@@ -3,1438 +3,2773 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-    <title>نظام إدارة محطة الوقود – إدارة الرواتب</title>
-        <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
-<link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
+    <title>إدارة الرواتب</title>
+
+    <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
+
     <style>
-        /* ============================================================
-           المتغيرات الأساسية (دعم الوضع الداكن والنهاري)
-           ============================================================ */
         :root {
-            /* === الوضع الفاتح (Light Mode - افتراضي) === */
-            --bg-color: #f5efe6;
-            --surface-color: #faf3e8;
-            --surface-elevated: #fdf8f0;
-            --primary-color: #007ACC;
-            --primary-dim: rgba(0,122,204,0.12);
-            --accent-color: #d4a017;
-            --accent-dim: rgba(212,160,23,0.12);
-            --success: #10b981;
-            --error: #ef4444;
-            --warning: #f59e0b;
-            --text-color: #1a2a3a;
-            --text-muted: #6a7f94;
-            --border-color: #003366;
-            --border-style: dashed;
-            --border-width: 2px;
-            --shadow-glow: 0 0 20px rgba(0,122,204,0.08);
-            --glass-bg: rgba(255,248,240,0.85);
-            --header-bg: linear-gradient(135deg, #e8e0d5 0%, #d5cdc0 100%);
-            --card-hover-bg: rgba(0,122,204,0.04);
-            --primary-hover: #005f99;
-            --fab-shadow: rgba(0,122,204,0.3);
-            --toast-bg: #fdf8f0;
-            --scrollbar-track: #f5efe6;
-            --scrollbar-thumb: rgba(0,51,102,0.2);
-            --skeleton-bg: #e8e0d5;
-            --skeleton-shine: #f5efe6;
-            --modal-border-color: #003366;
-            --modal-border-style: dashed;
-            --input-bg: #fdf8f0;
-            --input-border: #003366;
-            --input-border-style: dashed;
-            --data-text-color: #1a2a3a;
-            --data-text-muted: #4a5a6a;
+            --bg: #f4f7fb;
+            --surface: #ffffff;
+            --surface-2: #f8fafc;
+            --surface-3: #eef4f9;
+            --primary: #087ea4;
+            --primary-2: #2563eb;
+            --primary-soft: rgba(37,99,235,.10);
+            --success: #16a34a;
+            --warning: #d97706;
+            --danger: #dc2626;
+            --text: #172033;
+            --muted: #64748b;
+            --border: #d7dee8;
+            --border-strong: #c4cfdd;
+            --accent: #c58a18;
+            --shadow: 0 12px 35px rgba(15,23,42,.08);
+            --shadow-lg: 0 25px 70px rgba(15,23,42,.16);
+            --radius: 20px;
+            --radius-sm: 13px;
+            --font-sans: "Cairo", "Noto Sans Arabic", Arial, sans-serif;
         }
 
         [data-theme="dark"] {
-            /* === الوضع المظلم (Dark Mode) === */
-            --bg-color: #0a0e1a;
-            --surface-color: #111827;
-            --surface-elevated: #1a2236;
-            --primary-color: #00d4ff;
-            --primary-dim: rgba(0,212,255,0.15);
-            --accent-color: #f59e0b;
-            --accent-dim: rgba(245,158,11,0.15);
-            --success: #10b981;
-            --error: #ef4444;
-            --warning: #f59e0b;
-            --text-color: #f1f5f9;
-            --text-muted: #94a3b8;
-            --border-color: #e8d48b;
-            --border-style: dashed;
-            --border-width: 2px;
-            --shadow-glow: 0 0 20px rgba(0,212,255,0.1);
-            --glass-bg: rgba(22,34,64,0.85);
-            --header-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            --card-hover-bg: rgba(0,212,255,0.05);
-            --primary-hover: #00a7cc;
-            --fab-shadow: rgba(0,212,255,0.3);
-            --toast-bg: #1a2236;
-            --scrollbar-track: transparent;
-            --scrollbar-thumb: rgba(255,255,255,0.1);
-            --skeleton-bg: #1e293b;
-            --skeleton-shine: #2d3a4f;
-            --modal-border-color: #e8d48b;
-            --modal-border-style: dashed;
-            --input-bg: #1e293b;
-            --input-border: #e8d48b;
-            --input-border-style: dashed;
-            --data-text-color: #f1f5f9;
-            --data-text-muted: #94a3b8;
+            --bg: #06111f;
+            --surface: #0c1b2d;
+            --surface-2: #102238;
+            --surface-3: #132941;
+            --primary: #55c7f5;
+            --primary-2: #6ea8ff;
+            --primary-soft: rgba(85,199,245,.12);
+            --success: #42e39a;
+            --warning: #ffd166;
+            --danger: #ff7184;
+            --text: #eef7ff;
+            --muted: #aabbd0;
+            --border: #49a9ee;
+            --border-strong: #76c8ff;
+            --accent: #f1cf7a;
+            --shadow: 0 14px 40px rgba(0,0,0,.38);
+            --shadow-lg: 0 25px 75px rgba(0,0,0,.55);
         }
 
-        /* ============================================================
-           الأنماط الأساسية
-           ============================================================ */
-        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-
-        body {
-            font-family: 'Cairo', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            direction: rtl;
-            overflow-x: hidden;
+        * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            padding-bottom: 80px;
-            transition: background 0.4s ease, color 0.4s ease;
-            touch-action: pan-y;
+            -webkit-tap-highlight-color: transparent;
         }
 
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
-        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
-
-        /* ===== Pull-to-Refresh Indicator ===== */
-        .pull-indicator {
-            position: fixed;
-            top: -60px;
-            left: 0;
-            right: 0;
-            height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-muted);
-            font-size: 0.8rem;
-            transition: top 0.2s ease;
-            z-index: 50;
-            background: var(--surface-elevated);
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-            pointer-events: none;
-        }
-        .pull-indicator.active { top: 0; }
-        .pull-indicator i { margin-left: 8px; transition: transform 0.3s; }
-        .pull-indicator.loading i { animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        /* ===== Loading ===== */
-        .loading-indicator {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
-            z-index: 3000;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            backdrop-filter: blur(8px);
-        }
-        .spinner {
-            width: 50px; height: 50px;
-            border: 4px solid rgba(0,212,255,0.2);
-            border-radius: 50%;
-            border-top: 4px solid var(--primary-color);
-            animation: spin 1s linear infinite;
+        html, body {
+            min-height: 100%;
+            direction: rtl;
+            font-family: var(--font-sans);
         }
 
-        /* ===== Skeleton Loading ===== */
-        .skeleton-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            padding: 0 16px 16px;
-        }
-        .skeleton-card {
-            background: var(--surface-elevated);
-            border-radius: 18px;
-            padding: 16px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            position: relative;
-            overflow: hidden;
-        }
-        .skeleton-card::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(90deg,
-                transparent 0%,
-                var(--skeleton-shine) 50%,
-                transparent 100%);
-            animation: shimmer 1.5s infinite;
-        }
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-        .skeleton-row {
-            height: 12px;
-            background: var(--skeleton-bg);
-            border-radius: 6px;
-            margin-bottom: 8px;
-        }
-        .skeleton-row.short { width: 40%; }
-        .skeleton-row.medium { width: 60%; }
-        .skeleton-row.long { width: 80%; }
-
-        /* ===== Offline Banner ===== */
-        .offline-banner {
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            background: linear-gradient(90deg, var(--warning), #f97316);
-            color: #000;
+        body {
+            background:
+                radial-gradient(circle at 8% 0%, rgba(37,99,235,.09), transparent 32%),
+                var(--bg);
+            color: var(--text);
+            padding-bottom: 115px;
             text-align: center;
-            padding: 8px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            z-index: 2000;
-            transform: translateY(-100%);
-            transition: transform 0.3s;
+            overflow-x: hidden;
         }
-        .offline-banner.show { transform: translateY(0); }
 
-        /* ============================================================
-           الشريط العلوي (Header)
-           ============================================================ */
-        .top-bar {
+        button, input, select, textarea {
+            font-family: var(--font-sans);
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .topbar {
             position: sticky;
             top: 0;
-            display: flex;
-            flex-direction: column;
-            padding: 16px;
-            background: var(--header-bg);
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
             z-index: 100;
+            background: color-mix(in srgb, var(--surface) 94%, transparent);
             backdrop-filter: blur(20px);
-            transition: background 0.4s ease;
+            border-bottom: 1px solid var(--border);
+            padding: 12px 10px;
         }
-        .header-top {
+
+        .topbar-row {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
+            justify-content: space-between;
+            gap: 8px;
+            width: 100%;
         }
-        .top-title h2 {
-            margin: 0;
-            font-size: 1.3rem;
-            font-weight: 800;
-            background: linear-gradient(90deg, var(--primary-color), #a78bfa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+
+        .title-area {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 9px;
+            min-width: 0;
+            flex: 1;
+            text-align: right;
         }
+
+        .title-icon {
+            width: 43px;
+            height: 43px;
+            min-width: 43px;
+            border-radius: 13px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, var(--primary-2), var(--primary));
+            color: #fff;
+            box-shadow: var(--shadow);
+            font-size: 1.15rem;
+        }
+
+        .title-text {
+            min-width: 0;
+            text-align: right;
+        }
+
+        .title-text h1 {
+            font-size: 1.13rem;
+            line-height: 1.35;
+            font-weight: 950;
+            color: var(--primary);
+            white-space: nowrap;
+        }
+
+        .title-text p {
+            font-size: .65rem;
+            color: var(--muted);
+            margin-top: 2px;
+            white-space: nowrap;
+        }
+
         .header-actions {
             display: flex;
-            gap: 8px;
-        }
-        .icon-btn {
-            width: 40px; height: 40px;
-            border-radius: 12px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-elevated);
-            color: var(--text-muted);
-            display: flex;
             align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 1rem;
-            position: relative;
-        }
-        .icon-btn:hover {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            border-color: var(--primary-color);
-            transform: translateY(-2px);
-        }
-        .icon-btn:active { transform: scale(0.92); }
-        .icon-btn.has-badge::after {
-            content: '';
-            position: absolute;
-            top: 6px; right: 6px;
-            width: 8px; height: 8px;
-            background: var(--error);
-            border-radius: 50%;
-            box-shadow: 0 0 8px var(--error);
-            animation: pulse-dot 2s infinite;
-        }
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.3); }
+            gap: 7px;
+            flex-shrink: 0;
         }
 
-        .ai-badge {
-            background: linear-gradient(135deg, #8b5cf6, #6366f1);
-            color: white;
-            font-size: 0.6rem;
-            font-weight: 700;
-            padding: 2px 8px;
-            border-radius: 10px;
-            margin-right: 6px;
-            vertical-align: middle;
+        .icon-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 13px;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text);
+            font-size: 1.38rem;
+            display: grid;
+            place-items: center;
+            box-shadow: var(--shadow);
         }
 
-        /* ============================================================
-           البحث والفلاتر
-           ============================================================ */
-        .search-wrap {
-            position: relative;
-            margin-bottom: 10px;
+        .icon-btn:active {
+            transform: scale(.95);
         }
-        .search-input {
+
+        [data-theme="dark"] .icon-btn,
+        [data-theme="dark"] .panel,
+        [data-theme="dark"] .kpi,
+        [data-theme="dark"] .data-card,
+        [data-theme="dark"] .modal,
+        [data-theme="dark"] .field input,
+        [data-theme="dark"] .field select,
+        [data-theme="dark"] .field textarea,
+        [data-theme="dark"] .tab,
+        [data-theme="dark"] .bottom-nav,
+        [data-theme="dark"] .nav-item {
+            border-color: #63c7ff !important;
+            box-shadow:
+                0 0 0 1px rgba(99,199,255,.16),
+                0 0 18px rgba(99,199,255,.07);
+        }
+
+        .page {
             width: 100%;
-            padding: 12px 44px 12px 16px;
-            border-radius: 14px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-elevated);
-            color: var(--text-color);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.9rem;
-            transition: all 0.3s;
+            max-width: 1280px;
+            margin: auto;
+            padding: 13px;
+        }
+
+        .search-box {
+            position: relative;
+            margin-bottom: 11px;
+        }
+
+        .search-box input {
+            width: 100%;
+            height: 52px;
+            padding: 0 48px 0 16px;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: var(--surface);
+            color: var(--text);
             outline: none;
+            text-align: center;
+            box-shadow: var(--shadow);
+            font-size: .88rem;
         }
-        .search-input:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px var(--primary-dim);
+
+        .search-box input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-soft);
         }
-        .search-wrap i {
+
+        .search-box i {
             position: absolute;
-            right: 16px;
+            right: 18px;
             top: 50%;
             transform: translateY(-50%);
-            color: var(--text-muted);
+            color: var(--muted);
         }
 
-        .filter-chips {
+        .segmented-control {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            margin-bottom: 12px;
+            padding: 4px;
+            background: var(--surface-3);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+        }
+
+        .segmented-control::-webkit-scrollbar,
+        .tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .segment {
+            flex: 0 0 auto;
+            min-height: 44px;
+            border: 1px solid transparent;
+            border-radius: 11px;
+            padding: 8px 15px;
+            background: transparent;
+            color: var(--muted);
+            font-weight: 800;
+            font-size: .74rem;
+            white-space: nowrap;
+        }
+
+        .segment.active {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 3px 9px color-mix(in srgb, var(--primary) 28%, transparent);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0,1fr));
+            gap: 10px;
+            margin: 7px 0 14px;
+        }
+
+        .kpi {
+            background: linear-gradient(145deg, var(--surface), var(--surface-2));
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 15px 10px;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+
+        .kpi .ico {
+            font-size: 1.25rem;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+
+        .kpi strong {
+            display: block;
+            font-size: 1.22rem;
+            font-weight: 950;
+        }
+
+        .kpi span {
+            display: block;
+            color: var(--muted);
+            font-size: .66rem;
+            margin-top: 3px;
+            font-weight: 800;
+        }
+
+        .panel {
+            background: linear-gradient(145deg, var(--surface), var(--surface-2));
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 15px;
+            margin-bottom: 13px;
+        }
+
+        .panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .panel-head h2 {
+            font-size: .98rem;
+            font-weight: 950;
+        }
+
+        .badge {
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: var(--primary-soft);
+            color: var(--primary);
+            font-size: .7rem;
+            font-weight: 900;
+        }
+
+        .period-summary {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0,1fr));
+            gap: 8px;
+        }
+
+        .summary-item {
+            padding: 10px 8px;
+            border-radius: 13px;
+            background: var(--primary-soft);
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .summary-item small {
+            display: block;
+            color: var(--muted);
+            font-size: .62rem;
+        }
+
+        .summary-item b {
+            display: block;
+            margin-top: 3px;
+            font-size: .78rem;
+            overflow-wrap: anywhere;
+        }
+
+        .data-list {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0,1fr));
+            gap: 12px;
+        }
+
+        .data-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: var(--shadow);
+            animation: rise .35s ease both;
+        }
+
+        .data-card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .data-card-title {
+            font-weight: 950;
+            font-size: .94rem;
+        }
+
+        .data-card-subtitle {
+            color: var(--muted);
+            font-size: .68rem;
+            margin-top: 4px;
+            line-height: 1.7;
+        }
+
+        .data-card-value {
+            color: var(--accent);
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .data-fields {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0,1fr));
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .data-field {
+            padding: 9px 7px;
+            border-radius: 11px;
+            background: var(--primary-soft);
+            border: 1px solid var(--border);
+            min-width: 0;
+        }
+
+        .data-field span {
+            display: block;
+            color: var(--muted);
+            font-size: .61rem;
+        }
+
+        .data-field strong {
+            display: block;
+            color: var(--text);
+            font-size: .72rem;
+            margin-top: 2px;
+            overflow-wrap: anywhere;
+        }
+
+        .actions {
+            display: flex;
+            gap: 7px;
+            margin-top: 11px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            min-height: 42px;
+            padding: 8px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text);
+            font-size: .74rem;
+            font-weight: 900;
+            flex: 1;
+            text-align: center;
+        }
+
+        .btn.primary {
+            background: linear-gradient(135deg, var(--primary-2), var(--primary));
+            color: #fff;
+            border-color: transparent;
+        }
+
+        .btn.warning {
+            color: var(--warning);
+        }
+
+        .btn.danger {
+            color: var(--danger);
+        }
+
+        .empty {
+            padding: 48px 16px;
+            color: var(--muted);
+            line-height: 2;
+        }
+
+        .empty i {
+            font-size: 2.5rem;
+            color: var(--primary);
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .modal-bg {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: rgba(0,0,0,.68);
+            backdrop-filter: blur(7px);
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .modal-bg.show {
+            display: flex;
+        }
+
+        .modal {
+            width: min(920px,100%);
+            max-height: 94vh;
+            overflow: auto;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-bottom: 0;
+            border-radius: 25px 25px 0 0;
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+        }
+
+        .modal-head {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            padding: 15px 17px;
+            background: color-mix(in srgb, var(--surface) 96%, transparent);
+            backdrop-filter: blur(15px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-head h3 {
+            font-size: 1rem;
+            font-weight: 950;
+            flex: 1;
+        }
+
+        .close {
+            width: 38px;
+            height: 38px;
+            border-radius: 11px;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text);
+            font-size: 1.1rem;
+        }
+
+        .modal-body {
+            padding: 17px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 12px;
+        }
+
+        .field {
+            min-width: 0;
+            text-align: center;
+        }
+
+        .field.full {
+            grid-column: 1 / -1;
+        }
+
+        .field label {
+            display: block;
+            color: var(--muted);
+            font-size: .74rem;
+            font-weight: 850;
+            margin-bottom: 6px;
+        }
+
+        .field input,
+        .field select,
+        .field textarea {
+            width: 100%;
+            min-height: 46px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--surface-2);
+            color: var(--text);
+            outline: none;
+            padding: 9px 11px;
+            text-align: center;
+            font-size: .82rem;
+        }
+
+        .field input:focus,
+        .field select:focus,
+        .field textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-soft);
+        }
+
+        .field input[readonly],
+        .field select[disabled] {
+            opacity: .72;
+            background: var(--surface-3);
+            font-weight: 900;
+        }
+
+        .field textarea {
+            min-height: 96px;
+            resize: vertical;
+        }
+
+        .modal-foot {
+            display: flex;
+            gap: 9px;
+            padding: 13px 17px;
+            border-top: 1px solid var(--border);
+            position: sticky;
+            bottom: 0;
+            background: var(--surface);
+        }
+
+        .modal-foot .btn {
+            min-height: 48px;
+        }
+
+        .report-tabs {
             display: flex;
             gap: 8px;
             overflow-x: auto;
-            padding-bottom: 4px;
             scrollbar-width: none;
-        }
-        .filter-chips::-webkit-scrollbar { display: none; }
-        .filter-chip {
-            padding: 6px 14px;
-            border-radius: 20px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            font-size: 0.75rem;
-            font-family: 'Cairo', sans-serif;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .filter-chip:active { transform: scale(0.95); }
-        .filter-chip.active {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-        .filter-chip:hover:not(.active) {
-            border-color: var(--text-muted);
-            color: var(--text-color);
-        }
-
-        /* ============================================================
-           بطاقات الإحصائيات
-           ============================================================ */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            padding: 16px;
-        }
-        .stat-card {
-            background: var(--surface-elevated);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 16px;
-            padding: 16px;
-            position: relative;
-            overflow: hidden;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            cursor: pointer;
-            touch-action: manipulation;
-        }
-        .stat-card:active { transform: scale(0.96); }
-        .stat-card:hover {
-            transform: translateY(-4px);
-            border-color: var(--primary-color);
-            box-shadow: var(--shadow-glow);
-        }
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .stat-card:hover::before { opacity: 1; }
-        .stat-icon {
-            width: 40px; height: 40px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.1rem;
             margin-bottom: 12px;
         }
-        .stat-icon.blue { background: var(--primary-dim); color: var(--primary-color); }
-        .stat-icon.green { background: rgba(16,185,129,0.15); color: var(--success); }
-        .stat-icon.orange { background: var(--accent-dim); color: var(--accent-color); }
-        .stat-icon.red { background: rgba(239,68,68,0.15); color: var(--error); }
-        .stat-icon.purple { background: rgba(155,89,182,0.15); color: #9b59b6; }
-        .stat-value {
-            font-size: 1.4rem;
-            font-weight: 800;
-            margin-bottom: 4px;
-            color: var(--data-text-color);
-        }
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-        .stat-trend {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 0.7rem;
-            margin-top: 8px;
-            padding: 2px 8px;
-            border-radius: 8px;
-        }
-        .stat-trend.up { background: rgba(16,185,129,0.15); color: var(--success); }
-        .stat-trend.down { background: rgba(239,68,68,0.15); color: var(--error); }
 
-        @media (min-width: 768px) {
-            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+        .report-tab {
+            flex: 0 0 auto;
+            padding: 9px 14px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--surface);
+            color: var(--muted);
+            font-weight: 850;
+            font-size: .75rem;
         }
 
-        /* ============================================================
-           بطاقات البنوك والحسابات
-           ============================================================ */
-        .cards-container {
-            padding: 0 16px 80px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            touch-action: pan-y;
+        .report-tab.active {
+            background: var(--primary-soft);
+            color: var(--primary);
+            border-color: var(--primary);
         }
 
-        /* === Bank Card === */
-        .bank-card {
-            background: var(--surface-elevated);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 18px;
-            padding: 16px;
-            position: relative;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            cursor: pointer;
-            touch-action: pan-y;
-        }
-        .bank-card:hover {
-            border-color: var(--primary-color);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            background: var(--card-hover-bg);
-        }
-        .bank-card.selected {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px var(--primary-dim), 0 4px 20px rgba(0,212,255,0.1);
-        }
-        .bank-card:active { transform: scale(0.98); transition-duration: 0.05s; }
-
-        .bank-card .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 10px;
-        }
-        .bank-card .card-header .card-avatar {
-            width: 48px; height: 48px;
-            border-radius: 14px;
-            background: linear-gradient(135deg, var(--primary-color), #6366f1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2rem;
-            font-weight: 800;
-            color: white;
-            flex-shrink: 0;
-        }
-        .bank-card .card-header .card-status {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            border: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .card-status.active { background: rgba(16,185,129,0.15); color: var(--success); }
-        .card-status.inactive { background: rgba(148,163,184,0.15); color: var(--text-muted); }
-
-        .bank-card .card-name {
-            font-size: 1rem;
-            font-weight: 700;
-            color: var(--data-text-color);
-            margin-bottom: 2px;
-        }
-        .bank-card .card-code {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            font-family: 'Arial', sans-serif;
-            margin-bottom: 8px;
-        }
-        .bank-card .card-details {
+        .report-filter-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px 12px;
-            margin: 8px 0 10px;
-        }
-        .bank-card .card-details .detail-item {
-            font-size: 0.8rem;
-            color: var(--data-text-muted);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .bank-card .card-details .detail-item i {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-        }
-        .bank-card .card-actions {
-            display: flex;
-            gap: 8px;
-        }
-        .bank-card .card-actions .card-btn {
-            flex: 1;
-            padding: 10px;
-            border-radius: 12px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.8rem;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .bank-card .card-actions .card-btn:active { transform: scale(0.95); }
-        .bank-card .card-actions .card-btn:hover {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-        .bank-card .card-actions .card-btn.danger:hover {
-            background: rgba(239,68,68,0.15);
-            color: var(--error);
-            border-color: var(--error);
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 10px;
         }
 
-        /* === Account Card (nested inside Bank Card or separate) === */
-        .account-card {
-            background: var(--surface-color);
-            border-radius: 12px;
-            padding: 12px 14px;
-            margin-bottom: 10px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            transition: all 0.3s;
+        .report-output {
+            margin-top: 13px;
+            min-height: 120px;
         }
-        .account-card:hover {
-            border-color: var(--primary-color);
-            background: var(--card-hover-bg);
-        }
-        .account-card .account-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 6px;
-        }
-        .account-card .account-name {
-            font-weight: 700;
-            font-size: 0.9rem;
-            color: var(--data-text-color);
-        }
-        .account-card .account-number {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            font-family: 'Arial', sans-serif;
-        }
-        .account-card .account-balance {
-            font-size: 1.1rem;
-            font-weight: 800;
-            color: var(--primary-color);
-        }
-        .account-card .account-details {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            font-size: 0.7rem;
-            color: var(--text-muted);
-        }
-        .account-card .account-details .badge-type {
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-weight: 600;
-            border: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .badge-type.current { background: rgba(16,185,129,0.15); color: var(--success); }
-        .badge-type.savings { background: rgba(59,130,246,0.15); color: #3b82f6; }
-        .badge-type.deposit { background: rgba(139,92,246,0.15); color: #8b5cf6; }
-        .badge-type.loan { background: rgba(239,68,68,0.15); color: var(--error); }
 
-        .empty-state {
+        .report-table-wrap {
+            overflow: auto;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+        }
+
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 620px;
+            font-size: .72rem;
+        }
+
+        .report-table th,
+        .report-table td {
+            padding: 9px 8px;
+            border-bottom: 1px solid var(--border);
             text-align: center;
-            padding: 40px 20px;
-            color: var(--text-muted);
+            white-space: nowrap;
         }
-        .empty-state i { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
 
-        /* ============================================================
-           الزر العائم (FAB)
-           ============================================================ */
-        .fab {
+        .report-table th {
+            background: var(--primary-soft);
+            color: var(--primary);
+            font-weight: 950;
+            position: sticky;
+            top: 0;
+        }
+
+        .report-table tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .report-metric-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 9px;
+        }
+
+        .report-metric {
+            padding: 11px;
+            border-radius: 13px;
+            background: var(--primary-soft);
+            border: 1px solid var(--border);
+        }
+
+        .report-metric small {
+            display: block;
+            color: var(--muted);
+            font-size: .62rem;
+        }
+
+        .report-metric b {
+            display: block;
+            margin-top: 3px;
+            font-size: .84rem;
+        }
+
+        .loading {
+            display: none;
             position: fixed;
-            bottom: 90px;
-            left: 24px;
-            width: 56px; height: 56px;
+            inset: 0;
+            z-index: 3000;
+            background: rgba(0,0,0,.55);
+            backdrop-filter: blur(5px);
+            place-items: center;
+        }
+
+        .loading.show {
+            display: grid;
+        }
+
+        .spinner {
+            width: 52px;
+            height: 52px;
+            border: 5px solid rgba(255,255,255,.25);
+            border-top-color: var(--primary);
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary-color), #6366f1);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            color: white;
-            font-size: 1.5rem;
-            cursor: pointer;
-            box-shadow: 0 4px 20px var(--fab-shadow);
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            z-index: 200;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            touch-action: manipulation;
-        }
-        .fab:active { transform: scale(0.9); }
-        .fab:hover {
-            transform: scale(1.1) rotate(90deg);
-            box-shadow: 0 6px 30px var(--fab-shadow);
+            animation: spin 1s linear infinite;
         }
 
-        /* ============================================================
-           القائمة الجانبية (Sidebar)
-           ============================================================ */
-        .sidebar-toggle {
+        .offline {
             position: fixed;
-            top: 50%;
+            top: 0;
+            left: 0;
             right: 0;
-            transform: translateY(-50%);
-            background: linear-gradient(145deg, #4B0082, #5a1a9a);
-            color: white;
-            width: 35px; height: 35px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50% 0 0 50%;
-            cursor: pointer;
-            z-index: 1001;
-            box-shadow: -3px 0 10px rgba(0,0,0,0.4);
-            transition: all 0.3s;
-            border: 1px solid rgba(255,255,255,0.2);
-            touch-action: manipulation;
-        }
-        .sidebar-toggle:active { transform: translateY(-50%) scale(0.9); }
-        .sidebar-toggle.hidden { opacity: 0; pointer-events: none; }
-        .sidebar {
-            position: fixed;
-            top: 50%;
-            right: -90px;
-            transform: translateY(-50%);
-            width: 70px;
-            background: var(--surface-elevated);
-            z-index: 999;
-            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            z-index: 2500;
+            background: var(--warning);
+            color: #111;
             padding: 8px;
-            border-radius: 15px 0 0 15px;
-            overflow-y: auto;
-            box-shadow: -5px 0 20px rgba(0,0,0,0.4);
-            backdrop-filter: blur(10px);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            opacity: 0;
+            font-size: .76rem;
+            font-weight: 900;
+            transform: translateY(-110%);
+            transition: .3s;
         }
-        .sidebar.open { right: 0; opacity: 1; }
-        .sidebar-content { display: flex; flex-direction: column; gap: 8px; }
-        .sidebar-btn {
-            position: relative;
-            background: rgba(75, 0, 130, 0.8);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            padding: 8px 4px;
-            border-radius: 10px;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            min-height: 55px;
-            text-align: center;
-            font-size: 0.75rem;
-            font-family: 'Cairo', sans-serif;
-            touch-action: manipulation;
-        }
-        .sidebar-btn:active { transform: scale(0.95); }
-        .sidebar-btn:hover {
-            transform: scale(1.05);
-            background: rgba(75,0,130,0.35);
-            box-shadow: 0 0 15px rgba(0,212,255,0.2);
-        }
-        .sidebar-btn i { font-size: 1.1rem; }
-        .sidebar-btn span { font-size: 0.65rem; }
 
-        /* ============================================================
-           القائمة السفلية (Bottom Navigation)
-           ============================================================ */
+        .offline.show {
+            transform: translateY(0);
+        }
+
+        .toast {
+            position: fixed;
+            left: 50%;
+            bottom: 94px;
+            transform: translate(-50%,20px);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 4000;
+            min-width: min(90%,340px);
+            max-width: 92%;
+            padding: 11px 15px;
+            border-radius: 13px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            box-shadow: var(--shadow-lg);
+            font-size: .76rem;
+            font-weight: 850;
+            transition: .25s;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translate(-50%,0);
+        }
+
+        .toast.bad {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
         .bottom-nav {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-top: var(--border-width) var(--border-style) var(--border-color);
+            z-index: 500;
             display: flex;
-            justify-content: space-around;
-            padding: 8px 0 env(safe-area-inset-bottom, 8px) 0;
-            z-index: 300;
+            gap: 8px;
+            padding: 9px 10px calc(9px + env(safe-area-inset-bottom));
+            background: color-mix(in srgb, var(--surface) 95%, transparent);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid var(--border);
         }
-        .bottom-nav .nav-item {
+
+        .nav-item {
+            flex: 1;
+            min-height: 68px;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: var(--surface-2);
+            color: var(--muted);
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 2px;
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.55rem;
-            cursor: pointer;
-            transition: all 0.3s;
-            padding: 4px 8px;
-            position: relative;
-            touch-action: manipulation;
-            flex: 1;
-        }
-        .bottom-nav .nav-item:active { transform: scale(0.9); }
-        .bottom-nav .nav-item i { font-size: 18px; transition: all 0.3s; }
-        .bottom-nav .nav-item span { font-weight: 600; margin-top: 2px; }
-        .bottom-nav .nav-item.active { color: var(--primary-color); }
-        .bottom-nav .nav-item.active i { transform: translateY(-3px); text-shadow: 0 0 20px var(--primary-dim); }
-        .bottom-nav .nav-item.active::after {
-            content: '';
-            position: absolute;
-            top: -1px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 20px;
-            height: 3px;
-            background: var(--primary-color);
-            border-radius: 10px;
-        }
-
-        /* ============================================================
-           مودال التقارير
-           ============================================================ */
-        .report-modal-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(8px);
-            z-index: 900;
-            display: none;
-            align-items: flex-end;
             justify-content: center;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .report-modal-overlay.show { display: flex; opacity: 1; }
-        .report-modal {
-            background: var(--surface-elevated);
-            border-radius: 24px 24px 0 0;
-            width: 100%;
-            max-height: 92vh;
-            overflow-y: auto;
-            padding: 24px 20px;
-            transform: translateY(100%);
-            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-bottom: none;
-        }
-        .report-modal-overlay.show .report-modal { transform: translateY(0); }
-        .report-modal .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .report-modal .modal-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); }
-        .report-modal .modal-close {
-            width: 36px; height: 36px;
-            border-radius: 10px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .report-modal .modal-close:active { transform: scale(0.9); }
-        .report-modal .modal-close:hover {
-            background: var(--error);
-            color: white;
-            border-color: var(--error);
-        }
-        .report-filter-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-        .report-filter-row .form-group { margin-bottom: 0; }
-        .report-filter-row .form-label {
-            display: block;
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            margin-bottom: 4px;
-        }
-        .report-filter-row .form-input {
-            width: 100%;
-            padding: 10px 12px;
-            border-radius: 12px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-color);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.85rem;
-            transition: all 0.3s;
-            outline: none;
-        }
-        .report-filter-row .form-input:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px var(--primary-dim);
-        }
-        .report-actions {
-            display: flex;
-            gap: 12px;
-            margin-top: 8px;
-        }
-        .report-actions .btn {
-            flex: 1;
-            padding: 12px;
-            border-radius: 14px;
-            border: none;
-            font-weight: 700;
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .report-actions .btn:active { transform: scale(0.97); }
-        .report-actions .btn-primary {
-            background: linear-gradient(135deg, var(--primary-color), #6366f1);
-            color: white;
-        }
-        .report-actions .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px var(--primary-dim);
-        }
-        .report-actions .btn-secondary {
-            background: var(--surface-color);
-            color: var(--text-muted);
-            border: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .report-actions .btn-secondary:hover { background: var(--border-color); }
-        .report-results {
-            margin-top: 20px;
-            max-height: 300px;
-            overflow-y: auto;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 14px;
-        }
-        .report-results table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.8rem;
-        }
-        .report-results table th {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            padding: 10px 12px;
-            text-align: center;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            font-weight: 700;
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .report-results table td {
-            padding: 8px 12px;
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-            text-align: center;
-            color: var(--data-text-color);
-        }
-        .report-results table tr:hover { background: var(--card-hover-bg); }
-        .report-results .empty-state {
-            padding: 30px;
-            text-align: center;
-            color: var(--text-muted);
+            gap: 4px;
+            font-size: .68rem;
+            font-weight: 950;
         }
 
-        /* ============================================================
-           مودال الإضافة / التعديل (البنوك والحسابات)
-           ============================================================ */
-        .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(8px);
-            z-index: 800;
-            display: none;
-            align-items: flex-end;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .modal-overlay.show { display: flex; opacity: 1; }
-        .modal {
-            background: var(--surface-elevated);
-            border-radius: 24px 24px 0 0;
-            width: 100%;
-            max-height: 92vh;
-            overflow-y: auto;
-            padding: 24px 20px;
-            transform: translateY(100%);
-            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-bottom: none;
-        }
-        .modal-overlay.show .modal { transform: translateY(0); }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .modal-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); }
-        .modal-close {
-            width: 36px; height: 36px;
-            border-radius: 10px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .modal-close:active { transform: scale(0.9); }
-        .modal-close:hover {
-            background: var(--error);
-            color: white;
-            border-color: var(--error);
+        .nav-item i {
+            font-size: 1.2rem;
         }
 
-        /* ===== حقول النموذج ===== */
-        .form-group { margin-bottom: 16px; }
-        .form-label {
-            display: block;
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-        }
-        .form-input {
-            width: 100%;
-            padding: 12px 14px;
-            border-radius: 12px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-color);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.9rem;
-            transition: all 0.3s;
-            outline: none;
-        }
-        .form-input:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px var(--primary-dim);
-        }
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-        .submit-btn {
-            width: 100%;
-            padding: 14px;
-            border-radius: 14px;
-            border: none;
-            background: linear-gradient(135deg, var(--primary-color), #6366f1);
-            color: white;
-            font-family: 'Cairo', sans-serif;
-            font-size: 1rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s;
-            margin-top: 8px;
-            touch-action: manipulation;
-        }
-        .submit-btn:active { transform: scale(0.97); }
-        .submit-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px var(--primary-dim);
+        .nav-item.active {
+            color: var(--primary);
+            border-color: var(--primary);
+            background: var(--primary-soft);
         }
 
-        /* ============================================================
-           مودال تفاصيل البنك/الحساب
-           ============================================================ */
-        .details-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.8);
-            backdrop-filter: blur(12px);
-            z-index: 850;
-            display: none;
-            opacity: 0;
-            transition: opacity 0.3s;
-            overflow-y: auto;
-        }
-        .details-overlay.show { display: block; opacity: 1; }
-        .details-content {
-            background: var(--surface-elevated);
-            min-height: 100vh;
-            padding: 20px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-top: none;
-        }
-        .details-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            position: sticky;
-            top: 0;
-            background: var(--surface-elevated);
-            padding: 10px 0;
-            z-index: 10;
-        }
-        .details-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); }
-        .details-close {
-            width: 36px; height: 36px;
-            border-radius: 10px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            touch-action: manipulation;
-        }
-        .details-close:active { transform: scale(0.9); }
-        .details-close:hover { background: var(--error); color: white; border-color: var(--error); }
-        .details-profile { text-align: center; margin-bottom: 24px; }
-        .details-avatar {
-            width: 72px; height: 72px;
-            border-radius: 20px;
-            background: linear-gradient(135deg, var(--primary-color), #6366f1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: white;
-            margin: 0 auto 12px;
-        }
-        .details-name { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; color: var(--data-text-color); }
-        .details-status {
-            padding: 4px 16px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 700;
-            border: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .details-status.active { background: rgba(16,185,129,0.15); color: var(--success); }
-        .details-status.inactive { background: rgba(148,163,184,0.15); color: var(--text-muted); }
-        .details-section {
-            background: var(--surface-color);
-            border-radius: 16px;
-            padding: 16px;
-            margin-bottom: 16px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .details-section-title {
-            font-size: 0.9rem;
-            font-weight: 700;
-            margin-bottom: 12px;
-            color: var(--primary-color);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .details-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .details-row:last-child { border-bottom: none; }
-        .details-label { font-size: 0.8rem; color: var(--text-muted); }
-        .details-value { font-size: 0.85rem; font-weight: 600; color: var(--data-text-color); }
-
-        /* ============================================================
-           Toast إشعارات
-           ============================================================ */
-        .toast {
-            position: fixed;
-            top: 70px;
-            left: 50%;
-            transform: translateX(-50%) translateY(-20px);
-            background: var(--toast-bg);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 14px;
-            padding: 14px 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 600;
-            opacity: 0;
-            transition: all 0.4s;
-            pointer-events: none;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-        }
-        .toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-        .toast.success { border-color: var(--success); }
-        .toast.error { border-color: var(--error); }
-        .toast.warning { border-color: var(--warning); }
-        .toast-icon {
-            width: 28px; height: 28px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8rem;
-        }
-        .toast.success .toast-icon { background: rgba(16,185,129,0.15); color: var(--success); }
-        .toast.error .toast-icon { background: rgba(239,68,68,0.15); color: var(--error); }
-        .toast.warning .toast-icon { background: var(--accent-dim); color: var(--warning); }
-        .toast.info { border-color: var(--primary-color); }
-        .toast.info .toast-icon { background: var(--primary-dim); color: var(--primary-color); }
-
-        /* ============================================================
-           الرسوم المتحركة
-           ============================================================ */
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-up {
-            animation: fadeUp 0.5s ease forwards;
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: none; }
         }
 
-        /* ============================================================
-           تحسينات للهواتف
-           ============================================================ */
-        @media (max-width: 768px) {
-            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px; }
-            .stat-card { padding: 12px; }
-            .stat-value { font-size: 1.1rem; }
-            .bank-card .card-details { grid-template-columns: 1fr; }
-            .report-filter-row { grid-template-columns: 1fr; }
-            .cards-container { padding: 0 12px 16px; }
-            .bottom-nav .nav-item i { font-size: 15px; }
-            .bottom-nav .nav-item span { font-size: 0.5rem; }
-            .sidebar { width: 60px; }
-            .sidebar-btn { min-height: 45px; font-size: 0.65rem; }
-            .sidebar-btn i { font-size: 0.9rem; }
-            .fab { width: 48px; height: 48px; font-size: 1.2rem; bottom: 80px; left: 16px; }
-            .filter-chip { font-size: 0.65rem; padding: 4px 10px; }
-            .top-title h2 { font-size: 1rem; }
-            .icon-btn { width: 34px; height: 34px; font-size: 0.85rem; }
-            .report-modal { padding: 16px; }
-            .report-results { max-height: 200px; }
-            .report-results table th,
-            .report-results table td { padding: 6px 8px; font-size: 0.7rem; }
-            .form-row { grid-template-columns: 1fr; }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
-        @media (max-width: 480px) {
-            .stats-grid { gap: 6px; padding: 10px; }
-            .stat-card { padding: 10px; }
-            .stat-value { font-size: 0.95rem; }
-            .stat-icon { width: 32px; height: 32px; font-size: 0.85rem; }
-            .bank-card .card-details { grid-template-columns: 1fr; }
-            .card-actions { flex-wrap: wrap; }
-            .card-btn { font-size: 0.7rem; padding: 8px; }
-            .bottom-nav .nav-item { padding: 4px 4px; }
-            .bottom-nav .nav-item i { font-size: 13px; }
-            .bottom-nav .nav-item span { font-size: 0.45rem; }
-            .modal { padding: 16px; }
-            .account-card .account-details { flex-direction: column; gap: 4px; }
+        @media (max-width: 760px) {
+            .stats {
+                grid-template-columns: repeat(2,minmax(0,1fr));
+            }
+
+            .data-list {
+                grid-template-columns: 1fr;
+            }
+
+            .period-summary {
+                grid-template-columns: repeat(2,minmax(0,1fr));
+            }
+
+            .page {
+                padding: 10px;
+            }
+
+            .title-text h1 {
+                font-size: 1rem;
+            }
+
+            .title-text p {
+                display: none;
+            }
         }
-    
-        .page-container { max-width: 1280px; margin: 0 auto; padding: 16px 0 90px; }
-        .notice-card { margin: 0 16px 16px; padding: 14px 16px; border-radius: 16px; background: var(--surface-elevated); border: var(--border-width) var(--border-style) var(--border-color); color: var(--text-muted); line-height: 1.8; font-size: .8rem; }
-        .notice-card i { color: var(--primary-color); margin-left: 6px; }
-        .support-note { color: var(--warning); }
-        .data-panel { margin: 0 16px; padding: 16px; border-radius: 18px; background: var(--surface-elevated); border: var(--border-width) var(--border-style) var(--border-color); box-shadow: var(--shadow-glow); }
-        .section-title { display:flex; gap:8px; justify-content:space-between; align-items:center; margin-bottom:12px; }
-        .section-title h3 { font-size: 1rem; }
-        .section-title .count-badge { background: var(--primary-dim); color: var(--primary-color); border-radius: 12px; padding: 3px 10px; font-size: .75rem; }
-        .cards-container { padding: 0; }
-        .data-card { background: var(--surface-color); border: var(--border-width) var(--border-style) var(--border-color); border-radius: 16px; padding: 14px; margin-bottom: 10px; transition: .25s; }
-        .data-card:hover { border-color: var(--primary-color); box-shadow: var(--shadow-glow); }
-        .data-card-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
-        .data-card-title { font-weight:800; color:var(--data-text-color); }
-        .data-card-subtitle { color:var(--text-muted); font-size:.76rem; margin-top:4px; line-height:1.7; }
-        .data-card-value { color:var(--accent-color); font-weight:800; white-space:nowrap; }
-        .data-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; margin-top:12px; }
-        .data-field { padding:8px 10px; border-radius:10px; background:var(--primary-dim); min-width:0; }
-        .data-field span { display:block; font-size:.68rem; color:var(--text-muted); }
-        .data-field strong { display:block; margin-top:2px; overflow-wrap:anywhere; color:var(--data-text-color); font-size:.8rem; }
-        .action-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
-        .btn { border:var(--border-width) var(--border-style) var(--border-color); border-radius:10px; padding:9px 13px; background:var(--surface-elevated); color:var(--text-color); font-family:'Cairo',sans-serif; cursor:pointer; font-size:.78rem; transition:.2s; }
-        .btn:hover { border-color:var(--primary-color); color:var(--primary-color); transform:translateY(-1px); }
-        .btn.primary { background:var(--primary-color); color:#fff; border-color:var(--primary-color); }
-        .btn.danger { color:var(--error); }
-        .btn.warning { color:var(--warning); }
-        .btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
-        .empty-state { text-align:center; color:var(--text-muted); padding:35px 16px; line-height:1.9; }
-        .empty-state i { font-size:2.3rem; display:block; color:var(--primary-color); margin-bottom:10px; }
-        .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-        .form-group { display:flex; flex-direction:column; gap:6px; }
-        .form-group.full { grid-column:1/-1; }
-        .form-label { color:var(--text-muted); font-size:.78rem; }
-        .form-input { width:100%; padding:11px 12px; border-radius:10px; border:var(--border-width) var(--border-style) var(--input-border); background:var(--input-bg); color:var(--text-color); font-family:'Cairo',sans-serif; outline:none; }
-        .form-input:focus { border-color:var(--primary-color); box-shadow:0 0 0 3px var(--primary-dim); }
-        .modal-body { padding:16px; }
-        .modal-footer { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; padding:12px 16px; border-top:var(--border-width) var(--border-style) var(--border-color); }
-        .detail-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; }
-        .detail-item { padding:10px; border-radius:10px; background:var(--primary-dim); }
-        .detail-item span { display:block; color:var(--text-muted); font-size:.7rem; }
-        .detail-item strong { display:block; margin-top:3px; overflow-wrap:anywhere; }
-        .raw-json { direction:ltr; text-align:left; white-space:pre-wrap; word-break:break-word; background:#0b1220; color:#dbeafe; padding:12px; border-radius:10px; font: .72rem/1.5 monospace; max-height:300px; overflow:auto; }
-        .settings-wrap { padding:0 16px; }
-        .settings-card { background:var(--surface-elevated); border:var(--border-width) var(--border-style) var(--border-color); border-radius:16px; padding:16px; }
-        .settings-line { display:flex; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px dashed var(--border-color); align-items:center; }
-        .settings-line:last-child { border-bottom:0; }
-        .settings-line label { font-size:.82rem; color:var(--text-muted); }
-        .settings-line input { max-width:230px; }
-        .ai-output { min-height:100px; white-space:pre-wrap; line-height:1.9; color:var(--data-text-color); }
-        .utility-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; padding:0 16px; }
-        .utility-card { background:var(--surface-elevated); border:var(--border-width) var(--border-style) var(--border-color); border-radius:16px; padding:16px; }
-        .utility-card h3 { font-size:.9rem; margin-bottom:8px; }
-        .utility-card p { color:var(--text-muted); font-size:.75rem; line-height:1.8; margin-bottom:12px; }
-        .hidden { display:none !important; }
-        @media(max-width:640px){ .form-grid { grid-template-columns:1fr; } .form-group.full { grid-column:auto; } .data-card-head { flex-direction:column; } .data-card-value { align-self:flex-start; } }
-        @media print { .top-bar,.bottom-nav,.sidebar-toggle,.sidebar,.fab,.offline-banner,.action-row,.icon-btn,.notice-card { display:none !important; } body { background:#fff; color:#111; padding:0; } .data-panel,.data-card,.stat-card { box-shadow:none; color:#111; border:1px solid #aaa; } }
-</style>
+
+        @media (max-width: 430px) {
+            .form-grid {
+                grid-template-columns: repeat(2,minmax(0,1fr));
+                gap: 8px;
+            }
+
+            .field input,
+            .field select,
+            .field textarea {
+                padding: 8px 5px;
+                font-size: .75rem;
+            }
+
+            .field label {
+                font-size: .66rem;
+            }
+
+            .kpi {
+                padding: 11px 6px;
+            }
+
+            .kpi strong {
+                font-size: 1.04rem;
+            }
+
+            .nav-item {
+                min-height: 66px;
+                font-size: .59rem;
+            }
+
+            .nav-item i {
+                font-size: 1.08rem;
+            }
+
+            .modal-foot {
+                flex-wrap: wrap;
+            }
+
+            .modal-foot .btn {
+                min-width: calc(50% - 5px);
+            }
+        }
+
+        @media (max-width: 350px) {
+            .title-icon {
+                width: 39px;
+                min-width: 39px;
+                height: 39px;
+            }
+
+            .icon-btn {
+                width: 40px;
+                height: 40px;
+            }
+
+            .title-text h1 {
+                font-size: .9rem;
+            }
+        }
+
+        @media print {
+            .topbar,
+            .bottom-nav,
+            .loading,
+            .offline,
+            .toast,
+            .actions,
+            #addButton {
+                display: none !important;
+            }
+
+            body {
+                background: #fff;
+                color: #111;
+                padding: 0;
+            }
+
+            .panel,
+            .kpi,
+            .data-card {
+                box-shadow: none;
+                border: 1px solid #aaa;
+            }
+        }
+    </style>
 </head>
+
 <body>
-    <div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> Android Bridge غير متاح؛ لن تُحفظ أو تُعرض بيانات تجارية بديلة</div>
-    <div class="loading-indicator" id="loadingIndicator"><div class="spinner"></div></div>
-    <header class="top-bar">
-        <div class="header-top">
-            <div class="top-title"><h2><i class="fas fa-money-check-alt"></i> إدارة الرواتب</h2><p id="subtitle">hr · مصدر البيانات: طبقة Android/SQLite</p></div>
+    <div class="offline" id="offlineBanner">
+        <i class="fas fa-triangle-exclamation"></i>
+        الجسر غير متاح حالياً
+    </div>
+
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+    </div>
+
+    <header class="topbar">
+        <div class="topbar-row">
+            <div class="title-area">
+                <div class="title-icon">
+                    <i class="fas fa-money-check-dollar"></i>
+                </div>
+                <div class="title-text">
+                    <h1>إدارة الرواتب</h1>
+                    <p>مسيرات الرواتب والحسابات الشهرية</p>
+                </div>
+            </div>
+
             <div class="header-actions">
-                <button type="button" class="icon-btn" id="themeToggle" title="تبديل الوضع"><i class="fas fa-moon" id="themeIcon"></i></button>
-                <button type="button" class="icon-btn" onclick="goHome()" title="رجوع"><i class="fas fa-arrow-right"></i></button>
-                <button type="button" class="icon-btn" onclick="openReport()" title="التقرير"><i class="fas fa-chart-bar"></i></button>
+                <button class="icon-btn" type="button" id="themeToggle" title="تبديل الوضع">
+                    <i class="fas fa-moon" id="themeIcon"></i>
+                </button>
+                <button class="icon-btn" type="button" onclick="goHome()" title="الرئيسية">
+                    <i class="fas fa-home"></i>
+                </button>
             </div>
         </div>
-        <div class="search-wrap"><i class="fas fa-search"></i><input class="search-input" id="searchInput" type="search" placeholder="ابحث في البيانات..." autocomplete="off"></div>
-        <div class="filter-chips" id="filterChips" aria-label="الفلاتر"></div>
     </header>
-    <main class="page-container">
-        <div class="notice-card"><i class="fas fa-database"></i><span>تُنفذ هذه الشاشة عمليات القراءة والإضافة والتعديل والحذف عبر جدول payroll وعقود Typed Bridge الفعلية.</span></div>
-        <section class="stats-grid" id="statsGrid">
-            <article class="stat-card"><div class="stat-icon blue"><i class="fas fa-money-check-alt"></i></div><div class="stat-value" id="statCount">—</div><div class="stat-label">عدد السجلات المعروضة</div></article>
-            <article class="stat-card"><div class="stat-icon green"><i class="fas fa-check-circle"></i></div><div class="stat-value" id="statActive">—</div><div class="stat-label">نشط / مكتمل</div></article>
-            <article class="stat-card"><div class="stat-icon orange"><i class="fas fa-calculator"></i></div><div class="stat-value" id="statTotal">—</div><div class="stat-label">المجموع الرقمي المتاح</div></article>
-            <article class="stat-card"><div class="stat-icon purple"><i class="fas fa-clock"></i></div><div class="stat-value" id="statUpdated">—</div><div class="stat-label">آخر تحديث</div></article>
+
+    <main class="page">
+        <div class="search-box">
+            <i class="fas fa-search"></i>
+            <input id="searchInput" type="search" autocomplete="off"
+                   placeholder="ابحث برمز مسير الرواتب أو الفترة أو الحالة">
+        </div>
+
+        <div class="segmented-control" id="mainTabs">
+            <button class="segment active" data-view="payrolls">مسيرات الرواتب</button>
+            <button class="segment" data-view="current">المسيرة الحالية</button>
+            <button class="segment" data-view="history">السجل السابق</button>
+            <button class="segment" data-view="payments">مدفوعات الرواتب</button>
+        </div>
+
+        <section class="stats">
+            <article class="kpi">
+                <div class="ico"><i class="fas fa-users"></i></div>
+                <strong id="statEmployees">—</strong>
+                <span>إجمالي الموظفين</span>
+            </article>
+
+            <article class="kpi">
+                <div class="ico"><i class="fas fa-money-bill-wave"></i></div>
+                <strong id="statBasic">—</strong>
+                <span>الرواتب الأساسية</span>
+            </article>
+
+            <article class="kpi">
+                <div class="ico"><i class="fas fa-circle-plus"></i></div>
+                <strong id="statAllowances">—</strong>
+                <span>إجمالي البدلات</span>
+            </article>
+
+            <article class="kpi">
+                <div class="ico"><i class="fas fa-circle-minus"></i></div>
+                <strong id="statDeductions">—</strong>
+                <span>إجمالي الاستقطاعات</span>
+            </article>
+
+            <article class="kpi">
+                <div class="ico"><i class="fas fa-wallet"></i></div>
+                <strong id="statNet">—</strong>
+                <span>صافي الرواتب</span>
+            </article>
+
+            <article class="kpi">
+                <div class="ico"><i class="fas fa-file-invoice-dollar"></i></div>
+                <strong id="statPayrolls">—</strong>
+                <span>عدد المسيرات</span>
+            </article>
+
+            <article class="kpi">
+                <div class="ico"><i class="fas fa-circle-check"></i></div>
+                <strong id="statApproved">—</strong>
+                <span>المسيرات المعتمدة</span>
+            </article>
+
+            <article class="kpi">
+                <div class="ico"><i class="fas fa-clock"></i></div>
+                <strong id="statUpdated">—</strong>
+                <span>آخر تحديث</span>
+            </article>
         </section>
-        <section class="data-panel">
-            <div class="section-title"><h3><i class="fas fa-money-check-alt"></i> إدارة الرواتب</h3><span class="count-badge" id="itemCount">0</span></div>
-            <div class="cards-container" id="cardsContainer"></div>
+
+        <section class="panel" id="currentSummaryPanel">
+            <div class="panel-head">
+                <h2><i class="fas fa-calendar-days"></i> ملخص الفترة الحالية</h2>
+                <span class="badge" id="currentStatus">لا توجد مسيرة</span>
+            </div>
+
+            <div class="period-summary">
+                <div class="summary-item">
+                    <small>السنة</small>
+                    <b id="currentYear">—</b>
+                </div>
+                <div class="summary-item">
+                    <small>الشهر</small>
+                    <b id="currentMonth">—</b>
+                </div>
+                <div class="summary-item">
+                    <small>بداية الفترة</small>
+                    <b id="currentFrom">—</b>
+                </div>
+                <div class="summary-item">
+                    <small>نهاية الفترة</small>
+                    <b id="currentTo">—</b>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head">
+                <h2><i class="fas fa-file-invoice-dollar"></i> مسيرات الرواتب</h2>
+                <span class="badge" id="recordCount">0</span>
+            </div>
+
+            <div class="data-list" id="payrollList"></div>
         </section>
     </main>
-    <button type="button" class="fab" id="fab" title="إضافة"><i class="fas fa-plus"></i></button>
-    <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="فتح القائمة"><i class="fas fa-bars"></i></button>
-    <aside class="sidebar" id="sidebar"><div class="sidebar-content">
-        <button type="button" class="sidebar-btn" onclick="reloadData()"><i class="fas fa-sync-alt"></i><span>تحديث</span></button>
-        <button type="button" class="sidebar-btn" onclick="openReport()"><i class="fas fa-file-alt"></i><span>تقارير</span></button>
-        <button type="button" class="sidebar-btn" onclick="exportData()"><i class="fas fa-file-export"></i><span>تصدير</span></button>
-        <button type="button" class="sidebar-btn" onclick="window.print()"><i class="fas fa-print"></i><span>طباعة</span></button>
-        <button type="button" class="sidebar-btn" onclick="goHome()"><i class="fas fa-home"></i><span>رجوع</span></button>
-    </div></aside>
-    <nav class="bottom-nav" id="bottomNav" aria-label="التقارير والعمليات"></nav>
-    <div class="modal-overlay" id="formModal" onclick="closeModal(event,'formModal')"><div class="modal" onclick="event.stopPropagation()">
-        <div class="modal-header"><h3 class="modal-title" id="formTitle">إضافة سجل</h3><button type="button" class="modal-close" onclick="closeModal(null,'formModal')"><i class="fas fa-times"></i></button></div>
-        <div class="modal-body"><form id="recordForm" class="form-grid"></form></div>
-        <div class="modal-footer"><button type="button" class="btn primary" id="saveBtn"><i class="fas fa-save"></i> حفظ فعلي</button><button type="button" class="btn" onclick="closeModal(null,'formModal')">إلغاء</button></div>
-    </div></div>
-    <div class="modal-overlay" id="detailsModal" onclick="closeModal(event,'detailsModal')"><div class="modal" onclick="event.stopPropagation()">
-        <div class="modal-header"><h3 class="modal-title">تفاصيل السجل</h3><button type="button" class="modal-close" onclick="closeModal(null,'detailsModal')"><i class="fas fa-times"></i></button></div>
-        <div class="modal-body" id="detailsBody"></div>
-    </div></div>
-    <div class="modal-overlay" id="reportModal" onclick="closeModal(event,'reportModal')"><div class="modal" onclick="event.stopPropagation()">
-        <div class="modal-header"><h3 class="modal-title">تقرير إدارة الرواتب</h3><button type="button" class="modal-close" onclick="closeModal(null,'reportModal')"><i class="fas fa-times"></i></button></div>
-        <div class="modal-body"><div class="form-grid"><div class="form-group"><label class="form-label">من تاريخ</label><input class="form-input" type="date" id="reportFrom"></div><div class="form-group"><label class="form-label">إلى تاريخ</label><input class="form-input" type="date" id="reportTo"></div></div><div class="action-row"><button type="button" class="btn primary" onclick="generateReport()"><i class="fas fa-cog"></i> توليد من المصدر</button><button type="button" class="btn" onclick="exportData()"><i class="fas fa-file-export"></i> Excel/CSV</button><button type="button" class="btn" onclick="window.print()"><i class="fas fa-print"></i> طباعة/PDF</button></div><div id="reportResults" style="margin-top:14px"></div></div>
-    </div></div>
-    <div class="modal-overlay" id="aiModal" onclick="closeModal(event,'aiModal')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-header"><h3 class="modal-title">المساعد الذكي</h3><button type="button" class="modal-close" onclick="closeModal(null,'aiModal')"><i class="fas fa-times"></i></button></div><div class="modal-body"><textarea class="form-input" id="aiPrompt" rows="4" placeholder="اكتب سؤالك..."></textarea><div class="action-row"><button class="btn primary" type="button" onclick="askAI()">إرسال</button></div><div class="ai-output" id="aiOutput"></div></div></div></div>
+
+    <button class="btn primary" id="addButton"
+            style="position:fixed;left:18px;bottom:94px;width:56px;height:56px;min-height:56px;border-radius:50%;z-index:510;padding:0;font-size:1.25rem;box-shadow:var(--shadow-lg);">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <nav class="bottom-nav" aria-label="تنقل إدارة الرواتب">
+        <button class="nav-item active" type="button" data-bottom="payrolls">
+            <i class="fas fa-file-invoice-dollar"></i>
+            <span>المسيرات</span>
+        </button>
+        <button class="nav-item" type="button" data-bottom="employees">
+            <i class="fas fa-users"></i>
+            <span>الموظفون</span>
+        </button>
+        <button class="nav-item" type="button" data-bottom="attendance">
+            <i class="fas fa-calendar-check"></i>
+            <span>الحضور</span>
+        </button>
+        <button class="nav-item" type="button" data-bottom="payments">
+            <i class="fas fa-money-bill-transfer"></i>
+            <span>المدفوعات</span>
+        </button>
+        <button class="nav-item" type="button" data-bottom="reports">
+            <i class="fas fa-chart-column"></i>
+            <span>التقارير</span>
+        </button>
+    </nav>
+
+    <!-- مودال إضافة / تعديل مسيرة -->
+    <div class="modal-bg" id="formModal">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-head">
+                <h3 id="formTitle">إضافة سجل جديد</h3>
+                <button class="close" type="button" onclick="closeModal('formModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <form id="recordForm" class="form-grid">
+                    <div class="field hidden">
+                        <label>رمز مسير الرواتب</label>
+                        <input id="payroll_code" data-key="payroll_code" type="text" readonly>
+                    </div>
+
+                    <div class="field">
+                        <label>سنة الرواتب</label>
+                        <input id="payroll_year" data-key="payroll_year" type="number" min="2000" max="2100" required>
+                    </div>
+
+                    <div class="field">
+                        <label>شهر الرواتب</label>
+                        <select id="payroll_month" data-key="payroll_month" required>
+                            <option value="">اختر الشهر</option>
+                            <option value="1">يناير</option>
+                            <option value="2">فبراير</option>
+                            <option value="3">مارس</option>
+                            <option value="4">أبريل</option>
+                            <option value="5">مايو</option>
+                            <option value="6">يونيو</option>
+                            <option value="7">يوليو</option>
+                            <option value="8">أغسطس</option>
+                            <option value="9">سبتمبر</option>
+                            <option value="10">أكتوبر</option>
+                            <option value="11">نوفمبر</option>
+                            <option value="12">ديسمبر</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label>بداية الفترة</label>
+                        <input id="period_start" data-key="period_start" type="date" required>
+                    </div>
+
+                    <div class="field">
+                        <label>نهاية الفترة</label>
+                        <input id="period_end" data-key="period_end" type="date" required>
+                    </div>
+
+                    <div class="field">
+                        <label>إجمالي الموظفين</label>
+                        <input id="total_employees" data-key="total_employees" type="number" readonly>
+                    </div>
+
+                    <div class="field">
+                        <label>إجمالي الرواتب الأساسية</label>
+                        <input id="total_basic_salary" data-key="total_basic_salary" type="number" step="0.01" readonly>
+                    </div>
+
+                    <div class="field">
+                        <label>إجمالي البدلات</label>
+                        <input id="total_allowances" data-key="total_allowances" type="number" step="0.01" readonly>
+                    </div>
+
+                    <div class="field">
+                        <label>إجمالي الاستقطاعات</label>
+                        <input id="total_deductions" data-key="total_deductions" type="number" step="0.01" readonly>
+                    </div>
+
+                    <div class="field">
+                        <label>إجمالي صافي الرواتب</label>
+                        <input id="total_net_salary" data-key="total_net_salary" type="number" step="0.01" readonly>
+                    </div>
+
+                    <div class="field">
+                        <label>الحالة</label>
+                        <select id="status" data-key="status">
+                            <option value="draft">مسودة</option>
+                            <option value="calculated">محتسب</option>
+                            <option value="approved">معتمد</option>
+                            <option value="paid">مدفوع</option>
+                            <option value="closed">مغلق</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label>احتسب بواسطة</label>
+                        <input id="calculated_by" data-key="calculated_by" type="number" readonly>
+                    </div>
+
+                    <div class="field">
+                        <label>اعتمد بواسطة</label>
+                        <input id="approved_by" data-key="approved_by" type="number" readonly>
+                    </div>
+
+                    <div class="field">
+                        <label>دفع بواسطة</label>
+                        <input id="paid_by" data-key="paid_by" type="number" readonly>
+                    </div>
+
+                    <div class="field">
+                        <label>تاريخ الاحتساب</label>
+                        <input id="calculated_at" data-key="calculated_at" type="datetime-local" readonly>
+                    </div>
+
+                    <div class="field">
+                        <label>تاريخ الاعتماد</label>
+                        <input id="approved_at" data-key="approved_at" type="datetime-local">
+                    </div>
+
+                    <div class="field">
+                        <label>تاريخ الدفع</label>
+                        <input id="paid_at" data-key="paid_at" type="datetime-local">
+                    </div>
+
+                    <div class="field">
+                        <label>المنشئ</label>
+                        <input id="created_by" data-key="created_by" type="number" readonly>
+                    </div>
+
+                    <div class="field full">
+                        <label>ملاحظات</label>
+                        <textarea id="notes" data-key="notes"
+                                  placeholder="أدخل ملاحظات المسيرة أو أسباب الاستثناءات إن وجدت"></textarea>
+                    </div>
+                </form>
+            </div>
+
+            <div class="modal-foot">
+                <button class="btn primary" type="button" id="saveButton">
+                    <i class="fas fa-save"></i> حفظ المسيرة
+                </button>
+                <button class="btn" type="button" onclick="closeModal('formModal')">
+                    إلغاء
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال التفاصيل -->
+    <div class="modal-bg" id="detailsModal">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-head">
+                <h3>تفاصيل مسيرة الرواتب</h3>
+                <button class="close" type="button" onclick="closeModal('detailsModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="detailsBody"></div>
+        </div>
+    </div>
+
+    <!-- مودال التقارير -->
+    <div class="modal-bg" id="reportModal">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-head">
+                <h3><i class="fas fa-chart-column"></i> تقارير إدارة الرواتب</h3>
+                <button class="close" type="button" onclick="closeModal('reportModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div class="report-tabs" id="reportTabs">
+                    <button class="report-tab active" data-report="summary">ملخص الرواتب</button>
+                    <button class="report-tab" data-report="periods">المسيرات حسب الفترة</button>
+                    <button class="report-tab" data-report="status">حالة المسيرات</button>
+                    <button class="report-tab" data-report="employees">تفصيل الموظفين</button>
+                    <button class="report-tab" data-report="deductions">تحليل الاستقطاعات</button>
+                    <button class="report-tab" data-report="allowances">تحليل البدلات</button>
+                    <button class="report-tab" data-report="payments">حركة المدفوعات</button>
+                    <button class="report-tab" data-report="audit">مراجعة واعتماد</button>
+                </div>
+
+                <div class="report-filter-grid">
+                    <div class="field">
+                        <label>من تاريخ</label>
+                        <input id="reportFrom" type="date">
+                    </div>
+                    <div class="field">
+                        <label>إلى تاريخ</label>
+                        <input id="reportTo" type="date">
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button class="btn primary" type="button" id="generateReportButton">
+                        <i class="fas fa-chart-line"></i> توليد التقرير
+                    </button>
+                    <button class="btn" type="button" onclick="exportCsv()">
+                        <i class="fas fa-file-csv"></i> تصدير CSV
+                    </button>
+                    <button class="btn" type="button" onclick="window.print()">
+                        <i class="fas fa-print"></i> طباعة
+                    </button>
+                </div>
+
+                <div class="report-output" id="reportOutput"></div>
+            </div>
+        </div>
+    </div>
+
     <div class="toast" id="toast"></div>
+
     <script>
-    (() => {
-        'use strict';
-        const CFG = {"title":"إدارة الرواتب","icon":"fa-money-check-alt","module":"hr","listMethod":"getPayrollRecords","listArgs":["{}"],"fields":[{"label":"payroll code","key":"payroll_code","type":"text","required":true,"placeholder":""},{"label":"payroll year","key":"payroll_year","type":"number","required":true,"placeholder":""},{"label":"payroll month","key":"payroll_month","type":"text","required":true,"placeholder":""},{"label":"period start","key":"period_start","type":"text","required":true,"placeholder":""},{"label":"period end","key":"period_end","type":"text","required":true,"placeholder":""},{"label":"total employees","key":"total_employees","type":"number","required":false,"placeholder":""},{"label":"total basic salary","key":"total_basic_salary","type":"number","required":false,"placeholder":""},{"label":"total allowances","key":"total_allowances","type":"number","required":false,"placeholder":""},{"label":"total deductions","key":"total_deductions","type":"number","required":false,"placeholder":""},{"label":"total net salary","key":"total_net_salary","type":"number","required":false,"placeholder":""},{"label":"الحالة","key":"status","type":"select","required":false,"placeholder":""},{"label":"calculated at","key":"calculated_at","type":"text","required":false,"placeholder":""},{"label":"calculated by","key":"calculated_by","type":"text","required":false,"placeholder":""},{"label":"approved by","key":"approved_by","type":"text","required":false,"placeholder":""},{"label":"approved at","key":"approved_at","type":"text","required":false,"placeholder":""},{"label":"paid at","key":"paid_at","type":"number","required":false,"placeholder":""},{"label":"paid by","key":"paid_by","type":"number","required":false,"placeholder":""},{"label":"المنشئ","key":"created_by","type":"text","required":true,"placeholder":""}],"valueFields":["total_employees","total_basic_salary","total_allowances","total_deductions"],"titleFields":["payroll_code","payroll_year","payroll_month"],"subtitleFields":["payroll_code","payroll_year","payroll_month","period_start","period_end","total_employees","total_basic_salary","total_allowances"],"createMethod":"savePayrollRecord","updateMethod":"updatePayrollRecord","deleteMethod":"deletePayrollRecord","note":"تُنفذ هذه الشاشة عمليات القراءة والإضافة والتعديل والحذف عبر جدول payroll وعقود Typed Bridge الفعلية.","mode":"list","objectMode":false,"updateAction":null,"reportKind":"operational:Payroll","aiMethod":null,"reports":["الكل","ملخص","تفصيلي","تحليل","حركات"],"resolveMethod":null,"operationKey":"payroll"};
-        const bridge = window.AndroidInterface;
-        const state = { rows: [], filtered: [], editing: null, filter: 'all', loadedAt: null };
-        const $ = (id) => document.getElementById(id);
-        const esc = (value) => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-        const today = () => new Date().toISOString().slice(0,10);
-        function toast(message, bad=false) { const node=$('toast'); node.textContent=message; node.className='toast show'; node.style.background=bad?'var(--error)':'#111827'; clearTimeout(node._timer); node._timer=setTimeout(()=>node.classList.remove('show'),3500); }
-        function setLoading(value) { $('loadingIndicator').classList.toggle('show', Boolean(value)); }
-        function parse(raw) { if (raw == null) throw new Error('لم يرجع الجسر نتيجة'); const value=typeof raw==='string'?JSON.parse(raw):raw; if (value && value.success === false) throw new Error(value.error || value.message || 'فشلت العملية'); return value; }
-        function dataOf(value) { return value && Object.prototype.hasOwnProperty.call(value,'data') ? value.data : value; }
-        function invoke(method,args=[]) { if (!bridge || typeof bridge[method] !== 'function') return Promise.reject(new Error('العقد '+method+' غير متاح في Android Bridge')); try { return Promise.resolve(parse(bridge[method](...args))); } catch (error) { return Promise.reject(error); } }
-        function argsForLoad() {
-            if (CFG.operationKey) return [JSON.stringify({limit: 200, search: $('searchInput').value || ''})];
-            if (CFG.reportKind === 'balanceSheet') return [today(), 0];
-            if (CFG.reportKind === 'eod') return [];
-            return CFG.listArgs || [];
-        }
-        function rowsFrom(value) {
-            const raw=dataOf(value);
-            if (Array.isArray(raw)) return raw;
-            if (raw && Array.isArray(raw.rows)) return raw.rows;
-            if (raw && Array.isArray(raw.data)) return raw.data;
-            if (CFG.objectMode && raw && typeof raw === 'object') return Object.entries(raw).map(([key,val])=>({key,value:val}));
-            if (raw && typeof raw === 'object') return [raw];
-            return [];
-        }
-        function field(row, names) { for (const name of (names||[])) { if (row && row[name] !== undefined && row[name] !== null && row[name] !== '') return row[name]; } return ''; }
-        function titleOf(row) { return field(row, CFG.titleFields) || field(row,['name','title','label','id','key']) || 'سجل بلا اسم'; }
-        function subtitleOf(row) { return (CFG.subtitleFields||[]).map(k => { const v=row&&row[k]; return v===undefined||v===null||v===''?null:k+': '+v; }).filter(Boolean).join(' · '); }
-        function idOf(row) { return field(row,['id','_id','vehicle_id','pump_id','tank_id','payment_id','shift_id','sale_id','request_id','asset_id','employee_id']); }
-        function numeric(v) { const n=Number(v); return Number.isFinite(n)?n:0; }
-        function setDateDefaults() { $('reportFrom').value = $('reportFrom').value || today(); $('reportTo').value = $('reportTo').value || today(); }
-        function renderFilters() {
-            const labels=CFG.reports||['الكل','ملخص','تفصيلي','تحليل','حركات'];
-            $('filterChips').innerHTML=labels.map((label,i)=>`<button type="button" class="filter-chip ${i===0?'active':''}" data-filter="${i}">${esc(label)}</button>`).join('');
-            document.querySelectorAll('#filterChips [data-filter]').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('#filterChips .filter-chip').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); state.filter=btn.dataset.filter; applyFilter(); }));
-            $('bottomNav').innerHTML=labels.slice(0,5).map((label,i)=>`<button type="button" class="nav-item ${i===0?'active':''}" data-bottom-filter="${i}"><i class="fas ${i===0?'fa-list':i===1?'fa-file-alt':i===2?'fa-table':i===3?'fa-chart-bar':'fa-exchange-alt'}"></i><span>${esc(label)}</span></button>`).join('');
-            document.querySelectorAll('#bottomNav [data-bottom-filter]').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('#bottomNav .nav-item').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); state.filter=btn.dataset.bottomFilter; applyFilter(); }));
-        }
-        function applyFilter() {
-            const q=($('searchInput').value||'').trim().toLowerCase();
-            state.filtered=state.rows.filter(row=>{ const text=JSON.stringify(row||{}).toLowerCase(); return !q || text.includes(q); });
-            renderCards();
-        }
-        function renderStats() {
-            const rows=state.filtered; $('statCount').textContent=rows.length.toLocaleString('ar'); $('itemCount').textContent=rows.length.toLocaleString('ar');
-            const active=rows.filter(row=>['active','open','pending','completed','مفتوحة','نشط','قيد التنفيذ'].includes(String(field(row,['status','state','is_active'])))).length;
-            $('statActive').textContent=active.toLocaleString('ar');
-            let total=0; (CFG.valueFields||[]).forEach(k=>total += rows.reduce((sum,row)=>sum+numeric(row&&row[k]),0)); $('statTotal').textContent=total?total.toLocaleString('ar',{maximumFractionDigits:2}):'—';
-            $('statUpdated').textContent=state.loadedAt?state.loadedAt.toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}):'—';
-        }
-        function renderCards() {
-            renderStats(); const box=$('cardsContainer');
-            if (!state.filtered.length) { box.innerHTML=`<div class="empty-state"><i class="fas fa-inbox"></i><p>${CFG.mode==='unsupported'?'لا توجد عملية مدعومة لهذا المسار في العقد الحالي.':'لا توجد نتائج مطابقة أو لم تُرجع قاعدة البيانات سجلات.'}</p></div>`; return; }
-            box.innerHTML=state.filtered.map((row,index)=>{
-                const id=esc(idOf(row)||index); const fields=(CFG.subtitleFields||[]).filter(k=>row && row[k]!==undefined && row[k]!==null && row[k]!=='').slice(0,8);
-                const value=(CFG.valueFields||[]).map(k=>numeric(row&&row[k])).filter(v=>v!==0).reduce((a,b)=>a+b,0);
-                const buttons=`<div class="action-row"><button class="btn" type="button" data-view="${id}"><i class="fas fa-eye"></i> عرض</button>${CFG.updateMethod?`<button class="btn warning" type="button" data-edit="${id}"><i class="fas fa-edit"></i> تعديل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.deleteMethod?`<button class="btn danger" type="button" data-delete="${id}"><i class="fas fa-trash"></i> حذف</button>`:''}</div>`;
-                return `<article class="data-card"><div class="data-card-head"><div><div class="data-card-title">${esc(titleOf(row))}</div><div class="data-card-subtitle">${esc(subtitleOf(row))}</div></div>${value?`<div class="data-card-value">${value.toLocaleString('ar',{maximumFractionDigits:2})}</div>`:''}</div><div class="data-fields">${fields.map(k=>`<div class="data-field"><span>${esc(k)}</span><strong>${esc(row[k])}</strong></div>`).join('')}</div>${buttons}</article>`;
-            }).join('');
-            box.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>openDetails(b.dataset.view)));
-            box.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>openForm(findRow(b.dataset.edit))));
-            box.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>deleteRow(findRow(b.dataset.delete))));
-            box.querySelectorAll('[data-resolve]').forEach(b=>b.addEventListener('click',()=>resolveRow(findRow(b.dataset.resolve))));
-        }
-        function findRow(id) { return state.rows.find((row,index)=>String(idOf(row)||index)===String(id)); }
-        function openDetails(id) { const row=findRow(id); if(!row)return; $('detailsBody').innerHTML=`<div class="detail-grid">${Object.entries(row).map(([k,v])=>`<div class="detail-item"><span>${esc(k)}</span><strong>${esc(typeof v==='object'?JSON.stringify(v):v)}</strong></div>`).join('')}</div><details style="margin-top:14px"><summary>JSON الخام</summary><pre class="raw-json">${esc(JSON.stringify(row,null,2))}</pre></details>`; openModal(null,'detailsModal'); }
-        function inputHtml(def,row) { const value=row&&row[def.key]!==undefined?row[def.key]:''; const req=def.required?'required':''; const placeholder=def.placeholder?`placeholder="${esc(def.placeholder)}"`:''; if(def.type==='textarea')return `<div class="form-group full"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><textarea class="form-input" data-key="${esc(def.key)}" rows="3" ${req} ${placeholder}>${esc(value)}</textarea></div>`; if(def.type==='select')return `<div class="form-group"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><select class="form-input" data-key="${esc(def.key)}" ${req}><option value="">اختر...</option><option value="active">نشط</option><option value="inactive">غير نشط</option><option value="open">مفتوح</option><option value="pending">معلق</option><option value="cash">نقدي</option><option value="credit">آجل</option><option value="morning">صباحية</option><option value="evening">مسائية</option><option value="night">ليلية</option><option value="in">إيراد</option><option value="out">مصروف</option><option value="high">عالية</option><option value="medium">متوسطة</option><option value="low">منخفضة</option><option value="completed">مكتمل</option></select></div>`; return `<div class="form-group ${def.type==='datetime-local'?'full':''}"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><input class="form-input" data-key="${esc(def.key)}" type="${esc(def.type)}" value="${esc(value)}" ${req} ${placeholder}></div>`; }
-        function openForm(row=null) { if(!CFG.createMethod && !CFG.updateMethod){toast('لا توجد عملية كتابة مدعومة لهذه الشاشة في العقد الحالي',true);return;} state.editing=row; $('formTitle').textContent=row?'تعديل السجل':'إضافة سجل جديد'; $('recordForm').innerHTML=(CFG.fields||[]).map(def=>inputHtml(def,row)).join(''); if(row) (CFG.fields||[]).forEach(def=>{const el=document.querySelector(`[data-key="${CSS.escape(def.key)}"]`); if(el&&def.type==='select')el.value=row[def.key]??'';}); $('formModal').classList.add('show'); }
-        function collectForm() { const payload={}; document.querySelectorAll('#recordForm [data-key]').forEach(el=>{ let value=el.value; const type=el.type; if(type==='number') value=value===''?0:Number(value); payload[el.dataset.key]=value; }); if(CFG.module==='vehicles' && CFG.title==='إدارة السائقين') payload.party_type='driver'; return payload; }
-        function configurePayrollForm(row) {
-            const labels={payroll_code:'رمز مسير الرواتب',payroll_year:'سنة الرواتب',payroll_month:'شهر الرواتب',period_start:'بداية الفترة',period_end:'نهاية الفترة',total_employees:'إجمالي الموظفين',total_basic_salary:'إجمالي الرواتب الأساسية',total_allowances:'إجمالي البدلات',total_deductions:'إجمالي الاستقطاعات',total_net_salary:'إجمالي صافي الرواتب',status:'الحالة',calculated_at:'تاريخ الاحتساب',calculated_by:'احتسب بواسطة',approved_by:'اعتمد بواسطة',approved_at:'تاريخ الاعتماد',paid_at:'تاريخ الدفع',paid_by:'دفع بواسطة',created_by:'المنشئ'};
-            document.querySelectorAll('#recordForm [data-key]').forEach(el=>{const label=labels[el.dataset.key];const node=el.closest('.form-group')?.querySelector('.form-label');if(label&&node)node.textContent=label+(el.required?' *':'');});
-            const code=document.querySelector('#recordForm [data-key="payroll_code"]');if(code){code.required=false;code.readOnly=true;code.placeholder='يُرقم تلقائياً عند الحفظ';if(!row)code.value='';}
-            const createdBy=document.querySelector('#recordForm [data-key="created_by"]');if(createdBy){createdBy.required=false;createdBy.readOnly=true;createdBy.placeholder='يُحدد تلقائياً من الجلسة';if(!row)createdBy.value='';}
-            const year=document.querySelector('#recordForm [data-key="payroll_year"]');if(year){year.type='number';year.min='2000';year.max='2100';if(!row)year.value=String(new Date().getFullYear());}
-            const month=document.querySelector('#recordForm [data-key="payroll_month"]');if(month){month.type='number';month.min='1';month.max='12';if(!row)month.value=String(new Date().getMonth()+1);}
-            ['period_start','period_end'].forEach(key=>{const el=document.querySelector(`#recordForm [data-key="${key}"]`);if(el)el.type='date';});
-            const choose=(key,items,defaultValue)=>{const el=document.querySelector(`#recordForm [data-key="${key}"]`);if(!el)return;const selected=String((row&&row[key])??defaultValue);el.innerHTML=items.map(([value,text])=>`<option value="${value}">${text}</option>`).join('');el.value=items.some(([value])=>value===selected)?selected:defaultValue;};
-            choose('status',[['draft','مسودة'],['calculated','محتسب'],['approved','معتمد'],['paid','مدفوع'],['closed','مغلق']],'draft');
-        }
-        const payrollOpenForm=openForm; openForm=function(row=null){payrollOpenForm(row);configurePayrollForm(row);};
-        const payrollCollectForm=collectForm; collectForm=function(){const payload=payrollCollectForm();if(!state.editing){delete payload.payroll_code;delete payload.created_by;}['calculated_by','approved_by','paid_by','created_by','updated_by','deleted_by'].forEach(key=>{if(!Number.isFinite(Number(payload[key]))||Number(payload[key])<=0)delete payload[key];});['calculated_at','approved_at','paid_at'].forEach(key=>{if(!String(payload[key]||'').trim())delete payload[key];});payload.status=['draft','calculated','approved','paid','closed'].includes(payload.status)?payload.status:'draft';return payload;};
-        async function saveForm() { const form=$('recordForm'); if(!form.reportValidity())return; const payload=collectForm(); setLoading(true); try { let result; if(state.editing && CFG.updateMethod) { const id=idOf(state.editing); if(!id)throw new Error('معرف السجل غير صالح'); if(CFG.updateAction==='tankQuantity') result=await invoke(CFG.updateMethod,[Number(id),Number(payload.current_quantity||0)]); else if(CFG.updateAction==='maintenanceStatus') result=await invoke(CFG.updateMethod,[JSON.stringify({request_id:Number(id),status:payload.status||'completed'})]); else if(CFG.updateAction==='endShift') result=await invoke(CFG.updateMethod,[Number(id),JSON.stringify(payload)]); else result=await invoke(CFG.updateMethod,[Number(id),JSON.stringify(payload)]); } else if(CFG.createMethod) { if(CFG.createMethod==='saveBalanceSheet') result=await invoke(CFG.createMethod,[today(),0]); else result=await invoke(CFG.createMethod,[JSON.stringify(payload)]); } else throw new Error('لا توجد عملية حفظ مدعومة'); parse(result); toast('تم تنفيذ العملية والتحقق من نجاحها'); closeModal(null,'formModal'); await reloadData(); } catch(error) { toast(error.message||'فشلت العملية',true); } finally { setLoading(false); } }
-        async function deleteRow(row) { const id=row&&idOf(row); if(!id||!CFG.deleteMethod)return; if(!confirm('هل تريد تنفيذ الحذف الفعلي لهذا السجل؟'))return; setLoading(true); try { const result=await invoke(CFG.deleteMethod,[Number(id)]); parse(result); toast('تم الحذف فعلياً'); await reloadData(); } catch(error) { toast(error.message||'فشل الحذف',true); } finally { setLoading(false); } }
-        async function resolveRow(row) { const id=row&&idOf(row); if(!id||!CFG.resolveMethod)return; const note=prompt('أدخل ملاحظة الاعتماد/الحل إن لزم:',''); if(note===null)return; setLoading(true); try { const result=await invoke(CFG.resolveMethod,[Number(id),String(note)]); parse(result); toast('تم تنفيذ العملية فعلياً'); await reloadData(); } catch(error) { toast(error.message||'فشل تنفيذ العملية',true); } finally { setLoading(false); } }
-        async function reloadData() { if(CFG.mode==='unsupported'||CFG.mode==='ai'){ renderCards(); return; } if(CFG.mode==='backup'){ loadBackupHistory(); return; } if(!CFG.listMethod){ renderCards(); return; } if(!bridge){ $('offlineBanner').classList.add('show'); renderCards(); return; } setLoading(true); try { const result=await invoke(CFG.listMethod,argsForLoad()); state.rows=rowsFrom(result); state.loadedAt=new Date(); $('offlineBanner').classList.remove('show'); applyFilter(); } catch(error) { state.rows=[]; state.loadedAt=new Date(); renderCards(); toast(error.message||'فشل تحميل البيانات',true); } finally { setLoading(false); } }
-        function openModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.add('show'); } function closeModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.remove('show'); }
-        function openReport() { setDateDefaults(); $('reportResults').innerHTML='<div class="empty-state"><i class="fas fa-file-alt"></i><p>اضغط توليد التقرير لعرض البيانات المحملة من SQLite.</p></div>'; openModal(null,'reportModal'); }
-        async function generateReport() { setLoading(true); try { let result; if(CFG.reportKind==='balanceSheet') result=await invoke('getBalanceSheet',[($('reportTo').value||today()),0]); else if(CFG.reportKind==='eod') result=await invoke('getEodReport',[]); else if(String(CFG.reportKind||'').startsWith('operational:')) { const suffix=String(CFG.reportKind).split(':')[1]; result=await invoke('generate'+suffix+'Report',[JSON.stringify({from_date:$('reportFrom').value||'',to_date:$('reportTo').value||'',search:$('searchInput').value||'',include_archived:true,limit:1000})]); } else result={data:state.filtered}; $('reportResults').innerHTML=renderReport(rowsFrom(result)); toast('تم توليد التقرير من المصدر الفعلي'); } catch(e) { toast(e.message||'فشل التقرير',true); } finally { setLoading(false); } }
-        function renderReport(rows) { if(!rows.length)return '<div class="empty-state">لا توجد بيانات للتقرير.</div>'; return `<div class="data-fields">${rows.slice(0,100).map(row=>`<div class="data-field"><span>${esc(titleOf(row))}</span><strong>${esc(subtitleOf(row)||JSON.stringify(row))}</strong></div>`).join('')}</div>`; }
-        function exportData() { const rows=state.filtered; if(!rows.length){toast('لا توجد بيانات حقيقية لتصديرها',true);return;} const keys=[...new Set(rows.flatMap(row=>Object.keys(row||{})))]; const csv='\ufeff'+[keys, ...rows.map(row=>keys.map(k=>String(row[k]??'').replace(/"/g,'""')))].map(row=>row.map(v=>`"${v}"`).join(',')).join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='{filename}.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); toast('تم إنشاء ملف CSV من البيانات المحملة فعلياً'); }
-        async function askAI() { if(CFG.aiMethod!=='sendToAI'){toast('المساعد غير متاح لهذا المسار',true);return;} const prompt=($('aiPrompt').value||'').trim(); if(!prompt){toast('اكتب السؤال أولاً',true);return;} if(!bridge||typeof bridge.sendToAI!=='function'){toast('عقد المساعد غير متاح في Android Bridge',true);return;} $('aiOutput').textContent='جاري انتظار رد Android...'; window.onAIResponse=(payload)=>{ const result=typeof payload==='string'?JSON.parse(payload):payload; if(result&&result.success){ $('aiOutput').textContent=result.response||'عاد الرد دون نص'; toast('وصل رد المساعد فعلياً'); } else { $('aiOutput').textContent=result&&result.error||'فشل رد المساعد'; toast($('aiOutput').textContent,true); } setLoading(false); }; setLoading(true); try { const started=parse(bridge.sendToAI(prompt)); if(started.status!=='processing') window.onAIResponse(started); } catch(e) { setLoading(false); $('aiOutput').textContent=e.message; toast(e.message,true); } }
-        function goHome() { window.location.href='../main.html'; }
-        function applyTheme() { const saved=localStorage.getItem('theme')||'light'; if(saved==='dark')document.documentElement.dataset.theme='dark'; $('themeIcon').className=saved==='dark'?'fas fa-sun':'fas fa-moon'; }
-        function toggleTheme() { const dark=document.documentElement.dataset.theme==='dark'; if(dark)delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme='dark'; localStorage.setItem('theme',dark?'light':'dark'); $('themeIcon').className=dark?'fas fa-moon':'fas fa-sun'; }
-        function initSpecial() {
-            if(CFG.mode==='unsupported'){ $('fab').classList.add('hidden'); }
-            if(CFG.mode==='ai'){ $('fab').classList.add('hidden'); $('cardsContainer').innerHTML='<div class="settings-wrap"><div class="settings-card"><h3>أرسل طلباً إلى المساعد</h3><p class="data-card-subtitle">لا تُحفظ الرسالة في localStorage ولا تُعرض نتيجة نجاح قبل عودة الجسر.</p><div class="action-row"><button class="btn primary" onclick="openModal(null,\'aiModal\')">فتح المساعد</button></div></div></div>'; }
-            if(CFG.mode==='backup'){ $('fab').classList.add('hidden'); $('cardsContainer').innerHTML='<div class="utility-grid"><div class="utility-card"><h3>نسخة قاعدة البيانات</h3><p>تنفيذ النسخ عبر Android ثم استقبال callback الفعلي.</p><button class="btn primary" onclick="startAsync(\'backupDatabase\',\'onBackupResult\')">إنشاء نسخة</button></div><div class="utility-card"><h3>تصدير كل البيانات</h3><p>يستخدم exportAllData ويعرض نتيجة callback.</p><button class="btn primary" onclick="startAsync(\'exportAllData\',\'onExportAllResult\')">بدء التصدير</button></div><div class="utility-card"><h3>معلومات قاعدة البيانات</h3><p id="dbInfo">اضغط لقراءة المعلومات الفعلية.</p><button class="btn" onclick="loadDbInfo()">قراءة</button></div></div>'; }
-        }
-        function startAsync(method,callbackName){ if(!bridge||typeof bridge[method]!=='function'){toast('العقد '+method+' غير متاح',true);return;} window[callbackName]=(value)=>{const parsed=typeof value==='string'?JSON.parse(value):value; if(parsed.success)toast(parsed.message||'اكتملت العملية فعلياً'); else toast(parsed.error||'فشلت العملية',true);}; try{const result=parse(bridge[method]()); if(result.status==='processing')toast('بدأت العملية؛ انتظار نتيجة Android...');}catch(e){toast(e.message,true);} }
-        async function loadDbInfo(){try{const result=await invoke('getDatabaseInfo',[]); $('dbInfo').textContent=JSON.stringify(dataOf(result));}catch(e){$('dbInfo').textContent=e.message;toast(e.message,true);}}
-        async function loadBackupHistory(){if(CFG.mode!=='backup'||!bridge||typeof bridge.getBackupHistoryRecords!=='function')return;try{const result=await invoke('getBackupHistoryRecords',[JSON.stringify({limit:100})]);const rows=rowsFrom(result);$('backupHistory').innerHTML=rows.length?rows.map(row=>`<div class="data-card"><strong>${esc(row.file_name||row.backup_type||row.id)}</strong><div class="data-card-subtitle">${esc([row.status,row.started_at,row.completed_at,row.file_size_mb,row.storage_location].filter(Boolean).join(' · '))}</div></div>`).join(''):'<div class="empty-state">لا توجد سجلات نسخ في SQLite.</div>';}catch(e){$('backupHistory').textContent=e.message;toast(e.message,true);}}
-        $('searchInput').addEventListener('input',applyFilter); $('themeToggle').addEventListener('click',toggleTheme); $('fab').addEventListener('click',()=>openForm()); $('saveBtn').addEventListener('click',saveForm); $('sidebarToggle').addEventListener('click',()=>{const side=$('sidebar');side.classList.toggle('open');}); document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay').forEach(x=>x.classList.remove('show'));});
-        window.addEventListener('online',()=>toast('عاد اتصال الجسر المحتمل؛ اضغط تحديث للتحقق')); window.addEventListener('offline',()=>$('offlineBanner').classList.add('show'));
-        Object.assign(window, {goHome, openReport, exportData, reloadData, openForm, saveForm, openModal, closeModal, startAsync, loadDbInfo, askAI});
-        applyTheme(); renderFilters(); initSpecial(); if(CFG.mode!=='unsupported'&&CFG.mode!=='backup'&&CFG.mode!=='ai')reloadData(); else renderCards();
-    })();
+        (() => {
+            'use strict';
+
+            const bridge = window.AndroidInterface;
+
+            const state = {
+                rows: [],
+                employees: [],
+                filtered: [],
+                editing: null,
+                activeView: 'payrolls',
+                activeReport: 'summary',
+                loadedAt: null,
+                lastReportRows: []
+            };
+
+            const $ = id => document.getElementById(id);
+
+            const esc = value =>
+                String(value == null ? '—' : value)
+                    .replace(/[&<>"']/g, c => ({
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#39;'
+                    }[c]));
+
+            const numberValue = value => {
+                const n = Number(value);
+                return Number.isFinite(n) ? n : 0;
+            };
+
+            const money = value =>
+                numberValue(value).toLocaleString('ar', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2
+                });
+
+            const today = () => new Date().toISOString().slice(0, 10);
+
+            function toast(message, bad = false) {
+                const node = $('toast');
+                node.textContent = message;
+                node.className = 'toast show' + (bad ? ' bad' : '');
+                clearTimeout(node._timer);
+                node._timer = setTimeout(() => node.classList.remove('show'), 3500);
+            }
+
+            function setLoading(show) {
+                $('loading').classList.toggle('show', Boolean(show));
+            }
+
+            function parseBridge(raw) {
+                if (raw == null) {
+                    throw new Error('لم يرجع الجسر نتيجة');
+                }
+
+                const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+
+                if (value && value.success === false) {
+                    throw new Error(value.error || value.message || 'فشلت العملية');
+                }
+
+                return value;
+            }
+
+            function dataOf(value) {
+                return value && Object.prototype.hasOwnProperty.call(value, 'data')
+                    ? value.data
+                    : value;
+            }
+
+            function rowsOf(value) {
+                const raw = dataOf(value);
+
+                if (Array.isArray(raw)) return raw;
+                if (raw && Array.isArray(raw.rows)) return raw.rows;
+                if (raw && Array.isArray(raw.data)) return raw.data;
+
+                if (raw && typeof raw === 'object') {
+                    return [raw];
+                }
+
+                return [];
+            }
+
+            function invoke(method, args = []) {
+                if (!bridge || typeof bridge[method] !== 'function') {
+                    return Promise.reject(
+                        new Error('عقد ' + method + ' غير متاح في Android Bridge')
+                    );
+                }
+
+                try {
+                    return Promise.resolve(parseBridge(bridge[method](...args)));
+                } catch (error) {
+                    return Promise.reject(error);
+                }
+            }
+
+            function field(row, names) {
+                for (const name of names) {
+                    if (
+                        row &&
+                        row[name] !== undefined &&
+                        row[name] !== null &&
+                        row[name] !== ''
+                    ) {
+                        return row[name];
+                    }
+                }
+                return '';
+            }
+
+            function rowId(row, index = 0) {
+                return field(row, ['id', '_id', 'payroll_id']) || index;
+            }
+
+            function payrollTitle(row) {
+                return field(row, ['payroll_code']) || 'مسيرة رواتب';
+            }
+
+            function payrollStatus(status) {
+                const labels = {
+                    draft: 'مسودة',
+                    calculated: 'محتسب',
+                    approved: 'معتمد',
+                    paid: 'مدفوع',
+                    closed: 'مغلق'
+                };
+
+                return labels[String(status || '')] || String(status || 'غير محدد');
+            }
+
+            function employeeName(employee) {
+                return field(employee, [
+                    'full_name_ar',
+                    'full_name',
+                    'name',
+                    'employee_code'
+                ]) || 'موظف';
+            }
+
+            function employeeJob(employee) {
+                return field(employee, ['job_title_ar', 'job_title', 'position']);
+            }
+
+            function findEmployeeByJob(jobs) {
+                const normalized = jobs.map(x =>
+                    String(x).replace(/\s+/g, ' ').trim()
+                );
+
+                return state.employees.find(employee => {
+                    const job = String(employeeJob(employee) || '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+
+                    return normalized.includes(job);
+                });
+            }
+
+            function setEmployeeApprovers() {
+                const accountant = findEmployeeByJob([
+                    'محاسب عام',
+                    'محاسب'
+                ]);
+
+                const financialManager = findEmployeeByJob([
+                    'المدير المالي'
+                ]);
+
+                const cashier = findEmployeeByJob([
+                    'أمين صندوق'
+                ]);
+
+                $('calculated_by').value =
+                    accountant ? field(accountant, ['id', 'employee_id']) : '';
+
+                $('approved_by').value =
+                    financialManager ? field(financialManager, ['id', 'employee_id']) : '';
+
+                $('paid_by').value =
+                    cashier ? field(cashier, ['id', 'employee_id']) : '';
+
+                if (!accountant) {
+                    $('calculated_by').placeholder = 'لم يوجد موظف بالمسمى محاسب عام';
+                }
+
+                if (!financialManager) {
+                    $('approved_by').placeholder = 'لم يوجد موظف بالمسمى المدير المالي';
+                }
+
+                if (!cashier) {
+                    $('paid_by').placeholder = 'لم يوجد موظف بالمسمى أمين صندوق';
+                }
+            }
+
+            function calculateEmployeeTotals() {
+                const activeEmployees = state.employees.filter(employee => {
+                    const status = String(field(employee, ['status', 'state']) || 'active')
+                        .toLowerCase();
+
+                    const deleted = numberValue(
+                        field(employee, ['is_deleted', 'deleted'])
+                    );
+
+                    return deleted !== 1 &&
+                        ['active', 'on_leave', 'نشط'].includes(status);
+                });
+
+                const totals = {
+                    count: activeEmployees.length,
+                    basic: 0,
+                    allowances: 0,
+                    deductions: 0,
+                    net: 0
+                };
+
+                activeEmployees.forEach(employee => {
+                    const basic = numberValue(employee.basic_salary);
+
+                    const allowances =
+                        numberValue(employee.housing_allowance) +
+                        numberValue(employee.transport_allowance) +
+                        numberValue(employee.food_allowance) +
+                        numberValue(employee.other_allowances);
+
+                    const deductions =
+                        numberValue(employee.insurance_deduction) +
+                        numberValue(employee.tax_deduction) +
+                        numberValue(employee.other_deductions);
+
+                    const totalSalary = numberValue(employee.total_salary);
+
+                    const net =
+                        totalSalary > 0
+                            ? totalSalary - deductions
+                            : basic + allowances - deductions;
+
+                    totals.basic += basic;
+                    totals.allowances += allowances;
+                    totals.deductions += deductions;
+                    totals.net += Math.max(0, net);
+                });
+
+                return totals;
+            }
+
+            function applyAutomaticTotals() {
+                const totals = calculateEmployeeTotals();
+
+                $('total_employees').value = totals.count;
+                $('total_basic_salary').value = totals.basic.toFixed(2);
+                $('total_allowances').value = totals.allowances.toFixed(2);
+                $('total_deductions').value = totals.deductions.toFixed(2);
+                $('total_net_salary').value = totals.net.toFixed(2);
+
+                $('statEmployees').textContent = totals.count.toLocaleString('ar');
+                $('statBasic').textContent = money(totals.basic);
+                $('statAllowances').textContent = money(totals.allowances);
+                $('statDeductions').textContent = money(totals.deductions);
+                $('statNet').textContent = money(totals.net);
+            }
+
+            function automaticPayrollCode() {
+                const year = Number($('payroll_year').value || new Date().getFullYear());
+                const month = Number($('payroll_month').value || new Date().getMonth() + 1);
+
+                const prefix = 'PAY-' + year + '-' + String(month).padStart(2, '0');
+
+                const used = state.rows
+                    .map(row => String(row.payroll_code || ''))
+                    .filter(Boolean);
+
+                let sequence = 1;
+
+                while (used.includes(prefix + '-' + String(sequence).padStart(3, '0'))) {
+                    sequence++;
+                }
+
+                return prefix + '-' + String(sequence).padStart(3, '0');
+            }
+
+            function setPeriodDefaults() {
+                const year = Number($('payroll_year').value || new Date().getFullYear());
+                const month = Number($('payroll_month').value || new Date().getMonth() + 1);
+
+                const start = new Date(year, month - 1, 1);
+                const end = new Date(year, month, 0);
+
+                const toDate = date =>
+                    date.getFullYear() + '-' +
+                    String(date.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(date.getDate()).padStart(2, '0');
+
+                if (!$('period_start').value) {
+                    $('period_start').value = toDate(start);
+                }
+
+                if (!$('period_end').value) {
+                    $('period_end').value = toDate(end);
+                }
+            }
+
+            function resetForm() {
+                $('recordForm').reset();
+
+                const now = new Date();
+                $('payroll_year').value = now.getFullYear();
+                $('payroll_month').value = String(now.getMonth() + 1);
+
+                setPeriodDefaults();
+
+                $('status').value = 'draft';
+                $('calculated_at').value = '';
+
+                $('approved_at').value = '';
+                $('paid_at').value = '';
+
+                $('created_by').value = '';
+
+                setEmployeeApprovers();
+                applyAutomaticTotals();
+
+                $('payroll_code').value = automaticPayrollCode();
+            }
+
+            function fillForm(row) {
+                const keys = [
+                    'payroll_code',
+                    'payroll_year',
+                    'payroll_month',
+                    'period_start',
+                    'period_end',
+                    'total_employees',
+                    'total_basic_salary',
+                    'total_allowances',
+                    'total_deductions',
+                    'total_net_salary',
+                    'status',
+                    'calculated_by',
+                    'approved_by',
+                    'paid_by',
+                    'calculated_at',
+                    'approved_at',
+                    'paid_at',
+                    'created_by'
+                ];
+
+                keys.forEach(key => {
+                    if ($(key)) {
+                        $(key).value =
+                            row[key] == null ? '' : row[key];
+                    }
+                });
+
+                $('notes').value = row.notes || '';
+
+                setEmployeeApprovers();
+
+                $('total_employees').value =
+                    row.total_employees == null ? '' : row.total_employees;
+
+                $('total_basic_salary').value =
+                    row.total_basic_salary == null ? '' : row.total_basic_salary;
+
+                $('total_allowances').value =
+                    row.total_allowances == null ? '' : row.total_allowances;
+
+                $('total_deductions').value =
+                    row.total_deductions == null ? '' : row.total_deductions;
+
+                $('total_net_salary').value =
+                    row.total_net_salary == null ? '' : row.total_net_salary;
+            }
+
+            function openForm(row = null) {
+                state.editing = row;
+
+                if (row) {
+                    $('formTitle').textContent = 'تعديل مسيرة الرواتب';
+                    fillForm(row);
+                } else {
+                    $('formTitle').textContent = 'إضافة سجل جديد';
+                    resetForm();
+                }
+
+                $('formModal').classList.add('show');
+            }
+
+            function closeModal(id) {
+                $(id).classList.remove('show');
+            }
+
+            function collectForm() {
+                const payload = {};
+
+                document
+                    .querySelectorAll('#recordForm [data-key]')
+                    .forEach(element => {
+                        let value = element.value;
+
+                        if (element.type === 'number') {
+                            value = value === '' ? 0 : Number(value);
+                        }
+
+                        payload[element.dataset.key] = value;
+                    });
+
+                if (state.editing) {
+                    payload.payroll_code = state.editing.payroll_code;
+                } else {
+                    payload.payroll_code = automaticPayrollCode();
+                }
+
+                payload.total_employees = numberValue($('total_employees').value);
+                payload.total_basic_salary = numberValue($('total_basic_salary').value);
+                payload.total_allowances = numberValue($('total_allowances').value);
+                payload.total_deductions = numberValue($('total_deductions').value);
+                payload.total_net_salary = numberValue($('total_net_salary').value);
+
+                delete payload.notes;
+
+                return payload;
+            }
+
+            async function saveForm() {
+                const form = $('recordForm');
+
+                if (!form.reportValidity()) {
+                    return;
+                }
+
+                const payload = collectForm();
+
+                if (!payload.period_start || !payload.period_end) {
+                    toast('يجب تحديد بداية ونهاية فترة الرواتب', true);
+                    return;
+                }
+
+                if (payload.period_end < payload.period_start) {
+                    toast('نهاية الفترة يجب أن تكون بعد بدايتها', true);
+                    return;
+                }
+
+                setLoading(true);
+
+                try {
+                    let result;
+
+                    if (state.editing) {
+                        const id = rowId(state.editing);
+
+                        result = await invoke(
+                            'updatePayrollRecord',
+                            [Number(id), JSON.stringify(payload)]
+                        );
+                    } else {
+                        result = await invoke(
+                            'savePayrollRecord',
+                            [JSON.stringify(payload)]
+                        );
+                    }
+
+                    parseBridge(result);
+
+                    toast('تم حفظ مسيرة الرواتب فعلياً');
+                    closeModal('formModal');
+
+                    await reloadData();
+                } catch (error) {
+                    toast(error.message || 'فشل حفظ مسيرة الرواتب', true);
+                } finally {
+                    setLoading(false);
+                }
+            }
+
+            async function deletePayroll(row) {
+                const id = rowId(row);
+
+                if (!id) {
+                    toast('معرف المسيرة غير صالح', true);
+                    return;
+                }
+
+                if (!confirm('هل تريد حذف مسيرة الرواتب فعلياً؟')) {
+                    return;
+                }
+
+                setLoading(true);
+
+                try {
+                    await invoke('deletePayrollRecord', [Number(id)]);
+                    toast('تم حذف المسيرة فعلياً');
+                    await reloadData();
+                } catch (error) {
+                    toast(error.message || 'فشل حذف المسيرة', true);
+                } finally {
+                    setLoading(false);
+                }
+            }
+
+            function renderStats() {
+                const rows = state.filtered;
+
+                $('statPayrolls').textContent =
+                    rows.length.toLocaleString('ar');
+
+                $('statApproved').textContent =
+                    rows.filter(row =>
+                        String(row.status || '') === 'approved'
+                    ).length.toLocaleString('ar');
+
+                $('statUpdated').textContent =
+                    state.loadedAt
+                        ? state.loadedAt.toLocaleTimeString('ar', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })
+                        : '—';
+            }
+
+            function renderCurrentSummary() {
+                if (!state.rows.length) {
+                    $('currentStatus').textContent = 'لا توجد مسيرة';
+                    $('currentYear').textContent = '—';
+                    $('currentMonth').textContent = '—';
+                    $('currentFrom').textContent = '—';
+                    $('currentTo').textContent = '—';
+                    return;
+                }
+
+                const sorted = [...state.rows].sort((a, b) =>
+                    String(b.period_start || '').localeCompare(
+                        String(a.period_start || '')
+                    )
+                );
+
+                const row = sorted[0];
+
+                $('currentStatus').textContent =
+                    payrollStatus(row.status);
+
+                $('currentYear').textContent =
+                    row.payroll_year || '—';
+
+                $('currentMonth').textContent =
+                    row.payroll_month || '—';
+
+                $('currentFrom').textContent =
+                    row.period_start || '—';
+
+                $('currentTo').textContent =
+                    row.period_end || '—';
+            }
+
+            function renderCards() {
+                renderStats();
+                renderCurrentSummary();
+
+                const box = $('payrollList');
+
+                if (!state.filtered.length) {
+                    box.innerHTML = `
+                        <div class="empty" style="grid-column:1/-1">
+                            <i class="fas fa-file-invoice-dollar"></i>
+                            <p>لا توجد مسيرات رواتب مطابقة للبحث الحالي.</p>
+                        </div>
+                    `;
+                    $('recordCount').textContent = '0';
+                    return;
+                }
+
+                $('recordCount').textContent =
+                    state.filtered.length.toLocaleString('ar');
+
+                box.innerHTML = state.filtered.map((row, index) => {
+                    const id = esc(rowId(row, index));
+
+                    return `
+                        <article class="data-card">
+                            <div class="data-card-head">
+                                <div>
+                                    <div class="data-card-title">
+                                        <i class="fas fa-file-invoice-dollar"></i>
+                                        ${esc(payrollTitle(row))}
+                                    </div>
+                                    <div class="data-card-subtitle">
+                                        الفترة:
+                                        ${esc(row.period_start || '—')}
+                                        —
+                                        ${esc(row.period_end || '—')}
+                                    </div>
+                                </div>
+
+                                <div class="data-card-value">
+                                    ${money(row.total_net_salary)}
+                                </div>
+                            </div>
+
+                            <div class="data-fields">
+                                <div class="data-field">
+                                    <span>السنة</span>
+                                    <strong>${esc(row.payroll_year)}</strong>
+                                </div>
+
+                                <div class="data-field">
+                                    <span>الشهر</span>
+                                    <strong>${esc(row.payroll_month)}</strong>
+                                </div>
+
+                                <div class="data-field">
+                                    <span>الموظفون</span>
+                                    <strong>${money(row.total_employees)}</strong>
+                                </div>
+
+                                <div class="data-field">
+                                    <span>الرواتب الأساسية</span>
+                                    <strong>${money(row.total_basic_salary)}</strong>
+                                </div>
+
+                                <div class="data-field">
+                                    <span>البدلات</span>
+                                    <strong>${money(row.total_allowances)}</strong>
+                                </div>
+
+                                <div class="data-field">
+                                    <span>الاستقطاعات</span>
+                                    <strong>${money(row.total_deductions)}</strong>
+                                </div>
+
+                                <div class="data-field">
+                                    <span>صافي الرواتب</span>
+                                    <strong>${money(row.total_net_salary)}</strong>
+                                </div>
+
+                                <div class="data-field">
+                                    <span>الحالة</span>
+                                    <strong>${esc(payrollStatus(row.status))}</strong>
+                                </div>
+                            </div>
+
+                            <div class="actions">
+                                <button class="btn" type="button"
+                                        data-view="${id}">
+                                    <i class="fas fa-eye"></i> عرض
+                                </button>
+
+                                <button class="btn warning" type="button"
+                                        data-edit="${id}">
+                                    <i class="fas fa-edit"></i> تعديل
+                                </button>
+
+                                <button class="btn danger" type="button"
+                                        data-delete="${id}">
+                                    <i class="fas fa-trash"></i> حذف
+                                </button>
+                            </div>
+                        </article>
+                    `;
+                }).join('');
+
+                box.querySelectorAll('[data-view]').forEach(button => {
+                    button.addEventListener('click', () =>
+                        openDetails(findRow(button.dataset.view))
+                    );
+                });
+
+                box.querySelectorAll('[data-edit]').forEach(button => {
+                    button.addEventListener('click', () =>
+                        openForm(findRow(button.dataset.edit))
+                    );
+                });
+
+                box.querySelectorAll('[data-delete]').forEach(button => {
+                    button.addEventListener('click', () =>
+                        deletePayroll(findRow(button.dataset.delete))
+                    );
+                });
+            }
+
+            function findRow(id) {
+                return state.rows.find(
+                    (row, index) =>
+                        String(rowId(row, index)) === String(id)
+                );
+            }
+
+            function openDetails(row) {
+                if (!row) {
+                    toast('تعذر العثور على السجل', true);
+                    return;
+                }
+
+                const labels = {
+                    id: 'المعرف',
+                    payroll_code: 'رمز مسير الرواتب',
+                    payroll_year: 'سنة الرواتب',
+                    payroll_month: 'شهر الرواتب',
+                    period_start: 'بداية الفترة',
+                    period_end: 'نهاية الفترة',
+                    total_employees: 'إجمالي الموظفين',
+                    total_basic_salary: 'إجمالي الرواتب الأساسية',
+                    total_allowances: 'إجمالي البدلات',
+                    total_deductions: 'إجمالي الاستقطاعات',
+                    total_net_salary: 'إجمالي صافي الرواتب',
+                    status: 'الحالة',
+                    calculated_at: 'تاريخ الاحتساب',
+                    calculated_by: 'احتسب بواسطة',
+                    approved_by: 'اعتمد بواسطة',
+                    approved_at: 'تاريخ الاعتماد',
+                    paid_at: 'تاريخ الدفع',
+                    paid_by: 'دفع بواسطة',
+                    created_at: 'تاريخ الإنشاء',
+                    created_by: 'المنشئ',
+                    updated_at: 'آخر تحديث'
+                };
+
+                $('detailsBody').innerHTML = `
+                    <div class="data-fields">
+                        ${Object.entries(row).map(([key, value]) => `
+                            <div class="data-field">
+                                <span>${esc(labels[key] || key)}</span>
+                                <strong>${esc(value)}</strong>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+
+                $('detailsModal').classList.add('show');
+            }
+
+            function applyFilter() {
+                const query = String(
+                    $('searchInput').value || ''
+                ).trim().toLowerCase();
+
+                state.filtered = state.rows.filter(row => {
+                    if (!query) return true;
+
+                    return JSON.stringify(row || {})
+                        .toLowerCase()
+                        .includes(query);
+                });
+
+                if (state.activeView === 'history') {
+                    state.filtered = state.filtered.filter(row =>
+                        ['closed', 'paid', 'approved', 'calculated']
+                            .includes(String(row.status || ''))
+                    );
+                }
+
+                if (state.activeView === 'current') {
+                    const currentYear = new Date().getFullYear();
+                    const currentMonth = new Date().getMonth() + 1;
+
+                    state.filtered = state.filtered.filter(row =>
+                        Number(row.payroll_year) === currentYear &&
+                        Number(row.payroll_month) === currentMonth
+                    );
+                }
+
+                renderCards();
+            }
+
+            async function loadEmployees() {
+                try {
+                    const result = await invoke(
+                        'getEmployeeRecords',
+                        [JSON.stringify({
+                            limit: 500,
+                            offset: 0,
+                            search: ''
+                        })]
+                    );
+
+                    state.employees = rowsOf(result);
+                    applyAutomaticTotals();
+                    setEmployeeApprovers();
+                } catch (error) {
+                    state.employees = [];
+                    toast(
+                        'تعذر جلب الموظفين لحساب إجماليات الرواتب تلقائياً: ' +
+                        (error.message || ''),
+                        true
+                    );
+                }
+            }
+
+            async function reloadData() {
+                if (!bridge) {
+                    $('offlineBanner').classList.add('show');
+                    state.rows = [];
+                    state.filtered = [];
+                    renderCards();
+                    return;
+                }
+
+                setLoading(true);
+
+                try {
+                    const result = await invoke(
+                        'getPayrollRecords',
+                        [JSON.stringify({
+                            limit: 200,
+                            offset: 0,
+                            search: $('searchInput').value || ''
+                        })]
+                    );
+
+                    state.rows = rowsOf(result);
+                    state.loadedAt = new Date();
+
+                    $('offlineBanner').classList.remove('show');
+
+                    applyFilter();
+                } catch (error) {
+                    state.rows = [];
+                    state.filtered = [];
+                    renderCards();
+
+                    toast(
+                        error.message || 'فشل تحميل مسيرات الرواتب',
+                        true
+                    );
+                } finally {
+                    setLoading(false);
+                }
+            }
+
+            function reportDates() {
+                return {
+                    from_date: $('reportFrom').value || '',
+                    to_date: $('reportTo').value || '',
+                    search: $('searchInput').value || '',
+                    include_archived: true,
+                    limit: 1000,
+                    offset: 0
+                };
+            }
+
+            function reportSummary(rows) {
+                const totals = {
+                    payrolls: rows.length,
+                    employees: rows.reduce(
+                        (sum, row) => sum + numberValue(row.total_employees), 0
+                    ),
+                    basic: rows.reduce(
+                        (sum, row) => sum + numberValue(row.total_basic_salary), 0
+                    ),
+                    allowances: rows.reduce(
+                        (sum, row) => sum + numberValue(row.total_allowances), 0
+                    ),
+                    deductions: rows.reduce(
+                        (sum, row) => sum + numberValue(row.total_deductions), 0
+                    ),
+                    net: rows.reduce(
+                        (sum, row) => sum + numberValue(row.total_net_salary), 0
+                    )
+                };
+
+                return `
+                    <div class="report-metric-grid">
+                        <div class="report-metric">
+                            <small>عدد المسيرات</small>
+                            <b>${money(totals.payrolls)}</b>
+                        </div>
+                        <div class="report-metric">
+                            <small>إجمالي الموظفين في المسيرات</small>
+                            <b>${money(totals.employees)}</b>
+                        </div>
+                        <div class="report-metric">
+                            <small>الرواتب الأساسية</small>
+                            <b>${money(totals.basic)}</b>
+                        </div>
+                        <div class="report-metric">
+                            <small>البدلات</small>
+                            <b>${money(totals.allowances)}</b>
+                        </div>
+                        <div class="report-metric">
+                            <small>الاستقطاعات</small>
+                            <b>${money(totals.deductions)}</b>
+                        </div>
+                        <div class="report-metric">
+                            <small>صافي الرواتب</small>
+                            <b>${money(totals.net)}</b>
+                        </div>
+                    </div>
+                `;
+            }
+
+            function reportTable(rows) {
+                if (!rows.length) {
+                    return `
+                        <div class="empty">
+                            <i class="fas fa-chart-column"></i>
+                            لا توجد بيانات للتقرير المحدد.
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="report-table-wrap">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th>رمز المسيرة</th>
+                                    <th>الفترة</th>
+                                    <th>الموظفون</th>
+                                    <th>الأساسي</th>
+                                    <th>البدلات</th>
+                                    <th>الاستقطاعات</th>
+                                    <th>الصافي</th>
+                                    <th>الحالة</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows.slice(0, 300).map(row => `
+                                    <tr>
+                                        <td>${esc(row.payroll_code)}</td>
+                                        <td>
+                                            ${esc(row.period_start)}
+                                            -
+                                            ${esc(row.period_end)}
+                                        </td>
+                                        <td>${money(row.total_employees)}</td>
+                                        <td>${money(row.total_basic_salary)}</td>
+                                        <td>${money(row.total_allowances)}</td>
+                                        <td>${money(row.total_deductions)}</td>
+                                        <td>${money(row.total_net_salary)}</td>
+                                        <td>${esc(payrollStatus(row.status))}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            function statusReport(rows) {
+                const counts = {};
+
+                rows.forEach(row => {
+                    const status = payrollStatus(row.status);
+                    counts[status] = (counts[status] || 0) + 1;
+                });
+
+                return `
+                    <div class="report-metric-grid">
+                        ${Object.entries(counts).map(([status, count]) => `
+                            <div class="report-metric">
+                                <small>${esc(status)}</small>
+                                <b>${money(count)}</b>
+                            </div>
+                        `).join('') || '<div class="empty">لا توجد حالات.</div>'}
+                    </div>
+                `;
+            }
+
+            function employeeReport() {
+                if (!state.employees.length) {
+                    return '<div class="empty">لا توجد بيانات موظفين متاحة.</div>';
+                }
+
+                const employees = state.employees.filter(employee =>
+                    numberValue(employee.is_deleted) !== 1
+                );
+
+                return `
+                    <div class="report-table-wrap">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th>رقم الموظف</th>
+                                    <th>اسم الموظف</th>
+                                    <th>المسمى الوظيفي</th>
+                                    <th>الراتب الأساسي</th>
+                                    <th>البدلات</th>
+                                    <th>الاستقطاعات</th>
+                                    <th>الصافي</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${employees.slice(0, 500).map(employee => {
+                                    const basic = numberValue(employee.basic_salary);
+
+                                    const allowances =
+                                        numberValue(employee.housing_allowance) +
+                                        numberValue(employee.transport_allowance) +
+                                        numberValue(employee.food_allowance) +
+                                        numberValue(employee.other_allowances);
+
+                                    const deductions =
+                                        numberValue(employee.insurance_deduction) +
+                                        numberValue(employee.tax_deduction) +
+                                        numberValue(employee.other_deductions);
+
+                                    return `
+                                        <tr>
+                                            <td>${esc(field(employee, ['id', 'employee_id']))}</td>
+                                            <td>${esc(employeeName(employee))}</td>
+                                            <td>${esc(employeeJob(employee))}</td>
+                                            <td>${money(basic)}</td>
+                                            <td>${money(allowances)}</td>
+                                            <td>${money(deductions)}</td>
+                                            <td>${money(Math.max(0, basic + allowances - deductions))}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            function deductionsReport(rows) {
+                const total = rows.reduce(
+                    (sum, row) => sum + numberValue(row.total_deductions),
+                    0
+                );
+
+                return `
+                    <div class="report-metric-grid">
+                        <div class="report-metric">
+                            <small>إجمالي الاستقطاعات</small>
+                            <b>${money(total)}</b>
+                        </div>
+                        <div class="report-metric">
+                            <small>متوسط الاستقطاع لكل مسيرة</small>
+                            <b>${money(rows.length ? total / rows.length : 0)}</b>
+                        </div>
+                    </div>
+                    <div style="margin-top:10px">
+                        ${reportTable(rows)}
+                    </div>
+                `;
+            }
+
+            function allowancesReport(rows) {
+                const total = rows.reduce(
+                    (sum, row) => sum + numberValue(row.total_allowances),
+                    0
+                );
+
+                return `
+                    <div class="report-metric-grid">
+                        <div class="report-metric">
+                            <small>إجمالي البدلات</small>
+                            <b>${money(total)}</b>
+                        </div>
+                        <div class="report-metric">
+                            <small>متوسط البدلات لكل مسيرة</small>
+                            <b>${money(rows.length ? total / rows.length : 0)}</b>
+                        </div>
+                    </div>
+                    <div style="margin-top:10px">
+                        ${reportTable(rows)}
+                    </div>
+                `;
+            }
+
+            function paymentsReport(rows) {
+                const paid = rows.filter(row =>
+                    ['paid', 'مغلق'].includes(String(row.status || ''))
+                );
+
+                const paidValue = paid.reduce(
+                    (sum, row) => sum + numberValue(row.total_net_salary),
+                    0
+                );
+
+                return `
+                    <div class="report-metric-grid">
+                        <div class="report-metric">
+                            <small>المسيرات المدفوعة</small>
+                            <b>${money(paid.length)}</b>
+                        </div>
+                        <div class="report-metric">
+                            <small>قيمة صافي الرواتب المدفوعة</small>
+                            <b>${money(paidValue)}</b>
+                        </div>
+                    </div>
+                    <div style="margin-top:10px">
+                        ${reportTable(paid)}
+                    </div>
+                `;
+            }
+
+            function auditReport(rows) {
+                const approved = rows.filter(row =>
+                    String(row.status || '') === 'approved'
+                );
+
+                const pending = rows.filter(row =>
+                    ['draft', 'calculated'].includes(String(row.status || ''))
+                );
+
+                return `
+                    <div class="report-metric-grid">
+                        <div class="report-metric">
+                            <small>المسيرات المعتمدة</small>
+                            <b>${money(approved.length)}</b>
+                        </div>
+                        <div class="report-metric">
+                            <small>المسيرات التي تحتاج مراجعة</small>
+                            <b>${money(pending.length)}</b>
+                        </div>
+                    </div>
+                    <div style="margin-top:10px">
+                        ${reportTable(rows)}
+                    </div>
+                `;
+            }
+
+            async function generateReport() {
+                setLoading(true);
+
+                try {
+                    const result = await invoke(
+                        'generatePayrollReport',
+                        [JSON.stringify(reportDates())]
+                    );
+
+                    const rows = rowsOf(result);
+                    state.lastReportRows = rows;
+
+                    let output = '';
+
+                    switch (state.activeReport) {
+                        case 'periods':
+                            output = reportTable(rows);
+                            break;
+                        case 'status':
+                            output = statusReport(rows);
+                            break;
+                        case 'employees':
+                            output = employeeReport();
+                            break;
+                        case 'deductions':
+                            output = deductionsReport(rows);
+                            break;
+                        case 'allowances':
+                            output = allowancesReport(rows);
+                            break;
+                        case 'payments':
+                            output = paymentsReport(rows);
+                            break;
+                        case 'audit':
+                            output = auditReport(rows);
+                            break;
+                        case 'summary':
+                        default:
+                            output = reportSummary(rows);
+                            break;
+                    }
+
+                    $('reportOutput').innerHTML = output;
+
+                    toast('تم توليد التقرير من المصدر الفعلي');
+                } catch (error) {
+                    $('reportOutput').innerHTML = `
+                        <div class="empty">
+                            <i class="fas fa-triangle-exclamation"></i>
+                            ${esc(error.message || 'فشل توليد التقرير')}
+                        </div>
+                    `;
+
+                    toast(
+                        error.message || 'فشل توليد التقرير',
+                        true
+                    );
+                } finally {
+                    setLoading(false);
+                }
+            }
+
+            function exportCsv() {
+                const rows = state.lastReportRows.length
+                    ? state.lastReportRows
+                    : state.filtered;
+
+                if (!rows.length) {
+                    toast('لا توجد بيانات لتصديرها', true);
+                    return;
+                }
+
+                const keys = [
+                    'payroll_code',
+                    'payroll_year',
+                    'payroll_month',
+                    'period_start',
+                    'period_end',
+                    'total_employees',
+                    'total_basic_salary',
+                    'total_allowances',
+                    'total_deductions',
+                    'total_net_salary',
+                    'status'
+                ];
+
+                const headers = [
+                    'رمز مسير الرواتب',
+                    'السنة',
+                    'الشهر',
+                    'بداية الفترة',
+                    'نهاية الفترة',
+                    'إجمالي الموظفين',
+                    'إجمالي الرواتب الأساسية',
+                    'إجمالي البدلات',
+                    'إجمالي الاستقطاعات',
+                    'إجمالي صافي الرواتب',
+                    'الحالة'
+                ];
+
+                const csv = '\ufeff' + [
+                    headers,
+                    ...rows.map(row =>
+                        keys.map(key =>
+                            String(row[key] ?? '')
+                                .replace(/"/g, '""')
+                        )
+                    )
+                ]
+                .map(row =>
+                    row.map(value => `"${value}"`).join(',')
+                )
+                .join('\n');
+
+                const blob = new Blob(
+                    [csv],
+                    { type: 'text/csv;charset=utf-8' }
+                );
+
+                const url = URL.createObjectURL(blob);
+                const anchor = document.createElement('a');
+
+                anchor.href = url;
+                anchor.download = 'payroll-report.csv';
+                anchor.click();
+
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+                toast('تم إنشاء ملف CSV');
+            }
+
+            function openReport() {
+                $('reportFrom').value =
+                    $('reportFrom').value || today();
+
+                $('reportTo').value =
+                    $('reportTo').value || today();
+
+                $('reportOutput').innerHTML = `
+                    <div class="empty">
+                        <i class="fas fa-chart-column"></i>
+                        اختر نوع التقرير ثم اضغط توليد التقرير.
+                    </div>
+                `;
+
+                $('reportModal').classList.add('show');
+            }
+
+            function setView(view) {
+                state.activeView = view;
+
+                document
+                    .querySelectorAll('#mainTabs .segment')
+                    .forEach(button => {
+                        button.classList.toggle(
+                            'active',
+                            button.dataset.view === view
+                        );
+                    });
+
+                applyFilter();
+            }
+
+            function setReport(report) {
+                state.activeReport = report;
+
+                document
+                    .querySelectorAll('#reportTabs .report-tab')
+                    .forEach(button => {
+                        button.classList.toggle(
+                            'active',
+                            button.dataset.report === report
+                        );
+                    });
+            }
+
+            function navigateBottom(target) {
+                document
+                    .querySelectorAll('.bottom-nav .nav-item')
+                    .forEach(button => {
+                        button.classList.toggle(
+                            'active',
+                            button.dataset.bottom === target
+                        );
+                    });
+
+                if (target === 'reports') {
+                    openReport();
+                    return;
+                }
+
+                if (target === 'payrolls') {
+                    setView('payrolls');
+                    return;
+                }
+
+                if (target === 'employees') {
+                    window.location.href = 'employees.html';
+                    return;
+                }
+
+                if (target === 'attendance') {
+                    window.location.href = 'attendance.html';
+                    return;
+                }
+
+                if (target === 'payments') {
+                    window.location.href = 'employee-payments.html';
+                }
+            }
+
+            function goHome() {
+                window.location.href = '../main.html';
+            }
+
+            function applyTheme() {
+                const saved = localStorage.getItem('theme') || 'light';
+
+                if (saved === 'dark') {
+                    document.documentElement.dataset.theme = 'dark';
+                } else {
+                    delete document.documentElement.dataset.theme;
+                }
+
+                $('themeIcon').className =
+                    saved === 'dark'
+                        ? 'fas fa-sun'
+                        : 'fas fa-moon';
+            }
+
+            function toggleTheme() {
+                const dark =
+                    document.documentElement.dataset.theme === 'dark';
+
+                if (dark) {
+                    delete document.documentElement.dataset.theme;
+                    localStorage.setItem('theme', 'light');
+                    $('themeIcon').className = 'fas fa-moon';
+                } else {
+                    document.documentElement.dataset.theme = 'dark';
+                    localStorage.setItem('theme', 'dark');
+                    $('themeIcon').className = 'fas fa-sun';
+                }
+            }
+
+            $('searchInput').addEventListener('input', applyFilter);
+
+            $('themeToggle').addEventListener('click', toggleTheme);
+
+            $('addButton').addEventListener('click', () => openForm());
+
+            $('saveButton').addEventListener('click', saveForm);
+
+            $('generateReportButton')
+                .addEventListener('click', generateReport);
+
+            $('payroll_year').addEventListener('change', () => {
+                setPeriodDefaults();
+
+                if (!state.editing) {
+                    $('payroll_code').value = automaticPayrollCode();
+                }
+            });
+
+            $('payroll_month').addEventListener('change', () => {
+                setPeriodDefaults();
+
+                if (!state.editing) {
+                    $('payroll_code').value = automaticPayrollCode();
+                }
+            });
+
+            document
+                .querySelectorAll('#mainTabs .segment')
+                .forEach(button => {
+                    button.addEventListener('click', () =>
+                        setView(button.dataset.view)
+                    );
+                });
+
+            document
+                .querySelectorAll('#reportTabs .report-tab')
+                .forEach(button => {
+                    button.addEventListener('click', () =>
+                        setReport(button.dataset.report)
+                    );
+                });
+
+            document
+                .querySelectorAll('.bottom-nav .nav-item')
+                .forEach(button => {
+                    button.addEventListener('click', () =>
+                        navigateBottom(button.dataset.bottom)
+                    );
+                });
+
+            $('formModal').addEventListener('click', event => {
+                if (event.target === $('formModal')) {
+                    closeModal('formModal');
+                }
+            });
+
+            $('detailsModal').addEventListener('click', event => {
+                if (event.target === $('detailsModal')) {
+                    closeModal('detailsModal');
+                }
+            });
+
+            $('reportModal').addEventListener('click', event => {
+                if (event.target === $('reportModal')) {
+                    closeModal('reportModal');
+                }
+            });
+
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape') {
+                    document
+                        .querySelectorAll('.modal-bg')
+                        .forEach(modal =>
+                            modal.classList.remove('show')
+                        );
+                }
+            });
+
+            window.addEventListener('online', () => {
+                toast('عاد الاتصال المحتمل بالجسر؛ اضغط تحديثاً ضمنياً بإعادة فتح الشاشة');
+            });
+
+            window.addEventListener('offline', () => {
+                $('offlineBanner').classList.add('show');
+            });
+
+            Object.assign(window, {
+                goHome,
+                openForm,
+                closeModal,
+                openReport,
+                generateReport,
+                exportCsv,
+                reloadData,
+                toggleTheme
+            });
+
+            applyTheme();
+
+            loadEmployees()
+                .finally(() => reloadData());
+
+        })();
     </script>
+
     <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
 </body>
 </html>
