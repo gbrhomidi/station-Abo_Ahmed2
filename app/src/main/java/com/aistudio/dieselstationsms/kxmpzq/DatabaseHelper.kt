@@ -346,6 +346,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         fun addColumn(table: String, column: String, definition: String) {
             try { db.execSQL("ALTER TABLE $table ADD COLUMN $column $definition") } catch (_: Exception) { }
         }
+        addColumn("shifts", "branch_id", "INTEGER")
         addColumn("employees", "national_id", "TEXT")
         addColumn("employees", "remarks", "TEXT")
         addColumn("employees", "extra_data", "TEXT")
@@ -7402,6 +7403,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 u.role_id,
                 r.role_code AS role,
                 u.station_id,
+                u.branch_id,
                 u.company_id,
                 u.preferred_language,
                 u.theme,
@@ -7430,6 +7432,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("role", it.getString(it.getColumnIndexOrThrow("role")))
                     put("role_id", it.getLong(it.getColumnIndexOrThrow("role_id")))
                     put("station_id", it.getLong(it.getColumnIndexOrThrow("station_id")))
+                    put("branch_id", it.getLong(it.getColumnIndexOrThrow("branch_id")))
                     put("company_id", it.getLong(it.getColumnIndexOrThrow("company_id")))
                     put("language", it.getString(it.getColumnIndexOrThrow("preferred_language")))
                     put("theme", it.getString(it.getColumnIndexOrThrow("theme")))
@@ -8182,6 +8185,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun saveShiftRecordTyped(
         stationId: Int,
+        branchId: Int,
         shiftType: String,
         startTime: String,
         managerId: Long,
@@ -8193,6 +8197,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         remarks: String?
     ): Long {
         require(stationId > 0) { "معرف المحطة مطلوب" }
+        require(branchId > 0) { "معرف الفرع مطلوب" }
         require(
             shiftType in setOf(
                 "morning", "evening", "night", "full_day"
@@ -8283,6 +8288,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     )
                     put(
                         "station_id", stationId
+                    )
+                    put(
+                        "branch_id", branchId
                     )
                     put(
                         "shift_date", startTime.take(10)

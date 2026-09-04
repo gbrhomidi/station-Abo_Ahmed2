@@ -8096,6 +8096,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun saveShiftRecordTyped(
             stationId: Int,
+            branchId: Int,
             shiftType: String,
             startTime: String,
             managerId: Long,
@@ -8114,6 +8115,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 }
                 val id = db.saveShiftRecordTyped(
                     stationId = stationId,
+                    branchId = branchId,
                     shiftType = shiftType,
                     startTime = startTime,
                     managerId = managerId,

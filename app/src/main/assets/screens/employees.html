@@ -102,6 +102,7 @@ button{
     justify-content:space-between;
     gap:8px;
     width:100%;
+    direction:ltr;
 }
 
 /* أقصى اليمين: الأيقونة + العنوان */
@@ -113,6 +114,7 @@ button{
     min-width:0;
     flex:1;
     text-align:right;
+    direction:rtl;
 }
 
 .title-icon{
@@ -1991,8 +1993,8 @@ if(code){
 /* المحطة - تُجلب من جلسة المستخدم، وتُخبأ */
 if(station){
 
-    // جلب station_id من user أو تعيين 1
-    const stationId = state.user?.station_id ?? state.user?.stationId ?? '1';
+    // تقييد النطاق ببيانات المستخدم الحالي دون قيم افتراضية.
+    const stationId = userVal(['station_id','stationId']);
     station.value = stationId;
     station.readOnly = true;
     // إخفاء الحقل بإضافة class
@@ -2002,13 +2004,7 @@ if(station){
 /* الفرع */
 if(branch){
 
-    branch.value =
-        row?.branch_id ||
-        userVal([
-            'branch_id',
-            'branchId'
-        ]) ||
-        '';
+    branch.value = userVal(['branch_id','branchId']);
 
     branch.readOnly = true;
 }

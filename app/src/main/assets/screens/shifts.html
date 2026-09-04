@@ -1003,6 +1003,7 @@ button:disabled{
     z-index:5000;
 
     display:none;
+    pointer-events:none;
 
     align-items:center;
     justify-content:center;
@@ -2274,6 +2275,11 @@ body.shifts-screen .section-title{text-align:center;}
 
 
                 <!-- المحطة + نوع الوردية (سطر واحد) -->
+                <div class="form-group hidden" id="branchIdGroup">
+                    <label class="form-label">الفرع</label>
+                    <input id="branch_id" class="form-input" type="number" readonly tabindex="-1">
+                </div>
+
                 <div class="form-group">
 
                     <label class="form-label">
@@ -3233,7 +3239,9 @@ const state = {
 
         managers: [],
 
-        currentManager: null
+        currentManager: null,
+
+        currentUser: null
 
     },
 
@@ -3751,12 +3759,14 @@ async function loadFormOptions(force = false){
         const station = data.station || null;
         const stationId = station?.id ?? station?.station_id ?? null;
         const currentUser = data.current_user || data.currentUser || null;
+        const branchId = currentUser?.branch_id ?? currentUser?.branchId ?? null;
 
         state.options = {
             stations: station ? [station] : [],
             cashiers: Array.isArray(data.cashiers) ? data.cashiers : [],
             attendants: Array.isArray(data.attendants) ? data.attendants : [],
             managers: Array.isArray(data.managers) ? data.managers : [],
+            currentUser,
             currentManager: Array.isArray(data.managers)
                 ? (data.managers.find(x => String(x.id) === String(currentUser?.id)) || data.managers[0] || null)
                 : null
@@ -3773,6 +3783,11 @@ async function loadFormOptions(force = false){
         if(stationId){
             $("station_id").value = String(stationId);
             $("station_id").disabled = true;
+        }
+
+        if(branchId != null && branchId !== ""){
+            $("branch_id").value = String(branchId);
+            $("branch_id").disabled = true;
         }
 
         if(currentUser?.id && !state.options.currentManager){
@@ -4176,6 +4191,12 @@ function resetForm(){
     $("shift_type")
         .value =
         detectShiftType();
+
+    const currentUser = state.options.currentUser;
+    if(currentUser){
+        $("station_id").value = String(currentUser.station_id ?? currentUser.stationId ?? "");
+        $("branch_id").value = String(currentUser.branch_id ?? currentUser.branchId ?? "");
+    }
 
     $("duration_minutes")
         .value =
@@ -4774,6 +4795,7 @@ async function saveForm(){
 
             // استخدام saveShiftRecordTyped مع المعاملات المطلوبة
             const stationId = Number(payload.station_id || 0);
+            const branchId = Number(payload.branch_id || 0);
             const shiftType = String(payload.shift_type || detectShiftType());
             const startTime = String(payload.start_time || nowLocal());
             const managerId = Number(payload.manager_id || 0);
@@ -4789,6 +4811,7 @@ async function saveForm(){
                     CURRENT_CONTRACTS.save,
                     [
                         stationId,
+                        branchId,
                         shiftType,
                         startTime,
                         managerId,
