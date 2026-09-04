@@ -97,12 +97,12 @@ button{
 }
 
 .topbar-row{
+    position:relative;
     display:flex;
     align-items:center;
     justify-content:space-between;
     gap:8px;
     width:100%;
-    direction:ltr;
 }
 
 /* أقصى اليمين: الأيقونة + العنوان */
@@ -114,7 +114,6 @@ button{
     min-width:0;
     flex:1;
     text-align:right;
-    direction:rtl;
 }
 
 .title-icon{
@@ -155,6 +154,9 @@ button{
     align-items:center;
     gap:7px;
     flex-shrink:0;
+    position:absolute;
+    left:10px;
+    top:12px;
 }
 
 .icon-btn{

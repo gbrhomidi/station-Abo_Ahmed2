@@ -998,21 +998,17 @@ button:disabled{
 .loading{
     position:fixed;
 
-    inset:0;
+    top:76px;
+    left:50%;
+    width:max-content;
+    height:auto;
 
     z-index:5000;
 
     display:none;
     pointer-events:none;
 
-    align-items:center;
-    justify-content:center;
-
-    background:
-        rgba(0,0,0,.56);
-
-    backdrop-filter:
-        blur(7px);
+    transform:translateX(-50%);
 }
 
 .loading.show{
@@ -1020,9 +1016,9 @@ button:disabled{
 }
 
 .loading-card{
-    width:170px;
+    width:auto;
 
-    padding:22px;
+    padding:10px 14px;
 
     display:flex;
     flex-direction:column;
@@ -3699,11 +3695,10 @@ function wrapShiftFormRows(rows){
         if(!fields.length) return;
         const wrapper = document.createElement('div');
         wrapper.className = 'form-row' + (ids.length === 3 ? ' shift-row-triple' : '');
+        // ثبت الحاوية قبل نقل الحقول؛ نقل الحقول أولاً كان يترك نقطة الإدراج
+        // منفصلة عن النموذج، ويسبب بنية DOM غير مستقرة في WebView.
+        form.insertBefore(wrapper, fields[0]);
         fields.forEach(field => wrapper.appendChild(field));
-        const anchor = fields[0];
-        form.insertBefore(wrapper, anchor.nextSibling);
-        fields.forEach(field => field.remove());
-        wrapper.append(...fields);
     });
 }
 function applyShiftMobileFormOrder(){
