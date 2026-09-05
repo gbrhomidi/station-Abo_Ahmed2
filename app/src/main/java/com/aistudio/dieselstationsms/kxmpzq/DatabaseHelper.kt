@@ -10635,9 +10635,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                           u.deleted_at, u.created_at, u.updated_at, u.created_by, u.updated_by,
                           u.deleted_by, u.is_deleted, u.sync_status, u.sync_version, u.sync_at,
                           u.device_id, u.remarks, u.extra_data,
-                          r.role_name, r.role_name_ar
+                          r.role_name, r.role_name_ar,
+                          s.station_name, s.station_name_ar
                    FROM users u
                    LEFT JOIN roles r ON u.role_id = r.id
+                   LEFT JOIN stations s ON u.station_id = s.id
                    WHERE u.is_deleted = 0
                    ORDER BY u.full_name""",
                 null
@@ -10665,9 +10667,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                           u.deleted_at, u.created_at, u.updated_at, u.created_by, u.updated_by,
                           u.deleted_by, u.is_deleted, u.sync_status, u.sync_version, u.sync_at,
                           u.device_id, u.remarks, u.extra_data,
-                          r.role_name, r.role_name_ar
+                          r.role_name, r.role_name_ar,
+                          s.station_name, s.station_name_ar
                    FROM users u
                    LEFT JOIN roles r ON u.role_id = r.id
+                   LEFT JOIN stations s ON u.station_id = s.id
                    WHERE r.role_code = ? AND u.is_deleted = 0 AND u.status = 'active'
                    ORDER BY u.full_name""",
                 arrayOf(role)

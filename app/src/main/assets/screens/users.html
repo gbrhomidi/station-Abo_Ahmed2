@@ -1074,6 +1074,18 @@
             box-shadow: 0 4px 24px var(--cobalt-glow);
         }
 
+        /* توحيد محاذاة بيانات الجداول والحقول في شاشة المستخدمين */
+        table th,
+        table td {
+            text-align: center;
+            vertical-align: middle;
+        }
+        .user-form-modal input,
+        .user-form-modal select,
+        .user-form-modal textarea {
+            text-align: center;
+        }
+
         .toast {
             position: fixed;
             top: 70px;
@@ -1086,7 +1098,8 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            z-index: 600;
+            /* يجب أن يظهر الإشعار فوق طبقة المودال عند التحقق أو الحفظ */
+            z-index: 4000;
             opacity: 0;
             transition: all 0.4s;
             pointer-events: none;
@@ -2568,6 +2581,7 @@
                 const extraData = document.getElementById('extraData').value.trim();
                 if (extraData) { try { JSON.parse(extraData); } catch (e) { showToast('البيانات الإضافية يجب أن تكون JSON صحيحة', 'error'); return; } }
                 const data = {
+                    ...(id > 0 ? { id } : {}),
                     username, full_name: fullName,
                     email: document.getElementById('email').value.trim(),
                     phone: document.getElementById('phone').value.trim(),
