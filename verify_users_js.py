@@ -16,7 +16,9 @@ for index, script in enumerate(scripts, 1):
 print(f'PASS: checked {len(scripts)} inline script blocks')
 
 source = html
-for marker in ('id: id > 0 ? id : undefined', 'z-index: 2000', '#userModal .form-input'):
+if not ('...(id > 0 ? { id } : {})' in source or 'id: id > 0 ? id : undefined' in source):
+    raise SystemExit('Missing expected update-user id fix')
+for marker in ('z-index: 4000', '#userModal .form-input'):
     if marker not in source:
         raise SystemExit(f'Missing expected fix: {marker}')
 print('PASS: expected users-screen fixes are present')
