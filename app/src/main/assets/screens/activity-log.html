@@ -2155,7 +2155,13 @@
                     result = bridge.getRecentActivity(toSafeInt(p.limit, 100, 1, 2000));
                     break;
                 case 'getActivityLogs':
-                    result = bridge.getActivityLogs(toSafeInt(p.limit, 500, 1, 2000));
+                    // MainActivity.WebAppInterface يستقبل JSON نصياً، وليس رقماً مباشراً.
+                    // تمرير الرقم مباشرة كان يسبب TypeError في WebView ويحوّل الشاشة
+                    // إلى النسخة المحلية عند فتحها رغم توفر قاعدة SQLite.
+                    result = bridge.getActivityLogs(JSON.stringify({
+                        limit: toSafeInt(p.limit, 500, 1, 2000),
+                        offset: toSafeInt(p.offset, 0, 0, Number.MAX_SAFE_INTEGER)
+                    }));
                     break;
                 case 'getSmsMessages':
                     result = bridge.getSmsMessages();
