@@ -8206,8 +8206,28 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("shift_type", shiftType)
                     put("start_time", getCurrentDateTime())
                     put("cashier_id", cashierId)
+                    // كل وردية جديدة تبدأ برصيد وإجماليات مستقلة؛ لا تُرحّل أي قيم من وردية سابقة.
                     put("opening_cash", openingCash)
                     put("opening_bank", openingBank)
+                    put("opening_credit", 0.0)
+                    put("closing_cash", 0.0)
+                    put("closing_bank", 0.0)
+                    put("closing_credit", 0.0)
+                    put("total_sales", 0.0)
+                    put("total_fuel_sales", 0.0)
+                    put("total_product_sales", 0.0)
+                    put("total_service_sales", 0.0)
+                    put("total_discounts", 0.0)
+                    put("total_tax", 0.0)
+                    put("total_vat", 0.0)
+                    put("total_cash", 0.0)
+                    put("total_credit_card", 0.0)
+                    put("total_bank_transfer", 0.0)
+                    put("total_credit_sales", 0.0)
+                    put("total_cheque", 0.0)
+                    put("total_other", 0.0)
+                    put("total_fuel_liters", 0.0)
+                    put("cash_variance", 0.0)
                     put("status", "open")
                 }
                 val id = db.insertOrThrow("shifts", null, cv)
@@ -14605,7 +14625,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
             }
             "cash_boxes" -> defaultString("box_code", "BOX")
-            "shifts" -> defaultString("shift_code", "SHIFT")
+            "shifts" -> {
+                defaultString("shift_code", "SHIFT")
+                // لا تُقبل الإجماليات القديمة عند إنشاء وردية جديدة؛ تُحدّث لاحقاً من حركات هذه الوردية.
+                listOf(
+                    "opening_credit", "closing_cash", "closing_bank", "closing_credit",
+                    "total_sales", "total_fuel_sales", "total_product_sales", "total_service_sales",
+                    "total_discounts", "total_tax", "total_vat", "total_cash", "total_credit_card",
+                    "total_bank_transfer", "total_credit_sales", "total_cheque", "total_other",
+                    "total_fuel_liters", "cash_variance"
+                ).forEach { key -> data.put(key, data.optDouble(key, 0.0).takeIf { it.isFinite() } ?: 0.0) }
+            }
             "sales_transactions" -> defaultString("sale_code", "SALE")
             "payments" -> defaultString("payment_code", "PAY")
             "expenses" -> defaultString("expense_code", "EXP")
