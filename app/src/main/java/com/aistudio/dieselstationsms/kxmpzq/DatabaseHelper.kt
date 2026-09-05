@@ -101,6 +101,21 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return hashPassword(password, salt).first == storedHash
         }
 
+        /** الرصيد النقدي المتوقع عند الإغلاق قبل احتساب العجز أو الزيادة. */
+        @JvmStatic
+        fun calculateExpectedClosingCash(openingCash: Double, cashSales: Double): Double {
+            require(openingCash.isFinite() && openingCash >= 0.0) { "النقدية الافتتاحية غير صالحة" }
+            require(cashSales.isFinite() && cashSales >= 0.0) { "مبيعات النقد غير صالحة" }
+            return openingCash + cashSales
+        }
+
+        /** الفرق الموجب زيادة، والسالب عجز مقارنة بالنقدية المتوقعة. */
+        @JvmStatic
+        fun calculateCashVariance(openingCash: Double, cashSales: Double, closingCash: Double): Double {
+            require(closingCash.isFinite() && closingCash >= 0.0) { "النقدية الختامية غير صالحة" }
+            return closingCash - calculateExpectedClosingCash(openingCash, cashSales)
+        }
+
         @Volatile
         private var instance: DatabaseHelper? = null
 
@@ -8389,7 +8404,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("total_bank_transfer", transfer)
                 put("total_credit_sales", credit)
                 put("total_other", other)
-                put("cash_variance", closingCash - (openingCash + cash))
+                put(
+                    "cash_variance",
+                    calculateCashVariance(openingCash, cash, closingCash)
+                )
                 put("status", "closed")
             }
             val rows = db.update("shifts", cv, "id = ? AND station_id = ? AND is_deleted = 0 AND status = 'open'", arrayOf(shiftId.toString(), stationScopeId.toString()))
