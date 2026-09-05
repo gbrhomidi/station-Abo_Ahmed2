@@ -1933,7 +1933,10 @@
                     case 'deleteTask': raw = AndroidInterface.deleteTask(Number(p.id)); break;
                     case 'generateTaskReport': raw = AndroidInterface.generateTaskReport(JSON.stringify(p)); break;
                     case 'backupData': raw = AndroidInterface.backupDatabase(); break;
-                    case 'getAuditLogs': raw = AndroidInterface.getActivityLogs(Number(p.limit || 50)); break;
+                    case 'getAuditLogs': raw = AndroidInterface.getActivityLogs(JSON.stringify({
+                        limit: Number(p.limit || 50),
+                        offset: Number(p.offset || 0)
+                    })); break;
                     default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
                 }
                 return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
