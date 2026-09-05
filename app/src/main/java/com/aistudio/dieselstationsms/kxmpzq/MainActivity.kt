@@ -1107,7 +1107,7 @@ class MainActivity : AppCompatActivity() {
                                 displayZoomControls = false
                                 allowFileAccess = true
                                 // واجهات التطبيق من android_asset فقط، ولا تحتاج قراءة content:// داخل WebView.
-                                allowContentAccess = true
+                                allowContentAccess = false
                                 allowFileAccessFromFileURLs = false
                                 allowUniversalAccessFromFileURLs = false
                                 javaScriptCanOpenWindowsAutomatically = false
