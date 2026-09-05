@@ -12,6 +12,14 @@ for (const value of ['morning', 'evening', 'night', 'full_day']) {
   assert(database.includes(`"${value}"`), `Database allows ${value}`);
 }
 assert(database.includes('put(\n                        "shift_type", shiftType'), 'Database persists shift_type column');
+assert(database.includes('put("closed_at", closedAt)'), 'Database persists closed_at audit field');
+assert(database.includes('put("closed_by", closedBy)'), 'Database persists closed_by audit field');
+assert(database.includes('cashRefunds'), 'Close path accounts for cash refunds');
+assert(database.includes('cashExpenses'), 'Close path accounts for cash expenses');
+assert(database.includes('cashDeposits'), 'Close path accounts for cash deposits');
+assert(database.includes('cashMovementsIn') && database.includes('cashMovementsOut'), 'Close path accounts for cash movements');
+assert(database.includes("description IN ('دفع مصروف','إيداع في البنك')"), 'Close path avoids double counting expense and deposit movements');
+assert(database.includes('closedBy = activity.currentUserId') || main.includes('activity.currentUserId)'), 'Bridge passes authenticated user for close audit');
 assert(screen.includes('saveShiftRecordTyped'), 'UI uses typed save bridge');
 assert(screen.includes('<option value="full_day">'), 'UI exposes full_day option');
 

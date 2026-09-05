@@ -109,6 +109,25 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return openingCash + cashSales
         }
 
+        /**
+         * صافي النقد المتوقع: المبيعات والتحصيلات الداخلة، مطروحاً منها
+         * المرتجعات والمصروفات والإيداعات والسحوبات النقدية.
+         */
+        @JvmStatic
+        fun calculateExpectedClosingCash(
+            openingCash: Double,
+            cashSales: Double,
+            cashRefunds: Double,
+            cashExpenses: Double,
+            cashDeposits: Double,
+            cashMovementsIn: Double,
+            cashMovementsOut: Double
+        ): Double {
+            val values = listOf(openingCash, cashSales, cashRefunds, cashExpenses, cashDeposits, cashMovementsIn, cashMovementsOut)
+            require(values.all { it.isFinite() && it >= 0.0 }) { "إحدى قيم حركة النقد غير صالحة" }
+            return openingCash + cashSales - cashRefunds - cashExpenses - cashDeposits + cashMovementsIn - cashMovementsOut
+        }
+
         /** الفرق الموجب زيادة، والسالب عجز مقارنة بالنقدية المتوقعة. */
         @JvmStatic
         fun calculateCashVariance(openingCash: Double, cashSales: Double, closingCash: Double): Double {
@@ -8366,36 +8385,79 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun closeShift(shiftId: Int, stationScopeId: Int, closingCash: Double, closingBank: Double, totalSales: Double, operator: String): Boolean {
+    fun closeShift(shiftId: Int, stationScopeId: Int, closingCash: Double, closingBank: Double, totalSales: Double, operator: String, closedBy: Long): Boolean {
         require(shiftId > 0) { "معرف الوردية غير صالح" }
         require(stationScopeId > 0) { "معرف المحطة مطلوب لإغلاق الوردية" }
+        require(closedBy > 0L) { "معرف المستخدم القائم بالإغلاق مطلوب" }
         require(closingCash.isFinite() && closingCash >= 0.0) { "الرصيد النقدي الختامي غير صالح" }
         require(closingBank.isFinite() && closingBank >= 0.0) { "الرصيد البنكي الختامي غير صالح" }
         val db = writableDatabase
         db.beginTransaction()
         try {
             var openingCash = 0.0
-            db.rawQuery("SELECT opening_cash FROM shifts WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'open'", arrayOf(shiftId.toString(), stationScopeId.toString())).use { cursor ->
+            var startTime = ""
+            db.rawQuery("SELECT opening_cash, start_time FROM shifts WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'open'", arrayOf(shiftId.toString(), stationScopeId.toString())).use { cursor ->
                 if (!cursor.moveToFirst()) return false
                 openingCash = cursor.getDouble(0)
+                startTime = cursor.getString(1)
             }
+            val closedAt = getCurrentDateTime()
             var total = 0.0
-            var cash = 0.0
+            var cashSales = 0.0
+            var cashRefunds = 0.0
             var card = 0.0
             var transfer = 0.0
             var credit = 0.0
             var other = 0.0
             db.rawQuery("""SELECT COALESCE(SUM(net_amount),0),
-                    COALESCE(SUM(CASE WHEN payment_method='cash' THEN net_amount ELSE 0 END),0),
+                    COALESCE(SUM(CASE WHEN payment_method='cash' AND invoice_type <> 'credit_note' AND status <> 'refunded' AND payment_status <> 'refunded' THEN net_amount ELSE 0 END),0),
                     COALESCE(SUM(CASE WHEN payment_method='credit_card' THEN net_amount ELSE 0 END),0),
                     COALESCE(SUM(CASE WHEN payment_method='bank_transfer' THEN net_amount ELSE 0 END),0),
                     COALESCE(SUM(CASE WHEN payment_method='credit' THEN net_amount ELSE 0 END),0),
                     COALESCE(SUM(CASE WHEN payment_method NOT IN ('cash','credit_card','bank_transfer','credit') THEN net_amount ELSE 0 END),0)
                     FROM sales_transactions WHERE shift_id=? AND station_id=? AND status='completed' AND is_deleted=0""", arrayOf(shiftId.toString(), stationScopeId.toString())).use { cursor ->
-                if (cursor.moveToFirst()) { total = cursor.getDouble(0); cash = cursor.getDouble(1); card = cursor.getDouble(2); transfer = cursor.getDouble(3); credit = cursor.getDouble(4); other = cursor.getDouble(5) }
+                if (cursor.moveToFirst()) { total = cursor.getDouble(0); cashSales = cursor.getDouble(1); card = cursor.getDouble(2); transfer = cursor.getDouble(3); credit = cursor.getDouble(4); other = cursor.getDouble(5) }
             }
+            db.rawQuery("""SELECT COALESCE(SUM(ABS(net_amount)),0) FROM sales_transactions
+                WHERE shift_id=? AND station_id=? AND is_deleted=0 AND payment_method='cash'
+                  AND (invoice_type='credit_note' OR status='refunded' OR payment_status='refunded')""", arrayOf(shiftId.toString(), stationScopeId.toString())).use { cursor ->
+                if (cursor.moveToFirst()) cashRefunds = cursor.getDouble(0)
+            }
+            var cashExpenses = 0.0
+            db.rawQuery("""SELECT COALESCE(SUM(CASE WHEN paid_amount > 0 THEN paid_amount ELSE total_amount END),0)
+                FROM expenses WHERE station_id=? AND is_deleted=0 AND payment_method='cash'
+                  AND (payment_status IN ('paid','approved') OR status IN ('paid','approved'))
+                  AND datetime(created_at) > datetime(?) AND datetime(created_at) <= datetime(?)""", arrayOf(stationScopeId.toString(), startTime, closedAt)).use { cursor ->
+                if (cursor.moveToFirst()) cashExpenses = cursor.getDouble(0)
+            }
+            var cashDeposits = 0.0
+            db.rawQuery("""SELECT COALESCE(SUM(amount),0) FROM cash_deposits
+                WHERE station_id=? AND is_deleted=0 AND status='completed'
+                  AND datetime(COALESCE(created_at,date)) > datetime(?) AND datetime(COALESCE(created_at,date)) <= datetime(?)""", arrayOf(stationScopeId.toString(), startTime, closedAt)).use { cursor ->
+                if (cursor.moveToFirst()) cashDeposits = cursor.getDouble(0)
+            }
+            var cashMovementsIn = 0.0
+            var cashMovementsOut = 0.0
+            db.rawQuery("""SELECT
+                    COALESCE(SUM(CASE WHEN cm.movement_type IN ('in','deposit','return') THEN ABS(cm.amount) ELSE 0 END),0),
+                    COALESCE(SUM(CASE WHEN cm.movement_type IN ('out','withdrawal','expense') THEN ABS(cm.amount) ELSE 0 END),0)
+                FROM cash_movements cm JOIN cash_boxes cb ON cb.id=cm.cash_box_id
+                WHERE cb.station_id=? AND cb.is_deleted=0 AND cm.is_deleted=0
+                  AND NOT (cm.movement_type='out' AND cm.description IN ('دفع مصروف','إيداع في البنك'))
+                  AND datetime(cm.created_at) > datetime(?) AND datetime(cm.created_at) <= datetime(?)""", arrayOf(stationScopeId.toString(), startTime, closedAt)).use { cursor ->
+                if (cursor.moveToFirst()) { cashMovementsIn = cursor.getDouble(0); cashMovementsOut = cursor.getDouble(1) }
+            }
+            val cash = calculateExpectedClosingCash(
+                openingCash = 0.0,
+                cashSales = cashSales,
+                cashRefunds = cashRefunds,
+                cashExpenses = cashExpenses,
+                cashDeposits = cashDeposits,
+                cashMovementsIn = cashMovementsIn,
+                cashMovementsOut = cashMovementsOut
+            )
             val cv = ContentValues().apply {
-                put("end_time", getCurrentDateTime())
+                put("end_time", closedAt)
                 put("closing_cash", closingCash)
                 put("closing_bank", closingBank)
                 put("total_sales", total)
@@ -8408,6 +8470,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     "cash_variance",
                     calculateCashVariance(openingCash, cash, closingCash)
                 )
+                put("closed_at", closedAt)
+                put("closed_by", closedBy)
+                put("extra_data", JSONObject().put("cash_sales", cashSales).put("cash_refunds", cashRefunds).put("cash_expenses", cashExpenses).put("cash_deposits", cashDeposits).put("cash_movements_in", cashMovementsIn).put("cash_movements_out", cashMovementsOut).toString())
                 put("status", "closed")
             }
             val rows = db.update("shifts", cv, "id = ? AND station_id = ? AND is_deleted = 0 AND status = 'open'", arrayOf(shiftId.toString(), stationScopeId.toString()))
@@ -16939,7 +17004,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         )
     }
 
-    fun endShift(id: Long, data: JSONObject, stationScopeId: Int, operator: String): Int {
+    fun endShift(id: Long, data: JSONObject, stationScopeId: Int, operator: String, closedBy: Long): Int {
         require(id in 1L..Int.MAX_VALUE.toLong()) { "معرف الوردية غير صالح" }
         val success = closeShift(
             shiftId = id.toInt(),
@@ -16947,7 +17012,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             closingCash = data.optDouble("closing_cash", 0.0),
             closingBank = data.optDouble("closing_bank", 0.0),
             totalSales = data.optDouble("total_sales", 0.0),
-            operator = operator
+            operator = operator,
+            closedBy = closedBy
         )
         return if (success) 1 else 0
     }

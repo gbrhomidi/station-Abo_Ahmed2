@@ -3847,7 +3847,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val data = JSONObject(jsonData)
                 val operator = activity.currentUserName.ifBlank { "user:${activity.currentUserId}" }
-                val rows = db.endShift(id, data, stationId, operator)
+                val rows = db.endShift(id, data, stationId, operator, activity.currentUserId)
                 successResponse(rows > 0, if (rows > 0) "تم إنهاء الوردية بنجاح" else "لم يتم العثور على الوردية")
             } catch (e: Exception) {
                 DebugLogger.logException("Shift", e)
