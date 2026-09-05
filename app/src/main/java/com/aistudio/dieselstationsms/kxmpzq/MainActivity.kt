@@ -8135,9 +8135,13 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val stationScopeId = requireCurrentStationId(
                     db, activity.currentUserId
                 )
+                val authenticatedBranchId = db.getUserById(activity.currentUserId)
+                    ?.optInt("branch_id", branchId)
+                    ?.takeIf { it > 0 }
+                    ?: branchId
                 val id = db.saveShiftRecordTyped(
                     stationId = stationScopeId,
-                    branchId = branchId,
+                    branchId = authenticatedBranchId,
                     shiftType = shiftType,
                     startTime = startTime,
                     managerId = managerId,
