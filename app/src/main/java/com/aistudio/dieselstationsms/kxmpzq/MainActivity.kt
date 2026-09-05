@@ -8057,9 +8057,25 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 params.put(
                     "station_id", stationId
                 )
-                dataResponse(
+                // القراءة الأساسية تعرض البيانات الغنية، مع fallback مباشر من
+                // نفس جدول shifts لضمان ظهور السجل المنشأ حديثًا حتى لو تعذر
+                // أحد الـ joins الإضافية في استعلام العرض.
+                val limit = params.optInt("limit", 200).coerceIn(1, 500)
+                val typedRows = try {
                     db.getShiftRecordsTyped(params)
-                )
+                } catch (readError: Exception) {
+                    DebugLogger.warn(
+                        "GetShiftRecordsTyped",
+                        "Rich shift query failed; using scoped fallback: ${readError.message}"
+                    )
+                    JSONArray()
+                }
+                val rows = if (typedRows.length() > 0) {
+                    typedRows
+                } else {
+                    db.getShifts(stationId, limit)
+                }
+                dataResponse(rows)
             } catch (e: Exception) {
                 DebugLogger.logException(
                     "GetShiftRecordsTyped", e
