@@ -8373,6 +8373,25 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put(
                         "opening_credit", openingCredit
                     )
+                    // كل وردية جديدة تبدأ بإغلاقات وإجماليات صفرية مستقلة عن أي وردية سابقة.
+                    put("closing_cash", 0.0)
+                    put("closing_bank", 0.0)
+                    put("closing_credit", 0.0)
+                    put("total_sales", 0.0)
+                    put("total_fuel_sales", 0.0)
+                    put("total_product_sales", 0.0)
+                    put("total_service_sales", 0.0)
+                    put("total_discounts", 0.0)
+                    put("total_tax", 0.0)
+                    put("total_vat", 0.0)
+                    put("total_cash", 0.0)
+                    put("total_credit_card", 0.0)
+                    put("total_bank_transfer", 0.0)
+                    put("total_credit_sales", 0.0)
+                    put("total_cheque", 0.0)
+                    put("total_other", 0.0)
+                    put("total_fuel_liters", 0.0)
+                    put("cash_variance", 0.0)
                     put(
                         "status", "open"
                     )
