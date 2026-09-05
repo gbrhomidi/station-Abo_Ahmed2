@@ -3477,14 +3477,22 @@
             }catch(_){
 
                 return {
-                    success:true,
-                    value:result
+                    success:false,
+                    error:"استجابة Bridge غير صالحة"
                 };
 
             }
 
         }
 
+
+        function requireSuccess(result){
+            const parsed = parseBridge(result);
+            if(!parsed || parsed.success !== true){
+                throw new Error(parsed?.error || parsed?.message || "فشلت العملية ولم يؤكدها Bridge.");
+            }
+            return parsed;
+        }
 
         function rowsFrom(
             result
@@ -4835,10 +4843,7 @@
                 }
 
 
-                parseBridge(
-                    result
-                );
-
+                requireSuccess(result);
 
                 toast(
                     state.editing
@@ -5912,10 +5917,7 @@
                     );
 
 
-                parseBridge(
-                    result
-                );
-
+                requireSuccess(result);
 
                 toast(
                     "تم حذف الوردية بنجاح.",
@@ -6046,10 +6048,7 @@
                     );
 
 
-                parseBridge(
-                    result
-                );
-
+                requireSuccess(result);
 
                 toast(
                     "تم إنهاء الوردية بنجاح.",

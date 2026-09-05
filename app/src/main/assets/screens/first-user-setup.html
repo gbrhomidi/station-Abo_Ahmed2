@@ -638,11 +638,11 @@
                     </div>
                     <div class="field">
                         <label for="stationId">رقم المحطة <span class="required">*</span></label>
-                        <input id="stationId" type="number" required min="1" step="1" inputmode="numeric" value="1" placeholder="1">
+                        <input id="stationId" type="number" required min="1" step="1" inputmode="numeric" placeholder="معرف المحطة">
                     </div>
                     <div class="field">
                         <label for="branchId">رقم الفرع <span class="required">*</span></label>
-                        <input id="branchId" type="number" required min="1" step="1" inputmode="numeric" value="1" placeholder="1">
+                        <input id="branchId" type="number" required min="1" step="1" inputmode="numeric" placeholder="معرف الفرع">
                     </div>
 
                     <!-- Full-row: رقم المستخدم (readonly) -->
@@ -720,7 +720,7 @@
                         window.AndroidInterface[methodName](JSON.stringify(params || {})) :
                         window.AndroidInterface[methodName]();
                     const result = parseResult(raw);
-                    return result && result.success ?
+                    return result && result.success === true ?
                         Promise.resolve(result) :
                         Promise.reject(new Error((result && result.error) || 'فشلت عملية Bridge'));
                 } catch (error) {
@@ -777,7 +777,7 @@
             function syncFullNameArabic(){const a=document.getElementById('fullName'),b=document.getElementById('fullNameAr');if(a&&b)b.value=a.value.trim();}
             function getPayload(){
                 syncFullNameArabic();
-                return {username:document.getElementById('username').value.trim(),password:document.getElementById('password').value,password_confirmation:document.getElementById('passwordConfirmation').value,full_name:document.getElementById('fullName').value.trim(),full_name_ar:document.getElementById('fullNameAr').value.trim(),email:document.getElementById('email').value.trim(),phone:document.getElementById('phone').value.trim(),job_title:document.getElementById('jobTitle').value.trim(),department:document.getElementById('department').value.trim(),station_id:document.getElementById('stationId').value.trim()||'1',branch_id:document.getElementById('branchId').value.trim()||'1'};
+                return {username:document.getElementById('username').value.trim(),password:document.getElementById('password').value,password_confirmation:document.getElementById('passwordConfirmation').value,full_name:document.getElementById('fullName').value.trim(),full_name_ar:document.getElementById('fullNameAr').value.trim(),email:document.getElementById('email').value.trim(),phone:document.getElementById('phone').value.trim(),job_title:document.getElementById('jobTitle').value.trim(),department:document.getElementById('department').value.trim(),station_id:document.getElementById('stationId').value.trim(),branch_id:document.getElementById('branchId').value.trim()};
             }
             function validate(payload){
                 if(!payload.username)return 'الاسم المعروض مطلوب.';

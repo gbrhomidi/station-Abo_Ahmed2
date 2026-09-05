@@ -7491,15 +7491,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(stationId > 0L) { "لا توجد محطة مرتبطة بالمستخدم الحالي" }
 
             val station = JSONObject()
+            var stationBranchId = 0L
             db.rawQuery(
                 """
-                SELECT id, station_code, station_name, station_name_ar
+                SELECT id, branch_id, station_code, station_name, station_name_ar
                 FROM stations WHERE id = ? LIMIT 1
                 """.trimIndent(),
                 arrayOf(stationId.toString())
             ).use { cursor ->
                 if (cursor.moveToFirst()) {
                     station.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")))
+                    stationBranchId = if (cursor.isNull(cursor.getColumnIndexOrThrow("branch_id"))) 0L else cursor.getLong(cursor.getColumnIndexOrThrow("branch_id"))
+                    station.put("branch_id", stationBranchId)
                     station.put("station_code", cursor.getString(cursor.getColumnIndexOrThrow("station_code")))
                     station.put("station_name", cursor.getString(cursor.getColumnIndexOrThrow("station_name")))
                     station.put("station_name_ar", cursor.getString(cursor.getColumnIndexOrThrow("station_name_ar")))
@@ -7532,6 +7535,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 """.trimIndent()
                 return db.rawQuery(sql, args).use { cursorToJsonArray(it) }
             }
+
+            val branchId = currentUser.optLong("branch_id", 0L).takeIf { it > 0L } ?: stationBranchId
+            require(branchId > 0L) { "لا يوجد فرع مرتبط بالمستخدم أو المحطة الحالية" }
+            if (stationBranchId > 0L) require(stationBranchId == branchId) { "فرع المستخدم لا يطابق فرع المحطة الحالية" }
+            val branch = JSONObject().apply { put("id", branchId) }
 
             val managers = employeesByTitles(
                 listOf("STATION_MANAGER", "SHIFT_SUPERVISOR", "DEPUTY_STATION_MANAGER", "OPERATIONS_ASSISTANT"),
@@ -7580,6 +7588,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("success", true)
                 put("current_user", currentUser)
                 put("station", station)
+                put("branch", branch)
                 put("managers", allManagers)
                 put("cashiers", cashiers)
                 put("attendants", attendants)
@@ -8265,19 +8274,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(openingCredit.isFinite() && openingCredit >= 0.0) { "الرصيد الائتماني الافتتاحي غير صالح" }
 
         val normalizedAttendants = try {
-            val input = JSONArray(
-                attendantIds.ifBlank { "[]" }
-            )
+            val raw = attendantIds.trim()
+            val input = if (raw.isBlank()) JSONArray() else if (raw.startsWith("[")) {
+                JSONArray(raw)
+            } else {
+                JSONArray().apply {
+                    raw.split(',').forEach { token -> put(token.trim().toLong()) }
+                }
+            }
             val ids = JSONArray()
+            val seen = HashSet<Long>()
             for (i in 0 until input.length()) {
                 val id = input.optLong(i, 0L)
-                if (id > 0L) {
-                    ids.put(id)
-                }
+                if (id > 0L && seen.add(id)) ids.put(id)
             }
             ids.toString()
         } catch (_: Exception) {
-            "[]"
+            throw IllegalArgumentException("معرفات العاملين يجب أن تكون JSON array أو CSV صالحاً")
         }
 
         dbLock.lock()

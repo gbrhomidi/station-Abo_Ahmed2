@@ -1989,17 +1989,32 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     if (username.length > 50) return errorResponse("اسم المستخدم يتجاوز الحد المسموح")
                     if (fullName.isBlank()) return errorResponse("الاسم الكامل مطلوب")
                     if (fullName.length > 200) return errorResponse("الاسم الكامل يتجاوز الحد المسموح")
-                    if (password.length < 6) return errorResponse("كلمة المرور يجب أن تكون 6 أحرف على الأقل")
-                    if (password != confirmation) return errorResponse("تأكيد كلمة المرور غير مطابق")
+	                    if (password.length < 6) return errorResponse("كلمة المرور يجب أن تكون 6 أحرف على الأقل")
+	                    if (password != confirmation) return errorResponse("تأكيد كلمة المرور غير مطابق")
+	                    val stationId = input.optLong("station_id", 0L)
+	                    val branchId = input.optLong("branch_id", 0L)
+	                    if (stationId <= 0L) return errorResponse("معرف المحطة مطلوب ويجب أن يكون أكبر من صفر")
+	                    if (branchId <= 0L) return errorResponse("معرف الفرع مطلوب ويجب أن يكون أكبر من صفر")
 
-                    // قائمة حقول صريحة: لا تُقبل id أو hashes أو role/station/company من JavaScript.
-                    val userData = JSONObject().apply {
+	                    val stationBranchId = db.readableDatabase.rawQuery(
+	                        "SELECT branch_id FROM stations WHERE id = ? AND is_deleted = 0 LIMIT 1",
+	                        arrayOf(stationId.toString())
+	                    ).use { cursor ->
+	                        if (!cursor.moveToFirst()) return errorResponse("المحطة المحددة غير موجودة")
+	                        if (cursor.isNull(0)) 0L else cursor.getLong(0)
+	                    }
+	                    if (stationBranchId > 0L && stationBranchId != branchId) {
+	                        return errorResponse("الفرع لا يطابق الفرع المرتبط بالمحطة المحددة")
+	                    }
+
+	                    // قائمة حقول صريحة: لا تُقبل id أو hashes أو role/station/company من JavaScript.
+	                    val userData = JSONObject().apply {
                         put("username", username)
                         put("full_name", fullName)
-                        put("password", password)
-                        put("role_id", 1)
-                        put("station_id", 1)
-                        put("company_id", 1)
+	                        put("password", password)
+	                        put("role_id", 1)
+	                        put("station_id", stationId)
+	                        put("branch_id", branchId)
                         put("preferred_language", "ar")
                         put("status", "active")
                         put("must_change_password", 0)
@@ -8135,13 +8150,24 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val stationScopeId = requireCurrentStationId(
                     db, activity.currentUserId
                 )
-                val authenticatedBranchId = db.getUserById(activity.currentUserId)
-                    ?.optInt("branch_id", branchId)
-                    ?.takeIf { it > 0 }
-                    ?: branchId
+                val currentUser = db.getUserById(activity.currentUserId)
+                    ?: return errorResponse("المستخدم الحالي غير موجود في قاعدة البيانات")
+                val authenticatedBranchId = currentUser.optLong("branch_id", 0L).takeIf { it > 0L }
+                    ?: db.readableDatabase.rawQuery(
+                        "SELECT branch_id FROM stations WHERE id = ? AND is_deleted = 0 LIMIT 1",
+                        arrayOf(stationScopeId.toString())
+                    ).use { cursor ->
+                        if (!cursor.moveToFirst() || cursor.isNull(0)) 0L else cursor.getLong(0)
+                    }
+                if (authenticatedBranchId <= 0L) {
+                    return errorResponse("لا يوجد فرع موثوق مرتبط بالمستخدم أو المحطة")
+                }
+                if (branchId <= 0 || branchId.toLong() != authenticatedBranchId) {
+                    return errorResponse("الفرع المرسل من الواجهة لا يطابق فرع المستخدم الحالي")
+                }
                 val id = db.saveShiftRecordTyped(
                     stationId = stationScopeId,
-                    branchId = authenticatedBranchId,
+                    branchId = authenticatedBranchId.toInt(),
                     shiftType = shiftType,
                     startTime = startTime,
                     managerId = managerId,
