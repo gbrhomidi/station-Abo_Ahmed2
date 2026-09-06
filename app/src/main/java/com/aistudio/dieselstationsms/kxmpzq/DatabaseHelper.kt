@@ -8309,13 +8309,25 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
 
                 // التحقق من مدير الوردية: الاختيار من employees، مع الحفاظ على manager_id كـ users.id في مخطط shifts الحالي.
+                // قد تأتي المسميات من شاشة الموظفين بالرموز الإنجليزية القياسية أو بالعربية.
+                // كما أن بعض البيانات القديمة تحتوي e.user_id غير صالح؛ لذلك نبحث عن حساب
+                // مستخدم نشط مرتبط بالموظف ونفضّل الربط الصريح e.user_id عند صلاحيته.
                 val managerUserId = db.rawQuery(
                     """
-                    SELECT COALESCE(e.user_id, u.id)
+                    SELECT (
+                        SELECT u.id
+                        FROM users u
+                        WHERE u.is_deleted = 0 AND u.status = 'active'
+                          AND (u.id = e.user_id OR u.employee_id = e.id)
+                        ORDER BY CASE WHEN u.id = e.user_id THEN 0 ELSE 1 END, u.id
+                        LIMIT 1
+                    )
                     FROM employees e
-                    LEFT JOIN users u ON u.id = e.user_id OR u.employee_id = e.id
                     WHERE e.id = ? AND e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
-                      AND TRIM(COALESCE(e.job_title_ar,'')) IN ('مدير المحطة','نائب مدير المحطة','مشرف وردية','مساعد مدير العمليات')
+                      AND (
+                          UPPER(TRIM(COALESCE(e.job_title,''))) IN ('STATION_MANAGER','SHIFT_SUPERVISOR','DEPUTY_STATION_MANAGER','OPERATIONS_ASSISTANT')
+                          OR TRIM(COALESCE(e.job_title_ar,'')) IN ('مدير المحطة','نائب مدير المحطة','مشرف وردية','مساعد مدير العمليات')
+                      )
                     LIMIT 1
                     """.trimIndent(), arrayOf(managerId.toString(), stationId.toString())
                 ).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L }
@@ -8324,9 +8336,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 // التحقق من أمين الصندوق: المصدر employees، مع تحويل employee.id إلى user.id للحقل cashier_id الحالي.
                 val cashierUserId = db.rawQuery(
                     """
-                    SELECT COALESCE(e.user_id, u.id)
+                    SELECT (
+                        SELECT u.id
+                        FROM users u
+                        WHERE u.is_deleted = 0 AND u.status = 'active'
+                          AND (u.id = e.user_id OR u.employee_id = e.id)
+                        ORDER BY CASE WHEN u.id = e.user_id THEN 0 ELSE 1 END, u.id
+                        LIMIT 1
+                    )
                     FROM employees e
-                    LEFT JOIN users u ON u.id = e.user_id OR u.employee_id = e.id
                     WHERE e.id = ? AND e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
                       AND (UPPER(TRIM(COALESCE(e.job_title,''))) = 'CASHIER' OR TRIM(COALESCE(e.job_title_ar,'')) IN ('أمين صندوق','أمين الصندوق'))
                     LIMIT 1
