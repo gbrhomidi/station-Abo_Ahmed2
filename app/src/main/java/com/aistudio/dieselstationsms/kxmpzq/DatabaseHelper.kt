@@ -8314,13 +8314,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 // مستخدم نشط مرتبط بالموظف ونفضّل الربط الصريح e.user_id عند صلاحيته.
                 val managerUserId = db.rawQuery(
                     """
-                    SELECT (
-                        SELECT u.id
-                        FROM users u
-                        WHERE u.is_deleted = 0 AND u.status = 'active'
-                          AND (u.id = e.user_id OR u.employee_id = e.id)
-                        ORDER BY CASE WHEN u.id = e.user_id THEN 0 ELSE 1 END, u.id
-                        LIMIT 1
+                    SELECT COALESCE(
+                        (SELECT u.id FROM users u
+                         WHERE u.id = e.user_id AND u.is_deleted = 0 AND u.status = 'active'
+                         LIMIT 1),
+                        (SELECT u.id FROM users u
+                         WHERE u.employee_id = e.id AND u.is_deleted = 0 AND u.status = 'active'
+                         ORDER BY u.id LIMIT 1)
                     )
                     FROM employees e
                     WHERE e.id = ? AND e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
@@ -8336,13 +8336,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 // التحقق من أمين الصندوق: المصدر employees، مع تحويل employee.id إلى user.id للحقل cashier_id الحالي.
                 val cashierUserId = db.rawQuery(
                     """
-                    SELECT (
-                        SELECT u.id
-                        FROM users u
-                        WHERE u.is_deleted = 0 AND u.status = 'active'
-                          AND (u.id = e.user_id OR u.employee_id = e.id)
-                        ORDER BY CASE WHEN u.id = e.user_id THEN 0 ELSE 1 END, u.id
-                        LIMIT 1
+                    SELECT COALESCE(
+                        (SELECT u.id FROM users u
+                         WHERE u.id = e.user_id AND u.is_deleted = 0 AND u.status = 'active'
+                         LIMIT 1),
+                        (SELECT u.id FROM users u
+                         WHERE u.employee_id = e.id AND u.is_deleted = 0 AND u.status = 'active'
+                         ORDER BY u.id LIMIT 1)
                     )
                     FROM employees e
                     WHERE e.id = ? AND e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
