@@ -98,6 +98,7 @@ class MainActivity : AppCompatActivity() {
         private var pendingWebPermissionRequest: android.webkit.PermissionRequest? = null
         private var pendingFilePathCallback: ValueCallback<Array<Uri>>? = null
         private val fileChooserRequestCode = 4207
+        private val mapPickerRequestCode = 4208
 
         // ============================
         // DebugLogger - نظام التشخيص المركزي
@@ -1208,6 +1209,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == mapPickerRequestCode) {
+            if (resultCode == RESULT_OK && data != null) {
+                val latitude = data.getDoubleExtra(MapPickerActivity.EXTRA_LATITUDE, Double.NaN)
+                val longitude = data.getDoubleExtra(MapPickerActivity.EXTRA_LONGITUDE, Double.NaN)
+                if (latitude.isFinite() && longitude.isFinite()) {
+                    webView?.post {
+                        safeEvaluateJs("window.onNativeMapLocationSelected && window.onNativeMapLocationSelected($latitude, $longitude);")
+                    }
+                    DebugLogger.info("Maps", "Native picker returned latitude=$latitude longitude=$longitude")
+                }
+            } else {
+                DebugLogger.info("Maps", "Native picker cancelled")
+            }
+            return
+        }
         if (requestCode == fileChooserRequestCode) {
             val callback = pendingFilePathCallback
             pendingFilePathCallback = null
@@ -1557,6 +1573,28 @@ class MainActivity : AppCompatActivity() {
         private fun getDbHelper(): DatabaseHelper? = dbHelperRef.get()
         private fun getGeminiHelper(): GeminiAIHelper? = geminiHelperRef.get()
         private fun getActivity(): MainActivity? = activityRef.get()
+
+        /** Opens the real Google Maps SDK picker; no API key or map state is exposed to JavaScript. */
+        @JavascriptInterface
+        fun openNativeMapPicker(latitude: Double, longitude: Double): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val safeLatitude = latitude.takeIf { it.isFinite() && it in -90.0..90.0 } ?: 0.0
+            val safeLongitude = longitude.takeIf { it.isFinite() && it in -180.0..180.0 } ?: 0.0
+            return try {
+                activity.startActivityForResult(
+                    Intent(activity, MapPickerActivity::class.java).apply {
+                        putExtra(MapPickerActivity.EXTRA_INITIAL_LATITUDE, safeLatitude)
+                        putExtra(MapPickerActivity.EXTRA_INITIAL_LONGITUDE, safeLongitude)
+                    },
+                    mapPickerRequestCode
+                )
+                successResponse(true, "تم فتح محدد الموقع الأصلي")
+            } catch (exception: Exception) {
+                DebugLogger.logException("Maps", exception)
+                Toast.makeText(activity, "تعذر فتح خريطة Google؛ يمكنك إدخال الإحداثيات يدوياً.", Toast.LENGTH_LONG).show()
+                errorResponse("تعذر فتح محدد الموقع الأصلي")
+            }
+        }
 
         private fun getScreensForUser(
             activity: MainActivity,

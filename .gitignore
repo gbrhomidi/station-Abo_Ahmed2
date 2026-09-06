@@ -16,6 +16,8 @@
 local.properties
 
 # ─── ملفات الإعدادات السرية ───
+secrets.properties
+app/secrets.properties
 # ملف .env في جذر المشروع يحتوي على مفاتيح API الحقيقية
 # لا ترفعه إلى GitHub أبداً!
 .env

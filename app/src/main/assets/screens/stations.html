@@ -1156,14 +1156,14 @@ function showFormErrors(errors){
 /* =========================================================
 10. GPS
 ========================================================= */
-let mapPickerState={map:null,marker:null,lat:null,lon:null,ready:false,apiPromise:null};
+let mapPickerState={lat:null,lon:null};
 function currentFormCoords(){
     const lat=numeric($('field_latitude')?.value), lon=numeric($('field_longitude')?.value);
-    if(lat||lon) return {lat,lon};
+    if(Number.isFinite(lat)&&Number.isFinite(lon)&&!(lat===0&&lon===0)) return {lat,lon};
     return {lat:15.3694,lon:44.1910};
 }
-function applySelectedCoordinates(lat,lon,source='الخريطة'){
-    if(!Number.isFinite(lat)||!Number.isFinite(lon)) return;
+function applySelectedCoordinates(lat,lon,source='الخريطة الأصلية'){
+    if(!Number.isFinite(lat)||!Number.isFinite(lon)||lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
     mapPickerState.lat=Number(lat); mapPickerState.lon=Number(lon);
     if($('field_latitude')) $('field_latitude').value=Number(lat).toFixed(8);
     if($('field_longitude')) $('field_longitude').value=Number(lon).toFixed(8);
@@ -1172,89 +1172,28 @@ function applySelectedCoordinates(lat,lon,source='الخريطة'){
     if($('mapLon')) $('mapLon').textContent=Number(lon).toFixed(8);
     if($('mapLatInput')) $('mapLatInput').value=Number(lat).toFixed(8);
     if($('mapLonInput')) $('mapLonInput').value=Number(lon).toFixed(8);
-    if(mapPickerState.marker && mapPickerState.map){
-        const pos={lat:Number(lat),lng:Number(lon)};
-        mapPickerState.marker.setPosition(pos);
-        mapPickerState.map.panTo(pos);
-    }
     if(source) toast('تم تحديد الموقع: '+Number(lat).toFixed(6)+', '+Number(lon).toFixed(6),'success');
 }
-function getCurrentLocation(closeAfter=false){
-    if(!navigator.geolocation){toast('خدمة تحديد الموقع غير متاحة في WebView الحالي','bad');return;}
-    setLoading(true,'جاري الحصول على الموقع الجغرافي الحالي...');
-    navigator.geolocation.getCurrentPosition(position=>{
-        const lat=position.coords.latitude, lon=position.coords.longitude;
-        applySelectedCoordinates(lat,lon,'موقع الجهاز');
-        if(mapPickerState.map) mapPickerState.map.setCenter({lat,lng:lon});
-        if(closeAfter) closeModal('mapModal');
-        setLoading(false);
-    },error=>{
-        setLoading(false);
-        toast('تعذر الحصول على الموقع: '+(error.message||'تحقق من إذن الموقع في Android'),'bad');
-    },{enableHighAccuracy:true,timeout:15000,maximumAge:0});
-}
-function googleMapsKey(){
-    const meta=document.querySelector('meta[name="google-maps-api-key"]');
-    let nativeKey='';
+window.onNativeMapLocationSelected=function(latitude,longitude){
+    applySelectedCoordinates(Number(latitude),Number(longitude),'الموقع الأصلي');
+};
+function openNativePicker(){
+    const start=currentFormCoords();
+    if(!window.AndroidInterface || typeof window.AndroidInterface.openNativeMapPicker!=='function'){
+        toast('محدد الخريطة الأصلي غير متاح؛ تحقق من تشغيل التطبيق داخل APK.','bad');
+        return;
+    }
     try{
-        if(window.AndroidInterface && typeof window.AndroidInterface.getGoogleMapsApiKey==='function'){
-            nativeKey=String(window.AndroidInterface.getGoogleMapsApiKey()||'').trim();
-        }
-    }catch(_){ nativeKey=''; }
-    return (nativeKey||window.GOOGLE_MAPS_API_KEY||localStorage.getItem('GOOGLE_MAPS_API_KEY')||(meta&&meta.content)||'').trim();
+        const response=window.AndroidInterface.openNativeMapPicker(start.lat,start.lon);
+        const parsed=response?JSON.parse(response):null;
+        if(parsed && parsed.success===false) toast(parsed.error||'تعذر فتح محدد الموقع','bad');
+    }catch(error){
+        toast('تعذر فتح محدد الموقع الأصلي. يمكنك إدخال الإحداثيات يدوياً.','bad');
+    }
 }
-function loadGoogleMaps(){
-    if(window.google?.maps) return Promise.resolve(window.google.maps);
-    if(mapPickerState.apiPromise) return mapPickerState.apiPromise;
-    const key=googleMapsKey();
-    if(!key) return Promise.reject(new Error('لم يتم توفير مفتاح Google Maps JavaScript API'));
-    mapPickerState.apiPromise=new Promise((resolve,reject)=>{
-        const callback='initStationGoogleMap_'+Date.now();
-        window[callback]=()=>{delete window[callback];resolve(window.google.maps);};
-        const script=document.createElement('script');
-        script.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&callback='+callback+'&v=weekly';
-        script.async=true;script.defer=true;script.onerror=()=>{delete window[callback];reject(new Error('تعذر تحميل Google Maps'));};
-        document.head.appendChild(script);
-    });
-    return mapPickerState.apiPromise;
-}
-function initGooglePicker(){
-    const box=$('googleMapCanvas');
-    if(!box) return;
-    const start=currentFormCoords();
-    loadGoogleMaps().then(()=>{
-        mapPickerState.map=new google.maps.Map(box,{center:{lat:start.lat,lng:start.lon},zoom:15,mapTypeControl:true,streetViewControl:false,fullscreenControl:true,gestureHandling:'greedy'});
-        mapPickerState.marker=new google.maps.Marker({position:{lat:start.lat,lng:start.lon},map:mapPickerState.map,draggable:true,title:'الموقع المحدد'});
-        mapPickerState.ready=true;
-        applySelectedCoordinates(start.lat,start.lon,'');
-        mapPickerState.map.addListener('click',e=>applySelectedCoordinates(e.latLng.lat(),e.latLng.lng(),'الخريطة'));
-        mapPickerState.marker.addListener('dragend',e=>applySelectedCoordinates(e.latLng.lat(),e.latLng.lng(),'الخريطة'));
-    }).catch(error=>{
-        mapPickerState.ready=false;
-        box.innerHTML='<div class="map-fallback"><div><i class="fas fa-map-location-dot" style="font-size:3rem;color:var(--primary);display:block;margin-bottom:10px"></i><b>خريطة Google التفاعلية تحتاج Google Maps JavaScript API Key.</b><p style="margin-top:8px">يمكنك إضافة المفتاح في <code>window.GOOGLE_MAPS_API_KEY</code> أو localStorage باسم <code>GOOGLE_MAPS_API_KEY</code> لتمكين النقر والسحب واعتماد الإحداثيات بدقة.</p></div></div>';
-        toast(error.message,'bad');
-    });
-}
-function openMapPicker(){
-    $('mapModal').classList.add('show');
-    document.body.classList.add('no-scroll');
-    const start=currentFormCoords();
-    applySelectedCoordinates(start.lat,start.lon,'');
-    setTimeout(()=>initGooglePicker(),80);
-}
-function mapSearch(){
-    const query=$('mapSearchInput')?.value.trim();
-    if(!query){toast('اكتب اسم المكان أو العنوان للبحث','bad');return;}
-    if(!window.google?.maps){toast('خريطة Google لم تُحمّل بعد','bad');return;}
-    const geocoder=new google.maps.Geocoder();
-    geocoder.geocode({address:query},(results,status)=>{
-        if(status==='OK'&&results[0]){
-            const loc=results[0].geometry.location;
-            applySelectedCoordinates(loc.lat(),loc.lng(),'نتيجة البحث');
-            if(mapPickerState.map) mapPickerState.map.setZoom(16);
-        }else toast('لم يتم العثور على الموقع المطلوب','bad');
-    });
-}
+function getCurrentLocation(){ openNativePicker(); }
+function openMapPicker(){ openNativePicker(); }
+function mapSearch(){ toast('استخدم البحث داخل تطبيق خرائط Google أو اختر النقطة مباشرة على الخريطة الأصلية.','info'); }
 function confirmMapLocation(){
     const lat=Number(mapPickerState.lat),lon=Number(mapPickerState.lon);
     if(!Number.isFinite(lat)||!Number.isFinite(lon)){toast('حدد الموقع أولاً','bad');return;}
