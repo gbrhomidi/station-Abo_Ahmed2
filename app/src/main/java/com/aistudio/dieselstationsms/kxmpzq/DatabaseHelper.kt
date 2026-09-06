@@ -8314,41 +8314,35 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 // مستخدم نشط مرتبط بالموظف ونفضّل الربط الصريح e.user_id عند صلاحيته.
                 val managerUserId = db.rawQuery(
                     """
-                    SELECT COALESCE(
-                        (SELECT u.id FROM users u
-                         WHERE u.id = e.user_id AND u.is_deleted = 0 AND u.status = 'active'
-                         LIMIT 1),
-                        (SELECT u.id FROM users u
-                         WHERE u.employee_id = e.id AND u.is_deleted = 0 AND u.status = 'active'
-                         ORDER BY u.id LIMIT 1)
-                    )
+                    SELECT u.id
                     FROM employees e
-                    WHERE e.id = ? AND e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
+                    JOIN users u ON u.is_deleted = 0 AND u.status = 'active'
+                      AND (u.id = e.user_id OR u.employee_id = e.id)
+                    WHERE (e.id = ? OR u.id = ?)
+                      AND e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
                       AND (
                           UPPER(TRIM(COALESCE(e.job_title,''))) IN ('STATION_MANAGER','SHIFT_SUPERVISOR','DEPUTY_STATION_MANAGER','OPERATIONS_ASSISTANT')
                           OR TRIM(COALESCE(e.job_title_ar,'')) IN ('مدير المحطة','نائب مدير المحطة','مشرف وردية','مساعد مدير العمليات')
                       )
+                    ORDER BY CASE WHEN u.id = e.user_id THEN 0 ELSE 1 END, u.id
                     LIMIT 1
-                    """.trimIndent(), arrayOf(managerId.toString(), stationId.toString())
+                    """.trimIndent(), arrayOf(managerId.toString(), managerId.toString(), stationId.toString())
                 ).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L }
                 require(managerUserId > 0L) { "مدير الوردية غير صالح أو لا يملك حساب مستخدم مرتبطاً" }
 
                 // التحقق من أمين الصندوق: المصدر employees، مع تحويل employee.id إلى user.id للحقل cashier_id الحالي.
                 val cashierUserId = db.rawQuery(
                     """
-                    SELECT COALESCE(
-                        (SELECT u.id FROM users u
-                         WHERE u.id = e.user_id AND u.is_deleted = 0 AND u.status = 'active'
-                         LIMIT 1),
-                        (SELECT u.id FROM users u
-                         WHERE u.employee_id = e.id AND u.is_deleted = 0 AND u.status = 'active'
-                         ORDER BY u.id LIMIT 1)
-                    )
+                    SELECT u.id
                     FROM employees e
-                    WHERE e.id = ? AND e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
+                    JOIN users u ON u.is_deleted = 0 AND u.status = 'active'
+                      AND (u.id = e.user_id OR u.employee_id = e.id)
+                    WHERE (e.id = ? OR u.id = ?)
+                      AND e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
                       AND (UPPER(TRIM(COALESCE(e.job_title,''))) = 'CASHIER' OR TRIM(COALESCE(e.job_title_ar,'')) IN ('أمين صندوق','أمين الصندوق'))
+                    ORDER BY CASE WHEN u.id = e.user_id THEN 0 ELSE 1 END, u.id
                     LIMIT 1
-                    """.trimIndent(), arrayOf(cashierId.toString(), stationId.toString())
+                    """.trimIndent(), arrayOf(cashierId.toString(), cashierId.toString(), stationId.toString())
                 ).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L }
                 require(cashierUserId > 0L) { "أمين الصندوق غير صالح أو لا يملك حساب مستخدم مرتبطاً" }
 
