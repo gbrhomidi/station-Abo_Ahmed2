@@ -45,7 +45,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 34
+        const val VERSION = 35
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -243,6 +243,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     31 -> migrateV31ToV32(db)
                     32 -> migrateV32ToV33(db)
                     33 -> ensureFuelCommerceSchema(db)
+                    34 -> migrateV34ToV35(db)
                 }
             }
             ensureModule006Schema(db)
@@ -362,6 +363,102 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("UPDATE vehicle_locations SET location_time = replace(location_time, 'T', ' ') WHERE instr(location_time, 'T') > 0")
         ensureFleetSchema(db)
         Log.d(TAG, "Migrated vehicle location timestamps to V32 successfully")
+    }
+
+    /**
+     * Changes the shift-manager identity from users.id to employees.id without
+     * changing shift IDs or losing rows that cannot be linked safely.
+     */
+    private fun migrateV34ToV35(db: SQLiteDatabase) {
+        data class TableDefinition(val name: String, val sql: String, val indexes: List<String>)
+
+        fun columns(table: String): List<String> = db.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
+            val result = ArrayList<String>()
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            while (cursor.moveToNext()) result += cursor.getString(nameIndex)
+            result
+        }
+
+        fun tableSql(table: String): String = db.rawQuery(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+            arrayOf(table)
+        ).use { cursor ->
+            require(cursor.moveToFirst() && !cursor.isNull(0)) { "Missing table definition: $table" }
+            cursor.getString(0)
+        }
+
+        fun indexSql(table: String): List<String> = db.rawQuery(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL",
+            arrayOf(table)
+        ).use { cursor ->
+            val result = ArrayList<String>()
+            while (cursor.moveToNext()) result += cursor.getString(0)
+            result
+        }
+
+        fun renamedCreateSql(sql: String, oldName: String, newName: String): String {
+            val pattern = Regex("(?i)(CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?)${Regex.escape(oldName)}\\b")
+            return sql.replace(pattern) { match -> "${match.groupValues[1]}$newName" }
+        }
+
+        fun copyColumns(table: String, source: String): String {
+            val names = columns(source)
+            require(names.isNotEmpty()) { "No columns found for $source" }
+            return names.joinToString(", ")
+        }
+
+        fun rebuildChild(definition: TableDefinition) {
+            val oldName = "${definition.name}_v34_old"
+            db.execSQL("ALTER TABLE ${definition.name} RENAME TO $oldName")
+            val createSql = renamedCreateSql(definition.sql, definition.name, definition.name)
+                .replace(Regex("(?i)REFERENCES\\s+shifts_v34_old\\s*\\(id\\)"), "REFERENCES shifts(id)")
+            db.execSQL(createSql)
+            val columnList = copyColumns(definition.name, oldName)
+            db.execSQL("INSERT INTO ${definition.name} ($columnList) SELECT $columnList FROM $oldName")
+            db.execSQL("DROP TABLE $oldName")
+            definition.indexes.forEach { db.execSQL(it) }
+        }
+
+        val shiftDefinition = TableDefinition("shifts", tableSql("shifts"), indexSql("shifts"))
+        val childDefinitions = db.rawQuery(
+            "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND sql LIKE '%REFERENCES shifts(id)%' AND name NOT LIKE 'sqlite_%'",
+            null
+        ).use { cursor ->
+            val result = ArrayList<TableDefinition>()
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            val sqlIndex = cursor.getColumnIndexOrThrow("sql")
+            while (cursor.moveToNext()) {
+                val name = cursor.getString(nameIndex)
+                if (name != "shifts") result += TableDefinition(name, cursor.getString(sqlIndex), indexSql(name))
+            }
+            result
+        }
+
+        db.execSQL("ALTER TABLE shifts RENAME TO shifts_v34_old")
+        val newShiftSql = renamedCreateSql(shiftDefinition.sql, "shifts", "shifts")
+            .replace("FOREIGN KEY (manager_id) REFERENCES users(id)", "FOREIGN KEY (manager_id) REFERENCES employees(id)")
+        db.execSQL(newShiftSql)
+
+        val shiftColumnNames = columns("shifts_v34_old")
+        val shiftColumns = copyColumns("shifts", "shifts_v34_old")
+        val managerExpression = """
+            CASE
+                WHEN old.manager_id IS NULL THEN NULL
+                ELSE COALESCE(
+                    (SELECT e.id FROM employees e WHERE e.user_id = old.manager_id LIMIT 1),
+                    (SELECT e.id FROM employees e JOIN users u ON u.employee_id = e.id WHERE u.id = old.manager_id LIMIT 1)
+                )
+            END
+        """.trimIndent()
+        val selectColumns = shiftColumnNames.joinToString(", ") { column ->
+            if (column == "manager_id") "$managerExpression AS manager_id" else "old.$column"
+        }
+        db.execSQL("INSERT INTO shifts ($shiftColumns) SELECT $selectColumns FROM shifts_v34_old old")
+
+        childDefinitions.forEach { rebuildChild(it) }
+        db.execSQL("DROP TABLE shifts_v34_old")
+        shiftDefinition.indexes.forEach { db.execSQL(it) }
+        Log.d(TAG, "Migrated shift manager identity from users.id to employees.id")
     }
 
     private fun ensureModule007Schema(db: SQLiteDatabase) {
@@ -3406,7 +3503,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 remarks TEXT,
                 extra_data TEXT,
                 FOREIGN KEY (station_id) REFERENCES stations(id),
-                FOREIGN KEY (manager_id) REFERENCES users(id),
+                FOREIGN KEY (manager_id) REFERENCES employees(id),
                 FOREIGN KEY (cashier_id) REFERENCES users(id),
                 FOREIGN KEY (closed_by) REFERENCES users(id),
                 FOREIGN KEY (verified_by) REFERENCES users(id),
@@ -8308,27 +8405,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     require(!cursor.moveToFirst()) { "توجد وردية مفتوحة بالفعل لهذه المحطة" }
                 }
 
-                // التحقق من مدير الوردية: الاختيار من employees، مع الحفاظ على manager_id كـ users.id في مخطط shifts الحالي.
+                // التحقق من مدير الوردية: manager_id هو employees.id، ولا يتطلب حساب users.
                 // قد تأتي المسميات من شاشة الموظفين بالرموز الإنجليزية القياسية أو بالعربية.
-                // كما أن بعض البيانات القديمة تحتوي e.user_id غير صالح؛ لذلك نبحث عن حساب
-                // مستخدم نشط مرتبط بالموظف ونفضّل الربط الصريح e.user_id عند صلاحيته.
-                val managerUserId = db.rawQuery(
+                val managerEmployeeId = db.rawQuery(
                     """
-                    SELECT u.id
+                    SELECT e.id
                     FROM employees e
-                    JOIN users u ON u.is_deleted = 0 AND u.status = 'active'
-                      AND (u.id = e.user_id OR u.employee_id = e.id)
-                    WHERE (e.id = ? OR u.id = ?)
+                    WHERE e.id = ?
                       AND e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
                       AND (
                           UPPER(TRIM(COALESCE(e.job_title,''))) IN ('STATION_MANAGER','SHIFT_SUPERVISOR','DEPUTY_STATION_MANAGER','OPERATIONS_ASSISTANT')
                           OR TRIM(COALESCE(e.job_title_ar,'')) IN ('مدير المحطة','نائب مدير المحطة','مشرف وردية','مساعد مدير العمليات')
                       )
-                    ORDER BY CASE WHEN u.id = e.user_id THEN 0 ELSE 1 END, u.id
                     LIMIT 1
-                    """.trimIndent(), arrayOf(managerId.toString(), managerId.toString(), stationId.toString())
+                    """.trimIndent(), arrayOf(managerId.toString(), stationId.toString())
                 ).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L }
-                require(managerUserId > 0L) { "مدير الوردية غير صالح أو لا يملك حساب مستخدم مرتبطاً" }
+                require(managerEmployeeId > 0L) { "مدير الوردية غير صالح أو غير مؤهل أو لا يتبع المحطة" }
 
                 // التحقق من أمين الصندوق: المصدر employees، مع تحويل employee.id إلى user.id للحقل cashier_id الحالي.
                 val cashierUserId = db.rawQuery(
@@ -8381,7 +8473,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         "start_time", startTime
                     )
                     put(
-                        "manager_id", managerUserId
+                        "manager_id", managerEmployeeId
                     )
                     put(
                         "cashier_id", cashierUserId
@@ -15117,7 +15209,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 " WHERE " + where.joinToString(" AND ")
             }
             val query = """
-                SELECT sh.*, st.station_name AS station_name, st.station_name_ar AS station_name_ar, manager.username AS manager_username, manager.full_name AS manager_name, manager.full_name_ar AS manager_name_ar, manager.display_name AS manager_display_name, cashier.username AS cashier_username, cashier.full_name AS cashier_name, cashier.full_name_ar AS cashier_name_ar, cashier.display_name AS cashier_display_name FROM shifts sh LEFT JOIN stations st ON st.id = sh.station_id LEFT JOIN users manager ON manager.id = sh.manager_id LEFT JOIN users cashier ON cashier.id = sh.cashier_id $whereSql ORDER BY sh.id DESC LIMIT? OFFSET?
+                SELECT sh.*, st.station_name AS station_name, st.station_name_ar AS station_name_ar, manager.full_name AS manager_name, manager.full_name_ar AS manager_name_ar, cashier.username AS cashier_username, cashier.full_name AS cashier_name, cashier.full_name_ar AS cashier_name_ar, cashier.display_name AS cashier_display_name FROM shifts sh LEFT JOIN stations st ON st.id = sh.station_id LEFT JOIN employees manager ON manager.id = sh.manager_id LEFT JOIN users cashier ON cashier.id = sh.cashier_id $whereSql ORDER BY sh.id DESC LIMIT? OFFSET?
                 """.trimIndent()
             val queryArgs = args.toMutableList().apply {
                 add(limit.toString())
