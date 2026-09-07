@@ -10718,7 +10718,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(username.isNotBlank()) { "اسم المستخدم مطلوب" }
             require(fullName.isNotBlank()) { "الاسم الكامل مطلوب" }
             require(password.length >= 6) { "كلمة المرور يجب أن تكون 6 أحرف على الأقل" }
+            val roleId = data.optLong("role_id", 0L)
+            require(roleId > 0L) { "الدور مطلوب" }
+            require(data.optString("status", "active") in setOf("active", "inactive", "locked", "suspended")) { "حالة المستخدم غير صالحة" }
             validateUserUniqueFields(db, data)
+            db.rawQuery("SELECT 1 FROM roles WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(roleId.toString())).use {
+                require(it.moveToFirst()) { "الدور المحدد غير موجود" }
+            }
+            val employeeId = data.optLong("employee_id", 0L)
+            if (employeeId > 0L) db.rawQuery("SELECT 1 FROM employees WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(employeeId.toString())).use {
+                require(it.moveToFirst()) { "الموظف المرتبط غير موجود" }
+            }
             val (hash, salt) = hashPassword(password)
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
@@ -10805,6 +10815,80 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    fun searchUsers(query: String, status: String?, roleId: Long?, stationId: Long?, page: Int, pageSize: Int): JSONObject {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val safePage = page.coerceAtLeast(1)
+            val safePageSize = pageSize.coerceIn(1, 100)
+            val where = mutableListOf("u.is_deleted = 0")
+            val args = mutableListOf<String>()
+            val normalizedQuery = query.trim()
+            if (normalizedQuery.isNotBlank()) {
+                val like = "%$normalizedQuery%"
+                where += "(u.username LIKE ? OR u.full_name LIKE ? OR u.full_name_ar LIKE ? OR u.display_name LIKE ? OR u.email LIKE ? OR u.phone LIKE ? OR u.national_id LIKE ? OR u.passport_number LIKE ? OR CAST(u.employee_id AS TEXT) LIKE ? OR u.job_title LIKE ? OR u.department LIKE ? OR u.status LIKE ?)"
+                repeat(12) { args += like }
+            }
+            if (!status.isNullOrBlank()) {
+                require(status in setOf("active", "inactive", "locked", "suspended")) { "حالة المستخدم غير صالحة" }
+                where += "u.status = ?"
+                args += status
+            }
+            if (roleId != null && roleId > 0L) {
+                where += "u.role_id = ?"
+                args += roleId.toString()
+            }
+            if (stationId != null && stationId > 0L) {
+                where += "u.station_id = ?"
+                args += stationId.toString()
+            }
+            val whereSql = where.joinToString(" AND ")
+            val count = db.rawQuery("SELECT COUNT(*) FROM users u WHERE $whereSql", args.toTypedArray()).use {
+                if (it.moveToFirst()) it.getLong(0) else 0L
+            }
+            val stats = db.rawQuery(
+                "SELECT COUNT(*), SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), SUM(CASE WHEN status = 'locked' OR account_locked = 1 THEN 1 ELSE 0 END), SUM(CASE WHEN last_login_at IS NOT NULL AND last_login_at <> '' THEN 1 ELSE 0 END) FROM users WHERE is_deleted = 0",
+                null
+            ).use { cursor ->
+                if (cursor.moveToFirst()) longArrayOf(cursor.getLong(0), cursor.getLong(1), cursor.getLong(2), cursor.getLong(3)) else longArrayOf(0, 0, 0, 0)
+            }
+            val offset = (safePage - 1).toLong() * safePageSize
+            val dataArgs = args.toMutableList().apply { add(safePageSize.toString()); add(offset.toString()) }
+            val rows = db.rawQuery(
+                """SELECT u.id, u.uuid, u.username, u.email, u.phone, u.full_name, u.full_name_ar,
+                          u.display_name, u.avatar_path, u.national_id, u.passport_number, u.nationality,
+                          u.birth_date, u.gender, u.employee_id, u.job_title, u.department, u.hire_date,
+                          u.role_id, u.station_id, u.branch_id, u.company_id, u.preferred_language, u.theme,
+                          u.timezone, u.date_format, u.two_factor_enabled, u.two_factor_method,
+                          u.biometric_enabled, u.biometric_type, u.last_password_change,
+                          u.password_expiry_days, u.password_expiry_date, u.must_change_password,
+                          u.failed_login_attempts, u.account_locked, u.locked_until, u.last_login_at,
+                          u.last_login_ip, u.last_login_device, u.session_timeout, u.device_limit,
+                          u.has_biometrics, u.status, u.status_reason, u.email_verified, u.phone_verified,
+                          u.deleted_at, u.created_at, u.updated_at, u.created_by, u.updated_by,
+                          u.deleted_by, u.is_deleted, u.sync_status, u.sync_version, u.sync_at,
+                          u.device_id, u.remarks, u.extra_data, r.role_name, r.role_name_ar,
+                          s.station_name, s.station_name_ar
+                   FROM users u LEFT JOIN roles r ON u.role_id = r.id LEFT JOIN stations s ON u.station_id = s.id
+                   WHERE $whereSql ORDER BY u.full_name LIMIT ? OFFSET ?""",
+                dataArgs.toTypedArray()
+            ).use { cursorToJsonArray(it) }
+            JSONObject().apply {
+                put("success", true)
+                put("data", rows)
+                put("total", count)
+                put("page", safePage)
+                put("pageSize", safePageSize)
+                put("offset", offset)
+                put("stats", JSONObject().apply {
+                    put("total", stats[0]); put("active", stats[1]); put("locked", stats[2]); put("login", stats[3])
+                })
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
     fun getUsersByRole(role: String): JSONArray {
         dbLock.lock()
         return try {
@@ -10844,6 +10928,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(id > 0) { "معرف المستخدم غير صالح" }
             require(data.optString("full_name").trim().isNotBlank()) { "الاسم الكامل مطلوب" }
             validateUserUniqueFields(db, data, id)
+            if (data.has("role_id")) db.rawQuery("SELECT 1 FROM roles WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(data.optLong("role_id").toString())).use {
+                require(it.moveToFirst()) { "الدور المحدد غير موجود" }
+            }
+            if (data.has("employee_id") && !data.isNull("employee_id") && data.optLong("employee_id") > 0L) db.rawQuery("SELECT 1 FROM employees WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(data.optLong("employee_id").toString())).use {
+                require(it.moveToFirst()) { "الموظف المرتبط غير موجود" }
+            }
             val cv = ContentValues().apply {
                 val textFields = listOf("full_name", "full_name_ar", "display_name", "avatar_path", "email", "phone", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "preferred_language", "theme", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data")
                 textFields.forEach { key ->
@@ -10894,12 +10984,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun deleteUser(id: Long): Int {
+    fun deleteUser(id: Long, actorId: Long = 0L): Int {
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val cv = ContentValues().apply { put("is_deleted", 1) }
-            val rows = db.update("users", cv, "id=?", arrayOf(id.toString()))
+            require(id > 0L) { "معرف المستخدم غير صالح" }
+            val cv = ContentValues().apply {
+                put("is_deleted", 1)
+                put("deleted_at", getCurrentDateTime())
+                if (actorId > 0L) put("deleted_by", actorId)
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = db.update("users", cv, "id=? AND is_deleted = 0", arrayOf(id.toString()))
             if (rows > 0) logActivity("system", "delete_user", "حذف مستخدم $id")
             rows
         } finally {

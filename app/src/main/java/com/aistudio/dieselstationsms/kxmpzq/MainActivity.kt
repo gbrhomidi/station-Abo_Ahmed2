@@ -3766,6 +3766,26 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun searchUsers(jsonData: String = "{}"): String {
+            DebugLogger.info("WebAppInterface", "searchUsers called")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val params = JSONObject(jsonData.ifBlank { "{}" })
+                db.searchUsers(
+                    query = params.optString("query"),
+                    status = params.optString("status").takeIf { it.isNotBlank() },
+                    roleId = params.optLong("role_id", 0L).takeIf { it > 0L },
+                    stationId = params.optLong("station_id", 0L).takeIf { it > 0L },
+                    page = params.optInt("page", 1),
+                    pageSize = params.optInt("pageSize", 10)
+                ).toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("UserSearch", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
         fun getUsersByRole(role: String): String {
             DebugLogger.info("WebAppInterface", "getUsersByRole called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
@@ -3799,7 +3819,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "deleteUser called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.deleteUser(id)
+                val actorId = getActivity()?.currentUserId ?: 0L
+                val rows = db.deleteUser(id, actorId)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
                 DebugLogger.logException("User", e)
