@@ -34,6 +34,8 @@
 - [📡 نظام SMS المتكامل](#-نظام-sms-المتكامل)
 - [📊 التقارير والإحصائيات](#-التقارير-والإحصائيات)
 - [🔒 الأمان والنسخ الاحتياطي](#-الأمان-والنسخ-الاحتياطي)
+- [👥 شاشة إدارة المستخدمين وBridges](#-شاشة-إدارة-المستخدمين-وbridges)
+- [🧪 اختبارات DatabaseHelper](#-اختبارات-databasehelper)
 - [🤝 المساهمة](#-المساهمة)
 - [📜 الترخيص](#-الترخيص)
 - [👤 التواصل](#-التواصل)
@@ -615,3 +617,104 @@ SOFTWARE.
 </p>
 
 </div>
+
+
+---
+
+## 👥 شاشة إدارة المستخدمين وBridges
+
+توجد شاشة إدارة المستخدمين في `app/src/main/assets/screens/users.html`. لا تعتمد الشاشة على بيانات وهمية أو نتائج ثابتة؛ إذ تمر عمليات البحث والقراءة والإنشاء والتعديل والحذف عبر `AndroidInterface` ثم `MainActivity.WebAppInterface` إلى `DatabaseHelper` وSQLite.
+
+### مسار الاتصال
+
+```text
+users.html
+  → AndroidInterface.searchUsers(json)
+  → MainActivity.WebAppInterface.searchUsers(json)
+  → DatabaseHelper.searchUsers(...)
+  → SQLite users / roles / stations
+  → JSON response
+  → users.html
+```
+
+### Bridges المستخدمة في الشاشة
+
+| Bridge | التوقيع من JavaScript | الوظيفة | الصلاحية المطلوبة |
+|---|---|---|---|
+| `searchUsers` | `searchUsers(jsonData)` | بحث SQL مع الفلاتر والترقيم والإحصائيات | `users.read` |
+| `getRoles` | `getRoles()` | تحميل الأدوار الفعلية | حسب سياق التطبيق |
+| `getStations` | `getStations()` | تحميل المحطات الفعلية | حسب سياق التطبيق |
+| `getEmployees` | `getEmployees()` | تحميل الموظفين المرتبطين بالمحطة | حسب سياق التطبيق |
+| `getGroups` | `getGroups()` | قراءة المجموعات غير المؤرشفة | `users.read` |
+| `getPermissions` | `getPermissions()` | قراءة الصلاحيات | `users.read` |
+| `getUserPermissions` | `getUserPermissions(userId)` | قراءة صلاحيات مستخدم محدد | `users.read` |
+| `getUserSessions` | `getUserSessions(userId)` | قراءة الجلسات النشطة | `users.read` |
+| `terminateSession` | `terminateSession(sessionId)` | إنهاء جلسة | `users.update` أو ملكية الجلسة وفق سياسة التطبيق |
+| `getUserActivityLog` | `getUserActivityLog(jsonData)` | قراءة سجل النشاط | `users.read` |
+| `getUserNotifications` | `getUserNotifications(userId)` | قراءة إشعارات مستخدم | `users.read` |
+| `addUser` | `addUser(jsonData)` | إنشاء مستخدم وتجزيء كلمة المرور Native | `users.create` |
+| `updateUser` | `updateUser(id, jsonData)` | تعديل مستخدم مع التحقق والتدقيق | `users.update` |
+| `deleteUser` | `deleteUser(id)` | Soft Delete مع حقول التدقيق | `users.delete` |
+| `deleteGroup` | `deleteGroup(id)` | أرشفة مجموعة | عقد المجموعة الحالي |
+
+جميع الردود تُعاد بصيغة JSON. عمليات القراءة الناجحة تعيد عادةً `{ "success": true, "data": [...] }`. أما `searchUsers` فيعيد الشكل التالي، مع إبقاء معلومات كلمات المرور والأسرار خارج النتيجة:
+
+```json
+{
+  "success": true,
+  "data": [],
+  "total": 0,
+  "page": 1,
+  "pageSize": 10,
+  "offset": 0,
+  "stats": {
+    "total": 0,
+    "active": 0,
+    "locked": 0,
+    "login": 0
+  }
+}
+```
+
+ترسل الواجهة إلى `searchUsers` كائنًا يتضمن `query` و`status` و`role_id` و`station_id` و`page` و`pageSize`. تُقيّد قيمة `pageSize` Native بين 1 و100، وتُستخدم معاملات SQLite المعلّمة بدل تركيب SQL من مدخلات المستخدم. كما تتحقق طبقة Kotlin من صلاحية الدور والموظف المرتبط والحالة قبل الإنشاء أو التعديل.
+
+### جداول SQLite المرتبطة
+
+تعتمد الشاشة مباشرةً على جداول `users` و`roles` و`stations`، وتقرأ بيانات الموظف من `employees`، والمجموعات من `groups_table`، والصلاحيات من `permissions` و`role_permissions` و`user_permissions`. وتستخدم تقارير الجلسات والنشاط والإشعارات جداول `user_sessions` و`user_activity_log` و`notifications` بحسب العملية المطلوبة.
+
+### قواعد أمنية مهمة
+
+يتم تنفيذ `users.read/create/update/delete` داخل Native قبل الوصول إلى SQLite. وتُنفّذ كلمات المرور بالتجزئة داخل `DatabaseHelper` ولا تُعاد أعمدة `password_hash` أو `password_salt` أو أسرار المصادقة إلى WebView. الحذف ليس حذفًا فعليًا؛ بل يكتب `is_deleted = 1` و`deleted_at` و`deleted_by` و`updated_at`. وتُنشأ فهارس مركبة على نطاق المستخدم والحالة والدور والمحطة والاسم لتسريع الفلاتر والترتيب.
+
+---
+
+## 🧪 اختبارات DatabaseHelper
+
+أضيف اختبار Robolectric في:
+
+```text
+app/src/test/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelperUsersSearchTest.kt
+```
+
+يغطي الاختبار بحث الاسم، وإجمالي النتائج، وثبات حجم الصفحة، وعدم تكرار السجلات بين الصفحات، وترشيح الحالة، وإحصائيات SQLite. لتشغيله من جذر المشروع:
+
+```bash
+./gradlew :app:testDebugUnitTest --tests '*DatabaseHelperUsersSearchTest'
+```
+
+ولتسجيل تقرير المراجعة والفحوصات العامة يمكن استخدام:
+
+```bash
+./gradlew :app:testDebugUnitTest
+./gradlew :app:securityCheck
+```
+
+لم تُستخدم بيانات Mock أو نتائج ثابتة داخل الاختبار؛ تُنشأ السجلات داخل قاعدة SQLite الخاصة بـ Robolectric، ثم تُستدعى الدالة `DatabaseHelper.searchUsers` نفسها وتُفحص النتائج المعادة من الاستعلام.
+
+---
+
+## 🔎 ملخص مراجعة الكود
+
+تمت مراجعة مسار الاستدعاء بين JavaScript وKotlin وSQLite، مع التركيز على حقن SQL، كشف الأسرار، صلاحيات جسور WebView، الحذف، والتعامل مع المعاملات. استعلام البحث يستخدم placeholders لجميع قيم المستخدم، ويحدّ الترقيم Native، ويستبعد السجلات المحذوفة، ويعيد عدد النتائج من `COUNT(*)` مستقل قبل تطبيق `LIMIT/OFFSET`. أضيفت فهارس `idx_users_active_scope` و`idx_users_active_name` لدعم الفلاتر والترتيب المتكرر.
+
+تظل نتائج البحث النصي العام التي تبدأ بـ `%` محدودة الاستفادة من الفهارس التقليدية بطبيعتها؛ وإذا أصبح حجم جدول المستخدمين كبيرًا جدًا، فالحل اللاحق المناسب هو SQLite FTS5 مع مزامنة واضحة، وليس إعادة البحث في مصفوفة JavaScript. كما يجب تشغيل اختبارات الوحدة ضمن CI بعد كل تغيير في مخطط `users` أو عقد الـ Bridges.

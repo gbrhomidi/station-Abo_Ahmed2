@@ -500,6 +500,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         addColumn("employee_payments", "period_to", "TEXT")
         addColumn("employee_payments", "created_at", "TEXT")
         addColumn("employee_payments", "updated_at", "TEXT")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_users_active_scope ON users(is_deleted, status, role_id, station_id, full_name)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_users_active_name ON users(is_deleted, full_name)")
         addColumn("employee_payments", "is_deleted", "INTEGER DEFAULT 0")
         addColumn("employee_payments", "deleted_at", "TEXT")
         addColumn("employee_payments", "created_by", "INTEGER")
