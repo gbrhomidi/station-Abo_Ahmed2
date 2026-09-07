@@ -718,3 +718,35 @@ app/src/test/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelperUsersSearch
 تمت مراجعة مسار الاستدعاء بين JavaScript وKotlin وSQLite، مع التركيز على حقن SQL، كشف الأسرار، صلاحيات جسور WebView، الحذف، والتعامل مع المعاملات. استعلام البحث يستخدم placeholders لجميع قيم المستخدم، ويحدّ الترقيم Native، ويستبعد السجلات المحذوفة، ويعيد عدد النتائج من `COUNT(*)` مستقل قبل تطبيق `LIMIT/OFFSET`. أضيفت فهارس `idx_users_active_scope` و`idx_users_active_name` لدعم الفلاتر والترتيب المتكرر.
 
 تظل نتائج البحث النصي العام التي تبدأ بـ `%` محدودة الاستفادة من الفهارس التقليدية بطبيعتها؛ وإذا أصبح حجم جدول المستخدمين كبيرًا جدًا، فالحل اللاحق المناسب هو SQLite FTS5 مع مزامنة واضحة، وليس إعادة البحث في مصفوفة JavaScript. كما يجب تشغيل اختبارات الوحدة ضمن CI بعد كل تغيير في مخطط `users` أو عقد الـ Bridges.
+
+
+## 🧰 استكشاف أخطاء بناء APK
+
+يتطلب بناء المشروع وجود **Android SDK** و**JDK كامل يحتوي على `javac`**. المشروع يستخدم Java 17 في `compileOptions` وKotlin JVM target، لذلك لا يكفي تثبيت runtime فقط.
+
+إذا ظهر الخطأ `SDK location not found`، ثبّت Android SDK مع منصة `android-35` وBuild Tools `35.0.0`، ثم أنشئ ملف `local.properties` من النموذج:
+
+```bash
+cp local.properties.example local.properties
+# عدّل sdk.dir إلى المسار الحقيقي للـ Android SDK
+```
+
+يمكن أيضًا ضبط متغيرات البيئة:
+
+```bash
+export ANDROID_HOME="$HOME/Android/Sdk"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+export JAVA_HOME="/path/to/jdk-17"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
+./gradlew assembleDebug
+```
+
+إذا ظهر الخطأ `does not provide the required capabilities: [JAVA_COMPILER]`، فهذا يعني أن البيئة تحتوي على Java Runtime دون compiler. ثبّت JDK 17 (`openjdk-17-jdk` أو ما يعادله)، وتحقق من وجود `javac` عبر `javac -version`. لا تُرفع `local.properties` إلى Git لأنها تحتوي على مسار خاص بالجهاز؛ الملف النموذجي `local.properties.example` هو الملف المسموح بمشاركته.
+
+بعد نجاح البناء يوجد APK التطوير عادةً في:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+في بيئة التحقق الحالية تم تجاوز مشكلتي SDK وJDK، ونجح الأمر `./gradlew assembleDebug` بنجاح. بقيت تحذيرات Kotlin وواجهات Android deprecated غير مانعة للبناء، ولا توجد أخطاء ترجمة مانعة في التغييرات الحالية.
