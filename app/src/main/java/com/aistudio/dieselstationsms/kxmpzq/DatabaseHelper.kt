@@ -10823,7 +10823,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             val safePage = page.coerceAtLeast(1)
             val safePageSize = pageSize.coerceIn(1, 100)
-            val where = mutableListOf("u.is_deleted = 0")
+            val where = mutableListOf("1 = 1")
             val args = mutableListOf<String>()
             val normalizedQuery = query.trim()
             if (normalizedQuery.isNotBlank()) {
@@ -10849,7 +10849,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 if (it.moveToFirst()) it.getLong(0) else 0L
             }
             val stats = db.rawQuery(
-                "SELECT COUNT(*), SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), SUM(CASE WHEN status = 'locked' OR account_locked = 1 THEN 1 ELSE 0 END), SUM(CASE WHEN last_login_at IS NOT NULL AND last_login_at <> '' THEN 1 ELSE 0 END) FROM users WHERE is_deleted = 0",
+                "SELECT COUNT(*), SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), SUM(CASE WHEN status = 'locked' OR account_locked = 1 THEN 1 ELSE 0 END), SUM(CASE WHEN last_login_at IS NOT NULL AND last_login_at <> '' THEN 1 ELSE 0 END) FROM users",
                 null
             ).use { cursor ->
                 if (cursor.moveToFirst()) longArrayOf(cursor.getLong(0), cursor.getLong(1), cursor.getLong(2), cursor.getLong(3)) else longArrayOf(0, 0, 0, 0)
@@ -10872,7 +10872,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                           u.device_id, u.remarks, u.extra_data, r.role_name, r.role_name_ar,
                           s.station_name, s.station_name_ar
                    FROM users u LEFT JOIN roles r ON u.role_id = r.id LEFT JOIN stations s ON u.station_id = s.id
-                   WHERE $whereSql ORDER BY u.full_name LIMIT ? OFFSET ?""",
+	                   WHERE $whereSql ORDER BY u.full_name, u.id LIMIT ? OFFSET ?""",
                 dataArgs.toTypedArray()
             ).use { cursorToJsonArray(it) }
             JSONObject().apply {
