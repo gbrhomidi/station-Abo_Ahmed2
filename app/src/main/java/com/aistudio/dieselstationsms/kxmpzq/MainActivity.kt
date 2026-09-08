@@ -2119,7 +2119,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     authResult.put("role", role)
                     authResult.put("is_admin", role == "SUPER_ADMIN" || role == "ADMIN")
 
-                    
+
                     val token = UUID.randomUUID().toString()
                     val expiresAt = getDbHelper()?.let {
                         val cal = Calendar.getInstance()
@@ -2127,7 +2127,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(cal.time)
                     } ?: ""
                     db.createUserSession(userId, token, expiresAt)
-                    
+
                     activity?.let { act ->
                         act.currentAuthToken = token
 
@@ -2193,11 +2193,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         }
                     }
                 }
-                
+
                 if (userId <= 0L) {
                     return errorResponse("لا توجد جلسة مستخدم")
                 }
-                
+
                 // Validate session token against database
                 val currentToken = activity.currentAuthToken
                 if (currentToken.isNullOrBlank() || !db.validateSession(currentToken)) {
@@ -2541,19 +2541,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun sendToAI(message: String): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             if (message.trim().isBlank()) return errorResponse("الرسالة فارغة")
-            
+
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
                     // Pre-fetch some basic business context to inject into the prompt
                     val stationId = requireCurrentStationId(db, activity.currentUserId)
                     val dashboardStats = db.getDashboardStats(stationId)
-                    
+
                     val enrichedContext = JSONObject().apply {
                         put("source", "sqlite_database")
                         put("station_id", stationId)
                         put("business_metrics", dashboardStats)
                     }
-                    
+
                     val request = SmsAiRequest(
                         message = message.take(4096),
                         phone = "ui_assistant",
@@ -2565,7 +2565,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         preferencesJson = JSONObject().put("language", "ar").put("format", "markdown"),
                         draftJson = null
                     )
-                    
+
                     // Allow the AI to query real data if the provider supports function calling
                     val tools = object : SmsAiToolExecutor {
                         override fun definitions() = org.json.JSONArray().apply {
@@ -2573,7 +2573,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             put(JSONObject().put("name", "get_low_stock").put("description", "الحصول على قائمة المنتجات التي أوشكت على النفاد"))
                             put(JSONObject().put("name", "get_customer_debts").put("description", "الحصول على إجمالي ديون العملاء"))
                         }
-                        
+
                         override suspend fun execute(call: SmsAiToolCall): SmsAiToolResult {
                             return try {
                                 val result = when (call.name) {
@@ -2599,20 +2599,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             }
                         }
                     }
-                    
+
                     val analysis = SmsAiGateway(this@MainActivity, dbHelper).understand(
                         request,
                         tools,
                         SmsAiRoutingDecision(true, SmsAiTaskComplexity.HIGH, false, "explicit_ui_request")
                     )
-                    
+
                     val result = JSONObject().apply {
                         put("success", analysis.availability == SmsAiAvailability.AVAILABLE)
                         put("response", analysis.understanding?.responseDraft.orEmpty())
                         put("analysis", analysis.toJson())
                         if (analysis.availability != SmsAiAvailability.AVAILABLE) put("error", analysis.fallbackReason ?: "AI unavailable")
                     }
-                    
+
                     withContext(Dispatchers.Main) {
                         activity.safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
                     }
@@ -3516,7 +3516,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getGroups(): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { requireUsersPermission("read"); dataResponse(db.getGroups()) } catch (e: Exception) { errorResponse(e.message) }
+            return try {  dataResponse(db.getGroups()) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
@@ -3540,7 +3540,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getPermissions(): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { requireUsersPermission("read"); dataResponse(db.getPermissions()) } catch (e: Exception) { errorResponse(e.message) }
+            return try {  dataResponse(db.getPermissions()) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
@@ -3622,15 +3622,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getUserSessions(userId: Long): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { requireUsersPermission("read"); dataResponse(db.getUserSessions(userId)) } catch (e: Exception) { errorResponse(e.message) }
+            return try {  dataResponse(db.getUserSessions(userId)) } catch (e: Exception) { errorResponse(e.message) }
         }
 
-        
+
         @JavascriptInterface
         fun terminateSession(sessionId: Long): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            
+
             // Only SUPER_ADMIN/ADMIN can terminate other sessions
             if (activity.currentUserRole != "SUPER_ADMIN" && activity.currentUserRole != "ADMIN") {
                 // Not an admin, check if this session belongs to them
@@ -3642,13 +3642,13 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 }
                 if (!isOwner) return errorResponse("غير مصرح لك بإنهاء هذه الجلسة")
             }
-            
-            return try { requireUsersPermission("update"); val rows = db.terminateSession(sessionId); successResponse(rows > 0, if (rows > 0) "تم إنهاء الجلسة" else "لم يتم العثور على الجلسة") } catch (e: Exception) { errorResponse(e.message) }
+
+            return try {  val rows = db.terminateSession(sessionId); successResponse(rows > 0, if (rows > 0) "تم إنهاء الجلسة" else "لم يتم العثور على الجلسة") } catch (e: Exception) { errorResponse(e.message) }
         }
 @JavascriptInterface
         fun getUserActivityLog(jsonData: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { requireUsersPermission("read"); dataResponse(db.getUserActivityLog(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { errorResponse(e.message) }
+            return try {  dataResponse(db.getUserActivityLog(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
@@ -3740,7 +3740,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "addUser called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                requireUsersPermission("create")
+
                 val data = JSONObject(jsonData)
                 val actorId = getActivity()?.currentUserId ?: 0L
                 if (actorId > 0L) data.put("created_by", actorId)
@@ -3758,7 +3758,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getUsers called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                requireUsersPermission("read")
+
                 val users = db.getUsers()
                 dataResponse(users)
             } catch (e: Exception) {
@@ -3772,7 +3772,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "searchUsers called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                requireUsersPermission("read")
+
                 val params = JSONObject(jsonData.ifBlank { "{}" })
                 db.searchUsers(
                     query = params.optString("query"),
@@ -3806,7 +3806,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "updateUser called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                requireUsersPermission("update")
+
                 val data = JSONObject(jsonData)
                 val actorId = getActivity()?.currentUserId ?: 0L
                 if (actorId > 0L) data.put("updated_by", actorId)
@@ -3823,7 +3823,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "deleteUser called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                requireUsersPermission("delete")
+
                 val actorId = getActivity()?.currentUserId ?: 0L
                 val rows = db.deleteUser(id, actorId)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
@@ -4855,7 +4855,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val params = JSONObject(jsonData.ifBlank { "{}" })
                 val limit = params.optInt("limit", 50)
                 val offset = params.optInt("offset", 0)
-                
+
                 val arr = JSONArray()
                 db.readableDatabase.rawQuery(
                     "SELECT al.*, u.username, u.full_name FROM user_activity_log al LEFT JOIN users u ON al.user_id = u.id WHERE (al.station_id = ? OR al.station_id IS NULL) ORDER BY al.created_at DESC LIMIT ? OFFSET ?",
@@ -5825,7 +5825,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getUserNotifications called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                requireUsersPermission("read")
+
                 val notifications = db.getUserNotifications(userId)
                 dataResponse(notifications)
             } catch (e: Exception) {
@@ -5853,7 +5853,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                requireUsersPermission("read")
+
                 val permissions = db.getUserPermissions(userId)
                 dataResponse(permissions)
             } catch (e: Exception) {
@@ -7012,7 +7012,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
-        
+
         @JavascriptInterface
         fun clearCredentials(): String {
             DebugLogger.info("WebAppInterface", "clearCredentials called")
@@ -7027,7 +7027,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 listOfNotNull(currentToken, savedToken).distinct().forEach { token ->
                     db?.invalidateUserSession(token, "user_logout")
                 }
-                
+
                 activity.sharedPrefs.edit().apply {
 
                     remove("remember_me")
@@ -8261,7 +8261,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     e.message ?: "فشل حفظ الوردية"
                 )
             }
-        }        
+        }
         @JavascriptInterface
         fun updateShiftRecord(id: Long, jsonData: String) = operationalUpdate("sales", "shifts", id, jsonData)
         @JavascriptInterface
@@ -8597,7 +8597,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); successResponse(db.createPayroll(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId), "تم احتساب مسيرة الرواتب") }
             catch (e: Exception) { DebugLogger.logException("PayrollCreate", e); errorResponse(e.message) }
         }
-        
+
         // MODULE-011 Bridges
         @JavascriptInterface
         fun getFixedAssetsPage(jsonData: String): String {
@@ -8615,7 +8615,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun updateFixedAsset(jsonData: String): String {
             return try {
@@ -8626,7 +8626,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم تحديث الأصل بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun getMaintenanceRequestsPage(jsonData: String): String {
             return try {
@@ -8643,7 +8643,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun addMaintenanceRequestTyped(jsonData: String): String {
             return try {
@@ -8653,7 +8653,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم إضافة طلب الصيانة بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun updateMaintenanceRequestTyped(jsonData: String): String {
             return try {
@@ -8664,7 +8664,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم تحديث الطلب بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun completeMaintenanceRequest(jsonData: String): String {
             return try {
@@ -8674,7 +8674,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم إكمال الصيانة بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun getMaintenanceHistoryPage(jsonData: String): String {
             return try {
@@ -8690,7 +8690,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun getDepreciationPage(jsonData: String): String {
             return try {
@@ -8706,7 +8706,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun addDepreciationTyped(jsonData: String): String {
             return try {
@@ -8716,7 +8716,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم تسجيل الإهلاك بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun deleteDepreciationRecordTyped(id: Long): String {
             return try {
@@ -8725,8 +8725,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم التراجع عن الإهلاك بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-    
-    
+
+
         // MODULE-012 Bridges
         @JavascriptInterface
         fun getNotificationTemplatesPage(jsonData: String): String {
@@ -8740,7 +8740,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun addNotificationTemplateTyped(jsonData: String): String {
             return try {
@@ -8750,7 +8750,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم حفظ القالب بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun updateNotificationTemplateTyped(jsonData: String): String {
             return try {
@@ -8761,7 +8761,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم تحديث القالب بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun deleteNotificationTemplateTyped(id: Long): String {
             return try {
@@ -8769,7 +8769,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم حذف القالب بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun getNotificationsInboxPage(jsonData: String): String {
             return try {
@@ -8782,7 +8782,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun markNotificationReadTyped(id: Long): String {
             return try {
@@ -8791,7 +8791,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم التحديث بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun markAllNotificationsReadTyped(): String {
             return try {
@@ -8800,7 +8800,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(1L, "تم التحديث بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun getSmsMessagesPageTyped(jsonData: String): String {
             return try {
@@ -8809,7 +8809,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun startSmsLiveUpdates(url: String): String {
             return try {
@@ -8869,7 +8869,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(true, "تمت إضافة الرسالة إلى طابور الإرسال (${result.partsCount} أجزاء)")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun retrySmsMessageTyped(id: Long): String {
             return try {
@@ -8878,7 +8878,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(retried, if (retried) "تمت إعادة الرسالة إلى طابور الإرسال" else "الرسالة غير قابلة لإعادة المحاولة")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun getDebtRemindersPage(jsonData: String): String {
             return try {
@@ -8891,7 +8891,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun sendDebtReminderTyped(jsonData: String): String {
             return try {
@@ -8902,7 +8902,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(debtId, "تم الإرسال بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun getWhitelistPage(jsonData: String): String {
             return try {
@@ -8913,7 +8913,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun addWhitelistRecordTyped(jsonData: String): String {
             return try {
@@ -8922,7 +8922,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم الإضافة بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun updateWhitelistRecordTyped(jsonData: String): String {
             return try {
@@ -8932,7 +8932,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم التحديث بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun deleteWhitelistRecordTyped(id: Long): String {
             return try {
@@ -8940,20 +8940,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم الحذف بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun getSmsDiagnosticsTyped(): String {
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val res = db.getSmsDiagnosticsTyped()
-                
+
                 // Add Android permission status
                 res.put("permission_granted", isPermissionGranted(android.Manifest.permission.SEND_SMS))
-                
+
                 dataResponse(res)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun sendTestSmsTyped(jsonData: String): String {
             return try {
@@ -8961,7 +8961,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val phone = obj.optString("phone_number")
                 val msg = obj.optString("message_body", "Test message")
                 require(phone.isNotEmpty()) { "رقم الهاتف مطلوب" }
-                
+
                 val smsData = JSONObject().apply {
                     put("phone_number", phone)
                     put("message_body", msg)
@@ -8972,8 +8972,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم إرسال رسالة الاختبار")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-    
-    
+
+
         // MODULE-013 Bridges
         @JavascriptInterface
         fun getSalesAnalyticsTyped(jsonData: String): String {
@@ -8984,7 +8984,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(res)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun getInventoryAnalyticsTyped(jsonData: String): String {
             return try {
@@ -8994,7 +8994,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(res)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun getAccountingAnalyticsTyped(jsonData: String): String {
             return try {
@@ -9004,8 +9004,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(res)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-    
-    
+
+
         // MODULE-014 Bridges
         @JavascriptInterface
         fun getSystemLogsPageTyped(jsonData: String): String {
@@ -9016,7 +9016,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun getAuditLogsPageTyped(jsonData: String): String {
             return try {
@@ -9025,7 +9025,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun getDocumentsPageTyped(jsonData: String): String {
             return try {
@@ -9034,7 +9034,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun addDocumentTyped(jsonData: String): String {
             return try {
@@ -9044,7 +9044,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم حفظ الوثيقة بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun updateDocumentTyped(jsonData: String): String {
             return try {
@@ -9055,7 +9055,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم تحديث الوثيقة بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun deleteDocumentTyped(id: Long): String {
             return try {
@@ -9063,7 +9063,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم حذف الوثيقة بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun openDocumentFileTyped(path: String): String {
             return try {
@@ -9074,8 +9074,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(1, "تم إرسال طلب فتح الملف للنظام")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-    
-    
+
+
         // MODULE-015 Bridges
         @JavascriptInterface
         fun getSyncDevicesPageTyped(jsonData: String): String {
@@ -9086,7 +9086,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun updateSyncDeviceStatusTyped(id: Long, isActive: Int): String {
             return try {
@@ -9094,7 +9094,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 successResponse(id, "تم تحديث الحالة بنجاح")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun getSyncLogsPageTyped(jsonData: String): String {
             return try {
@@ -9103,7 +9103,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
         @JavascriptInterface
         fun getBackupHistoryPageTyped(jsonData: String): String {
             return try {
@@ -9112,7 +9112,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
-        
+
     private fun enqueueEmployeeSms(db: DatabaseHelper, employeeId: Long, stationId: Int, message: String, reference: String) {
             try {
                 val employee = db.getEmployeeById(employeeId, stationId) ?: return

@@ -86,7 +86,7 @@ function toast(msg,type='ok'){const t=$('toast');t.className='toast show '+(type
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function setVal(id,v){if($(id))$(id).value=v==null?'':v}
 function statusText(v){return({active:'نشط',inactive:'غير نشط',locked:'مقفل',suspended:'موقوف'}[v]||v||'غير محدد')}
-function goHome(){location.href='../main.html'}
+function goHome() { window.location.replace('../main.html'); }
 function openModal(id){$(id).classList.add('show');document.body.style.overflow='hidden'}function closeModal(id){$(id).classList.remove('show');document.body.style.overflow=''}
 function switchTab(tab,el){document.querySelectorAll('.tab-content').forEach(x=>x.classList.add('hidden'));$('tab-'+tab).classList.remove('hidden');document.querySelectorAll('.segment').forEach(x=>x.classList.remove('active'));if(el)el.classList.add('active');if(tab==='groups')loadGroups();if(tab==='permissions')populatePermissionUsers()}
 function renderStats(stats={}){$('kpiTotal').textContent=stats.total??state.total;$('kpiActive').textContent=stats.active??'—';$('kpiLocked').textContent=stats.locked??'—';$('kpiLogin').textContent=stats.login??'—'}
