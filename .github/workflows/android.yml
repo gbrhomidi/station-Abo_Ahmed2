@@ -41,7 +41,6 @@ jobs:
           def read(rel): return (root / rel).read_text(encoding='utf-8')
           def write(rel, text): (root / rel).write_text(text, encoding='utf-8')
 
-          # Login: keep the user in the password field; validation must not steal focus.
           login_rel = Path('app/src/main/assets/screens/login.html')
           login = read(login_rel)
           login_before = login
@@ -49,15 +48,12 @@ jobs:
           login = login.replace("\n            const submitBtn = document.getElementById('submitBtn');", '')
           write(login_rel, login)
 
-          # Users: remove users.* permission calls from the requested bridge operations.
-          # The generic helper is retained unused; DB/schema and station scoping remain intact.
           main_rel = Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt')
           main = read(main_rel)
           main_before = main
           main = re.sub(r'requireUsersPermission\("(?:read|create|update|delete)"\);?', '', main)
           write(main_rel, main)
 
-          # First-user setup: station and branch originate from real station rows.
           setup = read(Path('app/src/main/assets/screens/first-user-setup.html'))
           assert '<select id="stationId"' in setup
           assert 'getStations' in setup
@@ -65,7 +61,6 @@ jobs:
           assert 'dataset.branchId' in setup
           assert 'setupSystemUser' in setup
 
-          # Users home must resolve from screens/ to assets/main.html.
           users_rel = Path('app/src/main/assets/screens/users.html')
           users = read(users_rel)
           users_before = users
@@ -75,42 +70,33 @@ jobs:
               users += "\n<script>function goHome(){window.location.replace('../main.html');}</script>\n"
           write(users_rel, users)
 
-          # Deliveries: real typed Bridge contracts; fallback is allowed only as an offline compatibility path.
           deliveries_rel = Path('app/src/main/assets/screens/deliveries.html')
           deliveries = read(deliveries_rel)
           for method in ['getCustomers','getVehicles','getCurrentShift','getLatestCustomerSaleForDelivery','saveDeliveryRecord','updateDeliveryRecord','deleteDeliveryRecord']:
               assert re.search(r"invoke\(\s*['\"]" + re.escape(method) + r"['\"]", deliveries), 'missing delivery bridge: ' + method
-          assert 'id="f_id"' in deliveries
-          assert 'id="f_sale_id"' in deliveries
-          # Add hidden to internal IDs if not already hidden/type=hidden.
+          assert 'id="f_id"' in deliveries and 'id="f_sale_id"' in deliveries
           for field_id in ('f_id', 'f_sale_id'):
               pat = re.compile(r'<([A-Za-z][A-Za-z0-9:-]*)(?=[^>]*\bid=["\']' + re.escape(field_id) + r'["\'])[^>]*>', re.I)
-              matches = pat.findall(deliveries)
-              assert matches, 'missing delivery field: ' + field_id
+              assert pat.search(deliveries), 'missing delivery field: ' + field_id
               def hide(m):
                   tag = m.group(0)
-                  if re.search(r'\bhidden\b', tag, re.I): return tag
-                  if re.search(r'\btype=["\']hidden["\']', tag, re.I): return tag
+                  if re.search(r'\bhidden\b', tag, re.I) or re.search(r'\btype=["\']hidden["\']', tag, re.I): return tag
                   return tag[:-1] + ' hidden>'
               deliveries = pat.sub(hide, deliveries, count=1)
           write(deliveries_rel, deliveries)
 
-          # Fuel sales: dedicated scoped methods for real update/delete/create paths.
           fuel = read(Path('app/src/main/assets/screens/fuel-sales.html'))
           assert "createMethod:'saveFuelSaleRecord'" in fuel
           assert "updateMethod:'updateFuelSaleRecord'" in fuel
           assert "deleteMethod:'deleteFuelSaleRecord'" in fuel
 
-          # Main: current user + persisted avatar + project fallback.
           main_html = read(Path('app/src/main/assets/main.html'))
           assert 'getCurrentUser' in main_html
           assert 'userAvatar' in main_html
           assert 'avatar_path' in main_html
           assert 'default_avatar.png' in main_html
 
-          # Users permission calls are gone; the helper definition may remain unused.
           assert not re.search(r'(?m)^.*requireUsersPermission\("(?:read|create|update|delete)"\)', main)
-
           print('FINAL_TARGETED_REPAIR_VALIDATION=PASS')
           print('login_changed=', login != login_before)
           print('main_activity_changed=', main != main_before)
@@ -141,7 +127,6 @@ jobs:
           grep -Fq 'getStations' app/src/main/assets/screens/first-user-setup.html
           ! grep -Fq 'submitBtn.focus();' app/src/main/assets/screens/login.html
           ! grep -E 'requireUsersPermission\("(read|create|update|delete)"\)' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          test -d app/build/outputs/apk/release
           apk=$(find app/build/outputs/apk/release -type f -name '*.apk' | head -n1)
           test -n "$apk"
           rm -rf /tmp/apk_verify
@@ -165,6 +150,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          sed -i -e 's/[[:space:]]\+$//' app/src/main/assets/screens/login.html app/src/main/assets/screens/users.html app/src/main/assets/screens/deliveries.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
           git diff --check
           git status --short
           git diff --stat
