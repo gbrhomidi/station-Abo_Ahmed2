@@ -27,54 +27,15 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Apply first-user setup repair before validation
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('app/src/main/assets/screens/first-user-setup.html')
-          s = p.read_text(encoding='utf-8')
-          s = s.replace('overflow: hidden;\n            border: 1px solid rgba(255, 255, 255, .7);', 'overflow: visible;\n            border: 1px solid rgba(255, 255, 255, .7);', 1)
-          marker = '''        .field input:focus {\n            border-color: var(--blue);'''
-          insert = '''        .field select {\n            width: 100%;\n            padding: 12px 42px 12px 14px;\n            border: 1.5px solid var(--border);\n            border-radius: var(--radius-input);\n            background: #fff;\n            color: var(--text-primary);\n            font: inherit;\n            font-size: .95rem;\n            font-weight: 600;\n            outline: none;\n            text-align: center;\n            text-align-last: center;\n            transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);\n            appearance: auto;\n        }\n        .field select:focus {\n            border-color: var(--blue);\n            box-shadow: 0 0 0 4px rgba(25, 118, 184, .15);\n        }\n        .field select:disabled {\n            background: #eef4f8;\n            color: var(--text-muted);\n            cursor: not-allowed;\n        }\n\n''' + marker
-          if marker in s and '.field select:focus {' not in s:
-              s = s.replace(marker, insert, 1)
-          s = s.replace('type="number" required min="1" step="1" readonly placeholder="يُعبأ تلقائياً من المحطة"', 'type="number" required min="1" step="1" inputmode="numeric" autocomplete="off" placeholder="أدخل رقم الفرع أو راجعه"')
-          s = s.replace("else if(field.id==='phone'&&!/^\\+?[0-9 ]{7,20}$/.test(v))m='رقم الهاتف يجب أن يحتوي على أرقام فقط.';", "else if(field.id==='phone'&&!/^\\d{7,20}$/.test(v))m='رقم الهاتف يجب أن يحتوي على أرقام فقط (7 إلى 20 رقماً).';")
-          old_listener = '''field.addEventListener('input',function(){if(field.id==='stationId'||field.id==='branchId'||field.id==='phone'||field.id==='username')validateFieldLive(field);});field.addEventListener('change',function(){validateFieldLive(field);});'''
-          new_listener = '''field.addEventListener('input',function(){\n                    if(field.id==='phone'){\n                        const digits=String(field.value||'').replace(/\\D/g,'').slice(0,20);\n                        if(field.value!==digits)field.value=digits;\n                        field.classList.remove('input-error');\n                    }\n                    if(field.id==='stationId'||field.id==='branchId'||field.id==='username'){\n                        field.classList.remove('input-error');\n                    }\n                });\n                field.addEventListener('change',function(){validateFieldLive(field);});\n                field.addEventListener('blur',function(){if(field.value.trim())validateFieldLive(field);});'''
-          if old_listener in s:
-              s = s.replace(old_listener, new_listener, 1)
-          marker2 = '''                document.getElementById('setupForm').addEventListener('submit', saveFirstUser);'''
-          enter = '''                document.getElementById('username').addEventListener('keydown', function(event){\n                    if(event.key==='Enter'){\n                        event.preventDefault();\n                        document.getElementById('password').focus();\n                    }\n                });\n                document.getElementById('setupForm').addEventListener('submit', saveFirstUser);'''
-          if marker2 in s and "getElementById('username').addEventListener('keydown'" not in s:
-              s = s.replace(marker2, enter, 1)
-          old_func = '''function keepSaveButtonAboveKeyboard(){const a=document.querySelector('.actions');if(!a)return;const v=window.visualViewport;const k=v?Math.max(0,window.innerHeight-v.height-v.offsetTop):0;a.style.bottom=(12+k)+'px';}'''
-          new_func = '''function keepSaveButtonAboveKeyboard(){const a=document.querySelector('.actions');if(!a)return;const v=window.visualViewport;const k=v?Math.max(0,window.innerHeight-(v.height+v.offsetTop)):0;const safe=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom'))||0;a.style.bottom=(Math.max(12,safe)+k)+'px';}'''
-          s = s.replace(old_func, new_func)
-          s = s.replace("document.getElementById('stationHint').textContent=rows.length?'اختر المحطة وسيتم تعبئة رقم الفرع تلقائياً.':'لا توجد محطات في قاعدة البيانات.'", "document.getElementById('stationHint').textContent=rows.length?'اختر المحطة وسيتم تعبئة رقم الفرع إن كان محفوظاً، ويمكنك إدخاله أو تعديله يدوياً.':'لا توجد محطات في قاعدة البيانات.'")
-          p.write_text(s, encoding='utf-8')
-          PY
-          grep -q "getElementById('username').addEventListener('keydown'" app/src/main/assets/screens/first-user-setup.html
-          ! grep -q 'type="number" required min="1" step="1" readonly' app/src/main/assets/screens/first-user-setup.html
-          grep -q '.field select:focus' app/src/main/assets/screens/first-user-setup.html
-
-      - name: Commit first-user repair to target branch
-        shell: bash
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm -f .github/workflows/temporary-first-user-fix.yml || true
-          git add app/src/main/assets/screens/first-user-setup.html
-          git commit -m 'fix: first-user setup input and keyboard behavior' || true
-          git push origin HEAD:feature/ai-health-sqlite
-
       - name: Run notification and SMS screens smoke tests
         run: python3 screen-smoke-test.py
 
       - name: Run Kotlin and Robolectric regression tests
         run: ./gradlew testDebugUnitTest --no-daemon
 
+      # ───────────────────────────────────────────────
+      # 🔐 فك تشفير Keystore الخاص بالـ Release
+      # ───────────────────────────────────────────────
       - name: Decode Release Keystore
         run: |
           echo "🔐 Decoding release keystore from GitHub Secrets..."
@@ -82,6 +43,9 @@ jobs:
           ls -la diesel-station-release.keystore
           echo "✅ Release keystore decoded successfully."
 
+      # ───────────────────────────────────────────────
+      # 🔑 توليد debug.keystore كاحتياطي (للـ Debug builds)
+      # ───────────────────────────────────────────────
       - name: Generate debug keystore (if missing)
         run: |
           mkdir -p ~/.android
@@ -100,6 +64,9 @@ jobs:
             echo "✅ debug.keystore already exists."
           fi
 
+      # ───────────────────────────────────────────────
+      # 🏗️ بناء Release APK مع التوقيع الحقيقي
+      # ───────────────────────────────────────────────
       - name: Clean and Build Release APK
         run: ./gradlew clean assembleRelease --no-daemon
         env:
@@ -122,20 +89,3 @@ jobs:
           name: Station_Abo_Ahmed_Release_APK
           path: app/build/outputs/**/*.apk
           if-no-files-found: error
-
-      - name: Remove temporary repair step from workflow
-        if: ${{ always() }}
-        shell: bash
-        run: |
-          git fetch origin feature/ai-health-sqlite
-          git checkout feature/ai-health-sqlite -- .github/workflows/android.yml
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('.github/workflows/android.yml')
-          s=p.read_text(encoding='utf-8')
-          start=s.find('      - name: Apply first-user setup repair before validation\n')
-          if start < 0:
-              start=s.find('      - name: Apply first-user setup repair before validation')
-          # This cleanup is intentionally a no-op if the workflow has already been restored by a newer commit.
-          # The next normal branch state is verified separately.
-          PY
