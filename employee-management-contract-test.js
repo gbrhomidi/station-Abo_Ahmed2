@@ -16,19 +16,21 @@ assert.match(html, /data-screen="employee-payments\.html" class="segment">الد
 assert.doesNotMatch(html, /data-screen="training\.html"[^>]*>التدريب<\/button>/);
 assert.match(html, /role="tablist"/);
 assert.match(html, /role="tab"/);
-assert.match(html, /aria-selected="true"/);
+assert.match(html, /aria-selected="false"/);
+assert.match(html, /setAttribute\('aria-selected', 'true'\)/);
 assert.match(html, /Segmented Control: shared visual state/);
 assert.match(html, /ArrowLeft.*ArrowRight/s);
 assert.match(html, /const departments = \{/);
-assert.match(html, /function updateJobs\(\{preserve=false\}/);
-assert.match(html, /job\.disabled = !department/);
-assert.match(html, /updateJobs\(\{preserve:Boolean\(row\)\}\)/);
+assert.match(html, /function refreshEmployeeJobTitleOptions\(preserveValue = false, preferredValue = ''\)/);
+assert.match(html, /job\.disabled = titles\.length === 0/);
+assert.match(html, /refreshEmployeeJobTitleOptions\(\s*Boolean\(row\?\.job_title\),/s);
 assert.match(html, /dep\.addEventListener/);
 for (const [department, job] of [['المبيعات','كاشير'], ['الشؤون المالية','محاسب عام'], ['الصيانة والمرافق','فني صيانة مضخات']]) {
     assert.match(html, new RegExp(`'${department}':\\s*\\[[\\s\\S]*?'${job}'`));
 }
-assert.match(html, /const jobs =\s*departments\[department\] \|\| \[\]/);
-assert.match(html, /job\.disabled = !department/);
+assert.match(html, /function getEmployeeJobTitles\(department\)/);
+assert.match(html, /const titles = getEmployeeJobTitles\(selectedDepartment\)/);
+assert.match(html, /'أمين صندوق'/);
 assert.match(html, /saveEmployeePerformance/);
 assert.match(html, /status='terminated'/);
 assert.match(html, /أرشفة هذا الموظف/);
@@ -47,4 +49,3 @@ const price = fs.readFileSync('app/src/main/assets/screens/price-change-log.html
 assert.match(price, /id=['"]reportTable['"]/);
 assert.match(price, /exportRows/);
 console.log('Price-change-log contract PASS.');
-
