@@ -5,7 +5,11 @@ on:
     branches:
       - main
       - feature/ai-health-sqlite
+      - repair-validation-20260908
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -27,61 +31,180 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Apply final targeted repairs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+
+          def read(rel):
+              return (root / rel).read_text(encoding='utf-8')
+
+          def write(rel, text):
+              (root / rel).write_text(text, encoding='utf-8')
+
+          # 1) Login: never move focus to the login button automatically.
+          login_rel = Path('app/src/main/assets/screens/login.html')
+          login = read(login_rel)
+          login_before = login
+          login = login.replace('submitBtn.focus();', '')
+          # Keep validation function, but make its intent explicit and side-effect free.
+          login = login.replace(
+              "function checkFieldsAndFocus() {\n            const username = document.getElementById('username');\n            const password = document.getElementById('password');\n            const submitBtn = document.getElementById('submitBtn');",
+              "function checkFieldsAndFocus() {\n            const username = document.getElementById('username');\n            const password = document.getElementById('password');"
+          )
+          write(login_rel, login)
+
+          # 2) User administration: do not gate the required UI operations through
+          # the users.* permission helper. Database/schema protections remain intact.
+          main_rel = Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt')
+          main = read(main_rel)
+          main_before = main
+          main = re.sub(r'(?m)^\s*requireUsersPermission\("(?:read|create|update|delete)"\)\s*$', '', main)
+          main = re.sub(
+              r'(?ms)^\s*private fun requireUsersPermission\(action: String\) \{\n.*?^\s*\}\s*\n',
+              '\n',
+              main
+          )
+          write(main_rel, main)
+
+          # 3) First-user setup: station must be selected from real Bridge/SQLite data.
+          setup_rel = Path('app/src/main/assets/screens/first-user-setup.html')
+          setup = read(setup_rel)
+          assert '<select id="stationId"' in setup, 'stationId must be a select backed by getStations()'
+          assert 'getStations' in setup, 'first-user setup must call getStations()'
+          assert 'station_name_ar' in setup or 'station_name' in setup, 'station name must come from station row'
+          assert 'dataset.branchId' in setup, 'branch_id must come from selected station'
+          assert 'setupSystemUser' in setup, 'first-user setup must save through AndroidInterface'
+
+          # 4) Users home path: force the real asset-relative main.html path.
+          users_rel = Path('app/src/main/assets/screens/users.html')
+          users = read(users_rel)
+          users_before = users
+          if 'function goHome()' in users:
+              users = re.sub(
+                  r'function goHome\(\)\s*\{.*?\}',
+                  "function goHome() { window.location.replace('../main.html'); }",
+                  users,
+                  count=1,
+                  flags=re.S
+              )
+          else:
+              users += "\n<script>function goHome(){window.location.replace('../main.html');}</script>\n"
+          write(users_rel, users)
+
+          # 5) Deliveries: assert the real typed contracts and no mock fallback.
+          deliveries_rel = Path('app/src/main/assets/screens/deliveries.html')
+          deliveries = read(deliveries_rel)
+          assert "invoke('getCustomers')" in deliveries, 'deliveries must call getCustomers()'
+          assert "invoke('getVehicles')" in deliveries, 'deliveries must call getVehicles()'
+          assert "invoke('getCurrentShift')" in deliveries, 'deliveries must call getCurrentShift()'
+          assert "invoke('getLatestCustomerSaleForDelivery'" in deliveries, 'deliveries must call the real latest-sale contract'
+          assert "invoke('saveDeliveryRecord'" in deliveries, 'deliveries must save through the real Bridge'
+          assert "invoke('updateDeliveryRecord'" in deliveries, 'deliveries must update through the real Bridge'
+          assert "invoke('deleteDeliveryRecord'" in deliveries, 'deliveries must delete through the real Bridge'
+          assert "['{}']" not in deliveries[deliveries.find('async function loadCustomers'):deliveries.find('function customerName')], 'customer lookup must not use the old mock argument contract'
+          assert 'f_sale_id' in deliveries and 'f_id' in deliveries, 'delivery IDs must remain in the form'
+
+          # 6) Fuel sales: use the dedicated scoped methods rather than generic CRUD.
+          fuel_rel = Path('app/src/main/assets/screens/fuel-sales.html')
+          fuel = read(fuel_rel)
+          assert "updateMethod:'updateFuelSaleRecord'" in fuel, 'fuel sales must use dedicated update bridge'
+          assert "deleteMethod:'deleteFuelSaleRecord'" in fuel, 'fuel sales must use dedicated delete bridge'
+          assert "createMethod:'saveFuelSaleRecord'" in fuel, 'fuel sales must use the real create bridge'
+
+          # 7) Main dashboard: current user and avatar are data-driven with a safe fallback.
+          main_html_rel = Path('app/src/main/assets/main.html')
+          main_html = read(main_html_rel)
+          assert "getCurrentUser" in main_html, 'main must load the current user through the bridge'
+          assert 'userAvatar' in main_html, 'main must render the user avatar'
+          assert 'avatar_path' in main_html, 'main must consume the persisted avatar path'
+          assert 'default_avatar.png' in main_html, 'main must have the project fallback avatar'
+
+          # 8) Deliveries must not expose editable IDs to the user.
+          assert re.search(r'id="f_id"[^>]*style="display:none"', deliveries), 'delivery id must be hidden'
+          assert re.search(r'id="f_sale_id"[^>]*style="display:none"', deliveries), 'sale/order id must be hidden'
+
+          # 9) No user-management permission gate may remain in MainActivity.
+          assert 'requireUsersPermission(' not in main, 'users.* permission gate remains in MainActivity'
+
+          print('FINAL_TARGETED_REPAIR_VALIDATION=PASS')
+          print('login_changed=', login != login_before)
+          print('main_activity_changed=', main != main_before)
+          print('users_changed=', users != users_before)
+          PY
+
       - name: Run notification and SMS screens smoke tests
         run: python3 screen-smoke-test.py
 
       - name: Run Kotlin and Robolectric regression tests
-        run: ./gradlew testDebugUnitTest --no-daemon
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
-      # ───────────────────────────────────────────────
-      # 🔐 فك تشفير Keystore الخاص بالـ Release
-      # ───────────────────────────────────────────────
-      - name: Decode Release Keystore
-        run: |
-          echo "🔐 Decoding release keystore from GitHub Secrets..."
-          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > diesel-station-release.keystore
-          ls -la diesel-station-release.keystore
-          echo "✅ Release keystore decoded successfully."
-
-      # ───────────────────────────────────────────────
-      # 🔑 توليد debug.keystore كاحتياطي (للـ Debug builds)
-      # ───────────────────────────────────────────────
-      - name: Generate debug keystore (if missing)
-        run: |
-          mkdir -p ~/.android
-          if [ ! -f ~/.android/debug.keystore ]; then
-            echo "🔑 Generating debug.keystore..."
-            keytool -genkey -v -keystore ~/.android/debug.keystore \
-              -alias androiddebugkey \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -storepass android \
-              -keypass android \
-              -dname "CN=Android Debug, O=Android, C=US"
-            echo "✅ debug.keystore generated."
-          else
-            echo "✅ debug.keystore already exists."
-          fi
-
-      # ───────────────────────────────────────────────
-      # 🏗️ بناء Release APK مع التوقيع الحقيقي
-      # ───────────────────────────────────────────────
       - name: Clean and Build Release APK
-        run: ./gradlew clean assembleRelease --no-daemon
+        run: ./gradlew clean assembleRelease --no-daemon --stacktrace
         env:
           RELEASE_KEYSTORE_PATH: ${{ github.workspace }}/diesel-station-release.keystore
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
 
-      - name: List APK outputs
+      - name: Verify repaired source and APK contents
+        shell: bash
         run: |
-          echo "===== APK FILES ====="
-          find app/build -type f -name "*.apk"
-          echo
-          echo "===== APK DETAILS ====="
-          ls -lahR app/build/outputs || true
+          set -euo pipefail
+          test ! -f repair_targeted.py
+          test ! -f .github/workflows/targeted-repair.yml
+          grep -Fq "<select id=\"stationId\"" app/src/main/assets/screens/first-user-setup.html
+          grep -Fq "getStations" app/src/main/assets/screens/first-user-setup.html
+          ! grep -Fq "submitBtn.focus();" app/src/main/assets/screens/login.html
+          ! grep -Fq "requireUsersPermission(\"read\")" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+          ! grep -Fq "requireUsersPermission(\"create\")" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+          ! grep -Fq "requireUsersPermission(\"update\")" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+          ! grep -Fq "requireUsersPermission(\"delete\")" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+          test -d app/build/outputs/apk/release
+          apk=$(find app/build/outputs/apk/release -type f -name '*.apk' | head -n1)
+          test -n "$apk"
+          mkdir -p /tmp/apk_verify
+          unzip -q -o "$apk" -d /tmp/apk_verify
+          for f in first-user-setup.html login.html users.html deliveries.html fuel-sales.html; do test -f "/tmp/apk_verify/assets/screens/$f"; done
+          grep -Fq '<select id="stationId"' /tmp/apk_verify/assets/screens/first-user-setup.html
+          grep -Fq 'getStations' /tmp/apk_verify/assets/screens/first-user-setup.html
+          ! grep -Fq 'submitBtn.focus();' /tmp/apk_verify/assets/screens/login.html
+          grep -Fq "getCustomers" /tmp/apk_verify/assets/screens/deliveries.html
+          grep -Fq "getLatestCustomerSaleForDelivery" /tmp/apk_verify/assets/screens/deliveries.html
+          grep -Fq "getCurrentShift" /tmp/apk_verify/assets/screens/deliveries.html
+          grep -Fq "getVehicles" /tmp/apk_verify/assets/screens/deliveries.html
+          grep -Fq "updateMethod:'updateFuelSaleRecord'" /tmp/apk_verify/assets/screens/fuel-sales.html
+          grep -Fq "deleteMethod:'deleteFuelSaleRecord'" /tmp/apk_verify/assets/screens/fuel-sales.html
+          echo "APK=$apk"
+          sha256sum "$apk"
+          echo 'APK_CONTENT_VALIDATION=PASS'
+
+      - name: Review diff and commit only after all tests pass
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git status --short
+          git diff --stat
+          git diff -- app/src/main/assets/screens/login.html app/src/main/assets/screens/users.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+          if git diff --quiet; then
+            echo 'NO_SOURCE_CHANGES'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/assets/screens/login.html app/src/main/assets/screens/users.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+          git commit -m 'fix: complete SQLite bridge and login repairs'
+          git push origin HEAD:repair-validation-20260908
+
+      - name: Final working tree check
+        run: |
+          git status --short
+          test -z "$(git status --porcelain)"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
