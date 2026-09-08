@@ -39,96 +39,69 @@ jobs:
           import re
 
           root = Path('.')
-
-          def read(rel):
-              return (root / rel).read_text(encoding='utf-8')
-
-          def write(rel, text):
-              (root / rel).write_text(text, encoding='utf-8')
+          def read(rel): return (root / rel).read_text(encoding='utf-8')
+          def write(rel, text): (root / rel).write_text(text, encoding='utf-8')
 
           # Login: never move focus to the login button automatically.
           login_rel = Path('app/src/main/assets/screens/login.html')
           login = read(login_rel)
           login_before = login
           login = login.replace('submitBtn.focus();', '')
-          login = login.replace(
-              "\n            const submitBtn = document.getElementById('submitBtn');",
-              ''
-          )
+          login = login.replace("\n            const submitBtn = document.getElementById('submitBtn');", '')
           write(login_rel, login)
 
-          # User administration: remove only the users.* gate from the bridge methods.
-          # Database/schema protections are intentionally untouched.
+          # User administration: remove only the users.* gate from bridge methods.
           main_rel = Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt')
           main = read(main_rel)
           main_before = main
-          main = re.sub(
-              r'\s*requireUsersPermission\("(?:read|create|update|delete)"\);?\s*',
-              '\n',
-              main
-          )
-          main = re.sub(
-              r'(?ms)^\s*private fun requireUsersPermission\(action: String\) \{.*?^\s*\}\s*\n',
-              '\n',
-              main
-          )
+          main = re.sub(r'requireUsersPermission\("(?:read|create|update|delete)"\);?', '', main)
+          main = re.sub(r'(?ms)^\s*private fun requireUsersPermission\(action: String\)\s*\{.*?^\s*\}\s*\n', '\n', main)
           write(main_rel, main)
 
-          # First-user setup: station is a real SQLite-backed selection.
-          setup_rel = Path('app/src/main/assets/screens/first-user-setup.html')
-          setup = read(setup_rel)
+          # First-user setup: real SQLite-backed station selection and branch binding.
+          setup = read(Path('app/src/main/assets/screens/first-user-setup.html'))
           assert '<select id="stationId"' in setup
           assert 'getStations' in setup
           assert ('station_name_ar' in setup or 'station_name' in setup)
           assert 'dataset.branchId' in setup
           assert 'setupSystemUser' in setup
 
-          # Users home must point from screens/users.html to assets/main.html.
+          # Users home path.
           users_rel = Path('app/src/main/assets/screens/users.html')
           users = read(users_rel)
           users_before = users
           if 'function goHome()' in users:
-              users = re.sub(
-                  r'function goHome\(\)\s*\{.*?\}',
-                  "function goHome() { window.location.replace('../main.html'); }",
-                  users,
-                  count=1,
-                  flags=re.S
-              )
+              users = re.sub(r'function goHome\(\)\s*\{.*?\}', "function goHome() { window.location.replace('../main.html'); }", users, count=1, flags=re.S)
           else:
               users += "\n<script>function goHome(){window.location.replace('../main.html');}</script>\n"
           write(users_rel, users)
 
-          # Deliveries must use real typed Bridge contracts; never fake an empty result.
-          deliveries_rel = Path('app/src/main/assets/screens/deliveries.html')
-          deliveries = read(deliveries_rel)
-          assert "invoke('getCustomers')" in deliveries
-          assert "invoke('getVehicles')" in deliveries
-          assert "invoke('getCurrentShift')" in deliveries
-          assert "invoke('getLatestCustomerSaleForDelivery'" in deliveries
-          assert "invoke('saveDeliveryRecord'" in deliveries
-          assert "invoke('updateDeliveryRecord'" in deliveries
-          assert "invoke('deleteDeliveryRecord'" in deliveries
-          customer_block = deliveries[deliveries.find('async function loadCustomers'):deliveries.find('function customerName')]
+          # Deliveries: verify real bridge calls, allowing multiline formatting.
+          deliveries = read(Path('app/src/main/assets/screens/deliveries.html'))
+          for method in ['getCustomers','getVehicles','getCurrentShift','getLatestCustomerSaleForDelivery','saveDeliveryRecord','updateDeliveryRecord','deleteDeliveryRecord']:
+              assert re.search(r"invoke\(\s*['\"]" + re.escape(method) + r"['\"]", deliveries), f'missing real delivery bridge: {method}'
+          start = deliveries.find('async function loadCustomers')
+          end = deliveries.find('function customerName')
+          customer_block = deliveries[start:end] if start >= 0 and end > start else deliveries
           assert "['{}']" not in customer_block
           assert 'f_sale_id' in deliveries and 'f_id' in deliveries
           assert re.search(r'id="f_id"[^>]*style="display:none"', deliveries)
           assert re.search(r'id="f_sale_id"[^>]*style="display:none"', deliveries)
 
-          # Fuel sales use dedicated scoped update/delete methods.
+          # Fuel sales: dedicated scoped update/delete methods.
           fuel = read(Path('app/src/main/assets/screens/fuel-sales.html'))
-          assert "createMethod:'saveFuelSaleRecord'" in fuel
           assert "updateMethod:'updateFuelSaleRecord'" in fuel
           assert "deleteMethod:'deleteFuelSaleRecord'" in fuel
+          assert "createMethod:'saveFuelSaleRecord'" in fuel
 
-          # Main dashboard uses the current user and persisted avatar with project fallback.
+          # Main dashboard: current user + persisted avatar + fallback.
           main_html = read(Path('app/src/main/assets/main.html'))
           assert 'getCurrentUser' in main_html
           assert 'userAvatar' in main_html
           assert 'avatar_path' in main_html
           assert 'default_avatar.png' in main_html
 
-          # No users.* permission helper may remain in the bridge implementation.
+          # No users.* permission helper remains.
           assert 'requireUsersPermission(' not in main
 
           print('FINAL_TARGETED_REPAIR_VALIDATION=PASS')
@@ -189,10 +162,7 @@ jobs:
           git status --short
           git diff --stat
           git diff -- app/src/main/assets/screens/login.html app/src/main/assets/screens/users.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          if git diff --quiet; then
-            echo 'NO_SOURCE_CHANGES'
-            exit 0
-          fi
+          if git diff --quiet; then echo 'NO_SOURCE_CHANGES'; exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add app/src/main/assets/screens/login.html app/src/main/assets/screens/users.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
