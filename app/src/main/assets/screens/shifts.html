@@ -3819,7 +3819,7 @@
                 // تعيين أمين الصندوق تلقائياً إذا كان هناك واحد فقط
                 if (state.options.cashiers.length === 1) {
                     const cashier = state.options.cashiers[0];
-                    const cashierId = cashier.id || cashier.employee_id || "";
+                    const cashierId = cashier.user_id || cashier.id || "";
                     if (cashierId) {
                         $("cashier_id").value = String(cashierId);
                     }
@@ -3881,17 +3881,21 @@
                                 "option"
                             );
 
-                        option.value =
-                            person.id ??
-                            person.employee_id ??
-                            "";
+                        // shifts.cashier_id references users.id; keep employee_id
+                        // as metadata so the employee/user relationship remains explicit.
+                        option.value = person.user_id ?? "";
+                        option.dataset.employeeId = person.employee_id ?? person.id ?? "";
 
                         option.textContent =
                             person.full_name_ar ??
                             person.full_name ??
                             person.name ??
                             person.employee_name ??
-                            `موظف ${option.value}`;
+                            `موظف ${option.dataset.employeeId || option.value}`;
+                        if (!option.value) {
+                            option.disabled = true;
+                            option.textContent += " — لا يملك حساب مستخدم مرتبطاً";
+                        }
 
                         select.appendChild(
                             option

@@ -7659,10 +7659,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
             val cashiers = db.rawQuery(
                 """
-                SELECT e.id, e.employee_code, e.full_name, e.full_name_ar,
+                SELECT e.id AS employee_id, e.employee_code, e.full_name, e.full_name_ar,
                        e.job_title, e.job_title_ar, e.department, e.station_id,
-                       e.user_id, e.status
+                       COALESCE(u.id, e.user_id) AS user_id, e.status
                 FROM employees e
+                LEFT JOIN users u ON u.is_deleted = 0 AND u.status = 'active'
+                    AND (u.id = e.user_id OR u.employee_id = e.id)
                 WHERE e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
                   AND (
                       UPPER(TRIM(COALESCE(e.job_title,''))) = 'CASHIER'
