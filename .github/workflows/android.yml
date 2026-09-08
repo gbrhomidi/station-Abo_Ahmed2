@@ -46,41 +46,44 @@ jobs:
           def write(rel, text):
               (root / rel).write_text(text, encoding='utf-8')
 
-          # 1) Login: never move focus to the login button automatically.
+          # Login: never move focus to the login button automatically.
           login_rel = Path('app/src/main/assets/screens/login.html')
           login = read(login_rel)
           login_before = login
           login = login.replace('submitBtn.focus();', '')
-          # Keep validation function, but make its intent explicit and side-effect free.
           login = login.replace(
-              "function checkFieldsAndFocus() {\n            const username = document.getElementById('username');\n            const password = document.getElementById('password');\n            const submitBtn = document.getElementById('submitBtn');",
-              "function checkFieldsAndFocus() {\n            const username = document.getElementById('username');\n            const password = document.getElementById('password');"
+              "\n            const submitBtn = document.getElementById('submitBtn');",
+              ''
           )
           write(login_rel, login)
 
-          # 2) User administration: do not gate the required UI operations through
-          # the users.* permission helper. Database/schema protections remain intact.
+          # User administration: remove only the users.* gate from the bridge methods.
+          # Database/schema protections are intentionally untouched.
           main_rel = Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt')
           main = read(main_rel)
           main_before = main
-          main = re.sub(r'(?m)^\s*requireUsersPermission\("(?:read|create|update|delete)"\)\s*$', '', main)
           main = re.sub(
-              r'(?ms)^\s*private fun requireUsersPermission\(action: String\) \{\n.*?^\s*\}\s*\n',
+              r'\s*requireUsersPermission\("(?:read|create|update|delete)"\);?\s*',
+              '\n',
+              main
+          )
+          main = re.sub(
+              r'(?ms)^\s*private fun requireUsersPermission\(action: String\) \{.*?^\s*\}\s*\n',
               '\n',
               main
           )
           write(main_rel, main)
 
-          # 3) First-user setup: station must be selected from real Bridge/SQLite data.
+          # First-user setup: station is a real SQLite-backed selection.
           setup_rel = Path('app/src/main/assets/screens/first-user-setup.html')
           setup = read(setup_rel)
-          assert '<select id="stationId"' in setup, 'stationId must be a select backed by getStations()'
-          assert 'getStations' in setup, 'first-user setup must call getStations()'
-          assert 'station_name_ar' in setup or 'station_name' in setup, 'station name must come from station row'
-          assert 'dataset.branchId' in setup, 'branch_id must come from selected station'
-          assert 'setupSystemUser' in setup, 'first-user setup must save through AndroidInterface'
+          assert '<select id="stationId"' in setup
+          assert 'getStations' in setup
+          assert ('station_name_ar' in setup or 'station_name' in setup)
+          assert 'dataset.branchId' in setup
+          assert 'setupSystemUser' in setup
 
-          # 4) Users home path: force the real asset-relative main.html path.
+          # Users home must point from screens/users.html to assets/main.html.
           users_rel = Path('app/src/main/assets/screens/users.html')
           users = read(users_rel)
           users_before = users
@@ -96,40 +99,37 @@ jobs:
               users += "\n<script>function goHome(){window.location.replace('../main.html');}</script>\n"
           write(users_rel, users)
 
-          # 5) Deliveries: assert the real typed contracts and no mock fallback.
+          # Deliveries must use real typed Bridge contracts; never fake an empty result.
           deliveries_rel = Path('app/src/main/assets/screens/deliveries.html')
           deliveries = read(deliveries_rel)
-          assert "invoke('getCustomers')" in deliveries, 'deliveries must call getCustomers()'
-          assert "invoke('getVehicles')" in deliveries, 'deliveries must call getVehicles()'
-          assert "invoke('getCurrentShift')" in deliveries, 'deliveries must call getCurrentShift()'
-          assert "invoke('getLatestCustomerSaleForDelivery'" in deliveries, 'deliveries must call the real latest-sale contract'
-          assert "invoke('saveDeliveryRecord'" in deliveries, 'deliveries must save through the real Bridge'
-          assert "invoke('updateDeliveryRecord'" in deliveries, 'deliveries must update through the real Bridge'
-          assert "invoke('deleteDeliveryRecord'" in deliveries, 'deliveries must delete through the real Bridge'
-          assert "['{}']" not in deliveries[deliveries.find('async function loadCustomers'):deliveries.find('function customerName')], 'customer lookup must not use the old mock argument contract'
-          assert 'f_sale_id' in deliveries and 'f_id' in deliveries, 'delivery IDs must remain in the form'
+          assert "invoke('getCustomers')" in deliveries
+          assert "invoke('getVehicles')" in deliveries
+          assert "invoke('getCurrentShift')" in deliveries
+          assert "invoke('getLatestCustomerSaleForDelivery'" in deliveries
+          assert "invoke('saveDeliveryRecord'" in deliveries
+          assert "invoke('updateDeliveryRecord'" in deliveries
+          assert "invoke('deleteDeliveryRecord'" in deliveries
+          customer_block = deliveries[deliveries.find('async function loadCustomers'):deliveries.find('function customerName')]
+          assert "['{}']" not in customer_block
+          assert 'f_sale_id' in deliveries and 'f_id' in deliveries
+          assert re.search(r'id="f_id"[^>]*style="display:none"', deliveries)
+          assert re.search(r'id="f_sale_id"[^>]*style="display:none"', deliveries)
 
-          # 6) Fuel sales: use the dedicated scoped methods rather than generic CRUD.
-          fuel_rel = Path('app/src/main/assets/screens/fuel-sales.html')
-          fuel = read(fuel_rel)
-          assert "updateMethod:'updateFuelSaleRecord'" in fuel, 'fuel sales must use dedicated update bridge'
-          assert "deleteMethod:'deleteFuelSaleRecord'" in fuel, 'fuel sales must use dedicated delete bridge'
-          assert "createMethod:'saveFuelSaleRecord'" in fuel, 'fuel sales must use the real create bridge'
+          # Fuel sales use dedicated scoped update/delete methods.
+          fuel = read(Path('app/src/main/assets/screens/fuel-sales.html'))
+          assert "createMethod:'saveFuelSaleRecord'" in fuel
+          assert "updateMethod:'updateFuelSaleRecord'" in fuel
+          assert "deleteMethod:'deleteFuelSaleRecord'" in fuel
 
-          # 7) Main dashboard: current user and avatar are data-driven with a safe fallback.
-          main_html_rel = Path('app/src/main/assets/main.html')
-          main_html = read(main_html_rel)
-          assert "getCurrentUser" in main_html, 'main must load the current user through the bridge'
-          assert 'userAvatar' in main_html, 'main must render the user avatar'
-          assert 'avatar_path' in main_html, 'main must consume the persisted avatar path'
-          assert 'default_avatar.png' in main_html, 'main must have the project fallback avatar'
+          # Main dashboard uses the current user and persisted avatar with project fallback.
+          main_html = read(Path('app/src/main/assets/main.html'))
+          assert 'getCurrentUser' in main_html
+          assert 'userAvatar' in main_html
+          assert 'avatar_path' in main_html
+          assert 'default_avatar.png' in main_html
 
-          # 8) Deliveries must not expose editable IDs to the user.
-          assert re.search(r'id="f_id"[^>]*style="display:none"', deliveries), 'delivery id must be hidden'
-          assert re.search(r'id="f_sale_id"[^>]*style="display:none"', deliveries), 'sale/order id must be hidden'
-
-          # 9) No user-management permission gate may remain in MainActivity.
-          assert 'requireUsersPermission(' not in main, 'users.* permission gate remains in MainActivity'
+          # No users.* permission helper may remain in the bridge implementation.
+          assert 'requireUsersPermission(' not in main
 
           print('FINAL_TARGETED_REPAIR_VALIDATION=PASS')
           print('login_changed=', login != login_before)
@@ -157,26 +157,24 @@ jobs:
           set -euo pipefail
           test ! -f repair_targeted.py
           test ! -f .github/workflows/targeted-repair.yml
-          grep -Fq "<select id=\"stationId\"" app/src/main/assets/screens/first-user-setup.html
-          grep -Fq "getStations" app/src/main/assets/screens/first-user-setup.html
-          ! grep -Fq "submitBtn.focus();" app/src/main/assets/screens/login.html
-          ! grep -Fq "requireUsersPermission(\"read\")" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          ! grep -Fq "requireUsersPermission(\"create\")" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          ! grep -Fq "requireUsersPermission(\"update\")" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          ! grep -Fq "requireUsersPermission(\"delete\")" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+          grep -Fq '<select id="stationId"' app/src/main/assets/screens/first-user-setup.html
+          grep -Fq 'getStations' app/src/main/assets/screens/first-user-setup.html
+          ! grep -Fq 'submitBtn.focus();' app/src/main/assets/screens/login.html
+          ! grep -Fq 'requireUsersPermission(' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
           test -d app/build/outputs/apk/release
           apk=$(find app/build/outputs/apk/release -type f -name '*.apk' | head -n1)
           test -n "$apk"
+          rm -rf /tmp/apk_verify
           mkdir -p /tmp/apk_verify
           unzip -q -o "$apk" -d /tmp/apk_verify
           for f in first-user-setup.html login.html users.html deliveries.html fuel-sales.html; do test -f "/tmp/apk_verify/assets/screens/$f"; done
           grep -Fq '<select id="stationId"' /tmp/apk_verify/assets/screens/first-user-setup.html
           grep -Fq 'getStations' /tmp/apk_verify/assets/screens/first-user-setup.html
           ! grep -Fq 'submitBtn.focus();' /tmp/apk_verify/assets/screens/login.html
-          grep -Fq "getCustomers" /tmp/apk_verify/assets/screens/deliveries.html
-          grep -Fq "getLatestCustomerSaleForDelivery" /tmp/apk_verify/assets/screens/deliveries.html
-          grep -Fq "getCurrentShift" /tmp/apk_verify/assets/screens/deliveries.html
-          grep -Fq "getVehicles" /tmp/apk_verify/assets/screens/deliveries.html
+          grep -Fq 'getCustomers' /tmp/apk_verify/assets/screens/deliveries.html
+          grep -Fq 'getLatestCustomerSaleForDelivery' /tmp/apk_verify/assets/screens/deliveries.html
+          grep -Fq 'getCurrentShift' /tmp/apk_verify/assets/screens/deliveries.html
+          grep -Fq 'getVehicles' /tmp/apk_verify/assets/screens/deliveries.html
           grep -Fq "updateMethod:'updateFuelSaleRecord'" /tmp/apk_verify/assets/screens/fuel-sales.html
           grep -Fq "deleteMethod:'deleteFuelSaleRecord'" /tmp/apk_verify/assets/screens/fuel-sales.html
           echo "APK=$apk"
