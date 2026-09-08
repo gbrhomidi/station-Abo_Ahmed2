@@ -41,7 +41,7 @@ jobs:
           def read(rel): return (root / rel).read_text(encoding='utf-8')
           def write(rel, text): (root / rel).write_text(text, encoding='utf-8')
 
-          # Login: no automatic focus movement after six password digits.
+          # Login: keep the user in the password field; validation must not steal focus.
           login_rel = Path('app/src/main/assets/screens/login.html')
           login = read(login_rel)
           login_before = login
@@ -49,8 +49,8 @@ jobs:
           login = login.replace("\n            const submitBtn = document.getElementById('submitBtn');", '')
           write(login_rel, login)
 
-          # User administration: remove users.* permission gating from the requested UI path.
-          # SQLite/schema protection and station scoping are not removed.
+          # Users: remove only the users.* permission gate from the requested bridge path.
+          # Do not remove generic database/schema protections or station scoping.
           main_rel = Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt')
           main = read(main_rel)
           main_before = main
@@ -58,7 +58,7 @@ jobs:
           main = re.sub(r'(?ms)^\s*private fun requireUsersPermission\(action: String\)\s*\{.*?^\s*\}\s*\n', '\n', main)
           write(main_rel, main)
 
-          # First-user setup must select a real station returned by AndroidInterface.getStations().
+          # First-user setup: station and branch originate from real station rows.
           setup = read(Path('app/src/main/assets/screens/first-user-setup.html'))
           assert '<select id="stationId"' in setup
           assert 'getStations' in setup
@@ -66,7 +66,7 @@ jobs:
           assert 'dataset.branchId' in setup
           assert 'setupSystemUser' in setup
 
-          # Users home path must resolve from screens/ to the actual main.html asset.
+          # Users home: ensure the screen-relative path reaches assets/main.html.
           users_rel = Path('app/src/main/assets/screens/users.html')
           users = read(users_rel)
           users_before = users
@@ -76,30 +76,32 @@ jobs:
               users += "\n<script>function goHome(){window.location.replace('../main.html');}</script>\n"
           write(users_rel, users)
 
-          # Deliveries: real typed bridge contracts, no mock empty-array argument.
+          # Deliveries: real typed Bridge contracts and hidden internal IDs.
           deliveries_rel = Path('app/src/main/assets/screens/deliveries.html')
           deliveries = read(deliveries_rel)
           for method in ['getCustomers','getVehicles','getCurrentShift','getLatestCustomerSaleForDelivery','saveDeliveryRecord','updateDeliveryRecord','deleteDeliveryRecord']:
               assert re.search(r"invoke\(\s*['\"]" + re.escape(method) + r"['\"]", deliveries), 'missing delivery bridge: ' + method
+          assert 'id="f_id"' in deliveries
+          assert 'id="f_sale_id"' in deliveries
           start = deliveries.find('async function loadCustomers')
           end = deliveries.find('function customerName')
           customer_block = deliveries[start:end] if start >= 0 and end > start else deliveries
           assert "['{}']" not in customer_block
 
-          # Force the two internal delivery identifiers to be non-editable/hidden.
+          # Make internal IDs non-editable and hidden regardless of attribute ordering.
           for field_id in ('f_id', 'f_sale_id'):
               pat = re.compile(r'<([A-Za-z][A-Za-z0-9:-]*)(?=[^>]*\bid=["\']' + re.escape(field_id) + r'["\'])[^>]*>', re.I)
+              matches = pat.findall(deliveries)
+              assert matches, 'missing delivery field: ' + field_id
               def hide(m):
                   tag = m.group(0)
                   if re.search(r'\bhidden\b', tag, re.I): return tag
                   if re.search(r'\btype=["\']hidden["\']', tag, re.I): return tag
                   return tag[:-1] + ' hidden>'
               deliveries = pat.sub(hide, deliveries, count=1)
-          assert re.search(r'\bid=["\']f_id["\'][^>]*\bhidden\b', deliveries, re.I) or re.search(r'\btype=["\']hidden["\'][^>]*\bid=["\']f_id["\']', deliveries, re.I)
-          assert re.search(r'\bid=["\']f_sale_id["\'][^>]*\bhidden\b', deliveries, re.I) or re.search(r'\btype=["\']hidden["\'][^>]*\bid=["\']f_sale_id["\']', deliveries, re.I)
           write(deliveries_rel, deliveries)
 
-          # Fuel sales: dedicated scoped methods for update/delete/create.
+          # Fuel sales: dedicated scoped update/delete methods.
           fuel = read(Path('app/src/main/assets/screens/fuel-sales.html'))
           assert "createMethod:'saveFuelSaleRecord'" in fuel
           assert "updateMethod:'updateFuelSaleRecord'" in fuel
@@ -112,7 +114,7 @@ jobs:
           assert 'avatar_path' in main_html
           assert 'default_avatar.png' in main_html
 
-          # No users.* permission helper remains in the bridge implementation.
+          # No users.* permission helper may remain in MainActivity.
           assert 'requireUsersPermission(' not in main
 
           print('FINAL_TARGETED_REPAIR_VALIDATION=PASS')
@@ -172,11 +174,11 @@ jobs:
           git diff --check
           git status --short
           git diff --stat
-          git diff -- app/src/main/assets/screens/login.html app/src/main/assets/screens/users.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt app/src/main/assets/screens/deliveries.html
+          git diff -- app/src/main/assets/screens/login.html app/src/main/assets/screens/users.html app/src/main/assets/screens/deliveries.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
           if git diff --quiet; then echo 'NO_SOURCE_CHANGES'; exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add app/src/main/assets/screens/login.html app/src/main/assets/screens/users.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt app/src/main/assets/screens/deliveries.html
+          git add app/src/main/assets/screens/login.html app/src/main/assets/screens/users.html app/src/main/assets/screens/deliveries.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
           git commit -m 'fix: complete SQLite bridge and login repairs'
           git push origin HEAD:repair-validation-20260908
 
