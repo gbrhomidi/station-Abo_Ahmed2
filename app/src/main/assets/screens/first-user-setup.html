@@ -638,11 +638,11 @@
                     </div>
                     <div class="field">
                         <label for="stationId">رقم المحطة <span class="required">*</span></label>
-                        <input id="stationId" type="number" required min="1" step="1" inputmode="numeric" placeholder="معرف المحطة">
+                        <select id="stationId" required><option value="">جاري تحميل المحطات...</option></select><span class="hint" id="stationHint">يتم جلب المحطات من SQLite.</span>
                     </div>
                     <div class="field">
                         <label for="branchId">رقم الفرع <span class="required">*</span></label>
-                        <input id="branchId" type="number" required min="1" step="1" inputmode="numeric" placeholder="معرف الفرع">
+                        <input id="branchId" type="number" required min="1" step="1" readonly placeholder="يُعبأ تلقائياً من المحطة">
                     </div>
 
                     <!-- Full-row: رقم المستخدم (readonly) -->
@@ -775,6 +775,7 @@
                 jobTitle.disabled=titles.length===0;
             }
             function syncFullNameArabic(){const a=document.getElementById('fullName'),b=document.getElementById('fullNameAr');if(a&&b)b.value=a.value.trim();}
+            async function loadStationsForSetup(){const select=document.getElementById('stationId'),branch=document.getElementById('branchId');try{if(!window.AndroidInterface||typeof window.AndroidInterface.getStations!=='function')throw new Error('عقد المحطات غير متاح.');const raw=window.AndroidInterface.getStations(),r=typeof raw==='string'?JSON.parse(raw):raw;if(r&&r.success===false)throw new Error(r.error||r.message||'تعذر جلب المحطات.');const rows=Array.isArray(r)?r:(Array.isArray(r.data)?r.data:[]);select.innerHTML='<option value="">اختر المحطة</option>';rows.forEach(x=>{const id=x.id??x.station_id;if(!id)return;const o=document.createElement('option');o.value=String(id);o.textContent=x.station_name_ar||x.station_name||x.station_code||('محطة #'+id);o.dataset.branchId=x.branch_id??'';select.appendChild(o)});select.onchange=()=>{const o=select.options[select.selectedIndex];branch.value=o?.dataset.branchId||''};document.getElementById('stationHint').textContent=rows.length?'اختر المحطة وسيتم تعبئة رقم الفرع تلقائياً.':'لا توجد محطات في قاعدة البيانات.'}catch(e){select.innerHTML='<option value="">تعذر تحميل المحطات</option>';document.getElementById('stationHint').textContent=e.message||'تعذر جلب المحطات.';toast(e.message||'تعذر جلب المحطات من SQLite.','error')}}
             function getPayload(){
                 syncFullNameArabic();
                 return {username:document.getElementById('username').value.trim(),password:document.getElementById('password').value,password_confirmation:document.getElementById('passwordConfirmation').value,full_name:document.getElementById('fullName').value.trim(),full_name_ar:document.getElementById('fullNameAr').value.trim(),email:document.getElementById('email').value.trim(),phone:document.getElementById('phone').value.trim(),job_title:document.getElementById('jobTitle').value.trim(),department:document.getElementById('department').value.trim(),station_id:document.getElementById('stationId').value.trim(),branch_id:document.getElementById('branchId').value.trim()};
@@ -929,6 +930,7 @@
                 document.getElementById('fullName').addEventListener('input', syncFullNameArabic);
                 document.querySelectorAll('#setupForm input:not([type="hidden"]), #setupForm select').forEach(function(field){field.addEventListener('input',function(){if(field.id==='stationId'||field.id==='branchId'||field.id==='phone'||field.id==='username')validateFieldLive(field);});field.addEventListener('change',function(){validateFieldLive(field);});});
                 updateJobTitleOptions(); syncFullNameArabic();
+                loadStationsForSetup();
                 keepSaveButtonAboveKeyboard();
                 document.getElementById('setupForm').addEventListener('submit', saveFirstUser);
                 document.getElementById('retryCheck').addEventListener('click', checkInitialState);

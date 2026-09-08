@@ -1959,7 +1959,7 @@
                     </label>
 
                     <input
-                        id="f_id"
+                        id="f_id" style="display:none"
                         name="id"
                         class="form-input readonly"
                         type="text"
@@ -1978,7 +1978,7 @@
                     </label>
 
                     <input
-                        id="f_sale_id"
+                        id="f_sale_id" style="display:none"
                         name="sale_id"
                         class="form-input"
                         type="number"
@@ -3810,10 +3810,7 @@
             ) {
 
                 response =
-                    await invoke(
-                        'getCustomers',
-                        ['{}']
-                    );
+                    await invoke('getCustomers');
 
             } else if (
                 bridge &&
@@ -4367,7 +4364,7 @@
 
             if (
                 !bridge ||
-                typeof bridge.getVehicleRecords !==
+                typeof bridge.getVehicles !==
                 'function'
             ) {
 
@@ -4377,10 +4374,7 @@
             }
 
             const response =
-                await invoke(
-                    'getVehicleRecords',
-                    ['{}']
-                );
+                await invoke('getVehicles');
 
             state.vehicles =
                 rowsFrom(response);
@@ -4604,43 +4598,7 @@
 
         try {
 
-            let response;
-
-            if (
-                bridge &&
-                typeof bridge.getShiftRecordsTyped ===
-                'function'
-            ) {
-
-                response =
-                    await invoke(
-                        'getShiftRecordsTyped',
-                        ['{}']
-                    );
-
-            } else if (
-                bridge &&
-                typeof bridge.getShiftRecords ===
-                'function'
-            ) {
-
-                response =
-                    await invoke(
-                        'getShiftRecords',
-                        ['{}']
-                    );
-
-            } else {
-
-                throw new Error(
-                    'عقد الورديات غير متاح في Android Bridge.'
-                );
-            }
-
-            state.shifts =
-                rowsFrom(response);
-
-            renderShiftOptions();
+            let response; if(!bridge||typeof bridge.getCurrentShift!=='function') throw new Error('عقد الوردية الحالية غير متاح في Android Bridge.'); response=await invoke('getCurrentShift'); const current=dataOf(response); state.shifts=current&&current.id?[current]:(current&&current.shift_id?[current]:[]); renderShiftOptions();
 
         } catch (error) {
 
@@ -4789,14 +4747,7 @@
 
             if (state.editingId) {
 
-                await invoke(
-                    'updateDeliveryRecord',
-                    [
-                        JSON.stringify(
-                            payload
-                        )
-                    ]
-                );
+                await invoke('updateDeliveryRecord',[Number(state.editingId),JSON.stringify(payload)]);
 
                 toast(
                     'تم تعديل التوصيل بنجاح.'
@@ -5111,14 +5062,7 @@
 
         try {
 
-            await invoke(
-                'deleteDeliveryRecord',
-                [
-                    JSON.stringify({
-                        id:id
-                    })
-                ]
-            );
+            await invoke('deleteDeliveryRecord',[id]);
 
             toast(
                 'تم حذف سجل التوصيل.'

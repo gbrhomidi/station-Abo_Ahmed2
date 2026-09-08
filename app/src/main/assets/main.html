@@ -1943,6 +1943,9 @@
             if (nameEl) nameEl.textContent = user.full_name || user.full_name_ar || user.username || '—';
             if (emailEl) emailEl.textContent = user.email || '—';
             if (roleEl) roleEl.textContent = user.role_name || user.role || '—';
+            const avatarEl=document.getElementById('userAvatar');
+            const avatarPath=String(user.avatar_path||user.avatar||user.profile_image||'').trim();
+            if(avatarEl){if(/^(file:|content:|data:|https?:)/i.test(avatarPath)||avatarPath.startsWith('assets-local/')) avatarEl.src=avatarPath.startsWith('assets-local/')?'file:///android_asset/'+avatarPath:avatarPath;else avatarEl.src='file:///android_asset/assets-local/images/default_avatar.png';}
         }
 
         async function logout() {

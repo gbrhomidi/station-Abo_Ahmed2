@@ -1537,12 +1537,12 @@
                 <div class="contact-info">
                     <h3><i class="fas fa-headset"></i> التواصل والدعم الفني</h3>
                     <p><i class="fas fa-user"></i> المهندس <span class="glowing-text">جبر الحميدي</span></p>
-                    <p><i class="fas fa-phone"></i> 
+                    <p><i class="fas fa-phone"></i>
                         <a href="tel:+967106586714" class="contact-action-btn phone-btn">
                             <i class="fas fa-phone-alt"></i>  اضغــط هنــا
                         </a>
                     </p>
-                    <p><i class="fas fa-envelope"></i> 
+                    <p><i class="fas fa-envelope"></i>
                         <a href="mailto:gbrhomidi@gmail.com" class="contact-action-btn email-btn">
                             <i class="fas fa-envelope"></i>  اضغــط هنــا
                         </a>
@@ -1775,7 +1775,7 @@
         // ============================================================
         function initTooltips() {
             const tooltipElements = document.querySelectorAll('[data-tooltip]');
-            
+
             tooltipElements.forEach(el => {
                 el.addEventListener('touchstart', function(e) {
                     document.querySelectorAll('[data-tooltip].tooltip-visible').forEach(t => {
@@ -1783,27 +1783,27 @@
                     });
                     el.classList.add('tooltip-visible');
                 });
-                
+
                 el.addEventListener('touchend', function() {
                     setTimeout(() => el.classList.remove('tooltip-visible'), 2000);
                 });
-                
+
                 el.addEventListener('mouseenter', function() {
                     document.querySelectorAll('[data-tooltip].tooltip-visible').forEach(t => {
                         if (t !== el) t.classList.remove('tooltip-visible');
                     });
                     el.classList.add('tooltip-visible');
                 });
-                
+
                 el.addEventListener('mouseleave', function() {
                     el.classList.remove('tooltip-visible');
                 });
-                
+
                 el.addEventListener('blur', function() {
                     el.classList.remove('tooltip-visible');
                 });
             });
-            
+
             document.addEventListener('click', function(e) {
                 if (!e.target.closest('[data-tooltip]')) {
                     document.querySelectorAll('[data-tooltip].tooltip-visible').forEach(t => {
@@ -1867,9 +1867,9 @@
             const attempts = getLoginAttempts();
             attempts[username] = (attempts[username] || 0) + 1;
             setLoginAttempts(attempts);
-            
+
             updateAttemptsCounter(username);
-            
+
             if (attempts[username] >= 1) {
                 const forgotLink = document.getElementById('forgotPassword');
                 forgotLink.classList.add('show');
@@ -1877,14 +1877,14 @@
                     forgotLink.classList.add('beam-active');
                 }
             }
-            
+
             if (attempts[username] >= APP_CONFIG.MAX_LOGIN_ATTEMPTS) {
                 const lockoutTime = Date.now() + (APP_CONFIG.LOCKOUT_DURATION_MINUTES * 60 * 1000);
                 setLockoutUntil(lockoutTime);
                 showLockoutBanner();
                 debugWarn("ACCOUNT_LOCKED", { username: username, attempts: attempts[username] });
             }
-            
+
             return attempts[username];
         }
 
@@ -1905,7 +1905,7 @@
             const count = attempts[username] || 0;
             const counter = document.getElementById('attemptsCounter');
             const text = document.getElementById('attemptsText');
-            
+
             if (count > 0 && count < APP_CONFIG.MAX_LOGIN_ATTEMPTS) {
                 text.innerHTML = `محاولات فاشلة: ${count} من ${APP_CONFIG.MAX_LOGIN_ATTEMPTS}`;
                 counter.classList.add('show');
@@ -2068,7 +2068,7 @@
         // ============================================================
         function showNotification(message, type) {
             debugInfo("NOTIFICATION_SHOWN", { message: message, type: type });
-            
+
             const container = document.getElementById('notificationContainer');
             const notification = document.createElement('div');
             notification.className = `notification notification-${type}`;
@@ -2360,9 +2360,8 @@
             const submitBtn = document.getElementById('submitBtn');
 
             if (username.value.trim().length >= 3 && password.value.trim().length >= 6) {
-                submitBtn.focus();
-                submitBtn.style.transform = 'scale(1.02)';
-                setTimeout(() => { submitBtn.style.transform = ''; }, 300);
+
+
             }
         }
 
@@ -2620,11 +2619,11 @@
                         document.getElementById('successMessage').textContent =
                             'تم تحديث كلمة المرور! يمكنك تسجيل الدخول الآن.';
                         document.getElementById('successMessage').classList.add('show');
-                        
+
                         resetLoginAttempts(usernameInput.value.trim());
-                        
+
                         logToAndroid('PASSWORD_RESET_SUCCESS', 'تم إعادة تعيين كلمة المرور');
-                        
+
                         setTimeout(() => {
                             document.getElementById('successMessage').classList.remove('show');
                         }, 3000);

@@ -8353,9 +8353,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
-        fun updateFuelSaleRecord(id: Long, jsonData: String) = operationalUpdate("sales", "fuel_sales", id, jsonData)
+        fun updateFuelSaleRecord(id: Long, jsonData: String): String { val a=getActivity()?:return errorResponse("النشاط غير متاح"); val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try { val stationId=requireCurrentStationId(db,a.currentUserId); val rows=db.updateOperationalRecord("fuel_sales",id,operationalScopedJson(jsonData),a.currentUserId); if(rows>0)dataResponseObject(JSONObject().apply{put("success",true);put("message","تم تعديل عملية البيع فعلياً");put("record",db.getOperationalRecord("fuel_sales",id)?:JSONObject());put("station_id",stationId)}).toString() else successResponse(false,"لم يتم العثور على عملية البيع") } catch(e:Exception){DebugLogger.logException("UpdateFuelSaleRecord",e);errorResponse(e.message?:"فشل تعديل عملية البيع")} }
         @JavascriptInterface
-        fun deleteFuelSaleRecord(id: Long) = operationalDelete("sales", "fuel_sales", id)
+        fun deleteFuelSaleRecord(id: Long): String { val a=getActivity()?:return errorResponse("النشاط غير متاح"); val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try { val stationId=requireCurrentStationId(db,a.currentUserId); val rows=db.deleteOperationalRecord("fuel_sales",id,a.currentUserId,stationId); successResponse(rows>0,if(rows>0)"تم إلغاء/أرشفة عملية البيع فعلياً" else "لم يتم العثور على عملية البيع") } catch(e:Exception){DebugLogger.logException("DeleteFuelSaleRecord",e);errorResponse(e.message?:"فشل إلغاء عملية البيع")} }
         @JavascriptInterface
         fun resolveFuelSaleRecord(id: Long, note: String = "") = operationalResolve("sales", "fuel_sales", id, note)
 
