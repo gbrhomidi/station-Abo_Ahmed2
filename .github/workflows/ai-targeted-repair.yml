@@ -24,7 +24,7 @@ jobs:
           BASE=os.environ['BASE']
           p=Path('app/src/main/assets/screens/first-user-setup.html')
           s=subprocess.check_output(['git','show',f'{BASE}:app/src/main/assets/screens/first-user-setup.html'],text=True)
-          base_size=len(s.encode())
+          base_size=len(s.encode('utf-8'))
           s=re.sub(r'(<input[^>]*id=["\']branchId["\'][^>]*?)\s+readonly(?:\s*=\s*["\'][^"\']*["\'])?',r'\1',s,flags=re.I)
           s=re.sub(r'(<input[^>]*id=["\']branchId["\'][^>]*?)\s+disabled(?:\s*=\s*["\'][^"\']*["\'])?',r'\1',s,flags=re.I)
           ui=r'''
@@ -70,8 +70,6 @@ jobs:
               x,n=re.subn(pattern,replacement,x,count=1)
               if n!=1: raise SystemExit('users.html image handler not found')
               x=x.replace("screens/main.html","../main.html")
-              x=x.replace("requirePermission('users.read')",'').replace('requirePermission("users.read")','')
-              x=x.replace("checkPermission('users.read')",'').replace('checkPermission("users.read")','')
               up.write_text(x,encoding='utf-8')
 
           mp=Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt')
@@ -91,7 +89,6 @@ jobs:
           mp.write_text(m,encoding='utf-8')
           print('Targeted repairs applied.')
           PY
-
       - name: Targeted static verification
         run: |
           set -euo pipefail
@@ -120,36 +117,32 @@ jobs:
           grep -Fq 'saveFuelSaleRecord' app/src/main/assets/screens/fuel-sales.html
           grep -Fq 'updateFuelSaleRecord' app/src/main/assets/screens/fuel-sales.html
           grep -Fq 'deleteFuelSaleRecord' app/src/main/assets/screens/fuel-sales.html
-          ! grep -Fq 'users.read' app/src/main/assets/screens/users.html
+          grep -Fq 'getLastSelectedFileUri' app/src/main/assets/screens/users.html
           echo 'Targeted static verification PASS.'
-
       - name: Regression tests
         run: |
           set -euo pipefail
           for t in employee-department-job-title-runtime-test.js employee-management-contract-test.js activity-bridge-contract-regression-test.js activity-log-database-bridge-regression-test.js ai-assistant-dom-lifecycle-regression-test.js; do
             [ ! -f "$t" ] || node "$t"
           done
-
       - name: Gradle tests and release APK
         run: |
           set -euo pipefail
           chmod +x gradlew
           ./gradlew testDebugUnitTest assembleRelease --no-daemon
-
       - name: Upload verified APK
         uses: actions/upload-artifact@v4
         with:
           name: Station_Abo_Ahmed_Release_APK_verified
           path: app/build/outputs/**/*.apk
           if-no-files-found: error
-
       - name: Review diff, commit and push
         run: |
           set -euo pipefail
           git diff --check
-          echo '--- git status ---'
+          echo '--- STATUS ---'
           git status --short
-          echo '--- git diff stat ---'
+          echo '--- DIFF STAT ---'
           git diff --stat
           rm -f .github/workflows/ai-targeted-repair.yml
           git add app/src/main/assets/screens/first-user-setup.html app/src/main/assets/screens/login.html app/src/main/assets/screens/users.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
