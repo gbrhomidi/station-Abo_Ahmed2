@@ -1989,7 +1989,7 @@
 
                 <span
                         id="themeIcon"
-                        aria-hidden="true">🌞</span>
+                        aria-hidden="true">🌙</span>
 
             </button>
 
@@ -2032,6 +2032,10 @@
 
             <i class="fas fa-sync"></i>
 
+        </button>
+
+        <button class="btn success" type="button" id="closeOpenShiftBtn" title="إغلاق الوردية المفتوحة">
+            <span aria-hidden="true">🔒</span> إغلاق الوردية المفتوحة
         </button>
 
     </div>
@@ -3819,7 +3823,7 @@
                 // تعيين أمين الصندوق تلقائياً إذا كان هناك واحد فقط
                 if (state.options.cashiers.length === 1) {
                     const cashier = state.options.cashiers[0];
-                    const cashierId = cashier.user_id || cashier.id || "";
+                    const cashierId = cashier.id ?? cashier.employee_id ?? "";
                     if (cashierId) {
                         $("cashier_id").value = String(cashierId);
                     }
@@ -3883,8 +3887,9 @@
 
                         // shifts.cashier_id references users.id; keep employee_id
                         // as metadata so the employee/user relationship remains explicit.
-                        option.value = person.user_id ?? "";
-                        option.dataset.employeeId = person.employee_id ?? person.id ?? "";
+                        option.value = person.id ?? person.employee_id ?? "";
+                        option.dataset.employeeId = person.id ?? person.employee_id ?? "";
+                        option.dataset.persistedId = person.cashier_id ?? person.user_id ?? option.value;
 
                         option.textContent =
                             person.full_name_ar ??
@@ -3892,10 +3897,6 @@
                             person.name ??
                             person.employee_name ??
                             `موظف ${option.dataset.employeeId || option.value}`;
-                        if (!option.value) {
-                            option.disabled = true;
-                            option.textContent += " — لا يملك حساب مستخدم مرتبطاً";
-                        }
 
                         select.appendChild(
                             option
@@ -6745,7 +6746,7 @@
             const icon = $("themeIcon");
             if(icon){
                 icon.textContent =
-                    theme === "dark" ? "🌙" : "🌞";
+                    theme === "dark" ? "🌞" : "🌙";
                 icon.setAttribute(
                     "aria-label",
                     theme === "dark"
@@ -6833,5 +6834,88 @@
     })();
 </script>
 <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
+
+<div class="overlay" id="openShiftOverlay">
+    <div class="modal">
+        <div class="modal-head">
+            <div>
+                <div class="modal-title">الوردية المفتوحة حالياً</div>
+                <div class="modal-subtitle">بيانات مقروءة مباشرة من SQLite</div>
+            </div>
+            <button class="close" type="button" onclick="closeOpenShiftModal()" aria-label="إغلاق النافذة">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="validation-box" id="openShiftValidation"></div>
+            <div id="openShiftBody" class="shift-grid"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" type="button" onclick="closeOpenShiftModal()">تراجع</button>
+            <button class="btn success" type="button" id="confirmCloseOpenShiftBtn" onclick="confirmCloseOpenShift()">إغلاق</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    function parseCloseResult(raw){
+        if(raw && typeof raw === 'object') return raw;
+        try { return JSON.parse(raw); } catch(e) { return {success:false,error:'استجابة Android غير صالحة'}; }
+    }
+    function closeOpenShiftModal(){
+        const overlay=document.getElementById('openShiftOverlay');
+        if(overlay) overlay.classList.remove('show');
+        document.body.style.overflow='';
+    }
+    async function openCloseOpenShiftModal(){
+        const overlay=document.getElementById('openShiftOverlay'), body=document.getElementById('openShiftBody'), confirm=document.getElementById('confirmCloseOpenShiftBtn');
+        if(!overlay||!body||!confirm) return;
+        body.innerHTML='<div class="empty">جارٍ البحث عن الوردية المفتوحة من SQLite...</div>';
+        confirm.disabled=true;
+        overlay.classList.add('show'); document.body.style.overflow='hidden';
+        try{
+            if(!window.AndroidInterface||typeof window.AndroidInterface.getOpenShiftForManagement!=='function') throw new Error('عقد Android لإغلاق الوردية المفتوحة غير متاح');
+            const result=parseCloseResult(window.AndroidInterface.getOpenShiftForManagement());
+            if(result.success!==true) throw new Error(result.error||result.message||'تعذر العثور على الوردية المفتوحة');
+            const row=result.data||result.shift||result;
+            window.__openShiftManagementId=Number(row.id||row.shift_id||result.shift_id||0);
+            if(!window.__openShiftManagementId) throw new Error('قاعدة البيانات أعادت وردية مفتوحة دون معرف صالح');
+            const labels={shift_code:'رمز الوردية',station_name_ar:'المحطة',station_name:'المحطة',branch_id:'الفرع',company_id:'الشركة',shift_date:'تاريخ الوردية',shift_type:'نوع الوردية',start_time:'وقت البداية',end_time:'وقت النهاية',manager_name_ar:'مدير الوردية',manager_name:'مدير الوردية',cashier_name_ar:'أمين الصندوق',cashier_name:'أمين الصندوق',attendant_names_ar:'العاملون',attendant_names:'العاملون',opening_cash:'النقدية الافتتاحية',opening_bank:'الرصيد البنكي الافتتاحي',opening_credit:'الائتمان الافتتاحي',closing_cash:'النقدية الختامية',closing_bank:'الرصيد البنكي الختامي',closing_credit:'الائتمان الختامي',total_sales:'إجمالي المبيعات',total_fuel_sales:'مبيعات الوقود',total_product_sales:'مبيعات المنتجات',cash_variance:'الانحراف النقدي',status:'الحالة'};
+            const skip=new Set(['id','shift_id','station_id','manager_id','cashier_id','attendant_ids','station_name','station_name_ar','manager_name','manager_name_ar','cashier_name','cashier_name_ar','attendant_names','attendant_names_ar']);
+            const entries=[];
+            Object.keys(row).forEach(k=>{if(skip.has(k)||row[k]===null||row[k]===undefined||row[k]==='')return;entries.push(`<div class="info"><label>${esc(labels[k]||k)}</label><strong>${esc(typeof row[k]==='object'?JSON.stringify(row[k]):row[k])}</strong></div>`)});
+            body.innerHTML=entries.length?entries.join(''):'<div class="empty">لا توجد بيانات تشغيلية متاحة لهذه الوردية.</div>';
+            confirm.disabled=false;
+        }catch(e){
+            body.innerHTML=`<div class="error-state">${esc(e.message||e)}</div>`;
+            window.__openShiftManagementId=0;
+        }
+    }
+    async function confirmCloseOpenShift(){
+        const confirm=document.getElementById('confirmCloseOpenShiftBtn');
+        const id=Number(window.__openShiftManagementId||0);
+        if(!id) return;
+        confirm.disabled=true;
+        try{
+            if(!window.AndroidInterface||typeof window.AndroidInterface.closeOpenShiftForManagement!=='function') throw new Error('عقد Android لإغلاق الوردية غير متاح');
+            const result=parseCloseResult(window.AndroidInterface.closeOpenShiftForManagement());
+            if(result.success!==true) throw new Error(result.error||result.message||'فشل إغلاق الوردية');
+            toast(result.message||'تم إغلاق الوردية فعلياً في SQLite','success');
+            closeOpenShiftModal();
+            if(typeof window.reloadData==='function') await window.reloadData();
+        }catch(e){
+            const box=document.getElementById('openShiftValidation'); if(box){box.textContent=e.message||String(e);box.classList.add('show')}
+            toast(e.message||'فشل إغلاق الوردية','error');
+            confirm.disabled=false;
+        }
+    }
+    window.openCloseOpenShiftModal=openCloseOpenShiftModal;
+    window.closeOpenShiftModal=closeOpenShiftModal;
+    window.confirmCloseOpenShift=confirmCloseOpenShift;
+    document.addEventListener('DOMContentLoaded',function(){
+        const btn=document.getElementById('closeOpenShiftBtn');
+        if(btn) btn.addEventListener('click',openCloseOpenShiftModal);
+    });
+})();
+</script>
 </body>
 </html>

@@ -7350,7 +7350,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال التوثيق والمستخدمين
     // ========================================================================
 
-    
+
     fun createUserSession(userId: Long, token: String, expiresAt: String): Long {
         dbLock.lock()
         return try {
@@ -7651,7 +7651,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 """
                     SELECT e.id, e.employee_code, e.full_name, e.full_name_ar, e.job_title, e.job_title_ar, e.department, e.station_id, e.user_id, e.status FROM employees e WHERE e.station_id =? AND e.is_deleted = 0 AND e.status ='active' AND (TRIM(COALESCE(e.job_title_ar,'')) IN (${managerTitlesAr.joinToString(",") { "?" }})) ORDER BY COALESCE(e.full_name_ar, e.full_name, e.employee_code)
                 """.trimIndent(), args
-            ).use { cursorToJsonArray(it) }                                    
+            ).use { cursorToJsonArray(it) }
             val allManagers = JSONArray()
             val seenManagers = HashSet<Long>()
             for (i in 0 until managers.length()) { val o = managers.optJSONObject(i); if (o != null && seenManagers.add(o.optLong("id"))) allManagers.put(o) }
@@ -8401,8 +8401,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             try {
                 // منع وجود ورديتين مفتوحتين للمحطة نفسها.
                 db.rawQuery(
-                    """ 
-                    SELECT id FROM shifts WHERE station_id = ? AND status = 'open' AND is_deleted = 0 LIMIT 1 
+                    """
+                    SELECT id FROM shifts WHERE station_id = ? AND status = 'open' AND is_deleted = 0 LIMIT 1
                     """.trimIndent(),
                     arrayOf(stationId.toString())
                 ).use { cursor ->
@@ -20598,7 +20598,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("used_at", getCurrentDateTime())
                 }
                 db.update("password_reset_tokens", usedCv, "user_id = ? AND is_used = 0", arrayOf(userId.toString()))
-                
+
                 // Invalidate all active sessions for this user after password change
                 val sessionCv = ContentValues().apply {
                     put("is_active", 0)
@@ -20606,7 +20606,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("logout_reason", "password_reset")
                 }
                 db.update("user_sessions", sessionCv, "user_id = ? AND is_active = 1", arrayOf(userId.toString()))
-                
+
                 logActivity("system", "password_change", "تم تحديث كلمة المرور للمستخدم $userId")
 
             }
@@ -22271,10 +22271,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = readableDatabase
             val sql = """
-                SELECT p.*, c.category_name 
+                SELECT p.*, c.category_name
                 FROM products p
                 LEFT JOIN product_categories c ON p.category_id = c.id
-                WHERE p.has_expiry = 1 
+                WHERE p.has_expiry = 1
                 AND p.is_deleted = 0
                 AND date(p.expiry_date) <= date('now', '+' || ? || ' days')
                 ORDER BY p.expiry_date ASC
@@ -22498,18 +22498,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             var selection = "station_id = ? AND is_deleted = 0"
             val args = mutableListOf(stationId.toString())
-            
+
             if (!status.isNullOrEmpty()) { selection += " AND status = ?"; args.add(status) }
             if (!assetType.isNullOrEmpty()) { selection += " AND asset_type = ?"; args.add(assetType) }
             if (!search.isNullOrEmpty()) { selection += " AND (asset_name LIKE ? OR asset_code LIKE ?)"; args.add("%$search%"); args.add("%$search%") }
-            
+
             db.rawQuery("SELECT * FROM fixed_assets WHERE $selection ORDER BY id DESC LIMIT ? OFFSET ?", (args + listOf(limit.toString(), offset.toString())).toTypedArray()).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
         } finally { dbLock.unlock() }
         return arr
     }
-    
+
     fun updateFixedAsset(assetId: Long, stationId: Int, payload: JSONObject, userId: Long): Int {
         dbLock.lock()
         try {
@@ -22530,7 +22530,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.update("fixed_assets", cv, "id = ? AND station_id = ?", arrayOf(assetId.toString(), stationId.toString()))
         } finally { dbLock.unlock() }
     }
-    
+
     fun getMaintenanceRequestsPage(stationId: Int, limit: Int = 100, offset: Int = 0, status: String? = null, priority: String? = null, search: String? = null): JSONArray {
         val arr = JSONArray()
         dbLock.lock()
@@ -22539,36 +22539,36 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             // Join with fixed_assets to enforce station isolation and get asset name
             var query = "SELECT m.*, a.asset_name FROM maintenance_requests m INNER JOIN fixed_assets a ON m.asset_id = a.id WHERE a.station_id = ?"
             val args = mutableListOf(stationId.toString())
-            
+
             if (!status.isNullOrEmpty()) { query += " AND m.status = ?"; args.add(status) }
             if (!priority.isNullOrEmpty()) { query += " AND m.priority = ?"; args.add(priority) }
             if (!search.isNullOrEmpty()) { query += " AND (m.title LIKE ? OR m.request_code LIKE ?)"; args.add("%$search%"); args.add("%$search%") }
-            
+
             query += " ORDER BY m.id DESC LIMIT ? OFFSET ?"
             args.add(limit.toString())
             args.add(offset.toString())
-            
+
             db.rawQuery(query, args.toTypedArray()).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
         } finally { dbLock.unlock() }
         return arr
     }
-    
+
     fun addMaintenanceRequestTyped(payload: JSONObject, stationId: Int, userId: Long): Long {
         dbLock.lock()
         try {
             val db = writableDatabase
             val assetId = payload.optLong("asset_id", 0)
             require(assetId > 0) { "يجب تحديد الأصل" }
-            
+
             // Verify asset belongs to station
             var valid = false
             db.rawQuery("SELECT id FROM fixed_assets WHERE id = ? AND station_id = ?", arrayOf(assetId.toString(), stationId.toString())).use {
                 if (it.moveToFirst()) valid = true
             }
             require(valid) { "الأصل غير موجود أو لا ينتمي لهذه المحطة" }
-            
+
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
                 put("request_code", "MNT-" + System.currentTimeMillis())
@@ -22584,7 +22584,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.insert("maintenance_requests", null, cv)
         } finally { dbLock.unlock() }
     }
-    
+
     fun updateMaintenanceRequestTyped(requestId: Long, payload: JSONObject, stationId: Int, userId: Long): Int {
         dbLock.lock()
         try {
@@ -22595,7 +22595,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 if (it.moveToFirst()) valid = true
             }
             require(valid) { "الطلب غير موجود أو لا تملك صلاحية تعديله" }
-            
+
             val cv = ContentValues().apply {
                 if(payload.has("title")) put("title", payload.optString("title"))
                 if(payload.has("description")) put("description", payload.optString("description"))
@@ -22605,7 +22605,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.update("maintenance_requests", cv, "id = ?", arrayOf(requestId.toString()))
         } finally { dbLock.unlock() }
     }
-    
+
     fun completeMaintenanceRequest(payload: JSONObject, stationId: Int, userId: Long): Long {
         dbLock.lock()
         try {
@@ -22614,21 +22614,21 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             try {
                 val reqId = payload.optLong("id", 0)
                 require(reqId > 0) { "معرف الطلب مطلوب" }
-                
+
                 // Verify ownership
                 var valid = false
                 db.rawQuery("SELECT m.id FROM maintenance_requests m INNER JOIN fixed_assets a ON m.asset_id = a.id WHERE m.id = ? AND a.station_id = ?", arrayOf(reqId.toString(), stationId.toString())).use {
                     if (it.moveToFirst()) valid = true
                 }
                 require(valid) { "الطلب غير موجود أو لا تملك صلاحية إكماله" }
-                
+
                 // Update request
                 val cv = ContentValues().apply {
                     put("status", "completed")
                     put("completed_at", getCurrentDateTime())
                 }
                 db.update("maintenance_requests", cv, "id = ?", arrayOf(reqId.toString()))
-                
+
                 // Add to history
                 val hcv = ContentValues().apply {
                     put("uuid", UUID.randomUUID().toString())
@@ -22638,7 +22638,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("performed_by", userId)
                 }
                 val histId = db.insert("maintenance_history", null, hcv)
-                
+
                 db.setTransactionSuccessful()
                 return histId
             } finally {
@@ -22646,7 +22646,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
         } finally { dbLock.unlock() }
     }
-    
+
     fun getMaintenanceHistoryPage(stationId: Int, assetId: Long? = null, limit: Int = 100, offset: Int = 0): JSONArray {
         val arr = JSONArray()
         dbLock.lock()
@@ -22654,20 +22654,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             var query = "SELECT h.*, a.asset_name FROM maintenance_history h INNER JOIN maintenance_requests m ON h.maintenance_request_id = m.id INNER JOIN fixed_assets a ON m.asset_id = a.id WHERE a.station_id = ?"
             val args = mutableListOf(stationId.toString())
-            
+
             if (assetId != null && assetId > 0) { query += " AND a.id = ?"; args.add(assetId.toString()) }
-            
+
             query += " ORDER BY h.id DESC LIMIT ? OFFSET ?"
             args.add(limit.toString())
             args.add(offset.toString())
-            
+
             db.rawQuery(query, args.toTypedArray()).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
         } finally { dbLock.unlock() }
         return arr
     }
-    
+
     fun getDepreciationPage(stationId: Int, assetId: Long? = null, limit: Int = 100, offset: Int = 0): JSONArray {
         val arr = JSONArray()
         dbLock.lock()
@@ -22675,20 +22675,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             var query = "SELECT d.*, a.asset_name FROM depreciation d INNER JOIN fixed_assets a ON d.asset_id = a.id WHERE a.station_id = ? AND d.archived = 0"
             val args = mutableListOf(stationId.toString())
-            
+
             if (assetId != null && assetId > 0) { query += " AND a.id = ?"; args.add(assetId.toString()) }
-            
+
             query += " ORDER BY d.id DESC LIMIT ? OFFSET ?"
             args.add(limit.toString())
             args.add(offset.toString())
-            
+
             db.rawQuery(query, args.toTypedArray()).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
         } finally { dbLock.unlock() }
         return arr
     }
-    
+
     fun addDepreciationTyped(payload: JSONObject, stationId: Int, userId: Long): Long {
         dbLock.lock()
         try {
@@ -22699,7 +22699,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val amount = payload.optDouble("depreciation_amount", 0.0)
                 require(assetId > 0) { "يجب تحديد الأصل" }
                 require(amount > 0) { "قيمة الإهلاك يجب أن تكون موجبة" }
-                
+
                 // Verify asset and get current value
                 var currentValue = 0.0
                 var salvageValue = 0.0
@@ -22712,16 +22712,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     }
                 }
                 require(valid) { "الأصل غير موجود أو لا ينتمي لهذه المحطة" }
-                
+
                 val newValue = currentValue - amount
                 require(newValue >= salvageValue) { "لا يمكن إهلاك الأصل بأقل من قيمة الخردة ($salvageValue)" }
-                
+
                 // Get accumulated depreciation
                 var accumulated = amount
                 db.rawQuery("SELECT SUM(depreciation_amount) as acc FROM depreciation WHERE asset_id = ? AND archived = 0", arrayOf(assetId.toString())).use {
                     if (it.moveToFirst()) accumulated += it.getDouble(0)
                 }
-                
+
                 // Insert depreciation record
                 val cv = ContentValues().apply {
                     put("asset_id", assetId)
@@ -22732,11 +22732,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("created_by", userId)
                 }
                 val depId = db.insert("depreciation", null, cv)
-                
+
                 // Update asset value
                 val acv = ContentValues().apply { put("current_value", newValue) }
                 db.update("fixed_assets", acv, "id = ?", arrayOf(assetId.toString()))
-                
+
                 db.setTransactionSuccessful()
                 return depId
             } finally {
@@ -22744,7 +22744,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
         } finally { dbLock.unlock() }
     }
-    
+
     fun deleteDepreciationRecordTyped(depId: Long, stationId: Int): Int {
         dbLock.lock()
         try {
@@ -22763,14 +22763,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     }
                 }
                 require(valid) { "سجل الإهلاك غير موجود أو لا تملك صلاحية حذفه" }
-                
+
                 // Archive record
                 val cv = ContentValues().apply { put("archived", 1) }
                 db.update("depreciation", cv, "id = ?", arrayOf(depId.toString()))
-                
+
                 // Restore asset value
                 db.execSQL("UPDATE fixed_assets SET current_value = current_value + ? WHERE id = ?", arrayOf(amount, assetId))
-                
+
                 db.setTransactionSuccessful()
                 return 1
             } finally {
@@ -22778,9 +22778,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
         } finally { dbLock.unlock() }
     }
-    
+
     // MODULE-012: Notification & SMS Typed Methods
-    
+
     fun getNotificationTemplatesPage(channel: String? = null, isActive: String? = null, search: String? = null): JSONArray {
         val arr = JSONArray()
         dbLock.lock()
@@ -22788,18 +22788,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             var selection = "1=1"
             val args = mutableListOf<String>()
-            
+
             if (!channel.isNullOrEmpty()) { selection += " AND channel = ?"; args.add(channel) }
             if (!isActive.isNullOrEmpty()) { selection += " AND is_active = ?"; args.add(isActive) }
             if (!search.isNullOrEmpty()) { selection += " AND (template_name LIKE ? OR template_code LIKE ?)"; args.add("%$search%"); args.add("%$search%") }
-            
+
             db.rawQuery("SELECT * FROM notification_templates WHERE $selection ORDER BY id DESC", args.toTypedArray()).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
         } finally { dbLock.unlock() }
         return arr
     }
-    
+
     fun addNotificationTemplateTyped(payload: JSONObject, userId: Long): Long {
         dbLock.lock()
         try {
@@ -22816,7 +22816,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.insert("notification_templates", null, cv)
         } finally { dbLock.unlock() }
     }
-    
+
     fun updateNotificationTemplateTyped(id: Long, payload: JSONObject, userId: Long): Int {
         dbLock.lock()
         try {
@@ -22832,7 +22832,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.update("notification_templates", cv, "id = ?", arrayOf(id.toString()))
         } finally { dbLock.unlock() }
     }
-    
+
     fun deleteNotificationTemplateTyped(id: Long): Int {
         dbLock.lock()
         try {
@@ -22840,7 +22840,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.delete("notification_templates", "id = ?", arrayOf(id.toString()))
         } finally { dbLock.unlock() }
     }
-    
+
     fun getNotificationsInboxPage(userId: Long, isRead: String? = null): JSONArray {
         val arr = JSONArray()
         dbLock.lock()
@@ -22848,16 +22848,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             var selection = "user_id = ?"
             val args = mutableListOf(userId.toString())
-            
+
             if (!isRead.isNullOrEmpty()) { selection += " AND is_read = ?"; args.add(isRead) }
-            
+
             db.rawQuery("SELECT * FROM notifications WHERE $selection ORDER BY id DESC LIMIT 100", args.toTypedArray()).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
         } finally { dbLock.unlock() }
         return arr
     }
-    
+
     fun markNotificationReadTyped(id: Long, userId: Long): Int {
         dbLock.lock()
         try {
@@ -22869,7 +22869,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.update("notifications", cv, "id = ? AND user_id = ?", arrayOf(id.toString(), userId.toString()))
         } finally { dbLock.unlock() }
     }
-    
+
     fun markAllNotificationsReadTyped(userId: Long): Int {
         dbLock.lock()
         try {
@@ -22881,7 +22881,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.update("notifications", cv, "user_id = ? AND is_read = 0", arrayOf(userId.toString()))
         } finally { dbLock.unlock() }
     }
-    
+
     fun getDebtRemindersPage(stationId: Int, status: String? = null): JSONArray {
         val arr = JSONArray()
         dbLock.lock()
@@ -22890,19 +22890,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             // Join parties to get name and phone. We simulate debts by looking at party credit balances if a debts table isn't fully populated
             // But we use the actual parties table which holds credit limits and current balances.
             var query = "SELECT id as debt_id, party_name, phone_number as phone, (credit_limit - current_balance) as outstanding_amount, '2026-12-31' as due_date, 0 as is_overdue, null as last_reminder_date FROM parties WHERE party_type = 'customer' AND (credit_limit - current_balance) > 0"
-            
+
             if (status == "overdue") {
                 // For simulation purposes in this test environment, we just return empty or logic based on actual schema
                 query += " AND 1=0" // We'd need a real due_date column to filter overdue
             }
-            
+
             db.rawQuery(query, null).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
         } finally { dbLock.unlock() }
         return arr
     }
-    
+
     fun getWhitelistPage(enabled: String? = null): JSONArray {
         val arr = JSONArray()
         dbLock.lock()
@@ -22910,16 +22910,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             var selection = "1=1"
             val args = mutableListOf<String>()
-            
+
             if (!enabled.isNullOrEmpty()) { selection += " AND enabled = ?"; args.add(enabled) }
-            
+
             db.rawQuery("SELECT * FROM sms_whitelist WHERE $selection ORDER BY id DESC", args.toTypedArray()).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
         } finally { dbLock.unlock() }
         return arr
     }
-    
+
     fun addWhitelistRecordTyped(payload: JSONObject): Long {
         dbLock.lock()
         try {
@@ -22932,7 +22932,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.insertWithOnConflict("sms_whitelist", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
         } finally { dbLock.unlock() }
     }
-    
+
     fun updateWhitelistRecordTyped(id: Long, payload: JSONObject): Int {
         dbLock.lock()
         try {
@@ -22945,7 +22945,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.update("sms_whitelist", cv, "id = ?", arrayOf(id.toString()))
         } finally { dbLock.unlock() }
     }
-    
+
     fun deleteWhitelistRecordTyped(id: Long): Int {
         dbLock.lock()
         try {
@@ -22953,20 +22953,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.delete("sms_whitelist", "id = ?", arrayOf(id.toString()))
         } finally { dbLock.unlock() }
     }
-    
+
     fun getSmsDiagnosticsTyped(): JSONObject {
         val result = JSONObject()
         dbLock.lock()
         try {
             val db = readableDatabase
             result.put("enabled", getSetting("sms_enabled") == "1")
-            
+
             var pending = 0
             db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE status = 'pending'", null).use {
                 if (it.moveToFirst()) pending = it.getInt(0)
             }
             result.put("pending_count", pending)
-            
+
             var failed = 0
             db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE status = 'failed'", null).use {
                 if (it.moveToFirst()) failed = it.getInt(0)
@@ -22975,9 +22975,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
         return result
     }
-    
+
     // MODULE-013: Reporting & Analytics Typed Methods
-    
+
     fun getSalesAnalyticsTyped(params: JSONObject, stationId: Int): JSONObject {
         val result = JSONObject()
         val summary = JSONObject()
@@ -22988,17 +22988,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val dateFrom = params.optString("date_from", "")
             val dateTo = params.optString("date_to", "")
             val saleType = params.optString("sale_type", "")
-            
+
             var selection = "station_id = ?"
             val args = mutableListOf(stationId.toString())
-            
+
             if (dateFrom.isNotEmpty()) { selection += " AND DATE(transaction_date) >= ?"; args.add(dateFrom) }
             if (dateTo.isNotEmpty()) { selection += " AND DATE(transaction_date) <= ?"; args.add(dateTo) }
-            
+
             // Calculate Summary
             var totalSales = 0.0
             var totalDiscounts = 0.0
-            
+
             // For this test environment, we'll query sales_transactions if available, otherwise return empty
             try {
                 db.rawQuery("SELECT SUM(total_amount), SUM(discount_amount) FROM sales_transactions WHERE $selection", args.toTypedArray()).use { c ->
@@ -23007,7 +23007,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         totalDiscounts = c.getDouble(1)
                     }
                 }
-                
+
                 // Get details
                 db.rawQuery("SELECT invoice_number as invoice_no, transaction_date as date, 'Customer' as customer_name, 'product' as type, total_amount as gross_amount, discount_amount as discount, net_amount FROM sales_transactions WHERE $selection ORDER BY transaction_date DESC LIMIT 100", args.toTypedArray()).use { c ->
                     while (c.moveToNext()) details.put(cursorRowToJson(c))
@@ -23015,18 +23015,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             } catch (e: Exception) {
                 // Table might not exist in all test states
             }
-            
+
             summary.put("total_sales", totalSales)
             summary.put("fuel_sales", 0.0) // Placeholder
             summary.put("product_sales", totalSales)
             summary.put("total_discounts", totalDiscounts)
-            
+
             result.put("summary", summary)
             result.put("details", details)
         } finally { dbLock.unlock() }
         return result
     }
-    
+
     fun getInventoryAnalyticsTyped(params: JSONObject, stationId: Int): JSONObject {
         val result = JSONObject()
         val summary = JSONObject()
@@ -23035,12 +23035,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         try {
             val db = readableDatabase
             val stockStatus = params.optString("stock_status", "")
-            
+
             var totalItems = 0
             var totalCost = 0.0
             var totalRetail = 0.0
             var lowStockCount = 0
-            
+
             try {
                 db.rawQuery("SELECT COUNT(*), SUM(current_stock * cost_price), SUM(current_stock * sale_price) FROM products", null).use { c ->
                     if (c.moveToFirst()) {
@@ -23049,35 +23049,35 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         totalRetail = c.getDouble(2)
                     }
                 }
-                
+
                 db.rawQuery("SELECT COUNT(*) FROM products WHERE current_stock <= minimum_stock", null).use { c ->
                     if (c.moveToFirst()) lowStockCount = c.getInt(0)
                 }
-                
+
                 var query = "SELECT product_code as item_code, product_name as item_name, 'Category' as category_name, current_stock as current_qty, minimum_stock as min_qty, cost_price FROM products"
                 if (stockStatus == "low") query += " WHERE current_stock <= minimum_stock AND current_stock > 0"
                 else if (stockStatus == "out") query += " WHERE current_stock <= 0"
-                
+
                 query += " ORDER BY product_name LIMIT 100"
-                
+
                 db.rawQuery(query, null).use { c ->
                     while (c.moveToNext()) details.put(cursorRowToJson(c))
                 }
             } catch (e: Exception) {
                 // Table might not exist
             }
-            
+
             summary.put("total_items", totalItems)
             summary.put("total_cost_value", totalCost)
             summary.put("total_retail_value", totalRetail)
             summary.put("low_stock_items", lowStockCount)
-            
+
             result.put("summary", summary)
             result.put("details", details)
         } finally { dbLock.unlock() }
         return result
     }
-    
+
     fun getAccountingAnalyticsTyped(params: JSONObject, stationId: Int): JSONObject {
         val result = JSONObject()
         val summary = JSONObject()
@@ -23086,10 +23086,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         try {
             val db = readableDatabase
             val reportType = params.optString("report_type", "trial_balance")
-            
+
             // In a real scenario, this would query ledger_entries and accounts
             // For test environment, we return simulated empty structure matching the contract
-            
+
             if (reportType == "income_statement") {
                 summary.put("total_revenue", 0.0)
                 summary.put("total_expenses", 0.0)
@@ -23102,15 +23102,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 summary.put("total_debit", 0.0)
                 summary.put("total_credit", 0.0)
             }
-            
+
             result.put("summary", summary)
             result.put("details", details)
         } finally { dbLock.unlock() }
         return result
     }
-    
+
     // MODULE-014: System Logs & Documents Typed Methods
-    
+
     fun getSystemLogsPageTyped(params: JSONObject, stationId: Int): JSONArray {
         val arr = JSONArray()
         dbLock.lock()
@@ -23118,22 +23118,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             var selection = "station_id = ?"
             val args = mutableListOf(stationId.toString())
-            
+
             val logLevel = params.optString("log_level", "")
             val source = params.optString("source", "")
             val dateFrom = params.optString("date_from", "")
             val dateTo = params.optString("date_to", "")
             val search = params.optString("search", "")
-            
+
             if (logLevel.isNotEmpty()) { selection += " AND log_level = ?"; args.add(logLevel) }
             if (source.isNotEmpty()) { selection += " AND source = ?"; args.add(source) }
             if (dateFrom.isNotEmpty()) { selection += " AND DATE(created_at) >= ?"; args.add(dateFrom) }
             if (dateTo.isNotEmpty()) { selection += " AND DATE(created_at) <= ?"; args.add(dateTo) }
             if (search.isNotEmpty()) { selection += " AND (message LIKE ? OR message_ar LIKE ?)"; args.add("%$search%"); args.add("%$search%") }
-            
+
             val limit = params.optInt("limit", 50)
             val offset = params.optInt("offset", 0)
-            
+
             db.rawQuery("SELECT id, uuid, log_level, log_type, source, message, created_at FROM system_logs WHERE $selection ORDER BY id DESC LIMIT ? OFFSET ?", (args + listOf(limit.toString(), offset.toString())).toTypedArray()).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
@@ -23142,7 +23142,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
         return arr
     }
-    
+
     fun getAuditLogsPageTyped(params: JSONObject): JSONArray {
         val arr = JSONArray()
         dbLock.lock()
@@ -23150,22 +23150,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             var selection = "1=1"
             val args = mutableListOf<String>()
-            
+
             val actionType = params.optString("action_type", "")
             val tableName = params.optString("table_name", "")
             val dateFrom = params.optString("date_from", "")
             val dateTo = params.optString("date_to", "")
             val search = params.optString("search", "")
-            
+
             if (actionType.isNotEmpty()) { selection += " AND action_type = ?"; args.add(actionType) }
             if (tableName.isNotEmpty()) { selection += " AND table_name = ?"; args.add(tableName) }
             if (dateFrom.isNotEmpty()) { selection += " AND DATE(created_at) >= ?"; args.add(dateFrom) }
             if (dateTo.isNotEmpty()) { selection += " AND DATE(created_at) <= ?"; args.add(dateTo) }
             if (search.isNotEmpty()) { selection += " AND (table_name LIKE ? OR action_type LIKE ?)"; args.add("%$search%"); args.add("%$search%") }
-            
+
             val limit = params.optInt("limit", 50)
             val offset = params.optInt("offset", 0)
-            
+
             db.rawQuery("SELECT id, uuid, user_id, action_type, table_name, record_id, changed_columns, created_at FROM audit_logs WHERE $selection ORDER BY id DESC LIMIT ? OFFSET ?", (args + listOf(limit.toString(), offset.toString())).toTypedArray()).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
@@ -23174,7 +23174,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
         return arr
     }
-    
+
     fun getDocumentsPageTyped(params: JSONObject): JSONArray {
         val arr = JSONArray()
         dbLock.lock()
@@ -23182,16 +23182,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             var selection = "1=1"
             val args = mutableListOf<String>()
-            
+
             val docType = params.optString("document_type", "")
             val search = params.optString("search", "")
-            
+
             if (docType.isNotEmpty()) { selection += " AND document_type = ?"; args.add(docType) }
             if (search.isNotEmpty()) { selection += " AND (document_name LIKE ? OR document_code LIKE ?)"; args.add("%$search%"); args.add("%$search%") }
-            
+
             val limit = params.optInt("limit", 50)
             val offset = params.optInt("offset", 0)
-            
+
             db.rawQuery("SELECT id, uuid, document_code, document_name, document_type, entity_type, entity_id, file_size, mime_type, created_at FROM documents WHERE $selection ORDER BY id DESC LIMIT ? OFFSET ?", (args + listOf(limit.toString(), offset.toString())).toTypedArray()).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
@@ -23200,7 +23200,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
         return arr
     }
-    
+
     fun addDocumentTyped(payload: JSONObject, userId: Long): Long {
         dbLock.lock()
         try {
@@ -23222,7 +23222,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.insert("documents", null, cv)
         } finally { dbLock.unlock() }
     }
-    
+
     fun updateDocumentTyped(id: Long, payload: JSONObject, userId: Long): Int {
         dbLock.lock()
         try {
@@ -23237,7 +23237,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.update("documents", cv, "id = ?", arrayOf(id.toString()))
         } finally { dbLock.unlock() }
     }
-    
+
     fun deleteDocumentTyped(id: Long): Int {
         dbLock.lock()
         try {
@@ -23245,9 +23245,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.delete("documents", "id = ?", arrayOf(id.toString()))
         } finally { dbLock.unlock() }
     }
-    
+
     // MODULE-015: Sync & Backup Typed Methods
-    
+
     fun getSyncDevicesPageTyped(params: JSONObject, stationId: Int): JSONArray {
         val arr = JSONArray()
         dbLock.lock()
@@ -23255,16 +23255,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             var selection = "station_id = ?"
             val args = mutableListOf(stationId.toString())
-            
+
             val search = params.optString("search", "")
             val isActive = params.optInt("is_active", -1)
-            
+
             if (search.isNotEmpty()) { selection += " AND (device_name LIKE ? OR device_id LIKE ?)"; args.add("%$search%"); args.add("%$search%") }
             if (isActive != -1) { selection += " AND is_active = ?"; args.add(isActive.toString()) }
-            
+
             val limit = params.optInt("limit", 50)
             val offset = params.optInt("offset", 0)
-            
+
             db.rawQuery("SELECT * FROM sync_devices WHERE $selection ORDER BY id DESC LIMIT ? OFFSET ?", (args + listOf(limit.toString(), offset.toString())).toTypedArray()).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
@@ -23273,7 +23273,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
         return arr
     }
-    
+
     fun updateSyncDeviceStatusTyped(id: Long, isActive: Int): Int {
         dbLock.lock()
         try {
@@ -23282,7 +23282,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.update("sync_devices", cv, "id = ?", arrayOf(id.toString()))
         } finally { dbLock.unlock() }
     }
-    
+
     fun getSyncLogsPageTyped(params: JSONObject): JSONArray {
         val arr = JSONArray()
         dbLock.lock()
@@ -23290,22 +23290,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             var selection = "1=1"
             val args = mutableListOf<String>()
-            
+
             val status = params.optString("status", "")
             val direction = params.optString("sync_direction", "")
             val dateFrom = params.optString("date_from", "")
             val dateTo = params.optString("date_to", "")
             val search = params.optString("search", "")
-            
+
             if (status.isNotEmpty()) { selection += " AND status = ?"; args.add(status) }
             if (direction.isNotEmpty()) { selection += " AND sync_direction = ?"; args.add(direction) }
             if (dateFrom.isNotEmpty()) { selection += " AND DATE(started_at) >= ?"; args.add(dateFrom) }
             if (dateTo.isNotEmpty()) { selection += " AND DATE(started_at) <= ?"; args.add(dateTo) }
             if (search.isNotEmpty()) { selection += " AND (device_name LIKE ? OR entity_type LIKE ?)"; args.add("%$search%"); args.add("%$search%") }
-            
+
             val limit = params.optInt("limit", 50)
             val offset = params.optInt("offset", 0)
-            
+
             db.rawQuery("SELECT * FROM sync_logs WHERE $selection ORDER BY id DESC LIMIT ? OFFSET ?", (args + listOf(limit.toString(), offset.toString())).toTypedArray()).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
@@ -23314,7 +23314,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
         return arr
     }
-    
+
     fun getBackupHistoryPageTyped(params: JSONObject): JSONArray {
         val arr = JSONArray()
         dbLock.lock()
@@ -23322,7 +23322,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             val limit = params.optInt("limit", 50)
             val offset = params.optInt("offset", 0)
-            
+
             db.rawQuery("SELECT * FROM backup_history ORDER BY id DESC LIMIT ? OFFSET ?", arrayOf(limit.toString(), offset.toString())).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
@@ -23601,4 +23601,517 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_driver_penalties_driver_status ON driver_penalties(driver_id, status, created_at)")
     }
 
+
+
+    // ============================================================
+    // Management repairs: users/stations/shifts — SQLite-backed only
+    // ============================================================
+
+    private fun managementColumns(table: String): Set<String> {
+        val result = linkedSetOf<String>()
+        getReadableDatabase().rawQuery("PRAGMA table_info(`$table`)", null).use { cursor ->
+  val nameIndex = cursor.getColumnIndex("name")
+  require(nameIndex >= 0) { "تعذر قراءة مخطط جدول $table" }
+  while (cursor.moveToNext()) {
+      result += cursor.getString(nameIndex)
+  }
+        }
+        require(result.isNotEmpty()) { "جدول SQLite غير موجود أو بلا أعمدة: $table" }
+        return result
     }
+
+    private fun managementRequired(columns: Set<String>, table: String, column: String) {
+        require(column in columns) { "جدول $table لا يحتوي العمود المطلوب $column" }
+    }
+
+    private fun managementValue(cursor: android.database.Cursor, vararg names: String): String? {
+        for (name in names) {
+  val index = cursor.getColumnIndex(name)
+  if (index >= 0 && !cursor.isNull(index)) return cursor.getString(index)
+        }
+        return null
+    }
+
+    private fun managementLong(cursor: android.database.Cursor, vararg names: String): Long? {
+        val value = managementValue(cursor, *names) ?: return null
+        return value.toLongOrNull() ?: value.toDoubleOrNull()?.toLong()
+    }
+
+    private fun managementTableColumnInfo(table: String, column: String): Triple<String, Int, String?>? {
+        getReadableDatabase().rawQuery("PRAGMA table_info(`$table`)", null).use { cursor ->
+  val nameIndex = cursor.getColumnIndex("name")
+  val typeIndex = cursor.getColumnIndex("type")
+  val notNullIndex = cursor.getColumnIndex("notnull")
+  val defaultIndex = cursor.getColumnIndex("dflt_value")
+  while (cursor.moveToNext()) {
+      if (cursor.getString(nameIndex) == column) {
+          return Triple(
+              if (typeIndex >= 0 && !cursor.isNull(typeIndex)) cursor.getString(typeIndex) else "",
+              if (notNullIndex >= 0) cursor.getInt(notNullIndex) else 0,
+              if (defaultIndex >= 0 && !cursor.isNull(defaultIndex)) cursor.getString(defaultIndex) else null
+          )
+      }
+  }
+        }
+        return null
+    }
+
+    private fun managementForeignKeyTarget(table: String, column: String): Pair<String, String>? {
+        getReadableDatabase().rawQuery("PRAGMA foreign_key_list(`$table`)", null).use { cursor ->
+  val fromIndex = cursor.getColumnIndex("from")
+  val tableIndex = cursor.getColumnIndex("table")
+  val toIndex = cursor.getColumnIndex("to")
+  while (cursor.moveToNext()) {
+      if (fromIndex >= 0 && cursor.getString(fromIndex) == column) {
+          return Pair(cursor.getString(tableIndex), cursor.getString(toIndex))
+      }
+  }
+        }
+        return null
+    }
+
+    private fun managementNowForColumn(table: String, column: String): Any {
+        val type = managementTableColumnInfo(table, column)?.first?.uppercase().orEmpty()
+        return if (type.contains("INT") || type.contains("REAL") || type.contains("NUM")) {
+  System.currentTimeMillis()
+        } else {
+  java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", java.util.Locale.US).format(java.util.Date())
+        }
+    }
+
+    private fun managementPut(values: android.content.ContentValues, columns: Set<String>, column: String, value: Any?) {
+        if (column !in columns || value == null) return
+        when (value) {
+  is Long -> values.put(column, value)
+  is Int -> values.put(column, value)
+  is Double -> values.put(column, value)
+  is Float -> values.put(column, value)
+  is Boolean -> values.put(column, if (value) 1 else 0)
+  else -> values.put(column, value.toString())
+        }
+    }
+
+    private fun managementEmployee(employeeId: Long): android.database.Cursor? {
+        return getReadableDatabase().query("employees", null, "id = ?", arrayOf(employeeId.toString()), null, null, null, "1")
+    }
+
+    private fun managementEmployeeIsActive(cursor: android.database.Cursor): Boolean {
+        val deleted = managementLong(cursor, "is_deleted")
+        if (deleted == 1L) return false
+        val active = managementLong(cursor, "is_active", "active")
+        if (active == 0L) return false
+        val status = managementValue(cursor, "status", "employment_status", "employee_status")?.trim()?.lowercase()
+        if (status in setOf("inactive", "terminated", "deleted", "suspended", "resigned")) return false
+        return true
+    }
+
+    private fun managementIsCashier(cursor: android.database.Cursor): Boolean {
+        val title = managementValue(cursor, "job_title")?.trim().orEmpty()
+        val titleAr = managementValue(cursor, "job_title_ar")?.trim().orEmpty()
+        val combined = (title + " " + titleAr).lowercase()
+        return combined.contains("cashier") || combined.contains("أمين صندوق")
+    }
+
+    private fun managementEmployeeMatchesStation(cursor: android.database.Cursor, stationId: Long): Boolean {
+        val station = managementLong(cursor, "station_id", "stationId") ?: return true
+        return station <= 0L || station == stationId
+    }
+
+    fun getStationsForManagement(): org.json.JSONArray {
+        val columns = managementColumns("stations")
+        managementRequired(columns, "stations", "id")
+        managementRequired(columns, "stations", "branch_id")
+        managementRequired(columns, "stations", "company_id")
+        val result = org.json.JSONArray()
+        val where = if ("is_deleted" in columns) " WHERE is_deleted = 0 OR is_deleted IS NULL" else ""
+        getReadableDatabase().rawQuery("SELECT * FROM stations$where ORDER BY id", null).use { cursor ->
+  while (cursor.moveToNext()) {
+      val item = org.json.JSONObject()
+      item.put("id", managementLong(cursor, "id") ?: 0L)
+      item.put("station_name_ar", managementValue(cursor, "station_name_ar", "name_ar"))
+      item.put("station_name", managementValue(cursor, "station_name", "name"))
+      item.put("station_code", managementValue(cursor, "station_code", "code"))
+      item.put("branch_id", managementLong(cursor, "branch_id"))
+      item.put("company_id", managementLong(cursor, "company_id"))
+      managementValue(cursor, "branch_name_ar", "branch_name")?.let { item.put("branch_name_ar", it) }
+      managementValue(cursor, "branch_name", "branch_name_ar")?.let { item.put("branch_name", it) }
+      managementValue(cursor, "company_name_ar", "company_name")?.let { item.put("company_name_ar", it) }
+      managementValue(cursor, "company_name", "company_name_ar")?.let { item.put("company_name", it) }
+      result.put(item)
+  }
+        }
+        return result
+    }
+
+    fun searchUsersForManagement(
+        query: String = "",
+        status: String? = null,
+        roleId: Long? = null,
+        stationId: Long? = null,
+        page: Int = 1,
+        pageSize: Int = 10
+    ): org.json.JSONObject {
+        val result = searchUsers(query, status, roleId, stationId, page, pageSize)
+        val rows = result.optJSONArray("data") ?: result.optJSONArray("rows")
+        if (rows != null) {
+  for (i in 0 until rows.length()) {
+      val row = rows.optJSONObject(i) ?: continue
+      val userId = row.optLong("id", row.optLong("user_id", 0L))
+      if (userId > 0L) {
+          val persisted = getUserById(userId)
+          if (persisted != null) {
+              val keys = persisted.keys()
+              while (keys.hasNext()) {
+                  val key = keys.next()
+                  if (!row.has(key) || row.isNull(key)) row.put(key, persisted.opt(key))
+              }
+          }
+      }
+      val station = row.optLong("station_id", 0L)
+      if (station > 0L) {
+          val sc = managementColumns("stations")
+          getReadableDatabase().query("stations", null, "id = ?", arrayOf(station.toString()), null, null, null, "1").use { cursor ->
+              if (cursor.moveToFirst()) {
+                  managementValue(cursor, "station_name_ar", "name_ar")?.let { row.put("station_name_ar", it) }
+                  managementValue(cursor, "station_name", "name")?.let { row.put("station_name", it) }
+                  managementLong(cursor, "branch_id")?.let { row.put("branch_id", it) }
+                  managementLong(cursor, "company_id")?.let { row.put("company_id", it) }
+                  managementValue(cursor, "branch_name_ar", "branch_name")?.let { row.put("branch_name_ar", it) }
+                  managementValue(cursor, "branch_name", "branch_name_ar")?.let { row.put("branch_name", it) }
+                  managementValue(cursor, "company_name_ar", "company_name")?.let { row.put("company_name_ar", it) }
+                  managementValue(cursor, "company_name", "company_name_ar")?.let { row.put("company_name", it) }
+              }
+          }
+          if ("branch_id" !in sc || "company_id" !in sc) {
+              throw IllegalStateException("جدول stations لا يحتوي branch_id/company_id؛ تم رفض استخدام بيانات بديلة")
+          }
+      }
+      val employeeId = row.optLong("employee_id", 0L)
+      if (employeeId > 0L) {
+          managementEmployee(employeeId)?.use { cursor ->
+              if (cursor.moveToFirst()) {
+                  managementValue(cursor, "job_title")?.let { row.put("job_title", it) }
+                  managementValue(cursor, "job_title_ar")?.let { row.put("job_title_ar", it) }
+                  managementValue(cursor, "department", "department_name")?.let { row.put("department", it) }
+                  managementValue(cursor, "full_name_ar", "full_name", "name")?.let { row.put("employee_name_ar", it) }
+                  managementValue(cursor, "full_name", "name")?.let { row.put("employee_name", it) }
+              }
+          }
+      }
+      val title = row.optString("job_title").trim()
+      if (title.isNotBlank()) row.put("role", title)
+  }
+        }
+        return result
+    }
+
+    fun prepareUserManagementPayload(input: org.json.JSONObject): org.json.JSONObject {
+        val data = org.json.JSONObject(input.toString())
+        val employeeId = data.optLong("employee_id", 0L)
+        require(employeeId > 0L) { "يجب تحديد الموظف المرتبط بالمستخدم" }
+        val userColumns = managementColumns("users")
+        val employeeColumns = managementColumns("employees")
+        managementRequired(employeeColumns, "employees", "id")
+        managementRequired(employeeColumns, "employees", "job_title")
+
+        managementEmployee(employeeId)?.use { cursor ->
+  require(cursor.moveToFirst()) { "الموظف المحدد غير موجود في SQLite" }
+  require(managementEmployeeIsActive(cursor)) { "الموظف المحدد غير نشط ولا يمكن ربط حساب المستخدم به" }
+  val jobTitle = managementValue(cursor, "job_title")?.trim().orEmpty()
+  require(jobTitle.isNotBlank()) { "الموظف المحدد لا يملك employees.job_title" }
+  data.put("employee_id", employeeId)
+  if ("job_title" in userColumns) data.put("job_title", jobTitle)
+  if ("department" in userColumns) {
+      val department = managementValue(cursor, "department", "department_name")
+      if (!department.isNullOrBlank()) data.put("department", department)
+  }
+  if ("role" in userColumns) data.put("role", jobTitle) else data.remove("role")
+        }
+
+        if ("role_id" in userColumns) {
+  var matchedRoleId = 0L
+  if (getReadableDatabase().query("sqlite_master", arrayOf("name"), "type = ? AND name = ?", arrayOf("table", "roles"), null, null, null, "1").use { it.moveToFirst() }) {
+      getReadableDatabase().query("roles", null, null, null, null, null, "id").use { cursor ->
+          val jobTitle = data.optString("job_title").trim()
+          while (cursor.moveToNext()) {
+              val name = managementValue(cursor, "role_name_ar", "role_name", "role_code")?.trim().orEmpty()
+              if (name.equals(jobTitle, ignoreCase = true) || name.lowercase() == jobTitle.lowercase()) {
+                  matchedRoleId = managementLong(cursor, "id") ?: 0L
+                  if (matchedRoleId > 0L) break
+              }
+          }
+      }
+  }
+  val roleInfo = managementTableColumnInfo("users", "role_id")
+  val requiredRole = roleInfo?.second == 1 && roleInfo.third == null
+  if (matchedRoleId > 0L) {
+      data.put("role_id", matchedRoleId)
+  } else if (requiredRole) {
+      throw IllegalStateException("لا يوجد سجل roles مطابق لـ employees.job_title: ${data.optString("job_title")}")
+  } else {
+      data.remove("role_id")
+  }
+        } else {
+  data.remove("role_id")
+        }
+
+        val stationId = data.optLong("station_id", 0L)
+        if (stationId > 0L) {
+  val stationColumns = managementColumns("stations")
+  managementRequired(stationColumns, "stations", "id")
+  managementRequired(stationColumns, "stations", "branch_id")
+  managementRequired(stationColumns, "stations", "company_id")
+  getReadableDatabase().query("stations", null, "id = ?", arrayOf(stationId.toString()), null, null, null, "1").use { cursor ->
+      require(cursor.moveToFirst()) { "المحطة المحددة غير موجودة في SQLite" }
+      managementLong(cursor, "branch_id")?.let { if ("branch_id" in userColumns) data.put("branch_id", it) }
+      managementLong(cursor, "company_id")?.let { if ("company_id" in userColumns) data.put("company_id", it) }
+  }
+        }
+        return data
+    }
+
+    fun getShiftFormContextForManagement(userId: Long): org.json.JSONObject {
+        val result = getShiftFormContext(userId)
+        val stationId = result.optJSONObject("station")?.optLong("id", 0L)
+  ?: result.optJSONObject("current_user")?.optLong("station_id", 0L)
+        result.put("cashiers", getCashiersForManagement(stationId ?: 0L))
+        return result
+    }
+
+    fun getCashiersForManagement(stationId: Long): org.json.JSONArray {
+        val columns = managementColumns("employees")
+        managementRequired(columns, "employees", "id")
+        managementRequired(columns, "employees", "job_title")
+        val result = org.json.JSONArray()
+        getReadableDatabase().query("employees", null, null, null, null, null, "id").use { cursor ->
+  while (cursor.moveToNext()) {
+      if (!managementEmployeeIsActive(cursor)) continue
+      if (stationId > 0L && !managementEmployeeMatchesStation(cursor, stationId)) continue
+      if (!managementIsCashier(cursor)) continue
+      val id = managementLong(cursor, "id") ?: continue
+      val item = org.json.JSONObject()
+      item.put("id", id)
+      item.put("employee_id", id)
+      managementValue(cursor, "full_name_ar", "full_name", "name", "employee_name")?.let { item.put("full_name_ar", it) }
+      managementValue(cursor, "full_name", "name", "employee_name")?.let { item.put("full_name", it) }
+      managementValue(cursor, "job_title")?.let { item.put("job_title", it) }
+      managementValue(cursor, "job_title_ar")?.let { item.put("job_title_ar", it) }
+      managementLong(cursor, "user_id")?.let { item.put("user_id", it) }
+      item.put("cashier_id", id)
+      result.put(item)
+  }
+        }
+        return result
+    }
+
+    private fun managementAttendantRelation(): Pair<String, Pair<String, String>>? {
+        val tables = mutableListOf<String>()
+        getReadableDatabase().rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", null).use { cursor ->
+  while (cursor.moveToNext()) tables += cursor.getString(0)
+        }
+        for (table in tables) {
+  val lower = table.lowercase()
+  if (!(lower.contains("shift") && (lower.contains("attendant") || lower.contains("employee") || lower.contains("worker") || lower.contains("staff")))) continue
+  val columns = managementColumns(table)
+  val shiftColumn = columns.firstOrNull { it.equals("shift_id", true) || it.equals("shiftId", true) } ?: continue
+  val personColumn = columns.firstOrNull { it.equals("employee_id", true) || it.equals("attendant_id", true) || it.equals("worker_id", true) || it.equals("staff_id", true) || it.equals("user_id", true) } ?: continue
+  return Pair(table, Pair(shiftColumn, personColumn))
+        }
+        return null
+    }
+
+    fun saveShiftRecordTypedForManagement(
+        stationIdFromUi: Int,
+        branchIdFromUi: Int,
+        shiftType: String,
+        startTime: String,
+        managerId: Long,
+        cashierEmployeeId: Long,
+        attendantIds: String,
+        openingCash: Double,
+        openingBank: Double,
+        openingCredit: Double,
+        remarks: String,
+        currentUserId: Long
+    ): Long {
+        val db = getWritableDatabase()
+        val columns = managementColumns("shifts")
+        managementRequired(columns, "shifts", "id")
+        managementRequired(columns, "shifts", "station_id")
+        managementRequired(columns, "shifts", "cashier_id")
+        managementRequired(columns, "shifts", "start_time")
+        require(cashierEmployeeId > 0L) { "يجب تحديد أمين الصندوق" }
+        val stationId = stationIdFromUi.toLong()
+        require(stationId > 0L) { "معرف المحطة غير صالح" }
+
+        managementEmployee(cashierEmployeeId)?.use { cursor ->
+  require(cursor.moveToFirst()) { "أمين الصندوق المحدد غير موجود في employees" }
+  require(managementEmployeeIsActive(cursor)) { "أمين الصندوق المحدد غير نشط" }
+  require(managementIsCashier(cursor)) { "الموظف المحدد لا يملك employees.job_title كأمين صندوق/CASHIER" }
+  require(managementEmployeeMatchesStation(cursor, stationId)) { "أمين الصندوق لا يتبع المحطة الحالية" }
+        }
+
+        val cashierTarget = managementForeignKeyTarget("shifts", "cashier_id")
+        val cashierIdToStore = if (cashierTarget?.first == "users") {
+  var userId = 0L
+  managementEmployee(cashierEmployeeId)?.use { cursor ->
+      if (cursor.moveToFirst()) userId = managementLong(cursor, "user_id") ?: 0L
+  }
+  require(userId > 0L) { "schema الحالي لـ shifts.cashier_id يشير إلى users.id؛ الموظف المختار لا يملك user_id مطلوباً لهذا الـ FK" }
+  userId
+        } else {
+  cashierEmployeeId
+        }
+
+        val managerIdToStore = managerId
+        val attendantList = attendantIds.split(',').map { it.trim() }.filter { it.isNotBlank() }.map { it.toLongOrNull() ?: throw IllegalArgumentException("attendant_ids يحتوي معرفاً غير صالح: $it") }.distinct()
+        for (employeeId in attendantList) {
+  managementEmployee(employeeId)?.use { cursor ->
+      require(cursor.moveToFirst()) { "العامل $employeeId غير موجود في employees" }
+      require(managementEmployeeIsActive(cursor)) { "العامل $employeeId غير نشط" }
+      require(managementEmployeeMatchesStation(cursor, stationId)) { "العامل $employeeId لا يتبع المحطة الحالية" }
+  }
+        }
+
+        db.beginTransaction()
+        try {
+  val openWhere = buildString {
+      append("station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = '' OR end_time = 0)")
+      if ("is_deleted" in columns) append(" AND (is_deleted = 0 OR is_deleted IS NULL)")
+  }
+  db.query("shifts", arrayOf("id"), openWhere, arrayOf(stationId.toString()), null, null, null, "1").use { cursor ->
+      if (cursor.moveToFirst()) throw IllegalStateException("توجد وردية مفتوحة بالفعل لهذه المحطة؛ يجب إغلاقها قبل إنشاء وردية جديدة")
+  }
+
+  val values = android.content.ContentValues()
+  managementPut(values, columns, "shift_code", "SH-" + System.currentTimeMillis().toString())
+  managementPut(values, columns, "shift_date", startTime.take(10))
+  managementPut(values, columns, "station_id", stationId)
+  if (branchIdFromUi > 0) managementPut(values, columns, "branch_id", branchIdFromUi.toLong())
+  managementPut(values, columns, "shift_type", shiftType)
+  managementPut(values, columns, "start_time", startTime)
+  managementPut(values, columns, "manager_id", managerIdToStore.takeIf { it > 0L })
+  managementPut(values, columns, "cashier_id", cashierIdToStore)
+  if ("attendant_ids" in columns) managementPut(values, columns, "attendant_ids", attendantIds)
+  managementPut(values, columns, "opening_cash", openingCash)
+  managementPut(values, columns, "opening_bank", openingBank)
+  managementPut(values, columns, "opening_credit", openingCredit)
+  if (remarks.isNotBlank()) {
+      managementPut(values, columns, "remarks", remarks)
+      managementPut(values, columns, "variance_reason", remarks)
+  }
+  if ("status" in columns) {
+      val info = managementTableColumnInfo("shifts", "status")
+      if (info?.first?.uppercase()?.contains("INT") == true) managementPut(values, columns, "status", 1)
+      else managementPut(values, columns, "status", "open")
+  }
+  if ("is_open" in columns) managementPut(values, columns, "is_open", 1)
+  if ("created_by" in columns) managementPut(values, columns, "created_by", currentUserId.takeIf { it > 0L })
+  if ("created_at" in columns) managementPut(values, columns, "created_at", managementNowForColumn("shifts", "created_at"))
+  if ("uuid" in columns && !values.containsKey("uuid")) managementPut(values, columns, "uuid", java.util.UUID.randomUUID().toString())
+
+  val insertedId = db.insertOrThrow("shifts", null, values)
+  if ("attendant_ids" !in columns && attendantList.isNotEmpty()) {
+      val relation = managementAttendantRelation() ?: throw IllegalStateException("لا يوجد عمود attendant_ids ولا جدول علاقة موثق بين shifts والعاملين")
+      val relationColumns = managementColumns(relation.first)
+      for (employeeId in attendantList) {
+          val relationId = if (relation.second.second.equals("user_id", true)) {
+              var uid = 0L
+              managementEmployee(employeeId)?.use { cursor -> if (cursor.moveToFirst()) uid = managementLong(cursor, "user_id") ?: 0L }
+              require(uid > 0L) { "جدول علاقة العاملين يستخدم user_id لكن الموظف $employeeId لا يملك user_id" }
+              uid
+          } else employeeId
+          val rv = android.content.ContentValues()
+          managementPut(rv, relationColumns, relation.second.first, insertedId)
+          managementPut(rv, relationColumns, relation.second.second, relationId)
+          db.insertOrThrow(relation.first, null, rv)
+      }
+  }
+  db.setTransactionSuccessful()
+  return insertedId
+        } finally {
+  db.endTransaction()
+        }
+    }
+
+    fun getOpenShiftForManagement(stationId: Long): org.json.JSONObject? {
+        val columns = managementColumns("shifts")
+        managementRequired(columns, "shifts", "id")
+        managementRequired(columns, "shifts", "station_id")
+        managementRequired(columns, "shifts", "end_time")
+        val where = buildString {
+  append("station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = '' OR end_time = 0)")
+  if ("is_deleted" in columns) append(" AND (is_deleted = 0 OR is_deleted IS NULL)")
+        }
+        var id = 0L
+        var count = 0
+        getReadableDatabase().query("shifts", arrayOf("id"), where, arrayOf(stationId.toString()), null, null, "start_time ASC").use { cursor ->
+  while (cursor.moveToNext()) { count++; id = cursor.getLong(0) }
+        }
+        if (count == 0) return null
+        if (count > 1) throw IllegalStateException("قاعدة البيانات تحتوي أكثر من وردية مفتوحة للمحطة الحالية؛ تم إيقاف الإغلاق التلقائي لحماية البيانات")
+        return getShiftReport(id, stationId.toInt()).optJSONObject(0)
+    }
+
+    fun closeOpenShiftForManagement(stationId: Long, currentUserId: Long): Long {
+        val db = getWritableDatabase()
+        val columns = managementColumns("shifts")
+        managementRequired(columns, "shifts", "id")
+        managementRequired(columns, "shifts", "station_id")
+        managementRequired(columns, "shifts", "end_time")
+        db.beginTransaction()
+        try {
+  val where = buildString {
+      append("station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = '' OR end_time = 0)")
+      if ("is_deleted" in columns) append(" AND (is_deleted = 0 OR is_deleted IS NULL)")
+  }
+  var id = 0L
+  var startRaw: String? = null
+  var currentStatus: String? = null
+  var count = 0
+  db.query("shifts", arrayOf("id", "start_time", "status"), where, arrayOf(stationId.toString()), null, null, "start_time ASC").use { cursor ->
+      val statusIndex = cursor.getColumnIndex("status")
+      while (cursor.moveToNext()) {
+          count++
+          id = cursor.getLong(cursor.getColumnIndexOrThrow("id"))
+          startRaw = cursor.getString(cursor.getColumnIndexOrThrow("start_time"))
+          if (statusIndex >= 0 && !cursor.isNull(statusIndex)) currentStatus = cursor.getString(statusIndex)
+      }
+  }
+  if (count == 0) throw IllegalStateException("لا توجد وردية مفتوحة حالياً لهذه المحطة")
+  if (count > 1) throw IllegalStateException("يوجد أكثر من وردية مفتوحة؛ تم رفض الإغلاق حتى تتم معالجة تعارض SQLite")
+
+  val endValue = managementNowForColumn("shifts", "end_time")
+  val values = android.content.ContentValues()
+  managementPut(values, columns, "end_time", endValue)
+  managementPut(values, columns, "closed_at", endValue)
+  managementPut(values, columns, "updated_at", if ("updated_at" in columns) managementNowForColumn("shifts", "updated_at") else null)
+  managementPut(values, columns, "closed_by", currentUserId.takeIf { it > 0L })
+  managementPut(values, columns, "updated_by", currentUserId.takeIf { it > 0L })
+  if ("status" in columns) {
+      val type = managementTableColumnInfo("shifts", "status")?.first?.uppercase().orEmpty()
+      if (type.contains("INT")) managementPut(values, columns, "status", 0)
+      else managementPut(values, columns, "status", if (currentStatus?.firstOrNull()?.isUpperCase() == true) "CLOSED" else "closed")
+  }
+  if ("is_open" in columns) managementPut(values, columns, "is_open", 0)
+  if ("duration_minutes" in columns && startRaw != null) {
+      val startMillis = startRaw!!.toLongOrNull() ?: runCatching {
+          java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", java.util.Locale.US).parse(startRaw!!)?.time
+      }.getOrNull()
+      val endMillis = endValue.toString().toLongOrNull() ?: runCatching {
+          java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", java.util.Locale.US).parse(endValue.toString())?.time
+      }.getOrNull()
+      if (startMillis != null && endMillis != null && endMillis >= startMillis) {
+          managementPut(values, columns, "duration_minutes", (endMillis - startMillis) / 60000L)
+      }
+  }
+  val changed = db.update("shifts", values, "id = ? AND station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = '' OR end_time = 0)", arrayOf(id.toString(), stationId.toString()))
+  if (changed != 1) throw IllegalStateException("فشل UPDATE الحقيقي للوردية: لم يتغير سجل SQLite المتوقع")
+  db.setTransactionSuccessful()
+  return id
+        } finally {
+  db.endTransaction()
+        }
+    }
+
+}
