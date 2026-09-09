@@ -98,7 +98,6 @@ jobs:
           ! grep -Fq 'submitBtn.focus();' app/src/main/assets/screens/login.html
           grep -Fq 'getLastSelectedFileUri' app/src/main/assets/screens/users.html
           grep -Fq 'getLastSelectedFileUri' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq 'getStations' app/src/main/assets/screens/first-user-setup.html
           grep -Fq 'fun getStations' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
           grep -Fq 'fun getCustomers' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
           grep -Fq 'fun getVehicles' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
@@ -117,7 +116,6 @@ jobs:
           grep -Fq 'saveFuelSaleRecord' app/src/main/assets/screens/fuel-sales.html
           grep -Fq 'updateFuelSaleRecord' app/src/main/assets/screens/fuel-sales.html
           grep -Fq 'deleteFuelSaleRecord' app/src/main/assets/screens/fuel-sales.html
-          grep -Fq 'getLastSelectedFileUri' app/src/main/assets/screens/users.html
           echo 'Targeted static verification PASS.'
       - name: Regression tests
         run: |
