@@ -13,44 +13,27 @@ jobs:
         with:
           fetch-depth: 0
           ref: feature/ai-health-sqlite
-      - name: Inspect actual contracts
-        env:
-          BASE: 9d44b850b80d1dfcdca05035030391680ccbe8b4
+      - name: Inspect actual source contracts
         run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import re, subprocess, os
-          out=[]
-          def section(title): out.extend(['\n'+'='*80, title, '='*80])
-          files=['app/src/main/assets/screens/first-user-setup.html','app/src/main/assets/screens/users.html','app/src/main/assets/screens/shifts.html','app/src/main/assets/screens/login.html','app/src/main/assets/screens/deliveries.html','app/src/main/assets/main.html','app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt','app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt']
-          section('FILE SIZES')
-          for f in files:
-              p=Path(f); out.append(f'{f}: {p.stat().st_size if p.exists() else "MISSING"}')
-          section('DIFF STAT FROM BASE')
-          out.append(subprocess.check_output(['git','diff','--stat',os.environ['BASE']+'..HEAD'],text=True))
-          for f in files:
-              p=Path(f)
-              if not p.exists(): continue
-              s=p.read_text(errors='replace')
-              section(f'PATTERNS: {f}')
-              for term in ['getStations','getCustomers','getLatestCustomerSaleForDelivery','getVehicles','getShiftFormContext','saveShiftRecord','updateShiftRecord','deleteShiftRecord','updateFuelSaleRecord','deleteFuelSaleRecord','resolveFuelSaleRecord','avatar_path','job_title','cashier_id','employee_id','user_id','checkPermission','requirePermission','sales.read','sales.update','sales.delete','users.read','main.html','submitBtn.focus','open shift','close shift']:
-                  if term in s: out.append(f'FOUND: {term}')
-              if f.endswith('DatabaseHelper.kt'):
-                  for table in ['stations','users','employees','shifts','deliveries','fuel_sales','sales_transactions']:
-                      m=re.search(r'(?is)(CREATE TABLE(?: IF NOT EXISTS)?\\s+`?'+re.escape(table)+r'`?.{0,8000}?\\n\\s*\\})',s)
-                      if m: out.append('\nSCHEMA '+table+'\n'+m.group(0)[:8500])
-              if f.endswith('MainActivity.kt'):
-                  for name in ['getStations','getCustomers','getVehicles','getShiftFormContext','saveShiftRecordTyped','saveShiftRecord','updateShiftRecord','deleteShiftRecord','getLatestCustomerSaleForDelivery','updateFuelSaleRecord','deleteFuelSaleRecord','resolveFuelSaleRecord']:
-                      m=re.search(r'(?s)(?:@JavascriptInterface\\s*)?(?:fun|private fun|public fun)\\s+'+re.escape(name)+r'\\s*\\([^)]*\\)[^{]*\\{.*?(?=\\n\\s*(?:@JavascriptInterface|(?:private |public |internal )?fun |})',s)
-                      if m: out.append('\nMETHOD '+name+'\n'+m.group(0)[:12000])
-              if f.endswith('.html'):
-                  for name in ['handleImageFile','saveUser','populateModalSelects','renderCashierOptions','validateForm','saveShift','closeShift','goHome','getCustomers','getLatestCustomerSaleForDelivery','getOpenShift']:
-                      m=re.search(r'(?s)(?:async\\s+)?function\\s+'+re.escape(name)+r'\\s*\\([^)]*\\)\\s*\\{.*?(?=\\n\\s*function |\\n\\s*async function |</script>)',s)
-                      if m: out.append('\nFUNCTION '+name+'\n'+m.group(0)[:12000])
-          Path('contract-diagnostics.txt').write_text('\n'.join(out),encoding='utf-8')
-          PY
-          wc -c contract-diagnostics.txt
+          set +e
+          : > contract-diagnostics.txt
+          echo '=== FILE SIZES ===' >> contract-diagnostics.txt
+          wc -c app/src/main/assets/main.html app/src/main/assets/screens/{first-user-setup,users,shifts,login,deliveries}.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/{MainActivity,DatabaseHelper}.kt >> contract-diagnostics.txt 2>&1
+          for f in app/src/main/assets/screens/{first-user-setup,users,shifts,login,deliveries}.html app/src/main/assets/main.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt; do
+            echo "=== $f ===" >> contract-diagnostics.txt
+            grep -nE 'getStations|getCustomers|getLatestCustomerSaleForDelivery|getVehicles|getShiftFormContext|saveShiftRecord|updateShiftRecord|deleteShiftRecord|updateFuelSaleRecord|deleteFuelSaleRecord|resolveFuelSaleRecord|avatar_path|cashier_id|employee_id|user_id|checkPermission|requirePermission|users\.read|sales\.(read|update|delete)|submitBtn\.focus|main\.html|branchId|phone|username|saveUser|saveFirstUser|renderCashierOptions|cashiers' "$f" >> contract-diagnostics.txt 2>&1
+          done
+          echo '=== FIRST USER FUNCTION CONTEXT ===' >> contract-diagnostics.txt
+          grep -n -B12 -A25 'function validateFieldLive' app/src/main/assets/screens/first-user-setup.html >> contract-diagnostics.txt 2>&1
+          echo '=== SHIFTS CASHIER CONTEXT ===' >> contract-diagnostics.txt
+          grep -n -B20 -A45 'cashier_id' app/src/main/assets/screens/shifts.html | head -300 >> contract-diagnostics.txt 2>&1
+          echo '=== MAIN ACTIVITY SHIFT/FUEL CONTEXT ===' >> contract-diagnostics.txt
+          grep -n -B8 -A45 -E 'fun saveShiftRecordTyped|fun getShiftFormContext|fun updateFuelSaleRecord|fun deleteFuelSaleRecord|fun getLatestCustomerSaleForDelivery' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt | head -600 >> contract-diagnostics.txt 2>&1
+          echo '=== DATABASE SCHEMA CONTEXT ===' >> contract-diagnostics.txt
+          grep -n -B5 -A80 -E 'CREATE TABLE.*(stations|users|employees|shifts|deliveries|fuel_sales|sales_transactions)' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt | head -1200 >> contract-diagnostics.txt 2>&1
+          echo '=== DIFF STAT FROM BASE ===' >> contract-diagnostics.txt
+          git diff --stat 9d44b850b80d1dfcdca05035030391680ccbe8b4..HEAD >> contract-diagnostics.txt 2>&1
+          cat contract-diagnostics.txt
       - name: Upload diagnostics
         uses: actions/upload-artifact@v4
         with:
