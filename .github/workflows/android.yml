@@ -40,16 +40,40 @@ jobs:
           test -s /tmp/repair.py
           python3 /tmp/repair.py
 
-      - name: Inspect generated Kotlin around compiler failures
+      - name: Correct generated Kotlin type and scope errors
         run: |
           set -euo pipefail
-          nl -ba app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt | sed -n '3748,3772p;8218,8236p;9445,9480p'
-          nl -ba app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt | sed -n '23824,23884p;24045,24058p'
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt')
+          s=p.read_text(encoding='utf-8')
+          replacements={
+            'val rows = db.addUser(normalized)\n                DebugLogger.info("User", "Added user id=$id")\n                successResponse(id, "تم إضافة المستخدم بنجاح")':'val id = db.addUser(normalized)\n                DebugLogger.info("User", "Added user id=$id")\n                successResponse(id, "تم إضافة المستخدم بنجاح")',
+            'stationIdFromUi.toLong() != stationScopeId':'stationIdFromUi != stationScopeId',
+            'val stationId = requireCurrentStationId(db, currentUserId)\n      val report = db.getOpenShiftForManagement(stationId)':'val stationId = requireCurrentStationId(db, currentUserId).toLong()\n      val report = db.getOpenShiftForManagement(stationId)',
+            'val stationId = requireCurrentStationId(db, currentUserId)\n      val id = db.closeOpenShiftForManagement(stationId, currentUserId)':'val stationId = requireCurrentStationId(db, currentUserId).toLong()\n      val id = db.closeOpenShiftForManagement(stationId, currentUserId)',
+          }
+          for old,new in replacements.items():
+              if old not in s: raise SystemExit('Expected MainActivity pattern missing: '+old.splitlines()[0])
+              s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+
+          p=Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt')
+          s=p.read_text(encoding='utf-8')
+          old='if ("roles" in getReadableDatabase().query("sqlite_master", arrayOf("name"), "type = ? AND name = ?", arrayOf("table", "roles"), null, null, null, "1").use { it.count() }) {'
+          new='if (getReadableDatabase().query("sqlite_master", arrayOf("name"), "type = ? AND name = ?", arrayOf("table", "roles"), null, null, null, "1").use { it.moveToFirst() }) {'
+          if old not in s: raise SystemExit('Expected roles-table check pattern missing')
+          s=s.replace(old,new,1)
+          s=s.replace('result.put("cashiers", getCashiersForManagement(stationId))','result.put("cashiers", getCashiersForManagement(stationId ?: 0L))',1)
+          s=s.replace('return getShiftReport(id, stationId)','return getShiftReport(id.toInt(), stationId.toInt()).optJSONObject(0)',1)
+          p.write_text(s,encoding='utf-8')
+          print('PASS — generated Kotlin compatibility fixes applied')
+          PY
+          sed -i 's/[[:space:]]\+$//' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt app/src/main/assets/screens/users.html app/src/main/assets/screens/shifts.html
 
       - name: Static, HTML/JavaScript and project integrity checks
         run: |
           set -euo pipefail
-          sed -i 's/[[:space:]]\+$//' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt app/src/main/assets/screens/users.html app/src/main/assets/screens/shifts.html
           python3 screen-smoke-test.py
           python3 - <<'PY'
           from pathlib import Path
