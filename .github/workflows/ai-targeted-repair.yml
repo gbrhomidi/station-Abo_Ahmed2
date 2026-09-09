@@ -13,29 +13,28 @@ jobs:
         with:
           fetch-depth: 0
           ref: feature/ai-health-sqlite
-      - name: Inspect actual source contracts
+      - name: Inspect exact persistence paths
         run: |
           set +e
-          : > contract-diagnostics.txt
-          echo '=== FILE SIZES ===' >> contract-diagnostics.txt
-          wc -c app/src/main/assets/main.html app/src/main/assets/screens/{first-user-setup,users,shifts,login,deliveries}.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/{MainActivity,DatabaseHelper}.kt >> contract-diagnostics.txt 2>&1
-          for f in app/src/main/assets/screens/{first-user-setup,users,shifts,login,deliveries}.html app/src/main/assets/main.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt; do
-            echo "=== $f ===" >> contract-diagnostics.txt
-            grep -nE 'getStations|getCustomers|getLatestCustomerSaleForDelivery|getVehicles|getShiftFormContext|saveShiftRecord|updateShiftRecord|deleteShiftRecord|updateFuelSaleRecord|deleteFuelSaleRecord|resolveFuelSaleRecord|avatar_path|cashier_id|employee_id|user_id|checkPermission|requirePermission|users\.read|sales\.(read|update|delete)|submitBtn\.focus|main\.html|branchId|phone|username|saveUser|saveFirstUser|renderCashierOptions|cashiers' "$f" >> contract-diagnostics.txt 2>&1
-          done
-          echo '=== FIRST USER FUNCTION CONTEXT ===' >> contract-diagnostics.txt
-          grep -n -B12 -A25 'function validateFieldLive' app/src/main/assets/screens/first-user-setup.html >> contract-diagnostics.txt 2>&1
-          echo '=== SHIFTS CASHIER CONTEXT ===' >> contract-diagnostics.txt
-          grep -n -B20 -A45 'cashier_id' app/src/main/assets/screens/shifts.html | head -300 >> contract-diagnostics.txt 2>&1
-          echo '=== MAIN ACTIVITY SHIFT/FUEL CONTEXT ===' >> contract-diagnostics.txt
-          grep -n -B8 -A45 -E 'fun saveShiftRecordTyped|fun getShiftFormContext|fun updateFuelSaleRecord|fun deleteFuelSaleRecord|fun getLatestCustomerSaleForDelivery' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt | head -600 >> contract-diagnostics.txt 2>&1
-          echo '=== DATABASE SCHEMA CONTEXT ===' >> contract-diagnostics.txt
-          grep -n -B5 -A80 -E 'CREATE TABLE.*(stations|users|employees|shifts|deliveries|fuel_sales|sales_transactions)' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt | head -1200 >> contract-diagnostics.txt 2>&1
-          echo '=== DIFF STAT FROM BASE ===' >> contract-diagnostics.txt
-          git diff --stat 9d44b850b80d1dfcdca05035030391680ccbe8b4..HEAD >> contract-diagnostics.txt 2>&1
+          {
+            echo '=== SHIFT HTML CONFIG ==='
+            grep -n -B15 -A80 'cashier_id' app/src/main/assets/screens/shifts.html | head -420
+            echo '=== SHIFT SAVE/VALIDATION JS ==='
+            grep -n -B25 -A90 -E 'function validate|function save|saveShiftRecord|cashier_id' app/src/main/assets/screens/shifts.html | tail -650
+            echo '=== MAIN ACTIVITY SHIFT BRIDGE ==='
+            sed -n '8170,8305p' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+            echo '=== DATABASE SHIFT SAVE ==='
+            sed -n '7570,7725p' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
+            echo '=== DATABASE TYPED SHIFT SAVE ==='
+            sed -n '8340,8505p' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
+            echo '=== FUEL SALE BRIDGE ==='
+            sed -n '8290,8370p' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+            echo '=== FUEL SALE DB UPDATE/DELETE ==='
+            grep -n -B15 -A80 -E 'fun updateOperationalRecord|fun deleteOperationalRecord|fun updateFuelSale|fun deleteFuelSale' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt | head -700
+          } > contract-diagnostics.txt
           cat contract-diagnostics.txt
       - name: Upload diagnostics
         uses: actions/upload-artifact@v4
         with:
-          name: ai-contract-diagnostics
+          name: ai-persistence-diagnostics
           path: contract-diagnostics.txt
