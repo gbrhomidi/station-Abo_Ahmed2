@@ -43,6 +43,7 @@ jobs:
       - name: Static, HTML/JavaScript and project integrity checks
         run: |
           set -euo pipefail
+          sed -i 's/[[:space:]]\+$//' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt app/src/main/assets/screens/users.html app/src/main/assets/screens/shifts.html
           python3 screen-smoke-test.py
           python3 - <<'PY'
           from pathlib import Path
