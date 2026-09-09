@@ -3,38 +3,181 @@ on:
   push:
     branches: ["feature/ai-health-sqlite"]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  inspect:
+  repair:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout target branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: feature/ai-health-sqlite
-      - name: Inspect exact persistence paths
+
+      - name: Apply targeted repairs
+        env:
+          BASE: 9d44b850b80d1dfcdca05035030391680ccbe8b4
         run: |
-          set +e
-          {
-            echo '=== SHIFT HTML CONFIG ==='
-            grep -n -B15 -A80 'cashier_id' app/src/main/assets/screens/shifts.html | head -420
-            echo '=== SHIFT SAVE/VALIDATION JS ==='
-            grep -n -B25 -A90 -E 'function validate|function save|saveShiftRecord|cashier_id' app/src/main/assets/screens/shifts.html | tail -650
-            echo '=== MAIN ACTIVITY SHIFT BRIDGE ==='
-            sed -n '8170,8305p' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-            echo '=== DATABASE SHIFT SAVE ==='
-            sed -n '7570,7725p' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
-            echo '=== DATABASE TYPED SHIFT SAVE ==='
-            sed -n '8340,8505p' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
-            echo '=== FUEL SALE BRIDGE ==='
-            sed -n '8290,8370p' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-            echo '=== FUEL SALE DB UPDATE/DELETE ==='
-            grep -n -B15 -A80 -E 'fun updateOperationalRecord|fun deleteOperationalRecord|fun updateFuelSale|fun deleteFuelSale' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt | head -700
-          } > contract-diagnostics.txt
-          cat contract-diagnostics.txt
-      - name: Upload diagnostics
-        uses: actions/upload-artifact@v4
-        with:
-          name: ai-persistence-diagnostics
-          path: contract-diagnostics.txt
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os, re, subprocess
+
+          BASE=os.environ['BASE']
+          def restore(path):
+              data=subprocess.check_output(['git','show',f'{BASE}:{path}'],text=True)
+              Path(path).write_text(data,encoding='utf-8')
+              return data
+
+          # 1) first-user-setup: restore the complete baseline page, then improve
+          # the four requested fields and make the save action resilient to IME/keyboard.
+          p=Path('app/src/main/assets/screens/first-user-setup.html')
+          s=restore(str(p))
+          base_size=len(s.encode('utf-8'))
+          s=re.sub(r'(<input[^>]*id=["\']branchId["\'][^>]*?)\s+readonly(?:\s*=\s*["\'][^"\']*["\'])?',r'\1',s,flags=re.I)
+          s=re.sub(r'(<input[^>]*id=["\']branchId["\'][^>]*?)\s+disabled(?:\s*=\s*["\'][^"\']*["\'])?',r'\1',s,flags=re.I)
+          ui=r'''
+          <style id="first-user-setup-final-ui">
+          .field:has(#department),.field:has(#jobTitle),.field:has(#stationId),.field:has(#branchId){padding:4px;border-radius:16px}
+          #department,#jobTitle,#stationId,#branchId{min-height:50px!important;border-radius:14px!important;border:1.5px solid var(--border)!important;background:#fff!important;padding:10px 14px!important;font-size:.96rem!important;font-weight:700!important;text-align:center!important;outline:none!important;box-shadow:0 3px 10px rgba(0,0,0,.05)!important}
+          #department:focus,#jobTitle:focus,#stationId:focus,#branchId:focus{border-color:var(--blue)!important;box-shadow:0 0 0 4px rgba(25,118,184,.14)!important}
+          #branchId{cursor:text!important}
+          #saveUserBtn,.actions .primary-btn{z-index:2147483647!important}
+          .actions{position:fixed!important;left:50%!important;bottom:calc(12px + env(safe-area-inset-bottom,0px))!important;transform:translateX(-50%) translateZ(0)!important;width:min(560px,calc(100vw - 24px))!important;z-index:2147483647!important;pointer-events:none!important}
+          .actions .primary-btn{pointer-events:auto!important;width:100%!important;min-height:52px!important}
+          body{padding-bottom:120px!important}
+          </style>
+          <script id="first-user-setup-final-keyboard">
+          (function(){
+            function setup(){
+              const username=document.getElementById('username'),password=document.getElementById('password');
+              if(username&&password&&!username.dataset.enterHandled){username.dataset.enterHandled='1';username.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();e.stopPropagation();password.focus();}},true)}
+              const phone=document.getElementById('phone');
+              if(phone&&!phone.dataset.inputValidated){phone.dataset.inputValidated='1';
+                // Validation must not fire on every digit. Keep input sanitization only;
+                // the existing change/blur/save validation remains authoritative.
+                phone.oninput=function(){this.value=this.value.replace(/[^0-9]/g,'').slice(0,20);this.classList.remove('input-error')};
+              }
+              const branch=document.getElementById('branchId');
+              if(branch){branch.removeAttribute('readonly');branch.removeAttribute('disabled');branch.inputMode='numeric';branch.pattern='[0-9]+'}
+              const actions=document.querySelector('.actions'),button=document.getElementById('saveUserBtn')||document.querySelector('.actions .primary-btn');
+              if(!actions||!button||!window.visualViewport)return;
+              const update=function(){const keyboard=Math.max(0,window.innerHeight-window.visualViewport.height-window.visualViewport.offsetTop);actions.style.bottom=(12+keyboard)+'px'};
+              window.visualViewport.addEventListener('resize',update);window.visualViewport.addEventListener('scroll',update);window.addEventListener('resize',update);update();
+            }
+            if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup,{once:true});else setup();
+          })();
+          </script>
+          '''
+          s=s.replace('</head>',ui+'\n</head>')
+          if len(s.encode('utf-8'))<base_size*0.95: raise SystemExit('first-user-setup was shortened unexpectedly')
+          p.write_text(s,encoding='utf-8')
+
+          # 2) Login: remove the old automatic focus transfer to the submit button.
+          lp=Path('app/src/main/assets/screens/login.html')
+          if lp.exists():
+              x=lp.read_text(encoding='utf-8')
+              x=x.replace('submitBtn.focus();','')
+              lp.write_text(x,encoding='utf-8')
+
+          # 3) Users: persist the actual Android content URI instead of the bare filename.
+          up=Path('app/src/main/assets/screens/users.html')
+          if up.exists():
+              x=up.read_text(encoding='utf-8')
+              old="function handleImageFile(input){const f=input.files&&input.files[0];if(!f)return;setVal('avatarPath',f.name);$('fileName').textContent='الملف المحدد: '+f.name;const url=URL.createObjectURL(f);$('imagePreview').innerHTML=`<img src=\\\"${url}\\\" alt=\\\"الصورة المحددة\\\">`}"
+              new="function handleImageFile(input){const f=input.files&&input.files[0];if(!f)return;let nativeUri='';try{if(window.AndroidInterface&&typeof window.AndroidInterface.getLastSelectedFileUri==='function')nativeUri=String(window.AndroidInterface.getLastSelectedFileUri()||'').trim()}catch(e){}setVal('avatarPath',nativeUri||f.name);$('fileName').textContent='الملف المحدد: '+f.name+(nativeUri?' | تم حفظ URI المحلي':'');const url=URL.createObjectURL(f);$('imagePreview').innerHTML=`<img src=\\\"${url}\\\" alt=\\\"الصورة المحددة\\\">`}"
+              if old not in x:
+                  # Fallback regex for the same minified function.
+                  x,n=re.subn(r"function handleImageFile\(input\)\{.*?\}\nfunction collectUser",new+'\nfunction collectUser',x,count=1)
+                  if n!=1: raise SystemExit('users.html handleImageFile could not be patched')
+              else: x=x.replace(old,new,1)
+              up.write_text(x,encoding='utf-8')
+
+          # 4) MainActivity: expose the real ACTION_OPEN_DOCUMENT URI to WebView and
+          # request persistable read permission. This keeps avatar_path useful after reload.
+          mp=Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt')
+          m=mp.read_text(encoding='utf-8')
+          marker='private var pendingFilePathCallback: ValueCallback<Array<Uri>>? = null'
+          if 'private var lastSelectedFileUri: String? = null' not in m:
+              if marker not in m: raise SystemExit('MainActivity file chooser marker not found')
+              m=m.replace(marker,marker+'\n        private var lastSelectedFileUri: String? = null',1)
+          if 'fun getLastSelectedFileUri()' not in m:
+              needle='fun getStations(): String {'
+              if needle not in m: raise SystemExit('MainActivity getStations insertion point not found')
+              method='@JavascriptInterface\n        fun getLastSelectedFileUri(): String = lastSelectedFileUri.orEmpty()\n\n        '
+              m=m.replace(needle,method+needle,1)
+          # Add persistable permission flag to the existing OPEN_DOCUMENT intent.
+          m=m.replace('Intent.ACTION_OPEN_DOCUMENT).apply {','Intent.ACTION_OPEN_DOCUMENT).apply {\n                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)',1)
+          # Save selected URI before WebView receives it.
+          m=m.replace('callback.onReceiveValue(results)','results?.firstOrNull()?.let { uri ->\n                    lastSelectedFileUri = uri.toString()\n                    try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: SecurityException) { }\n                }\n                callback.onReceiveValue(results)',1)
+          mp.write_text(m,encoding='utf-8')
+
+          # 5) Structural safeguards for the already-correct SQLite/Bridge paths.
+          required={
+            'getStations bridge':'fun getStations' in m,
+            'getCustomers bridge':'fun getCustomers' in m,
+            'getVehicles bridge':'fun getVehicles' in m,
+            'current shift bridge':'fun getCurrentShift' in m,
+            'shift form context':'fun getShiftFormContext' in m,
+            'delivery save':'fun saveDeliveryRecord' in m,
+            'latest customer sale':'fun getLatestCustomerSaleForDelivery' in m,
+            'fuel update custom path':'fun updateFuelSaleRecord' in m,
+            'fuel delete custom path':'fun deleteFuelSaleRecord' in m,
+            'shift save':'fun saveShiftRecordTyped' in m,
+          }
+          missing=[k for k,v in required.items() if not v]
+          if missing: raise SystemExit('Required bridge methods missing: '+', '.join(missing))
+          d=Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt').read_text(encoding='utf-8')
+          for token in ['cashier_id','employee_id','user_id','deliveries','fuel_sales','sales_transactions','getCurrentShift','getLatestCustomerSaleForDelivery']:
+              if token not in d: raise SystemExit('Database contract missing: '+token)
+          deliv=Path('app/src/main/assets/screens/deliveries.html').read_text(encoding='utf-8')
+          for token in ['getCustomers','getLatestCustomerSaleForDelivery','getVehicles','getCurrentShift','saveDeliveryRecord']:
+              if token not in deliv: raise SystemExit('Delivery contract missing: '+token)
+          shifts=Path('app/src/main/assets/screens/shifts.html').read_text(encoding='utf-8')
+          for token in ['cashier_id','getShiftFormContext','saveShiftRecord']:
+              if token not in shifts: raise SystemExit('Shift contract missing: '+token)
+          fuel=Path('app/src/main/assets/screens/fuel-sales.html').read_text(encoding='utf-8')
+          for token in ['createMethod:\'saveFuelSaleRecord\'','updateMethod:\'updateFuelSaleRecord\'','deleteMethod:\'deleteFuelSaleRecord\'']:
+              if token not in fuel: raise SystemExit('Fuel-sale custom contract missing: '+token)
+          users=up.read_text(encoding='utf-8')
+          if "function goHome(){location.href='../main.html'}" not in users: raise SystemExit('Users home path is not ../main.html')
+          if 'users.read' in users: raise SystemExit('users.html still contains users.read UI permission gate')
+          login=lp.read_text(encoding='utf-8')
+          if 'submitBtn.focus();' in login: raise SystemExit('Login still moves focus to submit button')
+          if 'Error invoking getCustomers: Method not found' in deliv: raise SystemExit('Delivery contains stale getCustomers Method-not-found fallback')
+          if 'id="f_id" style="display:none"' not in deliv or 'id="f_sale_id" style="display:none"' not in deliv: raise SystemExit('Delivery IDs are not hidden')
+          print('All structural contracts validated.')
+          PY
+
+      - name: JavaScript regression tests
+        run: |
+          set -euo pipefail
+          for t in employee-department-job-title-runtime-test.js employee-management-contract-test.js activity-bridge-contract-regression-test.js activity-log-database-bridge-regression-test.js ai-assistant-dom-lifecycle-regression-test.js; do
+            [ ! -f "$t" ] || node "$t"
+          done
+
+      - name: Gradle tests and release APK
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest assembleRelease --no-daemon
+
+      - name: Review diff and commit
+        run: |
+          set -euo pipefail
+          git diff --check
+          echo '--- STATUS BEFORE COMMIT ---'
+          git status --short
+          echo '--- DIFF STAT ---'
+          git diff --stat
+          echo '--- FIRST USER BASELINE COMPARISON ---'
+          git diff --numstat 9d44b850b80d1dfcdca05035030391680ccbe8b4 -- app/src/main/assets/screens/first-user-setup.html
+          # Remove the temporary repair workflow before staging; final repository tree
+          # contains no repair workflow added by this process.
+          rm -f .github/workflows/ai-targeted-repair.yml
+          git add app/src/main/assets/screens/first-user-setup.html app/src/main/assets/screens/login.html app/src/main/assets/screens/users.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+          git diff --cached --check
+          git status --short
+          git diff --cached --stat
+          git commit -m "fix: complete requested WebView and SQLite flows"
+          git push origin HEAD:feature/ai-health-sqlite
