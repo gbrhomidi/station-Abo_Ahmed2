@@ -1,243 +1,2100 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-    <title>نظام إدارة محطات الوقود – إعدادات النظام</title>
-        <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
-<link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
-    <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
-    <style>
-        :root {
-            --bg-color:#f5efe6; --surface-color:#faf3e8; --surface-elevated:#fdf8f0;
-            --primary-color:#007ACC; --primary-dim:rgba(0,122,204,.12);
-            --accent-color:#d4a017; --accent-dim:rgba(212,160,23,.12);
-            --success:#10b981; --error:#ef4444; --warning:#f59e0b;
-            --text-color:#1a2a3a; --text-muted:#6a7f94; --border-color:#003366;
-            --border-style:dashed; --border-width:2px; --shadow-glow:0 0 20px rgba(0,122,204,.08);
-            --glass-bg:rgba(255,248,240,.85); --header-bg:linear-gradient(135deg,#e8e0d5 0%,#d5cdc0 100%);
-            --card-hover-bg:rgba(0,122,204,.04); --primary-hover:#005f99; --fab-shadow:rgba(0,122,204,.3);
-            --toast-bg:#fdf8f0; --scrollbar-track:#f5efe6; --scrollbar-thumb:rgba(0,51,102,.2);
-            --input-bg:#fdf8f0; --data-text-color:#1a2a3a; --data-text-muted:#4a5a6a;
-        }
-        [data-theme="dark"] {
-            --bg-color:#0a0e1a; --surface-color:#111827; --surface-elevated:#1a2236;
-            --primary-color:#00d4ff; --primary-dim:rgba(0,212,255,.15);
-            --accent-color:#f59e0b; --accent-dim:rgba(245,158,11,.15);
-            --success:#10b981; --error:#ef4444; --warning:#f59e0b;
-            --text-color:#f1f5f9; --text-muted:#94a3b8; --border-color:#e8d48b;
-            --glass-bg:rgba(22,34,64,.85); --header-bg:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);
-            --card-hover-bg:rgba(0,212,255,.05); --primary-hover:#00a7cc; --fab-shadow:rgba(0,212,255,.3);
-            --toast-bg:#1a2236; --scrollbar-track:transparent; --scrollbar-thumb:rgba(255,255,255,.1);
-            --input-bg:#1e293b; --data-text-color:#f1f5f9; --data-text-muted:#94a3b8;
-        }
-        * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
-        html { scroll-behavior:smooth; }
-        body { font-family:'Cairo','Tahoma',Arial,sans-serif; background:var(--bg-color); color:var(--text-color); direction:rtl; overflow-x:hidden; min-height:100vh; padding-bottom:86px; transition:background .4s ease,color .4s ease; }
-        button,input,select { font:inherit; }
-        button { cursor:pointer; }
-        ::-webkit-scrollbar { width:4px; height:4px; }
-        ::-webkit-scrollbar-track { background:var(--scrollbar-track); }
-        ::-webkit-scrollbar-thumb { background:var(--scrollbar-thumb); border-radius:2px; }
-        @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
-        @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
-        @keyframes pulseDot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.45;transform:scale(1.25)} }
-        .loading-indicator { position:fixed; inset:0; display:none; justify-content:center; align-items:center; background:rgba(0,0,0,.72); backdrop-filter:blur(8px); z-index:3000; }
-        .loading-indicator.show { display:flex; }
-        .spinner { width:52px; height:52px; border:4px solid rgba(0,212,255,.2); border-top-color:var(--primary-color); border-radius:50%; animation:spin 1s linear infinite; }
-        .offline-banner { position:fixed; top:0; left:0; right:0; z-index:2500; display:none; padding:8px; text-align:center; color:#111; background:linear-gradient(90deg,var(--warning),#f97316); font-size:.8rem; font-weight:700; }
-        .offline-banner.show { display:block; }
-        .top-bar { position:sticky; top:0; z-index:100; padding:16px; background:var(--header-bg); border-bottom:var(--border-width) var(--border-style) var(--border-color); backdrop-filter:blur(20px); }
-        .header-top { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:15px; }
-        .top-title { min-width:0; }
-        .top-title h2 { font-size:1.3rem; font-weight:800; background:linear-gradient(90deg,var(--primary-color),#a78bfa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-        .top-title p { color:var(--text-muted); font-size:.72rem; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .header-actions { display:flex; gap:8px; flex-shrink:0; }
-        .icon-btn { width:40px; height:40px; border-radius:12px; border:var(--border-width) var(--border-style) var(--border-color); background:var(--surface-elevated); color:var(--text-muted); display:flex; align-items:center; justify-content:center; transition:all .3s; }
-        .icon-btn:hover { background:var(--primary-dim); color:var(--primary-color); border-color:var(--primary-color); transform:translateY(-2px); }
-        .icon-btn:active { transform:scale(.92); }
-        .search-wrap { position:relative; margin-bottom:11px; }
-        .search-input { width:100%; padding:12px 44px 12px 16px; border-radius:14px; border:var(--border-width) var(--border-style) var(--border-color); background:var(--surface-elevated); color:var(--text-color); outline:none; transition:all .3s; }
-        .search-input:focus { border-color:var(--primary-color); box-shadow:0 0 0 3px var(--primary-dim); }
-        .search-wrap i { position:absolute; right:16px; top:50%; transform:translateY(-50%); color:var(--text-muted); }
-        .filter-chips { display:flex; gap:8px; overflow-x:auto; padding-bottom:3px; scrollbar-width:none; }
-        .filter-chips::-webkit-scrollbar { display:none; }
-        .filter-chip { border:var(--border-width) var(--border-style) var(--border-color); background:var(--surface-color); color:var(--text-muted); border-radius:20px; padding:6px 14px; white-space:nowrap; font-size:.75rem; transition:all .3s; }
-        .filter-chip.active { background:var(--primary-dim); color:var(--primary-color); border-color:var(--primary-color); }
-        .filter-chip:hover:not(.active) { color:var(--text-color); border-color:var(--text-muted); }
-        .page-container { max-width:1280px; margin:0 auto; }
-        .notice-card { margin:16px; padding:14px 16px; display:flex; gap:12px; align-items:flex-start; background:var(--surface-elevated); border:var(--border-width) var(--border-style) var(--border-color); border-radius:16px; box-shadow:var(--shadow-glow); color:var(--text-muted); font-size:.8rem; line-height:1.8; }
-        .notice-card i { color:var(--primary-color); font-size:1.15rem; margin-top:3px; }
-        .stats-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; padding:0 16px 16px; }
-        .stat-card { position:relative; overflow:hidden; padding:15px; background:var(--surface-elevated); border:var(--border-width) var(--border-style) var(--border-color); border-radius:16px; transition:all .3s; }
-        .stat-card:hover { transform:translateY(-3px); border-color:var(--primary-color); box-shadow:var(--shadow-glow); }
-        .stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,var(--primary-color),var(--accent-color)); opacity:.8; }
-        .stat-icon { width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:10px; }
-        .stat-icon.blue { background:var(--primary-dim); color:var(--primary-color); } .stat-icon.green { background:rgba(16,185,129,.15); color:var(--success); } .stat-icon.orange { background:var(--accent-dim); color:var(--accent-color); } .stat-icon.red { background:rgba(239,68,68,.15); color:var(--error); }
-        .stat-value { font-size:1.35rem; font-weight:800; color:var(--data-text-color); }
-        .stat-label { margin-top:4px; color:var(--text-muted); font-size:.72rem; }
-        @media(min-width:768px) { .stats-grid { grid-template-columns:repeat(4,1fr); } }
-        .content-area { padding:0 16px 30px; }
-        .panel { display:none; animation:fadeIn .25s ease; }
-        .panel.active { display:block; }
-        .settings-card { margin-bottom:14px; padding:16px; background:var(--surface-elevated); border:var(--border-width) var(--border-style) var(--border-color); border-radius:18px; transition:all .3s; }
-        .settings-card:hover { border-color:var(--primary-color); box-shadow:var(--shadow-glow); }
-        .card-header { display:flex; justify-content:space-between; align-items:center; gap:10px; padding-bottom:12px; margin-bottom:9px; border-bottom:var(--border-width) var(--border-style) var(--border-color); }
-        .card-header h3 { font-size:1rem; font-weight:800; color:var(--data-text-color); }
-        .card-header .card-avatar { width:42px; height:42px; border-radius:13px; display:flex; align-items:center; justify-content:center; color:#fff; background:linear-gradient(135deg,var(--primary-color),#6366f1); }
-        .card-header .card-badge { padding:4px 10px; border-radius:20px; border:var(--border-width) var(--border-style) var(--border-color); color:var(--text-muted); font-size:.68rem; }
-        .field { display:flex; align-items:center; justify-content:space-between; gap:14px; min-height:58px; padding:10px 0; border-bottom:1px dashed rgba(106,127,148,.35); }
-        .field:last-child { border-bottom:0; }
-        .field-info { flex:1; min-width:0; }
-        .field-info label { display:block; color:var(--data-text-color); font-size:.84rem; font-weight:700; }
-        .field-info small { display:block; color:var(--text-muted); font-size:.69rem; line-height:1.5; margin-top:3px; }
-        .field-control { width:150px; max-width:46%; flex-shrink:0; }
-        .form-input { width:100%; padding:10px 12px; border-radius:12px; border:var(--border-width) var(--border-style) var(--border-color); background:var(--input-bg); color:var(--text-color); outline:none; transition:all .3s; }
-        .form-input:focus { border-color:var(--primary-color); box-shadow:0 0 0 3px var(--primary-dim); }
-        .form-input[type="checkbox"] { width:23px; height:23px; padding:0; accent-color:var(--primary-color); }
-        .switch-control { width:48px; height:27px; position:relative; display:inline-block; }
-        .switch-control input { opacity:0; width:0; height:0; }
-        .switch-slider { position:absolute; inset:0; border-radius:20px; background:#94a3b8; transition:.3s; cursor:pointer; }
-        .switch-slider::before { content:''; position:absolute; width:21px; height:21px; right:3px; top:3px; border-radius:50%; background:#fff; transition:.3s; box-shadow:0 2px 6px rgba(0,0,0,.25); }
-        .switch-control input:checked + .switch-slider { background:var(--primary-color); }
-        .switch-control input:checked + .switch-slider::before { transform:translateX(-21px); }
-        .actions { display:flex; gap:9px; flex-wrap:wrap; margin-top:14px; }
-        .action-btn { flex:1; min-width:130px; padding:11px 13px; border-radius:12px; border:var(--border-width) var(--border-style) var(--border-color); background:var(--surface-color); color:var(--text-muted); font-weight:700; font-size:.78rem; transition:all .3s; }
-        .action-btn:hover { background:var(--primary-dim); color:var(--primary-color); border-color:var(--primary-color); transform:translateY(-2px); }
-        .action-btn.primary { color:#fff; border-color:transparent; background:linear-gradient(135deg,var(--primary-color),#6366f1); }
-        .action-btn.danger:hover { color:#fff; background:var(--error); border-color:var(--error); }
-        .action-btn.warning:hover { color:#111; background:var(--warning); border-color:var(--warning); }
-        .status-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px; }
-        .status-card { padding:13px; border-radius:13px; border:var(--border-width) var(--border-style) var(--border-color); background:var(--surface-color); }
-        .status-card span { display:block; color:var(--text-muted); font-size:.7rem; }
-        .status-card strong { display:block; margin-top:5px; color:var(--data-text-color); font-size:.95rem; overflow-wrap:anywhere; }
-        .status-card strong.ok { color:var(--success); } .status-card strong.bad { color:var(--error); }
-        .metrics-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px; margin-top:12px; }
-        .metric-card { padding:11px; border-radius:12px; background:var(--surface-color); border:1px dashed rgba(106,127,148,.5); }
-        .metric-card span { display:block; color:var(--text-muted); font-size:.68rem; overflow-wrap:anywhere; } .metric-card b { display:block; color:var(--data-text-color); margin-top:5px; overflow-wrap:anywhere; }
-        .table-shell { overflow:auto; border:var(--border-width) var(--border-style) var(--border-color); border-radius:14px; margin-top:14px; }
-        table { width:100%; min-width:640px; border-collapse:collapse; font-size:.77rem; }
-        th { position:sticky; top:0; z-index:2; background:var(--primary-dim); color:var(--primary-color); padding:11px; text-align:center; border-bottom:var(--border-width) var(--border-style) var(--border-color); }
-        td { padding:10px; text-align:center; color:var(--data-text-color); border-bottom:1px dashed rgba(106,127,148,.35); }
-        tr:hover td { background:var(--card-hover-bg); }
-        .empty-state { padding:34px 15px; text-align:center; color:var(--text-muted); } .empty-state i { display:block; font-size:2.4rem; opacity:.5; margin-bottom:10px; }
-        .fab { position:fixed; left:24px; bottom:92px; z-index:200; width:56px; height:56px; border-radius:50%; border:var(--border-width) var(--border-style) var(--border-color); color:#fff; background:linear-gradient(135deg,var(--primary-color),#6366f1); box-shadow:0 4px 20px var(--fab-shadow); font-size:1.2rem; transition:all .3s; }
-        .fab:hover { transform:scale(1.08) rotate(8deg); }
-        .fab:active { transform:scale(.92); }
-        .bottom-nav { position:fixed; bottom:0; left:0; right:0; z-index:300; display:flex; justify-content:space-around; padding:8px 0 env(safe-area-inset-bottom,8px); background:var(--glass-bg); backdrop-filter:blur(20px); border-top:var(--border-width) var(--border-style) var(--border-color); }
-        .bottom-nav .nav-item { flex:1; position:relative; display:flex; flex-direction:column; align-items:center; gap:2px; padding:4px 6px; border:0; background:none; color:var(--text-muted); font-size:.58rem; transition:all .3s; }
-        .bottom-nav .nav-item i { font-size:18px; transition:all .3s; } .bottom-nav .nav-item.active { color:var(--primary-color); } .bottom-nav .nav-item.active i { transform:translateY(-3px); text-shadow:0 0 20px var(--primary-dim); }
-        .bottom-nav .nav-item.active::after { content:''; position:absolute; top:-1px; left:50%; transform:translateX(-50%); width:20px; height:3px; background:var(--primary-color); border-radius:10px; }
-        .modal-overlay { position:fixed; inset:0; z-index:900; display:none; align-items:flex-end; justify-content:center; background:rgba(0,0,0,.7); backdrop-filter:blur(8px); opacity:0; transition:opacity .3s; }
-        .modal-overlay.show { display:flex; opacity:1; }
-        .modal { width:100%; max-height:92vh; overflow:auto; padding:24px 20px; background:var(--surface-elevated); border:var(--border-width) var(--border-style) var(--border-color); border-bottom:0; border-radius:24px 24px 0 0; transform:translateY(100%); transition:transform .4s cubic-bezier(.16,1,.3,1); }
-        .modal-overlay.show .modal { transform:translateY(0); }
-        .modal-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; }
-        .modal-title { color:var(--data-text-color); font-size:1.05rem; font-weight:800; } .modal-close { width:36px; height:36px; border-radius:10px; border:var(--border-width) var(--border-style) var(--border-color); background:var(--surface-color); color:var(--text-muted); }
-        .modal-close:hover { color:#fff; background:var(--error); border-color:var(--error); }
-        .confirm-text { color:var(--text-muted); line-height:1.8; font-size:.85rem; }
-        .toast { position:fixed; left:18px; bottom:96px; z-index:3200; display:none; max-width:calc(100vw - 36px); padding:12px 15px; border-radius:12px; color:#fff; background:#111827; box-shadow:0 4px 20px rgba(0,0,0,.3); font-size:.82rem; }
-        .toast.show { display:block; animation:fadeIn .2s ease; }
-        .hidden { display:none !important; }
-        @media(max-width:640px) { .header-top { align-items:flex-start; } .top-title h2 { font-size:1.05rem; } .field { align-items:flex-start; } .field-control { width:125px; max-width:44%; } .notice-card { margin:12px; } .stats-grid,.content-area { padding-left:12px; padding-right:12px; } }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+<title>إعدادات النظام</title>
+<link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+<link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
+<style>
+/* =========================================================
+   APP DESIGN SYSTEM
+   Settings Screen — SQLite/WebView
+   Light / Dark / RTL / Mobile WebView
+========================================================= */
+
+:root {
+    --bg:#f4f7fb;
+    --surface:#ffffff;
+    --surface-2:#f8fafc;
+    --surface-3:#eef4f9;
+    --primary:#087ea4;
+    --primary-2:#2563eb;
+    --primary-soft:rgba(37,99,235,.10);
+    --success:#16a34a;
+    --warning:#d97706;
+    --danger:#dc2626;
+    --text:#172033;
+    --muted:#64748b;
+    --border:#d7dee8;
+    --border-strong:#c4cfdd;
+    --accent:#c58a18;
+    --shadow:0 12px 35px rgba(15,23,42,.08);
+    --shadow-lg:0 25px 70px rgba(15,23,42,.16);
+    --radius:20px;
+    --radius-sm:13px;
+    --font-sans:"Cairo","Noto Sans Arabic",Arial,sans-serif;
+}
+
+[data-theme="dark"] {
+    --bg:#06111f;
+    --surface:#0c1b2d;
+    --surface-2:#102238;
+    --surface-3:#132941;
+    --primary:#55c7f5;
+    --primary-2:#6ea8ff;
+    --primary-soft:rgba(85,199,245,.12);
+    --success:#42e39a;
+    --warning:#ffd166;
+    --danger:#ff7184;
+    --text:#eef7ff;
+    --muted:#aabbd0;
+    --border:#49a9ee;
+    --border-strong:#76c8ff;
+    --accent:#f1cf7a;
+    --shadow:0 14px 40px rgba(0,0,0,.38);
+    --shadow-lg:0 25px 75px rgba(0,0,0,.55);
+}
+
+* {
+    box-sizing:border-box;
+    margin:0;
+    padding:0;
+    -webkit-tap-highlight-color:transparent;
+}
+
+html,body {
+    min-height:100%;
+    font-family:var(--font-sans);
+    direction:rtl;
+}
+
+html { scroll-behavior:smooth; }
+
+body {
+    background:
+        radial-gradient(circle at 8% 0%,rgba(37,99,235,.09),transparent 32%),
+        var(--bg);
+    color:var(--text);
+    padding-bottom:92px;
+    text-align:center;
+    overflow-x:hidden;
+}
+
+button,input,select,textarea { font-family:var(--font-sans); }
+button { cursor:pointer; }
+button:disabled { opacity:.55; cursor:not-allowed; }
+.hidden { display:none !important; }
+
+.topbar {
+    position:sticky;
+    top:0;
+    z-index:100;
+    background:color-mix(in srgb,var(--surface) 94%,transparent);
+    backdrop-filter:blur(20px);
+    border-bottom:1px solid var(--border);
+    padding:12px 10px;
+}
+
+.topbar-row {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    width:100%;
+}
+
+.title-area {
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+    gap:9px;
+    min-width:0;
+    flex:1;
+    text-align:right;
+}
+
+.title-icon {
+    width:43px;
+    height:43px;
+    min-width:43px;
+    border-radius:13px;
+    display:grid;
+    place-items:center;
+    background:linear-gradient(135deg,var(--primary-2),var(--primary));
+    color:#fff;
+    box-shadow:var(--shadow);
+    font-size:1.15rem;
+}
+
+.title-text {
+    min-width:0;
+    text-align:right;
+}
+
+.title-text h1 {
+    font-size:1.13rem;
+    line-height:1.35;
+    font-weight:950;
+    color:var(--primary);
+    white-space:nowrap;
+}
+
+.title-text p {
+    font-size:.65rem;
+    color:var(--muted);
+    margin-top:2px;
+    white-space:nowrap;
+}
+
+.header-actions {
+    display:flex;
+    align-items:center;
+    gap:7px;
+    flex-shrink:0;
+}
+
+.icon-btn {
+    width:44px;
+    height:44px;
+    border-radius:13px;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    color:var(--text);
+    font-size:1.38rem;
+    display:grid;
+    place-items:center;
+    box-shadow:var(--shadow);
+}
+
+.icon-btn:active { transform:scale(.95); }
+
+[data-theme="dark"] .icon-btn {
+    border-color:#63c7ff !important;
+}
+
+.page {
+    width:100%;
+    max-width:1280px;
+    margin:auto;
+    padding:13px;
+}
+
+.search-box {
+    display:flex;
+    align-items:stretch;
+    gap:7px;
+    margin-bottom:11px;
+}
+
+.search-input-wrap {
+    position:relative;
+    flex:1;
+    min-width:0;
+}
+
+.search-input {
+    width:100%;
+    height:52px;
+    padding:0 48px 0 14px;
+    border:1px solid var(--border);
+    border-radius:16px;
+    background:var(--surface);
+    color:var(--text);
+    outline:none;
+    text-align:center;
+    box-shadow:var(--shadow);
+    font-size:.88rem;
+}
+
+.search-input:focus {
+    border-color:var(--primary);
+    box-shadow:0 0 0 3px var(--primary-soft);
+}
+
+.search-icon {
+    position:absolute;
+    right:18px;
+    top:50%;
+    transform:translateY(-50%);
+    color:var(--muted);
+}
+
+.search-btn {
+    min-width:74px;
+    min-height:52px;
+    border:0;
+    border-radius:16px;
+    background:linear-gradient(135deg,var(--primary-2),var(--primary));
+    color:#fff;
+    font-weight:950;
+    box-shadow:var(--shadow);
+}
+
+.search-btn:active { transform:scale(.97); }
+
+.segmented-control {
+    display:flex;
+    align-items:center;
+    gap:3px;
+    overflow-x:auto;
+    scrollbar-width:none;
+    margin-bottom:12px;
+    padding:4px;
+    background:var(--surface-3);
+    border:1px solid var(--border);
+    border-radius:16px;
+}
+
+.segmented-control::-webkit-scrollbar { display:none; }
+
+.segment {
+    flex:0 0 auto;
+    min-height:44px;
+    border:1px solid transparent;
+    border-radius:11px;
+    padding:8px 15px;
+    background:transparent;
+    color:var(--muted);
+    font-weight:800;
+    font-size:.74rem;
+    white-space:nowrap;
+}
+
+.segment.active {
+    background:var(--primary);
+    color:#fff;
+    box-shadow:0 3px 9px color-mix(in srgb,var(--primary) 28%,transparent);
+}
+
+.stats {
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:10px;
+    margin:7px 0 14px;
+}
+
+.kpi {
+    background:linear-gradient(145deg,var(--surface),var(--surface-2));
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:15px 10px;
+    box-shadow:var(--shadow);
+    text-align:center;
+}
+
+.kpi .ico {
+    font-size:1.25rem;
+    color:var(--primary);
+    margin-bottom:5px;
+}
+
+.kpi strong {
+    display:block;
+    font-size:1.28rem;
+    font-weight:950;
+}
+
+.kpi span {
+    display:block;
+    color:var(--muted);
+    font-size:.66rem;
+    margin-top:3px;
+    font-weight:800;
+}
+
+.panel {
+    display:none;
+    animation:rise .25s ease both;
+}
+
+.panel.active { display:block; }
+
+.card {
+    background:linear-gradient(145deg,var(--surface),var(--surface-2));
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:15px;
+    margin-bottom:12px;
+    text-align:center;
+}
+
+.card-head {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:12px;
+}
+
+.card-head-main {
+    display:flex;
+    align-items:center;
+    gap:9px;
+    min-width:0;
+}
+
+.card-avatar {
+    width:42px;
+    height:42px;
+    min-width:42px;
+    border-radius:13px;
+    display:grid;
+    place-items:center;
+    color:#fff;
+    background:linear-gradient(135deg,var(--primary-2),var(--primary));
+}
+
+.card-head h2 {
+    font-size:.98rem;
+    font-weight:950;
+}
+
+.card-head p {
+    color:var(--muted);
+    font-size:.66rem;
+    margin-top:2px;
+}
+
+.badge {
+    padding:5px 10px;
+    border-radius:999px;
+    background:var(--primary-soft);
+    color:var(--primary);
+    font-size:.68rem;
+    font-weight:900;
+}
+
+.form-grid {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+}
+
+.field {
+    min-width:0;
+    text-align:center;
+}
+
+.field.full { grid-column:1/-1; }
+
+.field label {
+    display:block;
+    color:var(--muted);
+    font-size:.72rem;
+    font-weight:850;
+    margin-bottom:6px;
+}
+
+.field small {
+    display:block;
+    color:var(--muted);
+    font-size:.61rem;
+    margin-top:4px;
+}
+
+.field input,
+.field select,
+.field textarea {
+    width:100%;
+    min-height:46px;
+    border:1px solid var(--border);
+    border-radius:12px;
+    background:var(--surface-2);
+    color:var(--text);
+    outline:none;
+    padding:9px 11px;
+    text-align:center;
+    font-size:.82rem;
+}
+
+.field textarea {
+    min-height:92px;
+    resize:vertical;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+    border-color:var(--primary);
+    box-shadow:0 0 0 3px var(--primary-soft);
+}
+
+.field input[readonly] {
+    opacity:.62;
+    background:var(--surface-3);
+    font-weight:900;
+}
+
+.switch-field {
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    min-height:94px;
+    padding:10px;
+    border:1px solid var(--border);
+    border-radius:14px;
+    background:var(--surface-2);
+}
+
+.switch-field label {
+    margin-bottom:9px;
+}
+
+.switch {
+    position:relative;
+    width:50px;
+    height:28px;
+    display:inline-block;
+}
+
+.switch input {
+    opacity:0;
+    width:0;
+    height:0;
+}
+
+.slider {
+    position:absolute;
+    inset:0;
+    border-radius:999px;
+    background:#94a3b8;
+    transition:.2s;
+}
+
+.slider::before {
+    content:"";
+    position:absolute;
+    width:22px;
+    height:22px;
+    right:3px;
+    top:3px;
+    border-radius:50%;
+    background:#fff;
+    box-shadow:0 2px 7px rgba(0,0,0,.25);
+    transition:.2s;
+}
+
+.switch input:checked + .slider { background:var(--primary); }
+.switch input:checked + .slider::before { transform:translateX(-22px); }
+
+.actions {
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-top:12px;
+}
+
+.btn {
+    min-height:44px;
+    padding:8px 13px;
+    border-radius:12px;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    color:var(--text);
+    font-size:.74rem;
+    font-weight:900;
+    flex:1;
+}
+
+.btn.primary {
+    background:linear-gradient(135deg,var(--primary-2),var(--primary));
+    color:#fff;
+    border-color:transparent;
+}
+
+.btn.danger { color:var(--danger); }
+.btn.warning { color:var(--warning); }
+
+.status-grid {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:9px;
+}
+
+.status-card {
+    padding:11px;
+    border-radius:13px;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    text-align:center;
+}
+
+.status-card span {
+    display:block;
+    color:var(--muted);
+    font-size:.65rem;
+}
+
+.status-card strong {
+    display:block;
+    margin-top:4px;
+    color:var(--text);
+    font-size:.78rem;
+    overflow-wrap:anywhere;
+}
+
+.status-card strong.ok { color:var(--success); }
+.status-card strong.bad { color:var(--danger); }
+
+.table-shell {
+    overflow:auto;
+    border:1px solid var(--border);
+    border-radius:14px;
+    margin-top:12px;
+}
+
+table {
+    width:100%;
+    min-width:720px;
+    border-collapse:collapse;
+    font-size:.73rem;
+}
+
+th {
+    background:var(--primary-soft);
+    color:var(--primary);
+    padding:10px;
+    text-align:center;
+    border-bottom:1px solid var(--border);
+    position:sticky;
+    top:0;
+    z-index:2;
+}
+
+td {
+    padding:9px;
+    text-align:center;
+    color:var(--text);
+    border-bottom:1px solid var(--border);
+}
+
+tr:last-child td { border-bottom:0; }
+
+.empty-state {
+    padding:36px 12px;
+    color:var(--muted);
+    line-height:2;
+}
+
+.empty-state i {
+    display:block;
+    color:var(--primary);
+    font-size:2.3rem;
+    margin-bottom:8px;
+}
+
+.notice {
+    padding:12px;
+    border:1px solid var(--border);
+    border-radius:14px;
+    background:var(--primary-soft);
+    color:var(--muted);
+    font-size:.72rem;
+    line-height:1.8;
+    margin-bottom:12px;
+}
+
+.notice strong { color:var(--text); }
+
+.loading {
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:3000;
+    background:rgba(0,0,0,.55);
+    backdrop-filter:blur(5px);
+    place-items:center;
+}
+
+.loading.show { display:grid; }
+
+.spinner {
+    width:52px;
+    height:52px;
+    border:5px solid rgba(255,255,255,.25);
+    border-top-color:var(--primary);
+    border-radius:50%;
+    animation:spin 1s linear infinite;
+}
+
+.toast {
+    position:fixed;
+    left:50%;
+    bottom:80px;
+    transform:translate(-50%,20px);
+    opacity:0;
+    pointer-events:none;
+    z-index:4000;
+    width:min(92%,440px);
+    padding:12px 15px;
+    border-radius:15px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    color:var(--text);
+    box-shadow:var(--shadow-lg);
+    font-size:.76rem;
+    font-weight:850;
+    transition:.25s;
+}
+
+.toast.show {
+    opacity:1;
+    transform:translate(-50%,0);
+}
+
+.toast.success { border-color:var(--success); color:var(--success); }
+.toast.warn { border-color:var(--warning); color:var(--warning); }
+.toast.bad { border-color:var(--danger); color:var(--danger); }
+
+.offline {
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    z-index:2500;
+    background:var(--warning);
+    color:#111;
+    padding:7px;
+    font-size:.72rem;
+    font-weight:900;
+    transform:translateY(-110%);
+    transition:.3s;
+}
+
+.offline.show { transform:translateY(0); }
+
+.modal-bg {
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:1000;
+    background:rgba(0,0,0,.68);
+    backdrop-filter:blur(7px);
+    align-items:flex-end;
+    justify-content:center;
+}
+
+.modal-bg.show { display:flex; }
+
+.modal {
+    width:min(920px,100%);
+    max-height:94vh;
+    overflow:auto;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-bottom:0;
+    border-radius:25px 25px 0 0;
+    box-shadow:var(--shadow-lg);
+    text-align:center;
+    padding:16px;
+}
+
+.modal-head {
+    position:sticky;
+    top:0;
+    z-index:2;
+    padding:0 0 12px;
+    background:var(--surface);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    border-bottom:1px solid var(--border);
+}
+
+.modal-head h3 {
+    font-size:1rem;
+    font-weight:950;
+    flex:1;
+}
+
+.close {
+    width:38px;
+    height:38px;
+    border-radius:11px;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    color:var(--text);
+}
+
+.modal-body { padding-top:14px; }
+
+.bottom-nav {
+    position:fixed;
+    bottom:0;
+    left:0;
+    right:0;
+    z-index:500;
+    display:flex;
+    justify-content:center;
+    padding:8px 10px calc(8px + env(safe-area-inset-bottom));
+    background:color-mix(in srgb,var(--surface) 95%,transparent);
+    backdrop-filter:blur(20px);
+    border-top:1px solid var(--border);
+}
+
+.save-nav {
+    width:min(260px,92%);
+    min-height:52px;
+    border:1px solid var(--border);
+    border-radius:15px;
+    background:linear-gradient(135deg,var(--primary-2),var(--primary));
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:9px;
+    font-size:.82rem;
+    font-weight:950;
+    box-shadow:var(--shadow);
+}
+
+[data-theme="dark"] .card,
+[data-theme="dark"] .kpi,
+[data-theme="dark"] .field input,
+[data-theme="dark"] .field select,
+[data-theme="dark"] .field textarea,
+[data-theme="dark"] .status-card,
+[data-theme="dark"] .table-shell,
+[data-theme="dark"] .modal,
+[data-theme="dark"] .bottom-nav,
+[data-theme="dark"] .search-input,
+[data-theme="dark"] .segmented-control {
+    border-color:#63c7ff !important;
+    box-shadow:0 0 0 1px rgba(99,199,255,.16),0 0 18px rgba(99,199,255,.07);
+}
+
+@media(max-width:760px) {
+    .stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .page { padding:10px; }
+    .title-text h1 { font-size:1rem; }
+    .title-text p { display:none; }
+}
+
+@media(max-width:430px) {
+    .form-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .field input,.field select,.field textarea { padding:8px 5px; font-size:.75rem; }
+    .field label { font-size:.66rem; }
+    .kpi { padding:11px 6px; }
+    .kpi strong { font-size:1.05rem; }
+    .status-grid { grid-template-columns:1fr; }
+    .search-btn { min-width:64px; padding:0 8px; }
+}
+
+@media(max-width:350px) {
+    .title-icon { width:39px; min-width:39px; height:39px; }
+    .icon-btn { width:40px; height:40px; }
+    .title-text h1 { font-size:.9rem; }
+}
+
+@keyframes rise {
+    from { opacity:0; transform:translateY(10px); }
+    to { opacity:1; transform:none; }
+}
+
+@keyframes spin {
+    to { transform:rotate(360deg); }
+}
+</style>
 </head>
+
 <body>
-<div class="offline-banner" id="offlineBanner"><i class="fas fa-exclamation-triangle"></i> Android Bridge غير متاح؛ لن تُحفظ أي تغييرات</div>
-<div class="loading-indicator" id="loading"><div class="spinner"></div></div>
-<header class="top-bar">
-    <div class="header-top">
-        <div class="top-title"><h2><i class="fas fa-sliders-h"></i> إعدادات النظام</h2><p id="subtitle">إدارة إعدادات المحطة عبر SQLite وWebView Bridge</p></div>
+<div class="offline" id="offlineBanner">جسر Android غير متاح؛ لن تُحفظ التغييرات حتى يصبح التطبيق متاحاً.</div>
+<div class="loading" id="loading"><div class="spinner"></div></div>
+
+<header class="topbar">
+    <div class="topbar-row">
+        <div class="title-area">
+            <div class="title-icon"><i class="fas fa-sliders-h"></i></div>
+            <div class="title-text">
+                <h1>إعدادات النظام</h1>
+                <p>الإعدادات التشغيلية وقاعدة البيانات</p>
+            </div>
+        </div>
         <div class="header-actions">
-            <button class="icon-btn" id="themeBtn" title="الوضع الداكن"><i class="fas fa-moon"></i></button>
-            <button class="icon-btn" id="backBtn" title="رجوع"><i class="fas fa-arrow-right"></i></button>
+            <button class="icon-btn" id="themeBtn" title="تبديل الوضع" aria-label="تبديل الوضع">🌙</button>
+            <button class="icon-btn" id="homeBtn" title="الرئيسية" aria-label="الرئيسية">🏠</button>
         </div>
     </div>
-    <div class="search-wrap"><i class="fas fa-search"></i><input class="search-input" id="searchInput" type="search" placeholder="ابحث داخل الإعدادات..." autocomplete="off"></div>
-    <nav class="filter-chips" id="tabs" aria-label="تبويبات الإعدادات"></nav>
+
+    <div class="search-box">
+        <div class="search-input-wrap">
+            <i class="fas fa-search search-icon"></i>
+            <input id="searchInput" class="search-input" type="search"
+                   placeholder="ابحث عن مستخدم في قاعدة البيانات..."
+                   autocomplete="off" enterkeyhint="search">
+        </div>
+        <button id="searchBtn" class="search-btn" type="button">
+            <i class="fas fa-search"></i> بحث
+        </button>
+    </div>
+
+    <div class="segmented-control" id="tabs" aria-label="أقسام إعدادات النظام"></div>
 </header>
-<main class="page-container">
-    <div class="notice-card"><i class="fas fa-database"></i><div>تُحفظ إعدادات هذه الشاشة في <b>system_settings</b> عبر DatabaseHelper. عمليات النسخ والمراقبة والصيانة تستخدم الدوال الفعلية في Android؛ لا توجد بيانات تجريبية أو REST داخلي.</div></div>
-    <section class="stats-grid" id="summaryStats">
-        <article class="stat-card"><div class="stat-icon blue"><i class="fas fa-cogs"></i></div><div class="stat-value" id="statFields">—</div><div class="stat-label">حقول الإعدادات</div></article>
-        <article class="stat-card"><div class="stat-icon green"><i class="fas fa-heartbeat"></i></div><div class="stat-value" id="statService">—</div><div class="stat-label">حالة خدمة SMS</div></article>
-        <article class="stat-card"><div class="stat-icon orange"><i class="fas fa-copy"></i></div><div class="stat-value" id="statBackups">—</div><div class="stat-label">النسخ المحفوظة</div></article>
-        <article class="stat-card"><div class="stat-icon red"><i class="fas fa-shield-alt"></i></div><div class="stat-value" id="statIntegrity">—</div><div class="stat-label">سلامة SQLite</div></article>
+
+<main class="page">
+    <section class="stats" aria-label="ملخص النظام">
+        <article class="kpi">
+            <div class="ico"><i class="fas fa-sliders-h"></i></div>
+            <strong id="statFields">—</strong>
+            <span>إعدادات التطبيق</span>
+        </article>
+        <article class="kpi">
+            <div class="ico"><i class="fas fa-users"></i></div>
+            <strong id="statUsers">—</strong>
+            <span>نتائج المستخدمين</span>
+        </article>
+        <article class="kpi">
+            <div class="ico"><i class="fas fa-heartbeat"></i></div>
+            <strong id="statService">—</strong>
+            <span>خدمة SMS</span>
+        </article>
+        <article class="kpi">
+            <div class="ico"><i class="fas fa-database"></i></div>
+            <strong id="statIntegrity">—</strong>
+            <span>سلامة SQLite</span>
+        </article>
     </section>
-    <div class="content-area">
-        <section class="panel active" id="panel-general"><div id="generalFields"></div></section>
-        <section class="panel" id="panel-startup"><div id="startupFields"></div></section>
-        <section class="panel" id="panel-sms"><div id="smsFields"></div></section>
-        <section class="panel" id="panel-monitoring">
-            <div id="monitoringFields"></div>
-            <div class="settings-card"><div class="card-header"><div><h3>الحالة الحية</h3><span class="muted">بيانات مقروءة من SMSService وDatabaseHelper</span></div><div class="card-avatar"><i class="fas fa-heartbeat"></i></div></div><div id="monitoringState" class="status-grid"><div class="empty-state">اضغط تحديث لقراءة الحالة الفعلية.</div></div><div id="metrics" class="metrics-grid"></div><div class="actions"><button class="action-btn primary" id="refreshMonitoring"><i class="fas fa-sync-alt"></i> تحديث الحالة</button><button class="action-btn" id="clearLogs"><i class="fas fa-broom"></i> تنظيف السجلات</button><button class="action-btn" id="clearMetrics"><i class="fas fa-chart-line"></i> تنظيف المقاييس</button><button class="action-btn" id="openMonitoringReport"><i class="fas fa-file-alt"></i> تقرير الحالة</button></div></div>
-        </section>
-        <section class="panel" id="panel-security"><div id="securityFields"></div></section>
-        <section class="panel" id="panel-backup">
-            <div id="backupFields"></div>
-            <div class="settings-card"><div class="card-header"><div><h3>نسخ إعدادات module</h3><span class="muted">لا تشمل جداول المبيعات والعملاء</span></div><div class="card-avatar"><i class="fas fa-copy"></i></div></div><div class="actions"><button class="action-btn primary" id="createBackup"><i class="fas fa-plus"></i> إنشاء نسخة</button><button class="action-btn" id="refreshBackups"><i class="fas fa-sync-alt"></i> تحديث القائمة</button></div><div class="table-shell"><table><thead><tr><th>المعرف</th><th>التاريخ</th><th>الحجم</th><th>تشفير</th><th>الإجراء</th></tr></thead><tbody id="backupsBody"><tr><td colspan="5"><div class="empty-state"><i class="fas fa-folder-open"></i>لا توجد نسخ محفوظة.</div></td></tr></tbody></table></div></div>
-        </section>
-        <section class="panel" id="panel-maintenance">
-            <div id="maintenanceFields"></div>
-            <div class="settings-card"><div class="card-header"><div><h3>صيانة قاعدة البيانات</h3><span class="muted">فحص integrity ثم VACUUM دون حذف جداول الأعمال</span></div><div class="card-avatar"><i class="fas fa-tools"></i></div></div><div class="actions"><button class="action-btn warning" id="optimizeDb"><i class="fas fa-wrench"></i> فحص وتحسين</button><button class="action-btn" id="checkIntegrity"><i class="fas fa-shield-alt"></i> فحص السلامة</button></div><div id="integrityResult" class="status-grid" style="margin-top:12px"></div></div>
-        </section>
-        <div class="settings-card"><div class="actions"><button class="action-btn primary" id="saveBtn"><i class="fas fa-save"></i> حفظ وتطبيق الإعدادات</button><button class="action-btn danger" id="resetBtn"><i class="fas fa-undo"></i> إعادة الإعدادات الافتراضية</button></div></div>
+
+    <section class="panel active" id="panel-general">
+        <div class="card">
+            <div class="card-head">
+                <div class="card-head-main">
+                    <div class="card-avatar"><i class="fas fa-cog"></i></div>
+                    <div>
+                        <h2>الإعدادات العامة</h2>
+                        <p>تفضيلات التطبيق التي يديرها Settings Bridge</p>
+                    </div>
+                </div>
+                <span class="badge">SQLite / Android</span>
+            </div>
+            <div id="generalFields" class="form-grid"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <div class="card-head-main">
+                    <div class="card-avatar"><i class="fas fa-building"></i></div>
+                    <div>
+                        <h2>إعدادات النظام وقاعدة البيانات</h2>
+                        <p>قيم فعلية من جدول system_settings</p>
+                    </div>
+                </div>
+                <span class="badge">system_settings</span>
+            </div>
+            <div id="systemFields" class="form-grid"></div>
+        </div>
+    </section>
+
+    <section class="panel" id="panel-startup">
+        <div class="card">
+            <div class="card-head">
+                <div class="card-head-main">
+                    <div class="card-avatar"><i class="fas fa-power-off"></i></div>
+                    <div>
+                        <h2>التشغيل والمعالجة</h2>
+                        <p>الخيارات التشغيلية الخاصة بالخدمة وPipeline</p>
+                    </div>
+                </div>
+            </div>
+            <div id="startupFields" class="form-grid"></div>
+        </div>
+    </section>
+
+    <section class="panel" id="panel-sms">
+        <div class="card">
+            <div class="card-head">
+                <div class="card-head-main">
+                    <div class="card-avatar"><i class="fas fa-sms"></i></div>
+                    <div>
+                        <h2>خدمة SMS</h2>
+                        <p>إعدادات الاستقبال والإرسال وإعادة المحاولة</p>
+                    </div>
+                </div>
+            </div>
+            <div id="smsFields" class="form-grid"></div>
+        </div>
+    </section>
+
+    <section class="panel" id="panel-monitoring">
+        <div class="card">
+            <div class="card-head">
+                <div class="card-head-main">
+                    <div class="card-avatar"><i class="fas fa-heartbeat"></i></div>
+                    <div>
+                        <h2>المراقبة والصحة</h2>
+                        <p>بيانات حية من Android Monitoring Repository</p>
+                    </div>
+                </div>
+                <span class="badge" id="monitoringBadge">غير مقروءة</span>
+            </div>
+            <div id="monitoringState" class="status-grid">
+                <div class="empty-state">اضغط «تحديث الحالة» لقراءة الحالة الفعلية.</div>
+            </div>
+            <div id="metrics" class="status-grid" style="margin-top:9px"></div>
+            <div class="actions">
+                <button class="btn primary" id="refreshMonitoring"><i class="fas fa-sync-alt"></i> تحديث الحالة</button>
+                <button class="btn" id="openMonitoringReport"><i class="fas fa-file-alt"></i> تقرير الحالة</button>
+                <button class="btn warning" id="clearLogs"><i class="fas fa-broom"></i> تنظيف السجلات</button>
+                <button class="btn" id="clearMetrics"><i class="fas fa-chart-line"></i> تنظيف المقاييس</button>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel" id="panel-security">
+        <div class="card">
+            <div class="card-head">
+                <div class="card-head-main">
+                    <div class="card-avatar"><i class="fas fa-shield-alt"></i></div>
+                    <div>
+                        <h2>الأمان والخصوصية</h2>
+                        <p>إعدادات الحماية التي يدعمها نموذج التطبيق الحالي</p>
+                    </div>
+                </div>
+            </div>
+            <div id="securityFields" class="form-grid"></div>
+        </div>
+    </section>
+
+    <section class="panel" id="panel-backup">
+        <div class="card">
+            <div class="card-head">
+                <div class="card-head-main">
+                    <div class="card-avatar"><i class="fas fa-copy"></i></div>
+                    <div>
+                        <h2>النسخ الاحتياطي</h2>
+                        <p>إدارة النسخ من خلال BackupManager الفعلي</p>
+                    </div>
+                </div>
+            </div>
+            <div id="backupFields" class="form-grid"></div>
+            <div class="actions">
+                <button class="btn primary" id="createBackup"><i class="fas fa-plus"></i> إنشاء نسخة</button>
+                <button class="btn" id="refreshBackups"><i class="fas fa-sync-alt"></i> تحديث القائمة</button>
+            </div>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>المعرف</th>
+                            <th>التاريخ</th>
+                            <th>الحجم</th>
+                            <th>تشفير</th>
+                            <th>الإجراء</th>
+                        </tr>
+                    </thead>
+                    <tbody id="backupsBody">
+                        <tr><td colspan="5"><div class="empty-state"><i class="fas fa-folder-open"></i>لا توجد بيانات بعد.</div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel" id="panel-maintenance">
+        <div class="card">
+            <div class="card-head">
+                <div class="card-head-main">
+                    <div class="card-avatar"><i class="fas fa-tools"></i></div>
+                    <div>
+                        <h2>الصيانة وقاعدة البيانات</h2>
+                        <p>فحص السلامة وتحسين SQLite دون حذف بيانات الأعمال</p>
+                    </div>
+                </div>
+            </div>
+            <div id="maintenanceFields" class="form-grid"></div>
+            <div class="actions">
+                <button class="btn warning" id="optimizeDb"><i class="fas fa-wrench"></i> فحص وتحسين</button>
+                <button class="btn" id="checkIntegrity"><i class="fas fa-shield-alt"></i> فحص السلامة</button>
+                <button class="btn" id="refreshDbInfo"><i class="fas fa-database"></i> معلومات قاعدة البيانات</button>
+            </div>
+            <div id="integrityResult" class="status-grid" style="margin-top:12px"></div>
+        </div>
+    </section>
+
+    <section class="panel" id="panel-users">
+        <div class="card">
+            <div class="card-head">
+                <div class="card-head-main">
+                    <div class="card-avatar"><i class="fas fa-users"></i></div>
+                    <div>
+                        <h2>نتائج البحث في المستخدمين</h2>
+                        <p>الاستعلام الفعلي يستخدم AndroidInterface.getUsers() المرتبط بجدول users</p>
+                    </div>
+                </div>
+                <span class="badge" id="userSearchBadge">0</span>
+            </div>
+
+            <div class="notice">
+                البحث لا يعتمد على بيانات وهمية. عند الضغط على «بحث» يتم استدعاء الجسر الموجود
+                في <strong>MainActivity.kt</strong>، والذي يستدعي <strong>DatabaseHelper.getUsers()</strong> ثم يتم عرض النتائج الفعلية.
+            </div>
+
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>اسم المستخدم</th>
+                            <th>الاسم الكامل</th>
+                            <th>الدور</th>
+                            <th>المحطة</th>
+                            <th>الحالة</th>
+                            <th>آخر دخول</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersBody">
+                        <tr><td colspan="7"><div class="empty-state"><i class="fas fa-search"></i>اكتب كلمة بحث ثم اضغط «بحث».</div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <div class="card">
+        <div class="actions">
+            <button class="btn primary" id="saveBtn"><i class="fas fa-save"></i> حفظ وتطبيق الإعدادات</button>
+            <button class="btn danger" id="resetBtn"><i class="fas fa-undo"></i> إعادة الافتراضيات</button>
+        </div>
     </div>
 </main>
-<button class="fab" id="fabSave" title="حفظ الإعدادات"><i class="fas fa-save"></i></button>
-<nav class="bottom-nav" id="bottomNav" aria-label="التنقل السريع"></nav>
+
+<nav class="bottom-nav" aria-label="حفظ الإعدادات">
+    <button class="save-nav" id="bottomSave" type="button">
+        💾 <span>حفظ وتطبيق الإعدادات</span>
+    </button>
+</nav>
+
 <div class="toast" id="toast"></div>
-<div class="modal-overlay" id="confirmModal"><div class="modal"><div class="modal-header"><h3 class="modal-title" id="modalTitle">تأكيد العملية</h3><button class="modal-close" id="modalCancel"><i class="fas fa-times"></i></button></div><p class="confirm-text" id="modalText"></p><div class="actions"><button class="action-btn danger" id="modalConfirm">تأكيد</button><button class="action-btn" id="modalCancel2">إلغاء</button></div></div></div>
-<div class="modal-overlay" id="monitoringModal"><div class="modal"><div class="modal-header"><h3 class="modal-title"><i class="fas fa-file-alt"></i> تقرير الحالة الحية</h3><button class="modal-close" id="monitoringClose"><i class="fas fa-times"></i></button></div><div id="monitoringReportBody" class="status-grid"></div><div class="actions"><button class="action-btn" id="monitoringClose2">إغلاق</button></div></div></div>
+
+<div class="modal-bg" id="confirmModal">
+    <div class="modal">
+        <div class="modal-head">
+            <h3 id="modalTitle">تأكيد العملية</h3>
+            <button class="close" id="modalCancel" type="button"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <p id="modalText" style="line-height:1.9;color:var(--muted);font-size:.82rem;"></p>
+            <div class="actions">
+                <button class="btn danger" id="modalConfirm" type="button">تأكيد</button>
+                <button class="btn" id="modalCancel2" type="button">إلغاء</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-bg" id="monitoringModal">
+    <div class="modal">
+        <div class="modal-head">
+            <h3>تقرير الحالة الحية</h3>
+            <button class="close" id="monitoringClose" type="button"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div id="monitoringReportBody" class="status-grid"></div>
+            <div class="actions">
+                <button class="btn" id="monitoringClose2" type="button">إغلاق</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-(function(){
+(function () {
     'use strict';
-    const bridge=window.AndroidInterface;
-    const settings={}; let pendingConfirm=null; let lastMonitoring=null;
-    const tabs=[['general','عام','fa-cog'],['startup','التشغيل','fa-power-off'],['sms','SMS','fa-sms'],['monitoring','المراقبة','fa-heartbeat'],['security','الأمان','fa-shield-alt'],['backup','النسخ','fa-copy'],['maintenance','الصيانة','fa-tools']];
-    const defs={
-        general:[['appEnabled','تفعيل التطبيق','bool','تشغيل الوظائف العامة'],['debugMode','وضع التصحيح','bool','للتطوير والتشخيص فقط'],['language','اللغة','select','لغة الواجهة',['ar','العربية'],['en','English']],['darkMode','الوضع الداكن','bool','تطبيق مظهر داكن محلياً'],['notificationsEnabled','الإشعارات','bool','الإشعارات النظامية'],['startupNotification','إشعار بدء التشغيل','bool','إشعار بداية الخدمة'],['failureNotification','إشعار الفشل','bool','إشعار أخطاء الخدمة'],['healthNotification','إشعار الصحة','bool','إشعارات سلامة الخدمة']],
-        startup:[['autoStartEnabled','التشغيل بعد الإقلاع','bool','تشغيل SMSService بعد BOOT'],['bootDelayMs','تأخير الإقلاع (ms)','number','مدة الانتظار قبل البدء'],['startupMode','وضع البدء','select','سبب البدء',['BOOT','BOOT'],['MANUAL','MANUAL']],['pipelineEnabled','تفعيل Pipeline','bool','تفعيل مسار المعالجة'],['pipelineTimeoutMs','مهلة Pipeline (ms)','number','المهلة الإجمالية'],['phaseTimeoutMs','مهلة المرحلة (ms)','number','مهلة كل مرحلة'],['parallelExecutionEnabled','التنفيذ المتوازي','bool','تشغيل المراحل المتوازية'],['continueOnFailure','المتابعة بعد الفشل','bool','لا توقف المراحل غير الحرجة'],['maxParallelPhases','أقصى مراحل متوازية','number','حد التنفيذ المتوازي'],['dagValidationEnabled','التحقق من DAG','bool','فحص الرسم قبل التنفيذ'],['dagAutoRecoveryEnabled','الاسترداد التلقائي','bool','استعادة التشغيل عند الفشل'],['allowPhaseSkipping','السماح بتجاوز المرحلة','bool','خيار متقدم'],['criticalPhaseFailureStopsPipeline','إيقاف Pipeline عند الفشل الحرج','bool','قاعدة فشل حرجة']],
-        sms:[['smsServiceEnabled','تفعيل خدمة SMS','bool','بوابة الخدمة الأساسية'],['smsReceiveEnabled','استقبال SMS','bool','السماح بمعالجة الرسائل الواردة'],['smsSendEnabled','إرسال SMS','bool','السماح بإرسال الردود'],['smsProcessingIntervalMs','فترة معالجة SMS (ms)','number','فترة المعالجة'],['smsQueueEnabled','طابور SMS','bool','استخدام طابور الرسائل'],['smsQueueSize','حجم طابور SMS','number','الحد الأقصى للطابور'],['duplicateMessageProtection','منع الرسائل المكررة','bool','حماية idempotency'],['smsProcessingThreads','عدد خيوط المعالجة','number','عدد العمال'],['smsRetryEnabled','إعادة المحاولة','bool','إعادة المحاولة عند الفشل'],['allowedPhoneNumbers','الأرقام المسموحة','array','مفصولة بفواصل'],['blockedPhoneNumbers','الأرقام المحظورة','array','مفصولة بفواصل'],['retryEnabled','تفعيل Retry','bool','تفعيل سياسة Retry'],['maxRetryAttempts','أقصى محاولات','number','الحد الأعلى'],['retryBackoffMs','تأخير Retry (ms)','number','التأخير'],['retryStrategy','استراتيجية Retry','select','الاستراتيجية',['EXPONENTIAL','EXPONENTIAL'],['LINEAR','LINEAR'],['FIXED','FIXED']]],
-        monitoring:[['healthCheckEnabled','فحص الصحة','bool','التحقق الدوري'],['healthCheckIntervalMs','فترة فحص الصحة (ms)','number','الفترة'],['heartbeatTimeoutMs','مهلة Heartbeat (ms)','number','المهلة'],['maxHealthFailures','أقصى فشل للصحة','number','الحد'],['autoRestartService','إعادة تشغيل الخدمة تلقائياً','bool','إعادة التشغيل عند الحاجة'],['notifyOnFailure','إشعار عند الفشل','bool','تنبيه المستخدم'],['eventBusEnabled','Event Bus','bool','الأحداث الداخلية'],['eventHistoryEnabled','سجل الأحداث','bool','حفظ التاريخ'],['eventBufferSize','حجم Event Buffer','number','حجم الذاكرة'],['persistEvents','حفظ الأحداث','bool','الحفظ الدائم'],['eventHistoryDays','مدة سجل الأحداث (يوم)','number','المدة'],['loggingEnabled','التسجيل','bool','تشغيل السجل'],['logLevel','مستوى السجل','select','المستوى',['ERROR','ERROR'],['WARN','WARN'],['INFO','INFO'],['DEBUG','DEBUG']],['saveLogsToDatabase','حفظ السجلات في قاعدة البيانات','bool','الحفظ في SQLite'],['compressLogs','ضغط السجلات','bool','ضغط السجلات'],['exportLogsEnabled','تصدير السجلات','bool','السماح بالتصدير'],['crashLogEnabled','سجل الأعطال','bool','حفظ الأعطال'],['keepLogsDays','الاحتفاظ بالسجلات (يوم)','number','مدة الاحتفاظ'],['maxLogSizeMb','أقصى حجم للسجل (MB)','number','الحجم'],['autoDeleteOldLogs','حذف السجلات القديمة','bool','التنظيف الدوري'],['metricsEnabled','Metrics','bool','جمع المقاييس'],['metricsStorageEnabled','حفظ Metrics','bool','حفظ المقاييس'],['collectStartupDuration','قياس زمن البدء','bool','قياس البدء'],['collectFailureStatistics','إحصائيات الفشل','bool','إحصائيات الفشل'],['metricsRetentionDays','الاحتفاظ بالمقاييس (يوم)','number','مدة الاحتفاظ']],
-        security:[['requireDeviceUnlock','طلب فتح الجهاز','bool','حماية الوصول'],['encryptStorage','تشفير التخزين','bool','تشفير الإعدادات'],['biometricLockEnabled','القفل البيومتري','bool','بصمة أو وجه'],['hideSensitiveData','إخفاء البيانات الحساسة','bool','إخفاء القيم الحساسة'],['autoLogoutMinutes','الخروج التلقائي (دقيقة)','number','مدة الجلسة'],['preventScreenshots','منع لقطات الشاشة','bool','حماية العرض'],['secureBackupEnabled','نسخ احتياطي آمن','bool','التحقق من النسخة'],['pinCode','رمز PIN','password','رمز محلي']],
-        backup:[['autoBackupEnabled','نسخ احتياطي تلقائي','bool','النسخ الدوري'],['backupIntervalHours','فترة النسخ (ساعة)','number','الفترة'],['backupLocation','موقع النسخ','text','موقع داخل مساحة التطبيق'],['includeLogsInBackup','إدراج السجلات','bool','تضمين سجلات module'],['includeDatabaseBackup','إدراج قاعدة البيانات','bool','لا يُنفذ من backup settings الحالي'],['encryptBackup','تشفير النسخ','bool','تشفير Keystore عند توفره'],['automaticBackupOnExit','نسخ عند الخروج','bool','النسخ عند الإغلاق'],['keepDatabaseBackupCount','عدد نسخ قاعدة البيانات','number','الحد']],
-        maintenance:[['autoCleanupEnabled','تنظيف تلقائي','bool','التنظيف الدوري'],['cleanupIntervalDays','فترة التنظيف (يوم)','number','الفترة'],['autoRepairEnabled','إصلاح تلقائي','bool','الإصلاح عند الفشل'],['batteryOptimizationEnabled','إعداد تحسين البطارية','bool','إعداد التشغيل الخلفي'],['networkOptimizationEnabled','تحسين الشبكة','bool','تحسين الشبكة'],['wakeLockEnabled','WakeLock','bool','التحكم في WakeLock'],['developerMode','وضع المطور','bool','خيارات متقدمة'],['showAdvancedSettings','عرض الإعدادات المتقدمة','bool','إظهار الخيارات']]
+
+    const bridge = window.AndroidInterface || null;
+    const settings = {};
+    const systemSettings = {};
+    let pendingConfirm = null;
+    let lastMonitoring = null;
+    let cachedUsers = [];
+
+    const tabs = [
+        ['general','عام','fa-cog'],
+        ['startup','التشغيل','fa-power-off'],
+        ['sms','SMS','fa-sms'],
+        ['monitoring','المراقبة','fa-heartbeat'],
+        ['security','الأمان','fa-shield-alt'],
+        ['backup','النسخ','fa-copy'],
+        ['maintenance','الصيانة','fa-tools'],
+        ['users','المستخدمون','fa-users']
+    ];
+
+    const defs = {
+        general: [
+            ['appEnabled','تفعيل التطبيق','bool','تشغيل الوظائف العامة'],
+            ['debugMode','وضع التصحيح','bool','للتطوير والتشخيص فقط'],
+            ['language','اللغة','select','لغة الواجهة',[['ar','العربية'],['en','English']]],
+            ['darkMode','الوضع الداكن','bool','تطبيق المظهر الداكن'],
+            ['notificationsEnabled','الإشعارات','bool','تفعيل الإشعارات'],
+            ['startupNotification','إشعار بدء التشغيل','bool','إشعار بداية الخدمة'],
+            ['failureNotification','إشعار الفشل','bool','إشعار أخطاء الخدمة'],
+            ['healthNotification','إشعار الصحة','bool','إشعارات سلامة الخدمة']
+        ],
+        startup: [
+            ['autoStartEnabled','التشغيل بعد الإقلاع','bool','تشغيل SMSService بعد BOOT'],
+            ['bootDelayMs','تأخير الإقلاع (ms)','number','مدة الانتظار قبل البدء'],
+            ['startupMode','وضع البدء','select','سبب البدء',[['BOOT','BOOT'],['MANUAL','MANUAL']]],
+            ['pipelineEnabled','تفعيل Pipeline','bool','تفعيل مسار المعالجة'],
+            ['pipelineTimeoutMs','مهلة Pipeline (ms)','number','المهلة الإجمالية'],
+            ['phaseTimeoutMs','مهلة المرحلة (ms)','number','مهلة كل مرحلة'],
+            ['parallelExecutionEnabled','التنفيذ المتوازي','bool','تشغيل المراحل المتوازية'],
+            ['continueOnFailure','المتابعة بعد الفشل','bool','لا توقف المراحل غير الحرجة'],
+            ['maxParallelPhases','أقصى مراحل متوازية','number','حد التنفيذ المتوازي'],
+            ['dagValidationEnabled','التحقق من DAG','bool','فحص الرسم قبل التنفيذ'],
+            ['dagAutoRecoveryEnabled','الاسترداد التلقائي','bool','استعادة التشغيل عند الفشل'],
+            ['allowPhaseSkipping','السماح بتجاوز المرحلة','bool','خيار متقدم'],
+            ['criticalPhaseFailureStopsPipeline','إيقاف Pipeline عند الفشل الحرج','bool','قاعدة فشل حرجة']
+        ],
+        sms: [
+            ['smsServiceEnabled','تفعيل خدمة SMS','bool','بوابة الخدمة الأساسية'],
+            ['smsReceiveEnabled','استقبال SMS','bool','معالجة الرسائل الواردة'],
+            ['smsSendEnabled','إرسال SMS','bool','السماح بإرسال الردود'],
+            ['smsProcessingIntervalMs','فترة معالجة SMS (ms)','number','فترة المعالجة'],
+            ['smsQueueEnabled','طابور SMS','bool','استخدام طابور الرسائل'],
+            ['smsQueueSize','حجم طابور SMS','number','الحد الأقصى للطابور'],
+            ['duplicateMessageProtection','منع الرسائل المكررة','bool','حماية idempotency'],
+            ['smsProcessingThreads','عدد خيوط المعالجة','number','عدد العمال'],
+            ['smsRetryEnabled','إعادة المحاولة','bool','إعادة المحاولة عند الفشل'],
+            ['allowedPhoneNumbers','الأرقام المسموحة','array','مفصولة بفواصل'],
+            ['blockedPhoneNumbers','الأرقام المحظورة','array','مفصولة بفواصل'],
+            ['retryEnabled','تفعيل Retry','bool','تفعيل سياسة Retry'],
+            ['maxRetryAttempts','أقصى محاولات','number','الحد الأعلى'],
+            ['retryBackoffMs','تأخير Retry (ms)','number','التأخير'],
+            ['retryStrategy','استراتيجية Retry','select','الاستراتيجية',[['EXPONENTIAL','EXPONENTIAL'],['LINEAR','LINEAR'],['FIXED','FIXED']]]
+        ],
+        security: [
+            ['requireDeviceUnlock','طلب فتح الجهاز','bool','حماية الوصول'],
+            ['encryptStorage','تشفير التخزين','bool','تشفير الإعدادات إذا كان مدعوماً'],
+            ['biometricLockEnabled','القفل البيومتري','bool','بصمة أو وجه'],
+            ['hideSensitiveData','إخفاء البيانات الحساسة','bool','إخفاء القيم الحساسة'],
+            ['autoLogoutMinutes','الخروج التلقائي (دقيقة)','number','مدة الجلسة'],
+            ['preventScreenshots','منع لقطات الشاشة','bool','حماية العرض'],
+            ['secureBackupEnabled','نسخ احتياطي آمن','bool','التحقق من النسخة'],
+            ['pinCode','رمز PIN','password','رمز محلي']
+        ],
+        backup: [
+            ['autoBackupEnabled','نسخ احتياطي تلقائي','bool','النسخ الدوري'],
+            ['backupIntervalHours','فترة النسخ (ساعة)','number','الفترة'],
+            ['backupLocation','موقع النسخ','text','موقع داخل مساحة التطبيق'],
+            ['includeLogsInBackup','إدراج السجلات','bool','تضمين سجلات النظام'],
+            ['includeDatabaseBackup','إدراج قاعدة البيانات','bool','يُرسل إلى BackupManager فقط'],
+            ['encryptBackup','تشفير النسخ','bool','التشفير عند توفره'],
+            ['automaticBackupOnExit','نسخ عند الخروج','bool','النسخ عند الإغلاق'],
+            ['keepDatabaseBackupCount','عدد نسخ قاعدة البيانات','number','الحد']
+        ],
+        maintenance: [
+            ['autoCleanupEnabled','تنظيف تلقائي','bool','التنظيف الدوري'],
+            ['cleanupIntervalDays','فترة التنظيف (يوم)','number','الفترة'],
+            ['autoRepairEnabled','إصلاح تلقائي','bool','الإصلاح عند الفشل'],
+            ['batteryOptimizationEnabled','تحسين البطارية','bool','إعداد التشغيل الخلفي'],
+            ['networkOptimizationEnabled','تحسين الشبكة','bool','تحسين الشبكة'],
+            ['wakeLockEnabled','WakeLock','bool','التحكم في WakeLock'],
+            ['developerMode','وضع المطور','bool','خيارات متقدمة'],
+            ['showAdvancedSettings','عرض الإعدادات المتقدمة','bool','إظهار الخيارات']
+        ]
     };
-    function el(id){return document.getElementById(id);}
-    function showLoading(v){el('loading').classList.toggle('show',v);}
-    function toast(message,bad){const n=el('toast');n.textContent=message;n.style.background=bad?'var(--error)':'#111827';n.classList.add('show');clearTimeout(n._timer);n._timer=setTimeout(()=>n.classList.remove('show'),3500);}
-    function parseResult(raw){if(raw==null)throw new Error('لم يرجع الجسر نتيجة');const v=typeof raw==='string'?JSON.parse(raw):raw;if(!v||v.success!==true)throw new Error(v&&(v.error||v.message)||'فشلت العملية');return v;}
-    function bridgeCall(action,payload){if(!bridge)return Promise.reject(new Error('AndroidInterface غير متاح؛ افتح الشاشة داخل التطبيق'));try{let raw;switch(action){case'getApplicationSettings':raw=bridge.getApplicationSettings();break;case'saveApplicationSettings':raw=bridge.saveApplicationSettings(JSON.stringify(payload||{}));break;case'resetApplicationSettings':raw=bridge.resetApplicationSettings();break;case'createSettingsBackup':raw=bridge.createSettingsBackup();break;case'listSettingsBackups':raw=bridge.listSettingsBackups();break;case'restoreSettingsBackup':raw=bridge.restoreSettingsBackup(String(payload.id));break;case'deleteSettingsBackup':raw=bridge.deleteSettingsBackup(String(payload.id));break;case'getSettingsMonitoring':raw=bridge.getSettingsMonitoring();break;case'clearSettingsLogs':raw=bridge.clearSettingsLogs();break;case'clearSettingsMetrics':raw=bridge.clearSettingsMetrics();break;case'optimizeSettingsDatabase':raw=bridge.optimizeSettingsDatabase();break;case'getSettingsDatabaseIntegrity':raw=bridge.getSettingsDatabaseIntegrity();break;default:throw new Error('إجراء غير مسموح');}return Promise.resolve(parseResult(raw));}catch(e){return Promise.reject(e);}}
-    function dataOf(r){return Object.prototype.hasOwnProperty.call(r,'data')?r.data:r;}
-    function openModal(id){el(id).classList.add('show');} function closeModal(id){el(id).classList.remove('show');}
-    function renderTabs(){const html=tabs.map((t,i)=>`<button class="filter-chip ${i===0?'active':''}" data-tab="${t[0]}"><i class="fas ${t[2]}"></i> ${t[1]}</button>`).join('');el('tabs').innerHTML=html;el('bottomNav').innerHTML=tabs.slice(0,5).map((t,i)=>`<button class="nav-item ${i===0?'active':''}" data-tab="${t[0]}"><i class="fas ${t[2]}"></i><span>${t[1]}</span></button>`).join('');document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>selectTab(b.dataset.tab)));}
-    function selectTab(name){document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+name));if(name==='monitoring')refreshMonitoring();if(name==='backup')refreshBackups();window.scrollTo({top:0,behavior:'smooth'});}
-    function renderField(section,def){const[key,label,type,help,...options]=def;const row=document.createElement('div');row.className='field';const info=document.createElement('div');info.className='field-info';info.innerHTML=`<label for="setting-${key}">${label}</label><small>${help||''}</small>`;const control=document.createElement('div');control.className='field-control';let input;if(type==='bool'){const wrap=document.createElement('label');wrap.className='switch-control';input=document.createElement('input');input.type='checkbox';const slider=document.createElement('span');slider.className='switch-slider';wrap.append(input,slider);control.appendChild(wrap);}else{input=document.createElement('input');input.className='form-input';input.type=type==='number'?'number':type==='password'?'password':'text';if(type==='select'){input=document.createElement('select');input.className='form-input';options.forEach(o=>{const op=document.createElement('option');op.value=o[0];op.textContent=o[1];input.appendChild(op);});}if(type==='array')input.placeholder='قيمة1, قيمة2';input.id='setting-'+key;control.appendChild(input);}if(type==='bool')input.id='setting-'+key;row.append(info,control);return row;}
-    function renderAllFields(){Object.keys(defs).forEach(section=>{const target=el(section+'Fields');target.innerHTML='';const title=tabs.find(t=>t[0]===section);const card=document.createElement('div');card.className='settings-card';card.innerHTML=`<div class="card-header"><div><h3>${title[1]}</h3><span class="muted">إعدادات قابلة للقراءة والحفظ من المصدر الفعلي</span></div><div class="card-avatar"><i class="fas ${title[2]}"></i></div></div>`;const fields=document.createElement('div');defs[section].forEach(def=>fields.appendChild(renderField(section,def)));card.appendChild(fields);target.appendChild(card);});}
-    function setField(key,value){const input=el('setting-'+key);if(!input)return;if(input.type==='checkbox')input.checked=Boolean(value);else if(Array.isArray(value))input.value=value.join(', ');else input.value=value==null?'':value;}
-    function loadFields(){Object.keys(settings).forEach(k=>setField(k,settings[k]));el('statFields').textContent=Object.keys(defs).reduce((n,s)=>n+defs[s].length,0);}
-    function collectSettings(){const next=Object.assign({},settings);Object.keys(defs).forEach(s=>defs[s].forEach(def=>{const[key,,type]=def;const input=el('setting-'+key);if(!input)return;if(type==='bool')next[key]=input.checked;else if(type==='number')next[key]=Number(input.value||0);else if(type==='array')next[key]=input.value.split(',').map(v=>v.trim()).filter(Boolean);else next[key]=input.value;}));return next;}
-    async function loadSettings(){showLoading(true);try{const v=dataOf(await bridgeCall('getApplicationSettings'));Object.keys(v).forEach(k=>settings[k]=v[k]);loadFields();if(settings.darkMode)document.documentElement.dataset.theme='dark';}catch(e){el('offlineBanner').classList.toggle('show',!bridge);toast(e.message,true);}finally{showLoading(false);}}
-    async function saveSettings(){showLoading(true);try{const v=dataOf(await bridgeCall('saveApplicationSettings',collectSettings()));Object.keys(settings).forEach(k=>delete settings[k]);Object.assign(settings,v);loadFields();if(settings.darkMode)document.documentElement.dataset.theme='dark';else delete document.documentElement.dataset.theme;toast('تم حفظ الإعدادات وتطبيقها فعلياً');}catch(e){toast(e.message,true);}finally{showLoading(false);}}
-    async function resetSettings(){closeModal('confirmModal');showLoading(true);try{const v=dataOf(await bridgeCall('resetApplicationSettings'));Object.keys(settings).forEach(k=>delete settings[k]);Object.assign(settings,v);loadFields();toast('تمت إعادة الإعدادات الافتراضية');}catch(e){toast(e.message,true);}finally{showLoading(false);}}
-    async function refreshMonitoring(){showLoading(true);try{const v=dataOf(await bridgeCall('getSettingsMonitoring'));lastMonitoring=v;renderMonitoring(v);}catch(e){toast(e.message,true);}finally{showLoading(false);}}
-    function renderMonitoring(v){const state=el('monitoringState');state.innerHTML='';[['الخدمة',v.service_running,'تعمل','متوقفة'],['الصحة',v.service_healthy,'سليمة','غير سليمة']].forEach(a=>{const d=document.createElement('div');d.className='status-card';d.innerHTML=`<span>${a[0]}</span><strong class="${a[1]?'ok':'bad'}">${a[1]?a[2]:a[3]}</strong>`;state.appendChild(d);});[['الحالة',v.current_startup_state],['الطور',v.active_phase||'-'],['وقت التشغيل',v.uptime],['الأحداث',v.events_count],['الذاكرة',v.memory_usage],['CPU',v.cpu_usage]].forEach(a=>{const d=document.createElement('div');d.className='status-card';d.innerHTML=`<span>${a[0]}</span><strong>${a[1]==null?'-':a[1]}</strong>`;state.appendChild(d);});el('statService').textContent=v.service_running?'تعمل':'متوقفة';const metrics=el('metrics');metrics.innerHTML='';Object.entries(v.metrics||{}).forEach(([k,val])=>{const d=document.createElement('div');d.className='metric-card';d.innerHTML=`<span>${escapeHtml(k)}</span><b>${escapeHtml(val)}</b>`;metrics.appendChild(d);});}
-    async function refreshBackups(){try{const v=dataOf(await bridgeCall('listSettingsBackups'));renderBackups(Array.isArray(v)?v:[]);}catch(e){toast(e.message,true);}}
-    function renderBackups(items){el('statBackups').textContent=items.length;const body=el('backupsBody');if(!items.length){body.innerHTML='<tr><td colspan="5"><div class="empty-state"><i class="fas fa-folder-open"></i>لا توجد نسخ محفوظة.</div></td></tr>';return;}body.innerHTML=items.map(i=>`<tr><td>${escapeHtml(i.id)}</td><td>${new Date(Number(i.created_at||0)).toLocaleString('ar')}</td><td>${Number(i.size||0)} bytes</td><td>${i.is_encrypted?'نعم':'لا'}</td><td><button class="action-btn" data-restore="${escapeAttr(i.id)}">استعادة</button> <button class="action-btn danger" data-delete="${escapeAttr(i.id)}">حذف</button></td></tr>`).join('');body.querySelectorAll('[data-restore]').forEach(b=>b.addEventListener('click',()=>ask('استعادة نسخة','سيتم استبدال إعدادات module الحالية بهذه النسخة.',()=>restoreBackup(b.dataset.restore))));body.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>ask('حذف نسخة','لا يمكن التراجع عن حذف ملف النسخة.',()=>deleteBackup(b.dataset.delete))));}
-    async function createBackup(){showLoading(true);try{const r=await bridgeCall('createSettingsBackup');toast('تم إنشاء النسخة: '+r.id);await refreshBackups();}catch(e){toast(e.message,true);}finally{showLoading(false);}}
-    async function restoreBackup(id){closeModal('confirmModal');showLoading(true);try{const v=dataOf(await bridgeCall('restoreSettingsBackup',{id}));Object.keys(settings).forEach(k=>delete settings[k]);Object.assign(settings,v);loadFields();toast('تمت استعادة الإعدادات');}catch(e){toast(e.message,true);}finally{showLoading(false);}}
-    async function deleteBackup(id){closeModal('confirmModal');showLoading(true);try{await bridgeCall('deleteSettingsBackup',{id});toast('تم حذف النسخة');await refreshBackups();}catch(e){toast(e.message,true);}finally{showLoading(false);}}
-    async function optimizeDb(){showLoading(true);try{await bridgeCall('optimizeSettingsDatabase');toast('تم فحص وتحسين قاعدة البيانات');}catch(e){toast(e.message,true);}finally{showLoading(false);}}
-    async function checkIntegrity(){showLoading(true);try{const v=await bridgeCall('getSettingsDatabaseIntegrity');el('statIntegrity').textContent=v.valid?'سليمة':'فشل';el('integrityResult').innerHTML=`<div class="status-card"><span>سلامة SQLite</span><strong class="${v.valid?'ok':'bad'}">${v.valid?'OK':'FAIL'}</strong></div><div class="status-card"><span>قاعدة البيانات</span><strong>${v.database_open?'مفتوحة':'مغلقة'}</strong></div><div class="status-card"><span>الحجم</span><strong>${Number(v.size_bytes||0)} bytes</strong></div>`;}catch(e){toast(e.message,true);}finally{showLoading(false);}}
-    function ask(title,text,action){el('modalTitle').textContent=title;el('modalText').textContent=text;pendingConfirm=action;openModal('confirmModal');}
-    function openMonitoringReport(){if(!lastMonitoring){toast('حدّث الحالة أولاً',true);return;}const v=lastMonitoring;el('monitoringReportBody').innerHTML=[['الخدمة',v.service_running?'تعمل':'متوقفة'],['الصحة',v.service_healthy?'سليمة':'غير سليمة'],['الحالة',v.current_startup_state],['الطور',v.active_phase||'-'],['وقت التشغيل',v.uptime],['عدد الأحداث',v.events_count],['آخر خطأ',v.last_error||'لا يوجد']].map(a=>`<div class="status-card"><span>${a[0]}</span><strong>${escapeHtml(a[1])}</strong></div>`).join('');openModal('monitoringModal');}
-    function escapeHtml(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));} function escapeAttr(v){return escapeHtml(v).replace(/`/g,'&#96;');}
-    function bind(){el('backBtn').onclick=()=>{window.location.href='../main.html';};el('saveBtn').onclick=saveSettings;el('fabSave').onclick=saveSettings;el('resetBtn').onclick=()=>ask('إعادة الإعدادات','سيتم استبدال الإعدادات الحالية بالقيم الافتراضية.',resetSettings);el('createBackup').onclick=createBackup;el('refreshBackups').onclick=refreshBackups;el('refreshMonitoring').onclick=refreshMonitoring;el('openMonitoringReport').onclick=openMonitoringReport;el('optimizeDb').onclick=optimizeDb;el('checkIntegrity').onclick=checkIntegrity;el('clearLogs').onclick=async()=>{showLoading(true);try{await bridgeCall('clearSettingsLogs');toast('تم تنظيف السجلات القديمة');await refreshMonitoring();}catch(e){toast(e.message,true);}finally{showLoading(false);}};el('clearMetrics').onclick=async()=>{showLoading(true);try{await bridgeCall('clearSettingsMetrics');toast('تم تنظيف المقاييس القديمة');await refreshMonitoring();}catch(e){toast(e.message,true);}finally{showLoading(false);}};el('themeBtn').onclick=()=>{const dark=document.documentElement.dataset.theme==='dark';if(dark)delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme='dark';};el('modalCancel').onclick=()=>closeModal('confirmModal');el('modalCancel2').onclick=()=>closeModal('confirmModal');el('modalConfirm').onclick=()=>{if(pendingConfirm)pendingConfirm();};el('monitoringClose').onclick=()=>closeModal('monitoringModal');el('monitoringClose2').onclick=()=>closeModal('monitoringModal');el('searchInput').addEventListener('input',filterFields);}
-    function filterFields(){const q=el('searchInput').value.trim().toLowerCase();document.querySelectorAll('.field').forEach(row=>{row.classList.toggle('hidden',q&&!row.textContent.toLowerCase().includes(q));});}
-    renderTabs();renderAllFields();bind();loadSettings();
+
+    const systemDefs = [
+        ['VAT_PERCENTAGE','نسبة ضريبة القيمة المضافة','number','system_settings / tax'],
+        ['DEFAULT_CURRENCY','معرف العملة الافتراضية','number','system_settings / general'],
+        ['ALLOW_NEGATIVE_STOCK','السماح بالمخزون السالب','bool','system_settings / inventory'],
+        ['MAX_DISCOUNT_PERCENT','الحد الأقصى للخصم %','number','system_settings / sales'],
+        ['AUTO_BACKUP_ENABLED','النسخ الاحتياطي التلقائي','bool','system_settings / system'],
+        ['AUTO_SYNC_ENABLED','المزامنة التلقائية','bool','system_settings / system'],
+        ['SMS_GATEWAY','بوابة الرسائل','text','system_settings / sms'],
+        ['STATION_NAME','اسم المحطة','text','system_settings / general'],
+        ['LOW_STOCK_THRESHOLD','حد المخزون المنخفض','number','system_settings / inventory'],
+        ['CREDIT_LIMIT_DEFAULT','حد الائتمان الافتراضي','number','system_settings / finance'],
+        ['retention_days','مدة الاحتفاظ بالسجلات (يوم)','number','system_settings / system'],
+        ['push_notifications_enabled','إشعارات Push','bool','system_settings / notifications']
+    ];
+
+    function el(id) {
+        return document.getElementById(id);
+    }
+
+    function showLoading(value) {
+        el('loading').classList.toggle('show', !!value);
+    }
+
+    function toast(message, type='success') {
+        const node = el('toast');
+        node.textContent = String(message || 'تم تنفيذ العملية');
+        node.className = 'toast ' + type + ' show';
+        clearTimeout(node._timer);
+        node._timer = setTimeout(() => node.classList.remove('show'), 3600);
+    }
+
+    function parseResult(raw) {
+        if (raw == null) throw new Error('لم يرجع الجسر نتيجة');
+        const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (value && value.success === false) {
+            throw new Error(value.error || value.message || 'فشلت العملية');
+        }
+        return value;
+    }
+
+    function dataOf(value) {
+        if (value && Object.prototype.hasOwnProperty.call(value, 'data')) return value.data;
+        return value;
+    }
+
+    function bridgeCall(action, payload) {
+        if (!bridge) {
+            return Promise.reject(new Error('AndroidInterface غير متاح؛ افتح الشاشة داخل التطبيق.'));
+        }
+        try {
+            let raw;
+            switch (action) {
+                case 'getApplicationSettings':
+                    raw = bridge.getApplicationSettings();
+                    break;
+                case 'saveApplicationSettings':
+                    raw = bridge.saveApplicationSettings(JSON.stringify(payload || {}));
+                    break;
+                case 'resetApplicationSettings':
+                    raw = bridge.resetApplicationSettings();
+                    break;
+                case 'getSetting':
+                    raw = bridge.getSetting(String(payload.key));
+                    break;
+                case 'setSetting':
+                    raw = bridge.setSetting(String(payload.key), String(payload.value));
+                    break;
+                case 'getAllSettingsMap':
+                    raw = bridge.getAllSettingsMap();
+                    break;
+                case 'getUsers':
+                    raw = bridge.getUsers();
+                    break;
+                case 'createSettingsBackup':
+                    raw = bridge.createSettingsBackup();
+                    break;
+                case 'listSettingsBackups':
+                    raw = bridge.listSettingsBackups();
+                    break;
+                case 'restoreSettingsBackup':
+                    raw = bridge.restoreSettingsBackup(String(payload.id));
+                    break;
+                case 'deleteSettingsBackup':
+                    raw = bridge.deleteSettingsBackup(String(payload.id));
+                    break;
+                case 'getSettingsMonitoring':
+                    raw = bridge.getSettingsMonitoring();
+                    break;
+                case 'clearSettingsLogs':
+                    raw = bridge.clearSettingsLogs();
+                    break;
+                case 'clearSettingsMetrics':
+                    raw = bridge.clearSettingsMetrics();
+                    break;
+                case 'optimizeSettingsDatabase':
+                    raw = bridge.optimizeSettingsDatabase();
+                    break;
+                case 'getSettingsDatabaseIntegrity':
+                    raw = bridge.getSettingsDatabaseIntegrity();
+                    break;
+                case 'getDatabaseInfo':
+                    raw = bridge.getDatabaseInfo();
+                    break;
+                default:
+                    throw new Error('إجراء غير مسموح');
+            }
+            return Promise.resolve(parseResult(raw));
+        } catch (error) {
+            return Promise.reject(error);
+        }
+    }
+
+    function renderTabs() {
+        el('tabs').innerHTML = tabs.map((tab, index) =>
+            `<button class="segment ${index === 0 ? 'active' : ''}" data-tab="${tab[0]}" type="button">
+                <i class="fas ${tab[2]}"></i> ${tab[1]}
+            </button>`
+        ).join('');
+
+        el('tabs').querySelectorAll('[data-tab]').forEach(button => {
+            button.addEventListener('click', () => selectTab(button.dataset.tab));
+        });
+    }
+
+    function selectTab(name) {
+        document.querySelectorAll('.segment').forEach(button => {
+            button.classList.toggle('active', button.dataset.tab === name);
+        });
+        document.querySelectorAll('.panel').forEach(panel => {
+            panel.classList.toggle('active', panel.id === 'panel-' + name);
+        });
+
+        if (name === 'monitoring') refreshMonitoring();
+        if (name === 'backup') refreshBackups();
+        if (name === 'maintenance') refreshDatabaseInfo();
+        if (name === 'users') {
+            if (cachedUsers.length) renderUsers(cachedUsers, el('searchInput').value.trim());
+        }
+
+        window.scrollTo({top:0, behavior:'smooth'});
+    }
+
+    function createField(def, source='application') {
+        const [key, label, type, help, options] = def;
+        const row = document.createElement('div');
+        row.className = 'field' + (type === 'bool' ? ' switch-field' : '');
+
+        const labelNode = document.createElement('label');
+        labelNode.textContent = label;
+        labelNode.htmlFor = 'setting-' + key;
+
+        if (type === 'bool') {
+            row.appendChild(labelNode);
+
+            const switchWrap = document.createElement('label');
+            switchWrap.className = 'switch';
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.id = 'setting-' + key;
+            input.dataset.source = source;
+            input.dataset.key = key;
+
+            const slider = document.createElement('span');
+            slider.className = 'slider';
+
+            switchWrap.append(input, slider);
+            row.appendChild(switchWrap);
+        } else {
+            row.appendChild(labelNode);
+
+            let input;
+            if (type === 'select') {
+                input = document.createElement('select');
+                (options || []).forEach(option => {
+                    const item = document.createElement('option');
+                    item.value = option[0];
+                    item.textContent = option[1];
+                    input.appendChild(item);
+                });
+            } else {
+                input = document.createElement('input');
+                input.type = type === 'number' ? 'number' : type === 'password' ? 'password' : 'text';
+                if (type === 'number') input.inputMode = 'decimal';
+                if (type === 'array') input.placeholder = 'قيمة1, قيمة2';
+            }
+
+            input.className = 'form-input';
+            input.id = 'setting-' + key;
+            input.dataset.source = source;
+            input.dataset.key = key;
+            input.addEventListener('focus', () => focusField(input));
+
+            row.appendChild(input);
+
+            const note = document.createElement('small');
+            note.textContent = help || '';
+            row.appendChild(note);
+        }
+
+        return row;
+    }
+
+    function renderFields() {
+        Object.keys(defs).forEach(section => {
+            const target = el(section + 'Fields');
+            target.innerHTML = '';
+            defs[section].forEach(def => target.appendChild(createField(def, 'application')));
+        });
+
+        const systemTarget = el('systemFields');
+        systemTarget.innerHTML = '';
+        systemDefs.forEach(def => systemTarget.appendChild(createField(def, 'system')));
+
+        el('statFields').textContent =
+            Object.keys(defs).reduce((sum, section) => sum + defs[section].length, 0) + systemDefs.length;
+    }
+
+    function setApplicationField(key, value) {
+        const input = el('setting-' + key);
+        if (!input || input.dataset.source !== 'application') return;
+
+        if (input.type === 'checkbox') {
+            input.checked = value === true || value === 1 || value === '1' || value === 'true';
+        } else if (Array.isArray(value)) {
+            input.value = value.join(', ');
+        } else {
+            input.value = value == null ? '' : String(value);
+        }
+    }
+
+    function setSystemField(key, value) {
+        const input = el('setting-' + key);
+        if (!input || input.dataset.source !== 'system') return;
+
+        if (input.type === 'checkbox') {
+            input.checked = value === true || value === 1 || value === '1' || value === 'true';
+        } else {
+            input.value = value == null ? '' : String(value);
+        }
+    }
+
+    function collectApplicationSettings() {
+        const next = Object.assign({}, settings);
+
+        Object.keys(defs).forEach(section => {
+            defs[section].forEach(def => {
+                const [key, , type] = def;
+                const input = el('setting-' + key);
+                if (!input) return;
+
+                if (type === 'bool') {
+                    next[key] = input.checked;
+                } else if (type === 'number') {
+                    next[key] = Number(input.value || 0);
+                } else if (type === 'array') {
+                    next[key] = input.value.split(',').map(v => v.trim()).filter(Boolean);
+                } else {
+                    next[key] = input.value;
+                }
+            });
+        });
+
+        return next;
+    }
+
+    function collectSystemSettings() {
+        const result = {};
+
+        systemDefs.forEach(def => {
+            const [key, , type] = def;
+            const input = el('setting-' + key);
+            if (!input) return;
+
+            if (type === 'bool') {
+                result[key] = input.checked ? '1' : '0';
+            } else {
+                result[key] = input.value;
+            }
+        });
+
+        return result;
+    }
+
+    async function loadSettings() {
+        showLoading(true);
+        try {
+            const application = dataOf(await bridgeCall('getApplicationSettings')) || {};
+            Object.keys(settings).forEach(key => delete settings[key]);
+            Object.assign(settings, application);
+
+            Object.keys(settings).forEach(key => setApplicationField(key, settings[key]));
+
+            if (settings.darkMode === true || settings.darkMode === 1 || settings.darkMode === '1') {
+                setDarkMode(true);
+            } else {
+                setDarkMode(false);
+            }
+
+            await loadSystemSettings();
+        } catch (error) {
+            el('offlineBanner').classList.toggle('show', !bridge);
+            toast(error.message, 'bad');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    async function loadSystemSettings() {
+        try {
+            const values = dataOf(await bridgeCall('getAllSettingsMap')) || {};
+            Object.keys(systemSettings).forEach(key => delete systemSettings[key]);
+            Object.assign(systemSettings, values);
+
+            systemDefs.forEach(([key]) => {
+                if (Object.prototype.hasOwnProperty.call(systemSettings, key)) {
+                    setSystemField(key, systemSettings[key]);
+                }
+            });
+        } catch (error) {
+            toast('تعذر قراءة system_settings: ' + error.message, 'warn');
+        }
+    }
+
+    async function saveSettings() {
+        showLoading(true);
+        try {
+            const applicationPayload = collectApplicationSettings();
+            const systemPayload = collectSystemSettings();
+
+            const applicationResult = dataOf(
+                await bridgeCall('saveApplicationSettings', applicationPayload)
+            ) || {};
+
+            Object.keys(settings).forEach(key => delete settings[key]);
+            Object.assign(settings, applicationResult);
+
+            for (const [key, value] of Object.entries(systemPayload)) {
+                await bridgeCall('setSetting', {key, value});
+                systemSettings[key] = value;
+            }
+
+            Object.keys(settings).forEach(key => setApplicationField(key, settings[key]));
+
+            setDarkMode(
+                settings.darkMode === true ||
+                settings.darkMode === 1 ||
+                settings.darkMode === '1'
+            );
+
+            toast('تم حفظ وتطبيق الإعدادات فعلياً في SQLite وAndroid');
+        } catch (error) {
+            toast(error.message, 'bad');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    function setDarkMode(dark) {
+        document.documentElement.dataset.theme = dark ? 'dark' : '';
+        const button = el('themeBtn');
+        button.textContent = dark ? '🌞' : '🌙';
+        button.title = dark ? 'الوضع الفاتح' : 'الوضع المظلم';
+        button.setAttribute('aria-label', button.title);
+    }
+
+    async function toggleTheme() {
+        const dark = document.documentElement.dataset.theme === 'dark';
+        const next = !dark;
+        setDarkMode(next);
+
+        const input = el('setting-darkMode');
+        if (input) input.checked = next;
+
+        settings.darkMode = next;
+
+        try {
+            await bridgeCall('setSetting', {
+                key: 'theme',
+                value: next ? 'dark' : 'light'
+            });
+            toast(next ? 'تم تفعيل الوضع المظلم' : 'تم تفعيل الوضع الفاتح');
+        } catch (error) {
+            toast(error.message, 'warn');
+        }
+    }
+
+    function focusField(input) {
+        setTimeout(() => {
+            try {
+                input.focus({preventScroll:true});
+                if (input.select && input.type !== 'checkbox') input.select();
+            } catch (_) {}
+        }, 40);
+    }
+
+    function ask(title, text, action) {
+        el('modalTitle').textContent = title;
+        el('modalText').textContent = text;
+        pendingConfirm = action;
+        el('confirmModal').classList.add('show');
+    }
+
+    function closeModal(id) {
+        el(id).classList.remove('show');
+    }
+
+    async function resetSettings() {
+        closeModal('confirmModal');
+        showLoading(true);
+
+        try {
+            const result = dataOf(await bridgeCall('resetApplicationSettings')) || {};
+
+            Object.keys(settings).forEach(key => delete settings[key]);
+            Object.assign(settings, result);
+
+            Object.keys(settings).forEach(key => setApplicationField(key, settings[key]));
+
+            setDarkMode(
+                settings.darkMode === true ||
+                settings.darkMode === 1 ||
+                settings.darkMode === '1'
+            );
+
+            await loadSystemSettings();
+            toast('تمت إعادة الإعدادات الافتراضية');
+        } catch (error) {
+            toast(error.message, 'bad');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    async function searchUsers() {
+        const query = el('searchInput').value.trim().toLowerCase();
+
+        showLoading(true);
+        try {
+            const result = dataOf(await bridgeCall('getUsers'));
+            cachedUsers = Array.isArray(result) ? result : [];
+            renderUsers(cachedUsers, query);
+            el('statUsers').textContent = filterUsers(cachedUsers, query).length;
+            el('userSearchBadge').textContent = filterUsers(cachedUsers, query).length;
+            selectTab('users');
+
+            if (!query) {
+                toast('تم جلب المستخدمين الفعليين من جدول users');
+            } else {
+                toast('تم تنفيذ البحث على بيانات users الفعلية');
+            }
+        } catch (error) {
+            toast('تعذر جلب المستخدمين: ' + error.message, 'bad');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    function filterUsers(users, query) {
+        if (!query) return users;
+
+        return users.filter(user => {
+            const values = [
+                user.id,
+                user.username,
+                user.full_name,
+                user.full_name_ar,
+                user.display_name,
+                user.email,
+                user.phone,
+                user.role_name,
+                user.role_name_ar,
+                user.status
+            ];
+
+            return values.some(value =>
+                String(value == null ? '' : value).toLowerCase().includes(query)
+            );
+        });
+    }
+
+    function renderUsers(users, query) {
+        const rows = filterUsers(users, query);
+        const body = el('usersBody');
+
+        el('statUsers').textContent = rows.length;
+        el('userSearchBadge').textContent = rows.length;
+
+        if (!rows.length) {
+            body.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="fas fa-user-slash"></i>لا توجد نتائج مطابقة.</div></td></tr>';
+            return;
+        }
+
+        body.innerHTML = rows.map(user => {
+            const status = String(user.status || '');
+            const statusLabel =
+                status === 'active' ? 'نشط' :
+                status === 'inactive' ? 'غير نشط' :
+                status === 'locked' ? 'مقفل' :
+                status || '—';
+
+            return `
+                <tr>
+                    <td>${escapeHtml(user.id)}</td>
+                    <td>${escapeHtml(user.username || '—')}</td>
+                    <td>${escapeHtml(user.full_name_ar || user.full_name || user.display_name || '—')}</td>
+                    <td>${escapeHtml(user.role_name_ar || user.role_name || '—')}</td>
+                    <td>${escapeHtml(user.station_id == null ? '—' : user.station_id)}</td>
+                    <td>${escapeHtml(statusLabel)}</td>
+                    <td>${escapeHtml(user.last_login_at || '—')}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    async function refreshMonitoring() {
+        showLoading(true);
+        try {
+            const value = dataOf(await bridgeCall('getSettingsMonitoring')) || {};
+            lastMonitoring = value;
+            renderMonitoring(value);
+            el('monitoringBadge').textContent = 'محدّثة';
+        } catch (error) {
+            toast(error.message, 'bad');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    function renderMonitoring(value) {
+        const state = el('monitoringState');
+
+        const items = [
+            ['الخدمة', value.service_running, 'تعمل', 'متوقفة'],
+            ['الصحة', value.service_healthy, 'سليمة', 'غير سليمة'],
+            ['الحالة', value.current_startup_state, null, null],
+            ['الطور النشط', value.active_phase || '—', null, null],
+            ['وقت التشغيل', value.uptime || '—', null, null],
+            ['الأحداث', value.events_count == null ? '—' : value.events_count, null, null],
+            ['الذاكرة', value.memory_usage || '—', null, null],
+            ['CPU', value.cpu_usage || '—', null, null]
+        ];
+
+        state.innerHTML = items.map(item => {
+            const [label, raw, okText, badText] = item;
+            const booleanValue = typeof raw === 'boolean';
+            const text = booleanValue ? (raw ? okText : badText) : raw;
+            const cls = booleanValue ? (raw ? 'ok' : 'bad') : '';
+            return `<div class="status-card"><span>${escapeHtml(label)}</span><strong class="${cls}">${escapeHtml(text == null ? '—' : text)}</strong></div>`;
+        }).join('');
+
+        el('statService').textContent = value.service_running ? 'تعمل' : 'متوقفة';
+
+        const metrics = el('metrics');
+        const metricEntries = Object.entries(value.metrics || {});
+
+        metrics.innerHTML = metricEntries.length
+            ? metricEntries.map(([key,val]) =>
+                `<div class="status-card"><span>${escapeHtml(key)}</span><strong>${escapeHtml(val)}</strong></div>`
+              ).join('')
+            : '';
+    }
+
+    async function refreshBackups() {
+        try {
+            const value = dataOf(await bridgeCall('listSettingsBackups'));
+            renderBackups(Array.isArray(value) ? value : []);
+        } catch (error) {
+            toast(error.message, 'bad');
+        }
+    }
+
+    function renderBackups(items) {
+        const body = el('backupsBody');
+
+        if (!items.length) {
+            body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="fas fa-folder-open"></i>لا توجد نسخ محفوظة.</div></td></tr>';
+            return;
+        }
+
+        body.innerHTML = items.map(item => `
+            <tr>
+                <td>${escapeHtml(item.id)}</td>
+                <td>${escapeHtml(formatDate(item.created_at))}</td>
+                <td>${escapeHtml(formatBytes(item.size))}</td>
+                <td>${item.is_encrypted ? 'نعم' : 'لا'}</td>
+                <td>
+                    <button class="btn" type="button" data-restore="${escapeAttr(item.id)}">استعادة</button>
+                    <button class="btn danger" type="button" data-delete="${escapeAttr(item.id)}">حذف</button>
+                </td>
+            </tr>
+        `).join('');
+
+        body.querySelectorAll('[data-restore]').forEach(button => {
+            button.addEventListener('click', () =>
+                ask(
+                    'استعادة النسخة',
+                    'سيتم استبدال إعدادات التطبيق بالقيم الموجودة في النسخة المحددة.',
+                    () => restoreBackup(button.dataset.restore)
+                )
+            );
+        });
+
+        body.querySelectorAll('[data-delete]').forEach(button => {
+            button.addEventListener('click', () =>
+                ask(
+                    'حذف النسخة',
+                    'لا يمكن التراجع عن حذف النسخة المحددة.',
+                    () => deleteBackup(button.dataset.delete)
+                )
+            );
+        });
+
+        el('statFields').textContent = Number(el('statFields').textContent || 0);
+    }
+
+    async function createBackup() {
+        showLoading(true);
+        try {
+            const result = await bridgeCall('createSettingsBackup');
+            toast('تم إنشاء النسخة: ' + (result.id || '—'));
+            await refreshBackups();
+        } catch (error) {
+            toast(error.message, 'bad');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    async function restoreBackup(id) {
+        closeModal('confirmModal');
+        showLoading(true);
+        try {
+            const value = dataOf(await bridgeCall('restoreSettingsBackup', {id})) || {};
+
+            Object.keys(settings).forEach(key => delete settings[key]);
+            Object.assign(settings, value);
+
+            Object.keys(settings).forEach(key => setApplicationField(key, settings[key]));
+            setDarkMode(
+                settings.darkMode === true ||
+                settings.darkMode === 1 ||
+                settings.darkMode === '1'
+            );
+
+            toast('تمت استعادة الإعدادات فعلياً');
+        } catch (error) {
+            toast(error.message, 'bad');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    async function deleteBackup(id) {
+        closeModal('confirmModal');
+        showLoading(true);
+        try {
+            await bridgeCall('deleteSettingsBackup', {id});
+            toast('تم حذف النسخة');
+            await refreshBackups();
+        } catch (error) {
+            toast(error.message, 'bad');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    async function optimizeDb() {
+        showLoading(true);
+        try {
+            await bridgeCall('optimizeSettingsDatabase');
+            toast('تم فحص وتحسين قاعدة البيانات');
+            await refreshDatabaseInfo();
+        } catch (error) {
+            toast(error.message, 'bad');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    async function checkIntegrity() {
+        showLoading(true);
+        try {
+            const value = dataOf(await bridgeCall('getSettingsDatabaseIntegrity')) || {};
+            el('statIntegrity').textContent = value.valid ? 'سليمة' : 'فشل';
+
+            el('integrityResult').innerHTML = `
+                <div class="status-card">
+                    <span>سلامة SQLite</span>
+                    <strong class="${value.valid ? 'ok' : 'bad'}">${value.valid ? 'OK' : 'FAIL'}</strong>
+                </div>
+                <div class="status-card">
+                    <span>قاعدة البيانات</span>
+                    <strong>${value.database_open ? 'مفتوحة' : 'مغلقة'}</strong>
+                </div>
+                <div class="status-card">
+                    <span>الحجم</span>
+                    <strong>${escapeHtml(formatBytes(value.size_bytes))}</strong>
+                </div>
+            `;
+        } catch (error) {
+            toast(error.message, 'bad');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    async function refreshDatabaseInfo() {
+        try {
+            const value = dataOf(await bridgeCall('getDatabaseInfo')) || {};
+            el('integrityResult').innerHTML = `
+                <div class="status-card">
+                    <span>إصدار قاعدة البيانات</span>
+                    <strong>${escapeHtml(value.version == null ? '—' : value.version)}</strong>
+                </div>
+                <div class="status-card">
+                    <span>عدد الجداول المقروء</span>
+                    <strong>${escapeHtml(value.tables_count == null ? '—' : value.tables_count)}</strong>
+                </div>
+                <div class="status-card">
+                    <span>الحجم</span>
+                    <strong>${escapeHtml(formatBytes(value.size_bytes))}</strong>
+                </div>
+                <div class="status-card">
+                    <span>التشفير</span>
+                    <strong>${value.is_encrypted ? 'مفعل' : 'غير مفعل'}</strong>
+                </div>
+            `;
+        } catch (error) {
+            toast(error.message, 'warn');
+        }
+    }
+
+    function openMonitoringReport() {
+        if (!lastMonitoring) {
+            toast('حدّث الحالة أولاً', 'warn');
+            return;
+        }
+
+        const value = lastMonitoring;
+
+        el('monitoringReportBody').innerHTML = [
+            ['الخدمة', value.service_running ? 'تعمل' : 'متوقفة'],
+            ['الصحة', value.service_healthy ? 'سليمة' : 'غير سليمة'],
+            ['الحالة', value.current_startup_state || '—'],
+            ['الطور', value.active_phase || '—'],
+            ['وقت التشغيل', value.uptime || '—'],
+            ['عدد الأحداث', value.events_count == null ? '—' : value.events_count],
+            ['آخر خطأ', value.last_error || 'لا يوجد']
+        ].map(item =>
+            `<div class="status-card"><span>${escapeHtml(item[0])}</span><strong>${escapeHtml(item[1])}</strong></div>`
+        ).join('');
+
+        el('monitoringModal').classList.add('show');
+    }
+
+    function bind() {
+        el('themeBtn').addEventListener('click', toggleTheme);
+
+        el('homeBtn').addEventListener('click', () => {
+            window.location.href = '../main.html';
+        });
+
+        el('searchBtn').addEventListener('click', searchUsers);
+
+        el('searchInput').addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                searchUsers();
+            }
+        });
+
+        el('saveBtn').addEventListener('click', saveSettings);
+        el('bottomSave').addEventListener('click', saveSettings);
+
+        el('resetBtn').addEventListener('click', () =>
+            ask(
+                'إعادة الإعدادات',
+                'سيتم استبدال إعدادات التطبيق بالقيم الافتراضية. هل تريد المتابعة؟',
+                resetSettings
+            )
+        );
+
+        el('refreshMonitoring').addEventListener('click', refreshMonitoring);
+        el('openMonitoringReport').addEventListener('click', openMonitoringReport);
+        el('createBackup').addEventListener('click', createBackup);
+        el('refreshBackups').addEventListener('click', refreshBackups);
+        el('optimizeDb').addEventListener('click', optimizeDb);
+        el('checkIntegrity').addEventListener('click', checkIntegrity);
+        el('refreshDbInfo').addEventListener('click', refreshDatabaseInfo);
+
+        el('clearLogs').addEventListener('click', () =>
+            ask(
+                'تنظيف السجلات',
+                'سيتم تنفيذ عملية التنظيف الفعلية من Android Monitoring Repository.',
+                async () => {
+                    closeModal('confirmModal');
+                    showLoading(true);
+                    try {
+                        await bridgeCall('clearSettingsLogs');
+                        toast('تم تنظيف السجلات القديمة');
+                        await refreshMonitoring();
+                    } catch (error) {
+                        toast(error.message, 'bad');
+                    } finally {
+                        showLoading(false);
+                    }
+                }
+            )
+        );
+
+        el('clearMetrics').addEventListener('click', () =>
+            ask(
+                'تنظيف المقاييس',
+                'سيتم حذف المقاييس القديمة عبر الجسر الفعلي.',
+                async () => {
+                    closeModal('confirmModal');
+                    showLoading(true);
+                    try {
+                        await bridgeCall('clearSettingsMetrics');
+                        toast('تم تنظيف المقاييس القديمة');
+                        await refreshMonitoring();
+                    } catch (error) {
+                        toast(error.message, 'bad');
+                    } finally {
+                        showLoading(false);
+                    }
+                }
+            )
+        );
+
+        el('modalCancel').addEventListener('click', () => closeModal('confirmModal'));
+        el('modalCancel2').addEventListener('click', () => closeModal('confirmModal'));
+
+        el('modalConfirm').addEventListener('click', async () => {
+            if (pendingConfirm) {
+                const action = pendingConfirm;
+                pendingConfirm = null;
+                await action();
+            }
+        });
+
+        el('monitoringClose').addEventListener('click', () => closeModal('monitoringModal'));
+        el('monitoringClose2').addEventListener('click', () => closeModal('monitoringModal'));
+
+        document.querySelectorAll('input,select,textarea').forEach(input => {
+            input.addEventListener('focus', () => focusField(input));
+        });
+    }
+
+    function formatDate(value) {
+        const timestamp = Number(value || 0);
+        if (!timestamp) return '—';
+        try {
+            return new Date(timestamp).toLocaleString('ar');
+        } catch (_) {
+            return String(value);
+        }
+    }
+
+    function formatBytes(value) {
+        const bytes = Number(value || 0);
+        if (!Number.isFinite(bytes) || bytes < 1024) return bytes + ' B';
+
+        const units = ['KB','MB','GB','TB'];
+        let size = bytes / 1024;
+        let index = 0;
+
+        while (size >= 1024 && index < units.length - 1) {
+            size /= 1024;
+            index++;
+        }
+
+        return size.toFixed(1) + ' ' + units[index];
+    }
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, char => ({
+            '&':'&amp;',
+            '<':'&lt;',
+            '>':'&gt;',
+            '"':'&quot;',
+            "'":'&#39;'
+        }[char]));
+    }
+
+    function escapeAttr(value) {
+        return escapeHtml(value).replace(/`/g,'&#96;');
+    }
+
+    renderTabs();
+    renderFields();
+    bind();
+    loadSettings();
+
 })();
 </script>
-    <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
+
+<script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
 </body>
 </html>
