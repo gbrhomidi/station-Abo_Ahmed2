@@ -13,139 +13,1057 @@ jobs:
         with:
           fetch-depth: 0
           ref: feature/ai-health-sqlite
-      - name: Apply targeted repairs
-        env:
-          BASE: 9d44b850b80d1dfcdca05035030391680ccbe8b4
+
+      - name: Verify repository, branch and clean checkout
+        run: |
+          set -euo pipefail
+          test "$(git remote get-url origin)" = "https://github.com/gbrhomidi/station-Abo_Ahmed2.git" || {
+            echo "ERROR: wrong origin"; git remote -v; exit 1;
+          }
+          test "$(git branch --show-current)" = "feature/ai-health-sqlite" || {
+            echo "ERROR: wrong branch"; git branch --show-current; exit 1;
+          }
+          echo "HEAD before repair workflow commit: $(git rev-parse HEAD)"
+          echo "HEAD parent: $(git rev-parse HEAD^)"
+          test -z "$(git status --porcelain)"
+          echo "Working tree is clean after checkout."
+          git status --short --branch
+
+      - name: Apply complete users and shifts repair
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import os, re, subprocess
-          BASE=os.environ['BASE']
-          p=Path('app/src/main/assets/screens/first-user-setup.html')
-          s=subprocess.check_output(['git','show',f'{BASE}:app/src/main/assets/screens/first-user-setup.html'],text=True)
-          base_size=len(s.encode('utf-8'))
-          s=re.sub(r'(<input[^>]*id=["\']branchId["\'][^>]*?)\s+readonly(?:\s*=\s*["\'][^"\']*["\'])?',r'\1',s,flags=re.I)
-          s=re.sub(r'(<input[^>]*id=["\']branchId["\'][^>]*?)\s+disabled(?:\s*=\s*["\'][^"\']*["\'])?',r'\1',s,flags=re.I)
-          ui=r'''
-          <style id="first-user-setup-final-ui">
-          .field:has(#department),.field:has(#jobTitle),.field:has(#stationId),.field:has(#branchId){padding:4px;border-radius:16px}
-          #department,#jobTitle,#stationId,#branchId{min-height:50px!important;border-radius:14px!important;border:1.5px solid var(--border)!important;background:#fff!important;padding:10px 14px!important;font-size:.96rem!important;font-weight:700!important;text-align:center!important;outline:none!important;box-shadow:0 3px 10px rgba(0,0,0,.05)!important}
-          #department:focus,#jobTitle:focus,#stationId:focus,#branchId:focus{border-color:var(--blue)!important;box-shadow:0 0 0 4px rgba(25,118,184,.14)!important}
-          #branchId{cursor:text!important}
-          .actions{position:fixed!important;left:50%!important;bottom:calc(12px + env(safe-area-inset-bottom,0px))!important;transform:translateX(-50%) translateZ(0)!important;width:min(560px,calc(100vw - 24px))!important;z-index:2147483647!important;pointer-events:none!important}
-          .actions .primary-btn{pointer-events:auto!important;width:100%!important;min-height:52px!important}
-          body{padding-bottom:120px!important}
-          </style>
-          <script id="first-user-setup-final-keyboard">
-          (function(){
-            function setup(){
-              const username=document.getElementById('username'),password=document.getElementById('password');
-              if(username&&password&&!username.dataset.enterHandled){username.dataset.enterHandled='1';username.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();e.stopPropagation();password.focus();}},true)}
-              const phone=document.getElementById('phone');
-              if(phone&&!phone.dataset.inputValidated){phone.dataset.inputValidated='1';phone.oninput=function(){this.value=this.value.replace(/[^0-9]/g,'').slice(0,20);this.classList.remove('input-error')}}
-              const branch=document.getElementById('branchId');
-              if(branch){branch.removeAttribute('readonly');branch.removeAttribute('disabled');branch.setAttribute('inputmode','numeric');branch.setAttribute('pattern','[0-9]+')}
-              const actions=document.querySelector('.actions'),button=document.getElementById('saveUserBtn')||document.querySelector('.actions .primary-btn');
-              if(!actions||!button||!window.visualViewport)return;
-              const update=function(){const keyboard=Math.max(0,window.innerHeight-window.visualViewport.height-window.visualViewport.offsetTop);actions.style.bottom=(12+keyboard)+'px'};
-              window.visualViewport.addEventListener('resize',update);window.visualViewport.addEventListener('scroll',update);window.addEventListener('resize',update);update();
+          import re
+          import subprocess
+          import sys
+
+          ROOT = Path('.')
+          MAIN = ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt'
+          DB = ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt'
+          USERS = ROOT / 'app/src/main/assets/screens/users.html'
+          SHIFTS = ROOT / 'app/src/main/assets/screens/shifts.html'
+
+          required = [MAIN, DB, USERS, SHIFTS,
+                      ROOT / 'app/src/main/AndroidManifest.xml',
+                      ROOT / 'app/build.gradle.kts', ROOT / 'build.gradle.kts',
+                      ROOT / 'settings.gradle.kts', ROOT / 'gradle/libs.versions.toml']
+          missing = [str(p) for p in required if not p.exists()]
+          if missing:
+              raise SystemExit('Required project files missing: ' + ', '.join(missing))
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, found {count}')
+              return text.replace(old, new, 1)
+
+          def replace_regex(text, pattern, replacement, label, flags=re.S):
+              out, count = re.subn(pattern, replacement, text, count=1, flags=flags)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, found {count}')
+              return out
+
+          # ---------- users.html ----------
+          u = USERS.read_text(encoding='utf-8')
+          u_original_len = len(u)
+
+          u = replace_once(
+              u,
+              '<div class="header-actions"><button class="icon-btn" id="themeBtn" title="تبديل الوضع" aria-label="تبديل الوضع"><i id="themeIcon" class="fas fa-moon"></i></button><button class="icon-btn" onclick="goHome()" title="رجوع"><i class="fas fa-home"></i></button></div>',
+              '<div class="header-actions"><button class="icon-btn" id="themeBtn" type="button" title="تبديل الوضع" aria-label="تبديل الوضع"><span id="themeIcon" aria-hidden="true">🌙</span></button><button class="icon-btn" type="button" onclick="goHome()" title="الصفحة الرئيسية" aria-label="الصفحة الرئيسية"><span aria-hidden="true">🏠</span></button></div>',
+              'users top icons')
+
+          u = replace_once(
+              u,
+              '<div class="field"><label>معرف الموظف المرتبط</label><select id="employeeId"><option value="">بدون موظف مرتبط</option></select></div><div class="field"><label>الدور *</label><select id="roleId" required><option value="">اختر الدور</option></select></div>',
+              '<div class="field"><label>معرف الموظف المرتبط</label><select id="employeeId" onchange="syncEmployeeDerivedFields()"><option value="">بدون موظف مرتبط</option></select></div><input id="roleId" type="hidden" value="">',
+              'users hidden role field')
+
+          u = replace_once(
+              u,
+              "function fillDepartment(){ $('department').innerHTML='<option value=\"\">اختر القسم</option>'+departments.map(d=>`<option value=\"${esc(d)}\">${esc(d)}</option>`).join('') }function updateJobTitles(selected=''){const list=jobTitlesByDepartment[$('department').value]||[];$('jobTitle').innerHTML='<option value=\"\">اختر المسمى الوظيفي</option>'+list.map(x=>`<option value=\"${esc(x)}\">${esc(x)}</option>`).join('');if(selected)$('jobTitle').value=selected}",
+              "function fillDepartment(){const values=[...new Set(state.employees.map(e=>e.department||e.department_name||'').filter(Boolean))];$('department').innerHTML='<option value=\"\">اختر القسم</option>'+values.map(d=>`<option value=\"${esc(d)}\">${esc(d)}</option>`).join('')}function updateJobTitles(selected=''){const employee=state.employees.find(e=>String(e.id)===String($('employeeId').value));const title=selected||employee?.job_title||employee?.jobTitle||'';$('jobTitle').innerHTML=title?`<option value=\"${esc(title)}\">${esc(title)}</option>`:'<option value=\"\">اختر المسمى الوظيفي</option>';if(title)$('jobTitle').value=title}function syncEmployeeDerivedFields(){const employee=state.employees.find(e=>String(e.id)===String($('employeeId').value));if(!employee){setVal('roleId','');return}const department=employee.department||employee.department_name||'';const title=employee.job_title||employee.jobTitle||'';setVal('department',department);updateJobTitles(title);setVal('roleId','')}",
+              'users employee/job-title mapping')
+
+          u = replace_once(
+              u,
+              "function populateModalSelects(){ $('roleId').innerHTML='<option value=\"\">اختر الدور</option>'+state.roles.map(r=>`<option value=\"${esc(r.id)}\">${esc(r.role_name_ar||r.role_name||r.role_code)}</option>`).join('');$('stationId').innerHTML='<option value=\"\">اختر المحطة</option>'+state.stations.map(s=>`<option value=\"${esc(s.id)}\">${esc(s.station_name_ar||s.station_name||s.station_code)}</option>`).join('');$('employeeId').innerHTML='<option value=\"\">بدون موظف مرتبط</option>'+state.employees.map(e=>`<option value=\"${esc(e.id)}\">${esc(e.full_name_ar||e.full_name||e.employee_code)} — ${esc(e.employee_code||e.id)}</option>`).join('') }",
+              "function populateModalSelects(){$('stationId').innerHTML='<option value=\"\">اختر المحطة</option>'+state.stations.map(s=>`<option value=\"${esc(s.id)}\">${esc(s.station_name_ar||s.station_name||s.station_code)}</option>`).join('');$('employeeId').innerHTML='<option value=\"\">بدون موظف مرتبط</option>'+state.employees.map(e=>`<option value=\"${esc(e.id)}\">${esc(e.full_name_ar||e.full_name||e.employee_code)} — ${esc(e.employee_code||e.id)}</option>`).join('');fillDepartment()}",
+              'users modal selects')
+
+          u = replace_once(
+              u,
+              "function applyStationSelection(){const s=state.stations.find(x=>String(x.id)===String($('stationId').value));if(!s)return;setVal('branchId',s.branch_id||'');setVal('companyId',s.company_id||'');$('stationMeta').textContent=`المحطة: ${s.station_name_ar||s.station_name||'—'} | الفرع: ${s.branch_name||s.branch_name_ar||s.branch_id||'غير متاح من getStations'} | الشركة: ${s.company_name||s.company_name_ar||s.company_id||'غير متاح من getStations'}`}",
+              "function applyStationSelection(){const s=state.stations.find(x=>String(x.id)===String($('stationId').value));if(!s){setVal('branchId','');setVal('companyId','');$('stationMeta').textContent='';return}setVal('branchId',s.branch_id??'');setVal('companyId',s.company_id??'');$('stationMeta').textContent=`المحطة: ${s.station_name_ar||s.station_name||s.station_code||'—'} | الفرع: ${s.branch_id??'غير متاح من SQLite'} | الشركة: ${s.company_id??'غير متاح من SQLite'}`}",
+              'users station mapping')
+
+          u = replace_regex(
+              u,
+              r"function editUser\(id\)\{.*?\}\nfunction autoCopyFields",
+              """async function editUser(id){const u=state.users.find(x=>Number(x.id)===Number(id));if(!u)return;clearForm();state.editingId=Number(id);populateModalSelects();$('userModalTitle').innerHTML='<i class=\"fas fa-user-edit\"></i> تعديل مستخدم';$('editUserId').value=id;setVal('userId',id);setVal('username',u.username);$('username').readOnly=true;setVal('fullName',u.full_name);setVal('email',u.email);setVal('phone',u.phone);setVal('nationalId',u.national_id);setVal('passportNumber',u.passport_number);setVal('nationality',u.nationality||'يمني');setVal('gender',u.gender);setVal('birthDate',u.birth_date);setVal('hireDate',u.hire_date);setVal('employeeId',u.employee_id);syncEmployeeDerivedFields();setVal('stationId',u.station_id);setVal('branchId',u.branch_id);setVal('companyId',u.company_id);setVal('status',u.status||'active');setVal('statusReason',u.status_reason);setVal('preferredLanguage',u.preferred_language||'ar');setVal('theme',u.theme||'light');setVal('timezone',u.timezone||'UTC');setVal('dateFormat',u.date_format||'YYYY-MM-DD');setVal('passwordExpiryDays',u.password_expiry_days||90);setVal('passwordExpiryDate',u.password_expiry_date);setVal('sessionTimeout',u.session_timeout||30);setVal('deviceLimit',u.device_limit||3);setVal('twoFactorMethod',u.two_factor_method||'none');setVal('biometricType',u.biometric_type||'none');setVal('lockedUntil',u.locked_until);setVal('failedLoginAttempts',u.failed_login_attempts);setVal('lastPasswordChange',u.last_password_change);setVal('lastLoginAt',u.last_login_at);setVal('lastLoginIp',u.last_login_ip);setVal('lastLoginDevice',u.last_login_device);setVal('deviceId',u.device_id);setVal('emailVerified',u.email_verified?1:0);setVal('phoneVerified',u.phone_verified?1:0);setVal('avatarPath',u.avatar_path);setVal('remarks',u.remarks);setVal('extraData',u.extra_data);setVal('uuidField',u.uuid);setVal('createdAt',u.created_at);setVal('updatedAt',u.updated_at);setVal('deletedAt',u.deleted_at);setVal('createdBy',u.created_by);setVal('updatedBy',u.updated_by);setVal('deletedBy',u.deleted_by);setVal('isDeleted',u.is_deleted);setVal('syncStatus',u.sync_status);setVal('syncVersion',u.sync_version);setVal('syncAt',u.sync_at);setVal('fullNameAr',u.full_name);setVal('displayName',u.username);$('passwordHint').textContent='(اتركها فارغة للإبقاء على القديمة)';$('password').required=false;$('passwordConfirm').required=false;applyStationSelection();if(u.avatar_path){try{const r=await call('getImageDataUrl',[String(u.avatar_path)]);const src=dataOf(r);if(src)$('imagePreview').innerHTML=`<img src=\"${esc(src)}\" alt=\"صورة المستخدم\">`}catch(e){$('fileName').textContent='تعذر قراءة صورة المستخدم: '+e.message}}openModal('userModal');setTimeout(()=>{$('fullName').focus();$('fullName').scrollIntoView({behavior:'smooth',block:'center'})},150)}
+function autoCopyFields""",
+              'users editUser mapping')
+
+          u = replace_once(
+              u,
+              "function handleImageFile(input){const f=input.files&&input.files[0];if(!f)return;setVal('avatarPath',f.name);$('fileName').textContent='الملف المحدد: '+f.name;const url=URL.createObjectURL(f);$('imagePreview').innerHTML=`<img src=\"${url}\" alt=\"الصورة المحددة\">`}",
+              "function handleImageFile(input){const f=input.files&&input.files[0];if(!f)return;let nativeUri='';try{if(window.AndroidInterface&&typeof window.AndroidInterface.getLastSelectedFileUri==='function')nativeUri=String(window.AndroidInterface.getLastSelectedFileUri()||'').trim()}catch(e){toast('تعذر الحصول على URI للصورة المحددة من Android','error');return}if(!nativeUri){toast('لم يعرض Android مسار/URI للصورة المحددة','error');return}setVal('avatarPath',nativeUri);$('fileName').textContent='المسار الكامل: '+nativeUri;const url=URL.createObjectURL(f);$('imagePreview').innerHTML=`<img src=\"${url}\" alt=\"الصورة المحددة\">`}",
+              'users image picker')
+
+          u = replace_once(
+              u,
+              "preferred_language:'ar'",
+              "preferred_language:$('preferredLanguage').value",
+              'users preferred language mapping')
+
+          u = replace_once(
+              u,
+              "must_change_password:1",
+              "must_change_password:(state.editingId===0?1:Number(state.users.find(x=>Number(x.id)===Number(state.editingId))?.must_change_password??1))",
+              'users must-change-password persistence')
+
+          u = replace_once(
+              u,
+              "function saveUser(){autoCopyFields();const id=Number($('editUserId').value||0),p=$('password').value,c=$('passwordConfirm').value;if(!$('username').value.trim()||!$('fullName').value.trim()||!$('roleId').value){showFormAlert('اسم المستخدم والاسم الكامل والدور حقول مطلوبة');return}if(id===0&&!p){showFormAlert('كلمة المرور مطلوبة للمستخدم الجديد');return}if(p&&(p.length<6||p!==c)){showFormAlert('تحقق من كلمة المرور وتأكيدها؛ الحد الأدنى 6 أحرف');return}const data=collectUser();if(p)data.password=p;busy(true);try{const r=id?await call('updateUser',[id,JSON.stringify(data)]):await call('addUser',[JSON.stringify(data)]);toast(r.message||'تم حفظ المستخدم بنجاح');closeModal('userModal');await loadUsers()}catch(e){showFormAlert(e.message)}finally{busy(false)}}",
+              "function saveUser(){autoCopyFields();const id=Number($('editUserId').value||0),p=$('password').value,c=$('passwordConfirm').value;if(!$('username').value.trim()||!$('fullName').value.trim()||!$('employeeId').value){showFormAlert('اسم المستخدم والاسم الكامل والموظف المرتبط حقول مطلوبة');return}if(id===0&&!p){showFormAlert('كلمة المرور مطلوبة للمستخدم الجديد');return}if(p&&(p.length<6||p!==c)){showFormAlert('تحقق من كلمة المرور وتأكيدها؛ الحد الأدنى 6 أحرف');return}syncEmployeeDerivedFields();const data=collectUser();if(p)data.password=p;busy(true);try{const r=id?await call('updateUser',[id,JSON.stringify(data)]):await call('addUser',[JSON.stringify(data)]);toast(r.message||'تم حفظ المستخدم بنجاح');closeModal('userModal');await loadUsers()}catch(e){showFormAlert(e.message)}finally{busy(false)}}",
+              'users validation')
+
+          u = replace_once(
+              u,
+              "esc(u.role_name_ar||u.role_name||u.role_id||'—')",
+              "esc(u.role||u.job_title||u.role_name_ar||u.role_name||u.role_id||'—')",
+              'users table role display')
+
+          u = replace_once(
+              u,
+              "esc(u.role_name_ar||u.role_name||u.role_id)",
+              "esc(u.role||u.job_title||u.role_name_ar||u.role_name||u.role_id)",
+              'users details role display')
+
+          u = replace_once(
+              u,
+              "function toggleTheme(){const root=document.documentElement,next=root.getAttribute('data-theme')==='dark'?'light':'dark';root.setAttribute('data-theme',next);localStorage.setItem('users-theme',next);$('themeIcon').className=next==='dark'?'fas fa-sun':'fas fa-moon'}",
+              "function toggleTheme(){const root=document.documentElement,next=root.getAttribute('data-theme')==='dark'?'light':'dark';root.setAttribute('data-theme',next);localStorage.setItem('users-theme',next);$('themeIcon').textContent=next==='dark'?'🌞':'🌙'}",
+              'users theme toggle')
+
+          u = replace_once(
+              u,
+              "$('themeIcon').className=theme==='dark'?'fas fa-sun':'fas fa-moon';$('themeBtn').onclick=toggleTheme",
+              "$('themeIcon').textContent=theme==='dark'?'🌞':'🌙';$('themeBtn').onclick=toggleTheme",
+              'users theme init')
+
+          USERS.write_text(u, encoding='utf-8')
+          if len(u) < u_original_len * 0.90:
+              raise SystemExit('users.html became unexpectedly shorter')
+
+          # ---------- shifts.html ----------
+          s = SHIFTS.read_text(encoding='utf-8')
+          s_original_len = len(s)
+
+          s = replace_once(s, '<span\n                        id="themeIcon"\n                        aria-hidden="true">🌞</span>', '<span\n                        id="themeIcon"\n                        aria-hidden="true">🌙</span>', 'shifts initial theme icon')
+          s = replace_once(s, 'theme === "dark" ? "🌙" : "🌞"', 'theme === "dark" ? "🌞" : "🌙"', 'shifts theme mapping')
+
+          # Make the cashier list employee-ID based. The actual SQLite target (employee/user)
+          # is resolved in DatabaseHelper according to the real foreign-key schema.
+          s = replace_once(
+              s,
+              'option.value = person.user_id ?? "";\n                        option.dataset.employeeId = person.employee_id ?? person.id ?? "";\n\n                        option.textContent =',
+              'option.value = person.id ?? person.employee_id ?? "";\n                        option.dataset.employeeId = person.id ?? person.employee_id ?? "";\n                        option.dataset.persistedId = person.cashier_id ?? person.user_id ?? option.value;\n\n                        option.textContent =',
+              'shifts cashier employee id')
+          s = replace_regex(
+              s,
+              r'\n\s*if \(!option\.value\) \{\n\s*option\.disabled = true;\n\s*option\.textContent \+= " — لا يملك حساب مستخدم مرتبطاً";\n\s*\}\n',
+              '\n',
+              'remove cashier user-account validation UI')
+          s = replace_once(
+              s,
+              'const cashierId = cashier.user_id || cashier.id || "";',
+              'const cashierId = cashier.id ?? cashier.employee_id ?? "";',
+              'shifts cashier auto selection')
+
+          # Add the required "close open shift" action without disturbing existing controls.
+          close_button = '''\n        <button class="btn success" type="button" id="closeOpenShiftBtn" title="إغلاق الوردية المفتوحة">\n            <span aria-hidden="true">🔒</span> إغلاق الوردية المفتوحة\n        </button>\n'''
+          s = replace_once(
+              s,
+              '''        <button\n                class="icon-btn"\n                type="button"\n                onclick="reloadData()"\n                title="تحديث البيانات">\n\n            <i class="fas fa-sync"></i>\n\n        </button>\n''',
+              '''        <button\n                class="icon-btn"\n                type="button"\n                onclick="reloadData()"\n                title="تحديث البيانات">\n\n            <i class="fas fa-sync"></i>\n\n        </button>\n''' + close_button,
+              'shifts close-open button')
+
+          close_modal = '''\n<div class="overlay" id="openShiftOverlay">\n    <div class="modal">\n        <div class="modal-head">\n            <div>\n                <div class="modal-title">الوردية المفتوحة حالياً</div>\n                <div class="modal-subtitle">بيانات مقروءة مباشرة من SQLite</div>\n            </div>\n            <button class="close" type="button" onclick="closeOpenShiftModal()" aria-label="إغلاق النافذة">×</button>\n        </div>\n        <div class="modal-body">\n            <div class="validation-box" id="openShiftValidation"></div>\n            <div id="openShiftBody" class="shift-grid"></div>\n        </div>\n        <div class="modal-footer">\n            <button class="btn" type="button" onclick="closeOpenShiftModal()">تراجع</button>\n            <button class="btn success" type="button" id="confirmCloseOpenShiftBtn" onclick="confirmCloseOpenShift()">إغلاق</button>\n        </div>\n    </div>\n</div>\n'''
+          s = replace_once(s, '</body>', close_modal + '</body>', 'shifts close modal')
+
+          close_js = '''\n<script>\n(function(){\n    function parseCloseResult(raw){\n        if(raw && typeof raw === 'object') return raw;\n        try { return JSON.parse(raw); } catch(e) { return {success:false,error:'استجابة Android غير صالحة'}; }\n    }\n    function closeOpenShiftModal(){\n        const overlay=document.getElementById('openShiftOverlay');\n        if(overlay) overlay.classList.remove('show');\n        document.body.style.overflow='';\n    }\n    async function openCloseOpenShiftModal(){\n        const overlay=document.getElementById('openShiftOverlay'), body=document.getElementById('openShiftBody'), confirm=document.getElementById('confirmCloseOpenShiftBtn');\n        if(!overlay||!body||!confirm) return;\n        body.innerHTML='<div class="empty">جارٍ البحث عن الوردية المفتوحة من SQLite...</div>';\n        confirm.disabled=true;\n        overlay.classList.add('show'); document.body.style.overflow='hidden';\n        try{\n            if(!window.AndroidInterface||typeof window.AndroidInterface.getOpenShiftForManagement!=='function') throw new Error('عقد Android لإغلاق الوردية المفتوحة غير متاح');\n            const result=parseCloseResult(window.AndroidInterface.getOpenShiftForManagement());\n            if(result.success!==true) throw new Error(result.error||result.message||'تعذر العثور على الوردية المفتوحة');\n            const row=result.data||result.shift||result;\n            window.__openShiftManagementId=Number(row.id||row.shift_id||result.shift_id||0);\n            if(!window.__openShiftManagementId) throw new Error('قاعدة البيانات أعادت وردية مفتوحة دون معرف صالح');\n            const labels={shift_code:'رمز الوردية',station_name_ar:'المحطة',station_name:'المحطة',branch_id:'الفرع',company_id:'الشركة',shift_date:'تاريخ الوردية',shift_type:'نوع الوردية',start_time:'وقت البداية',end_time:'وقت النهاية',manager_name_ar:'مدير الوردية',manager_name:'مدير الوردية',cashier_name_ar:'أمين الصندوق',cashier_name:'أمين الصندوق',attendant_names_ar:'العاملون',attendant_names:'العاملون',opening_cash:'النقدية الافتتاحية',opening_bank:'الرصيد البنكي الافتتاحي',opening_credit:'الائتمان الافتتاحي',closing_cash:'النقدية الختامية',closing_bank:'الرصيد البنكي الختامي',closing_credit:'الائتمان الختامي',total_sales:'إجمالي المبيعات',total_fuel_sales:'مبيعات الوقود',total_product_sales:'مبيعات المنتجات',cash_variance:'الانحراف النقدي',status:'الحالة'};\n            const skip=new Set(['id','shift_id','station_id','manager_id','cashier_id','attendant_ids','station_name','station_name_ar','manager_name','manager_name_ar','cashier_name','cashier_name_ar','attendant_names','attendant_names_ar']);\n            const entries=[];\n            Object.keys(row).forEach(k=>{if(skip.has(k)||row[k]===null||row[k]===undefined||row[k]==='')return;entries.push(`<div class="info"><label>${esc(labels[k]||k)}</label><strong>${esc(typeof row[k]==='object'?JSON.stringify(row[k]):row[k])}</strong></div>`)});\n            body.innerHTML=entries.length?entries.join(''):'<div class="empty">لا توجد بيانات تشغيلية متاحة لهذه الوردية.</div>';\n            confirm.disabled=false;\n        }catch(e){\n            body.innerHTML=`<div class="error-state">${esc(e.message||e)}</div>`;\n            window.__openShiftManagementId=0;\n        }\n    }\n    async function confirmCloseOpenShift(){\n        const confirm=document.getElementById('confirmCloseOpenShiftBtn');\n        const id=Number(window.__openShiftManagementId||0);\n        if(!id) return;\n        confirm.disabled=true;\n        try{\n            if(!window.AndroidInterface||typeof window.AndroidInterface.closeOpenShiftForManagement!=='function') throw new Error('عقد Android لإغلاق الوردية غير متاح');\n            const result=parseCloseResult(window.AndroidInterface.closeOpenShiftForManagement());\n            if(result.success!==true) throw new Error(result.error||result.message||'فشل إغلاق الوردية');\n            toast(result.message||'تم إغلاق الوردية فعلياً في SQLite','success');\n            closeOpenShiftModal();\n            if(typeof window.reloadData==='function') await window.reloadData();\n        }catch(e){\n            const box=document.getElementById('openShiftValidation'); if(box){box.textContent=e.message||String(e);box.classList.add('show')}\n            toast(e.message||'فشل إغلاق الوردية','error');\n            confirm.disabled=false;\n        }\n    }\n    window.openCloseOpenShiftModal=openCloseOpenShiftModal;\n    window.closeOpenShiftModal=closeOpenShiftModal;\n    window.confirmCloseOpenShift=confirmCloseOpenShift;\n    document.addEventListener('DOMContentLoaded',function(){\n        const btn=document.getElementById('closeOpenShiftBtn');\n        if(btn) btn.addEventListener('click',openCloseOpenShiftModal);\n    });\n})();\n</script>\n'''
+          s = replace_once(s, '</body>', close_js + '</body>', 'shifts close modal script')
+          SHIFTS.write_text(s, encoding='utf-8')
+          if len(s) < s_original_len * 0.90:
+              raise SystemExit('shifts.html became unexpectedly shorter')
+
+          # ---------- DatabaseHelper.kt ----------
+          d = DB.read_text(encoding='utf-8')
+          d_original_len = len(d)
+
+          db_methods = r'''
+
+    // ============================================================
+    // Management repairs: users/stations/shifts — SQLite-backed only
+    // ============================================================
+
+    private fun managementColumns(table: String): Set<String> {
+        val result = linkedSetOf<String>()
+        getReadableDatabase().rawQuery("PRAGMA table_info(`$table`)", null).use { cursor ->
+            val nameIndex = cursor.getColumnIndex("name")
+            require(nameIndex >= 0) { "تعذر قراءة مخطط جدول $table" }
+            while (cursor.moveToNext()) {
+                result += cursor.getString(nameIndex)
             }
-            if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup,{once:true});else setup();
-          })();
-          </script>
-          '''
-          s=s.replace('</head>',ui+'\n</head>')
-          if len(s.encode())<base_size*0.95: raise SystemExit('first-user-setup was shortened unexpectedly')
-          p.write_text(s,encoding='utf-8')
+        }
+        require(result.isNotEmpty()) { "جدول SQLite غير موجود أو بلا أعمدة: $table" }
+        return result
+    }
 
-          lp=Path('app/src/main/assets/screens/login.html')
-          if lp.exists(): lp.write_text(lp.read_text(encoding='utf-8').replace('submitBtn.focus();',''),encoding='utf-8')
+    private fun managementRequired(columns: Set<String>, table: String, column: String) {
+        require(column in columns) { "جدول $table لا يحتوي العمود المطلوب $column" }
+    }
 
-          up=Path('app/src/main/assets/screens/users.html')
-          if up.exists():
-              x=up.read_text(encoding='utf-8')
-              pattern=r"function handleImageFile\(input\)\{.*?\}\nfunction collectUser"
-              replacement="function handleImageFile(input){const f=input.files&&input.files[0];if(!f)return;let nativeUri='';try{if(window.AndroidInterface&&typeof window.AndroidInterface.getLastSelectedFileUri==='function')nativeUri=String(window.AndroidInterface.getLastSelectedFileUri()||'').trim()}catch(e){}setVal('avatarPath',nativeUri||f.name);$('fileName').textContent='الملف المحدد: '+f.name;const url=URL.createObjectURL(f);$('imagePreview').innerHTML=`<img src=\\\"${url}\\\" alt=\\\"الصورة المحددة\\\">`}\nfunction collectUser"
-              x,n=re.subn(pattern,replacement,x,count=1)
-              if n!=1: raise SystemExit('users.html image handler not found')
-              x=x.replace("screens/main.html","../main.html")
-              up.write_text(x,encoding='utf-8')
+    private fun managementValue(cursor: android.database.Cursor, vararg names: String): String? {
+        for (name in names) {
+            val index = cursor.getColumnIndex(name)
+            if (index >= 0 && !cursor.isNull(index)) return cursor.getString(index)
+        }
+        return null
+    }
 
-          mp=Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt')
-          m=mp.read_text(encoding='utf-8')
-          marker='private var pendingFilePathCallback: ValueCallback<Array<Uri>>? = null'
-          if 'private var lastSelectedFileUri: String? = null' not in m:
-              if marker not in m: raise SystemExit('file chooser marker missing')
-              m=m.replace(marker,marker+'\n        private var lastSelectedFileUri: String? = null',1)
+    private fun managementLong(cursor: android.database.Cursor, vararg names: String): Long? {
+        val value = managementValue(cursor, *names) ?: return null
+        return value.toLongOrNull() ?: value.toDoubleOrNull()?.toLong()
+    }
+
+    private fun managementTableColumnInfo(table: String, column: String): Triple<String, Int, String?>? {
+        getReadableDatabase().rawQuery("PRAGMA table_info(`$table`)", null).use { cursor ->
+            val nameIndex = cursor.getColumnIndex("name")
+            val typeIndex = cursor.getColumnIndex("type")
+            val notNullIndex = cursor.getColumnIndex("notnull")
+            val defaultIndex = cursor.getColumnIndex("dflt_value")
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameIndex) == column) {
+                    return Triple(
+                        if (typeIndex >= 0 && !cursor.isNull(typeIndex)) cursor.getString(typeIndex) else "",
+                        if (notNullIndex >= 0) cursor.getInt(notNullIndex) else 0,
+                        if (defaultIndex >= 0 && !cursor.isNull(defaultIndex)) cursor.getString(defaultIndex) else null
+                    )
+                }
+            }
+        }
+        return null
+    }
+
+    private fun managementForeignKeyTarget(table: String, column: String): Pair<String, String>? {
+        getReadableDatabase().rawQuery("PRAGMA foreign_key_list(`$table`)", null).use { cursor ->
+            val fromIndex = cursor.getColumnIndex("from")
+            val tableIndex = cursor.getColumnIndex("table")
+            val toIndex = cursor.getColumnIndex("to")
+            while (cursor.moveToNext()) {
+                if (fromIndex >= 0 && cursor.getString(fromIndex) == column) {
+                    return Pair(cursor.getString(tableIndex), cursor.getString(toIndex))
+                }
+            }
+        }
+        return null
+    }
+
+    private fun managementNowForColumn(table: String, column: String): Any {
+        val type = managementTableColumnInfo(table, column)?.first?.uppercase().orEmpty()
+        return if (type.contains("INT") || type.contains("REAL") || type.contains("NUM")) {
+            System.currentTimeMillis()
+        } else {
+            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", java.util.Locale.US).format(java.util.Date())
+        }
+    }
+
+    private fun managementPut(values: android.content.ContentValues, columns: Set<String>, column: String, value: Any?) {
+        if (column !in columns || value == null) return
+        when (value) {
+            is Long -> values.put(column, value)
+            is Int -> values.put(column, value)
+            is Double -> values.put(column, value)
+            is Float -> values.put(column, value)
+            is Boolean -> values.put(column, if (value) 1 else 0)
+            else -> values.put(column, value.toString())
+        }
+    }
+
+    private fun managementEmployee(employeeId: Long): android.database.Cursor? {
+        return getReadableDatabase().query("employees", null, "id = ?", arrayOf(employeeId.toString()), null, null, null, "1")
+    }
+
+    private fun managementEmployeeIsActive(cursor: android.database.Cursor): Boolean {
+        val deleted = managementLong(cursor, "is_deleted")
+        if (deleted == 1L) return false
+        val active = managementLong(cursor, "is_active", "active")
+        if (active == 0L) return false
+        val status = managementValue(cursor, "status", "employment_status", "employee_status")?.trim()?.lowercase()
+        if (status in setOf("inactive", "terminated", "deleted", "suspended", "resigned")) return false
+        return true
+    }
+
+    private fun managementIsCashier(cursor: android.database.Cursor): Boolean {
+        val title = managementValue(cursor, "job_title")?.trim().orEmpty()
+        val titleAr = managementValue(cursor, "job_title_ar")?.trim().orEmpty()
+        val combined = (title + " " + titleAr).lowercase()
+        return combined.contains("cashier") || combined.contains("أمين صندوق")
+    }
+
+    private fun managementEmployeeMatchesStation(cursor: android.database.Cursor, stationId: Long): Boolean {
+        val station = managementLong(cursor, "station_id", "stationId") ?: return true
+        return station <= 0L || station == stationId
+    }
+
+    fun getStationsForManagement(): org.json.JSONArray {
+        val columns = managementColumns("stations")
+        managementRequired(columns, "stations", "id")
+        managementRequired(columns, "stations", "branch_id")
+        managementRequired(columns, "stations", "company_id")
+        val result = org.json.JSONArray()
+        val where = if ("is_deleted" in columns) " WHERE is_deleted = 0 OR is_deleted IS NULL" else ""
+        getReadableDatabase().rawQuery("SELECT * FROM stations$where ORDER BY id", null).use { cursor ->
+            while (cursor.moveToNext()) {
+                val item = org.json.JSONObject()
+                item.put("id", managementLong(cursor, "id") ?: 0L)
+                item.put("station_name_ar", managementValue(cursor, "station_name_ar", "name_ar"))
+                item.put("station_name", managementValue(cursor, "station_name", "name"))
+                item.put("station_code", managementValue(cursor, "station_code", "code"))
+                item.put("branch_id", managementLong(cursor, "branch_id"))
+                item.put("company_id", managementLong(cursor, "company_id"))
+                managementValue(cursor, "branch_name_ar", "branch_name")?.let { item.put("branch_name_ar", it) }
+                managementValue(cursor, "branch_name", "branch_name_ar")?.let { item.put("branch_name", it) }
+                managementValue(cursor, "company_name_ar", "company_name")?.let { item.put("company_name_ar", it) }
+                managementValue(cursor, "company_name", "company_name_ar")?.let { item.put("company_name", it) }
+                result.put(item)
+            }
+        }
+        return result
+    }
+
+    fun searchUsersForManagement(
+        query: String = "",
+        status: String? = null,
+        roleId: Long? = null,
+        stationId: Long? = null,
+        page: Int = 1,
+        pageSize: Int = 10
+    ): org.json.JSONObject {
+        val result = searchUsers(query, status, roleId, stationId, page, pageSize)
+        val rows = result.optJSONArray("data") ?: result.optJSONArray("rows")
+        if (rows != null) {
+            for (i in 0 until rows.length()) {
+                val row = rows.optJSONObject(i) ?: continue
+                val userId = row.optLong("id", row.optLong("user_id", 0L))
+                if (userId > 0L) {
+                    val persisted = getUserById(userId)
+                    if (persisted != null) {
+                        val keys = persisted.keys()
+                        while (keys.hasNext()) {
+                            val key = keys.next()
+                            if (!row.has(key) || row.isNull(key)) row.put(key, persisted.opt(key))
+                        }
+                    }
+                }
+                val station = row.optLong("station_id", 0L)
+                if (station > 0L) {
+                    val sc = managementColumns("stations")
+                    getReadableDatabase().query("stations", null, "id = ?", arrayOf(station.toString()), null, null, null, "1").use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            managementValue(cursor, "station_name_ar", "name_ar")?.let { row.put("station_name_ar", it) }
+                            managementValue(cursor, "station_name", "name")?.let { row.put("station_name", it) }
+                            managementLong(cursor, "branch_id")?.let { row.put("branch_id", it) }
+                            managementLong(cursor, "company_id")?.let { row.put("company_id", it) }
+                            managementValue(cursor, "branch_name_ar", "branch_name")?.let { row.put("branch_name_ar", it) }
+                            managementValue(cursor, "branch_name", "branch_name_ar")?.let { row.put("branch_name", it) }
+                            managementValue(cursor, "company_name_ar", "company_name")?.let { row.put("company_name_ar", it) }
+                            managementValue(cursor, "company_name", "company_name_ar")?.let { row.put("company_name", it) }
+                        }
+                    }
+                    if ("branch_id" !in sc || "company_id" !in sc) {
+                        throw IllegalStateException("جدول stations لا يحتوي branch_id/company_id؛ تم رفض استخدام بيانات بديلة")
+                    }
+                }
+                val employeeId = row.optLong("employee_id", 0L)
+                if (employeeId > 0L) {
+                    managementEmployee(employeeId)?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            managementValue(cursor, "job_title")?.let { row.put("job_title", it) }
+                            managementValue(cursor, "job_title_ar")?.let { row.put("job_title_ar", it) }
+                            managementValue(cursor, "department", "department_name")?.let { row.put("department", it) }
+                            managementValue(cursor, "full_name_ar", "full_name", "name")?.let { row.put("employee_name_ar", it) }
+                            managementValue(cursor, "full_name", "name")?.let { row.put("employee_name", it) }
+                        }
+                    }
+                }
+                val title = row.optString("job_title").trim()
+                if (title.isNotBlank()) row.put("role", title)
+            }
+        }
+        return result
+    }
+
+    fun prepareUserManagementPayload(input: org.json.JSONObject): org.json.JSONObject {
+        val data = org.json.JSONObject(input.toString())
+        val employeeId = data.optLong("employee_id", 0L)
+        require(employeeId > 0L) { "يجب تحديد الموظف المرتبط بالمستخدم" }
+        val userColumns = managementColumns("users")
+        val employeeColumns = managementColumns("employees")
+        managementRequired(employeeColumns, "employees", "id")
+        managementRequired(employeeColumns, "employees", "job_title")
+
+        managementEmployee(employeeId)?.use { cursor ->
+            require(cursor.moveToFirst()) { "الموظف المحدد غير موجود في SQLite" }
+            require(managementEmployeeIsActive(cursor)) { "الموظف المحدد غير نشط ولا يمكن ربط حساب المستخدم به" }
+            val jobTitle = managementValue(cursor, "job_title")?.trim().orEmpty()
+            require(jobTitle.isNotBlank()) { "الموظف المحدد لا يملك employees.job_title" }
+            data.put("employee_id", employeeId)
+            if ("job_title" in userColumns) data.put("job_title", jobTitle)
+            if ("department" in userColumns) {
+                val department = managementValue(cursor, "department", "department_name")
+                if (!department.isNullOrBlank()) data.put("department", department)
+            }
+            if ("role" in userColumns) data.put("role", jobTitle) else data.remove("role")
+        }
+
+        if ("role_id" in userColumns) {
+            var matchedRoleId = 0L
+            if ("roles" in getReadableDatabase().query("sqlite_master", arrayOf("name"), "type = ? AND name = ?", arrayOf("table", "roles"), null, null, null, "1").use { it.count() }) {
+                getReadableDatabase().query("roles", null, null, null, null, null, "id").use { cursor ->
+                    val jobTitle = data.optString("job_title").trim()
+                    while (cursor.moveToNext()) {
+                        val name = managementValue(cursor, "role_name_ar", "role_name", "role_code")?.trim().orEmpty()
+                        if (name.equals(jobTitle, ignoreCase = true) || name.lowercase() == jobTitle.lowercase()) {
+                            matchedRoleId = managementLong(cursor, "id") ?: 0L
+                            if (matchedRoleId > 0L) break
+                        }
+                    }
+                }
+            }
+            val roleInfo = managementTableColumnInfo("users", "role_id")
+            val requiredRole = roleInfo?.second == 1 && roleInfo.third == null
+            if (matchedRoleId > 0L) {
+                data.put("role_id", matchedRoleId)
+            } else if (requiredRole) {
+                throw IllegalStateException("لا يوجد سجل roles مطابق لـ employees.job_title: ${data.optString("job_title")}")
+            } else {
+                data.remove("role_id")
+            }
+        } else {
+            data.remove("role_id")
+        }
+
+        val stationId = data.optLong("station_id", 0L)
+        if (stationId > 0L) {
+            val stationColumns = managementColumns("stations")
+            managementRequired(stationColumns, "stations", "id")
+            managementRequired(stationColumns, "stations", "branch_id")
+            managementRequired(stationColumns, "stations", "company_id")
+            getReadableDatabase().query("stations", null, "id = ?", arrayOf(stationId.toString()), null, null, null, "1").use { cursor ->
+                require(cursor.moveToFirst()) { "المحطة المحددة غير موجودة في SQLite" }
+                managementLong(cursor, "branch_id")?.let { if ("branch_id" in userColumns) data.put("branch_id", it) }
+                managementLong(cursor, "company_id")?.let { if ("company_id" in userColumns) data.put("company_id", it) }
+            }
+        }
+        return data
+    }
+
+    fun getShiftFormContextForManagement(userId: Long): org.json.JSONObject {
+        val result = getShiftFormContext(userId)
+        val stationId = result.optJSONObject("station")?.optLong("id", 0L)
+            ?: result.optJSONObject("current_user")?.optLong("station_id", 0L)
+        result.put("cashiers", getCashiersForManagement(stationId))
+        return result
+    }
+
+    fun getCashiersForManagement(stationId: Long): org.json.JSONArray {
+        val columns = managementColumns("employees")
+        managementRequired(columns, "employees", "id")
+        managementRequired(columns, "employees", "job_title")
+        val result = org.json.JSONArray()
+        getReadableDatabase().query("employees", null, null, null, null, null, "id").use { cursor ->
+            while (cursor.moveToNext()) {
+                if (!managementEmployeeIsActive(cursor)) continue
+                if (stationId > 0L && !managementEmployeeMatchesStation(cursor, stationId)) continue
+                if (!managementIsCashier(cursor)) continue
+                val id = managementLong(cursor, "id") ?: continue
+                val item = org.json.JSONObject()
+                item.put("id", id)
+                item.put("employee_id", id)
+                managementValue(cursor, "full_name_ar", "full_name", "name", "employee_name")?.let { item.put("full_name_ar", it) }
+                managementValue(cursor, "full_name", "name", "employee_name")?.let { item.put("full_name", it) }
+                managementValue(cursor, "job_title")?.let { item.put("job_title", it) }
+                managementValue(cursor, "job_title_ar")?.let { item.put("job_title_ar", it) }
+                managementLong(cursor, "user_id")?.let { item.put("user_id", it) }
+                item.put("cashier_id", id)
+                result.put(item)
+            }
+        }
+        return result
+    }
+
+    private fun managementAttendantRelation(): Pair<String, Pair<String, String>>? {
+        val tables = mutableListOf<String>()
+        getReadableDatabase().rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", null).use { cursor ->
+            while (cursor.moveToNext()) tables += cursor.getString(0)
+        }
+        for (table in tables) {
+            val lower = table.lowercase()
+            if (!(lower.contains("shift") && (lower.contains("attendant") || lower.contains("employee") || lower.contains("worker") || lower.contains("staff")))) continue
+            val columns = managementColumns(table)
+            val shiftColumn = columns.firstOrNull { it.equals("shift_id", true) || it.equals("shiftId", true) } ?: continue
+            val personColumn = columns.firstOrNull { it.equals("employee_id", true) || it.equals("attendant_id", true) || it.equals("worker_id", true) || it.equals("staff_id", true) || it.equals("user_id", true) } ?: continue
+            return Pair(table, Pair(shiftColumn, personColumn))
+        }
+        return null
+    }
+
+    fun saveShiftRecordTypedForManagement(
+        stationIdFromUi: Int,
+        branchIdFromUi: Int,
+        shiftType: String,
+        startTime: String,
+        managerId: Long,
+        cashierEmployeeId: Long,
+        attendantIds: String,
+        openingCash: Double,
+        openingBank: Double,
+        openingCredit: Double,
+        remarks: String,
+        currentUserId: Long
+    ): Long {
+        val db = getWritableDatabase()
+        val columns = managementColumns("shifts")
+        managementRequired(columns, "shifts", "id")
+        managementRequired(columns, "shifts", "station_id")
+        managementRequired(columns, "shifts", "cashier_id")
+        managementRequired(columns, "shifts", "start_time")
+        require(cashierEmployeeId > 0L) { "يجب تحديد أمين الصندوق" }
+        val stationId = stationIdFromUi.toLong()
+        require(stationId > 0L) { "معرف المحطة غير صالح" }
+
+        managementEmployee(cashierEmployeeId)?.use { cursor ->
+            require(cursor.moveToFirst()) { "أمين الصندوق المحدد غير موجود في employees" }
+            require(managementEmployeeIsActive(cursor)) { "أمين الصندوق المحدد غير نشط" }
+            require(managementIsCashier(cursor)) { "الموظف المحدد لا يملك employees.job_title كأمين صندوق/CASHIER" }
+            require(managementEmployeeMatchesStation(cursor, stationId)) { "أمين الصندوق لا يتبع المحطة الحالية" }
+        }
+
+        val cashierTarget = managementForeignKeyTarget("shifts", "cashier_id")
+        val cashierIdToStore = if (cashierTarget?.first == "users") {
+            var userId = 0L
+            managementEmployee(cashierEmployeeId)?.use { cursor ->
+                if (cursor.moveToFirst()) userId = managementLong(cursor, "user_id") ?: 0L
+            }
+            require(userId > 0L) { "schema الحالي لـ shifts.cashier_id يشير إلى users.id؛ الموظف المختار لا يملك user_id مطلوباً لهذا الـ FK" }
+            userId
+        } else {
+            cashierEmployeeId
+        }
+
+        val managerIdToStore = managerId
+        val attendantList = attendantIds.split(',').map { it.trim() }.filter { it.isNotBlank() }.map { it.toLongOrNull() ?: throw IllegalArgumentException("attendant_ids يحتوي معرفاً غير صالح: $it") }.distinct()
+        for (employeeId in attendantList) {
+            managementEmployee(employeeId)?.use { cursor ->
+                require(cursor.moveToFirst()) { "العامل $employeeId غير موجود في employees" }
+                require(managementEmployeeIsActive(cursor)) { "العامل $employeeId غير نشط" }
+                require(managementEmployeeMatchesStation(cursor, stationId)) { "العامل $employeeId لا يتبع المحطة الحالية" }
+            }
+        }
+
+        db.beginTransaction()
+        try {
+            val openWhere = buildString {
+                append("station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = '' OR end_time = 0)")
+                if ("is_deleted" in columns) append(" AND (is_deleted = 0 OR is_deleted IS NULL)")
+            }
+            db.query("shifts", arrayOf("id"), openWhere, arrayOf(stationId.toString()), null, null, null, "1").use { cursor ->
+                if (cursor.moveToFirst()) throw IllegalStateException("توجد وردية مفتوحة بالفعل لهذه المحطة؛ يجب إغلاقها قبل إنشاء وردية جديدة")
+            }
+
+            val values = android.content.ContentValues()
+            managementPut(values, columns, "shift_code", "SH-" + System.currentTimeMillis().toString())
+            managementPut(values, columns, "shift_date", startTime.take(10))
+            managementPut(values, columns, "station_id", stationId)
+            if (branchIdFromUi > 0) managementPut(values, columns, "branch_id", branchIdFromUi.toLong())
+            managementPut(values, columns, "shift_type", shiftType)
+            managementPut(values, columns, "start_time", startTime)
+            managementPut(values, columns, "manager_id", managerIdToStore.takeIf { it > 0L })
+            managementPut(values, columns, "cashier_id", cashierIdToStore)
+            if ("attendant_ids" in columns) managementPut(values, columns, "attendant_ids", attendantIds)
+            managementPut(values, columns, "opening_cash", openingCash)
+            managementPut(values, columns, "opening_bank", openingBank)
+            managementPut(values, columns, "opening_credit", openingCredit)
+            if (remarks.isNotBlank()) {
+                managementPut(values, columns, "remarks", remarks)
+                managementPut(values, columns, "variance_reason", remarks)
+            }
+            if ("status" in columns) {
+                val info = managementTableColumnInfo("shifts", "status")
+                if (info?.first?.uppercase()?.contains("INT") == true) managementPut(values, columns, "status", 1)
+                else managementPut(values, columns, "status", "open")
+            }
+            if ("is_open" in columns) managementPut(values, columns, "is_open", 1)
+            if ("created_by" in columns) managementPut(values, columns, "created_by", currentUserId.takeIf { it > 0L })
+            if ("created_at" in columns) managementPut(values, columns, "created_at", managementNowForColumn("shifts", "created_at"))
+            if ("uuid" in columns && !values.containsKey("uuid")) managementPut(values, columns, "uuid", java.util.UUID.randomUUID().toString())
+
+            val insertedId = db.insertOrThrow("shifts", null, values)
+            if ("attendant_ids" !in columns && attendantList.isNotEmpty()) {
+                val relation = managementAttendantRelation() ?: throw IllegalStateException("لا يوجد عمود attendant_ids ولا جدول علاقة موثق بين shifts والعاملين")
+                val relationColumns = managementColumns(relation.first)
+                for (employeeId in attendantList) {
+                    val relationId = if (relation.second.second.equals("user_id", true)) {
+                        var uid = 0L
+                        managementEmployee(employeeId)?.use { cursor -> if (cursor.moveToFirst()) uid = managementLong(cursor, "user_id") ?: 0L }
+                        require(uid > 0L) { "جدول علاقة العاملين يستخدم user_id لكن الموظف $employeeId لا يملك user_id" }
+                        uid
+                    } else employeeId
+                    val rv = android.content.ContentValues()
+                    managementPut(rv, relationColumns, relation.second.first, insertedId)
+                    managementPut(rv, relationColumns, relation.second.second, relationId)
+                    db.insertOrThrow(relation.first, null, rv)
+                }
+            }
+            db.setTransactionSuccessful()
+            return insertedId
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun getOpenShiftForManagement(stationId: Long): org.json.JSONObject? {
+        val columns = managementColumns("shifts")
+        managementRequired(columns, "shifts", "id")
+        managementRequired(columns, "shifts", "station_id")
+        managementRequired(columns, "shifts", "end_time")
+        val where = buildString {
+            append("station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = '' OR end_time = 0)")
+            if ("is_deleted" in columns) append(" AND (is_deleted = 0 OR is_deleted IS NULL)")
+        }
+        var id = 0L
+        var count = 0
+        getReadableDatabase().query("shifts", arrayOf("id"), where, arrayOf(stationId.toString()), null, null, "start_time ASC").use { cursor ->
+            while (cursor.moveToNext()) { count++; id = cursor.getLong(0) }
+        }
+        if (count == 0) return null
+        if (count > 1) throw IllegalStateException("قاعدة البيانات تحتوي أكثر من وردية مفتوحة للمحطة الحالية؛ تم إيقاف الإغلاق التلقائي لحماية البيانات")
+        return getShiftReport(id, stationId)
+    }
+
+    fun closeOpenShiftForManagement(stationId: Long, currentUserId: Long): Long {
+        val db = getWritableDatabase()
+        val columns = managementColumns("shifts")
+        managementRequired(columns, "shifts", "id")
+        managementRequired(columns, "shifts", "station_id")
+        managementRequired(columns, "shifts", "end_time")
+        db.beginTransaction()
+        try {
+            val where = buildString {
+                append("station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = '' OR end_time = 0)")
+                if ("is_deleted" in columns) append(" AND (is_deleted = 0 OR is_deleted IS NULL)")
+            }
+            var id = 0L
+            var startRaw: String? = null
+            var currentStatus: String? = null
+            var count = 0
+            db.query("shifts", arrayOf("id", "start_time", "status"), where, arrayOf(stationId.toString()), null, null, "start_time ASC").use { cursor ->
+                val statusIndex = cursor.getColumnIndex("status")
+                while (cursor.moveToNext()) {
+                    count++
+                    id = cursor.getLong(cursor.getColumnIndexOrThrow("id"))
+                    startRaw = cursor.getString(cursor.getColumnIndexOrThrow("start_time"))
+                    if (statusIndex >= 0 && !cursor.isNull(statusIndex)) currentStatus = cursor.getString(statusIndex)
+                }
+            }
+            if (count == 0) throw IllegalStateException("لا توجد وردية مفتوحة حالياً لهذه المحطة")
+            if (count > 1) throw IllegalStateException("يوجد أكثر من وردية مفتوحة؛ تم رفض الإغلاق حتى تتم معالجة تعارض SQLite")
+
+            val endValue = managementNowForColumn("shifts", "end_time")
+            val values = android.content.ContentValues()
+            managementPut(values, columns, "end_time", endValue)
+            managementPut(values, columns, "closed_at", endValue)
+            managementPut(values, columns, "updated_at", if ("updated_at" in columns) managementNowForColumn("shifts", "updated_at") else null)
+            managementPut(values, columns, "closed_by", currentUserId.takeIf { it > 0L })
+            managementPut(values, columns, "updated_by", currentUserId.takeIf { it > 0L })
+            if ("status" in columns) {
+                val type = managementTableColumnInfo("shifts", "status")?.first?.uppercase().orEmpty()
+                if (type.contains("INT")) managementPut(values, columns, "status", 0)
+                else managementPut(values, columns, "status", if (currentStatus?.firstOrNull()?.isUpperCase() == true) "CLOSED" else "closed")
+            }
+            if ("is_open" in columns) managementPut(values, columns, "is_open", 0)
+            if ("duration_minutes" in columns && startRaw != null) {
+                val startMillis = startRaw!!.toLongOrNull() ?: runCatching {
+                    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", java.util.Locale.US).parse(startRaw!!)?.time
+                }.getOrNull()
+                val endMillis = endValue.toString().toLongOrNull() ?: runCatching {
+                    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", java.util.Locale.US).parse(endValue.toString())?.time
+                }.getOrNull()
+                if (startMillis != null && endMillis != null && endMillis >= startMillis) {
+                    managementPut(values, columns, "duration_minutes", (endMillis - startMillis) / 60000L)
+                }
+            }
+            val changed = db.update("shifts", values, "id = ? AND station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = '' OR end_time = 0)", arrayOf(id.toString(), stationId.toString()))
+            if (changed != 1) throw IllegalStateException("فشل UPDATE الحقيقي للوردية: لم يتغير سجل SQLite المتوقع")
+            db.setTransactionSuccessful()
+            return id
+        } finally {
+            db.endTransaction()
+        }
+    }
+'''
+
+          # Insert the management API immediately before the last top-level brace of DatabaseHelper.
+          if 'fun getStationsForManagement()' not in d:
+              idx = d.rfind('}')
+              if idx < 0: raise SystemExit('DatabaseHelper class closing brace not found')
+              d = d[:idx] + db_methods + '\n' + d[idx:]
+
+          DB.write_text(d, encoding='utf-8')
+          if len(d) < d_original_len * 0.90:
+              raise SystemExit('DatabaseHelper.kt became unexpectedly shorter')
+
+          # ---------- MainActivity.kt ----------
+          m = MAIN.read_text(encoding='utf-8')
+          m_original_len = len(m)
+
+          def function_body_replace(text, name, new_body, required=True):
+              marker = 'fun ' + name + '('
+              start = text.find(marker)
+              if start < 0:
+                  if required: raise SystemExit('Missing MainActivity function: ' + name)
+                  return text
+              brace = text.find('{', start)
+              if brace < 0: raise SystemExit('No opening brace for ' + name)
+              depth = 0
+              in_str = False
+              in_char = False
+              in_line = False
+              in_block = False
+              escape = False
+              i = brace
+              while i < len(text):
+                  c = text[i]
+                  n = text[i+1] if i+1 < len(text) else ''
+                  if in_line:
+                      if c == '\n': in_line = False
+                  elif in_block:
+                      if c == '*' and n == '/': in_block = False; i += 1
+                  elif in_str:
+                      if escape: escape = False
+                      elif c == '\\': escape = True
+                      elif c == '"': in_str = False
+                  elif in_char:
+                      if escape: escape = False
+                      elif c == '\\': escape = True
+                      elif c == "'": in_char = False
+                  else:
+                      if c == '/' and n == '/': in_line = True; i += 1
+                      elif c == '/' and n == '*': in_block = True; i += 1
+                      elif c == '"': in_str = True
+                      elif c == "'": in_char = True
+                      elif c == '{': depth += 1
+                      elif c == '}':
+                          depth -= 1
+                          if depth == 0:
+                              return text[:brace] + new_body + text[i+1:]
+                  i += 1
+              raise SystemExit('Unbalanced braces while replacing ' + name)
+
+          m = replace_once(m, 'dataResponse(db.getStations())', 'dataResponse(db.getStationsForManagement())', 'MainActivity getStations bridge')
+          m = replace_once(m, 'db.getShiftFormContext(\n                    activity.currentUserId\n                ).toString()', 'db.getShiftFormContextForManagement(\n                    activity.currentUserId\n                ).toString()', 'MainActivity shift context bridge')
+          m = replace_once(m, 'db.searchUsers(\n                    query = params.optString("query"),\n                    status = params.optString("status").takeIf { it.isNotBlank() },\n                    roleId = params.optLong("role_id", 0L).takeIf { it > 0L },\n                    stationId = params.optLong("station_id", 0L).takeIf { it > 0L },\n                    page = params.optInt("page", 1),\n                    pageSize = params.optInt("pageSize", 10)\n                ).toString()', 'db.searchUsersForManagement(\n                    query = params.optString("query"),\n                    status = params.optString("status").takeIf { it.isNotBlank() },\n                    roleId = params.optLong("role_id", 0L).takeIf { it > 0L },\n                    stationId = params.optLong("station_id", 0L).takeIf { it > 0L },\n                    page = params.optInt("page", 1),\n                    pageSize = params.optInt("pageSize", 10)\n                ).toString()', 'MainActivity search users bridge')
+
+          add_old = 'val rows = db.addUser(data)'
+          if add_old in m:
+              m = replace_once(m, add_old, 'val normalized = db.prepareUserManagementPayload(data)\n                val rows = db.addUser(normalized)', 'MainActivity addUser mapping')
+          else:
+              # Support variants where addUser returns an id instead of rows.
+              m = replace_regex(m, r'(fun addUser\(jsonData: String\): String \{.*?val data = JSONObject\(jsonData\).*?)(val\s+\w+\s*=\s*db\.addUser\(data\))', r'\1val normalized = db.prepareUserManagementPayload(data)\n                val rows = db.addUser(normalized)', 'MainActivity addUser mapping variant')
+
+          m = replace_once(m, 'val rows = db.updateUser(id, data)', 'val normalized = db.prepareUserManagementPayload(data)\n                val rows = db.updateUser(id, normalized)', 'MainActivity updateUser mapping')
+
+          save_body = '''{
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val currentUserId = activity.currentUserId
+                if (currentUserId <= 0L) return errorResponse("لا توجد جلسة مستخدم صالحة")
+                val stationScopeId = requireCurrentStationId(db, currentUserId)
+                if (stationIdFromUi > 0 && stationIdFromUi.toLong() != stationScopeId) {
+                    return errorResponse("معرف المحطة لا يطابق محطة الجلسة الحالية")
+                }
+                val id = db.saveShiftRecordTypedForManagement(
+                    stationIdFromUi = stationScopeId.toInt(),
+                    branchIdFromUi = branchId,
+                    shiftType = shiftType,
+                    startTime = startTime,
+                    managerId = managerId,
+                    cashierEmployeeId = cashierId,
+                    attendantIds = attendantIds,
+                    openingCash = openingCash,
+                    openingBank = openingBank,
+                    openingCredit = openingCredit,
+                    remarks = remarks,
+                    currentUserId = currentUserId
+                )
+                successResponse(true, "تم حفظ الوردية في SQLite فعلياً: $id")
+            } catch (e: Exception) {
+                DebugLogger.logException("Shift", e)
+                errorResponse(e.message)
+            }
+        }'''
+          m = function_body_replace(m, 'saveShiftRecordTyped', save_body)
+
+          # Add the image bridge and open/close-shift bridges inside WebAppInterface.
+          bridge_methods = r'''
+
+        @JavascriptInterface
+        fun getLastSelectedFileUri(): String {
+            return getActivity()?.getSharedPreferences("webview_file_picker", Context.MODE_PRIVATE)
+                ?.getString("last_uri", "") ?: ""
+        }
+
+        @JavascriptInterface
+        fun getImageDataUrl(path: String): String {
+            val raw = path.trim()
+            if (raw.isBlank()) return errorResponse("مسار الصورة فارغ")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val bytes = when {
+                    raw.startsWith("content://", ignoreCase = true) -> {
+                        activity.contentResolver.openInputStream(Uri.parse(raw))?.use { it.readBytes() }
+                            ?: throw IllegalStateException("تعذر فتح URI الصورة عبر ContentResolver")
+                    }
+                    raw.startsWith("file://", ignoreCase = true) -> java.io.File(Uri.parse(raw).path ?: "").readBytes()
+                    else -> java.io.File(raw).readBytes()
+                }
+                require(bytes.isNotEmpty()) { "ملف الصورة فارغ" }
+                require(bytes.size <= 5 * 1024 * 1024) { "حجم صورة المستخدم يتجاوز 5MB" }
+                val mime = if (raw.startsWith("content://", ignoreCase = true)) {
+                    activity.contentResolver.getType(Uri.parse(raw)) ?: "image/*"
+                } else {
+                    android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(
+                        raw.substringAfterLast('.', "").lowercase()
+                    ) ?: "image/*"
+                }
+                val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                JSONObject().apply {
+                    put("success", true)
+                    put("data", "data:$mime;base64,$encoded")
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("UserAvatar", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getOpenShiftForManagement(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val currentUserId = activity.currentUserId
+                if (currentUserId <= 0L) return errorResponse("لا توجد جلسة مستخدم صالحة")
+                val stationId = requireCurrentStationId(db, currentUserId)
+                val report = db.getOpenShiftForManagement(stationId)
+                    ?: return errorResponse("لا توجد وردية مفتوحة حالياً لهذه المحطة")
+                dataResponse(report)
+            } catch (e: Exception) {
+                DebugLogger.logException("OpenShift", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun closeOpenShiftForManagement(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val currentUserId = activity.currentUserId
+                if (currentUserId <= 0L) return errorResponse("لا توجد جلسة مستخدم صالحة")
+                val stationId = requireCurrentStationId(db, currentUserId)
+                val id = db.closeOpenShiftForManagement(stationId, currentUserId)
+                successResponse(true, "تم إغلاق الوردية $id فعلياً في SQLite")
+            } catch (e: Exception) {
+                DebugLogger.logException("CloseOpenShift", e)
+                errorResponse(e.message)
+            }
+        }
+'''
+          # Insert before WebAppInterface's closing brace.
+          marker = 'class WebAppInterface'
+          cls = m.find(marker)
+          if cls < 0: raise SystemExit('WebAppInterface class not found')
+          brace = m.find('{', cls)
+          if brace < 0: raise SystemExit('WebAppInterface opening brace not found')
+          depth = 0; in_str=False; in_char=False; in_line=False; in_block=False; escape=False; end=None; i=brace
+          while i < len(m):
+              c=m[i]; n=m[i+1] if i+1<len(m) else ''
+              if in_line:
+                  if c=='\n': in_line=False
+              elif in_block:
+                  if c=='*' and n=='/': in_block=False; i+=1
+              elif in_str:
+                  if escape: escape=False
+                  elif c=='\\': escape=True
+                  elif c=='"': in_str=False
+              elif in_char:
+                  if escape: escape=False
+                  elif c=='\\': escape=True
+                  elif c=="'": in_char=False
+              else:
+                  if c=='/' and n=='/': in_line=True; i+=1
+                  elif c=='/' and n=='*': in_block=True; i+=1
+                  elif c=='"': in_str=True
+                  elif c=="'": in_char=True
+                  elif c=='{': depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth==0: end=i; break
+              i+=1
+          if end is None: raise SystemExit('WebAppInterface braces are unbalanced')
           if 'fun getLastSelectedFileUri()' not in m:
-              target='@JavascriptInterface\n        fun getStations(): String {'
-              if target not in m: raise SystemExit('getStations insertion point missing')
-              m=m.replace(target,'@JavascriptInterface\n        fun getLastSelectedFileUri(): String = lastSelectedFileUri.orEmpty()\n\n        @JavascriptInterface\n        fun getStations(): String {',1)
-          if 'FLAG_GRANT_PERSISTABLE_URI_PERMISSION' not in m:
-              m=m.replace('Intent.ACTION_OPEN_DOCUMENT).apply {','Intent.ACTION_OPEN_DOCUMENT).apply {\n                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)',1)
-          if 'lastSelectedFileUri = uri.toString()' not in m:
-              m=m.replace('callback.onReceiveValue(results)','results?.firstOrNull()?.let { uri ->\n                    lastSelectedFileUri = uri.toString()\n                    try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: SecurityException) { }\n                }\n                callback.onReceiveValue(results)',1)
-          mp.write_text(m,encoding='utf-8')
-          print('Targeted repairs applied.')
+              m = m[:end] + bridge_methods + '\n' + m[end:]
+
+          # Persist the selected URI from the existing WebView file chooser callback.
+          if '"webview_file_picker"' not in m or 'putString("last_uri"' not in m:
+              old = 'callback.onReceiveValue(results)'
+              if old not in m:
+                  raise SystemExit('Existing WebView file chooser callback not found')
+              new = '''results?.firstOrNull()?.let { uri ->
+                    getSharedPreferences("webview_file_picker", Context.MODE_PRIVATE).edit()
+                        .putString("last_uri", uri.toString())
+                        .apply()
+                    try {
+                        contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    } catch (e: SecurityException) {
+                        DebugLogger.logException("UserAvatarUriPermission", e)
+                    }
+                }
+                callback.onReceiveValue(results)'''
+              m = replace_once(m, old, new, 'WebView file chooser URI persistence')
+
+          # Ensure ACTION_OPEN_DOCUMENT asks for persistable read access.
+          if 'Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION' not in m:
+              pat = r'(Intent\(Intent\.ACTION_OPEN_DOCUMENT\)\.apply \{)'
+              m = replace_regex(m, pat, r'\1\n            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)', 'ACTION_OPEN_DOCUMENT persistable permission')
+
+          MAIN.write_text(m, encoding='utf-8')
+          if len(m) < m_original_len * 0.90:
+              raise SystemExit('MainActivity.kt became unexpectedly shorter')
+
+          print('Complete users/shifts repair source transformations applied.')
           PY
-      - name: Targeted static verification
+
+      - name: Static contract and JavaScript verification
         run: |
           set -euo pipefail
-          test -s app/src/main/assets/screens/first-user-setup.html
-          grep -Fq 'first-user-setup-final-keyboard' app/src/main/assets/screens/first-user-setup.html
-          grep -Fq 'first-user-setup-final-ui' app/src/main/assets/screens/first-user-setup.html
-          ! grep -Fq 'submitBtn.focus();' app/src/main/assets/screens/login.html
-          grep -Fq 'getLastSelectedFileUri' app/src/main/assets/screens/users.html
-          grep -Fq 'getLastSelectedFileUri' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq 'fun getStations' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq 'fun getCustomers' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq 'fun getVehicles' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq 'fun getLatestCustomerSaleForDelivery' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq 'fun saveDeliveryRecord' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq 'fun saveShiftRecordTyped' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq 'fun updateFuelSaleRecord' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq 'fun deleteFuelSaleRecord' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq 'getCustomers' app/src/main/assets/screens/deliveries.html
-          grep -Fq 'getLatestCustomerSaleForDelivery' app/src/main/assets/screens/deliveries.html
-          grep -Fq 'getVehicles' app/src/main/assets/screens/deliveries.html
-          grep -Fq 'getCurrentShift' app/src/main/assets/screens/deliveries.html
-          grep -Fq 'saveDeliveryRecord' app/src/main/assets/screens/deliveries.html
-          grep -Fq 'cashier_id' app/src/main/assets/screens/shifts.html
-          grep -Fq 'getShiftFormContext' app/src/main/assets/screens/shifts.html
-          grep -Fq 'saveFuelSaleRecord' app/src/main/assets/screens/fuel-sales.html
-          grep -Fq 'updateFuelSaleRecord' app/src/main/assets/screens/fuel-sales.html
-          grep -Fq 'deleteFuelSaleRecord' app/src/main/assets/screens/fuel-sales.html
-          echo 'Targeted static verification PASS.'
-      - name: Regression tests
-        run: |
-          set -euo pipefail
-          for t in employee-department-job-title-runtime-test.js employee-management-contract-test.js activity-bridge-contract-regression-test.js activity-log-database-bridge-regression-test.js ai-assistant-dom-lifecycle-regression-test.js; do
-            [ ! -f "$t" ] || node "$t"
-          done
-      - name: Gradle tests and release APK
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+
+          users=Path('app/src/main/assets/screens/users.html').read_text(encoding='utf-8')
+          shifts=Path('app/src/main/assets/screens/shifts.html').read_text(encoding='utf-8')
+          main=Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt').read_text(encoding='utf-8')
+          db=Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt').read_text(encoding='utf-8')
+
+          checks={
+            'users real station fields': 'getStationsForManagement' in main and 'branch_id' in db and 'company_id' in db,
+            'users image URI bridge': 'getLastSelectedFileUri' in main and 'getImageDataUrl' in main and 'last_uri' in main,
+            'users role hidden': '<input id="roleId" type="hidden"' in users,
+            'users employee job_title source': 'syncEmployeeDerivedFields' in users and 'employee?.job_title' in users,
+            'users no role dropdown': '<select id="roleId"' not in users,
+            'users language not hardcoded': "preferred_language:$('preferredLanguage').value" in users,
+            'users password-change preservation': 'must_change_password:(state.editingId===0?1:' in users,
+            'users search enrichment': 'searchUsersForManagement' in main and 'fun searchUsersForManagement' in db,
+            'cashier employee id': 'option.value = person.id ?? person.employee_id ?? "";' in shifts,
+            'cashier no user-account UI validation': 'لا يملك حساب مستخدم مرتبطاً' not in shifts,
+            'typed shift save bridge': 'saveShiftRecordTypedForManagement' in main and 'fun saveShiftRecordTypedForManagement' in db,
+            'open shift bridge': 'getOpenShiftForManagement' in main and 'fun getOpenShiftForManagement' in db,
+            'close shift bridge': 'closeOpenShiftForManagement' in main and 'fun closeOpenShiftForManagement' in db,
+            'close shift button': 'closeOpenShiftBtn' in shifts,
+            'close shift modal': 'openShiftOverlay' in shifts and 'confirmCloseOpenShift' in shifts,
+            'close is real SQLite update': 'db.update("shifts"' in db and 'setTransactionSuccessful' in db,
+            'open-shift uniqueness check': 'توجد وردية مفتوحة بالفعل لهذه المحطة' in db,
+            'no Math.random in target files': not any('Math.random(' in x for x in (users,shifts,main,db)),
+          }
+          failed=[k for k,v in checks.items() if not v]
+          for k,v in checks.items(): print(('PASS' if v else 'FAIL')+' — '+k)
+          if failed: raise SystemExit('Static verification failed: '+', '.join(failed))
+
+          # Every user form field is either persisted by collectUser or explicitly system-managed/read-only.
+          form_ids=set(re.findall(r'<(?:input|select|textarea)[^>]*\bid="([A-Za-z0-9_]+)"', users))
+          persisted_ids={
+            'username','fullName','fullNameAr','displayName','email','phone','nationalId','passportNumber','nationality','gender','birthDate','hireDate',
+            'employeeId','jobTitle','department','stationId','branchId','companyId','password','status','statusReason','passwordExpiryDays','passwordExpiryDate',
+            'sessionTimeout','deviceLimit','twoFactorMethod','biometricType','preferredLanguage','theme','timezone','dateFormat','deviceId','lockedUntil',
+            'emailVerified','phoneVerified','avatarPath','remarks','extraData','roleId'
+          }
+          system_readonly={'userId','failedLoginAttempts','lastPasswordChange','lastLoginAt','lastLoginIp','lastLoginDevice','uuidField','createdAt','updatedAt','deletedAt','createdBy','updatedBy','deletedBy','isDeleted','syncStatus','syncVersion','syncAt','passwordHash','passwordSalt','otpSecret','publicKey','signCount','webauthnId','credentialId','hasBiometrics','editUserId','avatarFile','groupId'}
+          uncovered=sorted(x for x in form_ids if x not in persisted_ids and x not in system_readonly and not x.startswith('group'))
+          if uncovered: raise SystemExit('User UI fields without an explicit persistence/system mapping: '+', '.join(uncovered))
+          print('PASS — user UI field mapping coverage')
+
+          # Validate all inline JavaScript blocks syntactically without executing DOM-dependent code.
+          for path in ('app/src/main/assets/screens/users.html','app/src/main/assets/screens/shifts.html'):
+              text=Path(path).read_text(encoding='utf-8')
+              scripts=re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>',text,re.S|re.I)
+              for i,script in enumerate(scripts,1):
+                  p=Path('/tmp')/(Path(path).stem+f'-script-{i}.js')
+                  p.write_text(script,encoding='utf-8')
+                  subprocess.run(['node','--check',str(p)],check=True)
+              print('PASS — JavaScript syntax: '+path)
+          PY
+          git diff --check
+          echo '--- DIFF STAT BEFORE TESTS ---'
+          git diff --stat
+
+      - name: Kotlin unit tests and release build
         run: |
           set -euo pipefail
           chmod +x gradlew
           ./gradlew testDebugUnitTest assembleRelease --no-daemon
-      - name: Upload verified APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Station_Abo_Ahmed_Release_APK_verified
-          path: app/build/outputs/**/*.apk
-          if-no-files-found: error
-      - name: Review diff, commit and push
+
+      - name: Optional device verification (no SDK installation)
         run: |
           set -euo pipefail
-          git diff --check
+          if command -v adb >/dev/null 2>&1 && adb devices | awk 'NR>1 && $2=="device" {found=1} END{exit(found?0:1)}'; then
+            echo 'A connected Android device is available; running connected tests.'
+            ./gradlew connectedDebugAndroidTest --no-daemon
+            echo 'E2E_DEVICE_TEST=PASS'
+          else
+            echo 'E2E_DEVICE_TEST=BLOCKED: no connected Android device/emulator; Android SDK was not installed.'
+          fi
+
+      - name: Review diff, commit and push target branch
+        run: |
+          set -euo pipefail
           echo '--- STATUS ---'
-          git status --short
+          git status --short --branch
           echo '--- DIFF STAT ---'
           git diff --stat
+          echo '--- CHANGED FILES ---'
+          git diff --name-only
+          git diff --check
+          if git diff --name-only | grep -vE '^(app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity\.kt|app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper\.kt|app/src/main/assets/screens/users\.html|app/src/main/assets/screens/shifts\.html|\.github/workflows/ai-targeted-repair\.yml)$'; then
+            echo 'ERROR: unrelated files changed.'
+            exit 1
+          fi
+          # The workflow itself is temporary; remove it from the final tree so the project is left with no new workflow.
           rm -f .github/workflows/ai-targeted-repair.yml
-          git add app/src/main/assets/screens/first-user-setup.html app/src/main/assets/screens/login.html app/src/main/assets/screens/users.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+          git add app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt app/src/main/assets/screens/users.html app/src/main/assets/screens/shifts.html
           git diff --cached --check
-          git status --short
+          echo '--- CACHED DIFF STAT ---'
           git diff --cached --stat
-          git commit -m "fix: complete requested WebView and SQLite flows"
+          git commit -m "fix: repair users and shifts SQLite WebView flows"
           git push origin HEAD:feature/ai-health-sqlite
+          echo "FINAL_HEAD=$(git rev-parse HEAD)"
+          echo 'Push completed to origin/feature/ai-health-sqlite.'
