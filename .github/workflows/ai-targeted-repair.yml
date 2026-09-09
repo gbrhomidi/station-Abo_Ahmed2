@@ -61,8 +61,9 @@ jobs:
           replacements={
             'if ("roles" in getReadableDatabase().query("sqlite_master", arrayOf("name"), "type = ? AND name = ?", arrayOf("table", "roles"), null, null, null, "1").use { it.count() }) {':'if (getReadableDatabase().query("sqlite_master", arrayOf("name"), "type = ? AND name = ?", arrayOf("table", "roles"), null, null, null, "1").use { it.moveToFirst() }) {',
             'result.put("cashiers", getCashiersForManagement(stationId))':'result.put("cashiers", getCashiersForManagement(stationId ?: 0L))',
-            'return getShiftReport(id, stationId)':'return getShiftReport(id, stationId).optJSONObject(0)',
-            'return getShiftReport(id.toInt(), stationId.toInt()).optJSONObject(0)':'return getShiftReport(id, stationId).optJSONObject(0)',
+            'return getShiftReport(id, stationId).optJSONObject(0)':'return getShiftReport(id, stationId.toInt()).optJSONObject(0)',
+            'return getShiftReport(id.toInt(), stationId.toInt()).optJSONObject(0)':'return getShiftReport(id, stationId.toInt()).optJSONObject(0)',
+            'return getShiftReport(id, stationId)':'return getShiftReport(id, stationId.toInt()).optJSONObject(0)',
           }
           for old,new in replacements.items():
               if old in s: s=s.replace(old,new,1)
