@@ -19,7 +19,11 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "feature/ai-health-sqlite"
-          test "$(git remote get-url origin)" = "https://github.com/gbrhomidi/station-Abo_Ahmed2.git"
+          origin="$(git remote get-url origin)"
+          case "$origin" in
+            https://github.com/gbrhomidi/station-Abo_Ahmed2|https://github.com/gbrhomidi/station-Abo_Ahmed2.git) ;;
+            *) echo "ERROR: wrong origin: $origin"; exit 1 ;;
+          esac
           git show 33b705ecdc993761e5465c63beac5bf2ddf6948b:.github/workflows/ai-targeted-repair.yml > /tmp/repair.yml
           awk 'BEGIN{started=0} /^[[:space:]]*python3 - <<'"'"'PY'"'"'[[:space:]]*$/{if(!started){started=1;next}} started && /^[[:space:]]*PY[[:space:]]*$/{exit} started{line=$0; sub(/^          /,"",line); print line}' /tmp/repair.yml > /tmp/repair.py
           test -s /tmp/repair.py
