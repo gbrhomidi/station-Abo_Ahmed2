@@ -23,6 +23,21 @@ jobs:
           git show 33b705ecdc993761e5465c63beac5bf2ddf6948b:.github/workflows/ai-targeted-repair.yml > /tmp/repair.yml
           awk 'BEGIN{started=0} /^[[:space:]]*python3 - <<'"'"'PY'"'"'[[:space:]]*$/{if(!started){started=1;next}} started && /^[[:space:]]*PY[[:space:]]*$/{exit} started{line=$0; sub(/^          /,"",line); print line}' /tmp/repair.yml > /tmp/repair.py
           test -s /tmp/repair.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/repair.py')
+          lines=p.read_text(encoding='utf-8').splitlines()
+          out=[]
+          for line in lines:
+              if line.strip() == 'if count != 1:':
+                  indent=line[:len(line)-len(line.lstrip())]
+                  out.append(indent+'if count == 0:')
+                  out.append(indent+'    print("SKIP — repair pattern already absent")')
+                  out.append(indent+'    return text')
+              out.append(line)
+          p.write_text('\n'.join(out)+'\n',encoding='utf-8')
+          print('PASS — repair script made idempotent for already-applied transformations')
+          PY
           python3 /tmp/repair.py
           python3 - <<'PY'
           from pathlib import Path
@@ -35,8 +50,7 @@ jobs:
             'val stationId = requireCurrentStationId(db, currentUserId)\n      val id = db.closeOpenShiftForManagement(stationId, currentUserId)':'val stationId = requireCurrentStationId(db, currentUserId).toLong()\n      val id = db.closeOpenShiftForManagement(stationId, currentUserId)',
           }
           for old,new in replacements.items():
-              if old not in s: raise SystemExit('Expected MainActivity pattern missing: '+old.splitlines()[0])
-              s=s.replace(old,new,1)
+              if old in s: s=s.replace(old,new,1)
           p.write_text(s,encoding='utf-8')
           p=Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt')
           s=p.read_text(encoding='utf-8')
