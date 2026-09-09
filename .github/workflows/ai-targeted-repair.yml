@@ -3,120 +3,56 @@ on:
   push:
     branches: ["feature/ai-health-sqlite"]
 permissions:
-  contents: write
+  contents: read
 jobs:
-  repair:
+  inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout target branch
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: feature/ai-health-sqlite
-
-      - name: Restore and repair first-user-setup
+      - name: Inspect actual contracts
         env:
           BASE: 9d44b850b80d1dfcdca05035030391680ccbe8b4
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import os, re, subprocess
-          path = Path('app/src/main/assets/screens/first-user-setup.html')
-          baseline = subprocess.check_output(['git','show',f'{os.environ["BASE"]}:app/src/main/assets/screens/first-user-setup.html'], text=True)
-          s = baseline
-          baseline_size = len(s.encode())
-
-          # Restore the complete original page first; only targeted additions follow.
-          s = re.sub(r'(<input[^>]*id=["\'](?:branchId|branch_id)["\'][^>]*?)\s+readonly(?:\s*=\s*["\'][^"\']*["\'])?', r'\1', s, flags=re.I)
-          s = re.sub(r'(<input[^>]*id=["\'](?:branchId|branch_id)["\'][^>]*?)\s+disabled(?:\s*=\s*["\'][^"\']*["\'])?', r'\1', s, flags=re.I)
-
-          behavior = r'''
-          <style id="first-user-setup-targeted-ui-fix">
-          #stationId,#station_id,#branchId,#branch_id,#department,#departmentId,#jobTitle,#job_title{min-height:48px!important;border-radius:14px!important;padding:10px 14px!important;text-align:center!important;width:100%!important}
-          #stationId,#station_id,#department,#departmentId,#jobTitle,#job_title{cursor:pointer}
-          #branchId,#branch_id{cursor:text}
-          .first-user-save-floating{position:fixed!important;left:16px!important;right:16px!important;bottom:calc(16px + env(safe-area-inset-bottom,0px))!important;width:auto!important;z-index:2147483647!important;margin:0!important;transform:translateZ(0)}
-          body{padding-bottom:108px!important}
-          </style>
-          <script id="first-user-setup-targeted-behavior">
-          (function(){
-            function byLabel(text){const a=Array.from(document.querySelectorAll('label'));const l=a.find(x=>(x.textContent||'').replace(/\s+/g,' ').trim().includes(text));if(!l)return null;const id=l.htmlFor||l.getAttribute('for');return id?document.getElementById(id):l.parentElement?.querySelector('input,select,textarea')}
-            function nextControl(el){const a=Array.from(document.querySelectorAll('input,select,textarea,button'));const i=a.indexOf(el);return i>=0?a[i+1]:null}
-            function install(){
-              const u=byLabel('اسم المستخدم');
-              if(u&&!u.dataset.enterFixed){u.dataset.enterFixed='1';u.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();const n=nextControl(u);if(n&&!n.disabled)n.focus()}},true)}
-              const phone=byLabel('رقم الهاتف');
-              if(phone&&!phone.dataset.numericFixed){const c=phone.cloneNode(true);c.removeAttribute('oninput');c.removeAttribute('onkeyup');c.removeAttribute('onkeypress');c.dataset.numericFixed='1';phone.replaceWith(c);c.addEventListener('input',function(){const p=this.selectionStart;this.value=this.value.replace(/[^0-9]/g,'');if(p!==null){const q=Math.min(p,this.value.length);this.setSelectionRange(q,q)}})}
-              const branch=byLabel('رقم الفرع');
-              if(branch){branch.removeAttribute('readonly');branch.removeAttribute('disabled');branch.setAttribute('inputmode','numeric');branch.setAttribute('pattern','[0-9]+')}
-              const save=Array.from(document.querySelectorAll('button,input[type=button],input[type=submit]')).find(x=>(x.textContent||x.value||'').replace(/\s+/g,' ').trim().includes('حفظ المستخدم الاول'));
-              if(save&&!save.classList.contains('first-user-save-floating'))save.classList.add('first-user-save-floating');
-              if(save&&window.visualViewport&&!save.dataset.viewportFixed){save.dataset.viewportFixed='1';const f=()=>{const k=Math.max(0,window.innerHeight-window.visualViewport.height-window.visualViewport.offsetTop);save.style.bottom=(k+16)+'px'};window.visualViewport.addEventListener('resize',f);window.visualViewport.addEventListener('scroll',f);window.addEventListener('resize',f);f()}
-            }
-            if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
-          })();
-          </script>
-          '''
-          s = s.replace('</head>', behavior + '\n</head>')
-          if len(s.encode()) < baseline_size * 0.85: raise SystemExit('first-user-setup was unexpectedly shortened')
-          path.write_text(s,encoding='utf-8')
-          print(f'first-user-setup: {baseline_size} -> {path.stat().st_size} bytes')
+          import re, subprocess, os
+          out=[]
+          def section(title): out.extend(['\n'+'='*80, title, '='*80])
+          files=['app/src/main/assets/screens/first-user-setup.html','app/src/main/assets/screens/users.html','app/src/main/assets/screens/shifts.html','app/src/main/assets/screens/login.html','app/src/main/assets/screens/deliveries.html','app/src/main/assets/main.html','app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt','app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt']
+          section('FILE SIZES')
+          for f in files:
+              p=Path(f); out.append(f'{f}: {p.stat().st_size if p.exists() else "MISSING"}')
+          section('DIFF STAT FROM BASE')
+          out.append(subprocess.check_output(['git','diff','--stat',os.environ['BASE']+'..HEAD'],text=True))
+          for f in files:
+              p=Path(f)
+              if not p.exists(): continue
+              s=p.read_text(errors='replace')
+              section(f'PATTERNS: {f}')
+              for term in ['getStations','getCustomers','getLatestCustomerSaleForDelivery','getVehicles','getShiftFormContext','saveShiftRecord','updateShiftRecord','deleteShiftRecord','updateFuelSaleRecord','deleteFuelSaleRecord','resolveFuelSaleRecord','avatar_path','job_title','cashier_id','employee_id','user_id','checkPermission','requirePermission','sales.read','sales.update','sales.delete','users.read','main.html','submitBtn.focus','open shift','close shift']:
+                  if term in s: out.append(f'FOUND: {term}')
+              if f.endswith('DatabaseHelper.kt'):
+                  for table in ['stations','users','employees','shifts','deliveries','fuel_sales','sales_transactions']:
+                      m=re.search(r'(?is)(CREATE TABLE(?: IF NOT EXISTS)?\\s+`?'+re.escape(table)+r'`?.{0,8000}?\\n\\s*\\})',s)
+                      if m: out.append('\nSCHEMA '+table+'\n'+m.group(0)[:8500])
+              if f.endswith('MainActivity.kt'):
+                  for name in ['getStations','getCustomers','getVehicles','getShiftFormContext','saveShiftRecordTyped','saveShiftRecord','updateShiftRecord','deleteShiftRecord','getLatestCustomerSaleForDelivery','updateFuelSaleRecord','deleteFuelSaleRecord','resolveFuelSaleRecord']:
+                      m=re.search(r'(?s)(?:@JavascriptInterface\\s*)?(?:fun|private fun|public fun)\\s+'+re.escape(name)+r'\\s*\\([^)]*\\)[^{]*\\{.*?(?=\\n\\s*(?:@JavascriptInterface|(?:private |public |internal )?fun |})',s)
+                      if m: out.append('\nMETHOD '+name+'\n'+m.group(0)[:12000])
+              if f.endswith('.html'):
+                  for name in ['handleImageFile','saveUser','populateModalSelects','renderCashierOptions','validateForm','saveShift','closeShift','goHome','getCustomers','getLatestCustomerSaleForDelivery','getOpenShift']:
+                      m=re.search(r'(?s)(?:async\\s+)?function\\s+'+re.escape(name)+r'\\s*\\([^)]*\\)\\s*\\{.*?(?=\\n\\s*function |\\n\\s*async function |</script>)',s)
+                      if m: out.append('\nFUNCTION '+name+'\n'+m.group(0)[:12000])
+          Path('contract-diagnostics.txt').write_text('\n'.join(out),encoding='utf-8')
           PY
-
-      - name: Static contract validation
-        run: |
-          set -euo pipefail
-          grep -Fq "getStations" app/src/main/assets/screens/first-user-setup.html
-          grep -Fq "stations" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
-          grep -Fq "fun getStations" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq "getCustomers" app/src/main/assets/screens/deliveries.html
-          grep -Fq "fun getCustomers" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq "getLatestCustomerSaleForDelivery" app/src/main/assets/screens/deliveries.html
-          grep -Fq "getVehicles" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq "getShiftFormContext" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq "saveShiftRecord" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq "updateFuelSaleRecord" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq "deleteFuelSaleRecord" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Eq "location\.href=['\"]\.\./main\.html['\"]|window\.location\.href\s*=\s*['\"]\.\./main\.html['\"]" app/src/main/assets/screens/users.html
-          ! grep -Fq "submitBtn.focus();" app/src/main/assets/screens/login.html
-          ! grep -Fq "Error invoking getCustomers: Method not found" app/src/main/assets/screens/deliveries.html
-          grep -Fq "cashier_id" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq "cashier_id" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
-          grep -Fq "employee_id" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
-          grep -Fq "user_id" app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
-          grep -Fq "first-user-setup-targeted-behavior" app/src/main/assets/screens/first-user-setup.html
-          grep -Fq "first-user-save-floating" app/src/main/assets/screens/first-user-setup.html
-          echo 'Static contract validation PASS.'
-
-      - name: JavaScript regression tests
-        run: |
-          set -euo pipefail
-          for t in employee-department-job-title-runtime-test.js employee-management-contract-test.js activity-bridge-contract-regression-test.js activity-log-database-bridge-regression-test.js ai-assistant-dom-lifecycle-regression-test.js; do
-            [ ! -f "$t" ] || node "$t"
-          done
-
-      - name: Gradle tests and release APK
-        run: |
-          set -euo pipefail
-          chmod +x gradlew
-          ./gradlew testDebugUnitTest assembleRelease --no-daemon
-
-      - name: Review diff and commit
-        run: |
-          set -euo pipefail
-          git diff --check
-          echo '--- STATUS ---'
-          git status --short
-          echo '--- DIFF STAT ---'
-          git diff --stat
-          echo '--- FIRST USER SIZE ---'
-          wc -c app/src/main/assets/screens/first-user-setup.html
-          # Temporary workflow must never remain in the final tree.
-          rm -f .github/workflows/ai-targeted-repair.yml
-          git add app/src/main/assets/screens/first-user-setup.html
-          git diff --cached --check
-          git status --short
-          git diff --cached --stat
-          git commit -m "fix: complete requested WebView and SQLite flows"
-          git push origin HEAD:feature/ai-health-sqlite
+          wc -c contract-diagnostics.txt
+      - name: Upload diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-contract-diagnostics
+          path: contract-diagnostics.txt
