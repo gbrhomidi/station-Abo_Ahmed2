@@ -42,13 +42,21 @@ for name, required in CASES.items():
             ('<input id="roleId" type="hidden"' in html, 'hidden role field'),
             ('<select id="roleId"' not in html, 'no role dropdown'),
             ('syncEmployeeDerivedFields' in html, 'employee job_title derivation'),
-            ('preferred_language:$(' in html, 'preferred language persistence'),
+            ('preferred_language:$(\'preferredLanguage\').value' in html, 'preferred language persistence'),
+            ('branch_id' in html and 'company_id' in html, 'station branch/company mapping'),
+            ('avatar_path:$(\'avatarPath\').value' in html, 'avatar_path persistence'),
+            ('getImageDataUrl' in html, 'avatar re-read/display bridge'),
+            ('must_change_password:(state.editingId===0?1:' in html, 'password-change flag persistence'),
+            (not any(x in html for x in ('Math.random(', 'TODO', 'Mock Data', 'Fake Data')), 'no fake/mock user data'),
         ]
     if name == 'shifts.html':
         checks += [
             ('option.value = person.id ?? person.employee_id ?? "";' in html, 'cashier employee id'),
             ('لا يملك حساب مستخدم مرتبطاً' not in html, 'no employee-user cashier validation'),
             ('closeOpenShiftBtn' in html and 'openShiftOverlay' in html, 'open-shift close modal'),
+            ('getOpenShiftForManagement' in html and 'closeOpenShiftForManagement' in html, 'SQLite open/close bridge contract'),
+            ('SQLite' in html or 'sqlite' in html.lower(), 'SQLite-backed shift messaging'),
+            (not any(x in html for x in ('Math.random(', 'TODO', 'Mock Data', 'Fake Data')), 'no fake/mock shift data'),
         ]
     for ok, label in checks:
         print(f'{"PASS" if ok else "FAIL"} {name}: {label}')
