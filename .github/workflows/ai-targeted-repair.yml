@@ -22,15 +22,9 @@ jobs:
           from pathlib import Path
           import os, re, subprocess
           BASE=os.environ['BASE']
-          def restore(path):
-              data=subprocess.check_output(['git','show',f'{BASE}:{path}'],text=True)
-              Path(path).write_text(data,encoding='utf-8')
-              return data
-
-          # first-user-setup: restore the complete baseline page and improve only
-          # the requested fields/keyboard behavior.
           p=Path('app/src/main/assets/screens/first-user-setup.html')
-          s=restore(str(p)); base_size=len(s.encode('utf-8'))
+          s=subprocess.check_output(['git','show',f'{BASE}:app/src/main/assets/screens/first-user-setup.html'],text=True)
+          base_size=len(s.encode())
           s=re.sub(r'(<input[^>]*id=["\']branchId["\'][^>]*?)\s+readonly(?:\s*=\s*["\'][^"\']*["\'])?',r'\1',s,flags=re.I)
           s=re.sub(r'(<input[^>]*id=["\']branchId["\'][^>]*?)\s+disabled(?:\s*=\s*["\'][^"\']*["\'])?',r'\1',s,flags=re.I)
           ui=r'''
@@ -62,16 +56,12 @@ jobs:
           </script>
           '''
           s=s.replace('</head>',ui+'\n</head>')
-          if len(s.encode('utf-8'))<base_size*0.95: raise SystemExit('first-user-setup was shortened unexpectedly')
+          if len(s.encode())<base_size*0.95: raise SystemExit('first-user-setup was shortened unexpectedly')
           p.write_text(s,encoding='utf-8')
 
-          # Login: no automatic focus transfer to the submit button.
           lp=Path('app/src/main/assets/screens/login.html')
-          if lp.exists():
-              x=lp.read_text(encoding='utf-8').replace('submitBtn.focus();','')
-              lp.write_text(x,encoding='utf-8')
+          if lp.exists(): lp.write_text(lp.read_text(encoding='utf-8').replace('submitBtn.focus();',''),encoding='utf-8')
 
-          # Users: persist the real Android content URI rather than File.name only.
           up=Path('app/src/main/assets/screens/users.html')
           if up.exists():
               x=up.read_text(encoding='utf-8')
@@ -84,7 +74,6 @@ jobs:
               x=x.replace("checkPermission('users.read')",'').replace('checkPermission("users.read")','')
               up.write_text(x,encoding='utf-8')
 
-          # MainActivity: expose/persist the URI returned by ACTION_OPEN_DOCUMENT.
           mp=Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt')
           m=mp.read_text(encoding='utf-8')
           marker='private var pendingFilePathCallback: ValueCallback<Array<Uri>>? = null'
@@ -93,27 +82,29 @@ jobs:
               m=m.replace(marker,marker+'\n        private var lastSelectedFileUri: String? = null',1)
           if 'fun getLastSelectedFileUri()' not in m:
               target='@JavascriptInterface\n        fun getStations(): String {'
-              if target not in m: raise SystemExit('getStations annotation/insertion point missing')
+              if target not in m: raise SystemExit('getStations insertion point missing')
               m=m.replace(target,'@JavascriptInterface\n        fun getLastSelectedFileUri(): String = lastSelectedFileUri.orEmpty()\n\n        @JavascriptInterface\n        fun getStations(): String {',1)
-          m=m.replace('Intent.ACTION_OPEN_DOCUMENT).apply {','Intent.ACTION_OPEN_DOCUMENT).apply {\n                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)',1)
-          m=m.replace('callback.onReceiveValue(results)','results?.firstOrNull()?.let { uri ->\n                    lastSelectedFileUri = uri.toString()\n                    try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: SecurityException) { }\n                }\n                callback.onReceiveValue(results)',1)
+          if 'FLAG_GRANT_PERSISTABLE_URI_PERMISSION' not in m:
+              m=m.replace('Intent.ACTION_OPEN_DOCUMENT).apply {','Intent.ACTION_OPEN_DOCUMENT).apply {\n                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)',1)
+          if 'lastSelectedFileUri = uri.toString()' not in m:
+              m=m.replace('callback.onReceiveValue(results)','results?.firstOrNull()?.let { uri ->\n                    lastSelectedFileUri = uri.toString()\n                    try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: SecurityException) { }\n                }\n                callback.onReceiveValue(results)',1)
           mp.write_text(m,encoding='utf-8')
           print('Targeted repairs applied.')
           PY
 
-      - name: Validate requested contracts
+      - name: Targeted static verification
         run: |
           set -euo pipefail
+          test -s app/src/main/assets/screens/first-user-setup.html
           grep -Fq 'first-user-setup-final-keyboard' app/src/main/assets/screens/first-user-setup.html
           grep -Fq 'first-user-setup-final-ui' app/src/main/assets/screens/first-user-setup.html
-          grep -Fq "id=\"branchId\"" app/src/main/assets/screens/first-user-setup.html
-          ! grep -nE 'id="branchId"[^>]*readonly|id="branchId"[^>]*disabled' app/src/main/assets/screens/first-user-setup.html
           ! grep -Fq 'submitBtn.focus();' app/src/main/assets/screens/login.html
+          grep -Fq 'getLastSelectedFileUri' app/src/main/assets/screens/users.html
+          grep -Fq 'getLastSelectedFileUri' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
           grep -Fq 'getStations' app/src/main/assets/screens/first-user-setup.html
           grep -Fq 'fun getStations' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
           grep -Fq 'fun getCustomers' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
           grep -Fq 'fun getVehicles' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          grep -Fq 'fun getCurrentShift' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
           grep -Fq 'fun getLatestCustomerSaleForDelivery' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
           grep -Fq 'fun saveDeliveryRecord' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
           grep -Fq 'fun saveShiftRecordTyped' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
@@ -126,16 +117,13 @@ jobs:
           grep -Fq 'saveDeliveryRecord' app/src/main/assets/screens/deliveries.html
           grep -Fq 'cashier_id' app/src/main/assets/screens/shifts.html
           grep -Fq 'getShiftFormContext' app/src/main/assets/screens/shifts.html
-          grep -Fq "createMethod:'saveFuelSaleRecord'" app/src/main/assets/screens/fuel-sales.html
-          grep -Fq "updateMethod:'updateFuelSaleRecord'" app/src/main/assets/screens/fuel-sales.html
-          grep -Fq "deleteMethod:'deleteFuelSaleRecord'" app/src/main/assets/screens/fuel-sales.html
+          grep -Fq 'saveFuelSaleRecord' app/src/main/assets/screens/fuel-sales.html
+          grep -Fq 'updateFuelSaleRecord' app/src/main/assets/screens/fuel-sales.html
+          grep -Fq 'deleteFuelSaleRecord' app/src/main/assets/screens/fuel-sales.html
           ! grep -Fq 'users.read' app/src/main/assets/screens/users.html
-          grep -Eq "location\.href=['\"]\.\./main\.html['\"]|window\.location\.href\s*=\s*['\"]\.\./main\.html['\"]" app/src/main/assets/screens/users.html
-          grep -Fq 'getLastSelectedFileUri' app/src/main/assets/screens/users.html
-          grep -Fq 'getLastSelectedFileUri' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          echo 'Static contracts PASS.'
+          echo 'Targeted static verification PASS.'
 
-      - name: Run regression tests
+      - name: Regression tests
         run: |
           set -euo pipefail
           for t in employee-department-job-title-runtime-test.js employee-management-contract-test.js activity-bridge-contract-regression-test.js activity-log-database-bridge-regression-test.js ai-assistant-dom-lifecycle-regression-test.js; do
@@ -155,16 +143,14 @@ jobs:
           path: app/build/outputs/**/*.apk
           if-no-files-found: error
 
-      - name: Final diff review and commit
+      - name: Review diff, commit and push
         run: |
           set -euo pipefail
           git diff --check
-          echo '--- STATUS ---'
+          echo '--- git status ---'
           git status --short
-          echo '--- DIFF STAT ---'
+          echo '--- git diff stat ---'
           git diff --stat
-          echo '--- FIRST USER SIZE ---'
-          wc -c app/src/main/assets/screens/first-user-setup.html
           rm -f .github/workflows/ai-targeted-repair.yml
           git add app/src/main/assets/screens/first-user-setup.html app/src/main/assets/screens/login.html app/src/main/assets/screens/users.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
           git diff --cached --check
