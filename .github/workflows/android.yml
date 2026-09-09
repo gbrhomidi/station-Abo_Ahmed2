@@ -40,6 +40,12 @@ jobs:
           test -s /tmp/repair.py
           python3 /tmp/repair.py
 
+      - name: Inspect generated Kotlin around compiler failures
+        run: |
+          set -euo pipefail
+          nl -ba app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt | sed -n '3748,3772p;8218,8236p;9445,9480p'
+          nl -ba app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt | sed -n '23824,23884p;24045,24058p'
+
       - name: Static, HTML/JavaScript and project integrity checks
         run: |
           set -euo pipefail
