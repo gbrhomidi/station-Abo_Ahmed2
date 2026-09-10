@@ -1,91 +1,664 @@
+# ============================================================================
+# Build Android APK — Stable CI/CD Workflow
+# ============================================================================
+# Project:
+#   station-Abo_Ahmed2
+#
+# Branch policy:
+#   - main:
+#       Validation + Signed Release APK
+#
+#   - feature/ai-health-sqlite:
+#       Validation ONLY
+#       No Release signing
+#       No Release keystore
+#
+#   - Pull Request -> main:
+#       Validation ONLY
+#
+#   - workflow_dispatch:
+#       Validation is allowed from any branch.
+#       Signed Release is allowed ONLY when the selected ref is main.
+#
+# Security:
+#   - GITHUB_TOKEN is read-only.
+#   - Release secrets exist ONLY inside the release job.
+#   - Release keystore is stored under the runner temporary directory.
+#   - Keystore is never uploaded as an artifact.
+#   - Keystore cleanup runs even after failures.
+#
+# Reliability:
+#   - Validation must succeed before Release starts.
+#   - Release APK signature is verified with apksigner.
+#   - SHA256 checksum is generated for the final APK.
+#
+# Efficiency:
+#   - Gradle cache enabled.
+#   - Older runs for the same ref are cancelled when a newer run starts.
+#
+# IMPORTANT:
+#   The following signing environment variable names must match the Android
+#   Gradle signing configuration in this repository:
+#
+#     RELEASE_KEYSTORE_PATH
+#     RELEASE_KEYSTORE_PASSWORD
+#     RELEASE_KEY_ALIAS
+#     RELEASE_KEY_PASSWORD
+#
+# ============================================================================
+
+
 name: Build Android APK
 
+
+# ============================================================================
+# TRIGGERS
+# ============================================================================
+
 on:
+
+  # --------------------------------------------------------------------------
+  # Pushes
+  #
+  # main                    -> validation + Release
+  # feature/ai-health-sqlite -> validation only
+  # --------------------------------------------------------------------------
+
   push:
     branches:
       - main
       - feature/ai-health-sqlite
+
+
+  # --------------------------------------------------------------------------
+  # Pull Requests targeting main
+  #
+  # PRs never receive Release signing secrets.
+  # --------------------------------------------------------------------------
+
+  pull_request:
+    branches:
+      - main
+
+
+  # --------------------------------------------------------------------------
+  # Manual execution
+  #
+  # Validation can be manually executed from any selected branch/ref.
+  #
+  # Release remains protected by:
+  #
+  #   if: github.ref == 'refs/heads/main'
+  #
+  # Therefore a manual run from feature/ai-health-sqlite cannot produce
+  # a signed production Release APK.
+  # --------------------------------------------------------------------------
+
   workflow_dispatch:
 
+
+# ============================================================================
+# CONCURRENCY
+# ============================================================================
+#
+# If multiple commits are pushed rapidly to the same branch:
+#
+#   commit A -> running
+#   commit B -> running
+#   commit C -> newest
+#
+# obsolete runs are cancelled and only the newest relevant run continues.
+#
+# This is especially useful during intensive repair sessions.
+# ============================================================================
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+
+# ============================================================================
+# GITHUB TOKEN PERMISSIONS
+# ============================================================================
+#
+# This workflow does not:
+#
+#   - push commits
+#   - create branches
+#   - create tags
+#   - create releases
+#   - modify issues
+#   - modify pull requests
+#
+# Therefore read-only repository access is sufficient.
+# ============================================================================
+
+permissions:
+  contents: read
+
+
+# ============================================================================
+# GLOBAL GRADLE CONFIGURATION
+# ============================================================================
+
+env:
+  GRADLE_OPTS: >-
+    -Dorg.gradle.daemon=false
+    -Dorg.gradle.parallel=true
+    -Dorg.gradle.caching=true
+
+
+# ============================================================================
+# JOB 1 — VALIDATION
+# ============================================================================
+#
+# Purpose:
+#   Verify the project before any production Release signing occurs.
+#
+# Runs on:
+#
+#   - push -> main
+#   - push -> feature/ai-health-sqlite
+#   - pull_request -> main
+#   - workflow_dispatch
+#
+# IMPORTANT:
+#   This job deliberately receives NO Release signing secrets.
+#
+# ============================================================================
+
 jobs:
-  build:
+
+  validate:
+
+    name: Validate Android Project
+
     runs-on: ubuntu-latest
 
+    timeout-minutes: 30
+
+
     steps:
+
+      # ----------------------------------------------------------------------
+      # Checkout repository
+      # ----------------------------------------------------------------------
+
       - name: Checkout Project
         uses: actions/checkout@v4
+
+
+      # ----------------------------------------------------------------------
+      # Java 17
+      # ----------------------------------------------------------------------
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
+
+
+      # ----------------------------------------------------------------------
+      # Java diagnostic
+      # ----------------------------------------------------------------------
 
       - name: Verify Java version
-        run: java -version
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Run notification and SMS screens smoke tests
-        run: python3 screen-smoke-test.py
-
-      - name: Run Kotlin and Robolectric regression tests
-        run: ./gradlew testDebugUnitTest --no-daemon
-
-      # ───────────────────────────────────────────────
-      # 🔐 فك تشفير Keystore الخاص بالـ Release
-      # ───────────────────────────────────────────────
-      - name: Decode Release Keystore
         run: |
-          echo "🔐 Decoding release keystore from GitHub Secrets..."
-          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > diesel-station-release.keystore
-          ls -la diesel-station-release.keystore
-          echo "✅ Release keystore decoded successfully."
+          java -version
 
-      # ───────────────────────────────────────────────
-      # 🔑 توليد debug.keystore كاحتياطي (للـ Debug builds)
-      # ───────────────────────────────────────────────
-      - name: Generate debug keystore (if missing)
+
+      # ----------------------------------------------------------------------
+      # Verify Gradle wrapper
+      # ----------------------------------------------------------------------
+
+      - name: Verify Gradle wrapper
         run: |
-          mkdir -p ~/.android
-          if [ ! -f ~/.android/debug.keystore ]; then
-            echo "🔑 Generating debug.keystore..."
-            keytool -genkey -v -keystore ~/.android/debug.keystore \
-              -alias androiddebugkey \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -storepass android \
-              -keypass android \
-              -dname "CN=Android Debug, O=Android, C=US"
-            echo "✅ debug.keystore generated."
-          else
-            echo "✅ debug.keystore already exists."
+          set -e
+
+          if [ ! -f "./gradlew" ]; then
+            echo "::error::gradlew was not found in the repository root."
+            exit 1
           fi
 
-      # ───────────────────────────────────────────────
-      # 🏗️ بناء Release APK مع التوقيع الحقيقي
-      # ───────────────────────────────────────────────
-      - name: Clean and Build Release APK
-        run: ./gradlew clean assembleRelease --no-daemon
+          if [ ! -f "./gradle/wrapper/gradle-wrapper.properties" ]; then
+            echo "::error::Gradle wrapper configuration was not found."
+            exit 1
+          fi
+
+          chmod +x ./gradlew
+
+          echo "Gradle wrapper verified successfully."
+
+
+      # ----------------------------------------------------------------------
+      # Verify smoke-test script
+      # ----------------------------------------------------------------------
+
+      - name: Verify screen smoke test
+        run: |
+          set -e
+
+          if [ ! -f "./screen-smoke-test.py" ]; then
+            echo "::error::screen-smoke-test.py was not found."
+            exit 1
+          fi
+
+          python3 --version
+
+          echo "Smoke-test script verified successfully."
+
+
+      # ----------------------------------------------------------------------
+      # Smoke tests
+      # ----------------------------------------------------------------------
+
+      - name: Run notification and SMS screens smoke tests
+        run: |
+          python3 ./screen-smoke-test.py
+
+
+      # ----------------------------------------------------------------------
+      # Kotlin / Robolectric regression tests
+      # ----------------------------------------------------------------------
+
+      - name: Run Kotlin and Robolectric regression tests
+        run: |
+          ./gradlew testDebugUnitTest --no-daemon
+
+
+      # ----------------------------------------------------------------------
+      # Debug compilation
+      #
+      # This validates the Android compilation pipeline without accessing
+      # production Release signing secrets.
+      # ----------------------------------------------------------------------
+
+      - name: Compile Debug APK
+        run: |
+          ./gradlew assembleDebug --no-daemon
+
+
+      # ----------------------------------------------------------------------
+      # Optional validation artifact
+      #
+      # Keeping this short-lived reduces storage consumption.
+      #
+      # The artifact is useful for debugging validation failures while the
+      # production Release artifact remains separately retained for 14 days.
+      # ----------------------------------------------------------------------
+
+      - name: Upload validation APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Station_Abo_Ahmed_Validation_APK
+          path: app/build/outputs/apk/**/*.apk
+          if-no-files-found: warn
+          retention-days: 7
+
+
+# ============================================================================
+# JOB 2 — SIGNED PRODUCTION RELEASE
+# ============================================================================
+#
+# Release starts ONLY after successful validation.
+#
+# Security gate:
+#
+#   if: github.ref == 'refs/heads/main'
+#
+# This intentionally does NOT use:
+#
+#   github.event_name == 'workflow_dispatch'
+#
+# by itself.
+#
+# Therefore:
+#
+#   feature/ai-health-sqlite + push
+#       -> validation only
+#
+#   feature/ai-health-sqlite + manual dispatch
+#       -> validation only
+#
+#   PR -> main
+#       -> validation only
+#
+#   main + push
+#       -> validation -> signed Release
+#
+#   main + manual dispatch
+#       -> validation -> signed Release
+#
+# ============================================================================
+
+  release:
+
+    name: Build Signed Release APK
+
+    needs:
+      - validate
+
+    if: github.ref == 'refs/heads/main'
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+
+    steps:
+
+      # ----------------------------------------------------------------------
+      # Checkout exact commit being built
+      # ----------------------------------------------------------------------
+
+      - name: Checkout Project
+        uses: actions/checkout@v4
+
+
+      # ----------------------------------------------------------------------
+      # Java 17 + Gradle cache
+      # ----------------------------------------------------------------------
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+
+      # ----------------------------------------------------------------------
+      # Java diagnostic
+      # ----------------------------------------------------------------------
+
+      - name: Verify Java version
+        run: |
+          java -version
+
+
+      # ----------------------------------------------------------------------
+      # Gradle wrapper
+      # ----------------------------------------------------------------------
+
+      - name: Grant execute permission for gradlew
+        run: |
+          chmod +x ./gradlew
+
+
+      # ======================================================================
+      # RELEASE SIGNING SECRETS
+      # ======================================================================
+      #
+      # These secrets are deliberately introduced ONLY inside the Release job.
+      # ======================================================================
+
+      - name: Verify signing secrets exist
         env:
-          RELEASE_KEYSTORE_PATH: ${{ github.workspace }}/diesel-station-release.keystore
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
 
-      - name: List APK outputs
         run: |
-          echo "===== APK FILES ====="
-          find app/build -type f -name "*.apk"
-          echo
-          echo "===== APK DETAILS ====="
-          ls -lahR app/build/outputs || true
+          set -e
 
-      - name: Upload APK
+          missing=0
+
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "::error::Missing secret: RELEASE_KEYSTORE_BASE64"
+            missing=1
+          fi
+
+          if [ -z "$RELEASE_KEYSTORE_PASSWORD" ]; then
+            echo "::error::Missing secret: RELEASE_KEYSTORE_PASSWORD"
+            missing=1
+          fi
+
+          if [ -z "$RELEASE_KEY_ALIAS" ]; then
+            echo "::error::Missing secret: RELEASE_KEY_ALIAS"
+            missing=1
+          fi
+
+          if [ -z "$RELEASE_KEY_PASSWORD" ]; then
+            echo "::error::Missing secret: RELEASE_KEY_PASSWORD"
+            missing=1
+          fi
+
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::One or more Release signing secrets are missing."
+            exit 1
+          fi
+
+          echo "All required Release signing secrets are present."
+
+
+      # ======================================================================
+      # DECODE RELEASE KEYSTORE
+      # ======================================================================
+      #
+      # The keystore is kept outside the repository workspace.
+      # It is stored under the runner's temporary directory.
+      # ======================================================================
+
+      - name: Decode Release Keystore
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+
+        run: |
+          set -e
+
+          umask 077
+
+          KEYSTORE="$RUNNER_TEMP/station-release.keystore"
+
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" \
+            | base64 --decode > "$KEYSTORE"
+
+          if [ ! -s "$KEYSTORE" ]; then
+            echo "::error::Decoded Release keystore is empty."
+            rm -f "$KEYSTORE"
+            exit 1
+          fi
+
+          chmod 600 "$KEYSTORE"
+
+          echo "Release keystore decoded successfully."
+
+
+      # ======================================================================
+      # SIGNED RELEASE BUILD
+      # ======================================================================
+
+      - name: Clean and Build Signed Release APK
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/station-release.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
+        run: |
+          ./gradlew clean assembleRelease --no-daemon
+
+
+      # ======================================================================
+      # LOCATE FINAL RELEASE APK
+      # ======================================================================
+
+      - name: Locate Release APK
+        id: apk
+
+        run: |
+          set -e
+
+          mapfile -t APKS < <(
+            find app/build/outputs/apk \
+              -type f \
+              -name "*.apk" \
+              ! -name "*-unsigned.apk" \
+              | sort
+          )
+
+          if [ "${#APKS[@]}" -eq 0 ]; then
+            echo "::error::No signed Release APK was produced."
+            exit 1
+          fi
+
+          if [ "${#APKS[@]}" -gt 1 ]; then
+            echo "::error::More than one Release APK was produced."
+
+            printf '%s\n' "${APKS[@]}"
+
+            echo "::error::The workflow expects exactly one Release APK."
+            exit 1
+          fi
+
+          APK="${APKS[0]}"
+
+          echo "APK=$APK" >> "$GITHUB_OUTPUT"
+
+          echo "Release APK:"
+          echo "$APK"
+
+
+      # ======================================================================
+      # VERIFY APK SIGNATURE
+      # ======================================================================
+
+      - name: Verify APK Signature
+        env:
+          APK: ${{ steps.apk.outputs.APK }}
+
+        run: |
+          set -e
+
+          BUILD_TOOLS_DIR="$ANDROID_HOME/build-tools"
+
+          if [ ! -d "$BUILD_TOOLS_DIR" ]; then
+            echo "::error::Android SDK build-tools directory was not found."
+            exit 1
+          fi
+
+          APKSIGNER="$(
+            find "$BUILD_TOOLS_DIR" \
+              -maxdepth 2 \
+              -type f \
+              -name "apksigner" \
+              | sort -V \
+              | tail -n 1
+          )"
+
+          if [ -z "$APKSIGNER" ] || [ ! -x "$APKSIGNER" ]; then
+            echo "::error::apksigner was not found."
+            exit 1
+          fi
+
+          echo "Using apksigner:"
+          echo "$APKSIGNER"
+
+          echo
+          echo "===== APK SIGNATURE VERIFICATION ====="
+
+          "$APKSIGNER" verify \
+            --verbose \
+            --print-certs \
+            "$APK"
+
+
+      # ======================================================================
+      # GENERATE SHA256
+      # ======================================================================
+
+      - name: Generate SHA256 Checksum
+        env:
+          APK: ${{ steps.apk.outputs.APK }}
+
+        run: |
+          set -e
+
+          mkdir -p release-metadata
+
+          sha256sum "$APK" \
+            | tee release-metadata/SHA256SUMS.txt
+
+          echo
+          echo "===== APK INFORMATION ====="
+
+          ls -lh "$APK"
+
+          echo
+          echo "===== SHA256 ====="
+
+          cat release-metadata/SHA256SUMS.txt
+
+
+      # ======================================================================
+      # PREPARE FINAL RELEASE ARTIFACT
+      # ======================================================================
+
+      - name: Prepare Release Artifact
+        env:
+          APK: ${{ steps.apk.outputs.APK }}
+
+        run: |
+          set -e
+
+          mkdir -p release-artifact
+
+          cp "$APK" \
+            release-artifact/Station_Abo_Ahmed_Release.apk
+
+          cp release-metadata/SHA256SUMS.txt \
+            release-artifact/SHA256SUMS.txt
+
+          echo "===== FINAL RELEASE ARTIFACT ====="
+
+          ls -lah release-artifact
+
+
+      # ======================================================================
+      # CLEAN SIGNING MATERIAL
+      # ======================================================================
+      #
+      # Always executes, including when the build or verification fails.
+      # ======================================================================
+
+      - name: Clean Signing Material
+        if: always()
+
+        run: |
+          KEYSTORE="$RUNNER_TEMP/station-release.keystore"
+
+          if [ -f "$KEYSTORE" ]; then
+            rm -f "$KEYSTORE"
+            echo "Release keystore removed from runner temporary storage."
+          else
+            echo "Release keystore was already absent."
+          fi
+
+
+      # ======================================================================
+      # UPLOAD FINAL RELEASE ARTIFACT
+      # ======================================================================
+      #
+      # Only:
+      #
+      #   Station_Abo_Ahmed_Release.apk
+      #   SHA256SUMS.txt
+      #
+      # are uploaded.
+      #
+      # The keystore is NOT uploaded.
+      # Intermediate build files are NOT uploaded.
+      # ======================================================================
+
+      - name: Upload Release APK
         uses: actions/upload-artifact@v4
+
         with:
           name: Station_Abo_Ahmed_Release_APK
-          path: app/build/outputs/**/*.apk
+          path: release-artifact/*
           if-no-files-found: error
+          retention-days: 14
