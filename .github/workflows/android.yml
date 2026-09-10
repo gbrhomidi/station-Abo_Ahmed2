@@ -1,49 +1,46 @@
 # ============================================================================
-# Build Android APK — Stable CI/CD Workflow
+# Build Android APK — Production CI/CD Workflow
 # ============================================================================
-# Project:
-#   station-Abo_Ahmed2
+# Project: station-Abo_Ahmed2
 #
-# Branch policy:
-#   - main:
-#       Validation + Signed Release APK
+# Branch policy
+# ----------------------------------------------------------------------------
+# main:
+#   Validation + Signed Release APK
 #
-#   - feature/ai-health-sqlite:
-#       Validation ONLY
-#       No Release signing
-#       No Release keystore
+# feature/ai-health-sqlite:
+#   Validation ONLY
+#   No Release signing
+#   No Release keystore
 #
-#   - Pull Request -> main:
-#       Validation ONLY
+# Pull Request -> main:
+#   Validation ONLY
 #
-#   - workflow_dispatch:
-#       Validation is allowed from any branch.
-#       Signed Release is allowed ONLY when the selected ref is main.
+# workflow_dispatch:
+#   Validation is allowed from any ref.
+#   Signed Release is allowed ONLY when the selected ref is main.
 #
-# Security:
-#   - GITHUB_TOKEN is read-only.
-#   - Release secrets exist ONLY inside the release job.
-#   - Release keystore is stored under the runner temporary directory.
-#   - Keystore is never uploaded as an artifact.
-#   - Keystore cleanup runs even after failures.
+# Security
+# ----------------------------------------------------------------------------
+# - GITHUB_TOKEN is read-only.
+# - Release secrets are available ONLY to the release job.
+# - The Release keystore is stored outside the repository workspace.
+# - The keystore is never uploaded as an artifact.
+# - Keystore cleanup runs even when a previous step fails.
 #
-# Reliability:
-#   - Validation must succeed before Release starts.
-#   - Release APK signature is verified with apksigner.
-#   - SHA256 checksum is generated for the final APK.
+# Reliability
+# ----------------------------------------------------------------------------
+# - Release requires successful validation.
+# - Release APK must exist.
+# - Release APK must be cryptographically verified with apksigner.
+# - SHA256 checksum is generated for the final APK.
 #
-# Efficiency:
-#   - Gradle cache enabled.
-#   - Older runs for the same ref are cancelled when a newer run starts.
-#
-# IMPORTANT:
-#   The following signing environment variable names must match the Android
-#   Gradle signing configuration in this repository:
-#
-#     RELEASE_KEYSTORE_PATH
-#     RELEASE_KEYSTORE_PASSWORD
-#     RELEASE_KEY_ALIAS
-#     RELEASE_KEY_PASSWORD
+# Efficiency
+# ----------------------------------------------------------------------------
+# - Gradle cache enabled.
+# - Obsolete runs for the same ref are cancelled.
+# - No Validation APK artifact is uploaded.
+# - Only the final Release APK + SHA256 are retained.
 #
 # ============================================================================
 
@@ -52,16 +49,16 @@ name: Build Android APK
 
 
 # ============================================================================
-# TRIGGERS
+# WORKFLOW TRIGGERS
 # ============================================================================
 
 on:
 
   # --------------------------------------------------------------------------
-  # Pushes
+  # Push validation
   #
-  # main                    -> validation + Release
-  # feature/ai-health-sqlite -> validation only
+  # main                      -> Validation + Release
+  # feature/ai-health-sqlite  -> Validation ONLY
   # --------------------------------------------------------------------------
 
   push:
@@ -84,7 +81,7 @@ on:
   # --------------------------------------------------------------------------
   # Manual execution
   #
-  # Validation can be manually executed from any selected branch/ref.
+  # Validation can be started manually from any selected ref.
   #
   # Release remains protected by:
   #
@@ -101,15 +98,16 @@ on:
 # CONCURRENCY
 # ============================================================================
 #
-# If multiple commits are pushed rapidly to the same branch:
+# Rapid repair commits should not create a queue of obsolete builds.
+#
+# Example:
 #
 #   commit A -> running
 #   commit B -> running
 #   commit C -> newest
 #
-# obsolete runs are cancelled and only the newest relevant run continues.
+# Older runs for the same ref are cancelled when the newer run supersedes them.
 #
-# This is especially useful during intensive repair sessions.
 # ============================================================================
 
 concurrency:
@@ -121,16 +119,16 @@ concurrency:
 # GITHUB TOKEN PERMISSIONS
 # ============================================================================
 #
-# This workflow does not:
+# This workflow never:
 #
-#   - push commits
-#   - create branches
-#   - create tags
-#   - create releases
-#   - modify issues
-#   - modify pull requests
+#   - pushes commits
+#   - creates branches
+#   - creates tags
+#   - creates releases
+#   - modifies issues
+#   - modifies pull requests
 #
-# Therefore read-only repository access is sufficient.
+# Therefore repository read access is sufficient.
 # ============================================================================
 
 permissions:
@@ -138,7 +136,7 @@ permissions:
 
 
 # ============================================================================
-# GLOBAL GRADLE CONFIGURATION
+# GLOBAL GRADLE OPTIONS
 # ============================================================================
 
 env:
@@ -152,18 +150,14 @@ env:
 # JOB 1 — VALIDATION
 # ============================================================================
 #
-# Purpose:
-#   Verify the project before any production Release signing occurs.
+# No Release signing secrets are available to this job.
 #
-# Runs on:
+# Runs for:
 #
 #   - push -> main
 #   - push -> feature/ai-health-sqlite
 #   - pull_request -> main
 #   - workflow_dispatch
-#
-# IMPORTANT:
-#   This job deliberately receives NO Release signing secrets.
 #
 # ============================================================================
 
@@ -177,7 +171,6 @@ jobs:
 
     timeout-minutes: 30
 
-
     steps:
 
       # ----------------------------------------------------------------------
@@ -189,7 +182,7 @@ jobs:
 
 
       # ----------------------------------------------------------------------
-      # Java 17
+      # Java 17 + Gradle cache
       # ----------------------------------------------------------------------
 
       - name: Set up Java 17
@@ -271,8 +264,8 @@ jobs:
       # ----------------------------------------------------------------------
       # Debug compilation
       #
-      # This validates the Android compilation pipeline without accessing
-      # production Release signing secrets.
+      # This validates Android compilation without accessing Release signing
+      # secrets or the production keystore.
       # ----------------------------------------------------------------------
 
       - name: Compile Debug APK
@@ -280,57 +273,21 @@ jobs:
           ./gradlew assembleDebug --no-daemon
 
 
-      # ----------------------------------------------------------------------
-      # Optional validation artifact
-      #
-      # Keeping this short-lived reduces storage consumption.
-      #
-      # The artifact is useful for debugging validation failures while the
-      # production Release artifact remains separately retained for 14 days.
-      # ----------------------------------------------------------------------
-
-      - name: Upload validation APK
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Station_Abo_Ahmed_Validation_APK
-          path: app/build/outputs/apk/**/*.apk
-          if-no-files-found: warn
-          retention-days: 7
-
-
 # ============================================================================
 # JOB 2 — SIGNED PRODUCTION RELEASE
 # ============================================================================
 #
-# Release starts ONLY after successful validation.
+# Release is intentionally restricted to main.
 #
-# Security gate:
+# The gate is:
 #
 #   if: github.ref == 'refs/heads/main'
 #
-# This intentionally does NOT use:
+# Do NOT replace it with:
 #
 #   github.event_name == 'workflow_dispatch'
 #
-# by itself.
-#
-# Therefore:
-#
-#   feature/ai-health-sqlite + push
-#       -> validation only
-#
-#   feature/ai-health-sqlite + manual dispatch
-#       -> validation only
-#
-#   PR -> main
-#       -> validation only
-#
-#   main + push
-#       -> validation -> signed Release
-#
-#   main + manual dispatch
-#       -> validation -> signed Release
+# because that would allow manual Release signing from a feature branch.
 #
 # ============================================================================
 
@@ -341,17 +298,20 @@ jobs:
     needs:
       - validate
 
+    # ------------------------------------------------------------------------
+    # PRODUCTION RELEASE GATE
+    # ------------------------------------------------------------------------
+
     if: github.ref == 'refs/heads/main'
 
     runs-on: ubuntu-latest
 
     timeout-minutes: 30
 
-
     steps:
 
       # ----------------------------------------------------------------------
-      # Checkout exact commit being built
+      # Checkout exact revision being released
       # ----------------------------------------------------------------------
 
       - name: Checkout Project
@@ -392,7 +352,7 @@ jobs:
       # RELEASE SIGNING SECRETS
       # ======================================================================
       #
-      # These secrets are deliberately introduced ONLY inside the Release job.
+      # These secrets are intentionally scoped only to this job.
       # ======================================================================
 
       - name: Verify signing secrets exist
@@ -439,8 +399,8 @@ jobs:
       # DECODE RELEASE KEYSTORE
       # ======================================================================
       #
-      # The keystore is kept outside the repository workspace.
-      # It is stored under the runner's temporary directory.
+      # The keystore is placed under RUNNER_TEMP rather than inside the
+      # repository workspace.
       # ======================================================================
 
       - name: Decode Release Keystore
@@ -568,7 +528,7 @@ jobs:
 
 
       # ======================================================================
-      # GENERATE SHA256
+      # GENERATE SHA256 CHECKSUM
       # ======================================================================
 
       - name: Generate SHA256 Checksum
@@ -622,7 +582,7 @@ jobs:
       # CLEAN SIGNING MATERIAL
       # ======================================================================
       #
-      # Always executes, including when the build or verification fails.
+      # Always execute, including after build/signature failures.
       # ======================================================================
 
       - name: Clean Signing Material
@@ -640,18 +600,17 @@ jobs:
 
 
       # ======================================================================
-      # UPLOAD FINAL RELEASE ARTIFACT
+      # UPLOAD ONLY FINAL RELEASE ARTIFACTS
       # ======================================================================
       #
-      # Only:
+      # Uploaded files:
       #
       #   Station_Abo_Ahmed_Release.apk
       #   SHA256SUMS.txt
       #
-      # are uploaded.
-      #
-      # The keystore is NOT uploaded.
-      # Intermediate build files are NOT uploaded.
+      # No debug APK.
+      # No intermediate files.
+      # No keystore.
       # ======================================================================
 
       - name: Upload Release APK
