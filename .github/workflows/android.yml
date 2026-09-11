@@ -71,16 +71,29 @@ jobs:
           for f in files:
               if not Path(f).is_file(): raise SystemExit(f'Missing required file: {f}')
               print('PASS — file exists:', f)
+          settings = Path(files[0]).read_text(encoding='utf-8')
+          users = Path(files[1]).read_text(encoding='utf-8')
+          shifts = Path(files[2]).read_text(encoding='utf-8')
+          main = Path(files[3]).read_text(encoding='utf-8')
+          db = Path(files[4]).read_text(encoding='utf-8')
           checks = {
-              'settings': ('getAllSystemSettingsMap' in Path(files[0]).read_text(encoding='utf-8') and 'setSystemSetting' in Path(files[0]).read_text(encoding='utf-8') and "bridgeCall('searchUsers'" in Path(files[0]).read_text(encoding='utf-8')),
-              'users': ('avatar_file_name' in Path(files[1]).read_text(encoding='utf-8') and '<input id="roleId" type="hidden"' in Path(files[1]).read_text(encoding='utf-8') and '<select id="roleId"' not in Path(files[1]).read_text(encoding='utf-8')),
-              'shifts': ('cashier_employee_id' in Path(files[2]).read_text(encoding='utf-8') and 'employees.id' in Path(files[2]).read_text(encoding='utf-8') and 'لا يملك حساب مستخدم مرتبطاً' not in Path(files[2]).read_text(encoding='utf-8')),
-              'MainActivity': ('getAllSystemSettingsMap' in Path(files[3]).read_text(encoding='utf-8') and 'setSystemSetting' in Path(files[3]).read_text(encoding='utf-8')),
-              'DatabaseHelper': ('const val VERSION = 36' in Path(files[4]).read_text(encoding='utf-8') and 'cashier_employee_id' in Path(files[4]).read_text(encoding='utf-8') and 'fun saveShiftRecordTypedForManagement' in Path(files[4]).read_text(encoding='utf-8')),
+              'settings': ('getAllSystemSettingsMap' in settings and 'setSystemSetting' in settings and "bridgeCall('searchUsers'" in settings),
+              'users': ('avatar_file_name' in users and re.search(r'<input[^>]+id=["\']roleId["\'][^>]+type=["\']hidden["\']', users, re.I) is not None and '<select id="roleId"' not in users),
+              'shifts': ('cashier_employee_id' in shifts and 'employees.id' in shifts and 'لا يملك حساب مستخدم مرتبطاً' not in shifts),
+              'MainActivity': ('getAllSystemSettingsMap' in main and 'setSystemSetting' in main),
+              'DatabaseHelper': ('const val VERSION = 36' in db and 'cashier_employee_id' in db and 'fun saveShiftRecordTypedForManagement' in db),
           }
           for k,v in checks.items():
               print(('PASS' if v else 'FAIL') + ' — ' + k)
               if not v: raise SystemExit(1)
+          for path in ('app/src/main/assets/screens/users.html','app/src/main/assets/screens/shifts.html','app/src/main/assets/screens/settings.html'):
+              text = Path(path).read_text(encoding='utf-8')
+              for i, script in enumerate(re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', text, re.S|re.I), 1):
+                  q = Path('/tmp') / (Path(path).stem + f'-{i}.js')
+                  q.write_text(script, encoding='utf-8')
+                  import subprocess
+                  subprocess.run(['node','--check',str(q)], check=True)
+              print('PASS — JavaScript syntax:', path)
           PY
           python3 ./screen-smoke-test.py
           ./gradlew testDebugUnitTest --no-daemon
