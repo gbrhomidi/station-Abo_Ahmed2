@@ -3885,11 +3885,11 @@
                                 "option"
                             );
 
-                        // shifts.cashier_id references users.id; keep employee_id
-                        // as metadata so the employee/user relationship remains explicit.
+                        // The typed contract stores employees.id in cashier_employee_id.
+                        // A cashier never needs a linked users row to be selectable.
                         option.value = person.id ?? person.employee_id ?? "";
                         option.dataset.employeeId = person.id ?? person.employee_id ?? "";
-                        option.dataset.persistedId = person.cashier_id ?? person.user_id ?? option.value;
+                        option.dataset.persistedId = person.employee_id ?? option.value;
 
                         option.textContent =
                             person.full_name_ar ??

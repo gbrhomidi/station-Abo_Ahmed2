@@ -4617,6 +4617,21 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+        @JavascriptInterface
+        fun getAllSystemSettingsMap(): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getAllSystemSettingsMap()) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun setSystemSetting(key: String, value: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                db.setSystemSetting(key, value)
+                successResponse(true, "تم حفظ إعداد النظام")
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
         // ============================================================
         // 17. Settings module — عقد SQLite/Bridge الصريح
         // ============================================================

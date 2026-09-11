@@ -880,7 +880,6 @@ tr:last-child td { border-bottom:0; }
                     <div class="card-avatar"><i class="fas fa-building"></i></div>
                     <div>
                         <h2>إعدادات النظام وقاعدة البيانات</h2>
-                        <p>قيم فعلية من جدول system_settings</p>
                     </div>
                 </div>
                 <span class="badge">system_settings</span>
@@ -1022,7 +1021,6 @@ tr:last-child td { border-bottom:0; }
                     <div class="card-avatar"><i class="fas fa-users"></i></div>
                     <div>
                         <h2>نتائج البحث في المستخدمين</h2>
-                        <p>الاستعلام الفعلي يستخدم AndroidInterface.getUsers() المرتبط بجدول users</p>
                     </div>
                 </div>
                 <span class="badge" id="userSearchBadge">0</span>
@@ -1268,6 +1266,15 @@ tr:last-child td { border-bottom:0; }
                 case 'getAllSettingsMap':
                     raw = bridge.getAllSettingsMap();
                     break;
+                case 'getAllSystemSettingsMap':
+                    raw = bridge.getAllSystemSettingsMap();
+                    break;
+                case 'setSystemSetting':
+                    raw = bridge.setSystemSetting(String(payload.key), String(payload.value));
+                    break;
+                case 'searchUsers':
+                    raw = bridge.searchUsers(JSON.stringify(payload || {}));
+                    break;
                 case 'getUsers':
                     raw = bridge.getUsers();
                     break;
@@ -1507,7 +1514,7 @@ tr:last-child td { border-bottom:0; }
 
     async function loadSystemSettings() {
         try {
-            const values = dataOf(await bridgeCall('getAllSettingsMap')) || {};
+            const values = dataOf(await bridgeCall('getAllSystemSettingsMap')) || {};
             Object.keys(systemSettings).forEach(key => delete systemSettings[key]);
             Object.assign(systemSettings, values);
 
@@ -1535,7 +1542,7 @@ tr:last-child td { border-bottom:0; }
             Object.assign(settings, applicationResult);
 
             for (const [key, value] of Object.entries(systemPayload)) {
-                await bridgeCall('setSetting', {key, value});
+                await bridgeCall('setSystemSetting', {key, value});
                 systemSettings[key] = value;
             }
 
@@ -1632,15 +1639,15 @@ tr:last-child td { border-bottom:0; }
     }
 
     async function searchUsers() {
-        const query = el('searchInput').value.trim().toLowerCase();
+        const query = el('searchInput').value.trim();
 
         showLoading(true);
         try {
-            const result = dataOf(await bridgeCall('getUsers'));
-            cachedUsers = Array.isArray(result) ? result : [];
-            renderUsers(cachedUsers, query);
-            el('statUsers').textContent = filterUsers(cachedUsers, query).length;
-            el('userSearchBadge').textContent = filterUsers(cachedUsers, query).length;
+            const result = await bridgeCall('searchUsers', {query, page: 1, pageSize: 100});
+            cachedUsers = dataOf(result)?.data || [];
+            renderUsers(cachedUsers, '');
+            el('statUsers').textContent = cachedUsers.length;
+            el('userSearchBadge').textContent = cachedUsers.length;
             selectTab('users');
 
             if (!query) {

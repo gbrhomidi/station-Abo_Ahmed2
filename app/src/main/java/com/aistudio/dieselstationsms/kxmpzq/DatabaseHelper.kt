@@ -45,7 +45,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 35
+        const val VERSION = 36
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -201,6 +201,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureTaskPermissions(db)
             ensureMessagingPermissions(db)
             ensureSmsSettings(db)
+            ensureLegacySettingsSchema(db)
+            ensureManagementIdentitySchema(db)
             ensureFuelCommerceSchema(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
@@ -244,6 +246,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     32 -> migrateV32ToV33(db)
                     33 -> ensureFuelCommerceSchema(db)
                     34 -> migrateV34ToV35(db)
+                    35 -> migrateV35ToV36(db)
                 }
             }
             ensureModule006Schema(db)
@@ -302,6 +305,40 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureTaskPermissions(db)
         ensureMessagingPermissions(db)
         ensureSmsSettings(db)
+        ensureLegacySettingsSchema(db)
+        ensureManagementIdentitySchema(db)
+    }
+
+    /**
+     * V36 is additive: it gives shifts an explicit employee identity for its
+     * cashier and retains the historical users.id column for legacy records.
+     * No table is dropped and existing cashier values are left untouched.
+     */
+    private fun migrateV35ToV36(db: SQLiteDatabase) {
+        ensureLegacySettingsSchema(db)
+        ensureManagementIdentitySchema(db)
+        Log.d(TAG, "Migrated settings and shift cashier employee identity to V36")
+    }
+
+    private fun ensureLegacySettingsSchema(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setting_key TEXT UNIQUE NOT NULL,
+                setting_value TEXT,
+                setting_type TEXT DEFAULT 'string',
+                description TEXT,
+                is_editable INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """.trimIndent())
+    }
+
+    private fun ensureManagementIdentitySchema(db: SQLiteDatabase) {
+        ensureColumn(db, "users", "avatar_file_name", "TEXT")
+        ensureColumn(db, "shifts", "cashier_employee_id", "INTEGER REFERENCES employees(id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_cashier_employee ON shifts(cashier_employee_id)")
     }
 
     private fun ensureModule006Schema(db: SQLiteDatabase) {
@@ -2306,6 +2343,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 full_name_ar VARCHAR(200),
                 display_name VARCHAR(100),
                 avatar_path VARCHAR(500),
+                avatar_file_name VARCHAR(255),
                 national_id TEXT,
                 passport_number VARCHAR(50),
                 nationality VARCHAR(100),
@@ -3462,6 +3500,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 duration_minutes INTEGER,
                 manager_id INTEGER,
                 cashier_id INTEGER,
+                cashier_employee_id INTEGER,
                 attendant_ids TEXT,
                 opening_cash DECIMAL(15,2) DEFAULT 0,
                 opening_bank DECIMAL(15,2) DEFAULT 0,
@@ -3507,6 +3546,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 FOREIGN KEY (station_id) REFERENCES stations(id),
                 FOREIGN KEY (manager_id) REFERENCES employees(id),
                 FOREIGN KEY (cashier_id) REFERENCES users(id),
+                FOREIGN KEY (cashier_employee_id) REFERENCES employees(id),
                 FOREIGN KEY (closed_by) REFERENCES users(id),
                 FOREIGN KEY (verified_by) REFERENCES users(id),
                 FOREIGN KEY (variance_approved_by) REFERENCES users(id),
@@ -10740,7 +10780,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("password_hash", hash)
                 put("password_salt", salt)
                 put("full_name", fullName)
-                listOf("full_name_ar", "display_name", "avatar_path", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data").forEach { key ->
+                listOf("full_name_ar", "display_name", "avatar_path", "avatar_file_name", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data").forEach { key ->
                     val value = data.optString(key).trim()
                     if (value.isNotEmpty()) put(key, value) else putNull(key)
                 }
@@ -10793,7 +10833,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             db.rawQuery(
                 """SELECT u.id, u.uuid, u.username, u.email, u.phone, u.full_name, u.full_name_ar,
-                          u.display_name, u.avatar_path, u.national_id, u.passport_number, u.nationality,
+                          u.display_name, u.avatar_path, u.avatar_file_name, u.national_id, u.passport_number, u.nationality,
                           u.birth_date, u.gender, u.employee_id, u.job_title, u.department, u.hire_date,
                           u.role_id, u.station_id, u.branch_id, u.company_id, u.preferred_language, u.theme,
                           u.timezone, u.date_format, u.two_factor_enabled, u.two_factor_method,
@@ -10860,7 +10900,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val dataArgs = args.toMutableList().apply { add(safePageSize.toString()); add(offset.toString()) }
             val rows = db.rawQuery(
                 """SELECT u.id, u.uuid, u.username, u.email, u.phone, u.full_name, u.full_name_ar,
-                          u.display_name, u.avatar_path, u.national_id, u.passport_number, u.nationality,
+                          u.display_name, u.avatar_path, u.avatar_file_name, u.national_id, u.passport_number, u.nationality,
                           u.birth_date, u.gender, u.employee_id, u.job_title, u.department, u.hire_date,
                           u.role_id, u.station_id, u.branch_id, u.company_id, u.preferred_language, u.theme,
                           u.timezone, u.date_format, u.two_factor_enabled, u.two_factor_method,
@@ -10939,7 +10979,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 require(it.moveToFirst()) { "الموظف المرتبط غير موجود" }
             }
             val cv = ContentValues().apply {
-                val textFields = listOf("full_name", "full_name_ar", "display_name", "avatar_path", "email", "phone", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "preferred_language", "theme", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data")
+                val textFields = listOf("full_name", "full_name_ar", "display_name", "avatar_path", "avatar_file_name", "email", "phone", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "preferred_language", "theme", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data")
                 textFields.forEach { key ->
                     if (data.has(key)) {
                         val value = data.optString(key).trim()
@@ -15272,7 +15312,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val search = params.optString("search", "").trim()
             if (search.isNotBlank()) {
                 where += """
-                    ( sh.shift_code LIKE? OR sh.shift_type LIKE? OR sh.status LIKE? OR st.station_name LIKE? OR st.station_name_ar LIKE? OR manager.full_name LIKE? OR manager.full_name_ar LIKE? OR cashier.full_name LIKE? OR cashier.full_name_ar LIKE? )
+                    ( sh.shift_code LIKE? OR sh.shift_type LIKE? OR sh.status LIKE? OR st.station_name LIKE? OR st.station_name_ar LIKE? OR manager.full_name LIKE? OR manager.full_name_ar LIKE? OR cashier_employee.full_name LIKE? OR cashier_employee.full_name_ar LIKE? )
                     """.trimIndent()
                 repeat(9) { args += "%$search%" }
             }
@@ -15309,7 +15349,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 " WHERE " + where.joinToString(" AND ")
             }
             val query = """
-                SELECT sh.*, st.station_name AS station_name, st.station_name_ar AS station_name_ar, manager.full_name AS manager_name, manager.full_name_ar AS manager_name_ar, cashier.username AS cashier_username, cashier.full_name AS cashier_name, cashier.full_name_ar AS cashier_name_ar, cashier.display_name AS cashier_display_name FROM shifts sh LEFT JOIN stations st ON st.id = sh.station_id LEFT JOIN employees manager ON manager.id = sh.manager_id LEFT JOIN users cashier ON cashier.id = sh.cashier_id $whereSql ORDER BY sh.id DESC LIMIT? OFFSET?
+                SELECT sh.*, st.station_name AS station_name, st.station_name_ar AS station_name_ar, manager.full_name AS manager_name, manager.full_name_ar AS manager_name_ar, cashier_employee.full_name AS cashier_name, cashier_employee.full_name_ar AS cashier_name_ar FROM shifts sh LEFT JOIN stations st ON st.id = sh.station_id LEFT JOIN employees manager ON manager.id = sh.manager_id LEFT JOIN employees cashier_employee ON cashier_employee.id = sh.cashier_employee_id $whereSql ORDER BY sh.id DESC LIMIT? OFFSET?
                 """.trimIndent()
             val queryArgs = args.toMutableList().apply {
                 add(limit.toString())
@@ -17857,6 +17897,35 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally {
             dbLock.unlock()
         }
+    }
+
+    fun getAllSystemSettingsMap(): Map<String, String> {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                "SELECT setting_key, setting_value FROM system_settings WHERE archived = 0", null
+            ).use { cursor ->
+                buildMap { while (cursor.moveToNext()) put(cursor.getString(0), cursor.getString(1)) }
+            }
+        } finally { dbLock.unlock() }
+    }
+
+    fun setSystemSetting(key: String, value: String) {
+        require(key.isNotBlank()) { "مفتاح إعداد النظام مطلوب" }
+        dbLock.lock()
+        try {
+            val now = getCurrentDateTime()
+            val update = ContentValues().apply {
+                put("setting_value", value)
+                put("updated_at", now)
+                put("archived", 0)
+            }
+            if (writableDatabase.update("system_settings", update, "setting_key = ?", arrayOf(key.trim())) == 0) {
+                update.put("uuid", UUID.randomUUID().toString())
+                update.put("setting_key", key.trim())
+                writableDatabase.insertOrThrow("system_settings", null, update)
+            }
+        } finally { dbLock.unlock() }
     }
 
     // ========================================================================
@@ -23938,7 +24007,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val columns = managementColumns("shifts")
         managementRequired(columns, "shifts", "id")
         managementRequired(columns, "shifts", "station_id")
-        managementRequired(columns, "shifts", "cashier_id")
+        managementRequired(columns, "shifts", "cashier_employee_id")
         managementRequired(columns, "shifts", "start_time")
         require(cashierEmployeeId > 0L) { "يجب تحديد أمين الصندوق" }
         val stationId = stationIdFromUi.toLong()
@@ -23949,18 +24018,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
   require(managementEmployeeIsActive(cursor)) { "أمين الصندوق المحدد غير نشط" }
   require(managementIsCashier(cursor)) { "الموظف المحدد لا يملك employees.job_title كأمين صندوق/CASHIER" }
   require(managementEmployeeMatchesStation(cursor, stationId)) { "أمين الصندوق لا يتبع المحطة الحالية" }
-        }
-
-        val cashierTarget = managementForeignKeyTarget("shifts", "cashier_id")
-        val cashierIdToStore = if (cashierTarget?.first == "users") {
-  var userId = 0L
-  managementEmployee(cashierEmployeeId)?.use { cursor ->
-      if (cursor.moveToFirst()) userId = managementLong(cursor, "user_id") ?: 0L
-  }
-  require(userId > 0L) { "schema الحالي لـ shifts.cashier_id يشير إلى users.id؛ الموظف المختار لا يملك user_id مطلوباً لهذا الـ FK" }
-  userId
-        } else {
-  cashierEmployeeId
         }
 
         val managerIdToStore = managerId
@@ -23976,8 +24033,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.beginTransaction()
         try {
   val openWhere = buildString {
-      append("station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = '' OR end_time = 0)")
-      if ("is_deleted" in columns) append(" AND (is_deleted = 0 OR is_deleted IS NULL)")
+      append("station_id = ? AND status = 'open'")
+      if ("is_deleted" in columns) append(" AND is_deleted = 0")
   }
   db.query("shifts", arrayOf("id"), openWhere, arrayOf(stationId.toString()), null, null, null, "1").use { cursor ->
       if (cursor.moveToFirst()) throw IllegalStateException("توجد وردية مفتوحة بالفعل لهذه المحطة؛ يجب إغلاقها قبل إنشاء وردية جديدة")
@@ -23991,7 +24048,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
   managementPut(values, columns, "shift_type", shiftType)
   managementPut(values, columns, "start_time", startTime)
   managementPut(values, columns, "manager_id", managerIdToStore.takeIf { it > 0L })
-  managementPut(values, columns, "cashier_id", cashierIdToStore)
+  // cashier_employee_id is the authoritative employee FK; legacy cashier_id
+  // remains nullable so old user-linked rows can be read without inventing users.
+  managementPut(values, columns, "cashier_employee_id", cashierEmployeeId)
   if ("attendant_ids" in columns) managementPut(values, columns, "attendant_ids", attendantIds)
   managementPut(values, columns, "opening_cash", openingCash)
   managementPut(values, columns, "opening_bank", openingBank)
@@ -24038,7 +24097,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val columns = managementColumns("shifts")
         managementRequired(columns, "shifts", "id")
         managementRequired(columns, "shifts", "station_id")
-        managementRequired(columns, "shifts", "end_time")
+        managementRequired(columns, "shifts", "status")
         val where = buildString {
   append("station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = '' OR end_time = 0)")
   if ("is_deleted" in columns) append(" AND (is_deleted = 0 OR is_deleted IS NULL)")
@@ -24050,7 +24109,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
         if (count == 0) return null
         if (count > 1) throw IllegalStateException("قاعدة البيانات تحتوي أكثر من وردية مفتوحة للمحطة الحالية؛ تم إيقاف الإغلاق التلقائي لحماية البيانات")
-        return getShiftReport(id, stationId.toInt()).optJSONObject(0)
+        return getReadableDatabase().rawQuery(
+            """SELECT sh.*, st.station_name, st.station_name_ar,
+                      manager.full_name AS manager_name, manager.full_name_ar AS manager_name_ar,
+                      COALESCE(cashier_employee.full_name, legacy_cashier.full_name) AS cashier_name,
+                      COALESCE(cashier_employee.full_name_ar, legacy_cashier.full_name_ar) AS cashier_name_ar
+               FROM shifts sh
+               LEFT JOIN stations st ON st.id = sh.station_id
+               LEFT JOIN employees manager ON manager.id = sh.manager_id
+               LEFT JOIN employees cashier_employee ON cashier_employee.id = sh.cashier_employee_id
+               LEFT JOIN users legacy_cashier ON legacy_cashier.id = sh.cashier_id
+               WHERE sh.id = ? AND sh.station_id = ? AND sh.status = 'open' AND sh.is_deleted = 0""",
+            arrayOf(id.toString(), stationId.toString())
+        ).use { cursor -> cursorToJsonArray(cursor).optJSONObject(0) }
     }
 
     fun closeOpenShiftForManagement(stationId: Long, currentUserId: Long): Long {
@@ -24058,12 +24129,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val columns = managementColumns("shifts")
         managementRequired(columns, "shifts", "id")
         managementRequired(columns, "shifts", "station_id")
-        managementRequired(columns, "shifts", "end_time")
+        managementRequired(columns, "shifts", "status")
         db.beginTransaction()
         try {
   val where = buildString {
-      append("station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = '' OR end_time = 0)")
-      if ("is_deleted" in columns) append(" AND (is_deleted = 0 OR is_deleted IS NULL)")
+      append("station_id = ? AND status = 'open'")
+      if ("is_deleted" in columns) append(" AND is_deleted = 0")
   }
   var id = 0L
   var startRaw: String? = null
@@ -24105,8 +24176,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
           managementPut(values, columns, "duration_minutes", (endMillis - startMillis) / 60000L)
       }
   }
-  val changed = db.update("shifts", values, "id = ? AND station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = '' OR end_time = 0)", arrayOf(id.toString(), stationId.toString()))
+  val changed = db.update("shifts", values, "id = ? AND station_id = ? AND status = 'open' AND is_deleted = 0", arrayOf(id.toString(), stationId.toString()))
   if (changed != 1) throw IllegalStateException("فشل UPDATE الحقيقي للوردية: لم يتغير سجل SQLite المتوقع")
+  db.query("shifts", arrayOf("status"), "id = ? AND station_id = ?", arrayOf(id.toString(), stationId.toString()), null, null, null, "1").use { cursor ->
+      require(cursor.moveToFirst() && cursor.getString(0) != "open") { "فشل التحقق بعد إغلاق الوردية" }
+  }
   db.setTransactionSuccessful()
   return id
         } finally {
