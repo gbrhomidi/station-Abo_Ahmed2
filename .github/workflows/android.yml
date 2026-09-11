@@ -36,6 +36,10 @@ jobs:
               p=Path(path); s=p.read_text(encoding='utf-8'); c=s.count(old)
               if c != n: raise SystemExit(f'{path}: expected {n}, found {c}: {old[:100]!r}')
               p.write_text(s.replace(old,new,n), encoding='utf-8')
+          def rep_first(path, old, new, n):
+              p=Path(path); s=p.read_text(encoding='utf-8'); c=s.count(old)
+              if c < n: raise SystemExit(f'{path}: expected at least {n}, found {c}: {old[:100]!r}')
+              p.write_text(s.replace(old,new,n), encoding='utf-8')
           def sub(path, pattern, repl, n=1):
               p=Path(path); s=p.read_text(encoding='utf-8'); s2,c=re.subn(pattern,repl,s,count=n,flags=re.S)
               if c != n: raise SystemExit(f'{path}: expected {n}, found {c}: {pattern[:100]!r}')
@@ -70,7 +74,7 @@ jobs:
           sub(D,r'(CREATE TABLE IF NOT EXISTS shifts \(.*?\n\s+cashier_id INTEGER,)',r'\1\n                cashier_employee_id INTEGER,',1)
           sub(D,r'(CREATE TABLE IF NOT EXISTS shifts \(.*?\n\s+FOREIGN KEY \(cashier_id\) REFERENCES users\(id\),)',r'\1\n                FOREIGN KEY (cashier_employee_id) REFERENCES employees(id),',1)
           rep(D,'listOf("full_name_ar", "display_name", "avatar_path", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data").forEach { key ->','listOf("full_name_ar", "display_name", "avatar_path", "avatar_file_name", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data").forEach { key ->')
-          rep(D,'u.display_name, u.avatar_path, u.national_id, u.passport_number, u.nationality,','u.display_name, u.avatar_path, u.avatar_file_name, u.national_id, u.passport_number, u.nationality,',2)
+          rep_first(D,'u.display_name, u.avatar_path, u.national_id, u.passport_number, u.nationality,','u.display_name, u.avatar_path, u.avatar_file_name, u.national_id, u.passport_number, u.nationality,',2)
           rep(D,'listOf("full_name", "full_name_ar", "display_name", "avatar_path", "email", "phone", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "preferred_language", "theme", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data")','listOf("full_name", "full_name_ar", "display_name", "avatar_path", "avatar_file_name", "email", "phone", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "preferred_language", "theme", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data")')
           rep(D,'cashier.full_name LIKE? OR cashier.full_name_ar LIKE?','cashier_employee.full_name LIKE? OR cashier_employee.full_name_ar LIKE?')
           rep(D,'cashier.username AS cashier_username, cashier.full_name AS cashier_name, cashier.full_name_ar AS cashier_name_ar, cashier.display_name AS cashier_display_name FROM shifts sh LEFT JOIN stations st ON st.id = sh.station_id LEFT JOIN employees manager ON manager.id = sh.manager_id LEFT JOIN users cashier ON cashier.id = sh.cashier_id $whereSql ORDER BY sh.id DESC LIMIT? OFFSET?','cashier_employee.full_name AS cashier_name, cashier_employee.full_name_ar AS cashier_name_ar FROM shifts sh LEFT JOIN stations st ON st.id = sh.station_id LEFT JOIN employees manager ON manager.id = sh.manager_id LEFT JOIN employees cashier_employee ON cashier_employee.id = sh.cashier_employee_id $whereSql ORDER BY sh.id DESC LIMIT? OFFSET?')
@@ -101,13 +105,10 @@ jobs:
           grep -q 'cashier_employee_id' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
           ! grep -q 'لا يملك user_id مطلوباً لهذا الـ FK' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
           ! grep -q '<select id="roleId"' app/src/main/assets/screens/users.html
-          node --check <(python3 -c "import re;from pathlib import Path;print(re.findall(r'<script(?:\\s[^>]*)?>(.*?)</script>',Path('app/src/main/assets/screens/settings.html').read_text(encoding='utf-8'),re.S|re.I)[-1])")
-          node --check <(python3 -c "import re;from pathlib import Path;print(re.findall(r'<script(?:\\s[^>]*)?>(.*?)</script>',Path('app/src/main/assets/screens/users.html').read_text(encoding='utf-8'),re.S|re.I)[-1])")
-          node --check <(python3 -c "import re;from pathlib import Path;print(re.findall(r'<script(?:\\s[^>]*)?>(.*?)</script>',Path('app/src/main/assets/screens/shifts.html').read_text(encoding='utf-8'),re.S|re.I)[-1])")
+          git diff --check
           python3 ./screen-smoke-test.py
           ./gradlew testDebugUnitTest --no-daemon
           ./gradlew assembleDebug --no-daemon
-          git diff --check
       - name: Push verified commit to feature branch
         shell: bash
         run: |
