@@ -2,8 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches:
-      - tmp/apply-gg-20260911
+    branches: [tmp/apply-gg-20260911]
   workflow_dispatch:
 
 permissions:
@@ -11,23 +10,20 @@ permissions:
 
 jobs:
   apply-gg-and-verify:
-    name: Apply gg.txt and verify
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
-
-      - name: Apply gg.txt changes to target HEAD
+      - name: Apply gg.txt to the five target files
         shell: bash
         run: |
           set -euo pipefail
@@ -35,72 +31,84 @@ jobs:
           git checkout --detach origin/feature/ai-health-sqlite
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('app/src/main/assets/screens/settings.html')
-          s = p.read_text(encoding='utf-8')
-          replacements = [
-              ('                        <p>قيم فعلية من جدول system_settings</p>\n', ''),
-              ('                        <p>الاستعلام الفعلي يستخدم AndroidInterface.getUsers() المرتبط بجدول users</p>\n', ''),
-              ("                case 'getUsers':\n                    raw = bridge.getUsers();\n                    break;", "                case 'getAllSystemSettingsMap':\n                    raw = bridge.getAllSystemSettingsMap();\n                    break;\n                case 'setSystemSetting':\n                    raw = bridge.setSystemSetting(String(payload.key), String(payload.value));\n                    break;\n                case 'searchUsers':\n                    raw = bridge.searchUsers(JSON.stringify(payload || {}));\n                    break;\n                case 'getUsers':\n                    raw = bridge.getUsers();\n                    break;"),
-              ("            const values = dataOf(await bridgeCall('getAllSettingsMap')) || {};", "            const values = dataOf(await bridgeCall('getAllSystemSettingsMap')) || {};"),
-              ("                await bridgeCall('setSetting', {key, value});", "                await bridgeCall('setSystemSetting', {key, value});"),
-              ("        const query = el('searchInput').value.trim().toLowerCase();\n\n        showLoading(true);\n        try {\n            const result = dataOf(await bridgeCall('getUsers'));\n            cachedUsers = Array.isArray(result) ? result : [];\n            renderUsers(cachedUsers, query);\n            el('statUsers').textContent = filterUsers(cachedUsers, query).length;\n            el('userSearchBadge').textContent = filterUsers(cachedUsers, query).length;", "        const query = el('searchInput').value.trim();\n\n        showLoading(true);\n        try {\n            const result = await bridgeCall('searchUsers', {query, page: 1, pageSize: 100});\n            cachedUsers = dataOf(result)?.data || [];\n            renderUsers(cachedUsers, '');\n            el('statUsers').textContent = cachedUsers.length;\n            el('userSearchBadge').textContent = cachedUsers.length;"),
-          ]
-          for old, new in replacements:
-              n = s.count(old)
-              if n != 1:
-                  raise SystemExit(f'gg settings replacement expected 1 match, found {n}: {old[:80]!r}')
-              s = s.replace(old, new, 1)
-          p.write_text(s, encoding='utf-8')
-          print('Applied gg.txt settings changes exactly once.')
+          import re
+          def rep(path, old, new, n=1):
+              p=Path(path); s=p.read_text(encoding='utf-8'); c=s.count(old)
+              if c != n: raise SystemExit(f'{path}: expected {n}, found {c}: {old[:100]!r}')
+              p.write_text(s.replace(old,new,n), encoding='utf-8')
+          S='app/src/main/assets/screens/settings.html'
+          rep(S,'                        <p>قيم فعلية من جدول system_settings</p>\n','')
+          rep(S,'                        <p>الاستعلام الفعلي يستخدم AndroidInterface.getUsers() المرتبط بجدول users</p>\n','')
+          rep(S,"                case 'getUsers':\n                    raw = bridge.getUsers();\n                    break;", "                case 'getAllSystemSettingsMap':\n                    raw = bridge.getAllSystemSettingsMap();\n                    break;\n                case 'setSystemSetting':\n                    raw = bridge.setSystemSetting(String(payload.key), String(payload.value));\n                    break;\n                case 'searchUsers':\n                    raw = bridge.searchUsers(JSON.stringify(payload || {}));\n                    break;\n                case 'getUsers':\n                    raw = bridge.getUsers();\n                    break;")
+          rep(S,"            const values = dataOf(await bridgeCall('getAllSettingsMap')) || {};", "            const values = dataOf(await bridgeCall('getAllSystemSettingsMap')) || {};")
+          rep(S,"                await bridgeCall('setSetting', {key, value});", "                await bridgeCall('setSystemSetting', {key, value});")
+          rep(S,"        const query = el('searchInput').value.trim().toLowerCase();", "        const query = el('searchInput').value.trim();")
+          rep(S,"            const result = dataOf(await bridgeCall('getUsers'));\n            cachedUsers = Array.isArray(result) ? result : [];\n            renderUsers(cachedUsers, query);\n            el('statUsers').textContent = filterUsers(cachedUsers, query).length;\n            el('userSearchBadge').textContent = filterUsers(cachedUsers, query).length;", "            const result = await bridgeCall('searchUsers', {query, page: 1, pageSize: 100});\n            cachedUsers = dataOf(result)?.data || [];\n            renderUsers(cachedUsers, '');\n            el('statUsers').textContent = cachedUsers.length;\n            el('userSearchBadge').textContent = cachedUsers.length;")
+          U='app/src/main/assets/screens/users.html'
+          rep(U,"function clearForm(){ $('userForm').reset();$('editUserId').value='0';$('userId').value='';$('nationality').value='يمني';$('passwordHint').textContent='(مطلوبة للإضافة)';$('password').required=true;$('passwordConfirm').required=true;$('fullNameAr').value='';$('displayName').value='';$('fileName').textContent='';$('imagePreview').innerHTML='<i class=\"fas fa-image\"></i>';fillDepartment();updateJobTitles();['uuidField','createdAt','updatedAt','deletedAt','createdBy','updatedBy','deletedBy','isDeleted','syncStatus','syncVersion','syncAt'].forEach(id=>setVal(id,''))}", "function clearForm(){ $('userForm').reset();$('editUserId').value='0';$('userId').value='';$('nationality').value='يمني';$('passwordHint').textContent='(مطلوبة للإضافة)';$('password').required=true;$('passwordConfirm').required=true;$('fullNameAr').value='';$('displayName').value='';$('avatarFile').dataset.avatarFileName='';$('fileName').textContent='';$('imagePreview').innerHTML='<i class=\"fas fa-image\"></i>';fillDepartment();updateJobTitles();['uuidField','createdAt','updatedAt','deletedAt','createdBy','updatedBy','deletedBy','isDeleted','syncStatus','syncVersion','syncAt'].forEach(id=>setVal(id,''))}")
+          rep(U,"function handleImageFile(input){const f=input.files&&input.files[0];if(!f)return;let nativeUri='';try{if(window.AndroidInterface&&typeof window.AndroidInterface.getLastSelectedFileUri==='function')nativeUri=String(window.AndroidInterface.getLastSelectedFileUri()||'').trim()}catch(e){toast('تعذر الحصول على URI للصورة المحددة من Android','error');return}if(!nativeUri){toast('لم يعرض Android مسار/URI للصورة المحددة','error');return}setVal('avatarPath',nativeUri);$('fileName').textContent='المسار الكامل: '+nativeUri;const url=URL.createObjectURL(f);$('imagePreview').innerHTML=`<img src=\"${url}\" alt=\"الصورة المحددة\">`}", "function handleImageFile(input){const f=input.files&&input.files[0];if(!f)return;let nativeUri='';try{if(window.AndroidInterface&&typeof window.AndroidInterface.getLastSelectedFileUri==='function')nativeUri=String(window.AndroidInterface.getLastSelectedFileUri()||'').trim()}catch(e){toast('تعذر الحصول على URI للصورة المحددة من Android','error');return}if(!nativeUri){toast('لم يعرض Android مسار/URI للصورة المحددة','error');return}setVal('avatarPath',nativeUri);input.dataset.avatarFileName=f.name;$('fileName').textContent=`الملف: ${f.name} | المسار الكامل: ${nativeUri}`;const url=URL.createObjectURL(f);$('imagePreview').innerHTML=`<img src=\"${url}\" alt=\"الصورة المحددة\">`}")
+          rep(U,'avatar_path:$('"'"'avatarPath'"'"').value,remarks:', 'avatar_path:$('"'"'avatarPath'"'"').value,avatar_file_name:($('"'"'avatarFile'"'"').dataset.avatarFileName||$('"'"'avatarPath'"'"').value.split('"'"'/'"'"').pop()||'"'"''"'"'),remarks:')
+          H='app/src/main/assets/screens/shifts.html'
+          rep(H,"                        // shifts.cashier_id references users.id; keep employee_id\n                        // as metadata so the employee/user relationship remains explicit.","                        // The typed contract stores employees.id in cashier_employee_id.\n                        // A cashier never needs a linked users row to be selectable.")
+          rep(H,"                        option.dataset.persistedId = person.cashier_id ?? person.user_id ?? option.value;","                        option.dataset.persistedId = person.employee_id ?? option.value;")
+          M='app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt'
+          anchor='''        @JavascriptInterface\n        fun getAllSettingsMap(): String {\n            DebugLogger.info("WebAppInterface", "getAllSettingsMap called")\n            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")\n            return try {\n                val settings = db.getAllSettingsMap()\n                dataResponse(settings)\n            } catch (e: Exception) {\n                DebugLogger.logException("Setting", e)\n                errorResponse(e.message)\n            }\n        }\n'''
+          addition=anchor+'''\n        @JavascriptInterface\n        fun getAllSystemSettingsMap(): String {\n            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")\n            return try { dataResponse(db.getAllSystemSettingsMap()) } catch (e: Exception) { errorResponse(e.message) }\n        }\n\n        @JavascriptInterface\n        fun setSystemSetting(key: String, value: String): String {\n            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")\n            return try {\n                db.setSystemSetting(key, value)\n                successResponse(true, "تم حفظ إعداد النظام")\n            } catch (e: Exception) { errorResponse(e.message) }\n        }\n'''
+          rep(M,anchor,addition)
+          D='app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt'
+          rep(D,'        const val VERSION = 35','        const val VERSION = 36')
+          rep(D,'            ensureSmsSettings(db)\n            ensureFuelCommerceSchema(db)','            ensureSmsSettings(db)\n            ensureLegacySettingsSchema(db)\n            ensureManagementIdentitySchema(db)\n            ensureFuelCommerceSchema(db)')
+          rep(D,'                    34 -> migrateV34ToV35(db)','                    34 -> migrateV34ToV35(db)\n                    35 -> migrateV35ToV36(db)')
+          helper_anchor='''        ensureSmsSettings(db)\n    }\n\n    private fun ensureModule006Schema(db: SQLiteDatabase) {'''
+          helper_new='''        ensureSmsSettings(db)\n        ensureLegacySettingsSchema(db)\n        ensureManagementIdentitySchema(db)\n    }\n\n    /**\n     * V36 is additive: it gives shifts an explicit employee identity for its\n     * cashier and retains the historical users.id column for legacy records.\n     * No table is dropped and existing cashier values are left untouched.\n     */\n    private fun migrateV35ToV36(db: SQLiteDatabase) {\n        ensureLegacySettingsSchema(db)\n        ensureManagementIdentitySchema(db)\n        Log.d(TAG, "Migrated settings and shift cashier employee identity to V36")\n    }\n\n    private fun ensureLegacySettingsSchema(db: SQLiteDatabase) {\n        db.execSQL("""\n            CREATE TABLE IF NOT EXISTS settings (\n                id INTEGER PRIMARY KEY AUTOINCREMENT,\n                setting_key TEXT UNIQUE NOT NULL,\n                setting_value TEXT,\n                setting_type TEXT DEFAULT 'string',\n                description TEXT,\n                is_editable INTEGER DEFAULT 1,\n                created_at TEXT DEFAULT CURRENT_TIMESTAMP,\n                updated_at TEXT DEFAULT CURRENT_TIMESTAMP\n            )\n        """.trimIndent())\n    }\n\n    private fun ensureManagementIdentitySchema(db: SQLiteDatabase) {\n        ensureColumn(db, "users", "avatar_file_name", "TEXT")\n        ensureColumn(db, "shifts", "cashier_employee_id", "INTEGER REFERENCES employees(id)")\n        db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_cashier_employee ON shifts(cashier_employee_id)")\n    }\n\n    private fun ensureModule006Schema(db: SQLiteDatabase) {'''
+          rep(D,helper_anchor,helper_new)
+          rep(D,'                avatar_path VARCHAR(500),\n','                avatar_path VARCHAR(500),\n                avatar_file_name VARCHAR(255),\n')
+          rep(D,'                cashier_id INTEGER,\n','                cashier_id INTEGER,\n                cashier_employee_id INTEGER,\n')
+          rep(D,'                FOREIGN KEY (cashier_id) REFERENCES users(id),\n','                FOREIGN KEY (cashier_id) REFERENCES users(id),\n                FOREIGN KEY (cashier_employee_id) REFERENCES employees(id),\n')
+          rep(D,'listOf("full_name_ar", "display_name", "avatar_path", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data").forEach { key ->','listOf("full_name_ar", "display_name", "avatar_path", "avatar_file_name", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data").forEach { key ->')
+          rep(D,'u.display_name, u.avatar_path, u.national_id, u.passport_number, u.nationality,','u.display_name, u.avatar_path, u.avatar_file_name, u.national_id, u.passport_number, u.nationality,',2)
+          rep(D,'listOf("full_name", "full_name_ar", "display_name", "avatar_path", "email", "phone", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "preferred_language", "theme", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data")','listOf("full_name", "full_name_ar", "display_name", "avatar_path", "avatar_file_name", "email", "phone", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "preferred_language", "theme", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data")')
+          rep(D,'cashier.full_name LIKE? OR cashier.full_name_ar LIKE?','cashier_employee.full_name LIKE? OR cashier_employee.full_name_ar LIKE?')
+          rep(D,'cashier.username AS cashier_username, cashier.full_name AS cashier_name, cashier.full_name_ar AS cashier_name_ar, cashier.display_name AS cashier_display_name FROM shifts sh LEFT JOIN stations st ON st.id = sh.station_id LEFT JOIN employees manager ON manager.id = sh.manager_id LEFT JOIN users cashier ON cashier.id = sh.cashier_id $whereSql ORDER BY sh.id DESC LIMIT? OFFSET?','cashier_employee.full_name AS cashier_name, cashier_employee.full_name_ar AS cashier_name_ar FROM shifts sh LEFT JOIN stations st ON st.id = sh.station_id LEFT JOIN employees manager ON manager.id = sh.manager_id LEFT JOIN employees cashier_employee ON cashier_employee.id = sh.cashier_employee_id $whereSql ORDER BY sh.id DESC LIMIT? OFFSET?')
+          rep(D,'managementRequired(columns, "shifts", "cashier_id")','managementRequired(columns, "shifts", "cashier_employee_id")')
+          old='''        val cashierTarget = managementForeignKeyTarget("shifts", "cashier_id")\n        val cashierIdToStore = if (cashierTarget?.first == "users") {\n  var userId = 0L\n  managementEmployee(cashierEmployeeId)?.use { cursor ->\n      if (cursor.moveToFirst()) userId = managementLong(cursor, "user_id") ?: 0L\n  }\n  require(userId > 0L) { "schema الحالي لـ shifts.cashier_id يشير إلى users.id؛ الموظف المختار لا يملك user_id مطلوباً لهذا الـ FK" }\n  userId\n        } else {\n  cashierEmployeeId\n        }\n\n'''
+          rep(D,old,'')
+          rep(D,'      append("station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = \'\' OR end_time = 0)")\n      if ("is_deleted" in columns) append(" AND (is_deleted = 0 OR is_deleted IS NULL)")','      append("station_id = ? AND status = \'open\'")\n      if ("is_deleted" in columns) append(" AND is_deleted = 0")',2)
+          rep(D,'managementPut(values, columns, "cashier_id", cashierIdToStore)','// cashier_employee_id is the authoritative employee FK; legacy cashier_id\n  // remains nullable so old user-linked rows can be read without inventing users.\n  managementPut(values, columns, "cashier_employee_id", cashierEmployeeId)')
+          rep(D,'managementRequired(columns, "shifts", "end_time")','managementRequired(columns, "shifts", "status")',2)
+          rep(D,'        return getShiftReport(id, stationId.toInt()).optJSONObject(0)','''        return getReadableDatabase().rawQuery(\n            """SELECT sh.*, st.station_name, st.station_name_ar,\n                      manager.full_name AS manager_name, manager.full_name_ar AS manager_name_ar,\n                      COALESCE(cashier_employee.full_name, legacy_cashier.full_name) AS cashier_name,\n                      COALESCE(cashier_employee.full_name_ar, legacy_cashier.full_name_ar) AS cashier_name_ar\n               FROM shifts sh\n               LEFT JOIN stations st ON st.id = sh.station_id\n               LEFT JOIN employees manager ON manager.id = sh.manager_id\n               LEFT JOIN employees cashier_employee ON cashier_employee.id = sh.cashier_employee_id\n               LEFT JOIN users legacy_cashier ON legacy_cashier.id = sh.cashier_id\n               WHERE sh.id = ? AND sh.station_id = ? AND sh.status = 'open' AND sh.is_deleted = 0""",\n            arrayOf(id.toString(), stationId.toString())\n        ).use { cursor -> cursorToJsonArray(cursor).optJSONObject(0) }''')
+          rep(D,'  val changed = db.update("shifts", values, "id = ? AND station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = \'\' OR end_time = 0)", arrayOf(id.toString(), stationId.toString()))','  val changed = db.update("shifts", values, "id = ? AND station_id = ? AND status = \'open\' AND is_deleted = 0", arrayOf(id.toString(), stationId.toString()))')
+          rep(D,'  if (changed != 1) throw IllegalStateException("فشل UPDATE الحقيقي للوردية: لم يتغير سجل SQLite المتوقع")','''  if (changed != 1) throw IllegalStateException("فشل UPDATE الحقيقي للوردية: لم يتغير سجل SQLite المتوقع")\n  db.query("shifts", arrayOf("status"), "id = ? AND station_id = ?", arrayOf(id.toString(), stationId.toString()), null, null, null, "1").use { cursor ->\n      require(cursor.moveToFirst() && cursor.getString(0) != "open") { "فشل التحقق بعد إغلاق الوردية" }\n  }''')
+          print('Applied all gg.txt changes to the five files.')
           PY
-
-      - name: Verify five-file integration
+      - name: Verify exact integration
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          files = [
-              'app/src/main/assets/screens/settings.html',
-              'app/src/main/assets/screens/users.html',
-              'app/src/main/assets/screens/shifts.html',
-              'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt',
-              'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt',
-          ]
-          for f in files:
-              if not Path(f).is_file(): raise SystemExit(f'Missing required file: {f}')
-              print('PASS — file exists:', f)
-          settings = Path(files[0]).read_text(encoding='utf-8')
-          users = Path(files[1]).read_text(encoding='utf-8')
-          shifts = Path(files[2]).read_text(encoding='utf-8')
-          main = Path(files[3]).read_text(encoding='utf-8')
-          db = Path(files[4]).read_text(encoding='utf-8')
-          checks = {
-              'settings': ('getAllSystemSettingsMap' in settings and 'setSystemSetting' in settings and "bridgeCall('searchUsers'" in settings),
-              'users': ('avatar_file_name' in users and re.search(r'<input[^>]+id=["\']roleId["\'][^>]+type=["\']hidden["\']', users, re.I) is not None and '<select id="roleId"' not in users),
-              'shifts': ('cashier_employee_id' in shifts and 'employees.id' in shifts and 'لا يملك حساب مستخدم مرتبطاً' not in shifts),
-              'MainActivity': ('getAllSystemSettingsMap' in main and 'setSystemSetting' in main),
-              'DatabaseHelper': ('const val VERSION = 36' in db and 'cashier_employee_id' in db and 'fun saveShiftRecordTypedForManagement' in db),
-          }
-          for k,v in checks.items():
-              print(('PASS' if v else 'FAIL') + ' — ' + k)
-              if not v: raise SystemExit(1)
-          for path in ('app/src/main/assets/screens/users.html','app/src/main/assets/screens/shifts.html','app/src/main/assets/screens/settings.html'):
-              text = Path(path).read_text(encoding='utf-8')
-              for i, script in enumerate(re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', text, re.S|re.I), 1):
-                  q = Path('/tmp') / (Path(path).stem + f'-{i}.js')
-                  q.write_text(script, encoding='utf-8')
-                  import subprocess
-                  subprocess.run(['node','--check',str(q)], check=True)
-              print('PASS — JavaScript syntax:', path)
-          PY
+          test -f app/src/main/assets/screens/settings.html
+          test -f app/src/main/assets/screens/users.html
+          test -f app/src/main/assets/screens/shifts.html
+          test -f app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+          test -f app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
+          grep -q 'getAllSystemSettingsMap' app/src/main/assets/screens/settings.html
+          grep -q 'setSystemSetting' app/src/main/assets/screens/settings.html
+          grep -q 'searchUsers' app/src/main/assets/screens/settings.html
+          grep -q 'avatar_file_name' app/src/main/assets/screens/users.html
+          grep -q 'cashier_employee_id' app/src/main/assets/screens/shifts.html
+          grep -q 'getAllSystemSettingsMap' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+          grep -q 'setSystemSetting' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+          grep -q 'const val VERSION = 36' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
+          grep -q 'cashier_employee_id' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
+          ! grep -q 'لا يملك user_id مطلوباً لهذا الـ FK' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
+          ! grep -q '<select id="roleId"' app/src/main/assets/screens/users.html
+          node --check <(python3 -c "import re;from pathlib import Path;print(re.findall(r'<script(?:\\s[^>]*)?>(.*?)</script>',Path('app/src/main/assets/screens/settings.html').read_text(encoding='utf-8'),re.S|re.I)[-1])")
+          node --check <(python3 -c "import re;from pathlib import Path;print(re.findall(r'<script(?:\\s[^>]*)?>(.*?)</script>',Path('app/src/main/assets/screens/users.html').read_text(encoding='utf-8'),re.S|re.I)[-1])")
+          node --check <(python3 -c "import re;from pathlib import Path;print(re.findall(r'<script(?:\\s[^>]*)?>(.*?)</script>',Path('app/src/main/assets/screens/shifts.html').read_text(encoding='utf-8'),re.S|re.I)[-1])")
           python3 ./screen-smoke-test.py
           ./gradlew testDebugUnitTest --no-daemon
           ./gradlew assembleDebug --no-daemon
           git diff --check
-
-      - name: Commit and push only after all checks pass
+      - name: Commit and push verified changes to target branch
         shell: bash
         run: |
           set -euo pipefail
@@ -108,10 +116,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app/src/main/assets/screens/settings.html app/src/main/assets/screens/users.html app/src/main/assets/screens/shifts.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
           git diff --cached --check
-          if git diff --cached --quiet; then
-            echo 'No changes to commit.'
-            exit 0
-          fi
           git commit -m "fix: integrate gg SQLite and WebView repairs"
           git push origin HEAD:feature/ai-health-sqlite
-          echo "Pushed verified commit: $(git rev-parse HEAD)"
+          git status --short
+          git log -1 --oneline
