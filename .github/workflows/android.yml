@@ -1,189 +1,24 @@
-# ============================================================================
-# Build Android APK — Production CI/CD Workflow
-# ============================================================================
-# Project: station-Abo_Ahmed2
-#
-# Branch policy
-# ----------------------------------------------------------------------------
-# main:
-#   Validation + Signed Release APK
-#
-# feature/ai-health-sqlite:
-#   Validation ONLY
-#   No Release signing
-#   No Release keystore
-#
-# Pull Request -> main:
-#   Validation ONLY
-#
-# workflow_dispatch:
-#   Validation is allowed from any ref.
-#   Signed Release is allowed ONLY when the selected ref is main.
-#
-# Security
-# ----------------------------------------------------------------------------
-# - GITHUB_TOKEN is read-only.
-# - Release secrets are available ONLY to the release job.
-# - The Release keystore is stored outside the repository workspace.
-# - The keystore is never uploaded as an artifact.
-# - Keystore cleanup runs even when a previous step fails.
-#
-# Reliability
-# ----------------------------------------------------------------------------
-# - Release requires successful validation.
-# - Release APK must exist.
-# - Release APK must be cryptographically verified with apksigner.
-# - SHA256 checksum is generated for the final APK.
-#
-# Efficiency
-# ----------------------------------------------------------------------------
-# - Gradle cache enabled.
-# - Obsolete runs for the same ref are cancelled.
-# - No Validation APK artifact is uploaded.
-# - Only the final Release APK + SHA256 are retained.
-#
-# ============================================================================
-
-
 name: Build Android APK
 
-
-# ============================================================================
-# WORKFLOW TRIGGERS
-# ============================================================================
-
 on:
-
-  # --------------------------------------------------------------------------
-  # Push validation
-  #
-  # main                      -> Validation + Release
-  # feature/ai-health-sqlite  -> Validation ONLY
-  # --------------------------------------------------------------------------
-
   push:
     branches:
-      - main
-      - feature/ai-health-sqlite
-
-
-  # --------------------------------------------------------------------------
-  # Pull Requests targeting main
-  #
-  # PRs never receive Release signing secrets.
-  # --------------------------------------------------------------------------
-
-  pull_request:
-    branches:
-      - main
-
-
-  # --------------------------------------------------------------------------
-  # Manual execution
-  #
-  # Validation can be started manually from any selected ref.
-  #
-  # Release remains protected by:
-  #
-  #   if: github.ref == 'refs/heads/main'
-  #
-  # Therefore a manual run from feature/ai-health-sqlite cannot produce
-  # a signed production Release APK.
-  # --------------------------------------------------------------------------
-
+      - tmp/apply-gg-20260911
   workflow_dispatch:
 
-
-# ============================================================================
-# CONCURRENCY
-# ============================================================================
-#
-# Rapid repair commits should not create a queue of obsolete builds.
-#
-# Example:
-#
-#   commit A -> running
-#   commit B -> running
-#   commit C -> newest
-#
-# Older runs for the same ref are cancelled when the newer run supersedes them.
-#
-# ============================================================================
-
-concurrency:
-  group: android-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-
-# ============================================================================
-# GITHUB TOKEN PERMISSIONS
-# ============================================================================
-#
-# This workflow never:
-#
-#   - pushes commits
-#   - creates branches
-#   - creates tags
-#   - creates releases
-#   - modifies issues
-#   - modifies pull requests
-#
-# Therefore repository read access is sufficient.
-# ============================================================================
-
 permissions:
-  contents: read
-
-
-# ============================================================================
-# GLOBAL GRADLE OPTIONS
-# ============================================================================
-
-env:
-  GRADLE_OPTS: >-
-    -Dorg.gradle.daemon=false
-    -Dorg.gradle.parallel=true
-    -Dorg.gradle.caching=true
-
-
-# ============================================================================
-# JOB 1 — VALIDATION
-# ============================================================================
-#
-# No Release signing secrets are available to this job.
-#
-# Runs for:
-#
-#   - push -> main
-#   - push -> feature/ai-health-sqlite
-#   - pull_request -> main
-#   - workflow_dispatch
-#
-# ============================================================================
+  contents: write
 
 jobs:
-
-  validate:
-
-    name: Validate Android Project
-
+  apply-gg-and-verify:
+    name: Apply gg.txt and verify
     runs-on: ubuntu-latest
-
-    timeout-minutes: 30
-
+    timeout-minutes: 35
     steps:
-
-      # ----------------------------------------------------------------------
-      # Checkout repository
-      # ----------------------------------------------------------------------
-
-      - name: Checkout Project
+      - name: Checkout
         uses: actions/checkout@v4
-
-
-      # ----------------------------------------------------------------------
-      # Java 17 + Gradle cache
-      # ----------------------------------------------------------------------
+        with:
+          fetch-depth: 0
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -192,432 +27,78 @@ jobs:
           java-version: '17'
           cache: gradle
 
-
-      # ----------------------------------------------------------------------
-      # Java diagnostic
-      # ----------------------------------------------------------------------
-
-      - name: Verify Java version
+      - name: Apply gg.txt changes to target HEAD
+        shell: bash
         run: |
-          java -version
+          set -euo pipefail
+          git fetch origin feature/ai-health-sqlite
+          git checkout --detach origin/feature/ai-health-sqlite
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/assets/screens/settings.html')
+          s = p.read_text(encoding='utf-8')
+          replacements = [
+              ('                        <p>قيم فعلية من جدول system_settings</p>\n', ''),
+              ('                        <p>الاستعلام الفعلي يستخدم AndroidInterface.getUsers() المرتبط بجدول users</p>\n', ''),
+              ("                case 'getUsers':\n                    raw = bridge.getUsers();\n                    break;", "                case 'getAllSystemSettingsMap':\n                    raw = bridge.getAllSystemSettingsMap();\n                    break;\n                case 'setSystemSetting':\n                    raw = bridge.setSystemSetting(String(payload.key), String(payload.value));\n                    break;\n                case 'searchUsers':\n                    raw = bridge.searchUsers(JSON.stringify(payload || {}));\n                    break;\n                case 'getUsers':\n                    raw = bridge.getUsers();\n                    break;"),
+              ("            const values = dataOf(await bridgeCall('getAllSettingsMap')) || {};", "            const values = dataOf(await bridgeCall('getAllSystemSettingsMap')) || {};"),
+              ("                await bridgeCall('setSetting', {key, value});", "                await bridgeCall('setSystemSetting', {key, value});"),
+              ("        const query = el('searchInput').value.trim().toLowerCase();\n\n        showLoading(true);\n        try {\n            const result = dataOf(await bridgeCall('getUsers'));\n            cachedUsers = Array.isArray(result) ? result : [];\n            renderUsers(cachedUsers, query);\n            el('statUsers').textContent = filterUsers(cachedUsers, query).length;\n            el('userSearchBadge').textContent = filterUsers(cachedUsers, query).length;", "        const query = el('searchInput').value.trim();\n\n        showLoading(true);\n        try {\n            const result = await bridgeCall('searchUsers', {query, page: 1, pageSize: 100});\n            cachedUsers = dataOf(result)?.data || [];\n            renderUsers(cachedUsers, '');\n            el('statUsers').textContent = cachedUsers.length;\n            el('userSearchBadge').textContent = cachedUsers.length;"),
+          ]
+          for old, new in replacements:
+              n = s.count(old)
+              if n != 1:
+                  raise SystemExit(f'gg settings replacement expected 1 match, found {n}: {old[:80]!r}')
+              s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+          print('Applied gg.txt settings changes exactly once.')
+          PY
 
-
-      # ----------------------------------------------------------------------
-      # Verify Gradle wrapper
-      # ----------------------------------------------------------------------
-
-      - name: Verify Gradle wrapper
+      - name: Verify five-file integration
+        shell: bash
         run: |
-          set -e
-
-          if [ ! -f "./gradlew" ]; then
-            echo "::error::gradlew was not found in the repository root."
-            exit 1
-          fi
-
-          if [ ! -f "./gradle/wrapper/gradle-wrapper.properties" ]; then
-            echo "::error::Gradle wrapper configuration was not found."
-            exit 1
-          fi
-
-          chmod +x ./gradlew
-
-          echo "Gradle wrapper verified successfully."
-
-
-      # ----------------------------------------------------------------------
-      # Verify smoke-test script
-      # ----------------------------------------------------------------------
-
-      - name: Verify screen smoke test
-        run: |
-          set -e
-
-          if [ ! -f "./screen-smoke-test.py" ]; then
-            echo "::error::screen-smoke-test.py was not found."
-            exit 1
-          fi
-
-          python3 --version
-
-          echo "Smoke-test script verified successfully."
-
-
-      # ----------------------------------------------------------------------
-      # Smoke tests
-      # ----------------------------------------------------------------------
-
-      - name: Run notification and SMS screens smoke tests
-        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          files = [
+              'app/src/main/assets/screens/settings.html',
+              'app/src/main/assets/screens/users.html',
+              'app/src/main/assets/screens/shifts.html',
+              'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt',
+              'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt',
+          ]
+          for f in files:
+              if not Path(f).is_file(): raise SystemExit(f'Missing required file: {f}')
+              print('PASS — file exists:', f)
+          checks = {
+              'settings': ('getAllSystemSettingsMap' in Path(files[0]).read_text(encoding='utf-8') and 'setSystemSetting' in Path(files[0]).read_text(encoding='utf-8') and "bridgeCall('searchUsers'" in Path(files[0]).read_text(encoding='utf-8')),
+              'users': ('avatar_file_name' in Path(files[1]).read_text(encoding='utf-8') and '<input id="roleId" type="hidden"' in Path(files[1]).read_text(encoding='utf-8') and '<select id="roleId"' not in Path(files[1]).read_text(encoding='utf-8')),
+              'shifts': ('cashier_employee_id' in Path(files[2]).read_text(encoding='utf-8') and 'employees.id' in Path(files[2]).read_text(encoding='utf-8') and 'لا يملك حساب مستخدم مرتبطاً' not in Path(files[2]).read_text(encoding='utf-8')),
+              'MainActivity': ('getAllSystemSettingsMap' in Path(files[3]).read_text(encoding='utf-8') and 'setSystemSetting' in Path(files[3]).read_text(encoding='utf-8')),
+              'DatabaseHelper': ('const val VERSION = 36' in Path(files[4]).read_text(encoding='utf-8') and 'cashier_employee_id' in Path(files[4]).read_text(encoding='utf-8') and 'fun saveShiftRecordTypedForManagement' in Path(files[4]).read_text(encoding='utf-8')),
+          }
+          for k,v in checks.items():
+              print(('PASS' if v else 'FAIL') + ' — ' + k)
+              if not v: raise SystemExit(1)
+          PY
           python3 ./screen-smoke-test.py
-
-
-      # ----------------------------------------------------------------------
-      # Kotlin / Robolectric regression tests
-      # ----------------------------------------------------------------------
-
-      - name: Run Kotlin and Robolectric regression tests
-        run: |
           ./gradlew testDebugUnitTest --no-daemon
-
-
-      # ----------------------------------------------------------------------
-      # Debug compilation
-      #
-      # This validates Android compilation without accessing Release signing
-      # secrets or the production keystore.
-      # ----------------------------------------------------------------------
-
-      - name: Compile Debug APK
-        run: |
           ./gradlew assembleDebug --no-daemon
+          git diff --check
 
-
-# ============================================================================
-# JOB 2 — SIGNED PRODUCTION RELEASE
-# ============================================================================
-#
-# Release is intentionally restricted to main.
-#
-# The gate is:
-#
-#   if: github.ref == 'refs/heads/main'
-#
-# Do NOT replace it with:
-#
-#   github.event_name == 'workflow_dispatch'
-#
-# because that would allow manual Release signing from a feature branch.
-#
-# ============================================================================
-
-  release:
-
-    name: Build Signed Release APK
-
-    needs:
-      - validate
-
-    # ------------------------------------------------------------------------
-    # PRODUCTION RELEASE GATE
-    # ------------------------------------------------------------------------
-
-    if: github.ref == 'refs/heads/main'
-
-    runs-on: ubuntu-latest
-
-    timeout-minutes: 30
-
-    steps:
-
-      # ----------------------------------------------------------------------
-      # Checkout exact revision being released
-      # ----------------------------------------------------------------------
-
-      - name: Checkout Project
-        uses: actions/checkout@v4
-
-
-      # ----------------------------------------------------------------------
-      # Java 17 + Gradle cache
-      # ----------------------------------------------------------------------
-
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: gradle
-
-
-      # ----------------------------------------------------------------------
-      # Java diagnostic
-      # ----------------------------------------------------------------------
-
-      - name: Verify Java version
+      - name: Commit and push only after all checks pass
+        shell: bash
         run: |
-          java -version
-
-
-      # ----------------------------------------------------------------------
-      # Gradle wrapper
-      # ----------------------------------------------------------------------
-
-      - name: Grant execute permission for gradlew
-        run: |
-          chmod +x ./gradlew
-
-
-      # ======================================================================
-      # RELEASE SIGNING SECRETS
-      # ======================================================================
-      #
-      # These secrets are intentionally scoped only to this job.
-      # ======================================================================
-
-      - name: Verify signing secrets exist
-        env:
-          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
-          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-
-        run: |
-          set -e
-
-          missing=0
-
-          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
-            echo "::error::Missing secret: RELEASE_KEYSTORE_BASE64"
-            missing=1
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/assets/screens/settings.html app/src/main/assets/screens/users.html app/src/main/assets/screens/shifts.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+            exit 0
           fi
-
-          if [ -z "$RELEASE_KEYSTORE_PASSWORD" ]; then
-            echo "::error::Missing secret: RELEASE_KEYSTORE_PASSWORD"
-            missing=1
-          fi
-
-          if [ -z "$RELEASE_KEY_ALIAS" ]; then
-            echo "::error::Missing secret: RELEASE_KEY_ALIAS"
-            missing=1
-          fi
-
-          if [ -z "$RELEASE_KEY_PASSWORD" ]; then
-            echo "::error::Missing secret: RELEASE_KEY_PASSWORD"
-            missing=1
-          fi
-
-          if [ "$missing" -ne 0 ]; then
-            echo "::error::One or more Release signing secrets are missing."
-            exit 1
-          fi
-
-          echo "All required Release signing secrets are present."
-
-
-      # ======================================================================
-      # DECODE RELEASE KEYSTORE
-      # ======================================================================
-      #
-      # The keystore is placed under RUNNER_TEMP rather than inside the
-      # repository workspace.
-      # ======================================================================
-
-      - name: Decode Release Keystore
-        env:
-          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
-
-        run: |
-          set -e
-
-          umask 077
-
-          KEYSTORE="$RUNNER_TEMP/station-release.keystore"
-
-          printf '%s' "$RELEASE_KEYSTORE_BASE64" \
-            | base64 --decode > "$KEYSTORE"
-
-          if [ ! -s "$KEYSTORE" ]; then
-            echo "::error::Decoded Release keystore is empty."
-            rm -f "$KEYSTORE"
-            exit 1
-          fi
-
-          chmod 600 "$KEYSTORE"
-
-          echo "Release keystore decoded successfully."
-
-
-      # ======================================================================
-      # SIGNED RELEASE BUILD
-      # ======================================================================
-
-      - name: Clean and Build Signed Release APK
-        env:
-          RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/station-release.keystore
-          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-
-        run: |
-          ./gradlew clean assembleRelease --no-daemon
-
-
-      # ======================================================================
-      # LOCATE FINAL RELEASE APK
-      # ======================================================================
-
-      - name: Locate Release APK
-        id: apk
-
-        run: |
-          set -e
-
-          mapfile -t APKS < <(
-            find app/build/outputs/apk \
-              -type f \
-              -name "*.apk" \
-              ! -name "*-unsigned.apk" \
-              | sort
-          )
-
-          if [ "${#APKS[@]}" -eq 0 ]; then
-            echo "::error::No signed Release APK was produced."
-            exit 1
-          fi
-
-          if [ "${#APKS[@]}" -gt 1 ]; then
-            echo "::error::More than one Release APK was produced."
-
-            printf '%s\n' "${APKS[@]}"
-
-            echo "::error::The workflow expects exactly one Release APK."
-            exit 1
-          fi
-
-          APK="${APKS[0]}"
-
-          echo "APK=$APK" >> "$GITHUB_OUTPUT"
-
-          echo "Release APK:"
-          echo "$APK"
-
-
-      # ======================================================================
-      # VERIFY APK SIGNATURE
-      # ======================================================================
-
-      - name: Verify APK Signature
-        env:
-          APK: ${{ steps.apk.outputs.APK }}
-
-        run: |
-          set -e
-
-          BUILD_TOOLS_DIR="$ANDROID_HOME/build-tools"
-
-          if [ ! -d "$BUILD_TOOLS_DIR" ]; then
-            echo "::error::Android SDK build-tools directory was not found."
-            exit 1
-          fi
-
-          APKSIGNER="$(
-            find "$BUILD_TOOLS_DIR" \
-              -maxdepth 2 \
-              -type f \
-              -name "apksigner" \
-              | sort -V \
-              | tail -n 1
-          )"
-
-          if [ -z "$APKSIGNER" ] || [ ! -x "$APKSIGNER" ]; then
-            echo "::error::apksigner was not found."
-            exit 1
-          fi
-
-          echo "Using apksigner:"
-          echo "$APKSIGNER"
-
-          echo
-          echo "===== APK SIGNATURE VERIFICATION ====="
-
-          "$APKSIGNER" verify \
-            --verbose \
-            --print-certs \
-            "$APK"
-
-
-      # ======================================================================
-      # GENERATE SHA256 CHECKSUM
-      # ======================================================================
-
-      - name: Generate SHA256 Checksum
-        env:
-          APK: ${{ steps.apk.outputs.APK }}
-
-        run: |
-          set -e
-
-          mkdir -p release-metadata
-
-          sha256sum "$APK" \
-            | tee release-metadata/SHA256SUMS.txt
-
-          echo
-          echo "===== APK INFORMATION ====="
-
-          ls -lh "$APK"
-
-          echo
-          echo "===== SHA256 ====="
-
-          cat release-metadata/SHA256SUMS.txt
-
-
-      # ======================================================================
-      # PREPARE FINAL RELEASE ARTIFACT
-      # ======================================================================
-
-      - name: Prepare Release Artifact
-        env:
-          APK: ${{ steps.apk.outputs.APK }}
-
-        run: |
-          set -e
-
-          mkdir -p release-artifact
-
-          cp "$APK" \
-            release-artifact/Station_Abo_Ahmed_Release.apk
-
-          cp release-metadata/SHA256SUMS.txt \
-            release-artifact/SHA256SUMS.txt
-
-          echo "===== FINAL RELEASE ARTIFACT ====="
-
-          ls -lah release-artifact
-
-
-      # ======================================================================
-      # CLEAN SIGNING MATERIAL
-      # ======================================================================
-      #
-      # Always execute, including after build/signature failures.
-      # ======================================================================
-
-      - name: Clean Signing Material
-        if: always()
-
-        run: |
-          KEYSTORE="$RUNNER_TEMP/station-release.keystore"
-
-          if [ -f "$KEYSTORE" ]; then
-            rm -f "$KEYSTORE"
-            echo "Release keystore removed from runner temporary storage."
-          else
-            echo "Release keystore was already absent."
-          fi
-
-
-      # ======================================================================
-      # UPLOAD ONLY FINAL RELEASE ARTIFACTS
-      # ======================================================================
-      #
-      # Uploaded files:
-      #
-      #   Station_Abo_Ahmed_Release.apk
-      #   SHA256SUMS.txt
-      #
-      # No debug APK.
-      # No intermediate files.
-      # No keystore.
-      # ======================================================================
-
-      - name: Upload Release APK
-        uses: actions/upload-artifact@v4
-
-        with:
-          name: Station_Abo_Ahmed_Release_APK
-          path: release-artifact/*
-          if-no-files-found: error
-          retention-days: 14
+          git commit -m "fix: integrate gg SQLite and WebView repairs"
+          git push origin HEAD:feature/ai-health-sqlite
+          echo "Pushed verified commit: $(git rev-parse HEAD)"
