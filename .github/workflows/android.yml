@@ -36,6 +36,10 @@ jobs:
               p=Path(path); s=p.read_text(encoding='utf-8'); c=s.count(old)
               if c != n: raise SystemExit(f'{path}: expected {n}, found {c}: {old[:100]!r}')
               p.write_text(s.replace(old,new,n), encoding='utf-8')
+          def sub(path, pattern, repl, n=1):
+              p=Path(path); s=p.read_text(encoding='utf-8'); s2,c=re.subn(pattern,repl,s,count=n,flags=re.S)
+              if c != n: raise SystemExit(f'{path}: expected {n}, found {c}: {pattern[:100]!r}')
+              p.write_text(s2,encoding='utf-8')
           S='app/src/main/assets/screens/settings.html'
           rep(S,'                        <p>قيم فعلية من جدول system_settings</p>\n','')
           rep(S,'                        <p>الاستعلام الفعلي يستخدم AndroidInterface.getUsers() المرتبط بجدول users</p>\n','')
@@ -62,9 +66,9 @@ jobs:
           helper_anchor='''        ensureSmsSettings(db)\n    }\n\n    private fun ensureModule006Schema(db: SQLiteDatabase) {'''
           helper_new='''        ensureSmsSettings(db)\n        ensureLegacySettingsSchema(db)\n        ensureManagementIdentitySchema(db)\n    }\n\n    /**\n     * V36 is additive: it gives shifts an explicit employee identity for its\n     * cashier and retains the historical users.id column for legacy records.\n     * No table is dropped and existing cashier values are left untouched.\n     */\n    private fun migrateV35ToV36(db: SQLiteDatabase) {\n        ensureLegacySettingsSchema(db)\n        ensureManagementIdentitySchema(db)\n        Log.d(TAG, "Migrated settings and shift cashier employee identity to V36")\n    }\n\n    private fun ensureLegacySettingsSchema(db: SQLiteDatabase) {\n        db.execSQL("""\n            CREATE TABLE IF NOT EXISTS settings (\n                id INTEGER PRIMARY KEY AUTOINCREMENT,\n                setting_key TEXT UNIQUE NOT NULL,\n                setting_value TEXT,\n                setting_type TEXT DEFAULT 'string',\n                description TEXT,\n                is_editable INTEGER DEFAULT 1,\n                created_at TEXT DEFAULT CURRENT_TIMESTAMP,\n                updated_at TEXT DEFAULT CURRENT_TIMESTAMP\n            )\n        """.trimIndent())\n    }\n\n    private fun ensureManagementIdentitySchema(db: SQLiteDatabase) {\n        ensureColumn(db, "users", "avatar_file_name", "TEXT")\n        ensureColumn(db, "shifts", "cashier_employee_id", "INTEGER REFERENCES employees(id)")\n        db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_cashier_employee ON shifts(cashier_employee_id)")\n    }\n\n    private fun ensureModule006Schema(db: SQLiteDatabase) {'''
           rep(D,helper_anchor,helper_new)
-          rep(D,'                avatar_path VARCHAR(500),\n','                avatar_path VARCHAR(500),\n                avatar_file_name VARCHAR(255),\n')
-          rep(D,'                cashier_id INTEGER,\n','                cashier_id INTEGER,\n                cashier_employee_id INTEGER,\n')
-          rep(D,'                FOREIGN KEY (cashier_id) REFERENCES users(id),\n','                FOREIGN KEY (cashier_id) REFERENCES users(id),\n                FOREIGN KEY (cashier_employee_id) REFERENCES employees(id),\n')
+          sub(D,r'(CREATE TABLE IF NOT EXISTS users \(.*?\n\s+avatar_path VARCHAR\(500\),)',r'\1\n                avatar_file_name VARCHAR(255),',1)
+          sub(D,r'(CREATE TABLE IF NOT EXISTS shifts \(.*?\n\s+cashier_id INTEGER,)',r'\1\n                cashier_employee_id INTEGER,',1)
+          sub(D,r'(CREATE TABLE IF NOT EXISTS shifts \(.*?\n\s+FOREIGN KEY \(cashier_id\) REFERENCES users\(id\),)',r'\1\n                FOREIGN KEY (cashier_employee_id) REFERENCES employees(id),',1)
           rep(D,'listOf("full_name_ar", "display_name", "avatar_path", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data").forEach { key ->','listOf("full_name_ar", "display_name", "avatar_path", "avatar_file_name", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data").forEach { key ->')
           rep(D,'u.display_name, u.avatar_path, u.national_id, u.passport_number, u.nationality,','u.display_name, u.avatar_path, u.avatar_file_name, u.national_id, u.passport_number, u.nationality,',2)
           rep(D,'listOf("full_name", "full_name_ar", "display_name", "avatar_path", "email", "phone", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "preferred_language", "theme", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data")','listOf("full_name", "full_name_ar", "display_name", "avatar_path", "avatar_file_name", "email", "phone", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "preferred_language", "theme", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data")')
@@ -79,17 +83,13 @@ jobs:
           rep(D,'        return getShiftReport(id, stationId.toInt()).optJSONObject(0)','''        return getReadableDatabase().rawQuery(\n            """SELECT sh.*, st.station_name, st.station_name_ar,\n                      manager.full_name AS manager_name, manager.full_name_ar AS manager_name_ar,\n                      COALESCE(cashier_employee.full_name, legacy_cashier.full_name) AS cashier_name,\n                      COALESCE(cashier_employee.full_name_ar, legacy_cashier.full_name_ar) AS cashier_name_ar\n               FROM shifts sh\n               LEFT JOIN stations st ON st.id = sh.station_id\n               LEFT JOIN employees manager ON manager.id = sh.manager_id\n               LEFT JOIN employees cashier_employee ON cashier_employee.id = sh.cashier_employee_id\n               LEFT JOIN users legacy_cashier ON legacy_cashier.id = sh.cashier_id\n               WHERE sh.id = ? AND sh.station_id = ? AND sh.status = 'open' AND sh.is_deleted = 0""",\n            arrayOf(id.toString(), stationId.toString())\n        ).use { cursor -> cursorToJsonArray(cursor).optJSONObject(0) }''')
           rep(D,'  val changed = db.update("shifts", values, "id = ? AND station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = \'\' OR end_time = 0)", arrayOf(id.toString(), stationId.toString()))','  val changed = db.update("shifts", values, "id = ? AND station_id = ? AND status = \'open\' AND is_deleted = 0", arrayOf(id.toString(), stationId.toString()))')
           rep(D,'  if (changed != 1) throw IllegalStateException("فشل UPDATE الحقيقي للوردية: لم يتغير سجل SQLite المتوقع")','''  if (changed != 1) throw IllegalStateException("فشل UPDATE الحقيقي للوردية: لم يتغير سجل SQLite المتوقع")\n  db.query("shifts", arrayOf("status"), "id = ? AND station_id = ?", arrayOf(id.toString(), stationId.toString()), null, null, null, "1").use { cursor ->\n      require(cursor.moveToFirst() && cursor.getString(0) != "open") { "فشل التحقق بعد إغلاق الوردية" }\n  }''')
-          print('Applied all gg.txt changes to the five files.')
+          print('Applied gg.txt changes to all five target files.')
           PY
-      - name: Verify exact integration
+      - name: Verify and test before push
         shell: bash
         run: |
           set -euo pipefail
-          test -f app/src/main/assets/screens/settings.html
-          test -f app/src/main/assets/screens/users.html
-          test -f app/src/main/assets/screens/shifts.html
-          test -f app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
-          test -f app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
+          for f in app/src/main/assets/screens/settings.html app/src/main/assets/screens/users.html app/src/main/assets/screens/shifts.html app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt; do test -f "$f"; done
           grep -q 'getAllSystemSettingsMap' app/src/main/assets/screens/settings.html
           grep -q 'setSystemSetting' app/src/main/assets/screens/settings.html
           grep -q 'searchUsers' app/src/main/assets/screens/settings.html
@@ -108,7 +108,7 @@ jobs:
           ./gradlew testDebugUnitTest --no-daemon
           ./gradlew assembleDebug --no-daemon
           git diff --check
-      - name: Commit and push verified changes to target branch
+      - name: Push verified commit to feature branch
         shell: bash
         run: |
           set -euo pipefail
