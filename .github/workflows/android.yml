@@ -26,6 +26,7 @@ jobs:
           cp app/src/main/assets/screens/deliveries.html audit-source/app/src/main/assets/screens/deliveries.html
           cp app/src/main/assets/screens/orders.html audit-source/app/src/main/assets/screens/orders.html
           cp app/src/main/assets/screens/sales-log.html audit-source/app/src/main/assets/screens/sales-log.html
+          cp app/src/main/assets/screens/settings.html audit-source/app/src/main/assets/screens/settings.html
           cp app/src/main/assets/main.html audit-source/app/src/main/assets/main.html
           cp .github/workflows/android.yml audit-source/.github/workflows/android.yml
           find audit-source -type f -print | sort
