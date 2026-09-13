@@ -3,499 +3,723 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
-    <meta name="theme-color" content="#1a3a5a" />
+    <meta name="theme-color" content="#1C1E22" />
     <title>محطة أبو أحمد – لوحة التحكم</title>
+
+    <!-- ============ المكتبات المحلية ============ -->
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css" />
+
     <style>
         /* ================================================================
-           الخطوط
+           الخطوط المحلية (من assets-local/fonts/)
         ================================================================ */
         @font-face {
-            font-family: 'Poppins';
-            src: url('file:///android_asset/fonts/Poppins-Regular.ttf') format('truetype');
+            font-family: 'Tajawal';
+            src: url('file:///android_asset/assets-local/fonts/Tajawal-Regular.ttf') format('truetype');
             font-weight: 400;
             font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Tajawal';
+            src: url('file:///android_asset/assets-local/fonts/Tajawal-Medium.ttf') format('truetype');
+            font-weight: 500;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Tajawal';
+            src: url('file:///android_asset/assets-local/fonts/Tajawal-Bold.ttf') format('truetype');
+            font-weight: 700;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Tajawal';
+            src: url('file:///android_asset/assets-local/fonts/Tajawal-ExtraBold.ttf') format('truetype');
+            font-weight: 800;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Outfit';
+            src: url('file:///android_asset/assets-local/fonts/Outfit-Bold.ttf') format('truetype');
+            font-weight: 700;
+            font-style: normal;
+            font-display: swap;
         }
         @font-face {
             font-family: 'Poppins';
-            src: url('file:///android_asset/fonts/Poppins-Bold.ttf') format('truetype');
-            font-weight: 700;
-            font-style: normal;
+            src: url('file:///android_asset/assets-local/fonts/Poppins-Regular.ttf') format('truetype');
+            font-weight: 400; font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Poppins';
+            src: url('file:///android_asset/assets-local/fonts/Poppins-Bold.ttf') format('truetype');
+            font-weight: 700; font-style: normal;
+            font-display: swap;
         }
         @font-face {
             font-family: 'Inter';
-            src: url('file:///android_asset/fonts/Inter-Regular.ttf') format('truetype');
-            font-weight: 400;
-            font-style: normal;
+            src: url('file:///android_asset/assets-local/fonts/Inter-Regular.ttf') format('truetype');
+            font-weight: 400; font-style: normal;
+            font-display: swap;
         }
         @font-face {
             font-family: 'Inter';
-            src: url('file:///android_asset/fonts/Inter-Bold.ttf') format('truetype');
-            font-weight: 700;
-            font-style: normal;
+            src: url('file:///android_asset/assets-local/fonts/Inter-Bold.ttf') format('truetype');
+            font-weight: 700; font-style: normal;
+            font-display: swap;
         }
         @font-face {
             font-family: 'IBM Plex Mono';
-            src: url('file:///android_asset/fonts/IBMPlexMono-Regular.ttf') format('truetype');
-            font-weight: 400;
-            font-style: normal;
+            src: url('file:///android_asset/assets-local/fonts/IBMPlexMono-Regular.ttf') format('truetype');
+            font-weight: 400; font-style: normal;
+            font-display: swap;
         }
 
         /* ================================================================
-           نظام الألوان العالمي – Enterprise-Grade Design System
-           ================================================================ */
+           نظام الألوان Fuel2 Ultra v6
+        ================================================================ */
         :root {
-            /* ---------- الألوان الأولية (Primitive Colors) ---------- */
-            --color-primary-10: #0a1628;
-            --color-primary-20: #0f2440;
-            --color-primary-30: #143358;
-            --color-primary-40: #1a4270;
-            --color-primary-50: #205288;
-            --color-primary-60: #2b6ba8;
-            --color-primary-70: #4084c4;
-            --color-primary-80: #6aa0d8;
-            --color-primary-90: #9bc0e8;
-            --color-primary-95: #d0e3f5;
-            --color-primary-99: #f0f7fe;
+            --bg: #FFF8E7;
+            --bg2: #FDF2D8;
+            --card: #FFFFFFF2;
+            --card-solid: #FFFFFF;
+            --soft: rgba(209, 213, 217, .28);
+            --soft-hover: rgba(209, 213, 217, .45);
+            --text: #1E1C1A;
+            --muted: #8E95A0;
+            --line: rgba(232, 226, 213, .9);
+            --gold: #D4A86A;
+            --gold2: #B78D55;
+            --silver: #D1D5D9;
+            --success: #2ECC71;
+            --warning: #E67E22;
+            --danger: #FF4757;
+            --shadow: 0 20px 60px rgba(45, 30, 10, .08);
+            --shadow-hover: 0 30px 70px rgba(45, 30, 10, .14);
+            --blur: blur(22px) saturate(1.4);
+            --radius-lg: 26px;
+            --radius-md: 20px;
+            --radius-sm: 14px;
 
-            --color-secondary-10: #2b1d00;
-            --color-secondary-20: #4d3500;
-            --color-secondary-30: #6f4d00;
-            --color-secondary-40: #916600;
-            --color-secondary-50: #b38000;
-            --color-secondary-60: #d49a1a;
-            --color-secondary-70: #f0b840;
-            --color-secondary-80: #f5cc70;
-            --color-secondary-90: #fae0a0;
-            --color-secondary-95: #fcf0d0;
-            --color-secondary-99: #fffbf5;
+            --md-sys-color-background: #FFF8E7;
+            --md-sys-color-surface: #FFFFFFF2;
+            --md-sys-color-surface-container: rgba(212, 168, 106, .06);
+            --md-sys-color-surface-container-high: rgba(212, 168, 106, .12);
+            --md-sys-color-surface-container-low: rgba(212, 168, 106, .04);
+            --md-sys-color-surface-container-lowest: #FFFFFF;
+            --md-sys-color-surface-variant: #F5EFE3;
 
-            --color-neutral-0: #ffffff;
-            --color-neutral-10: #f8f7f5;
-            --color-neutral-20: #edebe7;
-            --color-neutral-30: #d6d2cc;
-            --color-neutral-40: #b0aaa2;
-            --color-neutral-50: #8a837a;
-            --color-neutral-60: #6b645c;
-            --color-neutral-70: #4d4741;
-            --color-neutral-80: #36312c;
-            --color-neutral-90: #201d1a;
-            --color-neutral-100: #0f0d0b;
+            --md-sys-color-primary: #D4A86A;
+            --md-sys-color-primary-fixed: #F5DFC0;
+            --md-sys-color-primary-fixed-dim: #E8C089;
+            --md-sys-color-on-primary: #FFFFFF;
+            --md-sys-color-on-primary-fixed: #4A3818;
 
-            /* ---------- الرموز الدلالية (Semantic Tokens) ---------- */
-            --md-sys-color-background: var(--color-neutral-10);
-            --md-sys-color-surface: var(--color-neutral-0);
-            --md-sys-color-surface-container: var(--color-neutral-20);
-            --md-sys-color-surface-container-high: var(--color-neutral-30);
-            --md-sys-color-surface-container-low: var(--color-neutral-10);
-            --md-sys-color-surface-container-lowest: var(--color-neutral-0);
-            --md-sys-color-surface-variant: var(--color-neutral-20);
+            --md-sys-color-secondary: #B78D55;
+            --md-sys-color-secondary-fixed: #F5DFC0;
+            --md-sys-color-secondary-fixed-dim: #D4A86A;
+            --md-sys-color-on-secondary: #FFFFFF;
 
-            --md-sys-color-primary: var(--color-primary-50);
-            --md-sys-color-primary-fixed: var(--color-primary-90);
-            --md-sys-color-primary-fixed-dim: var(--color-primary-70);
-            --md-sys-color-on-primary: var(--color-neutral-0);
-            --md-sys-color-on-primary-fixed: var(--color-primary-10);
+            --md-sys-color-on-background: #1E1C1A;
+            --md-sys-color-on-surface: #1E1C1A;
+            --md-sys-color-on-surface-variant: #6B635A;
+            --md-sys-color-on-surface-medium: #8E95A0;
+            --md-sys-color-on-surface-disabled: #C4C0B8;
 
-            --md-sys-color-secondary: var(--color-secondary-50);
-            --md-sys-color-secondary-fixed: var(--color-secondary-90);
-            --md-sys-color-secondary-fixed-dim: var(--color-secondary-70);
-            --md-sys-color-on-secondary: var(--color-neutral-0);
-            --md-sys-color-on-secondary-fixed: var(--color-secondary-10);
+            --md-sys-color-error: #FF4757;
+            --md-sys-color-error-container: #FFE0E3;
+            --md-sys-color-on-error: #FFFFFF;
+            --md-sys-color-on-error-container: #4A0008;
 
-            --md-sys-color-on-background: var(--color-neutral-90);
-            --md-sys-color-on-surface: var(--color-neutral-90);
-            --md-sys-color-on-surface-variant: var(--color-neutral-60);
-            --md-sys-color-on-surface-medium: var(--color-neutral-50);
-            --md-sys-color-on-surface-disabled: var(--color-neutral-40);
+            --md-sys-color-success: #2ECC71;
+            --md-sys-color-success-container: #D8F5E3;
+            --md-sys-color-on-success: #FFFFFF;
+            --md-sys-color-on-success-container: #003D18;
 
-            --md-sys-color-error: #ba1a1a;
-            --md-sys-color-error-container: #ffdad6;
-            --md-sys-color-on-error: #ffffff;
-            --md-sys-color-on-error-container: #410002;
+            --md-sys-color-warning: #E67E22;
+            --md-sys-color-warning-container: #FCE4C8;
+            --md-sys-color-on-warning: #FFFFFF;
+            --md-sys-color-on-warning-container: #4A2300;
 
-            --md-sys-color-success: #1a6a3a;
-            --md-sys-color-success-container: #c8f0d4;
-            --md-sys-color-on-success: #ffffff;
-            --md-sys-color-on-success-container: #052110;
+            --md-sys-color-info: #3D8BC4;
+            --md-sys-color-info-container: #D6E8F5;
+            --md-sys-color-on-info: #FFFFFF;
+            --md-sys-color-on-info-container: #002137;
 
-            --md-sys-color-warning: #7a5800;
-            --md-sys-color-warning-container: #fae0a0;
-            --md-sys-color-on-warning: #ffffff;
-            --md-sys-color-on-warning-container: #241b00;
+            --md-sys-color-outline: #D1D5D9;
+            --md-sys-color-outline-variant: #E8E2D5;
 
-            --md-sys-color-info: #005b7a;
-            --md-sys-color-info-container: #b6eaff;
-            --md-sys-color-on-info: #ffffff;
-            --md-sys-color-on-info-container: #001e2b;
-
-            --md-sys-color-outline: var(--color-neutral-40);
-            --md-sys-color-outline-variant: var(--color-neutral-30);
-
-            --md-sys-elevation-0: none;
-            --md-sys-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-            --md-sys-elevation-2: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.03);
-            --md-sys-elevation-3: 0 10px 20px rgba(0, 0, 0, 0.06), 0 4px 8px rgba(0, 0, 0, 0.04);
-            --md-sys-elevation-4: 0 16px 32px rgba(0, 0, 0, 0.08), 0 8px 16px rgba(0, 0, 0, 0.04);
-            --md-sys-elevation-5: 0 24px 48px rgba(0, 0, 0, 0.12), 0 12px 24px rgba(0, 0, 0, 0.06);
+            --md-sys-elevation-1: 0 4px 12px rgba(45, 30, 10, .06);
+            --md-sys-elevation-2: 0 8px 20px rgba(45, 30, 10, .08);
+            --md-sys-elevation-3: 0 12px 28px rgba(45, 30, 10, .10);
+            --md-sys-elevation-4: 0 16px 36px rgba(45, 30, 10, .12);
+            --md-sys-elevation-5: 0 24px 60px rgba(45, 30, 10, .18);
 
             --md-sys-shape-corner-small: 8px;
             --md-sys-shape-corner-medium: 12px;
             --md-sys-shape-corner-large: 16px;
             --md-sys-shape-corner-extra-large: 24px;
             --md-sys-shape-corner-full: 9999px;
+
+            --sidebar-width: 320px;
         }
 
         [data-theme="dark"] {
-            --color-primary-10: #f0f7fe;
-            --color-primary-20: #d0e3f5;
-            --color-primary-30: #9bc0e8;
-            --color-primary-40: #6aa0d8;
-            --color-primary-50: #4084c4;
-            --color-primary-60: #2b6ba8;
-            --color-primary-70: #205288;
-            --color-primary-80: #1a4270;
-            --color-primary-90: #143358;
-            --color-primary-95: #0f2440;
-            --color-primary-99: #0a1628;
+            --bg: #0F1215;
+            --bg2: #181C20;
+            --card: #1E2329F2;
+            --card-solid: #1E2329;
+            --soft: rgba(255, 255, 255, .06);
+            --soft-hover: rgba(255, 255, 255, .1);
+            --text: #F6F1E7;
+            --muted: #A0A8B1;
+            --line: rgba(255, 255, 255, .08);
+            --gold: #F0C992;
+            --gold2: #D4A86A;
+            --shadow: 0 20px 60px rgba(0, 0, 0, .6);
+            --shadow-hover: 0 30px 80px rgba(0, 0, 0, .75);
 
-            --color-secondary-10: #fffbf5;
-            --color-secondary-20: #fcf0d0;
-            --color-secondary-30: #fae0a0;
-            --color-secondary-40: #f5cc70;
-            --color-secondary-50: #f0b840;
-            --color-secondary-60: #d49a1a;
-            --color-secondary-70: #b38000;
-            --color-secondary-80: #916600;
-            --color-secondary-90: #6f4d00;
-            --color-secondary-95: #4d3500;
-            --color-secondary-99: #2b1d00;
+            --md-sys-color-background: #0F1215;
+            --md-sys-color-surface: #1E2329F2;
+            --md-sys-color-surface-container: rgba(240, 201, 146, .06);
+            --md-sys-color-surface-container-high: rgba(240, 201, 146, .12);
+            --md-sys-color-surface-container-low: rgba(240, 201, 146, .04);
+            --md-sys-color-surface-container-lowest: #1E2329;
+            --md-sys-color-surface-variant: #2A2F36;
 
-            --color-neutral-100: #f8f7f5;
-            --color-neutral-90: #edebe7;
-            --color-neutral-80: #d6d2cc;
-            --color-neutral-70: #b0aaa2;
-            --color-neutral-60: #8a837a;
-            --color-neutral-50: #6b645c;
-            --color-neutral-40: #4d4741;
-            --color-neutral-30: #36312c;
-            --color-neutral-20: #201d1a;
-            --color-neutral-10: #0f0d0b;
-            --color-neutral-0: #000000;
+            --md-sys-color-primary: #F0C992;
+            --md-sys-color-primary-fixed: #4A3818;
+            --md-sys-color-primary-fixed-dim: #D4A86A;
+            --md-sys-color-on-primary: #2A1F0A;
+            --md-sys-color-on-primary-fixed: #F5DFC0;
 
-            --md-sys-color-background: var(--color-neutral-10);
-            --md-sys-color-surface: var(--color-neutral-20);
-            --md-sys-color-surface-container: var(--color-neutral-30);
-            --md-sys-color-surface-container-high: var(--color-neutral-40);
-            --md-sys-color-surface-container-low: var(--color-neutral-10);
-            --md-sys-color-surface-container-lowest: var(--color-neutral-0);
-            --md-sys-color-surface-variant: var(--color-neutral-30);
+            --md-sys-color-secondary: #D4A86A;
+            --md-sys-color-secondary-fixed: #3A2A10;
+            --md-sys-color-secondary-fixed-dim: #B78D55;
+            --md-sys-color-on-secondary: #1A1305;
 
-            --md-sys-color-primary: var(--color-primary-60);
-            --md-sys-color-primary-fixed: var(--color-primary-30);
-            --md-sys-color-primary-fixed-dim: var(--color-primary-50);
-            --md-sys-color-on-primary: var(--color-primary-99);
-            --md-sys-color-on-primary-fixed: var(--color-primary-95);
+            --md-sys-color-on-background: #F6F1E7;
+            --md-sys-color-on-surface: #F6F1E7;
+            --md-sys-color-on-surface-variant: #A0A8B1;
+            --md-sys-color-on-surface-medium: #8A919A;
+            --md-sys-color-on-surface-disabled: #5C636B;
 
-            --md-sys-color-secondary: var(--color-secondary-60);
-            --md-sys-color-secondary-fixed: var(--color-secondary-30);
-            --md-sys-color-secondary-fixed-dim: var(--color-secondary-50);
-            --md-sys-color-on-secondary: var(--color-secondary-99);
-            --md-sys-color-on-secondary-fixed: var(--color-secondary-95);
-
-            --md-sys-color-on-background: var(--color-neutral-90);
-            --md-sys-color-on-surface: var(--color-neutral-90);
-            --md-sys-color-on-surface-variant: var(--color-neutral-60);
-            --md-sys-color-on-surface-medium: var(--color-neutral-50);
-            --md-sys-color-on-surface-disabled: var(--color-neutral-40);
-
-            --md-sys-color-error: #ff5449;
+            --md-sys-color-error: #FF6B7A;
             --md-sys-color-error-container: #410002;
             --md-sys-color-on-error: #410002;
-            --md-sys-color-on-error-container: #ffdad6;
+            --md-sys-color-on-error-container: #FFDAD6;
 
-            --md-sys-color-success: #52d084;
+            --md-sys-color-success: #52D084;
             --md-sys-color-success-container: #052110;
             --md-sys-color-on-success: #052110;
-            --md-sys-color-on-success-container: #c8f0d4;
+            --md-sys-color-on-success-container: #C8F0D4;
 
-            --md-sys-color-warning: #f5cc70;
-            --md-sys-color-warning-container: #241b00;
-            --md-sys-color-on-warning: #241b00;
-            --md-sys-color-on-warning-container: #fae0a0;
+            --md-sys-color-warning: #F5CC70;
+            --md-sys-color-warning-container: #241B00;
+            --md-sys-color-on-warning: #241B00;
+            --md-sys-color-on-warning-container: #FAE0A0;
 
-            --md-sys-color-info: #6ac8ff;
-            --md-sys-color-info-container: #001e2b;
-            --md-sys-color-on-info: #001e2b;
-            --md-sys-color-on-info-container: #b6eaff;
+            --md-sys-color-info: #6AC8FF;
+            --md-sys-color-info-container: #001E2B;
+            --md-sys-color-on-info: #001E2B;
+            --md-sys-color-on-info-container: #B6EAFF;
 
-            --md-sys-color-outline: var(--color-neutral-50);
-            --md-sys-color-outline-variant: var(--color-neutral-40);
+            --md-sys-color-outline: #4D4741;
+            --md-sys-color-outline-variant: #2A2F36;
 
-            --md-sys-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
-            --md-sys-elevation-2: 0 4px 6px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.4);
-            --md-sys-elevation-3: 0 10px 20px rgba(0, 0, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.5);
-            --md-sys-elevation-4: 0 16px 32px rgba(0, 0, 0, 0.7), 0 8px 16px rgba(0, 0, 0, 0.6);
-            --md-sys-elevation-5: 0 24px 48px rgba(0, 0, 0, 0.8), 0 12px 24px rgba(0, 0, 0, 0.7);
+            --md-sys-elevation-1: 0 4px 12px rgba(0, 0, 0, .35);
+            --md-sys-elevation-2: 0 8px 20px rgba(0, 0, 0, .45);
+            --md-sys-elevation-3: 0 12px 28px rgba(0, 0, 0, .5);
+            --md-sys-elevation-4: 0 16px 36px rgba(0, 0, 0, .55);
+            --md-sys-elevation-5: 0 24px 60px rgba(0, 0, 0, .65);
         }
 
+        @media (max-width: 1023px) { :root { --sidebar-width: min(85vw, 300px); } }
+        @media (max-width: 767px) { :root { --sidebar-width: min(85vw, 280px); } }
+        @media (max-width: 480px) { :root { --sidebar-width: min(85vw, 260px); } }
+
         /* ================================================================
-           الأنماط الأساسية
+           Reset & Basics
         ================================================================ */
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
+            font-family: 'Tajawal', 'Inter', sans-serif;
             -webkit-tap-highlight-color: transparent;
         }
 
-        html,
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--md-sys-color-background);
-            color: var(--md-sys-color-on-background);
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            max-width: 100%;
             overflow-x: hidden;
             min-height: 100vh;
             direction: rtl;
-            transition: background 0.4s ease, color 0.4s ease;
+            background: var(--bg);
+            color: var(--text);
+            transition: background .4s, color .4s;
         }
 
-        body {
-            padding-bottom: 20px;
-        }
-
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: var(--md-sys-color-surface-container-low);
-        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb {
-            background: var(--md-sys-color-primary);
+            background: var(--gold);
             border-radius: 3px;
         }
 
         /* ================================================================
-           الرسوم المتحركة
+           Animations
         ================================================================ */
         @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(12px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         @keyframes slideInRight {
-            from {
-                opacity: 0;
-                transform: translateX(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
         }
         @keyframes pulse {
-            0%,
-            100% {
-                transform: scale(1);
-            }
-            50% {
-                transform: scale(1.05);
-            }
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: .6; transform: scale(1.3); }
         }
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
+        @keyframes pulseSoft {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes shimmer {
-            0% {
-                background-position: -200px 0;
-            }
-            100% {
-                background-position: calc(200px + 100%) 0;
-            }
+            0% { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
         }
         @keyframes wave {
-            0% {
-                transform: scale(1);
-                opacity: 0.4;
+            0% { transform: scale(1); opacity: 0.4; }
+            50% { transform: scale(1.6); opacity: 0; }
+            100% { transform: scale(1); opacity: 0.4; }
+        }
+        @keyframes tabArrowPulse {
+            0%, 100% { transform: translateX(0); opacity: 1; }
+            50% { transform: translateX(-5px); opacity: 0.55; }
+        }
+        @keyframes headerGlow {
+            0%, 100% { opacity: .35; }
+            50% { opacity: .55; }
+        }
+        @keyframes sleepGlow {
+            0%, 100% {
+                text-shadow: 0 0 20px #D4A86A, 0 0 40px #D4A86A, 0 0 80px rgba(212,168,106,.5);
+                opacity: 1;
             }
             50% {
-                transform: scale(1.6);
-                opacity: 0;
-            }
-            100% {
-                transform: scale(1);
-                opacity: 0.4;
+                text-shadow: 0 0 30px #F0C992, 0 0 60px #F0C992, 0 0 120px rgba(240,201,146,.7);
+                opacity: 0.85;
             }
         }
 
-        .fade-in {
-            animation: fadeIn 0.3s ease;
-        }
-        .slide-in {
-            animation: slideInRight 0.3s ease;
-        }
+        .fade-in { animation: fadeIn 0.3s ease; }
+        .slide-in { animation: slideInRight 0.3s ease; }
 
         /* ================================================================
-           الحاوية العامة
+           Header Half-Circle
         ================================================================ */
-        .app-container {
-            background: var(--md-sys-color-background);
-            min-height: 100vh;
-            transition: background 0.4s ease;
+        .header-wrapper {
+            position: relative;
+            width: 100%;
+            overflow: visible;
+            z-index: 5;
         }
 
-        /* ================================================================
-           الرأس (Header)
-        ================================================================ */
-        .app-header {
-            position: sticky;
+        .header-arc {
+            width: 100%;
+            height: 285px;
+            background: linear-gradient(180deg, #1C1E22 0%, #252A31 100%);
+            border-radius: 0 0 45% 45% / 0 0 42% 42%;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, .3);
+            position: relative;
+            border-bottom: 1.5px dashed rgba(212, 168, 106, .55);
+            outline: 1.5px dashed rgba(209, 213, 217, .35);
+            outline-offset: -6px;
+        }
+
+        .header-arc::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background:
+                radial-gradient(600px 300px at 50% 0%, rgba(212, 168, 106, .35), transparent 65%),
+                radial-gradient(400px 200px at 80% 30%, rgba(209, 213, 217, .18), transparent 60%);
+            animation: headerGlow 6s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        .header-arc::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: -2px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(212, 168, 106, .6), rgba(209, 213, 217, .5), transparent);
+            filter: blur(.5px);
+            pointer-events: none;
+        }
+
+        /* ====== Header top ====== */
+        .header-top {
+            position: absolute;
             top: 0;
-            z-index: 100;
-            background: var(--md-sys-color-surface);
-            border-bottom: 1px solid var(--md-sys-color-outline-variant);
-            padding: 0 16px;
+            left: 0;
+            right: 0;
+            padding: 14px;
             display: flex;
-            align-items: center;
             justify-content: space-between;
-            height: 60px;
-            box-shadow: var(--md-sys-elevation-1);
-            transition: background 0.3s, border-color 0.3s;
+            align-items: center;
+            z-index: 3;
         }
 
-        .app-header .header-left {
+        .left-group {
             display: flex;
-            align-items: center;
             gap: 10px;
+            align-items: center;
             min-width: 0;
-            flex: 1 1 auto;
-            overflow: hidden;
         }
 
-        .app-header .header-brand {
+        .logo-box {
             display: flex;
+            gap: 10px;
             align-items: center;
-            gap: 8px;
+            color: #FFF;
             min-width: 0;
-            overflow: hidden;
         }
 
-        .app-header .header-brand .brand-icon {
-            width: 36px;
-            height: 36px;
-            background: linear-gradient(135deg, var(--md-sys-color-primary), var(--md-sys-color-primary-fixed-dim));
-            border-radius: var(--md-sys-shape-corner-small);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--md-sys-color-on-primary);
-            font-size: 17px;
-            flex-shrink: 0;
-            box-shadow: var(--md-sys-elevation-1);
-        }
-
-        .app-header .header-brand h1 {
-            font-size: 17px;
-            font-weight: 700;
-            font-family: 'Poppins', sans-serif;
-            color: var(--md-sys-color-on-surface);
-            margin: 0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .app-header .header-brand small {
-            font-size: 10px;
-            color: var(--md-sys-color-on-surface-variant);
-            display: block;
-            margin-top: -2px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .app-header .header-actions {
-            display: flex;
-            gap: 4px;
-            align-items: center;
-            padding: 4px 10px;
-            border: 1px solid var(--md-sys-color-outline-variant);
-            border-radius: 50px;
-            background: var(--md-sys-color-surface-container-low);
-        }
-
-        .icon-btn {
-            width: 38px;
-            height: 38px;
-            border-radius: 50%;
-            border: none;
-            background: transparent;
-            color: var(--md-sys-color-on-surface-variant);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 17px;
-            transition: 0.2s;
-        }
-
-        .icon-btn:hover {
-            background: var(--md-sys-color-surface-container);
-            color: var(--md-sys-color-on-surface);
-            transform: scale(1.05);
-        }
-
-        .header-actions .gold-icon {
-            color: var(--md-sys-color-secondary) !important;
-            text-shadow: 0 0 8px var(--md-sys-color-secondary-fixed-dim);
-        }
-
-        [data-theme="light"] .header-actions .gold-icon {
-            color: var(--color-secondary-50) !important;
-            text-shadow: none;
-        }
-
-        [data-theme="light"] .header-actions .gold-icon:hover {
-            color: var(--color-secondary-60) !important;
-            text-shadow: none;
-        }
-
-        .menu-toggle {
-            background: transparent;
-            border: 1px solid var(--md-sys-color-outline-variant);
-            border-radius: var(--md-sys-shape-corner-small);
-            color: var(--md-sys-color-on-surface);
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--gold), var(--gold2));
+            border-radius: 11px;
+            display: grid;
+            place-items: center;
             font-size: 20px;
-            cursor: pointer;
-            padding: 6px 10px;
-            transition: 0.2s;
+            box-shadow: 0 8px 20px rgba(212, 168, 106, .4);
+            flex-shrink: 0;
+            color: #1A1305;
         }
 
-        .menu-toggle:hover {
-            background: var(--md-sys-color-surface-container);
+        .logo-text {
+            min-width: 0;
+        }
+        .logo-text b {
+            display: block;
+            font-family: 'Outfit', 'Tajawal', sans-serif;
+            font-size: 16px;
+            color: #FFF;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .logo-text span {
+            font-size: 11px;
+            color: var(--silver);
+            opacity: .8;
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .right-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .glass-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .08);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, .12);
+            color: #fff;
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+            font-size: 18px;
+            transition: .2s;
+            padding: 0;
+        }
+        .glass-btn:active { transform: scale(.9); }
+        .glass-btn:hover {
+            background: rgba(255, 255, 255, .14);
+        }
+
+        .glass-btn.close-app {
+            background: rgba(255, 71, 87, .15);
+            border-color: rgba(255, 71, 87, .25);
+            color: #FF6B7A;
+        }
+        .glass-btn.close-app:hover {
+            background: rgba(255, 71, 87, .25);
+        }
+
+        .glass-btn.theme-btn {
+            color: var(--gold);
+        }
+
+        /* ====== Time Chip ====== */
+        .time-chip {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: calc(100% - 32px);
+            max-width: 420px;
+            background: rgba(255, 255, 255, .06);
+            backdrop-filter: blur(16px) saturate(1.4);
+            -webkit-backdrop-filter: blur(16px) saturate(1.4);
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 18px;
+            padding: 10px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(255, 255, 255, .1);
+            z-index: 3;
+            gap: 10px;
+        }
+
+        .time-chip .date {
+            color: #FFF;
+            font-size: 13px;
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .time-chip .time {
+            color: var(--gold);
+            font-family: 'Outfit', 'Tajawal', monospace;
+            font-weight: 700;
+            font-size: 16px;
+            white-space: nowrap;
+        }
+
+        .time-chip .dot {
+            width: 6px;
+            height: 6px;
+            background: var(--gold);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--gold);
+            animation: pulse 2s infinite;
+            flex-shrink: 0;
+        }
+
+        /* ====== User Chip ====== */
+        .user-chip {
+            position: absolute;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 32px);
+            max-width: 420px;
+            background: rgba(255, 255, 255, .08);
+            backdrop-filter: blur(18px) saturate(1.5);
+            -webkit-backdrop-filter: blur(18px) saturate(1.5);
+            border: 1px solid rgba(255, 255, 255, .14);
+            border-radius: 22px;
+            padding: 11px 14px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .25), inset 0 1px 0 rgba(255, 255, 255, .12);
+            z-index: 3;
+        }
+
+        .user-chip img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba(212, 168, 106, .6);
+            flex-shrink: 0;
+            background: #4A5568;
+        }
+
+        .user-chip .user-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .user-chip .user-info b {
+            display: block;
+            color: #FFF;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .user-chip .user-info span {
+            color: var(--gold);
+            font-size: 11px;
+            background: rgba(212, 168, 106, .15);
+            border: 1px solid rgba(212, 168, 106, .25);
+            padding: 3px 10px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-top: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        .user-chip .user-status {
+            width: 10px;
+            height: 10px;
+            background: var(--success);
+            border-radius: 50%;
+            box-shadow: 0 0 0 4px rgba(46, 204, 113, .2);
+            flex-shrink: 0;
         }
 
         /* ================================================================
-           القائمة الجانبية (Sidebar)
+           SVG الجانبي المرن (Elastic Sidebar)
+        ================================================================ */
+        .elastic-sidebar-bg {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            pointer-events: none;
+            z-index: 98;
+            overflow: visible;
+            filter: drop-shadow(-4px 0 18px rgba(45, 30, 10, .18));
+            transition: width 0.3s ease;
+        }
+
+        .s-path {
+            fill: var(--bg);
+            transition: fill 0.4s ease;
+        }
+
+        /* ================================================================
+           لسان الفتح
+        ================================================================ */
+        .side-tab {
+            position: fixed;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            width: 28px;
+            height: 76px;
+            background: linear-gradient(135deg, var(--gold), var(--gold2));
+            color: #1A1305;
+            border: none;
+            border-radius: 12px 0 0 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 0;
+            margin: 0;
+            font-size: 13px;
+            box-shadow: -3px 0 12px rgba(212, 168, 106, .4);
+            z-index: 101;
+            transition: width 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                        background 0.25s,
+                        opacity 0.35s ease,
+                        transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .side-tab::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 6px;
+            transform: translateY(-50%);
+            width: 2px;
+            height: 30px;
+            background: rgba(26, 19, 5, .35);
+            border-radius: 2px;
+            transition: height 0.3s, background 0.3s;
+        }
+
+        .side-tab:hover {
+            width: 34px;
+            box-shadow: -4px 0 18px rgba(212, 168, 106, .55);
+        }
+
+        .side-tab:hover::before {
+            height: 40px;
+            background: rgba(26, 19, 5, .55);
+        }
+
+        .side-tab:active {
+            transform: translateY(-50%) scale(0.94);
+        }
+
+        .side-tab i {
+            animation: tabArrowPulse 1.8s infinite;
+            margin-right: 3px;
+            text-shadow: 0 0 6px rgba(255, 255, 255, .35);
+            position: relative;
+            z-index: 1;
+        }
+
+        .side-tab.hidden {
+            opacity: 0;
+            transform: translateY(-50%) translateX(80px);
+            pointer-events: none;
+        }
+
+        @media (max-width: 480px) {
+            .side-tab {
+                width: 26px;
+                height: 68px;
+                font-size: 12px;
+                border-radius: 10px 0 0 10px;
+            }
+            .side-tab::before {
+                width: 2px;
+                height: 26px;
+                left: 5px;
+            }
+        }
+
+        /* ================================================================
+           Overlay + Sidebar
         ================================================================ */
         .sidebar-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.4);
-            backdrop-filter: blur(3px);
-            z-index: 98;
+            background: rgba(0, 0, 0, .45);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 97;
             display: none;
+            opacity: 0;
+            transition: opacity 0.4s ease;
         }
         .sidebar-overlay.active {
             display: block;
+            opacity: 1;
         }
 
         .sidebar {
@@ -503,111 +727,59 @@
             top: 0;
             right: 0;
             bottom: 0;
-            min-width: 220px;
-            max-width: 320px;
-            background: var(--md-sys-color-surface-container-lowest);
-            border-left: 1px solid var(--md-sys-color-outline-variant);
+            width: var(--sidebar-width);
+            background: transparent;
             z-index: 99;
-            transform: translateX(100%);
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             flex-direction: column;
-            box-shadow: var(--md-sys-elevation-4);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+            overflow: hidden;
+            touch-action: pan-y;
         }
 
         .sidebar.open {
-            transform: translateX(0);
-        }
-        .sidebar.pinned {
-            transform: translateX(0);
-            box-shadow: var(--md-sys-elevation-5);
-        }
-
-        @media (min-width: 1024px) {
-            .sidebar {
-                transform: translateX(0);
-                width: max-content;
-                min-width: 220px;
-                max-width: 320px;
-            }
-            .sidebar.compact {
-                width: 68px !important;
-                min-width: 68px !important;
-                max-width: 68px !important;
-            }
-            .sidebar.compact .nav-label,
-            .sidebar.compact .nav-arrow,
-            .sidebar.compact .brand span,
-            .sidebar.compact .sidebar-search input,
-            .sidebar.compact .nav-children,
-            .sidebar.compact .sidebar-section-title {
-                display: none !important;
-            }
-            .sidebar.compact .nav-item {
-                justify-content: center;
-                padding: 12px 0;
-            }
-            .sidebar.compact .nav-item .nav-icon {
-                font-size: 1.4rem;
-                width: auto;
-            }
-            .sidebar-overlay {
-                display: none !important;
-            }
-            .main-content {
-                margin-right: auto;
-                transition: margin-right 0.3s;
-            }
-            .sidebar.compact~.main-content {
-                margin-right: 68px;
-            }
-            .sidebar-close {
-                display: none;
-            }
-        }
-
-        @media (max-width: 1023px) {
-            .sidebar {
-                width: min(85vw, 300px);
-                min-width: 240px;
-            }
+            opacity: 1;
+            pointer-events: auto;
         }
 
         .sidebar-header {
-            padding: 12px 14px;
-            border-bottom: 1px solid var(--md-sys-color-outline-variant);
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--line);
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-shrink: 0;
-            background: var(--md-sys-color-surface-container-lowest);
+            background: transparent;
         }
 
         .sidebar-header .brand {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             overflow: hidden;
         }
 
         .sidebar-header .brand .icon {
-            width: 30px;
-            height: 30px;
-            background: linear-gradient(135deg, var(--md-sys-color-primary), var(--md-sys-color-primary-fixed-dim));
-            border-radius: var(--md-sys-shape-corner-small);
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--gold), var(--gold2));
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--md-sys-color-on-primary);
-            font-size: 15px;
+            color: #1A1305;
+            font-size: 16px;
             flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(212, 168, 106, .35);
         }
 
         .sidebar-header .brand span {
-            font-family: 'Poppins', sans-serif;
+            font-family: 'Outfit', 'Tajawal', sans-serif;
             font-weight: 700;
             font-size: 17px;
-            color: var(--md-sys-color-on-surface);
+            color: var(--text);
             white-space: nowrap;
         }
 
@@ -620,74 +792,75 @@
         .sidebar-header .header-actions-side button {
             background: none;
             border: none;
-            color: var(--md-sys-color-on-surface-variant);
+            color: var(--muted);
             cursor: pointer;
             font-size: 14px;
-            padding: 4px 6px;
-            border-radius: 4px;
-            transition: 0.2s;
+            padding: 6px 8px;
+            border-radius: 8px;
+            transition: 0.25s;
         }
 
         .sidebar-header .header-actions-side button:hover {
-            background: var(--md-sys-color-surface-container);
-            color: var(--md-sys-color-on-surface);
+            background: var(--soft);
+            color: var(--text);
+            transform: scale(1.08);
         }
 
         .sidebar-header .header-actions-side button.pinned {
-            color: var(--md-sys-color-secondary);
+            color: var(--gold);
             transform: rotate(-45deg);
         }
 
         .sidebar-search {
             padding: 8px 12px;
-            border-bottom: 1px solid var(--md-sys-color-outline-variant);
+            border-bottom: 1px solid var(--line);
             flex-shrink: 0;
+            background: transparent;
         }
 
         .sidebar-search input {
             width: 100%;
-            padding: 8px 10px 8px 34px;
-            border: 1px solid var(--md-sys-color-outline-variant);
+            padding: 9px 12px 9px 34px;
+            border: 1px solid var(--line);
             border-radius: 20px;
-            background: var(--md-sys-color-surface-container);
-            color: var(--md-sys-color-on-surface);
+            background: var(--soft);
+            color: var(--text);
             font-size: 13px;
             outline: none;
             transition: 0.2s;
-            font-family: 'Inter', sans-serif;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+            font-family: 'Tajawal', sans-serif;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23D4A86A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: left 10px center;
         }
 
         .sidebar-search input:focus {
-            border-color: var(--md-sys-color-primary);
-            box-shadow: 0 0 0 3px var(--md-sys-color-primary-fixed-dim);
+            border-color: var(--gold);
+            box-shadow: 0 0 0 3px rgba(212, 168, 106, .18);
         }
 
         .sidebar-search input::placeholder {
-            color: var(--md-sys-color-on-surface-variant);
-            opacity: 0.6;
+            color: var(--muted);
+            opacity: 0.7;
             font-size: 12px;
         }
 
         .sidebar-nav {
             flex: 1;
             overflow-y: auto;
-            padding: 6px 8px 16px;
+            padding: 8px 8px 18px;
         }
 
-        .sidebar-nav::-webkit-scrollbar {
-            width: 3px;
-        }
+        .sidebar-nav::-webkit-scrollbar { width: 3px; }
         .sidebar-nav::-webkit-scrollbar-thumb {
-            background: var(--md-sys-color-outline-variant);
+            background: var(--gold);
             border-radius: 2px;
+            opacity: .5;
         }
 
         .nav-item-parent {
             margin-bottom: 4px;
-            border-radius: var(--md-sys-shape-corner-small);
+            border-radius: 12px;
             overflow: hidden;
             width: 100%;
         }
@@ -696,31 +869,32 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 10px 14px;
-            border-radius: var(--md-sys-shape-corner-small);
-            background: linear-gradient(to left, var(--md-sys-color-primary), var(--md-sys-color-primary-fixed-dim));
-            color: var(--md-sys-color-on-primary);
+            padding: 11px 14px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--gold), var(--gold2));
+            color: #1A1305;
             cursor: pointer;
             font-size: 15px;
+            font-weight: 600;
             transition: 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            box-shadow: var(--md-sys-elevation-1);
+            box-shadow: 0 4px 12px rgba(212, 168, 106, .25);
             border: none;
             width: 100%;
             text-align: right;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Tajawal', sans-serif;
             white-space: nowrap;
         }
 
         .nav-item:hover {
-            filter: brightness(1.1);
+            filter: brightness(1.05);
             transform: scale(1.02);
-            box-shadow: var(--md-sys-elevation-2);
+            box-shadow: 0 8px 20px rgba(212, 168, 106, .35);
         }
 
         .nav-item:active {
             transform: scale(0.95);
-            background: var(--md-sys-color-secondary);
-            color: var(--md-sys-color-on-secondary);
+            background: var(--gold2);
+            color: #FFF;
         }
 
         .nav-item .nav-icon {
@@ -744,16 +918,14 @@
             margin-right: 4px;
             flex-shrink: 0;
         }
-        .nav-item .nav-arrow.open {
-            transform: rotate(180deg);
-        }
+        .nav-item .nav-arrow.open { transform: rotate(180deg); }
 
         .nav-children {
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.35s ease, padding 0.3s ease;
-            background: var(--md-sys-color-surface-container-low);
-            border-radius: 0 0 var(--md-sys-shape-corner-small) var(--md-sys-shape-corner-small);
+            background: var(--soft);
+            border-radius: 0 0 12px 12px;
             padding: 0 10px;
         }
 
@@ -766,60 +938,58 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 8px 12px;
+            padding: 9px 12px;
             margin-top: 4px;
-            border-radius: var(--md-sys-shape-corner-small);
+            border-radius: 10px;
             background: transparent;
-            color: var(--md-sys-color-on-surface);
+            color: var(--text);
             cursor: pointer;
             font-size: 13px;
             transition: 0.2s;
             border: none;
             width: 100%;
             text-align: right;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Tajawal', sans-serif;
             border-right: 2px solid transparent;
             white-space: nowrap;
         }
 
         .nav-child:hover {
-            background: var(--md-sys-color-surface-container);
-            border-right-color: var(--md-sys-color-primary);
+            background: var(--soft-hover);
+            border-right-color: var(--gold);
             transform: translateX(-4px);
         }
 
         .nav-child:active {
-            background: var(--md-sys-color-primary);
-            color: var(--md-sys-color-on-primary);
+            background: var(--gold);
+            color: #1A1305;
         }
 
         .nav-child .child-icon {
             font-size: 12px;
             width: 20px;
-            color: var(--md-sys-color-on-surface-variant);
+            color: var(--muted);
         }
 
         .sidebar-section-title {
             font-size: 11px;
             font-weight: 700;
-            color: var(--md-sys-color-on-surface-variant);
-            padding: 8px 12px 4px;
+            color: var(--muted);
+            padding: 10px 12px 4px;
             letter-spacing: 0.5px;
-            opacity: 0.7;
             display: flex;
             align-items: center;
             gap: 6px;
             white-space: nowrap;
+            font-family: 'Outfit', 'Tajawal', sans-serif;
         }
 
-        .sidebar-section-title i {
-            font-size: 12px;
-        }
+        .sidebar-section-title i { font-size: 12px; }
 
         .sidebar-empty-state {
             padding: 20px;
             text-align: center;
-            color: var(--md-sys-color-on-surface-variant);
+            color: var(--muted);
             font-size: 14px;
         }
 
@@ -827,97 +997,246 @@
            المحتوى الرئيسي
         ================================================================ */
         .main-content {
-            min-width: 0;
-            margin-right: 0;
-            transition: margin-right 0.3s;
-            padding: 18px 20px 30px;
-            min-height: calc(100vh - 60px);
-            background: var(--md-sys-color-background);
-        }
-
-        @media (min-width: 1024px) {
-            .main-content {
-                margin-right: auto;
-            }
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 54px 14px 30px;
+            width: 100%;
+            position: relative;
+            z-index: 2;
+            min-height: 40vh;
         }
 
         .page {
             display: block;
-            animation: fadeIn 0.35s ease;
+            animation: fadeIn 0.4s ease;
         }
 
-        /* ================================================================
-           بطاقة المستخدم
-        ================================================================ */
-        .user-info-card {
+        /* ====== Stats Grid ====== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+            margin-top: 39px;
+            margin-bottom: 18px;
+            width: 100%;
+        }
+
+        @media (min-width: 720px) {
+            .stats-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (min-width: 1024px) {
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        /* ====== بطاقة إحصائية مسطحة تماماً - بدون أي تأثير ====== */
+        .stat-card {
+            background: var(--card-solid);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+            padding: 22px 12px;
+            min-height: 165px;
+            min-width: 0;
+            width: 100%;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            /* لا يوجد backdrop-filter, box-shadow, transition, animation, hover, active */
+        }
+
+        .stat-card .card-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            width: 100%;
+        }
+
+        .stat-card .card-header h3 {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--muted);
+            margin: 0;
+            text-align: center;
+            width: 100%;
+            order: 2;
+        }
+
+        .stat-card .card-icon-wrapper {
+            width: 46px;
+            height: 46px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
-            gap: 16px;
-            background: var(--md-sys-color-surface);
-            border-radius: var(--md-sys-shape-corner-large);
-            padding: 14px 22px;
-            margin-bottom: 20px;
-            border: 1px solid var(--md-sys-color-outline-variant);
-            box-shadow: var(--md-sys-elevation-1);
-            transition: 0.3s;
             justify-content: center;
-            text-align: center;
-        }
-
-        .user-info-card:hover {
-            box-shadow: var(--md-sys-elevation-3);
-            transform: translateY(-2px);
-        }
-
-        .user-info-card .avatar {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            border: 2px solid var(--md-sys-color-primary);
-            overflow: hidden;
+            font-size: 20px;
+            background: linear-gradient(135deg, rgba(212, 168, 106, .18), rgba(209, 213, 217, .18));
+            color: var(--gold);
             flex-shrink: 0;
+            order: 1;
+            border: 1px solid rgba(212, 168, 106, .2);
         }
 
-        .user-info-card .avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .user-info-card .user-details {
-            text-align: center;
-        }
-
-        .user-info-card .user-details h4 {
-            font-family: 'Poppins', sans-serif;
-            font-size: 17px;
+        .stat-card .stat-value {
+            font-size: 20px;
             font-weight: 700;
-            color: var(--md-sys-color-on-surface);
-            margin: 0;
+            color: var(--text);
+            font-family: 'Outfit', 'Tajawal', sans-serif;
+            letter-spacing: -0.3px;
+            text-align: center;
+            width: 100%;
+            word-break: break-word;
+            line-height: 1.3;
+            margin-top: 4px;
         }
 
-        .user-info-card .user-details small {
-            color: var(--md-sys-color-on-surface-variant);
-            font-size: 13px;
-        }
-
-        .user-info-card .user-details .role-badge {
-            display: inline-block;
-            background: var(--md-sys-color-primary-fixed-dim);
-            color: var(--md-sys-color-on-primary-fixed);
-            padding: 3px 14px;
-            border-radius: 20px;
+        .stat-card .stat-footer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            margin-top: 4px;
             font-size: 12px;
+            width: 100%;
+        }
+
+        .stat-card .stat-trend {
             font-weight: 600;
-            margin-top: 3px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+        }
+
+        .trend-up {
+            color: var(--success);
+            background: rgba(46, 204, 113, .14);
+        }
+        .trend-down {
+            color: var(--danger);
+            background: rgba(255, 71, 87, .14);
+        }
+
+        .stat-card .stat-label {
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.5;
+            text-align: center;
+            width: 100%;
+        }
+
+        .stat-card .card-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: var(--danger);
+            color: #fff;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 9px;
+            border-radius: 20px;
+        }
+
+        .stat-card .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--soft);
+            border-radius: 3px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .stat-card .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--gold), var(--gold2));
+            border-radius: 3px;
+        }
+
+        /* ألوان الأيقونات فقط */
+        .stat-card.success-card .card-icon-wrapper {
+            background: rgba(46, 204, 113, .16);
+            color: var(--success);
+            border-color: rgba(46, 204, 113, .25);
+        }
+
+        .stat-card.warning-card .card-icon-wrapper {
+            background: rgba(230, 126, 34, .16);
+            color: var(--warning);
+            border-color: rgba(230, 126, 34, .25);
+        }
+
+        .stat-card.danger-card .card-icon-wrapper {
+            background: rgba(255, 71, 87, .16);
+            color: var(--danger);
+            border-color: rgba(255, 71, 87, .25);
+        }
+
+        .stat-card.info-card .card-icon-wrapper {
+            background: rgba(61, 139, 196, .16);
+            color: #3D8BC4;
+            border-color: rgba(61, 139, 196, .25);
+        }
+
+        .stat-card.success-card .progress-fill {
+            background: linear-gradient(90deg, #2ECC71, #27AE60);
+        }
+        .stat-card.warning-card .progress-fill {
+            background: linear-gradient(90deg, #E67E22, #CA6F1E);
+        }
+        .stat-card.danger-card .progress-fill {
+            background: linear-gradient(90deg, #FF4757, #E0304A);
+        }
+        .stat-card.info-card .progress-fill {
+            background: linear-gradient(90deg, #3D8BC4, #2E6E9E);
         }
 
         /* ================================================================
-           الإشعارات (Toasts)
+           معلومات التحديث
+        ================================================================ */
+        .data-update-info {
+            font-size: 0.78rem;
+            margin-top: 12px;
+            color: var(--muted);
+            padding: 8px 14px;
+            background: var(--card-solid);
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid var(--line);
+        }
+
+        .data-update-info .refresh-btn {
+            background: none;
+            border: none;
+            color: var(--gold);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: 0.3s;
+        }
+
+        .data-update-info .refresh-btn:hover {
+            background: var(--soft-hover);
+            transform: rotate(180deg);
+        }
+
+        /* ================================================================
+           Toast
         ================================================================ */
         .toast-container {
             position: sticky;
-            top: 70px;
+            top: 12px;
             z-index: 9999;
             display: flex;
             flex-direction: column;
@@ -930,12 +1249,12 @@
         }
 
         .toast {
-            background: var(--md-sys-color-surface-container);
-            color: var(--md-sys-color-on-surface);
+            background: var(--card-solid);
+            color: var(--text);
             padding: 10px 18px;
-            border-radius: var(--md-sys-shape-corner-medium);
-            box-shadow: var(--md-sys-elevation-4);
-            border: 1px solid var(--md-sys-color-outline-variant);
+            border-radius: 14px;
+            box-shadow: var(--shadow-hover);
+            border: 1px solid var(--line);
             font-size: 14px;
             font-weight: 500;
             display: flex;
@@ -943,7 +1262,7 @@
             gap: 10px;
             animation: fadeIn 0.3s ease;
             pointer-events: auto;
-            border-right: 4px solid var(--md-sys-color-primary);
+            border-right: 4px solid var(--gold);
             transition: 0.3s;
             width: auto;
             max-width: 100%;
@@ -952,278 +1271,16 @@
             white-space: normal;
         }
 
-        .toast.success {
-            border-right-color: var(--md-sys-color-success);
-        }
-        .toast.error {
-            border-right-color: var(--md-sys-color-error);
-        }
-        .toast.warning {
-            border-right-color: var(--md-sys-color-warning);
-        }
+        .toast.success { border-right-color: var(--success); }
+        .toast.error { border-right-color: var(--danger); }
+        .toast.warning { border-right-color: var(--warning); }
         .toast.dismiss {
             opacity: 0;
             transform: translateX(20px);
         }
 
         /* ================================================================
-           البطاقات الإحصائية
-        ================================================================ */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(1, 1fr);
-            gap: 18px;
-            margin-bottom: 28px;
-        }
-
-        @media (min-width: 640px) {
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-        @media (min-width: 1024px) {
-            .stats-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-        }
-        @media (min-width: 1280px) {
-            .stats-grid {
-                grid-template-columns: repeat(4, 1fr);
-            }
-        }
-
-        .stat-card {
-            background: var(--md-sys-color-surface-container);
-            border-radius: var(--md-sys-shape-corner-large);
-            padding: 20px 18px;
-            border: 1px solid var(--md-sys-color-outline-variant);
-            box-shadow: var(--md-sys-elevation-1);
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            overflow: hidden;
-            transition: transform 0.25s, box-shadow 0.3s, border-color 0.3s;
-            cursor: pointer;
-            text-align: right;
-            animation: fadeIn 0.4s ease both;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-6px);
-            box-shadow: var(--md-sys-elevation-4);
-            border-color: var(--md-sys-color-primary);
-        }
-
-        .stat-card::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--md-sys-color-primary), var(--md-sys-color-secondary));
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
-        .stat-card:hover::after {
-            opacity: 1;
-        }
-
-        .stat-card .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 14px;
-        }
-
-        .stat-card .card-header h3 {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--md-sys-color-on-surface-variant);
-            margin: 0;
-        }
-
-        .stat-card .card-icon-wrapper {
-            width: 44px;
-            height: 44px;
-            border-radius: var(--md-sys-shape-corner-medium);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            background: var(--md-sys-color-primary-fixed-dim);
-            color: var(--md-sys-color-primary);
-            flex-shrink: 0;
-            transition: 0.2s;
-        }
-
-        .stat-card:hover .card-icon-wrapper {
-            transform: scale(1.05);
-            background: var(--md-sys-color-primary);
-            color: var(--md-sys-color-on-primary);
-        }
-
-        .stat-card .stat-value {
-            font-size: 26px;
-            font-weight: 700;
-            color: var(--md-sys-color-on-surface);
-            margin-bottom: 4px;
-            font-family: 'Poppins', sans-serif;
-            letter-spacing: -0.5px;
-        }
-
-        .stat-card .stat-footer {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: auto;
-            font-size: 13px;
-            flex-wrap: wrap;
-        }
-
-        .stat-card .stat-trend {
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-        }
-
-        .trend-up {
-            color: var(--md-sys-color-success);
-            background: var(--md-sys-color-success-container);
-        }
-        .trend-down {
-            color: var(--md-sys-color-error);
-            background: var(--md-sys-color-error-container);
-        }
-
-        .stat-card .stat-label {
-            color: var(--md-sys-color-on-surface-variant);
-            font-size: 12px;
-        }
-
-        .stat-card .card-badge {
-            position: absolute;
-            top: 16px;
-            left: 16px;
-            background: var(--md-sys-color-error);
-            color: var(--md-sys-color-on-error);
-            font-size: 11px;
-            font-weight: bold;
-            padding: 2px 10px;
-            border-radius: 20px;
-            box-shadow: var(--md-sys-elevation-2);
-            animation: pulse 2s infinite;
-        }
-
-        .stat-card .progress-bar {
-            width: 100%;
-            height: 6px;
-            background: var(--md-sys-color-outline-variant);
-            border-radius: 3px;
-            margin-top: 12px;
-            overflow: hidden;
-        }
-
-        .stat-card .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--md-sys-color-primary), var(--md-sys-color-primary-fixed-dim));
-            border-radius: 3px;
-            transition: width 0.6s ease;
-        }
-
-        /* تلوين البطاقات حسب النوع */
-        .stat-card.success-card .card-icon-wrapper {
-            background: var(--md-sys-color-success-container);
-            color: var(--md-sys-color-success);
-        }
-        .stat-card.success-card:hover .card-icon-wrapper {
-            background: var(--md-sys-color-success);
-            color: var(--md-sys-color-on-success);
-        }
-
-        .stat-card.warning-card .card-icon-wrapper {
-            background: var(--md-sys-color-warning-container);
-            color: var(--md-sys-color-warning);
-        }
-        .stat-card.warning-card:hover .card-icon-wrapper {
-            background: var(--md-sys-color-warning);
-            color: var(--md-sys-color-on-warning);
-        }
-
-        .stat-card.danger-card .card-icon-wrapper {
-            background: var(--md-sys-color-error-container);
-            color: var(--md-sys-color-error);
-        }
-        .stat-card.danger-card:hover .card-icon-wrapper {
-            background: var(--md-sys-color-error);
-            color: var(--md-sys-color-on-error);
-        }
-
-        .stat-card.info-card .card-icon-wrapper {
-            background: var(--md-sys-color-info-container);
-            color: var(--md-sys-color-info);
-        }
-        .stat-card.info-card:hover .card-icon-wrapper {
-            background: var(--md-sys-color-info);
-            color: var(--md-sys-color-on-info);
-        }
-
-        .stat-card .progress-fill {
-            transition: width 0.6s ease;
-        }
-        .stat-card.success-card .progress-fill {
-            background: var(--md-sys-color-success);
-        }
-        .stat-card.warning-card .progress-fill {
-            background: var(--md-sys-color-warning);
-        }
-        .stat-card.danger-card .progress-fill {
-            background: var(--md-sys-color-error);
-        }
-        .stat-card.info-card .progress-fill {
-            background: var(--md-sys-color-info);
-        }
-
-        /* ================================================================
-           معلومات التحديث
-        ================================================================ */
-        .data-update-info {
-            font-size: 0.75rem;
-            margin-top: 12px;
-            color: var(--md-sys-color-on-surface-variant);
-            padding: 6px 14px;
-            background: var(--md-sys-color-surface-container);
-            border-radius: var(--md-sys-shape-corner-small);
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            border: 1px solid var(--md-sys-color-outline-variant);
-            box-shadow: var(--md-sys-elevation-1);
-        }
-
-        .data-update-info .refresh-btn {
-            background: none;
-            border: none;
-            color: var(--md-sys-color-primary);
-            cursor: pointer;
-            font-size: 1rem;
-            padding: 4px 8px;
-            border-radius: 4px;
-            transition: 0.2s;
-        }
-
-        .data-update-info .refresh-btn:hover {
-            background: var(--md-sys-color-surface-container-high);
-            transform: rotate(180deg);
-        }
-
-        /* ================================================================
-           الفقاعات (Bubbles)
+           Bubbles
         ================================================================ */
         .bubble-container {
             position: fixed;
@@ -1246,29 +1303,19 @@
             color: white;
             font-weight: bold;
             font-size: 16px;
-            box-shadow: var(--md-sys-elevation-4);
+            box-shadow: var(--shadow-hover);
             cursor: pointer;
             transition: 0.3s;
             position: relative;
-            animation: pulse 2.5s infinite;
+            animation: pulseSoft 2.5s infinite;
         }
 
-        .notification-bubble:hover {
-            transform: scale(1.1);
-        }
+        .notification-bubble:hover { transform: scale(1.1); }
 
-        .bubble-info {
-            background: var(--md-sys-color-info);
-        }
-        .bubble-warning {
-            background: var(--md-sys-color-warning);
-        }
-        .bubble-danger {
-            background: var(--md-sys-color-error);
-        }
-        .bubble-success {
-            background: var(--md-sys-color-success);
-        }
+        .bubble-info { background: #3D8BC4; }
+        .bubble-warning { background: var(--warning); }
+        .bubble-danger { background: var(--danger); }
+        .bubble-success { background: var(--success); }
 
         .bubble-wave {
             position: absolute;
@@ -1281,13 +1328,14 @@
         }
 
         /* ================================================================
-           لوحة الأوامر (Command Palette)
+           Command Palette
         ================================================================ */
         .command-palette-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, .5);
             backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
             z-index: 9999;
             display: none;
             align-items: flex-start;
@@ -1295,34 +1343,32 @@
             padding-top: 10vh;
         }
 
-        .command-palette-overlay.show {
-            display: flex;
-        }
+        .command-palette-overlay.show { display: flex; }
 
         .command-palette-box {
-            background: var(--md-sys-color-surface-container-lowest);
-            border-radius: var(--md-sys-shape-corner-large);
-            box-shadow: var(--md-sys-elevation-5);
+            background: var(--card-solid);
+            border-radius: 20px;
+            box-shadow: var(--shadow-hover);
             width: 90%;
             max-width: 540px;
             max-height: 70vh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            border: 1px solid var(--md-sys-color-outline-variant);
+            border: 1px solid var(--line);
             animation: slideInRight 0.3s ease;
         }
 
         .command-palette-box .palette-header {
             padding: 14px 18px;
-            border-bottom: 1px solid var(--md-sys-color-outline-variant);
+            border-bottom: 1px solid var(--line);
             display: flex;
             align-items: center;
             gap: 10px;
         }
 
         .command-palette-box .palette-header i {
-            color: var(--md-sys-color-on-surface-variant);
+            color: var(--gold);
             font-size: 18px;
         }
 
@@ -1332,27 +1378,28 @@
             outline: none;
             background: transparent;
             font-size: 16px;
-            color: var(--md-sys-color-on-surface);
-            font-family: 'Inter', sans-serif;
+            color: var(--text);
+            font-family: 'Tajawal', sans-serif;
         }
 
         .command-palette-box .palette-header input::placeholder {
-            color: var(--md-sys-color-on-surface-variant);
-            opacity: 0.6;
+            color: var(--muted);
+            opacity: 0.7;
         }
 
         .command-palette-box .palette-close {
             background: none;
             border: none;
-            color: var(--md-sys-color-on-surface-variant);
+            color: var(--muted);
             font-size: 20px;
             cursor: pointer;
             padding: 4px;
-            border-radius: 4px;
+            border-radius: 6px;
         }
 
         .command-palette-box .palette-close:hover {
-            background: var(--md-sys-color-surface-container);
+            background: var(--soft);
+            color: var(--text);
         }
 
         .command-palette-box .palette-results {
@@ -1363,7 +1410,7 @@
 
         .command-palette-box .palette-results .result-item {
             padding: 10px 14px;
-            border-radius: var(--md-sys-shape-corner-small);
+            border-radius: 12px;
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -1373,12 +1420,12 @@
 
         .command-palette-box .palette-results .result-item:hover,
         .command-palette-box .palette-results .result-item.active {
-            background: var(--md-sys-color-surface-container);
+            background: var(--soft);
         }
 
         .command-palette-box .palette-results .result-item i {
             width: 20px;
-            color: var(--md-sys-color-on-surface-variant);
+            color: var(--gold);
         }
 
         .command-palette-box .palette-results .result-item .result-label {
@@ -1388,7 +1435,7 @@
 
         .command-palette-box .palette-results .result-item .result-path {
             font-size: 11px;
-            color: var(--md-sys-color-on-surface-variant);
+            color: var(--muted);
             opacity: 0.7;
             direction: ltr;
         }
@@ -1396,41 +1443,40 @@
         .command-palette-box .palette-results .no-results {
             padding: 20px;
             text-align: center;
-            color: var(--md-sys-color-on-surface-variant);
+            color: var(--muted);
         }
 
         /* ================================================================
-           شاشة التحميل (Loading)
+           Loading
         ================================================================ */
         .loading-overlay {
             position: fixed;
             inset: 0;
             z-index: 9998;
-            background: rgba(0, 0, 0, 0.45);
+            background: rgba(15, 18, 21, .55);
             display: none;
             align-items: center;
             justify-content: center;
-            backdrop-filter: blur(3px);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
         }
 
-        .loading-overlay.active {
-            display: flex;
-        }
+        .loading-overlay.active { display: flex; }
 
         .loading-overlay .loading-box {
-            background: var(--md-sys-color-surface);
+            background: var(--card-solid);
             padding: 32px 44px;
-            border-radius: var(--md-sys-shape-corner-large);
+            border-radius: 22px;
             text-align: center;
-            box-shadow: var(--md-sys-elevation-5);
-            border: 1px solid var(--md-sys-color-outline-variant);
+            box-shadow: var(--shadow-hover);
+            border: 1px solid var(--line);
         }
 
         .loading-overlay .loading-box .spinner {
             width: 42px;
             height: 42px;
-            border: 4px solid var(--md-sys-color-outline-variant);
-            border-top-color: var(--md-sys-color-primary);
+            border: 4px solid var(--soft);
+            border-top-color: var(--gold);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
             display: inline-block;
@@ -1439,18 +1485,18 @@
         .loading-overlay .loading-box p {
             margin-top: 14px;
             font-weight: 600;
-            color: var(--md-sys-color-on-surface);
+            color: var(--text);
         }
 
         /* ================================================================
-           شاشة الـ Skeleton (وهمية للتحميل)
+           Skeleton
         ================================================================ */
         .skeleton {
-            background: var(--md-sys-color-surface-container-high);
+            background: var(--soft);
             background-image: linear-gradient(90deg,
-                    var(--md-sys-color-surface-container-high) 0px,
-                    var(--md-sys-color-surface-container) 40px,
-                    var(--md-sys-color-surface-container-high) 80px);
+                    var(--soft) 0px,
+                    var(--soft-hover) 40px,
+                    var(--soft) 80px);
             background-size: 200px 100%;
             background-repeat: no-repeat;
             animation: shimmer 1.8s infinite linear;
@@ -1466,228 +1512,126 @@
             visibility: hidden;
         }
 
-        .skeleton .card-header {
-            height: 22px;
-            width: 60%;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            margin: 0 auto 6px;
-        }
-
-        .skeleton .stat-value {
-            height: 26px;
-            width: 50%;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            margin: 4px auto;
-        }
-
-        .skeleton .stat-label {
-            height: 14px;
-            width: 70%;
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 4px;
-            margin: 0 auto;
-        }
-
         /* ================================================================
-           التوافق مع الشاشات الصغيرة
+           Sleep Mode - وضع السبات
         ================================================================ */
-        @media (max-width: 767px) {
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
-            }
-            .stat-card .stat-value {
-                font-size: 18px;
-            }
-            .stat-card {
-                min-height: 80px;
-                padding: 12px;
-            }
-            .stat-card .card-header h3 {
-                font-size: 0.7rem;
-            }
-            .sidebar {
-                width: min(85vw, 280px);
-                min-width: 240px;
-                max-width: 280px;
-                transform: translateX(100%);
-            }
-            .sidebar.open {
-                transform: translateX(0);
-            }
-            .sidebar.compact {
-                width: min(85vw, 280px) !important;
-                min-width: 240px !important;
-                max-width: 280px !important;
-            }
-            .sidebar.compact .nav-label,
-            .sidebar.compact .nav-arrow,
-            .sidebar.compact .brand span,
-            .sidebar.compact .sidebar-search input,
-            .sidebar.compact .nav-children,
-            .sidebar.compact .sidebar-section-title {
-                display: flex !important;
-            }
-            .sidebar.compact .nav-item {
-                justify-content: flex-start;
-                padding: 10px 14px;
-            }
-            .sidebar.compact .nav-item .nav-icon {
-                font-size: 1rem;
-                width: 24px;
-            }
-            .main-content {
-                padding: 12px 14px 20px;
-            }
+        .sleep-overlay {
+            position: fixed;
+            inset: 0;
+            background: #000000;
+            z-index: 999999;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.8s ease;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .sleep-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        .sleep-text {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 30px;
+            font-weight: 800;
+            color: #D4A86A;
+            font-family: 'Outfit', 'Tajawal', sans-serif;
+            text-shadow: 0 0 20px #D4A86A, 0 0 40px #D4A86A, 0 0 80px rgba(212, 168, 106, .5);
+            animation: sleepGlow 2.5s ease-in-out infinite;
+            white-space: nowrap;
+            pointer-events: none;
+            letter-spacing: 0.5px;
+            padding: 0 10px;
+            direction: rtl;
+            z-index: 1000000;
+            will-change: left, top;
         }
 
         @media (max-width: 480px) {
-            .app-header {
-                padding: 0 8px;
-                gap: 4px;
+            .sleep-text {
+                font-size: 22px;
             }
-            .app-header .header-left {
-                gap: 6px;
-                flex: 1 1 0;
-                min-width: 0;
-            }
-            .app-header .header-actions {
-                flex: 0 0 auto;
-                min-width: 0;
-                width: auto;
-                max-width: 86px;
-                gap: 2px;
-                padding: 2px;
-                overflow: visible;
-                position: relative;
-                z-index: 2;
-            }
-            .app-header .header-brand {
-                flex: 1 1 0;
-                min-width: 0;
-            }
-            .app-header .header-brand h1 {
-                font-size: 13px;
-            }
-            .app-header .header-brand small {
-                display: none;
-                max-width: 120px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                font-size: 9px;
-            }
-            .icon-btn {
-                flex: 0 0 34px;
-                width: 34px;
-                height: 34px;
-                font-size: 15px;
-            }
-            .menu-toggle {
-                flex: 0 0 auto;
-                padding: 5px 8px;
+        }
+
+        @media (max-width: 360px) {
+            .sleep-text {
                 font-size: 18px;
-                position: relative;
-                z-index: 3;
-            }
-            .stats-grid {
-                gap: 8px;
-            }
-            .stat-card .stat-value {
-                font-size: 16px;
-            }
-            .sidebar {
-                width: min(85vw, 260px);
-                min-width: 200px;
-                max-width: 260px;
-            }
-            .user-info-card {
-                padding: 10px 14px;
-                flex-direction: column;
-            }
-            .user-info-card .avatar {
-                width: 42px;
-                height: 42px;
-            }
-            .user-info-card .user-details h4 {
-                font-size: 15px;
-            }
-            .toast-container {
-                width: 95%;
-            }
-            .toast {
-                font-size: 13px;
-                padding: 8px 14px;
             }
         }
 
-        /* ================================================================
-           أدوات مساعدة
-        ================================================================ */
-        .text-center {
-            text-align: center;
-        }
-        .text-muted {
-            color: var(--md-sys-color-on-surface-variant);
-        }
-        .mt-1 {
-            margin-top: 6px;
-        }
-        .mt-2 {
-            margin-top: 12px;
-        }
-        .mb-1 {
-            margin-bottom: 6px;
-        }
-        .mb-2 {
-            margin-bottom: 12px;
-        }
-        .gap-1 {
-            gap: 6px;
-        }
-        .gap-2 {
-            gap: 12px;
-        }
-        .flex {
-            display: flex;
-        }
-        .flex-wrap {
-            flex-wrap: wrap;
-        }
-        .items-center {
-            align-items: center;
-        }
-        .justify-between {
-            justify-content: space-between;
-        }
-        .w-full {
-            width: 100%;
-        }
-        .hidden {
-            display: none !important;
+        .sleep-active .header-arc::before,
+        .sleep-active .side-tab i,
+        .sleep-active .time-chip .dot,
+        .sleep-active .notification-bubble,
+        .sleep-active .bubble-wave {
+            animation-play-state: paused !important;
         }
 
         /* ================================================================
-           مصدر البيانات (مخفي)
+           Responsive
         ================================================================ */
-        .report-source-banner {
-            display: none;
+        @media (max-width: 900px) {
+            .header-arc {
+                height: 255px;
+                border-radius: 0 0 35% 35% / 0 0 35% 35%;
+            }
         }
+
+        @media (max-width: 767px) {
+            .stat-card .stat-value { font-size: 18px; }
+            .main-content { padding: 50px 12px 24px; }
+            .stats-grid { margin-top: 35px; }
+        }
+
+        @media (max-width: 480px) {
+            .header-arc {
+                height: 240px;
+                border-radius: 0 0 32% 32% / 0 0 32% 32%;
+            }
+            .header-top { padding: 10px; }
+            .logo-icon { width: 36px; height: 36px; font-size: 18px; }
+            .logo-text b { font-size: 14px; }
+            .logo-text span { font-size: 10px; }
+            .glass-btn { width: 38px; height: 38px; font-size: 16px; }
+            .time-chip { padding: 8px 12px; border-radius: 16px; }
+            .time-chip .date { font-size: 11px; }
+            .time-chip .time { font-size: 14px; }
+            .user-chip { padding: 9px 12px; border-radius: 18px; }
+            .user-chip img { width: 42px; height: 42px; }
+            .user-chip .user-info b { font-size: 13px; }
+            .user-chip .user-info span { font-size: 10px; padding: 2px 8px; }
+            .stat-card { padding: 18px 10px; min-height: 145px; }
+            .stat-card .stat-value { font-size: 17px; }
+            .toast-container { width: 95%; }
+            .toast { font-size: 13px; padding: 8px 14px; }
+        }
+
+        @media (max-width: 360px) {
+            .stat-card { padding: 16px 8px; min-height: 135px; }
+            .stat-card .stat-value { font-size: 15px; }
+            .header-arc { height: 220px; }
+        }
+
+        /* Helpers */
+        .hidden { display: none !important; }
+        .report-source-banner { display: none; }
     </style>
     <meta name="reports-bridge-methods" content="getDashboardStats">
     <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 </head>
 <body>
 
-    <!-- ====== مصدر البيانات ====== -->
     <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status">
         <i class="fas fa-plug-circle-xmark" aria-hidden="true"></i>
         <span>جاري التحقق من مصدر بيانات SQLite...</span>
     </div>
 
-    <!-- ====== شاشة التحميل ====== -->
+    <!-- ============ شاشة التحميل ============ -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-box">
             <div class="spinner"></div>
@@ -1695,107 +1639,118 @@
         </div>
     </div>
 
-    <!-- ====== الحاوية الرئيسية ====== -->
-    <div class="app-container" id="appContainer">
+    <!-- ============ الرأس ============ -->
+    <div class="header-wrapper">
+        <div class="header-arc"></div>
 
-        <!-- ===== الرأس ===== -->
-        <header class="app-header">
-            <div class="header-left">
-                <button class="menu-toggle" onclick="toggleSidebar()" aria-label="فتح القائمة">
-                    <i class="fas fa-bars"></i>
-                </button>
-                <div class="header-brand">
-                    <div class="brand-icon"><i class="fas fa-gas-pump"></i></div>
-                    <div>
-                        <h1>محطة أبو أحمد</h1>
-                        <small>نظام إدارة الديزل المتكامل</small>
+        <div class="header-top">
+            <div class="left-group">
+                <div class="logo-box">
+                    <div class="logo-icon"><i class="fas fa-gas-pump"></i></div>
+                    <div class="logo-text">
+                        <b>محطة أبو أحمد</b>
+                        <span>نظام إدارة الديزل المتكامل</span>
                     </div>
                 </div>
             </div>
-            <div class="header-actions">
-                <button id="themeToggleButton" class="icon-btn gold-icon" onclick="toggleTheme()" title="تفعيل الوضع المظلم" aria-label="تفعيل الوضع المظلم">
-                    <i id="themeToggleIcon" class="fas fa-moon" aria-hidden="true"></i>
+            <div class="right-group">
+                <button class="glass-btn theme-btn" id="themeToggleButton" onclick="toggleTheme()" title="تبديل الوضع" aria-label="تبديل الوضع">
+                    <i id="themeToggleIcon" class="fas fa-moon"></i>
                 </button>
-                <button id="logoutButton" class="icon-btn gold-icon" onclick="logout()" title="الخروج من التطبيق" aria-label="الخروج من التطبيق">
-                    <i class="fas fa-right-from-bracket" aria-hidden="true"></i>
+                <button class="glass-btn close-app" id="logoutButton" onclick="logout()" title="الخروج من التطبيق" aria-label="الخروج">
+                    <i class="fas fa-power-off"></i>
                 </button>
-            </div>
-        </header>
-
-        <!-- ===== القائمة الجانبية ===== -->
-        <div class="sidebar-overlay" id="sidebarOverlay" onclick="closePanels()"></div>
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <div class="brand">
-                    <div class="icon"><i class="fas fa-gas-pump"></i></div>
-                    <span>أبو أحمد</span>
-                </div>
-                <div class="header-actions-side">
-                    <button onclick="togglePinSidebar()" id="pinBtn" title="تثبيت القائمة"><i class="fas fa-thumbtack"></i></button>
-                    <button onclick="toggleCompactSidebar()" id="compactBtn" title="وضع مضغوط"><i class="fas fa-compress-alt"></i></button>
-                    <button onclick="closeSidebar()" class="sidebar-close" title="إغلاق"><i class="fas fa-times"></i></button>
-                </div>
-            </div>
-
-            <div class="sidebar-search">
-                <input type="text" id="sidebarSearch" placeholder="بحث في القائمة..." oninput="filterSidebar(event)" />
-            </div>
-
-            <nav class="sidebar-nav" id="sidebarNav">
-                <!-- سيتم إنشاؤها عبر JavaScript -->
-            </nav>
-        </aside>
-
-        <!-- ===== الغطاء الخلفي ===== -->
-        <div class="overlay" id="overlay" onclick="closePanels()"></div>
-
-        <!-- ===== لوحة الأوامر ===== -->
-        <div class="command-palette-overlay" id="commandPaletteOverlay" onclick="if(event.target===this) closeCommandPalette()">
-            <div class="command-palette-box" onclick="event.stopPropagation()">
-                <div class="palette-header">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="commandPaletteInput" placeholder="ابحث عن شاشة..." autofocus>
-                    <button class="palette-close" onclick="closeCommandPalette()"><i class="fas fa-times"></i></button>
-                </div>
-                <div class="palette-results" id="commandPaletteResults"></div>
             </div>
         </div>
 
-        <!-- ===== المحتوى الرئيسي ===== -->
-        <main class="main-content" id="mainContent">
-            <div class="page" id="page-dashboard">
-
-                <!-- بطاقة المستخدم -->
-                <div class="user-info-card" id="userInfoCard">
-                    <div class="avatar">
-                        <img id="userAvatar" src="file:///android_asset/assets-local/images/default_avatar.png" alt="صورة المستخدم">
-                    </div>
-                    <div class="user-details">
-                        <h4 id="userDisplayName">جاري التحميل...</h4>
-                        <small id="userDisplayEmail">—</small>
-                        <div><span class="role-badge" id="userDisplayRole">—</span></div>
-                    </div>
-                </div>
-
-                <!-- حاوية الإشعارات -->
-                <div class="toast-container" id="toastContainer"></div>
-
-                <!-- البطاقات الإحصائية -->
-                <div class="stats-grid" id="dashStats"></div>
-
-                <!-- معلومات التحديث -->
-                <div class="data-update-info">
-                    <i class="fas fa-database"></i> مصدر المؤشرات: SQLite عبر DatabaseHelper — آخر قراءة: <span id="last-update">يتم التحميل...</span>
-                    <button class="refresh-btn" onclick="manualRefresh()" title="تحديث الآن"><i class="fas fa-rotate-right"></i></button>
-                </div>
-
+        <div class="time-chip" id="timeChip">
+            <div class="date">
+                <span class="dot"></span>
+                <span id="dateText">--</span>
             </div>
-        </main>
+            <div class="time" id="timeText">--:--:--</div>
+        </div>
 
+        <div class="user-chip" id="userInfoCard">
+            <img id="userAvatar" src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Ccircle cx='100' cy='100' r='100' fill='%234A5568'/%3E%3Crect x='56' y='78' width='10' height='22' rx='5' fill='%23E2E8F0'/%3E%3Crect x='134' y='78' width='10' height='22' rx='5' fill='%23E2E8F0'/%3E%3Cpath d='M62,72 Q62,38 100,38 Q138,38 138,72 L138,88 Q138,114 100,120 Q62,114 62,88 Z' fill='%23E2E8F0'/%3E%3Crect x='86' y='116' width='28' height='24' fill='%23E2E8F0'/%3E%3Cpath d='M32,200 L32,180 Q32,146 82,138 L118,138 Q168,146 168,180 L168,200 Z' fill='%23E2E8F0'/%3E%3C/svg%3E" alt="صورة المستخدم">
+            <div class="user-info">
+                <b id="userDisplayName">جاري التحميل...</b>
+                <span id="userDisplayRole">—</span>
+            </div>
+            <div class="user-status"></div>
+        </div>
+    </div>
+
+    <!-- ============ SVG خلفية القائمة المرنة ============ -->
+    <svg class="elastic-sidebar-bg" id="elasticSvg" viewBox="0 0 320 1000" preserveAspectRatio="none" aria-hidden="true">
+        <path id="sPath" class="s-path" d="M320,0 L320,0 a0,500 0 0,0 0,1000 L320,1000 Z" />
+    </svg>
+
+    <!-- ============ لسان الفتح ============ -->
+    <button class="side-tab" id="sideTab" onclick="toggleSidebar()" aria-label="اضغط لفتح القائمة" title="اضغط لفتح القائمة">
+        <i class="fas fa-angles-left"></i>
+    </button>
+
+    <!-- ============ القائمة الجانبية ============ -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closePanels()"></div>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="brand">
+                <div class="icon"><i class="fas fa-gas-pump"></i></div>
+                <span>أبو أحمد</span>
+            </div>
+            <div class="header-actions-side">
+                <button onclick="togglePinSidebar()" id="pinBtn" title="تثبيت القائمة"><i class="fas fa-thumbtack"></i></button>
+                <button onclick="toggleCompactSidebar()" id="compactBtn" title="وضع مضغوط"><i class="fas fa-compress-alt"></i></button>
+                <button onclick="closeSidebar()" class="sidebar-close" title="إغلاق"><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+
+        <div class="sidebar-search">
+            <input type="text" id="sidebarSearch" placeholder="بحث في القائمة..." oninput="filterSidebar(event)" />
+        </div>
+
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+
+    <!-- ============ Command Palette ============ -->
+    <div class="command-palette-overlay" id="commandPaletteOverlay" onclick="if(event.target===this) closeCommandPalette()">
+        <div class="command-palette-box" onclick="event.stopPropagation()">
+            <div class="palette-header">
+                <i class="fas fa-search"></i>
+                <input type="text" id="commandPaletteInput" placeholder="ابحث عن شاشة..." autofocus>
+                <button class="palette-close" onclick="closeCommandPalette()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="palette-results" id="commandPaletteResults"></div>
+        </div>
+    </div>
+
+    <!-- ============ المحتوى الرئيسي ============ -->
+    <main class="main-content" id="mainContent">
+        <div class="page" id="page-dashboard">
+
+            <div class="toast-container" id="toastContainer"></div>
+
+            <div class="stats-grid" id="dashStats"></div>
+
+            <div class="data-update-info">
+                <i class="fas fa-database" style="color: var(--gold);"></i>
+                مصدر المؤشرات: SQLite — آخر قراءة: <span id="last-update">يتم التحميل...</span>
+                <button class="refresh-btn" onclick="manualRefresh()" title="تحديث الآن">
+                    <i class="fas fa-rotate-right"></i>
+                </button>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- ============ شاشة السبات ============ -->
+    <div class="sleep-overlay" id="sleepOverlay" onclick="exitSleepMode(event)" ontouchstart="exitSleepMode(event)">
+        <div class="sleep-text" id="sleepText">⛽ محطة ابو احمد</div>
     </div>
 
     <!-- ================================================================ -->
-    <!-- JavaScript – جميع الوظائف الكاملة -->
+    <!-- JavaScript -->
     <!-- ================================================================ -->
     <script>
         // ================================================================
@@ -1810,11 +1765,87 @@
         let androidInterface = null;
         let useAndroidInterface = false;
         let isRefreshing = false;
+        let clockInterval = null;
 
         let sidebarNavData = [];
         let subPageRouteMap = {};
         let favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
         let recent = JSON.parse(localStorage.getItem('recent') || '[]');
+
+        // ================================================================
+        // Sleep Mode Variables
+        // ================================================================
+        const SLEEP_TIMEOUT = 30000;
+        let inactivityTimer = null;
+        let sleepMoveInterval = null;
+        let isSleeping = false;
+
+        // ================================================================
+        // Elastic Sidebar Variables
+        // ================================================================
+        const SVG_BASE_WIDTH = 320;
+        const SIDEBAR_CLOSED = SVG_BASE_WIDTH;
+        const SIDEBAR_OPEN = 0;
+        let currentLeadX = SIDEBAR_CLOSED;
+        let isSidebarAnimating = false;
+
+        // الصورة الافتراضية (ذكر - رأس بأذنين وأكتاف عريضة)
+        const DEFAULT_AVATAR = "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Ccircle cx='100' cy='100' r='100' fill='%234A5568'/%3E%3Crect x='56' y='78' width='10' height='22' rx='5' fill='%23E2E8F0'/%3E%3Crect x='134' y='78' width='10' height='22' rx='5' fill='%23E2E8F0'/%3E%3Cpath d='M62,72 Q62,38 100,38 Q138,38 138,72 L138,88 Q138,114 100,120 Q62,114 62,88 Z' fill='%23E2E8F0'/%3E%3Crect x='86' y='116' width='28' height='24' fill='%23E2E8F0'/%3E%3Cpath d='M32,200 L32,180 Q32,146 82,138 L118,138 Q168,146 168,180 L168,200 Z' fill='%23E2E8F0'/%3E%3C/svg%3E";
+
+        function createElasticD(leadX, arcRadius) {
+            return 'M' + SVG_BASE_WIDTH + ',0 ' +
+                   'L' + leadX + ',0 ' +
+                   'a' + arcRadius + ',500 0 0,0 ' +
+                   '0,1000 L' + SVG_BASE_WIDTH + ',1000 Z';
+        }
+
+        function smallElastic(t, b, c, d) {
+            var ts = (t /= d) * t;
+            var tc = ts * t;
+            return b + c * (33 * tc * ts + -106 * ts * ts + 126 * tc + -67 * ts + 15 * t);
+        }
+
+        function animateElasticPath(fromLeadX, toLeadX, duration, onComplete) {
+            if (isSidebarAnimating) return;
+            isSidebarAnimating = true;
+
+            var pathEl = document.getElementById('sPath');
+            var startTime = null;
+            var diff = toLeadX - fromLeadX;
+
+            function step(timestamp) {
+                if (!startTime) startTime = timestamp;
+                var elapsed = timestamp - startTime;
+                if (elapsed > duration) elapsed = duration;
+
+                var easedProgress = smallElastic(elapsed, 0, 1, duration);
+                var leadX = fromLeadX + diff * easedProgress;
+
+                var linearProgress = elapsed / duration;
+                var arcRadius = Math.sin(linearProgress * Math.PI) * 70;
+
+                pathEl.setAttribute('d', createElasticD(leadX, arcRadius));
+
+                if (elapsed < duration) {
+                    requestAnimationFrame(step);
+                } else {
+                    pathEl.setAttribute('d', createElasticD(toLeadX, 0));
+                    currentLeadX = toLeadX;
+                    isSidebarAnimating = false;
+                    if (onComplete) onComplete();
+                }
+            }
+
+            requestAnimationFrame(step);
+        }
+
+        function syncElasticSvgWidth() {
+            const svg = document.getElementById('elasticSvg');
+            const sidebar = document.getElementById('sidebar');
+            if (!svg || !sidebar) return;
+            const w = sidebar.offsetWidth;
+            if (w > 0) svg.style.width = w + 'px';
+        }
 
         // ================================================================
         // أدوات مساعدة
@@ -1840,6 +1871,162 @@
         }
 
         // ================================================================
+        // الساعة والتاريخ
+        // ================================================================
+        function updateDateTime() {
+            if (isSleeping) return;
+            const now = new Date();
+            const dateEl = document.getElementById('dateText');
+            const timeEl = document.getElementById('timeText');
+            if (dateEl) {
+                try {
+                    dateEl.textContent = new Intl.DateTimeFormat('ar-EG', {
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                    }).format(now);
+                } catch (e) {
+                    dateEl.textContent = now.toLocaleDateString('ar-EG');
+                }
+            }
+            if (timeEl) {
+                try {
+                    timeEl.textContent = new Intl.DateTimeFormat('en-GB', {
+                        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+                    }).format(now);
+                } catch (e) {
+                    timeEl.textContent = now.toLocaleTimeString('en-GB');
+                }
+            }
+        }
+
+        // ================================================================
+        // Sleep Mode
+        // ================================================================
+        function resetInactivityTimer() {
+            if (inactivityTimer) clearTimeout(inactivityTimer);
+            if (isSleeping) return;
+            inactivityTimer = setTimeout(enterSleepMode, SLEEP_TIMEOUT);
+        }
+
+        function enterSleepMode() {
+            if (isSleeping) return;
+            isSleeping = true;
+
+            document.body.classList.add('sleep-active');
+
+            if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
+            if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
+            if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; }
+
+            hideAllBubbles();
+
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar && sidebar.classList.contains('open')) {
+                sidebar.classList.remove('open');
+                document.getElementById('sidebarOverlay').classList.remove('active');
+                document.getElementById('sideTab').classList.remove('hidden');
+                const pathEl = document.getElementById('sPath');
+                if (pathEl) {
+                    pathEl.setAttribute('d', createElasticD(SIDEBAR_CLOSED, 0));
+                    currentLeadX = SIDEBAR_CLOSED;
+                }
+            }
+
+            const overlay = document.getElementById('sleepOverlay');
+            overlay.classList.add('active');
+
+            const sleepText = document.getElementById('sleepText');
+            sleepText.style.transition = 'none';
+            sleepText.style.left = '50%';
+            sleepText.style.top = '50%';
+            sleepText.style.transform = 'translate(-50%, -50%)';
+
+            setTimeout(() => {
+                sleepText.style.transition = 'left 1.6s cubic-bezier(0.45, 0.05, 0.55, 0.95), top 1.6s cubic-bezier(0.45, 0.05, 0.55, 0.95)';
+                moveSleepText();
+                if (sleepMoveInterval) clearInterval(sleepMoveInterval);
+                sleepMoveInterval = setInterval(moveSleepText, 2200);
+            }, 400);
+        }
+
+        function moveSleepText() {
+            const text = document.getElementById('sleepText');
+            if (!text) return;
+
+            const padding = 16;
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+
+            const prevLeft = text.style.left;
+            const prevTop = text.style.top;
+            const prevTransform = text.style.transform;
+
+            text.style.left = '0px';
+            text.style.top = '0px';
+            text.style.transform = 'none';
+            const tw = text.offsetWidth || 200;
+            const th = text.offsetHeight || 50;
+
+            text.style.left = prevLeft;
+            text.style.top = prevTop;
+            text.style.transform = prevTransform;
+
+            const maxX = Math.max(padding, w - tw - padding);
+            const maxY = Math.max(padding, h - th - padding);
+
+            const minX = Math.min(padding, maxX);
+            const minY = Math.min(padding, maxY);
+
+            const x = minX + Math.random() * (maxX - minX);
+            const y = minY + Math.random() * (maxY - minY);
+
+            text.style.left = x + 'px';
+            text.style.top = y + 'px';
+            text.style.transform = 'none';
+        }
+
+        function exitSleepMode(event) {
+            if (!isSleeping) return;
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            isSleeping = false;
+
+            const overlay = document.getElementById('sleepOverlay');
+            overlay.classList.remove('active');
+
+            if (sleepMoveInterval) {
+                clearInterval(sleepMoveInterval);
+                sleepMoveInterval = null;
+            }
+
+            document.body.classList.remove('sleep-active');
+
+            if (!clockInterval) {
+                clockInterval = setInterval(updateDateTime, 1000);
+                updateDateTime();
+            }
+
+            loadDashboard(true);
+
+            if (!refreshInterval) {
+                refreshInterval = setInterval(() => { loadDashboard(true); }, 180000);
+            }
+
+            resetInactivityTimer();
+        }
+
+        function initSleepMode() {
+            const events = ['mousemove', 'mousedown', 'touchstart', 'touchmove', 'keydown', 'scroll', 'click', 'wheel'];
+            events.forEach(evt => {
+                document.addEventListener(evt, function() {
+                    if (!isSleeping) resetInactivityTimer();
+                }, { passive: true });
+            });
+            resetInactivityTimer();
+        }
+
+        // ================================================================
         // جسر Android
         // ================================================================
         function initAndroidBridge() {
@@ -1854,7 +2041,6 @@
                 if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface !== null) {
                     androidInterface = window.AndroidInterface;
                     useAndroidInterface = true;
-                    console.log('AndroidInterface initialized after retry');
                     if (currentUser) {
                         loadDashboard(true);
                         renderSidebar();
@@ -1938,18 +2124,35 @@
         function updateUserInfo(user) {
             if (!user) return;
             const nameEl = document.getElementById('userDisplayName');
-            const emailEl = document.getElementById('userDisplayEmail');
             const roleEl = document.getElementById('userDisplayRole');
             if (nameEl) nameEl.textContent = user.full_name || user.full_name_ar || user.username || '—';
-            if (emailEl) emailEl.textContent = user.email || '—';
             if (roleEl) roleEl.textContent = user.role_name || user.role || '—';
-            const avatarEl=document.getElementById('userAvatar');
-            const avatarPath=String(user.avatar_path||user.avatar||user.profile_image||'').trim();
-            if(avatarEl){if(/^(file:|content:|data:|https?:)/i.test(avatarPath)||avatarPath.startsWith('assets-local/')) avatarEl.src=avatarPath.startsWith('assets-local/')?'file:///android_asset/'+avatarPath:avatarPath;else avatarEl.src='file:///android_asset/assets-local/images/default_avatar.png';}
+
+            const avatarEl = document.getElementById('userAvatar');
+            const avatarPath = String(user.avatar_path || user.avatar || user.profile_image || '').trim();
+
+            if (avatarEl) {
+                if (!avatarPath) {
+                    avatarEl.src = DEFAULT_AVATAR;
+                } else if (/^(file:|content:|data:|https?:)/i.test(avatarPath)) {
+                    avatarEl.src = avatarPath;
+                } else if (avatarPath.startsWith('assets-local/')) {
+                    avatarEl.src = 'file:///android_asset/' + avatarPath;
+                } else {
+                    avatarEl.src = DEFAULT_AVATAR;
+                }
+                avatarEl.onerror = function() {
+                    this.onerror = null;
+                    this.src = DEFAULT_AVATAR;
+                };
+            }
         }
 
         async function logout() {
             if (refreshInterval) clearInterval(refreshInterval);
+            if (clockInterval) clearInterval(clockInterval);
+            if (inactivityTimer) clearTimeout(inactivityTimer);
+            if (sleepMoveInterval) clearInterval(sleepMoveInterval);
             hideAllBubbles();
             try {
                 const result = await apiCall('exitApplication');
@@ -1968,7 +2171,8 @@
             const icon = document.getElementById('themeToggleIcon');
             if (!icon) return;
             icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
-            document.getElementById('themeToggleButton').title = isDark ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع المظلم';
+            const btn = document.getElementById('themeToggleButton');
+            if (btn) btn.title = isDark ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع المظلم';
         }
 
         function toggleTheme() {
@@ -1977,11 +2181,14 @@
             const nextDark = !isDark;
             html.setAttribute('data-theme', nextDark ? 'dark' : 'light');
             localStorage.setItem('darkMode', String(nextDark));
+            localStorage.setItem('fuel2-v6', nextDark ? 'dark' : 'light');
             updateThemeButton(nextDark);
             showToast(nextDark ? 'تم تفعيل الوضع المظلم' : 'تم تفعيل الوضع الفاتح', 'info');
         }
+
         (function initTheme() {
-            const isDark = localStorage.getItem('darkMode') === 'true';
+            const isDark = localStorage.getItem('darkMode') === 'true' ||
+                          localStorage.getItem('fuel2-v6') === 'dark';
             document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
         })();
 
@@ -1990,56 +2197,40 @@
         // ================================================================
         const fallbackSidebarData = [
             { id: 'security', label: 'الأمان والمصادقة', icon: 'fa-shield-alt', children: ['إدارة المستخدمين',
-                    'الأدوار والصلاحيات', 'إدارة الشاشات', 'سجل النشاطات'
-                ] },
+                    'الأدوار والصلاحيات', 'إدارة الشاشات', 'سجل النشاطات'] },
             { id: 'admin', label: 'الإدارة الأساسية', icon: 'fa-building', children: ['إعدادات الشركة', 'إدارة المحطات',
-                    'إعدادات النظام', 'أسعار الصرف'
-                ] },
+                    'إعدادات النظام', 'أسعار الصرف'] },
             { id: 'parties', label: 'الأطراف والعملاء', icon: 'fa-users', children: ['إدارة العملاء', 'إدارة الموردين',
-                    'أنواع الأطراف', 'إدارة العقود', 'الديون المعدومة', 'CRM - العلاقات'
-                ] },
+                    'أنواع الأطراف', 'إدارة العقود', 'الديون المعدومة', 'CRM - العلاقات'] },
             { id: 'vehicles', label: 'المركبات والسائقين', icon: 'fa-truck', children: ['إدارة المركبات', 'إدارة السائقين',
-                    'تتبع المركبات', 'رحلات المركبات', 'مصروفات المركبات'
-                ] },
+                    'تتبع المركبات', 'رحلات المركبات', 'مصروفات المركبات'] },
             { id: 'products', label: 'المنتجات والوقود', icon: 'fa-boxes', children: ['أنواع الوقود', 'إدارة المنتجات',
-                    'فئات المنتجات', 'قوائم الأسعار', 'سجل تغيير الأسعار'
-                ] },
+                    'فئات المنتجات', 'قوائم الأسعار', 'سجل تغيير الأسعار'] },
             { id: 'tanks', label: 'الخزانات والمضخات', icon: 'fa-oil-can', children: ['إدارة الخزانات', 'إدارة المضخات',
-                    'قراءات العدادات', 'تعبئة الخزانات', 'فحوصات الجودة', 'معايرة المعدات'
-                ] },
+                    'قراءات العدادات', 'تعبئة الخزانات', 'فحوصات الجودة', 'معايرة المعدات'] },
             { id: 'inventory', label: 'المخزون والمستودعات', icon: 'fa-warehouse', children: ['إدارة المستودعات',
-                    'مستويات المخزون', 'حركات المخزون', 'الجرد والتسوية', 'المنتجات التالفة', 'تنبيهات المخزون'
-                ] },
+                    'مستويات المخزون', 'حركات المخزون', 'الجرد والتسوية', 'المنتجات التالفة', 'تنبيهات المخزون'] },
             { id: 'sales', label: 'المبيعات والورديات', icon: 'fa-shopping-cart', children: ['نقطة البيع (POS)',
-                    'إدارة الورديات', 'سجل المبيعات', 'إدارة الطلبات', 'إدارة التوصيلات', 'مبيعات الوقود'
-                ] },
+                    'إدارة الورديات', 'سجل المبيعات', 'إدارة الطلبات', 'إدارة التوصيلات', 'مبيعات الوقود'] },
             { id: 'finance', label: 'المالية والحسابات', icon: 'fa-money-bill-wave', children: ['إدارة المدفوعات',
                     'إدارة الإيصالات', 'إدارة الصناديق', 'حركات النقدية', 'البنوك والحسابات', 'شجرة الحسابات',
                     'القيود المحاسبية', 'فئات المصروفات', 'إدارة المصروفات', 'الميزانيات', 'الإيداعات النقدية',
-                    'دفتر الأستاذ', 'الميزانية العمومية'
-                ] },
+                    'دفتر الأستاذ', 'الميزانية العمومية'] },
             { id: 'hr', label: 'الموارد البشرية', icon: 'fa-user-tie', children: ['إدارة الموظفين', 'الحضور والانصراف',
-                    'إدارة الرواتب', 'دفعات الموظفين'
-                ] },
+                    'إدارة الرواتب', 'دفعات الموظفين'] },
             { id: 'assets', label: 'الأصول والصيانة', icon: 'fa-tools', children: ['الأصول الثابتة', 'إدارة الأصول V12',
-                    'طلبات الصيانة', 'جدولة الصيانة', 'سجل الصيانة', 'الإهلاك'
-                ] },
+                    'طلبات الصيانة', 'جدولة الصيانة', 'سجل الصيانة', 'الإهلاك'] },
             { id: 'notifications', label: 'الإشعارات والرسائل', icon: 'fa-bell', children: ['قوالب الإشعارات',
-                    'صندوق الإشعارات', 'إدارة الرسائل', 'سجل الرسائل', 'تذكيرات الديون', 'القائمة البيضاء', 'فحص الرسائل'
-                ] },
+                    'صندوق الإشعارات', 'إدارة الرسائل', 'سجل الرسائل', 'تذكيرات الديون', 'القائمة البيضاء', 'فحص الرسائل'] },
             { id: 'reports', label: 'التقارير والتحليلات', icon: 'fa-chart-bar', children: ['لوحة التحكم',
                     'تقارير المبيعات', 'تقرير نهاية اليوم', 'تقارير المخزون', 'تقارير العملاء', 'تقارير الوقود',
-                    'مؤشرات الأداء KPI', 'التنبؤات والتحليلات', 'التقارير المحاسبية'
-                ] },
+                    'مؤشرات الأداء KPI', 'التنبؤات والتحليلات', 'التقارير المحاسبية'] },
             { id: 'system', label: 'النظام والسجلات', icon: 'fa-server', children: ['سجلات النظام', 'سجلات التدقيق',
-                    'إدارة الوثائق'
-                ] },
+                    'إدارة الوثائق'] },
             { id: 'sync', label: 'المزامنة والنسخ الاحتياطي', icon: 'fa-sync', children: ['إدارة الأجهزة', 'سجل المزامنة',
-                    'النسخ الاحتياطي'
-                ] },
+                    'النسخ الاحتياطي'] },
             { id: 'printing', label: 'الطباعة والقوالب', icon: 'fa-print', children: ['إعدادات الطابعات', 'قوالب الإيصالات',
-                    'قوالب الفواتير'
-                ] },
+                    'قوالب الفواتير'] },
             { id: 'ai', label: 'المساعد الذكي', icon: 'fa-robot', children: ['المساعد الذكي'] }
         ];
 
@@ -2186,7 +2377,7 @@
         function isFavorite(label) { return favorites.includes(label); }
 
         // ================================================================
-        // بناء القائمة الجانبية (Accordion + مفضلة + مستخدمة مؤخراً)
+        // بناء القائمة الجانبية
         // ================================================================
         function renderSidebar() {
             const nav = document.getElementById('sidebarNav');
@@ -2202,11 +2393,10 @@
                 return;
             }
 
-            // === المفضلة ===
             if (favorites.length > 0) {
                 const title = document.createElement('div');
                 title.className = 'sidebar-section-title';
-                title.innerHTML = '<i class="fas fa-star" style="color: var(--md-sys-color-secondary);"></i> المفضلة';
+                title.innerHTML = '<i class="fas fa-star" style="color: var(--gold);"></i> المفضلة';
                 nav.appendChild(title);
                 favorites.forEach(label => {
                     const item = sidebarData.find(p => p.label === label);
@@ -2217,11 +2407,10 @@
                 });
             }
 
-            // === المستخدمة مؤخراً ===
             if (recent.length > 0) {
                 const title = document.createElement('div');
                 title.className = 'sidebar-section-title';
-                title.innerHTML = '<i class="fas fa-clock" style="color: var(--md-sys-color-on-surface-variant);"></i> المستخدمة مؤخراً';
+                title.innerHTML = '<i class="fas fa-clock" style="color: var(--muted);"></i> المستخدمة مؤخراً';
                 nav.appendChild(title);
                 recent.slice(0, 5).forEach(label => {
                     const item = sidebarData.find(p => p.label === label);
@@ -2232,7 +2421,6 @@
                 });
             }
 
-            // === جميع العناصر ===
             const allTitle = document.createElement('div');
             allTitle.className = 'sidebar-section-title';
             allTitle.innerHTML = '<i class="fas fa-list"></i> جميع الشاشات';
@@ -2251,7 +2439,7 @@
                     <span class="nav-label">${item.label}</span>
                     ${hasChildren ? `<span class="nav-arrow"><i class="fas fa-chevron-down"></i></span>` : ''}
                     <span style="margin-right:auto;font-size:12px;cursor:pointer;" onclick="event.stopPropagation(); toggleFavorite('${item.label}');" title="${isFavorite(item.label) ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}">
-                        <i class="fas ${isFavorite(item.label) ? 'fa-star' : 'fa-star-o'}" style="color:${isFavorite(item.label) ? 'var(--md-sys-color-secondary)' : 'var(--md-sys-color-on-surface-variant)'};"></i>
+                        <i class="fas ${isFavorite(item.label) ? 'fa-star' : 'fa-star-o'}" style="color:${isFavorite(item.label) ? 'var(--gold)' : 'rgba(26,19,5,.5)'};"></i>
                     </span>
                 `;
 
@@ -2285,7 +2473,7 @@
                             <span class="child-icon"><i class="fas fa-chevron-left"></i></span>
                             <span>${child}</span>
                             <span style="margin-right:auto;font-size:11px;cursor:pointer;" onclick="event.stopPropagation(); toggleFavorite('${child}');" title="${isFavorite(child) ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}">
-                                <i class="fas ${isFavorite(child) ? 'fa-star' : 'fa-star-o'}" style="color:${isFavorite(child) ? 'var(--md-sys-color-secondary)' : 'var(--md-sys-color-on-surface-variant)'};"></i>
+                                <i class="fas ${isFavorite(child) ? 'fa-star' : 'fa-star-o'}" style="color:${isFavorite(child) ? 'var(--gold)' : 'var(--muted)'};"></i>
                             </span>
                         `;
                         childBtn.onclick = function(e) {
@@ -2305,7 +2493,6 @@
                 nav.appendChild(wrapper);
             });
 
-            // استعادة الحالة
             const pinned = localStorage.getItem('sidebar-pinned') === 'true';
             if (pinned) {
                 document.getElementById('sidebar').classList.add('pinned');
@@ -2317,16 +2504,15 @@
                 document.getElementById('compactBtn').classList.add('active-mode');
             }
 
-            // ضبط المسافة للمحتوى الرئيسي
-            adjustMainContentMargin();
+            syncElasticSvgWidth();
         }
 
         function createNavItem(item, isFav) {
             const btn = document.createElement('button');
             btn.className = 'nav-item';
-            btn.style.background = isFav ?
-                'linear-gradient(to left, var(--md-sys-color-secondary), var(--md-sys-color-secondary-fixed-dim))' :
-                '';
+            if (isFav) {
+                btn.style.background = 'linear-gradient(135deg, var(--gold2), var(--gold))';
+            }
             btn.dataset.label = item.label;
             const hasChildren = item.children && item.children.length > 0;
             btn.innerHTML = `
@@ -2334,7 +2520,7 @@
                 <span class="nav-label">${item.label}</span>
                 ${hasChildren ? `<span class="nav-arrow"><i class="fas fa-chevron-down"></i></span>` : ''}
                 <span style="margin-right:auto;font-size:12px;cursor:pointer;" onclick="event.stopPropagation(); toggleFavorite('${item.label}');" title="${isFavorite(item.label) ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}">
-                    <i class="fas ${isFavorite(item.label) ? 'fa-star' : 'fa-star-o'}" style="color:${isFavorite(item.label) ? 'var(--md-sys-color-secondary)' : 'var(--md-sys-color-on-surface-variant)'};"></i>
+                    <i class="fas ${isFavorite(item.label) ? 'fa-star' : 'fa-star-o'}" style="color:${isFavorite(item.label) ? '#1A1305' : 'rgba(26,19,5,.5)'};"></i>
                 </span>
             `;
             btn.onclick = function(e) {
@@ -2393,20 +2579,40 @@
         // ================================================================
         // التحكم في القائمة الجانبية
         // ================================================================
-        function toggleSidebar() {
+        function openSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
-            if (sidebar.classList.contains('open')) {
-                closeSidebar();
-            } else {
-                sidebar.classList.add('open');
-                overlay.classList.add('active');
-            }
+            const sideTab = document.getElementById('sideTab');
+            if (isSidebarAnimating || sidebar.classList.contains('open')) return;
+
+            syncElasticSvgWidth();
+            sidebar.classList.add('open');
+            if (overlay) overlay.classList.add('active');
+            if (sideTab) sideTab.classList.add('hidden');
+
+            animateElasticPath(currentLeadX, SIDEBAR_OPEN, 700);
         }
 
         function closeSidebar() {
-            document.getElementById('sidebar').classList.remove('open');
-            document.getElementById('sidebarOverlay').classList.remove('active');
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const sideTab = document.getElementById('sideTab');
+            if (isSidebarAnimating || !sidebar.classList.contains('open')) return;
+
+            sidebar.classList.remove('open');
+            if (overlay) overlay.classList.remove('active');
+            if (sideTab) sideTab.classList.remove('hidden');
+
+            animateElasticPath(currentLeadX, SIDEBAR_CLOSED, 620);
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar.classList.contains('open')) {
+                closeSidebar();
+            } else {
+                openSidebar();
+            }
         }
 
         function togglePinSidebar() {
@@ -2415,12 +2621,8 @@
             const isPinned = sidebar.classList.toggle('pinned');
             pinBtn.classList.toggle('pinned');
             localStorage.setItem('sidebar-pinned', isPinned ? 'true' : 'false');
-            if (isPinned) {
-                sidebar.classList.add('open');
-                document.getElementById('sidebarOverlay').classList.remove('active');
-            } else {
-                closeSidebar();
-            }
+            if (isPinned) openSidebar();
+            else closeSidebar();
         }
 
         function toggleCompactSidebar() {
@@ -2429,23 +2631,8 @@
             const isCompact = sidebar.classList.toggle('compact');
             btn.classList.toggle('active-mode');
             localStorage.setItem('sidebar-compact', isCompact ? 'true' : 'false');
-            if (!isCompact) {
-                sidebar.style.width = '';
-            }
+            setTimeout(syncElasticSvgWidth, 50);
             showToast(isCompact ? 'تم تفعيل الوضع المضغوط' : 'تم إلغاء الوضع المضغوط', 'info');
-            adjustMainContentMargin();
-        }
-
-        function adjustMainContentMargin() {
-            const sidebar = document.getElementById('sidebar');
-            const main = document.getElementById('mainContent');
-            if (window.innerWidth >= 1024) {
-                const isCompact = sidebar.classList.contains('compact');
-                const width = isCompact ? 68 : sidebar.scrollWidth;
-                main.style.marginRight = width + 'px';
-            } else {
-                main.style.marginRight = '0';
-            }
         }
 
         function closePanels() {
@@ -2453,7 +2640,145 @@
         }
 
         // ================================================================
-        // التنقل بين الصفحات
+        // Drag Gestures
+        // ================================================================
+        let dragState = {
+            active: false,
+            target: null,
+            startX: 0,
+            startY: 0,
+            currentX: 0,
+            currentY: 0,
+            direction: null
+        };
+
+        function beginDrag(touch, target) {
+            if (isSidebarAnimating) return;
+            dragState.active = true;
+            dragState.target = target;
+            dragState.startX = touch.clientX;
+            dragState.startY = touch.clientY;
+            dragState.currentX = touch.clientX;
+            dragState.currentY = touch.clientY;
+            dragState.direction = null;
+        }
+
+        function moveDrag(e) {
+            if (!dragState.active) return;
+            const touch = e.touches[0];
+            if (!touch) return;
+
+            dragState.currentX = touch.clientX;
+            dragState.currentY = touch.clientY;
+
+            const dx = dragState.currentX - dragState.startX;
+            const dy = dragState.currentY - dragState.startY;
+
+            if (!dragState.direction) {
+                if (Math.abs(dx) > Math.abs(dy) + 4) {
+                    dragState.direction = 'horizontal';
+                } else if (Math.abs(dy) > Math.abs(dx) + 4) {
+                    dragState.direction = 'vertical';
+                } else {
+                    return;
+                }
+            }
+
+            if (dragState.direction !== 'horizontal') return;
+
+            e.preventDefault();
+
+            const sidebar = document.getElementById('sidebar');
+            const width = sidebar.offsetWidth || 320;
+            let leadX;
+
+            if (dragState.target === 'tab') {
+                const progress = Math.max(0, Math.min(1, -dx / width));
+                leadX = SIDEBAR_CLOSED - (SIDEBAR_CLOSED * progress);
+            } else if (dragState.target === 'sidebar') {
+                const progress = Math.max(0, Math.min(1, dx / width));
+                leadX = SIDEBAR_OPEN + (SIDEBAR_CLOSED - SIDEBAR_OPEN) * progress;
+            } else {
+                return;
+            }
+
+            const normalizedProgress = 1 - (leadX / SIDEBAR_CLOSED);
+            const arcRadius = Math.sin(normalizedProgress * Math.PI) * 55;
+
+            const pathEl = document.getElementById('sPath');
+            pathEl.setAttribute('d', createElasticD(leadX, arcRadius));
+            currentLeadX = leadX;
+        }
+
+        function endDrag() {
+            if (!dragState.active) return;
+            const target = dragState.target;
+            const direction = dragState.direction;
+            const dx = dragState.currentX - dragState.startX;
+
+            dragState.active = false;
+            dragState.target = null;
+            dragState.direction = null;
+
+            if (direction !== 'horizontal') return;
+
+            const sidebar = document.getElementById('sidebar');
+            const width = sidebar.offsetWidth || 320;
+            const threshold = width * 0.28;
+
+            if (target === 'tab') {
+                if (-dx > threshold) {
+                    sidebar.classList.add('open');
+                    document.getElementById('sidebarOverlay').classList.add('active');
+                    document.getElementById('sideTab').classList.add('hidden');
+                    animateElasticPath(currentLeadX, SIDEBAR_OPEN, 420);
+                } else {
+                    animateElasticPath(currentLeadX, SIDEBAR_CLOSED, 420);
+                }
+            } else if (target === 'sidebar') {
+                if (dx > threshold) {
+                    sidebar.classList.remove('open');
+                    document.getElementById('sidebarOverlay').classList.remove('active');
+                    document.getElementById('sideTab').classList.remove('hidden');
+                    animateElasticPath(currentLeadX, SIDEBAR_CLOSED, 420);
+                } else {
+                    animateElasticPath(currentLeadX, SIDEBAR_OPEN, 420);
+                }
+            }
+        }
+
+        function initDragGestures() {
+            const sideTab = document.getElementById('sideTab');
+            const sidebar = document.getElementById('sidebar');
+
+            if (sideTab) {
+                sideTab.addEventListener('touchstart', function(e) {
+                    if (sidebar.classList.contains('open') || isSidebarAnimating) return;
+                    const touch = e.touches[0];
+                    if (touch) beginDrag(touch, 'tab');
+                }, { passive: true });
+            }
+
+            if (sidebar) {
+                sidebar.addEventListener('touchstart', function(e) {
+                    if (!sidebar.classList.contains('open') || isSidebarAnimating) return;
+                    const tag = (e.target.tagName || '').toLowerCase();
+                    if (tag === 'input' || tag === 'button' || tag === 'a' || tag === 'textarea' ||
+                        tag === 'select' || e.target.closest('button') || e.target.closest('input')) {
+                        return;
+                    }
+                    const touch = e.touches[0];
+                    if (touch) beginDrag(touch, 'sidebar');
+                }, { passive: true });
+            }
+
+            document.addEventListener('touchmove', moveDrag, { passive: false });
+            document.addEventListener('touchend', endDrag, { passive: true });
+            document.addEventListener('touchcancel', endDrag, { passive: true });
+        }
+
+        // ================================================================
+        // التنقل
         // ================================================================
         async function navigateTo(url) {
             if (typeof url !== 'string' || !url.trim()) {
@@ -2573,7 +2898,7 @@
         }
 
         // ================================================================
-        // لوحة التحكم (Dashboard) - تحديث عند فتح الشاشة
+        // Dashboard
         // ================================================================
         function renderSkeletons() {
             const grid = document.getElementById('dashStats');
@@ -2603,8 +2928,9 @@
             grid.innerHTML = '';
 
             const formatTrend = (trendData) => {
-                if (!trendData || !Number.isFinite(Number(trendData.percentage_change))) return { text: '—', up: false,
-                    label: 'لا توجد مقارنة كافية' };
+                if (!trendData || !Number.isFinite(Number(trendData.percentage_change))) {
+                    return { text: '—', up: false, label: 'لا توجد مقارنة كافية' };
+                }
                 const pct = Number(trendData.percentage_change);
                 const dir = trendData.trend_direction;
                 return {
@@ -2618,37 +2944,42 @@
             const custTrend = formatTrend(stats.customers_trend_data);
 
             const cardDefs = [
-                { id: 'card-total-products', header: 'إجمالي المنتجات', icon: 'fa-boxes', value: stats.total_products ||
-                        0, label: prodTrend.label, trend: prodTrend.text, trendUp: prodTrend.up },
-                { id: 'card-daily-sales', header: 'المبيعات اليومية', icon: 'fa-chart-line', value: (stats.daily_sales ||
-                        0).toFixed(2) + ' ر.ي', label: salesTrend.label, trend: salesTrend.text, trendUp: salesTrend
-                        .up, cls: 'success-card' },
-                { id: 'card-active-customers', header: 'العملاء النشطين', icon: 'fa-users', value: stats
-                        .active_customers || 0, label: custTrend.label, trend: custTrend.text, trendUp: custTrend.up,
-                    cls: '' },
-                { id: 'card-expiry-soon', header: 'المنتهية قريباً', icon: 'fa-hourglass-half', value: stats
-                        .expiry_soon || 0, label: 'منتج خلال 30 يومًا', badge: stats.expiry_soon || 0,
-                    cls: 'warning-card' },
-                { id: 'card-low-stock', header: 'انخفاض المخزون', icon: 'fa-exclamation-circle', value: stats
-                        .low_stock || 0, label: 'تحت الحد الأدنى', badge: stats.low_stock || 0, cls: 'danger-card' },
-                { id: 'card-due-invoices', header: 'الفواتير المستحقة', icon: 'fa-file-invoice', value: stats
-                        .due_invoices || 0, label: 'فاتورة خلال أسبوع', cls: 'info-card' },
-                { id: 'card-returned-products', header: 'المنتجات المرتجعة', icon: 'fa-undo', value: (stats
-                        .returned_products_today || 0).toFixed(2), label: 'كمية اليوم (لتر)', cls: 'returned-card' },
-                { id: 'card-damaged-products', header: 'المنتجات التالفة', icon: 'fa-ban', value: (stats
-                        .damaged_products_today || 0).toFixed(2), label: 'كمية اليوم (لتر)', cls: 'damaged-card' },
-                { id: 'card-customer-debts', header: 'مديونية العملاء', icon: 'fa-hand-holding-usd', value: (stats
-                        .customer_debts || 0).toFixed(2) + ' ر.ي', label: 'إجمالي الديون المستحقة',
-                    cls: 'warning-card' },
-                { id: 'card-supplier-debts', header: 'مديونية الموردين', icon: 'fa-file-invoice-dollar', value: (stats
-                        .supplier_debts || 0).toFixed(2) + ' ر.ي', label: 'إجمالي الدين للموردين', cls: '' },
-                { id: 'card-inventory-value', header: 'قيمة المخزون', icon: 'fa-warehouse', value: (stats
-                        .inventory_value || 0).toFixed(2) + ' ر.ي', label: 'القيمة الإجمالية للمخزون',
-                    cls: 'success-card' },
-                { id: 'card-pending-tasks', header: 'المهام المعلقة', icon: 'fa-tasks', value: stats.pending_tasks ||
-                        0, label: 'مهمة تحتاج لمراجعتك', badge: stats.pending_tasks || 0, cls: 'info-card' },
-                { id: 'card-occupancy', header: 'امتلاء الخزانات', icon: 'fa-tachometer-alt', value: (Number(stats
-                        .occupancy_rate) || 0).toFixed(2) + '%', label: `${stats.tank_count || 0} خزانات — من الكمية والسعة الفعلية`,
+                { id: 'card-total-products', header: 'إجمالي المنتجات', icon: 'fa-boxes',
+                    value: stats.total_products || 0, label: prodTrend.label,
+                    trend: prodTrend.text, trendUp: prodTrend.up },
+                { id: 'card-daily-sales', header: 'المبيعات اليومية', icon: 'fa-chart-line',
+                    value: (stats.daily_sales || 0).toFixed(2) + ' ر.ي', label: salesTrend.label,
+                    trend: salesTrend.text, trendUp: salesTrend.up, cls: 'success-card' },
+                { id: 'card-active-customers', header: 'العملاء النشطين', icon: 'fa-users',
+                    value: stats.active_customers || 0, label: custTrend.label,
+                    trend: custTrend.text, trendUp: custTrend.up, cls: '' },
+                { id: 'card-expiry-soon', header: 'المنتهية قريباً', icon: 'fa-hourglass-half',
+                    value: stats.expiry_soon || 0, label: 'منتج خلال 30 يومًا',
+                    badge: stats.expiry_soon || 0, cls: 'warning-card' },
+                { id: 'card-low-stock', header: 'انخفاض المخزون', icon: 'fa-exclamation-circle',
+                    value: stats.low_stock || 0, label: 'تحت الحد الأدنى',
+                    badge: stats.low_stock || 0, cls: 'danger-card' },
+                { id: 'card-due-invoices', header: 'الفواتير المستحقة', icon: 'fa-file-invoice',
+                    value: stats.due_invoices || 0, label: 'فاتورة خلال أسبوع', cls: 'info-card' },
+                { id: 'card-returned-products', header: 'المنتجات المرتجعة', icon: 'fa-undo',
+                    value: (stats.returned_products_today || 0).toFixed(2), label: 'كمية اليوم (لتر)' },
+                { id: 'card-damaged-products', header: 'المنتجات التالفة', icon: 'fa-ban',
+                    value: (stats.damaged_products_today || 0).toFixed(2), label: 'كمية اليوم (لتر)' },
+                { id: 'card-customer-debts', header: 'مديونية العملاء', icon: 'fa-hand-holding-usd',
+                    value: (stats.customer_debts || 0).toFixed(2) + ' ر.ي',
+                    label: 'إجمالي الديون المستحقة', cls: 'warning-card' },
+                { id: 'card-supplier-debts', header: 'مديونية الموردين', icon: 'fa-file-invoice-dollar',
+                    value: (stats.supplier_debts || 0).toFixed(2) + ' ر.ي',
+                    label: 'إجمالي الدين للموردين' },
+                { id: 'card-inventory-value', header: 'قيمة المخزون', icon: 'fa-warehouse',
+                    value: (stats.inventory_value || 0).toFixed(2) + ' ر.ي',
+                    label: 'القيمة الإجمالية للمخزون', cls: 'success-card' },
+                { id: 'card-pending-tasks', header: 'المهام المعلقة', icon: 'fa-tasks',
+                    value: stats.pending_tasks || 0, label: 'مهمة تحتاج لمراجعتك',
+                    badge: stats.pending_tasks || 0, cls: 'info-card' },
+                { id: 'card-occupancy', header: 'امتلاء الخزانات', icon: 'fa-tachometer-alt',
+                    value: (Number(stats.occupancy_rate) || 0).toFixed(2) + '%',
+                    label: `${stats.tank_count || 0} خزانات — من الكمية والسعة`,
                     progress: (Number(stats.occupancy_rate) || 0), cls: 'info-card' }
             ];
 
@@ -2662,19 +2993,17 @@
                 }
                 let progressHtml = '';
                 if (def.progress !== undefined) {
-                    progressHtml =
-                        `<div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100,def.progress)}%"></div></div>`;
+                    progressHtml = `<div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100, def.progress)}%"></div></div>`;
                 }
                 let trendHtml = '';
                 if (def.trend) {
                     const up = def.trendUp !== false;
-                    trendHtml =
-                        `<div class="stat-trend trend-${up ? 'up' : 'down'}"><i class="fas fa-arrow-${up ? 'up' : 'down'}"></i> ${def.trend}</div>`;
+                    trendHtml = `<div class="stat-trend trend-${up ? 'up' : 'down'}"><i class="fas fa-arrow-${up ? 'up' : 'down'}"></i> ${def.trend}</div>`;
                 }
                 card.innerHTML = `
                     <div class="card-header">
-                        <h3>${def.header}</h3>
                         <div class="card-icon-wrapper"><i class="fas ${def.icon}"></i></div>
+                        <h3>${def.header}</h3>
                     </div>
                     <div class="stat-value">${def.value}</div>
                     <div class="stat-footer">
@@ -2690,11 +3019,8 @@
             initCardDoubleClick();
 
             document.getElementById('last-update').textContent = new Date().toLocaleString('ar-EG', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: 'numeric'
+                year: 'numeric', month: 'long', day: 'numeric',
+                hour: 'numeric', minute: 'numeric'
             });
         }
 
@@ -2710,7 +3036,6 @@
         async function loadDashboard(forceRefresh = false) {
             if (isRefreshing) return;
             isRefreshing = true;
-
             renderSkeletons();
 
             try {
@@ -2726,7 +3051,7 @@
             } catch (e) {
                 console.error('Dashboard error:', e);
                 document.getElementById('reportsDataSource')?.setAttribute('data-state', 'error');
-                showToast(e.message || 'تعذر تحميل بيانات SQLite؛ لم يتم عرض بديل', 'error');
+                showToast(e.message || 'تعذر تحميل بيانات SQLite', 'error');
             } finally {
                 isRefreshing = false;
             }
@@ -2742,15 +3067,18 @@
         // ================================================================
         function showRealNotifications(stats) {
             if (stats.expiry_soon > 0) {
-                addNotificationToQueue({ title: 'تنبيه انتهاء الصلاحية', message: `هناك ${stats.expiry_soon} منتج ستنتهي صلاحيته خلال 30 يومًا`,
+                addNotificationToQueue({ title: 'تنبيه انتهاء الصلاحية',
+                    message: `هناك ${stats.expiry_soon} منتج ستنتهي صلاحيته خلال 30 يومًا`,
                     icon: 'fa-hourglass-half', type: 'warning', targetCard: 'card-expiry-soon' });
             }
             if (stats.low_stock > 0) {
-                addNotificationToQueue({ title: 'تنبيه انخفاض المخزون', message: `هناك ${stats.low_stock} منتج تحت الحد الأدنى`,
+                addNotificationToQueue({ title: 'تنبيه انخفاض المخزون',
+                    message: `هناك ${stats.low_stock} منتج تحت الحد الأدنى`,
                     icon: 'fa-exclamation-circle', type: 'danger', targetCard: 'card-low-stock' });
             }
             if (stats.pending_tasks > 0) {
-                addNotificationToQueue({ title: 'مهام معلقة', message: `لديك ${stats.pending_tasks} مهمة تحتاج إلى مراجعتك`,
+                addNotificationToQueue({ title: 'مهام معلقة',
+                    message: `لديك ${stats.pending_tasks} مهمة تحتاج إلى مراجعتك`,
                     icon: 'fa-tasks', type: 'info', targetCard: 'card-pending-tasks' });
             }
             processNotificationQueue();
@@ -2763,8 +3091,7 @@
             isProcessingQueue = true;
             const notification = notificationQueue.shift();
             createNotificationBubble(notification);
-            setTimeout(() => { isProcessingQueue = false;
-                processNotificationQueue(); }, 1500);
+            setTimeout(() => { isProcessingQueue = false; processNotificationQueue(); }, 1500);
         }
 
         function createNotificationBubble(notification) {
@@ -2785,12 +3112,12 @@
                 const card = document.getElementById(this.dataset.target);
                 if (card) {
                     card.scrollIntoView({ behavior: 'smooth' });
-                    card.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.8)';
-                    setTimeout(() => { card.style.boxShadow = ''; }, 2000);
-                    this.style.opacity = '0';
-                    this.style.transform = 'scale(0)';
-                    setTimeout(() => { if (this.parentNode) { clearInterval(interval);
-                            this.parentNode.removeChild(this); } }, 500);
+                    setTimeout(() => {
+                        if (this.parentNode) {
+                            clearInterval(interval);
+                            this.parentNode.removeChild(this);
+                        }
+                    }, 500);
                 }
             };
             activeBubbles.push({ element: bubble, interval: interval });
@@ -2805,14 +3132,13 @@
         }
 
         function hideAllBubbles() {
-            activeBubbles.forEach(b => { clearInterval(b.interval);
-                b.element.remove(); });
+            activeBubbles.forEach(b => { clearInterval(b.interval); b.element.remove(); });
             activeBubbles = [];
             notificationQueue = [];
         }
 
         // ================================================================
-        // النقر المزدوج على البطاقات
+        // النقر المزدوج على البطاقات (فقط التنقل)
         // ================================================================
         function initCardDoubleClick() {
             const routes = {
@@ -2845,20 +3171,21 @@
         // Pull-to-Refresh
         // ================================================================
         function initPullToRefresh() {
-            let startY = 0,
-                moveY = 0,
-                pulling = false;
+            let startY = 0, moveY = 0, pulling = false;
             document.addEventListener('touchstart', function(e) {
                 if (document.querySelector('.command-palette-overlay.show')) return;
+                if (isSleeping) return;
                 startY = e.touches[0].clientY;
                 pulling = false;
             }, { passive: true });
             document.addEventListener('touchmove', function(e) {
                 if (document.querySelector('.command-palette-overlay.show')) return;
+                if (isSleeping) return;
                 moveY = e.touches[0].clientY - startY;
                 if (moveY > 0 && window.scrollY === 0) pulling = true;
             }, { passive: true });
             document.addEventListener('touchend', function() {
+                if (isSleeping) return;
                 if (pulling && moveY > 70) manualRefresh();
                 moveY = 0;
                 pulling = false;
@@ -2871,7 +3198,18 @@
         document.addEventListener('DOMContentLoaded', async function() {
             await loadMenuData();
 
-            // Command Palette events
+            currentLeadX = SIDEBAR_CLOSED;
+            const pathEl = document.getElementById('sPath');
+            if (pathEl) pathEl.setAttribute('d', createElasticD(SIDEBAR_CLOSED, 0));
+
+            setTimeout(syncElasticSvgWidth, 100);
+
+            updateDateTime();
+            clockInterval = setInterval(updateDateTime, 1000);
+
+            initDragGestures();
+            initSleepMode();
+
             const cmdInput = document.getElementById('commandPaletteInput');
             cmdInput.addEventListener('input', function(e) {
                 renderCommandPaletteResults(e.target.value.trim());
@@ -2908,6 +3246,10 @@
                     if (overlay.classList.contains('show')) closeCommandPalette();
                     else openCommandPalette();
                 }
+                if (e.key === 'Escape') {
+                    const sidebar = document.getElementById('sidebar');
+                    if (sidebar.classList.contains('open')) closeSidebar();
+                }
             });
 
             document.addEventListener('click', handlePanelOutsideClick);
@@ -2930,7 +3272,7 @@
             updateThemeButton(document.documentElement.getAttribute('data-theme') === 'dark');
 
             let lastClick = 0;
-            document.addEventListener('click', function(e) {
+            document.addEventListener('click', function() {
                 const now = Date.now();
                 if (now - lastClick < 300) hideAllBubbles();
                 lastClick = now;
@@ -2938,39 +3280,46 @@
 
             if (currentUser) updateUserInfo(currentUser);
 
-            // تحديث البطاقات عند فتح الصفحة
             window.addEventListener('pageshow', function(e) {
-                if (e.persisted) {
-                    loadDashboard(true);
-                }
+                if (e.persisted) loadDashboard(true);
             });
             document.addEventListener('visibilitychange', function() {
-                if (!document.hidden) {
-                    loadDashboard(true);
-                }
+                if (!document.hidden && !isSleeping) loadDashboard(true);
             });
 
-            setTimeout(adjustMainContentMargin, 300);
-            window.addEventListener('resize', adjustMainContentMargin);
+            window.addEventListener('resize', function() {
+                syncElasticSvgWidth();
+            });
         });
 
+        // ================================================================
+        // إغلاق القائمة عند النقر خارجها
+        // ================================================================
         function handlePanelOutsideClick(event) {
+            if (isSleeping) return;
             const target = event.target;
             const sidebar = document.getElementById('sidebar');
-            const menuToggle = document.querySelector('.menu-toggle');
+            const sideTab = document.getElementById('sideTab');
             const searchInput = document.getElementById('sidebarSearch');
             const pinBtn = document.getElementById('pinBtn');
             const closeBtn = document.querySelector('.sidebar-close');
             const compactBtn = document.getElementById('compactBtn');
             const cmdPalette = document.querySelector('.command-palette-box');
 
-            if (sidebar && !sidebar.contains(target) && !menuToggle.contains(target) &&
-                !searchInput.contains(target) && !pinBtn.contains(target) && !closeBtn.contains(target) &&
-                !compactBtn.contains(target) && !cmdPalette.contains(target)) {
-                if (sidebar.classList.contains('open')) closeSidebar();
+            if (sidebar && sidebar.contains(target)) return;
+            if (sideTab && sideTab.contains(target)) return;
+            if (searchInput && searchInput.contains(target)) return;
+            if (pinBtn && pinBtn.contains(target)) return;
+            if (closeBtn && closeBtn.contains(target)) return;
+            if (compactBtn && compactBtn.contains(target)) return;
+            if (cmdPalette && cmdPalette.contains(target)) return;
+
+            if (sidebar && sidebar.classList.contains('open')) {
+                closeSidebar();
             }
         }
     </script>
+
     <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
 </body>
 </html>
