@@ -2064,6 +2064,9 @@
                 exitApplication: () => androidInterface.exitApplication(),
                 getCurrentUser: () => androidInterface.getCurrentUser(),
                 getDashboardStats: () => androidInterface.getDashboardStats(JSON.stringify(safeParams)),
+                getImageDataUrl: () => androidInterface.getImageDataUrl(
+                    typeof safeParams.path === 'string' ? safeParams.path : ''
+                ),
                 screenExists: () => androidInterface.screenExists(
                     typeof safeParams.path === 'string' ? safeParams.path : ''
                 )
@@ -2093,6 +2096,40 @@
         // ================================================================
         // المستخدم
         // ================================================================
+        // [FIX-AVATAR-1] دالة جديدة: تُحوّل avatar_path المخزَّن في SQLite
+        // (content:// أو file://) إلى data URL عبر جسر Android، لأن WebView
+        // مُهيّأ بـ allowContentAccess=false ولا يستطيع تحميل content:// مباشرة.
+        // النتيجة تُخزَّن في user.avatar_data_url.
+        async function resolveUserAvatar(user) {
+            if (!user) return;
+            user.avatar_data_url = '';
+
+            const raw = String(user.avatar_path || '').trim();
+            if (!raw) return;
+
+            // data URL أصلاً → استخدمها مباشرة.
+            if (/^data:/i.test(raw)) {
+                user.avatar_data_url = raw;
+                return;
+            }
+
+            // content:// أو file:// → حوّلها إلى base64 عبر Android.
+            if (/^(content:|file:)/i.test(raw)) {
+                try {
+                    const res = await apiCall('getImageDataUrl', { path: raw });
+                    if (res && res.success && typeof res.data === 'string' && res.data.startsWith('data:')) {
+                        user.avatar_data_url = res.data;
+                    }
+                } catch (e) {
+                    console.warn('Avatar resolve failed:', e);
+                    user.avatar_data_url = '';
+                }
+                return;
+            }
+
+            // مسارات assets-local/ تُحمَّل مباشرة من WebView بدون تحويل.
+        }
+
         async function loadUserFromKotlin() {
             try {
                 showLoading(true);
@@ -2101,6 +2138,10 @@
                     throw new Error(result.error || 'لم يتم العثور على جلسة مستخدم');
                 }
                 currentUser = result.data;
+
+                // [FIX-AVATAR-2] حلّ صورة المستخدم قبل العرض وقبل الحفظ.
+                await resolveUserAvatar(currentUser);
+
                 localStorage.setItem('user', JSON.stringify(currentUser));
                 updateUserInfo(currentUser);
                 renderSidebar();
@@ -2121,31 +2162,52 @@
             }
         }
 
+        // [FIX-AVATAR-3] تحسين ترتيب أولوية الاسم والدور والصورة.
         function updateUserInfo(user) {
             if (!user) return;
+
+            // الاسم: يُفضّل العربي، ثم الإنجليزي، ثم display_name، ثم username.
             const nameEl = document.getElementById('userDisplayName');
-            const roleEl = document.getElementById('userDisplayRole');
-            if (nameEl) nameEl.textContent = user.full_name || user.full_name_ar || user.username || '—';
-            if (roleEl) roleEl.textContent = user.role_name || user.role || '—';
-
-            const avatarEl = document.getElementById('userAvatar');
-            const avatarPath = String(user.avatar_path || user.avatar || user.profile_image || '').trim();
-
-            if (avatarEl) {
-                if (!avatarPath) {
-                    avatarEl.src = DEFAULT_AVATAR;
-                } else if (/^(file:|content:|data:|https?:)/i.test(avatarPath)) {
-                    avatarEl.src = avatarPath;
-                } else if (avatarPath.startsWith('assets-local/')) {
-                    avatarEl.src = 'file:///android_asset/' + avatarPath;
-                } else {
-                    avatarEl.src = DEFAULT_AVATAR;
-                }
-                avatarEl.onerror = function() {
-                    this.onerror = null;
-                    this.src = DEFAULT_AVATAR;
-                };
+            if (nameEl) {
+                nameEl.textContent =
+                    user.full_name_ar ||
+                    user.full_name ||
+                    user.display_name ||
+                    user.username ||
+                    '—';
             }
+
+            // الدور: يُفضّل العربي، ثم الإنجليزي، ثم role_code، ثم role_id.
+            const roleEl = document.getElementById('userDisplayRole');
+            if (roleEl) {
+                roleEl.textContent =
+                    user.role_name_ar ||
+                    user.role_name ||
+                    user.role ||
+                    (user.role_id ? `#${user.role_id}` : '—');
+            }
+
+            // الصورة: تُستخدم data URL إن وُجدت، ثم HTTPS، ثم asset محلي، ثم الافتراضي.
+            const avatarEl = document.getElementById('userAvatar');
+            if (!avatarEl) return;
+
+            const dataUrl = String(user.avatar_data_url || '').trim();
+            const assetPath = String(user.avatar_path || '').trim();
+
+            if (dataUrl) {
+                avatarEl.src = dataUrl;
+            } else if (/^https?:\/\//i.test(assetPath)) {
+                avatarEl.src = assetPath;
+            } else if (assetPath.startsWith('assets-local/')) {
+                avatarEl.src = 'file:///android_asset/' + assetPath;
+            } else {
+                avatarEl.src = DEFAULT_AVATAR;
+            }
+
+            avatarEl.onerror = function () {
+                this.onerror = null;
+                this.src = DEFAULT_AVATAR;
+            };
         }
 
         async function logout() {
