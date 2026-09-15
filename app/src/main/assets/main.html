@@ -2163,6 +2163,8 @@
         }
 
         // [FIX-AVATAR-3] تحسين ترتيب أولوية الاسم والدور والصورة.
+        // [FIX-ROLE] المسمى الوظيفي الفعلي من users.job_title يأخذ الأولوية على
+        // دور النظام (role_name_ar / role_name / role) في شريحة المستخدم.
         function updateUserInfo(user) {
             if (!user) return;
 
@@ -2177,13 +2179,14 @@
                     '—';
             }
 
-            // الدور: يُفضّل العربي، ثم الإنجليزي، ثم role_code، ثم role_id.
+            // المسمى الوظيفي الفعلي أولاً، ثم دور النظام كـ Fallback.
             const roleEl = document.getElementById('userDisplayRole');
             if (roleEl) {
                 roleEl.textContent =
-                    user.role_name_ar ||
-                    user.role_name ||
-                    user.role ||
+                    String(user.job_title || '').trim() ||
+                    String(user.role_name_ar || '').trim() ||
+                    String(user.role_name || '').trim() ||
+                    String(user.role || '').trim() ||
                     (user.role_id ? `#${user.role_id}` : '—');
             }
 
