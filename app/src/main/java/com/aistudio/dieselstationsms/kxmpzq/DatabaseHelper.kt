@@ -7561,48 +7561,38 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun getUserById(userId: Long): JSONObject? {
-
         val db = readableDatabase
-
         val cursor = db.rawQuery(
             """
-            SELECT
-                u.id,
-                u.uuid,
-                u.username,
-                u.full_name,
-                u.full_name_ar,
-                u.display_name,
-                u.role_id,
-                r.role_code AS role,
-                u.station_id,
-                u.branch_id,
-                u.company_id,
-                u.preferred_language,
-                u.theme,
-                u.status
+            SELECT u.id, u.uuid, u.username, u.full_name, u.full_name_ar,
+                   u.display_name, u.avatar_path, u.avatar_file_name,
+                   u.job_title, u.department,
+                   u.role_id, r.role_code AS role, r.role_name AS role_name, r.role_name_ar AS role_name_ar,
+                   u.station_id, u.branch_id, u.company_id,
+                   u.preferred_language, u.theme, u.status
             FROM users u
             LEFT JOIN roles r ON r.id = u.role_id
-            WHERE u.id = ?
-            AND u.is_deleted = 0
+            WHERE u.id = ? AND u.is_deleted = 0
             LIMIT 1
             """,
             arrayOf(userId.toString())
         )
-
         return cursor.use {
-
             if (it.moveToFirst()) {
-
                 JSONObject().apply {
-
                     put("user_id", it.getLong(it.getColumnIndexOrThrow("id")))
                     put("uuid", it.getString(it.getColumnIndexOrThrow("uuid")))
                     put("username", it.getString(it.getColumnIndexOrThrow("username")))
                     put("full_name", it.getString(it.getColumnIndexOrThrow("full_name")))
                     put("full_name_ar", it.getString(it.getColumnIndexOrThrow("full_name_ar")))
                     put("display_name", it.getString(it.getColumnIndexOrThrow("display_name")))
+                    put("avatar_path", it.getString(it.getColumnIndexOrThrow("avatar_path")))
+                    put("avatar_file_name", it.getString(it.getColumnIndexOrThrow("avatar_file_name")))
+                    put("job_title", it.getString(it.getColumnIndexOrThrow("job_title")))
+                    put("department", it.getString(it.getColumnIndexOrThrow("department")))
                     put("role", it.getString(it.getColumnIndexOrThrow("role")))
+                    put("role_name", it.getString(it.getColumnIndexOrThrow("role_name")))
+                    put("role_name_ar", it.getString(it.getColumnIndexOrThrow("role_name_ar")))
                     put("role_id", it.getLong(it.getColumnIndexOrThrow("role_id")))
                     put("station_id", it.getLong(it.getColumnIndexOrThrow("station_id")))
                     put("branch_id", it.getLong(it.getColumnIndexOrThrow("branch_id")))
@@ -7611,12 +7601,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("theme", it.getString(it.getColumnIndexOrThrow("theme")))
                     put("status", it.getString(it.getColumnIndexOrThrow("status")))
                 }
-
             } else {
                 null
             }
         }
-    }
+	}
 
     fun getShiftFormContext(currentUserId: Long): JSONObject {
         require(currentUserId > 0L) { "معرف المستخدم الحالي غير صالح" }
