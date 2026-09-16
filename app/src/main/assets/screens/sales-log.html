@@ -1277,6 +1277,9 @@
                     case 'getSalesTransactions':
                         raw = AndroidInterface.getSalesTransactionRecords(JSON.stringify(p));
                         break;
+                    case 'generateSalesTransactionReport':
+                        raw = AndroidInterface.generateSalesTransactionReport(JSON.stringify(p));
+                        break;
                     case 'getParties':
                         raw = AndroidInterface.getParties(p.type || 'customer');
                         break;
@@ -1494,18 +1497,26 @@
             container.innerHTML = `<div class="skeleton-grid" style="display:flex;flex-direction:column;gap:10px;">${skeleton}</div>`;
         }
 
-        async function loadSales() {
+        async function loadSales(params = {}) {
             if (isInitialLoad) renderSkeleton();
             showLoading(true);
             try {
+                const salesParams = {
+                    limit: 500,
+                    offset: 0,
+                    ...params
+                };
                 const [salesRes, customersRes, fuelRes, pumpsRes] = await Promise.all([
-                    apiCall('getSalesTransactions', { station_id: 1, limit: 500 }),
+                    apiCall('getSalesTransactions', salesParams),
                     apiCall('getParties', { type: 'customer' }),
                     apiCall('getFuelTypes', {}),
-                    apiCall('getPumps', { station_id: 1 })
+                    apiCall('getPumps', {})
                 ]);
                 if (!salesRes.success) throw new Error(salesRes.message || 'فشل جلب سجل المبيعات');
-                allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
+                const salesData = salesRes.data;
+                allSales = Array.isArray(salesData)
+                    ? salesData
+                    : (salesData && Array.isArray(salesData.rows) ? salesData.rows : []);
                 allCustomers = customersRes.success && Array.isArray(customersRes.data) ? customersRes.data : [];
                 allFuelTypes = fuelRes.success && Array.isArray(fuelRes.data) ? fuelRes.data : [];
                 allPumps = pumpsRes.success && Array.isArray(pumpsRes.data) ? pumpsRes.data : [];
@@ -1547,30 +1558,6 @@
                 });
             }
 
-            // فلاتر التبويبات العلوية
-            if (currentFilter === 'today') {
-                const today = new Date().toISOString().split('T')[0];
-                filtered = filtered.filter(s => (s.created_at || '').startsWith(today));
-            } else if (currentFilter === 'week') {
-                const weekAgo = new Date();
-                weekAgo.setDate(weekAgo.getDate() - 7);
-                const weekStr = weekAgo.toISOString();
-                filtered = filtered.filter(s => (s.created_at || '') >= weekStr);
-            } else if (currentFilter === 'month') {
-                const monthAgo = new Date();
-                monthAgo.setMonth(monthAgo.getMonth() - 1);
-                const monthStr = monthAgo.toISOString();
-                filtered = filtered.filter(s => (s.created_at || '') >= monthStr);
-            } else if (currentFilter === 'fuel') {
-                filtered = filtered.filter(s => s.fuel_type_id && s.fuel_type_id > 0);
-            } else if (currentFilter === 'products') {
-                filtered = filtered.filter(s => s.product_id && s.product_id > 0);
-            } else if (currentFilter === 'credit') {
-                filtered = filtered.filter(s => s.is_credit == 1);
-            } else if (currentFilter === 'cash') {
-                filtered = filtered.filter(s => s.payment_method === 'cash');
-            }
-
             filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
             document.getElementById('saleCount').textContent = filtered.length;
@@ -1588,7 +1575,7 @@
             container.innerHTML = filtered.map((s, idx) => {
                 const id = s.id || s.sale_id;
                 const code = s.sale_code || '---';
-                const customerName = s.customer_name || 'عميل عام';
+                const customerName = s.customer_name || '—';
                 const liters = parseFloat(s.liters || 0);
                 const netAmount = parseFloat(s.net_amount || 0);
                 const paymentStatus = s.payment_status || 'paid';
@@ -1663,11 +1650,81 @@
         // ============================================================
         function handleSearch(query) { renderSalesCards(); }
 
-        function setFilter(filter, btn) {
+        function dateOnly(d){
+            return `${d.getFullYear()}-${
+                String(d.getMonth()+1).padStart(2,'0')
+            }-${
+                String(d.getDate()).padStart(2,'0')
+            }`;
+        }
+
+        async function reloadForFilter(){
+
+            const params = {};
+
+            const today = new Date();
+
+            if(currentFilter === 'today'){
+
+                params.from_date = dateOnly(today);
+                params.to_date = dateOnly(today);
+
+            }else if(currentFilter === 'week'){
+
+                const d = new Date(today);
+                d.setDate(d.getDate() - 6);
+
+                params.from_date = dateOnly(d);
+                params.to_date = dateOnly(today);
+
+            }else if(currentFilter === 'month'){
+
+                const d = new Date(today);
+                d.setMonth(d.getMonth() - 1);
+
+                params.from_date = dateOnly(d);
+                params.to_date = dateOnly(today);
+
+            }else if(currentFilter === 'fuel'){
+
+                params.sale_category = 'fuel';
+
+            }else if(currentFilter === 'products'){
+
+                params.sale_category = 'products';
+
+            }else if(currentFilter === 'credit'){
+
+                params.payment_method = 'credit';
+
+            }else if(currentFilter === 'cash'){
+
+                params.payment_method = 'cash';
+            }
+
+            await loadSales(params);
+        }
+
+        function setFilter(filter, btn){
+
             currentFilter = filter;
-            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-            if (btn) btn.classList.add('active');
-            renderSalesCards();
+
+            document
+                .querySelectorAll('.filter-chip')
+                .forEach(c => c.classList.remove('active'));
+
+            if(btn){
+                btn.classList.add('active');
+            }
+
+            reloadForFilter().catch(e =>
+                showToast(
+                    e.message ||
+                    'فشل تطبيق الفلتر من SQLite',
+                    'error'
+                )
+            );
+
             hapticFeedback('light');
         }
 
@@ -1720,10 +1777,35 @@
 
             showLoading(true);
             try {
-                const filtered = allSales.filter(s => {
-                    const date = (s.created_at || '').split('T')[0];
-                    return date >= from && date <= to;
-                });
+                const reportRes =
+                    await apiCall(
+                        'generateSalesTransactionReport',
+                        {
+                            from_date: from,
+                            to_date: to,
+                            limit: 1000,
+                            offset: 0
+                        }
+                    );
+
+                if(!reportRes.success){
+                    throw new Error(
+                        reportRes.message ||
+                        'فشل جلب التقرير من SQLite'
+                    );
+                }
+
+                const reportData =
+                    reportRes.data || reportRes;
+
+                const filtered =
+                    Array.isArray(reportData.rows)
+                        ? reportData.rows
+                        : (
+                            Array.isArray(reportData)
+                                ? reportData
+                                : []
+                        );
 
                 if (filtered.length === 0) {
                     document.getElementById('reportResult').innerHTML =
@@ -1930,7 +2012,7 @@
             if (!sale) { showToast('❌ البيع غير موجود', 'error'); return; }
 
             const content = document.getElementById('detailsContent');
-            const customerName = sale.customer_name || 'عميل عام';
+            const customerName = sale.customer_name || '—';
             const statusLabel = getStatusLabel(sale.payment_status || 'paid');
             const statusClass = getStatusClass(sale.payment_status || 'paid');
             const methodLabel = getPaymentMethodLabel(sale.payment_method || 'cash');

@@ -1447,8 +1447,26 @@
             reportKind:'operational:FuelSale',reports:['الكل','مبيعات كاش','مبيعات آجل'],operationKey:null
         }
         const bridge = window.AndroidInterface;
-        const state = { rows: [], filtered: [], editing: null, filter: 'all', loadedAt: null };
+        const state = {
+            rows: [],
+            filtered: [],
+            editing: null,
+            filter: 'all',
+            loadedAt: null,
+            pendingIdempotencyKey: null
+        };
         const $ = (id) => document.getElementById(id);
+        function newIdempotencyKey(){
+            if(window.crypto?.randomUUID){
+                return window.crypto.randomUUID();
+            }
+
+            return 'fuel-' +
+                Date.now() +
+                '-' +
+                Math.random().toString(36).slice(2,12);
+        }
+
         const esc = (value) => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const today = () => new Date().toISOString().slice(0,10);
         function toast(message, bad=false) { const node=$('toast'); node.textContent=message; node.className='toast show'; node.style.background=bad?'var(--error)':'#111827'; clearTimeout(node._timer); node._timer=setTimeout(()=>node.classList.remove('show'),3500); }
@@ -1551,8 +1569,29 @@
             if(pumpEl){pumpEl.innerHTML='<option value="">اختر المضخة...</option>'+pumps.map(x=>`<option value="${esc(field(x,['id','pump_id']))}">${esc(field(x,['id','pump_id']))} — ${esc(field(x,['pump_name_ar','pump_name','pump_code','name'])||'مضخة')}</option>`).join('');if(row)pumpEl.value=field(row,['pump_id'])||'';}
             const fuelEl=document.querySelector('[data-key="fuel_type_id"]');
             if(fuelEl){fuelEl.innerHTML='<option value="">اختر نوع الوقود...</option>'+fuels.map(x=>`<option value="${esc(field(x,['id','fuel_type_id']))}" data-price="${esc(field(x,['default_sale_price','sale_price','price_per_liter'])||'')}">${esc(field(x,['id','fuel_type_id']))} — ${esc(field(x,['fuel_name_ar','fuel_name','name'])||'وقود')}</option>`).join('');if(row)fuelEl.value=field(row,['fuel_type_id'])||'';}
-            const pay=document.querySelector('[data-key="payment_method"]'); if(pay){pay.innerHTML='<option value="cash">نقدي</option><option value="credit">آجل</option>';pay.value=field(row,['payment_method'])||'cash';}
-            const customerEl=document.querySelector('[data-key="customer_id"]'); if(customerEl){customerEl.innerHTML='<option value="0">عميل عام</option>'+customers.map(x=>`<option value="${esc(field(x,['id','party_id','customer_id']))}">${esc(field(x,['commercial_name_ar','commercial_name','legal_name','name'])||'عميل')}</option>`).join('');customerEl.value=field(row,['customer_id','customer_party_id'])||'0';}
+            const pay=document.querySelector('[data-key="payment_method"]');
+            if(pay){
+                pay.innerHTML =
+                    '<option value="cash">نقدي</option>' +
+                    '<option value="credit">آجل</option>' +
+                    '<option value="credit_card">بطاقة</option>';
+
+                pay.value = field(row,['payment_method']) || 'cash';
+            }
+
+            const customerEl=document.querySelector('[data-key="customer_id"]');
+
+            if(customerEl){
+                customerEl.innerHTML =
+                    '<option value="">اختر العميل عند الحاجة...</option>' +
+                    customers.map(x =>
+                        `<option value="${esc(field(x,['id','party_id','customer_id']))}">
+                            ${esc(field(x,['commercial_name_ar','commercial_name','legal_name','name']) || 'عميل')}
+                        </option>`
+                    ).join('');
+
+                customerEl.value = field(row,['customer_id','customer_party_id']) || '';
+            }
             if(!row){const now=new Date();document.querySelector('[data-key="sale_date"]')?.setAttribute('value',localDate(now));const dateEl=document.querySelector('[data-key="sale_date"]');if(dateEl)dateEl.value=localDate(now);const timeEl=document.querySelector('[data-key="sale_time"]');if(timeEl)timeEl.value=localTime(now);}
             bindFuelCalculation();
         }
@@ -1561,7 +1600,125 @@
         function bindFuelCalculation(){const q=document.querySelector('[data-key="quantity"]'),p=document.querySelector('[data-key="price_per_liter"]'),t=document.querySelector('[data-key="total_amount"]'),f=document.querySelector('[data-key="fuel_type_id"]');const calc=()=>{if(t)t.value=(numeric(q?.value)*numeric(p?.value)).toFixed(2);};f?.addEventListener('change',()=>{const o=f.options[f.selectedIndex];if(p)p.value=o?.dataset.price||'';calc();});q?.addEventListener('input',calc);}
         async function openForm(row=null) { if(!CFG.createMethod&&!CFG.updateMethod){toast('لا توجد عملية كتابة مدعومة لهذه الشاشة',true);return;}state.editing=row;const deliveryBtn=$('deliveryBtn');if(deliveryBtn){deliveryBtn.disabled=true;delete deliveryBtn.dataset.saleId;deliveryBtn.title='يتاح بعد حفظ عملية البيع بنجاح';}$('formTitle').textContent=row?'تعديل مبيعات الوقود':'إضافة عملية بيع وقود';$('recordForm').innerHTML=(CFG.fields||[]).map(def=>inputHtml(def,row)).join('');$('formModal').classList.add('show');try{await loadSaleFormLookups(row);}catch(e){toast(e.message||'تعذر تحميل بيانات النموذج',true);} }
         function collectForm(){const payload={};document.querySelectorAll('#recordForm [data-key]').forEach(el=>{if(el.dataset.key==='sale_id')return;let v=el.value;if(el.type==='number')v=v===''?0:Number(v);payload[el.dataset.key]=v;});payload.created_at=new Date().toISOString();return payload;}
-        async function saveForm(){const form=$('recordForm');if(!form.reportValidity())return;const payload=collectForm();payload.customer_id=Number(payload.customer_id||0);delete payload.vehicle_plate;if(!payload.shift_id)return toast('لا توجد وردية مفتوحة حالياً',true);if(!payload.pump_id)return toast('اختر المضخة',true);if(!payload.fuel_type_id)return toast('اختر نوع الوقود',true);if(!(numeric(payload.quantity)>0))return toast('أدخل كمية أكبر من صفر',true);payload.total_amount=(numeric(payload.quantity)*numeric(payload.price_per_liter)).toFixed(2);setLoading(true);try{let result;if(state.editing&&CFG.updateMethod){result=await invoke(CFG.updateMethod,[Number(idOf(state.editing)),JSON.stringify(payload)]);parse(result);toast('تم تحديث عملية البيع فعلياً');}else{result=await invoke('saveFuelSaleRecord',[JSON.stringify(payload)]);const saved=parse(result);const saleId=Number(saved.sale_id||saved.id||0);if(!saleId)throw new Error('لم يتم استلام sale_id الحقيقي من SQLite');state.lastSavedSaleId=saleId;toast('تم حفظ عملية البيع فعلياً — رقم البيع '+saleId);showDeliveryAction(saleId);await reloadData();return;}closeModal(null,'formModal');await reloadData();}catch(e){toast(e.message||'فشل حفظ العملية',true);}finally{setLoading(false);}}
+        async function saveForm(){
+
+            const form = $('recordForm');
+
+            if(!form.reportValidity()){
+                return;
+            }
+
+            const payload = collectForm();
+
+            const customerId = Number(payload.customer_id || 0);
+
+            if(customerId > 0){
+                payload.customer_id = customerId;
+            }else{
+                delete payload.customer_id;
+            }
+
+            delete payload.vehicle_plate;
+
+            if(payload.payment_method === 'credit' && customerId <= 0){
+                return toast('اختر عميلاً حقيقياً للبيع الآجل', true);
+            }
+
+            if(!payload.shift_id){
+                return toast('لا توجد وردية مفتوحة حالياً', true);
+            }
+
+            if(!payload.pump_id){
+                return toast('اختر المضخة', true);
+            }
+
+            if(!payload.fuel_type_id){
+                return toast('اختر نوع الوقود', true);
+            }
+
+            if(!(numeric(payload.quantity) > 0)){
+                return toast('أدخل كمية أكبر من صفر', true);
+            }
+
+            payload.total_amount =
+                (numeric(payload.quantity) *
+                 numeric(payload.price_per_liter)).toFixed(2);
+
+            if(!state.pendingIdempotencyKey){
+                state.pendingIdempotencyKey = newIdempotencyKey();
+            }
+
+            payload.idempotency_key = state.pendingIdempotencyKey;
+
+            setLoading(true);
+
+            try{
+
+                let result;
+
+                if(state.editing && CFG.updateMethod){
+
+                    result = await invoke(
+                        CFG.updateMethod,
+                        [
+                            Number(idOf(state.editing)),
+                            JSON.stringify(payload)
+                        ]
+                    );
+
+                    parse(result);
+
+                    toast('تم تحديث عملية البيع فعلياً');
+
+                }else{
+
+                    result = await invoke(
+                        'saveFuelSaleRecord',
+                        [JSON.stringify(payload)]
+                    );
+
+                    const saved = parse(result);
+
+                    const saleId =
+                        Number(saved.sale_id || saved.id || 0);
+
+                    if(!saleId){
+                        throw new Error(
+                            'لم يتم استلام sale_id الحقيقي من SQLite'
+                        );
+                    }
+
+                    state.lastSavedSaleId = saleId;
+                    state.pendingIdempotencyKey = null;
+
+                    toast(
+                        'تم حفظ عملية البيع فعلياً — رقم البيع ' +
+                        saleId
+                    );
+
+                    showDeliveryAction(saleId);
+
+                    await reloadData();
+
+                    return;
+                }
+
+                closeModal(null,'formModal');
+
+                await reloadData();
+
+            }catch(e){
+
+                toast(
+                    e.message || 'فشل حفظ العملية',
+                    true
+                );
+
+            }finally{
+
+                setLoading(false);
+            }
+        }
         function showDeliveryAction(saleId){const button=$('deliveryBtn');if(!button)return;button.disabled=false;button.dataset.saleId=String(saleId);button.title='تم الحفظ؛ يمكنك الآن إنشاء التوصيل';}
         function openDelivery(saleId){const id=Number(saleId||$('deliveryBtn')?.dataset.saleId||0);if(!id)return toast('احفظ عملية البيع أولاً',true);sessionStorage.setItem('delivery_sale_id',String(id));window.location.href='deliveries.html?sale_id='+encodeURIComponent(id);}
         async function deleteRow(row) { const id=row&&idOf(row); if(!id||!CFG.deleteMethod)return; if(!confirm('هل تريد تنفيذ الحذف الفعلي لهذا السجل؟'))return; setLoading(true); try { const result=await invoke(CFG.deleteMethod,[Number(id)]); parse(result); toast('تم الحذف فعلياً'); await reloadData(); } catch(error) { toast(error.message||'فشل الحذف',true); } finally { setLoading(false); } }
