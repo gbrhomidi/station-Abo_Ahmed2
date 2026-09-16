@@ -24391,7 +24391,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         "received_by", "inspected_by", "assigned_to"
     )
 
-    private const val BROWSER_DEFAULT_USER_ID = 1L
+    private val BROWSER_DEFAULT_USER_ID = 1L
 
     fun getBrowserTableList(): JSONArray {
         val result = JSONArray()
