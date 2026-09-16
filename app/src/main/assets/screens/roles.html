@@ -1566,9 +1566,10 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="grantPermission">الصلاحية *</label>
-                            <select class="form-input" id="grantPermission" required>
+                            <select class="form-input" id="grantPermission" required aria-hidden="true" tabindex="-1">
                                 <option value="">اختر الصلاحية</option>
                             </select>
+                            <div id="grantPermissionOptions" class="permission-checkbox-grid" aria-label="الصلاحيات المتاحة"></div>
                         </div>
                     </div>
                     <div class="form-row">
@@ -1626,7 +1627,8 @@
             <div class="form-section" style="margin-top:12px;">
                 <h4 style="margin-bottom:12px;color:var(--ruby);">ربط صلاحية بمجموعة</h4>
                 <div class="form-row">
-                    <div class="form-group"><label class="form-label" for="groupPermissionSelect">الصلاحية *</label><select class="form-input" id="groupPermissionSelect"><option value="">اختر الصلاحية</option></select></div>
+                    <div class="form-group"><label class="form-label" for="groupPermissionSelect">الصلاحية *</label><select class="form-input" id="groupPermissionSelect" aria-hidden="true" tabindex="-1"><option value="">اختر الصلاحية</option></select>
+                    <div id="groupPermissionOptions" class="permission-checkbox-grid" aria-label="صلاحيات المجموعة"></div></div>
                     <div class="form-group"><label class="form-label" for="groupScreenSelect">الشاشة المرجعية (اختياري)</label><select class="form-input" id="groupScreenSelect"><option value="">بدون شاشة محددة</option></select></div>
                 </div>
                 <button type="button" class="submit-btn" onclick="grantGroupPermission()"><i class="fas fa-link" aria-hidden="true"></i> ربط الصلاحية بالمجموعة</button>
@@ -1662,9 +1664,10 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label" for="delegatePermission">الصلاحية *</label>
-                            <select class="form-input" id="delegatePermission" required>
+                            <select class="form-input" id="delegatePermission" required aria-hidden="true" tabindex="-1">
                                 <option value="">اختر الصلاحية</option>
                             </select>
+                            <div id="delegatePermissionOptions" class="permission-checkbox-grid" aria-label="صلاحيات التفويض"></div>
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="delegateScreen">الشاشة *</label>
@@ -1778,7 +1781,7 @@
                     <section class="permission-section">
                         <h4 class="permission-section-title"><i class="fas fa-layer-group" aria-hidden="true"></i>النطاق والإجراء</h4>
                         <div class="permission-grid">
-                            <div class="form-group"><label class="form-label" for="permModule">الوحدة *</label><select class="form-input" id="permModule" required><option value="">اختر الوحدة</option><option value="users">المستخدمين</option><option value="sales">المبيعات</option><option value="inventory">المخزون</option><option value="accounting">المحاسبة</option><option value="reports">التقارير</option><option value="settings">الإعدادات</option><option value="tanks">الخزانات</option><option value="pumps">المضخات</option><option value="customers">العملاء</option><option value="parties">الأطراف</option><option value="vehicles">المركبات</option><option value="drivers">السائقين</option><option value="employees">الموظفين</option><option value="maintenance">الصيانة</option><option value="sms">الرسائل القصيرة</option><option value="notifications">الإشعارات</option><option value="audit">التدقيق</option><option value="backup">النسخ الاحتياطي</option><option value="sync">المزامنة</option><option value="ai">الذكاء الاصطناعي</option></select></div>
+                            <div class="form-group"><label class="form-label" for="permModule">الوحدة *</label><select class="form-input" id="permModule" required><option value="">اختر الوحدة</option></select></div>
                             <div class="form-group"><label class="form-label" for="permModuleNameAr">اسم الوحدة بالعربية</label><input type="text" class="form-input" id="permModuleNameAr"></div>
                             <div class="form-group"><label class="form-label" for="permAction">الإجراء *</label><select class="form-input" id="permAction" required><option value="">اختر الإجراء</option><option value="create">إنشاء</option><option value="read">عرض</option><option value="update">تعديل</option><option value="delete">حذف</option><option value="export">تصدير</option><option value="print">طباعة</option><option value="approve">موافقة</option></select></div>
                             <div class="form-group full-width"><div class="form-check-grid"><label class="form-check"><input type="checkbox" id="requiresStation"><span>تتطلب تحديد محطة</span></label><label class="form-check"><input type="checkbox" id="requiresBranch"><span>تتطلب تحديد فرع</span></label><label class="form-check"><input type="checkbox" id="permIsActive" checked><span>الصلاحية مفعلة</span></label></div></div>
@@ -1894,6 +1897,12 @@
                 getGroupPermissions: () => window.AndroidInterface.getGroupPermissions(),
                 grantGroupPermission: p => window.AndroidInterface.grantGroupPermission(JSON.stringify(p || {})),
                 revokeGroupPermission: p => window.AndroidInterface.revokeGroupPermission(Number((p || {}).id || 0)),
+                grantUserPermissionsBatch: p => window.AndroidInterface.grantUserPermissionsBatch(JSON.stringify(p || {})),
+                revokeUserPermissionsBatch: p => window.AndroidInterface.revokeUserPermissionsBatch(JSON.stringify(p || {})),
+                grantGroupPermissionsBatch: p => window.AndroidInterface.grantGroupPermissionsBatch(JSON.stringify(p || {})),
+                revokeGroupPermissionsBatch: p => window.AndroidInterface.revokeGroupPermissionsBatch(JSON.stringify(p || {})),
+                grantDelegatedPermissionsBatch: p => window.AndroidInterface.grantDelegatedPermissionsBatch(JSON.stringify(p || {})),
+                revokeDelegatedPermissionsBatch: p => window.AndroidInterface.revokeDelegatedPermissionsBatch(JSON.stringify(p || {})),
                 getSetting: p => window.AndroidInterface.getSetting(String((p || {}).key || '')),
                 setSetting: p => window.AndroidInterface.setSetting(String((p || {}).key || ''), String((p || {}).value || ''))
             };
@@ -3049,5 +3058,48 @@ let pullStartY = 0,
             window.openScreens = openScreens;  // إضافة الدالة الجديدة للنطاق العام
         </script>
 </main>    <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
+<style id="roles-permissions-fix-v2-style">
+.permission-checkbox-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;max-height:280px;overflow-y:auto;padding:10px;margin-top:8px;background:var(--surface-elevated);border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px}
+.permission-checkbox{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--card-hover-bg);color:var(--text-color);cursor:pointer}
+.permission-checkbox small{display:block;color:var(--text-muted);font-size:.78em}.permission-checkbox input{width:18px;height:18px;accent-color:var(--ruby)}
+.bulk-permission-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0;padding:8px;border-radius:10px;background:var(--surface-elevated);border:1px dashed var(--border-color)}
+</style>
+<script id="roles-permissions-fix-v2">
+(function(){
+'use strict';
+if(window.__ROLES_PERMISSIONS_FIX_V2__)return;window.__ROLES_PERMISSIONS_FIX_V2__=true;
+const esc=window.escapeHtml||function(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))};
+const pid=p=>Number(p?.permission_id??p?.id??0);
+const pname=p=>p?.permission_name_ar||p?.permission_name||p?.permission_code||'صلاحية';
+const pcode=p=>p?.permission_code||'';
+function ids(box){return [...document.querySelectorAll('#'+box+' input[type=checkbox]:checked')].map(x=>Number(x.value)).filter(Boolean)}
+function renderChecks(boxId, list, checked=new Set(), disabled=new Set()){
+ const box=document.getElementById(boxId);if(!box)return;
+ box.innerHTML=(Array.isArray(list)?list:[]).map(p=>{const id=pid(p);if(!id)return '';const d=disabled.has(id),c=checked.has(id);return `<label class="permission-checkbox"><input type="checkbox" value="${id}"${c?' checked':''}${d?' disabled':''}><span>${esc(pname(p))}<small>${esc(pcode(p))}${d?' — موروثة من الدور':''}</small></span></label>`}).join('')||'<div style="color:var(--text-muted);padding:8px">لا توجد صلاحيات متاحة</div>';
+}
+function syncSelect(selectId,boxId){const sel=document.getElementById(selectId);if(!sel)return;const set=new Set(ids(boxId));[...sel.options].forEach(o=>o.selected=set.has(Number(o.value)))}
+function bindBox(selectId,boxId){const sel=document.getElementById(selectId),box=document.getElementById(boxId);if(!sel||!box||sel.dataset.rolesFix==='1')return;sel.dataset.rolesFix='1';sel.style.display='none';box.addEventListener('change',()=>syncSelect(selectId,boxId));}
+async function loadModules(){try{const r=await apiCall('getModules',{});if(!r.success)throw new Error(r.error||r.message);const sel=document.getElementById('permModule');if(!sel)return;const rows=Array.isArray(r.data)?r.data:[];sel.innerHTML='<option value="">اختر الوحدة</option>'+rows.map(x=>{const code=String(x.module_name??x.module??'');if(!code)return '';const name=allPermissions.find(p=>String(p.module||'')===code)?.module_name_ar||code;return `<option value="${esc(code)}">${esc(name)}</option>`}).join('')}catch(e){showToast(e.error||e.message||'تعذر تحميل الوحدات من قاعدة البيانات','error')}}
+async function refreshUserChecks(){const uid=Number(document.getElementById('grantUser')?.value||0);if(!uid)return;try{const r=await apiCall('getUserPermissions',{userId:uid});if(!r.success)throw new Error(r.error||r.message);const rows=Array.isArray(r.data)?r.data:[];renderChecks('grantPermissionOptions',allPermissions,new Set(rows.map(pid).filter(Boolean)),new Set(rows.filter(x=>String(x.source||'')==='role').map(pid).filter(Boolean)));syncSelect('grantPermission','grantPermissionOptions')}catch(e){showToast(e.error||e.message||'تعذر تحميل صلاحيات المستخدم','error')}}
+async function refreshGroupChecks(){const gid=Number(document.getElementById('groupSelectForPerms')?.value||0);if(!gid)return;try{const r=await apiCall('getGroupPermissions',{});if(!r.success)throw new Error(r.error||r.message);const rows=(Array.isArray(r.data)?r.data:[]).filter(x=>Number(x.group_id)===gid);renderChecks('groupPermissionOptions',allPermissions,new Set(rows.map(pid).filter(Boolean)));syncSelect('groupPermissionSelect','groupPermissionOptions')}catch(e){showToast(e.error||e.message||'تعذر تحميل صلاحيات المجموعة','error')}}
+async function refreshDelegateChecks(){renderChecks('delegatePermissionOptions',allPermissions,new Set());syncSelect('delegatePermission','delegatePermissionOptions')}
+async function grantUserFixed(){const uid=Number(document.getElementById('grantUser')?.value||0),selected=ids('grantPermissionOptions'),reason=document.getElementById('grantExpiry')?.value?.trim()||'';if(!uid||!selected.length){showToast('يرجى اختيار المستخدم وصلاحية واحدة على الأقل','error');return}if(typeof validateGrantScope==='function'&&!validateGrantScope())return;showLoading(true);try{const r=await apiCall('grantUserPermissionsBatch',{user_id:uid,permission_ids:selected,reason});if(!r.success)throw new Error(r.error||r.message);if(Number(r.data?.affected_rows||0)!==selected.length)throw new Error('لم يتم حفظ جميع الصلاحيات المحددة');showToast('تم حفظ جميع الصلاحيات المحددة والتحقق منها في قاعدة البيانات','success');await loadGrantedPermissions();await refreshUserChecks()}catch(e){showToast(e.error||e.message||'فشل منح الصلاحيات في قاعدة البيانات','error')}finally{showLoading(false)}}
+async function grantGroupFixed(){const gid=Number(document.getElementById('groupSelectForPerms')?.value||0),selected=ids('groupPermissionOptions'),sid=Number(document.getElementById('groupScreenSelect')?.value||0);if(!gid||!selected.length){showToast('يرجى اختيار المجموعة وصلاحية واحدة على الأقل','error');return}const bad=selected.some(x=>{const p=allPermissions.find(y=>pid(y)===x),sc=allScreens.find(y=>Number(y.id??y.screen_id)===sid);return sc&&p&&sc.module&&p.module&&sc.module!==p.module});if(bad){showToast('الشاشة المختارة لا تنتمي إلى وحدة إحدى الصلاحيات المحددة','error');return}showLoading(true);try{const r=await apiCall('grantGroupPermissionsBatch',{group_id:gid,permission_ids:selected,screen_id:sid||null});if(!r.success)throw new Error(r.error||r.message);if(Number(r.data?.affected_rows||0)!==selected.length)throw new Error('لم يتم ربط جميع الصلاحيات المحددة');showToast('تم حفظ جميع صلاحيات المجموعة والتحقق منها في قاعدة البيانات','success');await loadGroupPermissions(gid);await refreshGroupChecks()}catch(e){showToast(e.error||e.message||'فشل ربط الصلاحيات في قاعدة البيانات','error')}finally{showLoading(false)}}
+async function delegateFixed(){const did=Number(document.getElementById('delegatee')?.value||0),selected=ids('delegatePermissionOptions'),sid=Number(document.getElementById('delegateScreen')?.value||0),expires=document.getElementById('delegateExpiry')?.value||'',reason=document.getElementById('delegateReason')?.value?.trim()||'';if(!did||!selected.length||!expires){showToast('يرجى استكمال المفوض إليه والصلاحيات وتاريخ الانتهاء','error');return}showLoading(true);try{const r=await apiCall('grantDelegatedPermissionsBatch',{delegate_id:did,permission_ids:selected,screen_id:sid||null,reason,expires_at:expires+' 23:59:59'});if(!r.success)throw new Error(r.error||r.message);if(Number(r.data?.affected_rows||0)!==selected.length)throw new Error('لم يتم حفظ جميع التفويضات المحددة');showToast('تم حفظ جميع التفويضات والتحقق منها في قاعدة البيانات','success');document.getElementById('delegatePermissionForm')?.reset();await loadDelegatedPermissions()}catch(e){showToast(e.error||e.message||'فشل حفظ التفويض في قاعدة البيانات','error')}finally{showLoading(false)}}
+function addBulkToolbar(container,type){if(!container||container.parentElement.querySelector('.bulk-permission-toolbar'))return;const bar=document.createElement('div');bar.className='bulk-permission-toolbar';bar.innerHTML=`<button type="button" class="submit-btn danger">سحب المحدد</button><button type="button" class="action-btn">تحديد الكل</button>`;container.parentElement.insertBefore(bar,container);bar.children[1].onclick=()=>container.querySelectorAll('input[data-permission-record]').forEach(x=>x.checked=true);bar.children[0].onclick=async()=>{const selected=[...container.querySelectorAll('input[data-permission-record]:checked')].map(x=>Number(x.dataset.permissionRecord)).filter(Boolean);if(!selected.length){showToast('حدد صلاحية واحدة على الأقل','warning');return}showLoading(true);try{const action=type==='user'?'revokeUserPermissionsBatch':'revokeGroupPermissionsBatch';const payload=type==='user'?{user_permission_ids:selected}:{group_permission_ids:selected};const r=await apiCall(action,payload);if(!r.success)throw new Error(r.error||r.message);if(Number(r.data?.affected_rows||0)!==selected.length)throw new Error('لم يتم سحب جميع السجلات المحددة');showToast('تم سحب جميع السجلات المحددة والتحقق منها','success');if(type==='user')await loadGrantedPermissions();else{const gid=Number(document.getElementById('groupSelectForPerms')?.value||0);if(gid)await loadGroupPermissions(gid)}}catch(e){showToast(e.error||e.message||'فشل السحب في قاعدة البيانات','error')}finally{showLoading(false)}}}
+function enhanceUserTable(){const body=document.getElementById('grantedPermissionsBody');if(!body)return;body.querySelectorAll('tr').forEach(row=>{if(row.querySelector('input[data-permission-record]'))return;const b=row.querySelector('button[onclick*="revokeGrantedPermission("]');if(!b)return;const m=(b.getAttribute('onclick')||'').match(/revokeGrantedPermission\((\d+)\)/);if(!m)return;const td=document.createElement('td');td.innerHTML=`<input type="checkbox" data-permission-record="${m[1]}">`;row.insertBefore(td,row.firstElementChild)});addBulkToolbar(body,'user')}
+function enhanceGroupTable(){const box=document.getElementById('groupPermissionsDisplay');if(!box)return;box.querySelectorAll('tr').forEach(row=>{if(row.querySelector('input[data-permission-record]'))return;const b=row.querySelector('button[onclick*="revokeGroupPermission("]');if(!b)return;const m=(b.getAttribute('onclick')||'').match(/revokeGroupPermission\((\d+)\)/);if(!m)return;const td=document.createElement('td');td.innerHTML=`<input type="checkbox" data-permission-record="${m[1]}">`;row.insertBefore(td,row.firstElementChild)});addBulkToolbar(box,'group')}
+function install(){bindBox('grantPermission','grantPermissionOptions');bindBox('groupPermissionSelect','groupPermissionOptions');bindBox('delegatePermission','delegatePermissionOptions');const u=document.getElementById('grantUser');if(u&&!u.dataset.rolesFixBound){u.dataset.rolesFixBound='1';u.addEventListener('change',refreshUserChecks)}const g=document.getElementById('groupSelectForPerms');if(g&&!g.dataset.rolesFixBound){g.dataset.rolesFixBound='1';g.addEventListener('change',refreshGroupChecks)}const ub=document.getElementById('grantedPermissionsBody');if(ub&&!ub.dataset.rolesFixObs){new MutationObserver(enhanceUserTable).observe(ub,{childList:true,subtree:true});ub.dataset.rolesFixObs='1'}const gb=document.getElementById('groupPermissionsDisplay');if(gb&&!gb.dataset.rolesFixObs){new MutationObserver(enhanceGroupTable).observe(gb,{childList:true,subtree:true});gb.dataset.rolesFixObs='1'}
+ const oldGrant=window.grantUserPermission;window.grantUserPermission=grantUserFixed;const oldGroup=window.grantGroupPermission;window.grantGroupPermission=grantGroupFixed;const oldDelegate=window.delegatePermission;window.delegatePermission=delegateFixed;
+ loadModules();renderChecks('grantPermissionOptions',allPermissions);renderChecks('groupPermissionOptions',allPermissions);renderChecks('delegatePermissionOptions',allPermissions);enhanceUserTable();enhanceGroupTable();
+ // Keep the original dropdown population functions intact, then project their real options to checkboxes.
+ const wrap=(name,after)=>{if(typeof window[name]!=='function'||window[name].__rolesFix)return;const fn=window[name];const w=function(){const r=fn.apply(this,arguments);try{after()}catch(e){}return r};w.__rolesFix=true;window[name]=w};
+ wrap('populateGrantFormDropdowns',()=>renderChecks('grantPermissionOptions',allPermissions));
+ wrap('populateGroupSelect',()=>renderChecks('groupPermissionOptions',allPermissions));
+ wrap('populateDelegateFormDropdowns',()=>renderChecks('delegatePermissionOptions',allPermissions));
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
+})();
+</script>
 </body>
 </html>
