@@ -9020,6 +9020,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(s.sale_code LIKE ? OR s.invoice_number LIKE ? OR COALESCE(p.commercial_name,'') LIKE ?)"; args += like; args += like; args += like }
         data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "s.status = ?"; args += it }
         data.optString("payment_method").trim().takeIf { it.isNotEmpty() }?.let { where += "s.payment_method = ?"; args += it }
+        when (data.optString("sale_category").trim()) {
+            "fuel" ->
+                where += "s.fuel_type_id IS NOT NULL AND s.fuel_type_id > 0"
+            "products" ->
+                where += "s.product_id IS NOT NULL AND s.product_id > 0"
+        }
         data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(s.created_at) >= date(?)"; args += it }
         data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(s.created_at) <= date(?)"; args += it }
         val whereSql = where.joinToString(" AND ")
@@ -9030,7 +9036,48 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val sortColumn = when (data.optString("sort_by")) { "invoice_number" -> "s.invoice_number"; "net_amount" -> "s.net_amount"; "payment_method" -> "s.payment_method"; "created_at" -> "s.created_at"; else -> "s.id" }
         val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
         val pageArgs = args.toMutableList().apply { add(limit.toString()); add(offset.toString()) }
-        val rows = db.rawQuery("""SELECT s.id AS sale_id, s.sale_code, s.invoice_number, s.station_id, s.shift_id, s.customer_party_id, COALESCE(p.commercial_name, p.commercial_name_ar, '') AS customer_name, s.subtotal, s.discount_amount, s.tax_amount, s.gross_amount, s.net_amount, s.payment_method, s.payment_status, s.paid_amount, s.remaining_amount, s.status, s.order_type, s.created_at, (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) AS item_count FROM sales_transactions s LEFT JOIN parties p ON p.id = s.customer_party_id WHERE $whereSql ORDER BY $sortColumn $direction LIMIT ? OFFSET ?""", pageArgs.toTypedArray()).use { cursorToJsonArray(it) }
+        val rows = db.rawQuery(
+            """
+            SELECT
+                s.id AS sale_id,
+                s.sale_code,
+                s.invoice_number,
+                s.station_id,
+                s.shift_id,
+                s.customer_party_id,
+                COALESCE(
+                    NULLIF(p.commercial_name_ar,''),
+                    NULLIF(p.commercial_name,''),
+                    NULLIF(p.legal_name,''),
+                    ''
+                ) AS customer_name,
+                s.fuel_type_id,
+                s.product_id,
+                s.liters,
+                s.price_per_liter,
+                s.subtotal,
+                s.discount_amount,
+                s.tax_amount,
+                s.gross_amount,
+                s.net_amount,
+                s.payment_method,
+                s.payment_status,
+                s.paid_amount,
+                s.remaining_amount,
+                s.is_credit,
+                s.status,
+                s.order_type,
+                s.created_at,
+                (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) AS item_count
+            FROM sales_transactions s
+            LEFT JOIN parties p
+            ON p.id = s.customer_party_id
+            WHERE $whereSql
+            ORDER BY $sortColumn $direction
+            LIMIT ? OFFSET ?
+            """,
+            pageArgs.toTypedArray()
+        ).use { cursorToJsonArray(it) }
         return module008Page(rows, total, limit, offset)
     }
 
@@ -9485,16 +9532,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val fuelTypeId = data.optLong("fuel_type_id", 0L).toInt()
         require(fuelTypeId > 0) { "نوع الوقود مطلوب" }
         val paymentMethod = when (data.optString("payment_method", "cash").trim()) {
-            "آجل", "credit", "credit_sale", "credit_account", "credit_card" -> "credit"
-            "بطاقة", "card", "debit_card" -> "credit_card"
+            "آجل", "credit", "credit_sale", "credit_account" -> "credit"
+            "بطاقة", "card", "credit_card", "debit_card" -> "credit_card"
             "تحويل", "bank_transfer" -> "bank_transfer"
             "شيك", "cheque" -> "cheque"
             else -> "cash"
         }
-        val isCreditSale = data.optBoolean(
-            "is_credit",
-            paymentMethod == "credit"
-        )
+        // التصنيف المالي مشتق من payment_method نفسه.
+        // لا نسمح لـ is_credit القادم من HTML بأن يحول credit_card إلى بيع آجل.
+        val isCreditSale = paymentMethod == "credit"
+        if (isCreditSale) {
+            require(customerId != null) {
+                "العميل مطلوب للبيع الآجل"
+            }
+        }
         val dueDate = data.optString("due_date", "").trim().ifBlank { null }
         dbLock.lock()
         return try {
@@ -9525,7 +9576,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     cashierId = cashierId.toInt(),
                     notes = data.optString("notes", ""),
                     orderType = "fuel",
-                    paidAmount = data.optDouble("amount_paid", totalAmount),
+                    paidAmount = if (data.has("amount_paid") && !data.isNull("amount_paid")) {
+                        data.optDouble(
+                            "amount_paid",
+                            if (isCreditSale) 0.0 else totalAmount
+                        )
+                    } else {
+                        if (isCreditSale) 0.0 else totalAmount
+                    },
                     manageTransaction = false
                 )
                 val cv = ContentValues().apply {
@@ -9549,6 +9607,90 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("updated_at", getCurrentDateTime())
                 }
                 db.insertOrThrow("fuel_sales", null, cv)
+
+                db.rawQuery(
+                    """
+                    SELECT
+                        customer_party_id,
+                        payment_method,
+                        net_amount,
+                        paid_amount,
+                        remaining_amount,
+                        is_credit
+                    FROM sales_transactions
+                    WHERE id = ?
+                    AND station_id = ?
+                    AND is_deleted = 0
+                    """,
+                    arrayOf(
+                        saleId.toString(),
+                        stationScopeId.toString()
+                    )
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) {
+                        "فشل التحقق من عملية البيع بعد الحفظ"
+                    }
+
+                    val actualCustomer =
+                        if (cursor.isNull(0)) {
+                            null
+                        } else {
+                            cursor.getLong(0).toInt()
+                        }
+
+                    require(actualCustomer == customerId) {
+                        "فشل التحقق من العميل بعد الحفظ"
+                    }
+
+                    require(
+                        cursor.getString(1) == paymentMethod
+                    ) {
+                        "فشل التحقق من طريقة الدفع بعد الحفظ"
+                    }
+
+                    require(
+                        kotlin.math.abs(
+                            cursor.getDouble(2) - totalAmount
+                        ) <= 1e-9
+                    ) {
+                        "فشل التحقق من إجمالي البيع بعد الحفظ"
+                    }
+
+                    val expectedPaid =
+                        if (data.has("amount_paid") && !data.isNull("amount_paid")) {
+                            data.optDouble(
+                                "amount_paid",
+                                if (isCreditSale) 0.0 else totalAmount
+                            )
+                        } else {
+                            if (isCreditSale) 0.0 else totalAmount
+                        }
+
+                    require(
+                        kotlin.math.abs(
+                            cursor.getDouble(3) - expectedPaid
+                        ) <= 1e-9
+                    ) {
+                        "فشل التحقق من المدفوع بعد الحفظ"
+                    }
+
+                    require(
+                        kotlin.math.abs(
+                            cursor.getDouble(4) -
+                                (totalAmount - expectedPaid).coerceAtLeast(0.0)
+                        ) <= 1e-9
+                    ) {
+                        "فشل التحقق من المتبقي بعد الحفظ"
+                    }
+
+                    require(
+                        cursor.getInt(5) ==
+                            if (isCreditSale) 1 else 0
+                    ) {
+                        "فشل التحقق من تصنيف البيع"
+                    }
+                }
+
                 completeFinancialIdempotency(db, "fuel_sale", stationScopeId, idempotencyKey, saleId)
                 db.setTransactionSuccessful()
                 saleId
@@ -13582,6 +13724,71 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("daily_sales", cursor.getDouble(0))
+        }
+
+        db.rawQuery(
+            """
+            SELECT
+                COALESCE(SUM(net_amount),0),
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN payment_method = 'cash'
+                            THEN net_amount
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ),
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN is_credit = 1
+                            THEN net_amount
+                            ELSE 0
+                        END
+                    ),
+                    0
+                )
+            FROM sales_transactions
+            WHERE station_id = ?
+            AND date(created_at) = date('now')
+            AND is_deleted = 0
+            """,
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) {
+                stats.put(
+                    "cash_sales",
+                    cursor.getDouble(1)
+                )
+
+                stats.put(
+                    "credit_sales",
+                    cursor.getDouble(2)
+                )
+            }
+        }
+
+        db.rawQuery(
+            """
+            SELECT COALESCE(SUM(p.amount),0)
+            FROM payments p
+            JOIN sales_transactions s
+            ON s.id = p.sale_id
+            WHERE s.station_id = ?
+            AND s.is_deleted = 0
+            AND p.status = 'completed'
+            AND date(p.created_at) = date('now')
+            """,
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) {
+                stats.put(
+                    "collected_amount",
+                    cursor.getDouble(0)
+                )
+            }
         }
 
         // 3. العملاء النشطون في المحطة (من خلال المبيعات)
