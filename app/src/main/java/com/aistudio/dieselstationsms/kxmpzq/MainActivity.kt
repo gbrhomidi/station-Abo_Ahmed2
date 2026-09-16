@@ -9492,7 +9492,133 @@ fun getDashboardStats(jsonData: String = "{}"): String {
       errorResponse(e.message)
   }
         }
+        // ============================================================
+        // Database Browser Bridge — dev-mode, بلا فحص صلاحيات
+        // ============================================================
 
+        @JavascriptInterface
+        fun getDatabaseTables(): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                dataResponse(db.getBrowserTableList())
+            } catch (e: Exception) {
+                DebugLogger.logException("DBBrowser", e)
+                errorResponse(e.message ?: "فشل تحميل قائمة الجداول")
+            }
+        }
+
+        @JavascriptInterface
+        fun getDatabaseTableSchema(tableName: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                dataResponse(db.getBrowserTableSchema(tableName))
+            } catch (e: Exception) {
+                DebugLogger.logException("DBBrowser", e)
+                errorResponse(e.message ?: "فشل تحميل مخطط الجدول")
+            }
+        }
+
+        @JavascriptInterface
+        fun getDatabaseTableData(tableName: String, jsonParams: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val p = JSONObject(jsonParams.ifBlank { "{}" })
+                dataResponse(
+                    db.getBrowserTableRows(
+                        table = tableName,
+                        limit = p.optInt("limit", 50),
+                        offset = p.optInt("offset", 0),
+                        search = p.optString("search", ""),
+                        sortBy = p.optString("sort_by", ""),
+                        sortDir = p.optString("sort_dir", "desc")
+                    )
+                )
+            } catch (e: Exception) {
+                DebugLogger.logException("DBBrowser", e)
+                errorResponse(e.message ?: "فشل تحميل بيانات الجدول")
+            }
+        }
+
+        @JavascriptInterface
+        fun getDatabaseRecord(tableName: String, id: Long): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val row = db.getBrowserRow(tableName, id)
+                    ?: return errorResponse("السجل غير موجود")
+                dataResponse(row)
+            } catch (e: Exception) {
+                DebugLogger.logException("DBBrowser", e)
+                errorResponse(e.message ?: "فشل تحميل السجل")
+            }
+        }
+
+        @JavascriptInterface
+        fun insertBrowserRecord(tableName: String, jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val obj = JSONObject(jsonData.ifBlank { "{}" })
+                val id = db.insertBrowserRow(tableName, obj)
+                successResponse(id, "تم الإدراج بنجاح")
+            } catch (e: Exception) {
+                DebugLogger.logException("DBBrowser", e)
+                errorResponse(e.message ?: "فشل الإدراج")
+            }
+        }
+
+        @JavascriptInterface
+        fun updateBrowserRecord(tableName: String, id: Long, jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val obj = JSONObject(jsonData.ifBlank { "{}" })
+                val rows = db.updateBrowserRow(tableName, id, obj)
+                if (rows > 0) {
+                    successResponse(id, "تم التحديث بنجاح")
+                } else {
+                    successResponse(false, "لم يتم العثور على السجل")
+                }
+            } catch (e: Exception) {
+                DebugLogger.logException("DBBrowser", e)
+                errorResponse(e.message ?: "فشل التحديث")
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteBrowserRecord(tableName: String, id: Long): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val result = db.deleteBrowserRow(tableName, id)
+                val rows = result.optInt("rows", 0)
+                val mode = result.optString("mode", "hard")
+                val message = if (rows > 0)
+                    (if (mode == "soft") "تم الحذف المنطقي" else "تم الحذف الفعلي")
+                else "لم يتم العثور على السجل"
+                JSONObject().apply {
+                    put("success", rows > 0)
+                    put("rows", rows)
+                    put("mode", mode)
+                    put("message", message)
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("DBBrowser", e)
+                errorResponse(e.message ?: "فشل الحذف")
+            }
+        }
+
+        @JavascriptInterface
+        fun getDatabaseRelatedRows(
+            relatedTable: String,
+            fkColumn: String,
+            fkValue: String,
+            limit: Int = 100
+        ): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                dataResponse(db.getBrowserRelatedRows(relatedTable, fkColumn, fkValue, limit))
+            } catch (e: Exception) {
+                DebugLogger.logException("DBBrowser", e)
+                errorResponse(e.message ?: "فشل تحميل البيانات المرتبطة")
+            }
+		}
 }
 
     private fun clearSessionState() {
