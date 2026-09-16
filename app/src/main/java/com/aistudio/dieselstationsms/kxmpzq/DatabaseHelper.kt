@@ -24176,5 +24176,579 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
   db.endTransaction()
         }
     }
+    // ========================================================================
+    // GENERIC DATABASE BROWSER — استعلام شامل و CRUD فعلي عبر SQLite
+    // يعمل في نمط التطوير: بلا تصفية بمعرّف المحطة، وبلا فحص صلاحيات.
+    // ========================================================================
 
+    private val browserHiddenTables = setOf(
+        "sqlite_sequence", "android_metadata",
+        "sqlite_stat1", "sqlite_stat2", "sqlite_stat3", "sqlite_stat4"
+    )
+
+    private val browserArabicTables: Map<String, String> = mapOf(
+        "accounts" to "الحسابات", "assets" to "الأصول", "attendance" to "الحضور",
+        "attachments" to "المرفقات", "audit_logs" to "سجل التدقيق",
+        "backup_history" to "سجل النسخ الاحتياطي", "bad_debts" to "الديون المعدومة",
+        "bank_accounts" to "الحسابات البنكية", "bank_ledger" to "دفتر البنك",
+        "banks" to "البنوك", "budgets" to "الميزانيات", "budget_details" to "تفاصيل الميزانية",
+        "calibration_records" to "سجلات المعايرة", "cash_boxes" to "الصناديق",
+        "cash_deposits" to "الإيداعات النقدية", "cash_ledger" to "دفتر الصندوق",
+        "cash_movements" to "الحركات النقدية", "companies" to "الشركات",
+        "contract_line_items" to "بنود العقود", "contract_payment_schedules" to "دفعات العقود",
+        "contract_status_history" to "سجل حالات العقود", "contracts" to "العقود",
+        "currencies" to "العملات", "customer_calls" to "مكالمات العملاء",
+        "customer_complaints" to "شكاوى العملاء", "customer_followups" to "متابعة العملاء",
+        "customer_ledger" to "دفتر العملاء", "customer_visits" to "زيارات العملاء",
+        "damaged_products" to "المنتجات التالفة", "data_versions" to "إصدارات البيانات",
+        "deliveries" to "التوصيلات", "depreciation" to "الإهلاك", "documents" to "الوثائق",
+        "drivers" to "السائقون", "employee_audit_log" to "تدقيق الموظفين",
+        "employee_payments" to "دفعات الموظفين", "employee_performance" to "أداء الموظفين",
+        "employees" to "الموظفون", "employees_old" to "الموظفون (قديم)",
+        "exchange_rates" to "أسعار الصرف", "expense_categories" to "فئات المصروفات",
+        "expenses" to "المصروفات", "fact_inventory" to "وقائع المخزون",
+        "fact_payments" to "وقائع المدفوعات", "fact_sales" to "وقائع المبيعات",
+        "field_permissions" to "صلاحيات الحقول", "financial_idempotency_keys" to "مفاتيح العمليات المالية",
+        "fixed_assets" to "الأصول الثابتة", "fuel_orders" to "طلبات الوقود",
+        "fuel_payment_matches" to "مطابقات مدفوعات الوقود", "fuel_quality_tests" to "اختبارات جودة الوقود",
+        "fuel_quotes" to "عروض أسعار الوقود", "fuel_reservations" to "حجوزات الوقود",
+        "fuel_sales" to "مبيعات الوقود", "fuel_types" to "أنواع الوقود",
+        "groups_table" to "المجموعات", "inventory_ledger" to "دفتر المخزون",
+        "inventory_levels" to "مستويات المخزون", "inventory_movements" to "حركات المخزون",
+        "iot_devices" to "أجهزة IoT", "journal_entries" to "قيود اليومية",
+        "journal_entry_items" to "بنود قيود اليومية", "kpi_definitions" to "مؤشرات الأداء",
+        "kpi_results" to "نتائج المؤشرات", "maintenance_history" to "سجل الصيانة",
+        "maintenance_parts" to "قطع الصيانة", "maintenance_requests" to "طلبات الصيانة",
+        "maintenance_schedule" to "جدول الصيانة", "meter_readings" to "قراءات العدادات",
+        "notification_logs" to "سجل الإشعارات", "notification_queue" to "طابور الإشعارات",
+        "notification_templates" to "قوالب الإشعارات", "notifications" to "الإشعارات",
+        "parties" to "الأطراف", "party_addresses" to "عناوين الأطراف",
+        "party_contacts" to "جهات اتصال الأطراف", "party_types" to "أنواع الأطراف",
+        "password_reset_tokens" to "رموز استعادة كلمة المرور", "payments" to "المدفوعات",
+        "payroll" to "مسيرات الرواتب", "payroll_items" to "بنود الرواتب",
+        "permissions" to "الصلاحيات", "predictions" to "التنبؤات",
+        "price_history" to "تاريخ الأسعار", "price_list_items" to "بنود قوائم الأسعار",
+        "price_lists" to "قوائم الأسعار", "product_categories" to "فئات المنتجات",
+        "products" to "المنتجات", "pump_nozzles" to "فوهات المضخات",
+        "pumps" to "المضخات", "receipts" to "الإيصالات", "report_cache" to "ذاكرة التقارير",
+        "role_permissions" to "صلاحيات الأدوار", "roles" to "الأدوار",
+        "sale_items" to "بنود المبيعات", "sales_transactions" to "حركات البيع",
+        "screens" to "الشاشات", "settings" to "الإعدادات",
+        "shift_deliveries" to "تسليمات الورديات", "shift_expenses" to "مصروفات الورديات",
+        "shift_sales" to "مبيعات الورديات", "shifts" to "الورديات",
+        "sms_conversation_context" to "سياق محادثات SMS", "sms_customer_preferences" to "تفضيلات عملاء SMS",
+        "sms_interaction_history" to "سجل تفاعل SMS", "sms_logs" to "سجلات SMS",
+        "sms_metrics" to "مقاييس SMS", "sms_messages" to "رسائل SMS",
+        "sms_otp_verifications" to "رموز OTP للرسائل", "sms_outbound_dedupe" to "منع تكرار SMS الصادرة",
+        "sms_outbox" to "صادر SMS", "sms_outbox_parts" to "أجزاء SMS",
+        "sms_payment_events" to "أحداث مدفوعات SMS", "sms_processed_hashes" to "هاش SMS المعالجة",
+        "sms_processed_messages" to "SMS المعالجة", "sms_rate_limits" to "حدود معدل SMS",
+        "sms_recurring_orders" to "طلبات SMS المتكررة", "sms_whitelist" to "القائمة البيضاء لـ SMS",
+        "sms_templates" to "قوالب SMS", "station_settings" to "إعدادات المحطات",
+        "stations" to "المحطات", "stock_alerts" to "تنبيهات المخزون",
+        "stock_movements" to "حركات المخزون (قديم)", "stocktake_details" to "تفاصيل الجرد",
+        "stocktakes" to "عمليات الجرد", "supplier_ledger" to "دفتر الموردين",
+        "sync_conflicts" to "تعارضات المزامنة", "sync_devices" to "أجهزة المزامنة",
+        "sync_logs" to "سجلات المزامنة", "sync_queue" to "طابور المزامنة",
+        "system_events" to "أحداث النظام", "system_logs" to "سجلات النظام",
+        "system_settings" to "إعدادات النظام", "tank_level_log" to "سجل مستويات الخزانات",
+        "tank_refills" to "تعبئات الخزانات", "tanks" to "الخزانات",
+        "tasks" to "المهام", "terminals" to "المحطات الطرفية",
+        "units" to "الوحدات", "user_activity_log" to "نشاط المستخدمين",
+        "user_otp_verifications" to "رموز OTP للمستخدمين", "user_permissions" to "صلاحيات المستخدمين",
+        "user_sessions" to "جلسات المستخدمين", "user_settings" to "إعدادات المستخدمين",
+        "users" to "المستخدمون", "vehicle_accidents" to "حوادث المركبات",
+        "vehicle_expenses" to "مصروفات المركبات", "vehicle_insurance" to "تأمين المركبات",
+        "vehicle_locations" to "مواقع المركبات", "vehicle_maintenance" to "صيانة المركبات",
+        "vehicle_trip_events" to "أحداث رحلات المركبات", "vehicle_trips" to "رحلات المركبات",
+        "vehicles" to "المركبات", "warehouses" to "المستودعات"
+    )
+
+    private val browserArabicColumns: Map<String, String> = mapOf(
+        "id" to "المعرف", "uuid" to "المعرف الفريد",
+        "created_at" to "تاريخ الإنشاء", "updated_at" to "تاريخ التحديث",
+        "deleted_at" to "تاريخ الحذف", "created_by" to "أنشأه",
+        "updated_by" to "عدّله", "deleted_by" to "حذفه",
+        "is_deleted" to "محذوف", "is_active" to "نشط",
+        "name" to "الاسم", "name_ar" to "الاسم العربي",
+        "full_name" to "الاسم الكامل", "full_name_ar" to "الاسم الكامل (عربي)",
+        "display_name" to "الاسم المعروض", "description" to "الوصف",
+        "description_ar" to "الوصف (عربي)", "notes" to "ملاحظات",
+        "remarks" to "ملاحظات", "status" to "الحالة",
+        "status_reason" to "سبب الحالة", "phone" to "الهاتف",
+        "phone2" to "الهاتف 2", "email" to "البريد الإلكتروني",
+        "address" to "العنوان", "city" to "المدينة", "country" to "الدولة",
+        "district" to "الحي", "street" to "الشارع", "postal_code" to "الرمز البريدي",
+        "station_id" to "المحطة", "party_id" to "الطرف", "party_type_id" to "نوع الطرف",
+        "customer_id" to "العميل", "customer_party_id" to "العميل",
+        "supplier_id" to "المورد", "supplier_party_id" to "المورد",
+        "product_id" to "المنتج", "user_id" to "المستخدم",
+        "employee_id" to "الموظف", "vehicle_id" to "المركبة",
+        "driver_id" to "السائق", "tank_id" to "الخزان",
+        "pump_id" to "المضخة", "nozzle_id" to "الفوهة",
+        "shift_id" to "الوردية", "sale_id" to "البيع",
+        "fuel_type_id" to "نوع الوقود", "warehouse_id" to "المستودع",
+        "category_id" to "الفئة", "unit_id" to "الوحدة",
+        "amount" to "المبلغ", "quantity" to "الكمية",
+        "price" to "السعر", "total" to "الإجمالي",
+        "subtotal" to "الإجمالي الفرعي", "total_amount" to "الإجمالي",
+        "gross_amount" to "الإجمالي قبل الخصم", "net_amount" to "الصافي",
+        "paid_amount" to "المبلغ المدفوع", "remaining_amount" to "المتبقي",
+        "discount" to "الخصم", "discount_amount" to "مبلغ الخصم",
+        "discount_percent" to "نسبة الخصم", "tax" to "الضريبة",
+        "tax_amount" to "مبلغ الضريبة", "tax_rate" to "معدل الضريبة",
+        "vat_amount" to "ضريبة القيمة المضافة", "vat_rate" to "معدل القيمة المضافة",
+        "date" to "التاريخ", "time" to "الوقت",
+        "start_date" to "تاريخ البداية", "end_date" to "تاريخ النهاية",
+        "due_date" to "تاريخ الاستحقاق", "entry_date" to "تاريخ القيد",
+        "hire_date" to "تاريخ التعيين", "expiry_date" to "تاريخ الانتهاء",
+        "type" to "النوع", "category" to "الفئة",
+        "code" to "الكود", "barcode" to "الباركود",
+        "unit_price" to "سعر الوحدة", "sale_price" to "سعر البيع",
+        "purchase_price" to "سعر الشراء", "cost" to "التكلفة",
+        "balance" to "الرصيد", "current_balance" to "الرصيد الحالي",
+        "debit" to "مدين", "credit" to "دائن",
+        "currency_id" to "العملة", "currency_code" to "كود العملة",
+        "currency_name" to "اسم العملة", "account_id" to "الحساب",
+        "account_code" to "كود الحساب", "account_name" to "اسم الحساب",
+        "role_id" to "الدور", "role_name" to "اسم الدور",
+        "permission_code" to "كود الصلاحية", "permission_name" to "اسم الصلاحية",
+        "username" to "اسم المستخدم", "password_hash" to "هاش كلمة المرور",
+        "password_salt" to "ملح كلمة المرور", "reported_by" to "أبلغ عنه",
+        "approved_by" to "اعتمده", "performed_by" to "نفّذه",
+        "posted_by" to "رحّله", "received_by" to "استلمه",
+        "inspected_by" to "فحصه", "assigned_to" to "مُكلّف إلى",
+        "message_body" to "نص الرسالة", "message_type" to "نوع الرسالة",
+        "phone_number" to "رقم الهاتف", "sent_at" to "وقت الإرسال",
+        "read_at" to "وقت القراءة", "is_read" to "مقروء",
+        "capacity_liters" to "السعة (لتر)", "current_quantity" to "الكمية الحالية",
+        "minimum_level" to "الحد الأدنى", "maximum_level" to "الحد الأعلى",
+        "opening_balance" to "الرصيد الافتتاحي", "closing_balance" to "الرصيد الختامي",
+        "entry_number" to "رقم القيد", "invoice_number" to "رقم الفاتورة",
+        "sale_code" to "كود البيع", "receipt_number" to "رقم الإيصال",
+        "payment_method" to "طريقة الدفع", "payment_status" to "حالة الدفع",
+        "commercial_name" to "الاسم التجاري",
+        "commercial_name_ar" to "الاسم التجاري (عربي)",
+        "legal_name" to "الاسم القانوني", "party_code" to "كود الطرف",
+        "employee_code" to "كود الموظف", "tank_code" to "كود الخزان",
+        "pump_code" to "كود المضخة", "vehicle_code" to "كود المركبة",
+        "driver_code" to "كود السائق", "plate_number" to "رقم اللوحة",
+        "is_credit" to "آجل", "is_default" to "افتراضي",
+        "level" to "المستوى", "parent_id" to "المعرّف الأب",
+        "parent_account_id" to "الحساب الأب", "parent_category_id" to "الفئة الأم",
+        "normal_balance" to "الرصيد الطبيعي", "account_type" to "نوع الحساب",
+        "product_name" to "اسم المنتج", "product_name_ar" to "اسم المنتج (عربي)"
+    )
+
+    private fun browserLabelForColumn(column: String): String {
+        return browserArabicColumns[column] ?: column
+            .replace('_', ' ')
+            .replaceFirstChar { it.uppercaseChar() }
+    }
+
+    private fun browserSafeIdentifier(name: String): String {
+        require(name.matches(Regex("^[A-Za-z_][A-Za-z0-9_]*$"))) {
+            "معرّف غير آمن: $name"
+        }
+        return "`$name`"
+    }
+
+    private fun browserTableColumns(table: String): List<Pair<String, String>> {
+        val result = mutableListOf<Pair<String, String>>()
+        readableDatabase.rawQuery("PRAGMA table_info(${browserSafeIdentifier(table)})", null).use { c ->
+            val nameIdx = c.getColumnIndexOrThrow("name")
+            val typeIdx = c.getColumnIndexOrThrow("type")
+            while (c.moveToNext()) {
+                result += c.getString(nameIdx) to (c.getString(typeIdx) ?: "")
+            }
+        }
+        return result
+    }
+
+    private fun browserTableColumnNames(table: String): Set<String> {
+        val names = linkedSetOf<String>()
+        readableDatabase.rawQuery("PRAGMA table_info(${browserSafeIdentifier(table)})", null).use { c ->
+            val nameIdx = c.getColumnIndexOrThrow("name")
+            while (c.moveToNext()) names += c.getString(nameIdx)
+        }
+        return names
+    }
+
+    private fun browserRequireTable(table: String): String {
+        require(table.matches(Regex("^[A-Za-z_][A-Za-z0-9_]*$"))) { "اسم جدول غير صالح" }
+        require(table !in browserHiddenTables) { "الجدول غير قابل للعرض" }
+        val exists = readableDatabase.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+            arrayOf(table)
+        ).use { it.moveToFirst() }
+        require(exists) { "الجدول غير موجود: $table" }
+        return table
+    }
+
+    private val browserAuditUserColumns = setOf(
+        "created_by", "updated_by", "deleted_by", "user_id",
+        "reported_by", "approved_by", "performed_by", "posted_by",
+        "received_by", "inspected_by", "assigned_to"
+    )
+
+    private const val BROWSER_DEFAULT_USER_ID = 1L
+
+    fun getBrowserTableList(): JSONArray {
+        val result = JSONArray()
+        dbLock.lock()
+        try {
+            val db = readableDatabase
+            db.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+                null
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val tableName = cursor.getString(0)
+                    if (tableName in browserHiddenTables) continue
+                    val rowCount = try {
+                        db.rawQuery("SELECT COUNT(*) FROM ${browserSafeIdentifier(tableName)}", null).use { c ->
+                            if (c.moveToFirst()) c.getLong(0) else 0L
+                        }
+                    } catch (_: Exception) { 0L }
+                    result.put(JSONObject().apply {
+                        put("table_name", tableName)
+                        put("table_label", browserArabicTables[tableName] ?: tableName)
+                        put("row_count", rowCount)
+                    })
+                }
+            }
+        } finally {
+            dbLock.unlock()
+        }
+        return result
+    }
+
+    fun getBrowserTableSchema(table: String): JSONObject {
+        dbLock.lock()
+        try {
+            browserRequireTable(table)
+            val db = readableDatabase
+
+            val columnsArr = JSONArray()
+            db.rawQuery("PRAGMA table_info(${browserSafeIdentifier(table)})", null).use { c ->
+                val nameIdx = c.getColumnIndexOrThrow("name")
+                val typeIdx = c.getColumnIndexOrThrow("type")
+                val notNullIdx = c.getColumnIndexOrThrow("notnull")
+                val defIdx = c.getColumnIndexOrThrow("dflt_value")
+                val pkIdx = c.getColumnIndexOrThrow("pk")
+                while (c.moveToNext()) {
+                    columnsArr.put(JSONObject().apply {
+                        put("name", c.getString(nameIdx))
+                        put("label", browserLabelForColumn(c.getString(nameIdx)))
+                        put("type", c.getString(typeIdx) ?: "")
+                        put("not_null", c.getInt(notNullIdx))
+                        put("default_value", if (c.isNull(defIdx)) JSONObject.NULL else c.getString(defIdx))
+                        put("is_pk", c.getInt(pkIdx) > 0)
+                        put("is_fk", false)
+                        put("fk_table", JSONObject.NULL)
+                        put("fk_column", JSONObject.NULL)
+                    })
+                }
+            }
+
+            val fkMap = linkedMapOf<String, Pair<String, String>>()
+            db.rawQuery("PRAGMA foreign_key_list(${browserSafeIdentifier(table)})", null).use { c ->
+                val fromIdx = c.getColumnIndexOrThrow("from")
+                val tblIdx = c.getColumnIndexOrThrow("table")
+                val toIdx = c.getColumnIndexOrThrow("to")
+                while (c.moveToNext()) {
+                    fkMap[c.getString(fromIdx)] = c.getString(tblIdx) to (c.getString(toIdx) ?: "id")
+                }
+            }
+            for (i in 0 until columnsArr.length()) {
+                val obj = columnsArr.getJSONObject(i)
+                val name = obj.optString("name")
+                fkMap[name]?.let { (fkTable, fkColumn) ->
+                    obj.put("is_fk", true)
+                    obj.put("fk_table", fkTable)
+                    obj.put("fk_table_label", browserArabicTables[fkTable] ?: fkTable)
+                    obj.put("fk_column", fkColumn)
+                }
+            }
+
+            val relatedArr = JSONArray()
+            val allTables = mutableListOf<String>()
+            db.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+                null
+            ).use { c -> while (c.moveToNext()) allTables += c.getString(0) }
+            for (otherTable in allTables) {
+                if (otherTable in browserHiddenTables || otherTable == table) continue
+                try {
+                    db.rawQuery("PRAGMA foreign_key_list(${browserSafeIdentifier(otherTable)})", null).use { c ->
+                        val fromIdx = c.getColumnIndexOrThrow("from")
+                        val tblIdx = c.getColumnIndexOrThrow("table")
+                        val toIdx = c.getColumnIndexOrThrow("to")
+                        while (c.moveToNext()) {
+                            if (c.getString(tblIdx) == table) {
+                                relatedArr.put(JSONObject().apply {
+                                    put("related_table", otherTable)
+                                    put("related_table_label", browserArabicTables[otherTable] ?: otherTable)
+                                    put("foreign_key_column", c.getString(fromIdx))
+                                    put("referenced_column", c.getString(toIdx) ?: "id")
+                                })
+                            }
+                        }
+                    }
+                } catch (_: Exception) { }
+            }
+
+            return JSONObject().apply {
+                put("table_name", table)
+                put("table_label", browserArabicTables[table] ?: table)
+                put("columns", columnsArr)
+                put("related_tables", relatedArr)
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getBrowserTableRows(
+        table: String,
+        limit: Int = 50,
+        offset: Int = 0,
+        search: String = "",
+        sortBy: String = "",
+        sortDir: String = "desc"
+    ): JSONObject {
+        dbLock.lock()
+        try {
+            browserRequireTable(table)
+            val safeLimit = limit.coerceIn(1, 500)
+            val safeOffset = offset.coerceAtLeast(0)
+            val db = readableDatabase
+            val columnNames = browserTableColumnNames(table)
+
+            val where = StringBuilder("1=1")
+            val args = mutableListOf<String>()
+            val trimmed = search.trim()
+            if (trimmed.isNotEmpty()) {
+                val textColumns = mutableListOf<String>()
+                db.rawQuery("PRAGMA table_info(${browserSafeIdentifier(table)})", null).use { c ->
+                    val nameIdx = c.getColumnIndexOrThrow("name")
+                    val typeIdx = c.getColumnIndexOrThrow("type")
+                    while (c.moveToNext()) {
+                        val col = c.getString(nameIdx)
+                        val type = (c.getString(typeIdx) ?: "").uppercase()
+                        if (type.contains("CHAR") || type.contains("TEXT") || type.contains("CLOB") || type.contains("VARCHAR")) {
+                            textColumns += col
+                        }
+                    }
+                }
+                if (textColumns.isNotEmpty()) {
+                    where.append(" AND (")
+                    where.append(textColumns.joinToString(" OR ") { "${browserSafeIdentifier(it)} LIKE ?" })
+                    where.append(")")
+                    repeat(textColumns.size) { args += "%$trimmed%" }
+                }
+            }
+
+            val sortColumn = if (sortBy.isNotBlank() && sortBy in columnNames) {
+                browserSafeIdentifier(sortBy)
+            } else if ("id" in columnNames) {
+                browserSafeIdentifier("id")
+            } else if ("created_at" in columnNames) {
+                browserSafeIdentifier("created_at")
+            } else {
+                browserSafeIdentifier(columnNames.first())
+            }
+            val sortDirection = if (sortDir.equals("asc", ignoreCase = true)) "ASC" else "DESC"
+
+            val total = db.rawQuery(
+                "SELECT COUNT(*) FROM ${browserSafeIdentifier(table)} WHERE $where",
+                args.toTypedArray()
+            ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+
+            val pageArgs = args.toMutableList()
+            pageArgs += safeLimit.toString()
+            pageArgs += safeOffset.toString()
+            val rows = db.rawQuery(
+                "SELECT * FROM ${browserSafeIdentifier(table)} WHERE $where ORDER BY $sortColumn $sortDirection LIMIT ? OFFSET ?",
+                pageArgs.toTypedArray()
+            ).use { cursorToJsonArray(it) }
+
+            return JSONObject().apply {
+                put("rows", rows)
+                put("total", total)
+                put("limit", safeLimit)
+                put("offset", safeOffset)
+                put("table_name", table)
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getBrowserRelatedRows(
+        relatedTable: String,
+        fkColumn: String,
+        fkValue: String,
+        limit: Int = 100
+    ): JSONArray {
+        dbLock.lock()
+        try {
+            browserRequireTable(relatedTable)
+            val columns = browserTableColumnNames(relatedTable)
+            require(fkColumn in columns) { "العمود $fkColumn غير موجود في $relatedTable" }
+            val safeLimit = limit.coerceIn(1, 500)
+            readableDatabase.rawQuery(
+                "SELECT * FROM ${browserSafeIdentifier(relatedTable)} WHERE ${browserSafeIdentifier(fkColumn)} = ? LIMIT ?",
+                arrayOf(fkValue, safeLimit.toString())
+            ).use { cursorToJsonArray(it) }.let { return it }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    private fun browserCoerceValue(raw: Any?, columnType: String): Any? {
+        if (raw == null || raw == JSONObject.NULL) return null
+        val text = raw.toString().trim()
+        if (text.isEmpty()) return null
+        val upper = columnType.uppercase()
+        return when {
+            upper.contains("INT") -> text.toLongOrNull() ?: text.toDoubleOrNull()?.toLong() ?: text
+            upper.contains("REAL") || upper.contains("NUM") || upper.contains("DEC") || upper.contains("DOUB") || upper.contains("FLOA") ->
+                text.toDoubleOrNull() ?: text
+            else -> text
+        }
+    }
+
+    private fun browserBuildContentValues(
+        table: String,
+        jsonData: JSONObject,
+        mode: String
+    ): ContentValues {
+        val db = readableDatabase
+        val typeMap = linkedMapOf<String, String>()
+        val pkColumns = linkedSetOf<String>()
+        db.rawQuery("PRAGMA table_info(${browserSafeIdentifier(table)})", null).use { c ->
+            val nameIdx = c.getColumnIndexOrThrow("name")
+            val typeIdx = c.getColumnIndexOrThrow("type")
+            val pkIdx = c.getColumnIndexOrThrow("pk")
+            while (c.moveToNext()) {
+                val col = c.getString(nameIdx)
+                typeMap[col] = c.getString(typeIdx) ?: ""
+                if (c.getInt(pkIdx) > 0) pkColumns += col
+            }
+        }
+
+        val values = ContentValues()
+        val keys = jsonData.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            if (key !in typeMap) continue
+            if (key in pkColumns) continue
+            if (key == "created_at" && mode == "insert") continue
+            if (key == "updated_at") continue
+            val coerced = browserCoerceValue(jsonData.opt(key), typeMap[key] ?: "")
+            if (coerced == null) values.putNull(key) else when (coerced) {
+                is Long -> values.put(key, coerced)
+                is Double -> values.put(key, coerced)
+                is Int -> values.put(key, coerced)
+                else -> values.put(key, coerced.toString())
+            }
+        }
+
+        if (mode == "insert") {
+            if ("created_at" in typeMap && !values.containsKey("created_at")) {
+                values.put("created_at", getCurrentDateTime())
+            }
+            if ("uuid" in typeMap && !values.containsKey("uuid") && jsonData.optString("uuid").isBlank()) {
+                values.put("uuid", UUID.randomUUID().toString())
+            }
+            browserAuditUserColumns.forEach { col ->
+                if (col in typeMap && !values.containsKey(col)) {
+                    values.put(col, BROWSER_DEFAULT_USER_ID)
+                }
+            }
+        } else if (mode == "update") {
+            if ("updated_at" in typeMap) values.put("updated_at", getCurrentDateTime())
+            if ("updated_by" in typeMap && !values.containsKey("updated_by")) {
+                values.put("updated_by", BROWSER_DEFAULT_USER_ID)
+            }
+        } else if (mode == "soft_delete") {
+            if ("is_deleted" in typeMap) values.put("is_deleted", 1)
+            if ("deleted_at" in typeMap) values.put("deleted_at", getCurrentDateTime())
+            if ("deleted_by" in typeMap) values.put("deleted_by", BROWSER_DEFAULT_USER_ID)
+            if ("updated_at" in typeMap) values.put("updated_at", getCurrentDateTime())
+            if ("updated_by" in typeMap) values.put("updated_by", BROWSER_DEFAULT_USER_ID)
+        }
+        return values
+    }
+
+    fun insertBrowserRow(table: String, jsonData: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            browserRequireTable(table)
+            val values = browserBuildContentValues(table, jsonData, "insert")
+            require(values.size() > 0) { "لا توجد أعمدة صالحة للإدراج في $table" }
+            val id = writableDatabase.insert(table, null, values)
+            require(id > 0) { "فشل الإدراج في $table" }
+            logActivity("system", "browser_insert", "إدراج سجل في $table بمعرف $id")
+            id
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun updateBrowserRow(table: String, id: Long, jsonData: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            browserRequireTable(table)
+            require(id > 0L) { "معرف غير صالح" }
+            val values = browserBuildContentValues(table, jsonData, "update")
+            require(values.size() > 0) { "لا توجد أعمدة صالحة للتحديث" }
+            val rows = writableDatabase.update(table, values, "id = ?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "browser_update", "تحديث سجل $id في $table")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteBrowserRow(table: String, id: Long): JSONObject {
+        dbLock.lock()
+        return try {
+            browserRequireTable(table)
+            require(id > 0L) { "معرف غير صالح" }
+            val columns = browserTableColumnNames(table)
+            val db = writableDatabase
+            if ("is_deleted" in columns) {
+                val values = browserBuildContentValues(table, JSONObject(), "soft_delete")
+                val rows = db.update(table, values, "id = ?", arrayOf(id.toString()))
+                if (rows > 0) logActivity("system", "browser_soft_delete", "حذف منطقي للسجل $id في $table")
+                return JSONObject().apply {
+                    put("rows", rows)
+                    put("mode", "soft")
+                }
+            }
+            val rows = db.delete(table, "id = ?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "browser_delete", "حذف فعلي للسجل $id في $table")
+            JSONObject().apply {
+                put("rows", rows)
+                put("mode", "hard")
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getBrowserRow(table: String, id: Long): JSONObject? {
+        dbLock.lock()
+        return try {
+            browserRequireTable(table)
+            readableDatabase.rawQuery(
+                "SELECT * FROM ${browserSafeIdentifier(table)} WHERE id = ? LIMIT 1",
+                arrayOf(id.toString())
+            ).use { cursor -> if (cursor.moveToFirst()) cursorToJsonObject(cursor) else null }
+        } finally {
+            dbLock.unlock()
+        }
+    }
 }
