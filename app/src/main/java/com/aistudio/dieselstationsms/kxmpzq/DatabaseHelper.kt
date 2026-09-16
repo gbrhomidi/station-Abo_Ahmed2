@@ -11916,6 +11916,48 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
     }
 
+    /** منح عدة صلاحيات مباشرة لمستخدم كوحدة ذرية واحدة. */
+    fun grantUserPermissionsBatch(data: JSONObject): JSONObject {
+        dbLock.lock()
+        return try {
+            val arr = data.optJSONArray("permission_ids") ?: throw IllegalArgumentException("قائمة الصلاحيات مطلوبة")
+            val userId = data.optLong("user_id", 0L)
+            require(userId > 0L && arr.length() > 0) { "المستخدم وقائمة الصلاحيات مطلوبان" }
+            val ids = linkedSetOf<Long>()
+            for (i in 0 until arr.length()) { val id = arr.optLong(i, 0L); require(id > 0L); ids.add(id) }
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                val created = JSONArray()
+                for (permissionId in ids) {
+                    val req = JSONObject(data.toString()).apply { put("permission_id", permissionId) }
+                    val id = grantUserPermission(req)
+                    require(id > 0L) { "تعذر منح الصلاحية $permissionId" }
+                    val ok = db.rawQuery("SELECT 1 FROM user_permissions WHERE id = ? AND user_id = ? AND permission_id = ? AND is_granted = 1", arrayOf(id.toString(), userId.toString(), permissionId.toString())).use { it.moveToFirst() }
+                    require(ok) { "فشل التحقق من حفظ الصلاحية $permissionId" }
+                    created.put(id)
+                }
+                db.setTransactionSuccessful()
+                JSONObject().apply { put("affected_rows", created.length()); put("requested_permissions", ids.size); put("ids", created) }
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+    /** سحب عدة صلاحيات مباشرة لمستخدم كوحدة ذرية واحدة. */
+    fun revokeUserPermissionsBatch(data: JSONObject): JSONObject {
+        dbLock.lock()
+        return try {
+            val arr = data.optJSONArray("user_permission_ids") ?: throw IllegalArgumentException("قائمة سجلات الصلاحيات مطلوبة")
+            require(arr.length() > 0) { "قائمة سجلات الصلاحيات مطلوبة" }
+            val ids = linkedSetOf<Long>(); for (i in 0 until arr.length()) { val id=arr.optLong(i,0L); require(id>0L); ids.add(id) }
+            val db=writableDatabase; db.beginTransaction()
+            try {
+                var affected=0; for(id in ids){ val rows=revokeUserPermission(id); require(rows==1){"لم يتم سحب سجل الصلاحية $id"}; affected+=rows }
+                db.setTransactionSuccessful(); JSONObject().apply{put("affected_rows",affected);put("requested_records",ids.size)}
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
     fun getGrantedPermissions(): JSONArray {
         dbLock.lock()
         return try {
@@ -11961,6 +12003,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             rows
         } finally { dbLock.unlock() }
+    }
+
+    /** منح عدة صلاحيات لمجموعة كوحدة ذرية واحدة. */
+    fun grantGroupPermissionsBatch(data: JSONObject): JSONObject {
+        dbLock.lock()
+        return try {
+            val arr=data.optJSONArray("permission_ids")?:throw IllegalArgumentException("قائمة الصلاحيات مطلوبة")
+            val groupId=data.optLong("group_id",0L); val screenId=data.optLong("screen_id",0L)
+            require(groupId>0L&&arr.length()>0){"المجموعة وقائمة الصلاحيات مطلوبتان"}
+            val ids=linkedSetOf<Long>();for(i in 0 until arr.length()){val id=arr.optLong(i,0L);require(id>0L);ids.add(id)}
+            val db=writableDatabase;db.beginTransaction()
+            try{val created=JSONArray();for(permissionId in ids){val req=JSONObject().apply{put("group_id",groupId);put("permission_id",permissionId);if(screenId>0)put("screen_id",screenId)};val id=grantGroupPermission(req);require(id>0){"تعذر ربط الصلاحية $permissionId"};val ok=db.rawQuery("SELECT 1 FROM group_permissions WHERE id = ? AND group_id = ? AND permission_id = ? AND is_granted = 1",arrayOf(id.toString(),groupId.toString(),permissionId.toString())).use{it.moveToFirst()};require(ok){"فشل التحقق من ربط الصلاحية $permissionId"};created.put(id)};db.setTransactionSuccessful();JSONObject().apply{put("affected_rows",created.length());put("requested_permissions",ids.size);put("ids",created)}}finally{db.endTransaction()}
+        } finally { dbLock.unlock() }
+    }
+
+    /** سحب عدة صلاحيات مجموعة كوحدة ذرية واحدة. */
+    fun revokeGroupPermissionsBatch(data: JSONObject): JSONObject {
+        dbLock.lock();return try{val arr=data.optJSONArray("group_permission_ids")?:throw IllegalArgumentException("قائمة سجلات صلاحيات المجموعة مطلوبة");require(arr.length()>0);val ids=linkedSetOf<Long>();for(i in 0 until arr.length()){val id=arr.optLong(i,0L);require(id>0L);ids.add(id)};val db=writableDatabase;db.beginTransaction();try{var affected=0;for(id in ids){val rows=revokeGroupPermission(id);require(rows==1){"لم يتم سحب سجل صلاحية المجموعة $id"};affected+=rows};db.setTransactionSuccessful();JSONObject().apply{put("affected_rows",affected);put("requested_records",ids.size)}}finally{db.endTransaction()}}finally{dbLock.unlock()}
     }
 
     fun getDelegatedPermissions(): JSONArray {
@@ -12014,6 +12074,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             logActivity("system", "grant_delegated_permission", "منح تفويض مؤقت رقم $id")
             id
         } finally { dbLock.unlock() }
+    }
+
+    /** إنشاء عدة تفويضات مؤقتة؛ سجل مستقل لكل Permission وفق Schema الحالي. */
+    fun grantDelegatedPermissionsBatch(data: JSONObject): JSONObject {
+        dbLock.lock();return try{val arr=data.optJSONArray("permission_ids")?:throw IllegalArgumentException("قائمة الصلاحيات مطلوبة");require(arr.length()>0);val ids=linkedSetOf<Long>();for(i in 0 until arr.length()){val id=arr.optLong(i,0L);require(id>0L);ids.add(id)};val db=writableDatabase;db.beginTransaction();try{val created=JSONArray();for(permissionId in ids){val req=JSONObject(data.toString()).apply{put("permission_id",permissionId)};val id=grantDelegatedPermission(req);require(id>0L){"تعذر حفظ التفويض للصلاحية $permissionId"};val ok=db.rawQuery("SELECT 1 FROM delegated_permissions WHERE id = ? AND delegator_id = ? AND delegate_id = ? AND permission_id = ? AND is_active = 1",arrayOf(id.toString(),data.optLong("delegator_id").toString(),data.optLong("delegate_id").toString(),permissionId.toString())).use{it.moveToFirst()};require(ok){"فشل التحقق من التفويض للصلاحية $permissionId"};created.put(id)};db.setTransactionSuccessful();JSONObject().apply{put("affected_rows",created.length());put("requested_permissions",ids.size);put("ids",created)}}finally{db.endTransaction()}}finally{dbLock.unlock()}
+    }
+
+    /** إلغاء عدة تفويضات مؤقتة كوحدة ذرية واحدة. */
+    fun revokeDelegatedPermissionsBatch(data: JSONObject): JSONObject {
+        dbLock.lock();return try{val arr=data.optJSONArray("delegation_ids")?:throw IllegalArgumentException("قائمة التفويضات مطلوبة");require(arr.length()>0);val ids=linkedSetOf<Long>();for(i in 0 until arr.length()){val id=arr.optLong(i,0L);require(id>0L);ids.add(id)};val db=writableDatabase;db.beginTransaction();try{var affected=0;for(id in ids){val rows=revokeDelegatedPermission(id);require(rows==1){"لم يتم إلغاء التفويض $id"};affected+=rows};db.setTransactionSuccessful();JSONObject().apply{put("affected_rows",affected);put("requested_records",ids.size)}}finally{db.endTransaction()}}finally{dbLock.unlock()}
     }
 
     fun revokeDelegatedPermission(id: Long): Int {
