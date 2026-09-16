@@ -3622,6 +3622,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun grantUserPermissionsBatch(jsonData: String): String {
+            val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة")
+            return try{val data=JSONObject(jsonData);if(data.optLong("granted_by",0L)<=0L)data.put("granted_by",getActivity()?.currentUserId?:0L);dataResponse(db.grantUserPermissionsBatch(data))}catch(e:Exception){errorResponse(e.message)}
+        }
+
+        @JavascriptInterface
+        fun revokeUserPermissionsBatch(jsonData: String): String {
+            val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة")
+            return try{dataResponse(db.revokeUserPermissionsBatch(JSONObject(jsonData)))}catch(e:Exception){errorResponse(e.message)}
+        }
+
+        @JavascriptInterface
         fun getGrantedPermissions(): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getGrantedPermissions()) } catch (e: Exception) { errorResponse(e.message) }
@@ -3684,6 +3696,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun grantDelegatedPermissionsBatch(jsonData: String): String {
+            val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة")
+            return try{val data=JSONObject(jsonData);val actorId=getActivity()?.currentUserId?:0L;if(actorId<=0L)return errorResponse("جلسة المستخدم غير متاحة");data.put("delegator_id",actorId);dataResponse(db.grantDelegatedPermissionsBatch(data))}catch(e:Exception){errorResponse(e.message)}
+        }
+
+        @JavascriptInterface
+        fun revokeDelegatedPermissionsBatch(jsonData: String): String {
+            val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة")
+            return try{dataResponse(db.revokeDelegatedPermissionsBatch(JSONObject(jsonData)))}catch(e:Exception){errorResponse(e.message)}
+        }
+
+        @JavascriptInterface
         fun revokeDelegatedPermission(id: Long): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.revokeDelegatedPermission(id); successResponse(rows > 0, if (rows > 0) "تم إلغاء التفويض" else "لم يتم العثور على التفويض") } catch (e: Exception) { errorResponse(e.message) }
@@ -3702,6 +3726,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val data = JSONObject(jsonData)
                 successResponse(db.grantGroupPermission(data), "تم ربط الصلاحية بالمجموعة بنجاح")
             } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun grantGroupPermissionsBatch(jsonData: String): String {
+            val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة")
+            return try{dataResponse(db.grantGroupPermissionsBatch(JSONObject(jsonData)))}catch(e:Exception){errorResponse(e.message)}
+        }
+
+        @JavascriptInterface
+        fun revokeGroupPermissionsBatch(jsonData: String): String {
+            val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة")
+            return try{dataResponse(db.revokeGroupPermissionsBatch(JSONObject(jsonData)))}catch(e:Exception){errorResponse(e.message)}
         }
 
         @JavascriptInterface
