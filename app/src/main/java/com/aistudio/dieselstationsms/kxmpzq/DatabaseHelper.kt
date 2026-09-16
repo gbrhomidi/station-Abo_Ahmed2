@@ -10758,7 +10758,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             db.rawQuery("SELECT 1 FROM roles WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(roleId.toString())).use {
                 require(it.moveToFirst()) { "الدور المحدد غير موجود" }
             }
-            val employeeId = data.optLong("employee_id", 0L)
+            val requestedEmployeeId = data.optLong("employee_id", 0L)
+            val employeeId = if (requestedEmployeeId > 0L) requestedEmployeeId else {
+                db.rawQuery("SELECT id FROM employees WHERE id = 1 AND is_deleted = 0 LIMIT 1", null).use {
+                    if (it.moveToFirst()) 1L else 0L
+                }
+            }
             if (employeeId > 0L) db.rawQuery("SELECT 1 FROM employees WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(employeeId.toString())).use {
                 require(it.moveToFirst()) { "الموظف المرتبط غير موجود" }
             }
@@ -10773,7 +10778,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     val value = data.optString(key).trim()
                     if (value.isNotEmpty()) put(key, value) else putNull(key)
                 }
-                if (data.optLong("employee_id", 0L) > 0) put("employee_id", data.optLong("employee_id")) else putNull("employee_id")
+                if (employeeId > 0L) put("employee_id", employeeId) else putNull("employee_id")
                 put("role_id", data.optInt("role_id", 4))
                 if (data.optInt("station_id", 0) > 0) put("station_id", data.optInt("station_id")) else putNull("station_id")
                 if (data.optInt("branch_id", 0) > 0) put("branch_id", data.optInt("branch_id")) else putNull("branch_id")
@@ -10964,7 +10969,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (data.has("role_id")) db.rawQuery("SELECT 1 FROM roles WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(data.optLong("role_id").toString())).use {
                 require(it.moveToFirst()) { "الدور المحدد غير موجود" }
             }
-            if (data.has("employee_id") && !data.isNull("employee_id") && data.optLong("employee_id") > 0L) db.rawQuery("SELECT 1 FROM employees WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(data.optLong("employee_id").toString())).use {
+            val resolvedEmployeeId: Long = if (data.has("employee_id")) {
+                val requested = data.optLong("employee_id", 0L)
+                if (requested > 0L) requested else {
+                    db.rawQuery("SELECT id FROM employees WHERE id = 1 AND is_deleted = 0 LIMIT 1", null).use {
+                        if (it.moveToFirst()) 1L else 0L
+                    }
+                }
+            } else 0L
+            if (resolvedEmployeeId > 0L) db.rawQuery("SELECT 1 FROM employees WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(resolvedEmployeeId.toString())).use {
                 require(it.moveToFirst()) { "الموظف المرتبط غير موجود" }
             }
             val cv = ContentValues().apply {
@@ -10975,11 +10988,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         if (value.isNotEmpty()) put(key, value) else putNull(key)
                     }
                 }
-                if (data.has("employee_id")) { if (data.isNull("employee_id")) putNull("employee_id") else put("employee_id", data.optLong("employee_id")) }
+                if (data.has("employee_id")) {
+                    if (resolvedEmployeeId > 0L) put("employee_id", resolvedEmployeeId) else putNull("employee_id")
+                }
                 if (data.has("role_id")) put("role_id", data.optInt("role_id"))
-                if (data.has("station_id")) { if (data.isNull("station_id")) putNull("station_id") else put("station_id", data.optInt("station_id")) }
-                if (data.has("branch_id")) { if (data.isNull("branch_id")) putNull("branch_id") else put("branch_id", data.optInt("branch_id")) }
-                if (data.has("company_id")) { if (data.isNull("company_id")) putNull("company_id") else put("company_id", data.optInt("company_id")) }
+                if (data.has("station_id")) {
+                    if (data.isNull("station_id")) putNull("station_id") else put("station_id", data.optInt("station_id"))
+                }
+                if (data.has("branch_id")) {
+                    if (data.isNull("branch_id")) putNull("branch_id") else put("branch_id", data.optInt("branch_id"))
+                }
+                if (data.has("company_id")) {
+                    if (data.isNull("company_id")) putNull("company_id") else put("company_id", data.optInt("company_id"))
+                }
                 if (data.has("preferred_language")) put("preferred_language", data.optString("preferred_language"))
                 if (data.has("theme")) put("theme", data.optString("theme"))
                 if (data.has("status")) {
@@ -10995,10 +11016,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 if (data.has("email_verified")) put("email_verified", data.optInt("email_verified"))
                 if (data.has("phone_verified")) put("phone_verified", data.optInt("phone_verified"))
                 if (data.has("password_expiry_days")) put("password_expiry_days", data.optInt("password_expiry_days"))
-                if (data.has("password_expiry_date")) { if (data.isNull("password_expiry_date")) putNull("password_expiry_date") else put("password_expiry_date", data.optString("password_expiry_date")) }
+                if (data.has("password_expiry_date")) {
+                    if (data.isNull("password_expiry_date")) putNull("password_expiry_date") else put("password_expiry_date", data.optString("password_expiry_date"))
+                }
                 if (data.has("session_timeout")) put("session_timeout", data.optInt("session_timeout"))
                 if (data.has("device_limit")) put("device_limit", data.optInt("device_limit"))
-                if (data.has("locked_until")) { if (data.isNull("locked_until")) putNull("locked_until") else put("locked_until", data.optString("locked_until")) }
+                if (data.has("locked_until")) {
+                    if (data.isNull("locked_until")) putNull("locked_until") else put("locked_until", data.optString("locked_until"))
+                }
                 if (data.has("updated_by") && data.optLong("updated_by", 0L) > 0L) put("updated_by", data.optLong("updated_by"))
                 if (data.has("password")) {
                     val (hash, salt) = hashPassword(data.optString("password"))
