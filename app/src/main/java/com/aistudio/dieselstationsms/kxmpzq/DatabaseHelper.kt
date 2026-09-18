@@ -17003,7 +17003,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             for (key in spec.columns) if (data.has(key) && key != "created_by") putOperationalValue(values, key, data.opt(key))
             if (spec.hasUpdatedAt) values.put("updated_at", getCurrentDateTime())
             val stationId = data.optInt("station_id", 0)
-            if (screenKey == "deliveries") requireDeliveryRelationsInStation(writeDb, data, stationId)
+            if (screenKey == "deliveries") requireDeliveryRelationsInStation(writableDatabase, data, stationId)
             if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_level_log", "fuel_quality_tests")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
             val fleetScope = if (stationId > 0) fleetStationPredicate(screenKey, stationId) else null
             if (screenKey in setOf("vehicles", "drivers", "vehicle_locations", "vehicle_trips", "vehicle_expenses", "vehicle_maintenance", "vehicle_insurance")) {
