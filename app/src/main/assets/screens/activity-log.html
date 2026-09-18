@@ -2160,7 +2160,16 @@
                     // إلى النسخة المحلية عند فتحها رغم توفر قاعدة SQLite.
                     result = bridge.getActivityLogs(JSON.stringify({
                         limit: toSafeInt(p.limit, 500, 1, 2000),
-                        offset: toSafeInt(p.offset, 0, 0, Number.MAX_SAFE_INTEGER)
+                        offset: toSafeInt(p.offset, 0, 0, Number.MAX_SAFE_INTEGER),
+                        type: String(p.type ?? ''),
+                        status: String(p.status ?? ''),
+                        date_from: String(p.date_from ?? ''),
+                        date_to: String(p.date_to ?? ''),
+                        search: String(p.search ?? ''),
+                        user: String(p.user ?? ''),
+                        ip: String(p.ip ?? ''),
+                        table: String(p.table ?? ''),
+                        action: String(p.action ?? '')
                     }));
                     break;
                 case 'getSmsMessages':
@@ -2563,6 +2572,33 @@
         /* ============================================================
            9. Load Data from Database
            ============================================================ */
+        function buildActivityQueryParams(extra = {}) {
+            const params = {
+                limit: 2000,
+                offset: 0,
+                type: currentFilter === 'ai_suggest' ? '' : currentFilter,
+                date_from: window._timeFilterStart || '',
+                date_to: window._timeFilterEnd || '',
+                search: searchQuery || ''
+            };
+            if (advancedSearchActive) {
+                params.user = document.getElementById('advUser')?.value.trim() || '';
+                params.date_from = document.getElementById('advFrom')?.value || params.date_from;
+                params.date_to = document.getElementById('advTo')?.value || params.date_to;
+                params.ip = document.getElementById('advIp')?.value.trim() || '';
+                params.table = document.getElementById('advTable')?.value.trim() || '';
+                params.action = document.getElementById('advAction')?.value.trim() || '';
+                params.status = document.getElementById('advStatus')?.value || '';
+            }
+            return { ...params, ...extra };
+        }
+
+        let reloadTimer = null;
+        function scheduleDataReload() {
+            clearTimeout(reloadTimer);
+            reloadTimer = setTimeout(() => loadData(), 250);
+        }
+
         async function loadData() {
             if (isLoadingData) return;
             isLoadingData = true;
@@ -2570,13 +2606,12 @@
             showLoading(true);
             try {
                 const [activityRes, currentUserRes] = await Promise.all([
-                    apiCall('getActivityLogs', { limit: 500 }),
+                    apiCall('getActivityLogs', buildActivityQueryParams()),
                     apiCall('getCurrentUser', {})
                 ]);
                 if (!activityRes.success || !Array.isArray(activityRes.data)) {
                     throw new Error(activityRes.error || activityRes.message || 'فشل قراءة سجل النشاط');
                 }
-
                 baseLogs = activityRes.data.map(log => ({
                     ...log,
                     _type: log.log_type || 'user_activity',
@@ -2600,11 +2635,9 @@
                     else currentUserRole = ROLES.VIEWER;
                 }
 
-                // تحميل الإعدادات
-                loadSettings();
-
+                await loadSettings();
                 initFuse();
-                applyTimeFilter();
+                currentPage = 1;
                 renderCards();
                 updateStats();
                 updateCharts();
@@ -2612,21 +2645,23 @@
                 generateAIInsights();
             } catch (e) {
                 console.error('Load error:', e);
-                baseLogs = LocalDB.get('logs', []);
-                allLogs = [...baseLogs];
                 allUsers = LocalDB.get('users', []);
+                const cached = LocalDB.get('logs', []);
+                baseLogs = Array.isArray(cached) ? cached : [];
+                allLogs = [...baseLogs];
                 initFuse();
-                applyTimeFilter();
+                currentPage = 1;
                 renderCards();
                 updateStats();
                 updateCharts();
                 updateAlerts();
-                showToast('⚠️ تعذر الاتصال بقاعدة البيانات؛ عُرضت آخر نسخة محلية', 'warning');
+                showToast('❌ تعذر تحميل سجل النشاط من SQLite: ' + getErrorMessage(e, 'خطأ غير معروف'), 'error');
             } finally {
                 isLoadingData = false;
                 showLoading(false);
             }
         }
+
 
         function renderSkeleton() {
             const container = document.getElementById('cardsContainer');
@@ -2669,8 +2704,9 @@
         function handleSearch(query) {
             searchQuery = query.trim();
             currentPage = 1;
-            renderCards();
+            scheduleDataReload();
         }
+
 
         /* ============================================================
            11. Time Filters
@@ -2687,10 +2723,10 @@
                 return;
             }
             applyTimeFilter();
-            renderCards();
-            updateStats();
-            updateCharts();
+            currentPage = 1;
+            loadData();
         }
+
 
         function applyTimeFilter() {
             const now = new Date();
@@ -2759,7 +2795,7 @@
             document.body.style.overflow = '';
         }
 
-        function applyAdvancedSearch() {
+        async function applyAdvancedSearch() {
             const user = document.getElementById('advUser').value.trim();
             const from = document.getElementById('advFrom').value;
             const to = document.getElementById('advTo').value;
@@ -2768,39 +2804,16 @@
             const action = document.getElementById('advAction').value.trim();
             const status = document.getElementById('advStatus').value;
 
-            let filtered = [...allLogs];
-
-            if (user) filtered = filtered.filter(l => (l.username || '').toLowerCase().includes(user.toLowerCase()));
-            if (from) {
-                const f = new Date(from + 'T00:00:00').getTime();
-                filtered = filtered.filter(l => {
-                    const d = getLogTimestamp(l);
-                    return !isNaN(d) && d >= f;
-                });
+            if (from && to && from > to) {
+                showToast('❌ تاريخ البداية يجب أن يسبق أو يساوي تاريخ النهاية', 'error');
+                return;
             }
-            if (to) {
-                const t = new Date(to + 'T23:59:59.999').getTime();
-                filtered = filtered.filter(l => {
-                    const d = getLogTimestamp(l);
-                    return !isNaN(d) && d <= t;
-                });
-            }
-            if (ip) filtered = filtered.filter(l => (l.ip_address || '').includes(ip));
-            if (table) filtered = filtered.filter(l => (l.table_name || l.source || '').toLowerCase().includes(table
-            .toLowerCase()));
-            if (action) filtered = filtered.filter(l => (l.action || l.action_type || l.log_type || '').toLowerCase()
-                .includes(action.toLowerCase()));
-            if (status) filtered = filtered.filter(l => getStatusValue(l) === status);
-
             advancedSearchActive = Boolean(user || from || to || ip || table || action || status);
-            allLogs = filtered;
             currentPage = 1;
-            renderCards();
-            updateStats();
-            updateCharts();
             closeAdvancedSearch();
-            showToast('✅ تم تطبيق البحث المتقدم – ' + filtered.length + ' نتيجة', 'success');
+            await loadData();
         }
+
 
         function resetAdvancedSearch() {
             document.getElementById('advUser').value = '';
@@ -2811,17 +2824,13 @@
             document.getElementById('advAction').value = '';
             document.getElementById('advStatus').value = '';
             advancedSearchActive = false;
-            allLogs = [...baseLogs];
             currentPage = 1;
             initFuse();
             applyTimeFilter();
-            renderCards();
-            updateStats();
-            updateCharts();
-            updateAlerts();
             closeAdvancedSearch();
-            showToast('🔄 تم إعادة تعيين البحث', 'info');
+            loadData();
         }
+
 
         /* ============================================================
            13. Compare Periods
@@ -4069,14 +4078,14 @@
                 c.classList.remove('active');
                 c.setAttribute('aria-selected', 'false');
             });
-            if (btn) { btn.classList.add('active');
-                btn.setAttribute('aria-selected', 'true'); }
+            if (btn) {
+                btn.classList.add('active');
+                btn.setAttribute('aria-selected', 'true');
+            }
             currentPage = 1;
-            renderCards();
-            updateStats();
-            updateCharts();
-            updateAlerts();
+            loadData();
         }
+
 
         /* ============================================================
            26. Pull-to-Refresh
