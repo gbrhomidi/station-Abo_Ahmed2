@@ -10989,7 +10989,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                             val jobTitleAr = if (cursor.isNull(2)) "" else cursor.getString(2)
                             if (department.isNotBlank()) put("department", department)
                             if (jobTitle.isNotBlank()) put("job_title", jobTitle)
-                            if (jobTitleAr.isNotBlank()) put("full_name_ar", data.optString("full_name_ar").ifBlank { fullName })
+                            if (jobTitleAr.isNotBlank() && data.optString("full_name_ar").isBlank()) put("full_name_ar", jobTitleAr)
                         }
                     }
                 }
