@@ -16125,10 +16125,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val productId = params.optLong("product_id", 0L)
                 val customerId = params.optLong("customer_id", 0L)
                 val shiftId = params.optLong("shift_id", 0L)
+                val orderType = params.optString("order_type", "").trim()
                 if (paymentMethod.isNotBlank()) { where += "payment_method = ?"; args += paymentMethod }
                 if (productId > 0L) { where += "product_id = ?"; args += productId.toString() }
                 if (customerId > 0L) { where += "customer_party_id = ?"; args += customerId.toString() }
                 if (shiftId > 0L) { where += "shift_id = ?"; args += shiftId.toString() }
+                if (orderType.isNotBlank()) { where += "order_type = ?"; args += orderType }
             }
             if (screenKey == "meter_readings") {
                 val tankId = params.optLong("tank_id", 0L)
