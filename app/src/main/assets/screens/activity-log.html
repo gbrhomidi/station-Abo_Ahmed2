@@ -2860,65 +2860,51 @@
             document.body.style.overflow = '';
         }
 
-        function runComparison() {
+        async function runComparison() {
             const from1 = document.getElementById('compareFrom1').value;
             const to1 = document.getElementById('compareTo1').value;
             const from2 = document.getElementById('compareFrom2').value;
             const to2 = document.getElementById('compareTo2').value;
-
             if (!from1 || !to1 || !from2 || !to2) {
-                showToast('❌ الرجاء تحديد جميع التواريخ', 'error');
-                return;
+                showToast('❌ الرجاء تحديد جميع التواريخ', 'error'); return;
             }
-
-            const t1 = new Date(from1 + 'T00:00:00').getTime();
-            const t2 = new Date(to1 + 'T23:59:59.999').getTime();
-            const t3 = new Date(from2 + 'T00:00:00').getTime();
-            const t4 = new Date(to2 + 'T23:59:59.999').getTime();
-            if (t1 > t2 || t3 > t4) {
-                showToast('❌ يجب أن يكون تاريخ البداية قبل تاريخ النهاية', 'error');
-                return;
+            if (from1 > to1 || from2 > to2) {
+                showToast('❌ يجب أن يكون تاريخ البداية قبل أو يساوي النهاية', 'error'); return;
             }
-
-            const data1 = allLogs.filter(l => {
-                const d = getLogTimestamp(l);
-                return !isNaN(d) && d >= t1 && d <= t2;
-            });
-            const data2 = allLogs.filter(l => {
-                const d = getLogTimestamp(l);
-                return !isNaN(d) && d >= t3 && d <= t4;
-            });
-
-            const container = document.getElementById('compareResults');
-            if (data1.length === 0 && data2.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>لا توجد بيانات في الفترتين</p></div>';
-                return;
+            showLoading(true);
+            try {
+                const [r1, r2] = await Promise.all([
+                    apiCall('getActivityLogs', {limit:2000, date_from:from1, date_to:to1, type:'', status:'', search:''}),
+                    apiCall('getActivityLogs', {limit:2000, date_from:from2, date_to:to2, type:'', status:'', search:''})
+                ]);
+                if (!r1.success || !r2.success) throw new Error(r1.error || r2.error || 'فشل قراءة بيانات المقارنة');
+                const data1 = Array.isArray(r1.data) ? r1.data : [];
+                const data2 = Array.isArray(r2.data) ? r2.data : [];
+                if (data1.length === 0 && data2.length === 0) {
+                    document.getElementById('compareResults').innerHTML = '<div class="empty-state"><p>لا توجد بيانات في الفترتين</p></div>';
+                    return;
+                }
+                const users1 = new Set(data1.map(l => l.username || l.user_id).filter(Boolean)).size;
+                const users2 = new Set(data2.map(l => l.username || l.user_id).filter(Boolean)).size;
+                const errors1 = data1.filter(l => ['fail','error','failed'].includes(getStatusValue(l))).length;
+                const errors2 = data2.filter(l => ['fail','error','failed'].includes(getStatusValue(l))).length;
+                document.getElementById('compareResults').innerHTML = `
+                    <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+                        <thead><tr><th>المقياس</th><th>الفترة الأولى</th><th>الفترة الثانية</th><th>الفرق</th></tr></thead>
+                        <tbody>
+                            <tr><td>عدد النشاطات</td><td>${data1.length}</td><td>${data2.length}</td><td>${data1.length-data2.length}</td></tr>
+                            <tr><td>مستخدمين نشطين</td><td>${users1}</td><td>${users2}</td><td>${users1-users2}</td></tr>
+                            <tr><td>الأخطاء</td><td>${errors1}</td><td>${errors2}</td><td>${errors1-errors2}</td></tr>
+                        </tbody>
+                    </table>`;
+                showToast('✅ تمت المقارنة من SQLite بنجاح', 'success');
+            } catch (e) {
+                showToast('❌ فشل المقارنة: ' + getErrorMessage(e), 'error');
+            } finally {
+                showLoading(false);
             }
-
-            const users1 = new Set(data1.map(l => l.username || l.user_id).filter(Boolean)).size;
-            const users2 = new Set(data2.map(l => l.username || l.user_id).filter(Boolean)).size;
-            const errors1 = data1.filter(l => {
-                const s = getStatusValue(l);
-                return s === 'fail' || s === 'error' || s === 'failed';
-            }).length;
-            const errors2 = data2.filter(l => {
-                const s = getStatusValue(l);
-                return s === 'fail' || s === 'error' || s === 'failed';
-            }).length;
-
-            let html = `
-                <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
-                    <thead><tr><th>المقياس</th><th>الفترة الأولى</th><th>الفترة الثانية</th><th>الفرق</th></tr></thead>
-                    <tbody>
-                        <tr><td>عدد النشاطات</td><td>${data1.length}</td><td>${data2.length}</td><td style="color:${data1.length > data2.length ? 'var(--success)' : 'var(--error)'};">${data1.length - data2.length}</td></tr>
-                        <tr><td>مستخدمين نشطين</td><td>${users1}</td><td>${users2}</td><td style="color:${users1 > users2 ? 'var(--success)' : 'var(--error)'};">${users1 - users2}</td></tr>
-                        <tr><td>الأخطاء</td><td>${errors1}</td><td>${errors2}</td><td style="color:${errors1 < errors2 ? 'var(--success)' : 'var(--error)'};">${errors1 - errors2}</td></tr>
-                    </tbody>
-                </table>
-            `;
-            container.innerHTML = html;
-            showToast('✅ تمت المقارنة بنجاح', 'success');
         }
+
 
         /* ============================================================
            14. Settings
