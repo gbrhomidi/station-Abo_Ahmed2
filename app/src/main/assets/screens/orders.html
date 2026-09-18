@@ -1357,10 +1357,7 @@ body{padding-bottom:100px}
         toast('تم توليد التقرير من SQLite بنجاح', 'success');
     }
 
-    function exportData() {
-        var rows = state.filtered;
-        if (!rows.length) {
-            toa    function printOrdersReport() {
+    function printOrdersReport() {
         if (!bridge || typeof bridge.printCurrentPage !== 'function') {
             toast('عقد الطباعة غير متاح في Android Bridge', 'error');
             return;
@@ -1377,8 +1374,11 @@ body{padding-bottom:100px}
             toast('عقد تصدير CSV غير متاح في Android Bridge', 'error');
             return;
         }
-        try { bridge.exportOperationalCsv('sales_transactions', JSON.stringify({ order_type:'order' })); }
-        catch (e) { toast(e.message || 'فشل بدء تصدير CSV', 'error'); }
+        try {
+            bridge.exportOperationalCsv('sales_transactions', JSON.stringify({ order_type:'order' }));
+        } catch (e) {
+            toast(e.message || 'فشل بدء تصدير CSV', 'error');
+        }
     }
 
 
