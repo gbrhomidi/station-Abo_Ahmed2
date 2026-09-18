@@ -1318,6 +1318,7 @@ body{padding-bottom:100px}
     async function generateReport() {
         var from = $('reportFrom').value || today();
         var to = $('reportTo').value || today();
+        if (from > to) { toast('تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية', 'error'); return; }
         var reportResponse;
         try {
             reportResponse = await callBridge('generateSalesTransactionReport', [JSON.stringify({ order_type:'order', from_date:from, to_date:to, limit:1000 })]);
@@ -1375,7 +1376,7 @@ body{padding-bottom:100px}
             return;
         }
         try {
-            bridge.exportOperationalCsv('sales_transactions', JSON.stringify({ order_type:'order' }));
+            var from = $('reportFrom').value || today(); var to = $('reportTo').value || today(); if (from > to) { toast('تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية', 'error'); return; } bridge.exportOperationalCsv('sales_transactions', JSON.stringify({ order_type:'order', from_date:from, to_date:to }));
         } catch (e) {
             toast(e.message || 'فشل بدء تصدير CSV', 'error');
         }

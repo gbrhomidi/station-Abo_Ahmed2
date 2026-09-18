@@ -10955,6 +10955,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (employeeId > 0L) db.rawQuery("SELECT 1 FROM employees WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(employeeId.toString())).use {
                 require(it.moveToFirst()) { "الموظف المرتبط غير موجود" }
             }
+            val stationId = data.optLong("station_id", 0L)
+            val branchId = data.optLong("branch_id", 0L)
+            val companyId = data.optLong("company_id", 0L)
+            if (stationId > 0L) {
+                db.rawQuery("SELECT branch_id, company_id FROM stations WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(stationId.toString())).use { cursor ->
+                    require(cursor.moveToFirst()) { "المحطة المحددة غير موجودة" }
+                    val actualBranch = if (cursor.isNull(0)) 0L else cursor.getLong(0)
+                    val actualCompany = if (cursor.isNull(1)) 0L else cursor.getLong(1)
+                    require(branchId <= 0L || branchId == actualBranch) { "معرف الفرع لا يطابق المحطة المحددة" }
+                    require(companyId <= 0L || companyId == actualCompany) { "معرف الشركة لا يطابق المحطة المحددة" }
+                }
+            }
+
             val (hash, salt) = hashPassword(password)
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
@@ -10968,6 +10981,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
                 if (employeeId > 0L) put("employee_id", employeeId) else putNull("employee_id")
                 put("role_id", data.optInt("role_id", 4))
+                if (employeeId > 0L) {
+                    db.rawQuery("SELECT department, job_title, job_title_ar FROM employees WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(employeeId.toString())).use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val department = if (cursor.isNull(0)) "" else cursor.getString(0)
+                            val jobTitle = if (cursor.isNull(1)) "" else cursor.getString(1)
+                            val jobTitleAr = if (cursor.isNull(2)) "" else cursor.getString(2)
+                            if (department.isNotBlank()) put("department", department)
+                            if (jobTitle.isNotBlank()) put("job_title", jobTitle)
+                            if (jobTitleAr.isNotBlank() && data.optString("full_name_ar").isBlank()) put("full_name_ar", jobTitleAr)
+                        }
+                    }
+                }
                 if (data.optInt("station_id", 0) > 0) put("station_id", data.optInt("station_id")) else putNull("station_id")
                 if (data.optInt("branch_id", 0) > 0) put("branch_id", data.optInt("branch_id")) else putNull("branch_id")
                 if (data.optInt("company_id", 0) > 0) put("company_id", data.optInt("company_id")) else putNull("company_id")
@@ -11168,6 +11193,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (resolvedEmployeeId > 0L) db.rawQuery("SELECT 1 FROM employees WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(resolvedEmployeeId.toString())).use {
                 require(it.moveToFirst()) { "الموظف المرتبط غير موجود" }
             }
+            val stationId = data.optLong("station_id", 0L)
+            val branchId = data.optLong("branch_id", 0L)
+            val companyId = data.optLong("company_id", 0L)
+            if (stationId > 0L) {
+                db.rawQuery("SELECT branch_id, company_id FROM stations WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(stationId.toString())).use { cursor ->
+                    require(cursor.moveToFirst()) { "المحطة المحددة غير موجودة" }
+                    val actualBranch = if (cursor.isNull(0)) 0L else cursor.getLong(0)
+                    val actualCompany = if (cursor.isNull(1)) 0L else cursor.getLong(1)
+                    require(branchId <= 0L || branchId == actualBranch) { "معرف الفرع لا يطابق المحطة المحددة" }
+                    require(companyId <= 0L || companyId == actualCompany) { "معرف الشركة لا يطابق المحطة المحددة" }
+                }
+            }
+
             val cv = ContentValues().apply {
                 val textFields = listOf("full_name", "full_name_ar", "display_name", "avatar_path", "avatar_file_name", "email", "phone", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "preferred_language", "theme", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data")
                 textFields.forEach { key ->
@@ -11178,6 +11216,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
                 if (data.has("employee_id")) {
                     if (resolvedEmployeeId > 0L) put("employee_id", resolvedEmployeeId) else putNull("employee_id")
+                }
+                if (resolvedEmployeeId > 0L) {
+                    db.rawQuery("SELECT department, job_title FROM employees WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(resolvedEmployeeId.toString())).use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val department = if (cursor.isNull(0)) "" else cursor.getString(0)
+                            val jobTitle = if (cursor.isNull(1)) "" else cursor.getString(1)
+                            if (department.isNotBlank()) put("department", department)
+                            if (jobTitle.isNotBlank()) put("job_title", jobTitle)
+                        }
+                    }
                 }
                 if (data.has("role_id")) put("role_id", data.optInt("role_id"))
                 if (data.has("station_id")) {

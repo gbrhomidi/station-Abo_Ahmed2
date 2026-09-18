@@ -1658,7 +1658,7 @@
             }`;
         }
 
-        async function reloadForFilter(){
+        async async function reloadForFilter(){
 
             const params = {};
 
@@ -1859,27 +1859,36 @@
         }
 
         function exportReport() {
-            const resultDiv = document.getElementById('reportResult');
-            const table = resultDiv.querySelector('table');
-            if (!table) { showToast('⚠️ لا توجد بيانات للتصدير', 'warning'); return; }
-
-            const rows = table.querySelectorAll('tr');
-            let csv = '\uFEFF';
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('th, td');
-                const rowData = Array.from(cells).map(cell => `"${cell.textContent.trim().replace(/"/g, '""')}"`);
-                csv += rowData.join(',') + '\n';
-            });
-
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `تقرير_المبيعات_${new Date().toISOString().split('T')[0]}.csv`;
-            a.click();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-            showToast('✅ تم تصدير التقرير', 'success');
+            const from = document.getElementById('reportFrom')?.value || '';
+            const to = document.getElementById('reportTo')?.value || '';
+            if (!from || !to) { showToast('❌ الرجاء تحديد الفترة قبل التصدير', 'error'); return; }
+            if (from > to) { showToast('❌ تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية', 'error'); return; }
+            if (!window.AndroidInterface || typeof window.AndroidInterface.exportOperationalCsv !== 'function') {
+                showToast('عقد تصدير CSV غير متاح في Android Bridge', 'error');
+                return;
+            }
+            try {
+                const result = window.AndroidInterface.exportOperationalCsv(
+                    'sales_transactions',
+                    JSON.stringify({ from_date: from, to_date: to })
+                );
+                const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+                if (parsed && parsed.success === false) throw new Error(parsed.error || 'فشل بدء التصدير');
+                showToast('⏳ جارٍ إنشاء ملف CSV فعلياً عبر Android', 'success');
+            } catch (e) {
+                showToast(e.message || 'فشل بدء تصدير CSV', 'error');
+            }
         }
+
+        window.onOperationalExportResult = function(result) {
+            try {
+                const value = typeof result === 'string' ? JSON.parse(result) : result;
+                if (value && value.success) showToast('✅ تم إنشاء ملف CSV: ' + (value.path || ''), 'success');
+                else showToast((value && value.error) || 'فشل إنشاء ملف CSV', 'error');
+            } catch (e) {
+                showToast('تعذر قراءة نتيجة تصدير CSV', 'error');
+            }
+        };
 
         // ============================================================
         // 11. التنبيهات
@@ -2101,13 +2110,13 @@
 
             switch (action) {
                 case 'export':
-                    showToast('⚠️ تصدير سجل المبيعات غير متاح في هذه الشاشة', 'warning');
+                    exportReport();
                     break;
                 case 'pdf':
                     showToast('⚠️ PDF غير متاح في هذه الشاشة؛ استخدم الطباعة', 'warning');
                     break;
                 case 'print':
-                    window.print();
+                    printSalesReport();
                     break;
                 case 'refresh':
                     loadSales();
@@ -2118,6 +2127,18 @@
                     break;
                 default:
                     showToast('❌ إجراء غير معروف', 'error');
+            }
+        }
+
+        function printSalesReport() {
+            if (!window.AndroidInterface || typeof window.AndroidInterface.printCurrentPage !== 'function') {
+                showToast('عقد الطباعة غير متاح في Android Bridge', 'error');
+                return;
+            }
+            try {
+                window.AndroidInterface.printCurrentPage();
+            } catch (e) {
+                showToast(e.message || 'فشل بدء الطباعة', 'error');
             }
         }
 

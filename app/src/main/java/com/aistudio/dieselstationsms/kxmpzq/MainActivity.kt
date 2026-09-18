@@ -5640,7 +5640,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun exportOperationalCsv(screenKey: String, jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "exportOperationalCsv called: $screenKey")
-            if (screenKey !in setOf("sales_transactions", "deliveries")) {
+            if (screenKey !in setOf("sales_transactions", "fuel_sales", "deliveries")) {
                 return errorResponse("مسار التصدير غير مسموح")
             }
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
