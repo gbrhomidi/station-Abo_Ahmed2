@@ -3610,6 +3610,27 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getScreenPermissions(screenId)) } catch (e: Exception) { errorResponse(e.message) }
         }
+        @JavascriptInterface
+        fun getScreenPermissionIds(screenId: Long): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getScreenPermissionIds(screenId)) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun grantScreenPermissionsBatch(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val data = JSONObject(jsonData)
+                if (data.optLong("granted_by", 0L) <= 0L) data.put("granted_by", getActivity()?.currentUserId ?: 0L)
+                dataResponse(db.grantScreenPermissionsBatch(data))
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun revokeScreenPermissionsBatch(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.revokeScreenPermissionsBatch(JSONObject(jsonData))) } catch (e: Exception) { errorResponse(e.message) }
+        }
 
         @JavascriptInterface
         fun grantUserPermission(jsonData: String): String {
@@ -5920,6 +5941,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 DebugLogger.logException("Permissions", e)
                 errorResponse(e.message)
             }
+        }
+        @JavascriptInterface
+        fun getUserPermissionIds(userId: Long): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getUserPermissionIds(userId)) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface

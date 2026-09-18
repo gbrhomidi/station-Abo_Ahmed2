@@ -1359,8 +1359,12 @@ function renderPermissionCheckboxes(containerId, currentCheckedIds, filterText) 
     const container = document.getElementById(containerId);
     if (!container) return;
     const q = (filterText || '').trim().toLowerCase();
+    const selectedScreenId = Number(document.getElementById('grantScreen')?.value || 0);
+    const selectedScreen = allScreens.find(s => Number(s.id || s.screen_id) === selectedScreenId);
+    const screenModule = selectedScreen?.module || '';
     const checkedSet = new Set((currentCheckedIds || []).map(Number));
     const items = allPermissions.filter(p => {
+        if (screenModule && p.module && p.module !== screenModule) return false;
         if (!q) return true;
         const name = (p.permission_name || '').toLowerCase();
         const ar = (p.permission_name_ar || '').toLowerCase();
@@ -1438,17 +1442,28 @@ function populateGrantFormDropdowns() {
     window.__grantCurrentChecked = [];
     renderPermissionCheckboxes('grantPermissionsList', [], window.__grantPermFilter || '');
 
+    screenSelect.onchange = () => {
+        window.__grantPermFilter = '';
+        const filter = document.getElementById('grantPermFilter');
+        if (filter) filter.value = '';
+        renderPermissionCheckboxes('grantPermissionsList', window.__grantCurrentChecked || [], '');
+        validateGrantScope();
+    };
+
     userSelect.onchange = async () => {
         const uid = Number(userSelect.value || 0);
-        window.__grantCurrentChecked = [];
-        if (uid > 0) {
+        if (uid <= 0) {
+            window.__grantCurrentChecked = [];
+        } else {
             try {
                 const res = await apiCall('getUserPermissionIds', { userId: uid });
                 if (res.success && Array.isArray(res.data)) {
                     window.__grantCurrentChecked = res.data.map(Number);
+                } else {
+                    throw new Error((res && (res.error || res.message)) || 'فشل تحميل صلاحيات المستخدم');
                 }
             } catch (_) {
-                // في حال فشل القراءة، تبقى القائمة بدون تحديد
+                // لا نمسح آخر حالة صحيحة عند فشل القراءة المؤقت.
             }
         }
         renderPermissionCheckboxes('grantPermissionsList', window.__grantCurrentChecked, window.__grantPermFilter || '');
