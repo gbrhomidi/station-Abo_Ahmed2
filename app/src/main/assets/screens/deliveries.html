@@ -2473,7 +2473,7 @@
                 <button
                     type="button"
                     class="btn"
-                    onclick="window.print()">
+                    onclick="printDeliveriesReport()">
 
                     <i class="fas fa-print"></i>
                     طباعة
@@ -2528,8 +2528,8 @@
 
         online: true,
 
-        loadedAt: null
-
+        loadedAt: null,
+        latestSaleRequestId: 0
     };
 
     const $ = id =>
@@ -3124,8 +3124,8 @@
 
             const response =
                 await invoke(
-                    'getDeliveryRecords',
-                    ['{}']
+                    'getDeliveriesPage',
+                    [JSON.stringify({ limit: 100, offset: 0 })]
                 );
 
             state.rows =
@@ -4008,6 +4008,7 @@
     ) {
 
         if (!partyId) return;
+        const requestId = ++state.latestSaleRequestId;
 
         clearFieldWarnings();
 
@@ -4029,10 +4030,9 @@
             const response =
                 await invoke(
                     'getLatestCustomerSaleForDelivery',
-                    [
-                        Number(partyId)
-                    ]
+                    [Number(partyId)]
                 );
+            if (requestId !== state.latestSaleRequestId || Number($('f_party_id').value || 0) !== Number(partyId)) return;
 
             const payload =
                 dataOf(response);
@@ -4050,18 +4050,18 @@
             ) {
 
                 hideLatestSale();
-
+                $('f_sale_id').style.display = 'block';
+                $('f_sale_id').removeAttribute('readonly');
                 showFormNotice(
-                    'لم يتم العثور على عملية شراء سابقة لهذا العميل. يمكنك إدخال البيانات يدوياً.',
+                    'لم يتم العثور على طلب سابق. أدخل معرف الطلب/البيع المرتبط بالتوصيل يدوياً.',
                     'warning'
                 );
 
                 return;
             }
 
-            fillFromLatestSale(
-                sale
-            );
+            $('f_sale_id').style.display = 'none';
+            fillFromLatestSale(sale);
 
             showLatestSale(
                 sale
@@ -4073,8 +4073,10 @@
             );
 
         } catch (error) {
-
+            if (requestId !== state.latestSaleRequestId) return;
             hideLatestSale();
+            $('f_sale_id').style.display = 'block';
+            $('f_sale_id').removeAttribute('readonly');
 
             showFormNotice(
                 error.message ||
@@ -5210,258 +5212,62 @@
         );
     }
 
-    function generateReport() {
-
-        const from =
-            $('reportFrom').value;
-
-        const to =
-            $('reportTo').value;
-
-        const rows =
-            state.rows.filter(
-                row => {
-
-                    if (
-                        !row.delivery_date
-                    ) {
-                        return false;
-                    }
-
-                    const d =
-                        String(
-                            row.delivery_date
-                        ).slice(0,10);
-
-                    return (
-                        (!from || d >= from) &&
-                        (!to || d <= to)
-                    );
-                }
-            );
-
-        const completed =
-            rows.filter(
-                r =>
-                    r.status ===
-                    'completed'
-            ).length;
-
-        const pending =
-            rows.filter(
-                r =>
-                    r.status ===
-                    'pending'
-            ).length;
-
-        const cancelled =
-            rows.filter(
-                r =>
-                    r.status ===
-                    'cancelled'
-            ).length;
-
-        const quantity =
-            rows.reduce(
-                (sum,r) =>
-                    sum +
-                    number(
-                        r.quantity
-                    ),
-                0
-            );
-
-        const total =
-            rows.reduce(
-                (sum,r) =>
-                    sum +
-                    number(
-                        r.total_amount
-                    ),
-                0
-            );
-
-        $('reportResults')
-            .innerHTML =
-
-            `
-                <div class="report-summary">
-
-                    <div class="report-box">
-                        <strong>
-                            ${rows.length}
-                        </strong>
-                        <span>
-                            إجمالي التوصيلات
-                        </span>
-                    </div>
-
-                    <div class="report-box">
-                        <strong>
-                            ${completed}
-                        </strong>
-                        <span>
-                            تمت
-                        </span>
-                    </div>
-
-                    <div class="report-box">
-                        <strong>
-                            ${pending}
-                        </strong>
-                        <span>
-                            مؤجلة
-                        </span>
-                    </div>
-
-                    <div class="report-box">
-                        <strong>
-                            ${cancelled}
-                        </strong>
-                        <span>
-                            ملغاة
-                        </span>
-                    </div>
-
-                    <div class="report-box">
-                        <strong>
-                            ${quantity.toLocaleString('ar-YE')}
-                        </strong>
-                        <span>
-                            إجمالي الكمية
-                        </span>
-                    </div>
-
-                    <div class="report-box">
-                        <strong>
-                            ${money(total)}
-                        </strong>
-                        <span>
-                            إجمالي المبالغ
-                        </span>
-                    </div>
-
-                </div>
-            `;
-    }
-
-    /* ================================================================
-       CSV
-       ================================================================ */
-
-    function exportCSV() {
-
-        const rows =
-            state.filtered;
-
-        if (!rows.length) {
-
-            toast(
-                'لا توجد بيانات لتصديرها.',
-                true
-            );
-
+    async function generateReport() {
+        const from = $('reportFrom').value || today();
+        const to = $('reportTo').value || today();
+        let response;
+        try {
+            response = await invoke('generateDeliveryReport', [JSON.stringify({ from_date: from, to_date: to, limit: 1000 })]);
+        } catch (error) {
+            toast(error.message || 'تعذر توليد تقرير التوصيلات من SQLite.', true);
             return;
         }
-
-        const headers = [
-
-            'id',
-            'sale_id',
-            'party_id',
-            'party_name',
-            'vehicle_id',
-            'vehicle_name',
-            'driver_id',
-            'driver_name',
-            'shift_id',
-            'shift_code',
-            'quantity',
-            'fuel_type',
-            'price_per_liter',
-            'total_amount',
-            'status',
-            'delivery_date',
-            'location',
-            'created_at',
-            'notes'
-
-        ];
-
-        const csv = [
-
-            headers.join(','),
-
-            ...rows.map(
-                row =>
-                    headers
-                        .map(
-                            key =>
-                                csvCell(
-                                    row[key]
-                                )
-                        )
-                        .join(',')
-            )
-
-        ].join('\n');
-
-        const blob =
-            new Blob(
-                [
-                    '\uFEFF' +
-                    csv
-                ],
-                {
-                    type:
-                        'text/csv;charset=utf-8;'
-                }
-            );
-
-        const url =
-            URL.createObjectURL(
-                blob
-            );
-
-        const a =
-            document.createElement(
-                'a'
-            );
-
-        a.href =
-            url;
-
-        a.download =
-            'deliveries.csv';
-
-        document.body
-            .appendChild(a);
-
-        a.click();
-
-        a.remove();
-
-        URL.revokeObjectURL(
-            url
-        );
+        const report = dataOf(response) || {};
+        const totals = report.totals || {};
+        const rows = Array.isArray(report.rows) ? report.rows : [];
+        if (!rows.length) {
+            $('reportResults').innerHTML = '<div class="empty-state">لا توجد توصيلات في هذه الفترة.</div>';
+            return;
+        }
+        const completed = rows.filter(r => normalizeStatus(r.status) === 'completed').length;
+        const pending = rows.filter(r => normalizeStatus(r.status) === 'pending').length;
+        const cancelled = rows.filter(r => normalizeStatus(r.status) === 'cancelled').length;
+        const quantity = Number(totals.quantity || 0);
+        const total = Number(totals.total_amount || 0);
+        $('reportResults').innerHTML = `
+            <div class="report-summary">
+                <div class="report-box"><strong>${Number(report.total_count || rows.length)}</strong><span>إجمالي التوصيلات</span></div>
+                <div class="report-box"><strong>${completed}</strong><span>تمت (ضمن الصفحة)</span></div>
+                <div class="report-box"><strong>${pending}</strong><span>مؤجلة (ضمن الصفحة)</span></div>
+                <div class="report-box"><strong>${cancelled}</strong><span>ملغاة (ضمن الصفحة)</span></div>
+                <div class="report-box"><strong>${quantity.toLocaleString('ar-YE')}</strong><span>إجمالي الكمية</span></div>
+                <div class="report-box"><strong>${money(total)}</strong><span>إجمالي المبالغ</span></div>
+            </div>
+        `;
+        toast('تم توليد تقرير التوصيلات من SQLite بنجاح.');
     }
 
-    function csvCell(
-        value
-    ) {
-
-        const text =
-            String(
-                value ?? ''
-            ).replace(
-                /"/g,
-                '""'
-            );
-
-        return '"' +
-            text +
-            '"';
+    function printDeliveriesReport() {
+        if (!bridge || typeof bridge.printCurrentPage !== 'function') {
+            toast('عقد الطباعة غير متاح في Android Bridge', true);
+            return;
+        }
+        try { bridge.printCurrentPage(); } catch (e) { toast(e.message || 'فشل بدء الطباعة', true); }
     }
+
+    function exportCSV() {
+        if (!state.rows.length) {
+            toast('لا توجد بيانات لتصديرها.', true);
+            return;
+        }
+        if (!bridge || typeof bridge.exportOperationalCsv !== 'function') {
+            toast('عقد تصدير CSV غير متاح في Android Bridge', true);
+            return;
+        }
+        try { bridge.exportOperationalCsv('deliveries', JSON.stringify({})); }
+        catch (e) { toast(e.message || 'فشل بدء تصدير CSV', true); }
+    }
+
 
     /* ================================================================
        MODALS
