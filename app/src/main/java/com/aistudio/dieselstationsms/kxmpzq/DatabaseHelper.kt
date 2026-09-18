@@ -9239,7 +9239,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val total = db.rawQuery(finalCountSql, args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
         val sortColumn = when (data.optString("sort_by")) { "delivery_date" -> "d.delivery_date"; "total_amount" -> "d.total_amount"; "status" -> "d.status"; else -> "d.id" }
         val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
-        val rows = db.rawQuery("""SELECT d.id AS delivery_id, d.sale_id, s.sale_code, s.invoice_number, d.party_id, COALESCE(p.commercial_name, p.commercial_name_ar, '') AS customer_name, d.vehicle_id, d.driver_id, d.delivery_date, d.quantity, d.fuel_type, d.price_per_liter, d.total_amount, d.status, d.location, d.notes, d.created_at FROM deliveries d JOIN sales_transactions s ON s.id = d.sale_id LEFT JOIN parties p ON p.id = d.party_id WHERE $whereSql ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset""", args.toTypedArray()).use { cursorToJsonArray(it) }
+        val rows = db.rawQuery("""SELECT d.id AS delivery_id, d.sale_id, s.sale_code, s.invoice_number, d.party_id,
+                       COALESCE(p.commercial_name, p.commercial_name_ar, p.legal_name, '') AS customer_name,
+                       d.vehicle_id,
+                       COALESCE(v.plate_number_ar, v.plate_number, v.vehicle_code, '') AS vehicle_name,
+                       d.driver_id,
+                       COALESCE(dr.full_name_ar, dr.full_name, dr.driver_code, '') AS driver_name,
+                       d.shift_id,
+                       COALESCE(sh.shift_code, '') AS shift_code,
+                       d.delivery_date, d.quantity, d.fuel_type, d.price_per_liter, d.total_amount,
+                       d.status, d.location, d.notes, d.created_at
+                FROM deliveries d
+                JOIN sales_transactions s ON s.id = d.sale_id
+                LEFT JOIN parties p ON p.id = d.party_id
+                LEFT JOIN vehicles v ON v.id = d.vehicle_id
+                LEFT JOIN drivers dr ON dr.id = d.driver_id
+                LEFT JOIN shifts sh ON sh.id = d.shift_id
+                WHERE $whereSql
+                ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset""", args.toTypedArray()).use { cursorToJsonArray(it) }
         return module008Page(rows, total, limit, offset)
     }
 
