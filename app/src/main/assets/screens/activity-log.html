@@ -2516,9 +2516,11 @@
                 case 'cleanup':
                     cleanupOldLogs();
                     break;
-                case 'audit':
-                    showToast('📋 عرض سجل التدقيق', 'info');
+                case 'audit': {
+                    const auditBtn = Array.from(document.querySelectorAll('.filter-chip')).find(b => b.textContent.includes('تدقيق'));
+                    setFilter('audit', auditBtn);
                     break;
+                }
                 case 'ai_advisor':
                     openAIAdvisor();
                     break;
