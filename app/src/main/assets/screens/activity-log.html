@@ -3752,7 +3752,7 @@
             try {
                 const result = await apiCall('getActivityLogs', {
                     limit: 2000, offset: 0, date_from: from, date_to: to,
-                    type: type || '', status: status || '', search: ''
+                    type: type || '', status: status === 'fail' ? 'failed' : (status || ''), search: ''
                 });
                 if (!result.success) throw new Error(result.error || result.message || 'فشل قراءة بيانات التقرير');
                 const data = Array.isArray(result.data) ? result.data : [];
