@@ -16948,7 +16948,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             val writeDb = writableDatabase
             val stationId = data.optInt("station_id", 0)
-            if (screenKey == "deliveries") requireDeliveryRelationsInStation(writeDb, data, stationId)
+            if (screenKey == "deliveries") requireDeliveryRelationsInStation(writableDatabase, data, stationId)
             if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_level_log", "fuel_quality_tests")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
             if (screenKey in setOf("vehicles", "drivers", "vehicle_locations", "vehicle_trips", "vehicle_expenses", "vehicle_maintenance", "vehicle_insurance")) {
                 require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
@@ -18895,7 +18895,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     val row = rows.optJSONObject(i) ?: continue
                     val values = columns.map { key ->
                         val raw = if (row.has(key) && !row.isNull(key)) row.opt(key).toString() else ""
-                        """ + raw.replace(""", """") + """
+                        "\"" + raw.replace("\"", "\"\"") + "\""
                     }
                     csv.append(values.joinToString(",")).append("\n")
                 }
