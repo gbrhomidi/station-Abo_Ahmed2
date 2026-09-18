@@ -5638,6 +5638,51 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun exportOperationalCsv(screenKey: String, jsonData: String = "{}"): String {
+            DebugLogger.info("WebAppInterface", "exportOperationalCsv called: $screenKey")
+            if (screenKey !in setOf("sales_transactions", "deliveries")) {
+                return errorResponse("مسار التصدير غير مسموح")
+            }
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val params = JSONObject(jsonData.ifBlank { "{}" })
+                val job = activity.lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        val path = db.exportOperationalCsv(screenKey, params, stationId)
+                        withContext(Dispatchers.Main) {
+                            val result = JSONObject().apply {
+                                put("success", true)
+                                put("path", path)
+                                put("message", "تم إنشاء ملف CSV فعلياً")
+                            }
+                            activity.safeEvaluateJs("window.onOperationalExportResult && window.onOperationalExportResult(${result})")
+                        }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            val result = JSONObject().apply {
+                                put("success", false)
+                                put("error", e.message ?: "فشل إنشاء ملف CSV")
+                            }
+                            activity.safeEvaluateJs("window.onOperationalExportResult && window.onOperationalExportResult(${result})")
+                        }
+                        DebugLogger.logException("OperationalExport-$screenKey", e)
+                    }
+                }
+                activity.backgroundJob?.cancel()
+                activity.backgroundJob = job
+                JSONObject().apply {
+                    put("success", true)
+                    put("status", "processing")
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("OperationalExport-$screenKey", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
         fun exportToCSV(tableName: String): String {
             DebugLogger.info("WebAppInterface", "exportToCSV called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")

@@ -9239,7 +9239,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val total = db.rawQuery(finalCountSql, args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
         val sortColumn = when (data.optString("sort_by")) { "delivery_date" -> "d.delivery_date"; "total_amount" -> "d.total_amount"; "status" -> "d.status"; else -> "d.id" }
         val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
-        val rows = db.rawQuery("""SELECT d.id AS delivery_id, d.sale_id, s.sale_code, s.invoice_number, d.party_id, COALESCE(p.commercial_name, p.commercial_name_ar, '') AS customer_name, d.vehicle_id, d.driver_id, d.delivery_date, d.quantity, d.fuel_type, d.price_per_liter, d.total_amount, d.status, d.location, d.notes, d.created_at FROM deliveries d JOIN sales_transactions s ON s.id = d.sale_id LEFT JOIN parties p ON p.id = d.party_id WHERE $whereSql ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset""", args.toTypedArray()).use { cursorToJsonArray(it) }
+        val rows = db.rawQuery("""SELECT d.id AS delivery_id, d.sale_id, s.sale_code, s.invoice_number, d.party_id,
+                       COALESCE(p.commercial_name, p.commercial_name_ar, p.legal_name, '') AS customer_name,
+                       d.vehicle_id,
+                       COALESCE(v.plate_number_ar, v.plate_number, v.vehicle_code, '') AS vehicle_name,
+                       d.driver_id,
+                       COALESCE(dr.full_name_ar, dr.full_name, dr.driver_code, '') AS driver_name,
+                       d.shift_id,
+                       COALESCE(sh.shift_code, '') AS shift_code,
+                       d.delivery_date, d.quantity, d.fuel_type, d.price_per_liter, d.total_amount,
+                       d.status, d.location, d.notes, d.created_at
+                FROM deliveries d
+                JOIN sales_transactions s ON s.id = d.sale_id
+                LEFT JOIN parties p ON p.id = d.party_id
+                LEFT JOIN vehicles v ON v.id = d.vehicle_id
+                LEFT JOIN drivers dr ON dr.id = d.driver_id
+                LEFT JOIN shifts sh ON sh.id = d.shift_id
+                WHERE $whereSql
+                ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset""", args.toTypedArray()).use { cursorToJsonArray(it) }
         return module008Page(rows, total, limit, offset)
     }
 
@@ -15955,6 +15972,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 where += "EXISTS (SELECT 1 FROM tanks scope_t WHERE scope_t.id = tank_level_log.tank_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
             } else if (stationId > 0 && screenKey == "fuel_quality_tests") {
                 where += "EXISTS (SELECT 1 FROM tank_refills scope_tr JOIN tanks scope_t ON scope_t.id = scope_tr.tank_id WHERE scope_tr.id = fuel_quality_tests.refill_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
+            } else if (stationId > 0 && screenKey == "deliveries") {
+                where += "EXISTS (SELECT 1 FROM sales_transactions scope_sale WHERE scope_sale.id = deliveries.sale_id AND scope_sale.station_id = ? AND scope_sale.is_deleted = 0)"
+                args += stationId.toString()
+            } else if (stationId > 0 && screenKey == "deliveries") {
+                where += "EXISTS (SELECT 1 FROM sales_transactions scope_sale WHERE scope_sale.id = deliveries.sale_id AND scope_sale.station_id = ? AND scope_sale.is_deleted = 0)"
+                args += stationId.toString()
             }
             val includeArchived = params.optBoolean("include_archived", false)
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
@@ -15991,10 +16014,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val productId = params.optLong("product_id", 0L)
                 val customerId = params.optLong("customer_id", 0L)
                 val shiftId = params.optLong("shift_id", 0L)
+                val orderType = params.optString("order_type", "").trim()
                 if (paymentMethod.isNotBlank()) { where += "payment_method = ?"; args += paymentMethod }
                 if (productId > 0L) { where += "product_id = ?"; args += productId.toString() }
                 if (customerId > 0L) { where += "customer_party_id = ?"; args += customerId.toString() }
                 if (shiftId > 0L) { where += "shift_id = ?"; args += shiftId.toString() }
+                if (orderType.isNotBlank()) { where += "order_type = ?"; args += orderType }
             }
             if (screenKey == "meter_readings") {
                 val tankId = params.optLong("tank_id", 0L)
@@ -16117,10 +16142,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val productId = params.optLong("product_id", 0L)
                 val customerId = params.optLong("customer_id", 0L)
                 val shiftId = params.optLong("shift_id", 0L)
+                val orderType = params.optString("order_type", "").trim()
                 if (paymentMethod.isNotBlank()) { where += "payment_method = ?"; args += paymentMethod }
                 if (productId > 0L) { where += "product_id = ?"; args += productId.toString() }
                 if (customerId > 0L) { where += "customer_party_id = ?"; args += customerId.toString() }
                 if (shiftId > 0L) { where += "shift_id = ?"; args += shiftId.toString() }
+                if (orderType.isNotBlank()) { where += "order_type = ?"; args += orderType }
             }
             if (screenKey == "meter_readings") {
                 val tankId = params.optLong("tank_id", 0L)
@@ -16173,16 +16200,37 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getOperationalReport(screenKey: String, params: JSONObject = JSONObject()): JSONObject {
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
-        val rows = getOperationalRows(screenKey, params)
-        val totals = JSONObject()
-        spec.numericColumns.forEach { key ->
-            var total = 0.0
-            for (i in 0 until rows.length()) total += rows.optJSONObject(i)?.optDouble(key, 0.0) ?: 0.0
-            totals.put(key, total)
-        }
         val pageSize = params.optInt("limit", 200).coerceIn(1, 1000)
         val offset = params.optInt("offset", 0).coerceAtLeast(0)
+        val pageParams = JSONObject(params.toString()).apply {
+            put("limit", pageSize)
+            put("offset", offset)
+        }
+        val rows = getOperationalRows(screenKey, pageParams)
         val totalCount = getOperationalTotalCount(screenKey, params)
+        val totals = JSONObject()
+        spec.numericColumns.forEach { totals.put(it, 0.0) }
+
+        // Aggregate the complete filtered SQLite result set in Kotlin/SQLite pages.
+        // The WebView never computes report totals from its rendered JavaScript array.
+        val scanParams = JSONObject(params.toString()).apply {
+            put("limit", 1000)
+            put("offset", 0)
+        }
+        var scanOffset = 0
+        while (scanOffset < totalCount) {
+            scanParams.put("offset", scanOffset)
+            val scanRows = getOperationalRows(screenKey, scanParams)
+            if (scanRows.length() == 0) break
+            for (i in 0 until scanRows.length()) {
+                val row = scanRows.optJSONObject(i) ?: continue
+                spec.numericColumns.forEach { key ->
+                    totals.put(key, totals.optDouble(key, 0.0) + row.optDouble(key, 0.0))
+                }
+            }
+            scanOffset += scanRows.length()
+        }
+
         val page = (offset / pageSize) + 1
         val totalPages = if (totalCount == 0) 0 else ((totalCount + pageSize - 1) / pageSize)
         return JSONObject().apply {
@@ -16833,6 +16881,49 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
     }
 
+    private fun requireDeliveryRelationsInStation(db: SQLiteDatabase, data: JSONObject, stationId: Int) {
+        require(stationId > 0) { "معرف المحطة مطلوب للتوصيل" }
+        val saleId = data.optLong("sale_id", 0L)
+        require(saleId > 0L) { "معرف الطلب/البيع المرتبط بالتوصيل مطلوب" }
+        var saleCustomerId = 0L
+        db.rawQuery(
+            "SELECT customer_party_id FROM sales_transactions WHERE id = ? AND station_id = ? AND is_deleted = 0 AND order_type = 'order'",
+            arrayOf(saleId.toString(), stationId.toString())
+        ).use { cursor ->
+            require(cursor.moveToFirst()) { "الطلب المرتبط بالتوصيل غير موجود ضمن محطة الجلسة الحالية" }
+            saleCustomerId = cursor.getLong(0)
+        }
+        val partyId = data.optLong("party_id", 0L)
+        if (partyId > 0L) {
+            db.rawQuery(
+                "SELECT id FROM parties WHERE id = ? AND station_id = ? AND is_deleted = 0",
+                arrayOf(partyId.toString(), stationId.toString())
+            ).use { cursor -> require(cursor.moveToFirst()) { "العميل خارج نطاق محطة الجلسة الحالية" } }
+            if (saleCustomerId > 0L) require(saleCustomerId == partyId) { "العميل لا يطابق العميل المسجل في الطلب المرتبط" }
+        }
+        val vehicleId = data.optLong("vehicle_id", 0L)
+        if (vehicleId > 0L) {
+            db.rawQuery(
+                "SELECT v.id FROM vehicles v JOIN parties p ON p.id = v.party_id WHERE v.id = ? AND p.station_id = ? AND v.is_deleted = 0 AND p.is_deleted = 0",
+                arrayOf(vehicleId.toString(), stationId.toString())
+            ).use { cursor -> require(cursor.moveToFirst()) { "المركبة خارج نطاق محطة الجلسة الحالية" } }
+        }
+        val driverId = data.optLong("driver_id", 0L)
+        if (driverId > 0L) {
+            db.rawQuery(
+                "SELECT id FROM drivers WHERE id = ? AND station_id = ? AND is_deleted = 0",
+                arrayOf(driverId.toString(), stationId.toString())
+            ).use { cursor -> require(cursor.moveToFirst()) { "السائق خارج نطاق محطة الجلسة الحالية" } }
+        }
+        val shiftId = data.optLong("shift_id", 0L)
+        if (shiftId > 0L) {
+            db.rawQuery(
+                "SELECT id FROM shifts WHERE id = ? AND station_id = ? AND is_deleted = 0",
+                arrayOf(shiftId.toString(), stationId.toString())
+            ).use { cursor -> require(cursor.moveToFirst()) { "الوردية خارج نطاق محطة الجلسة الحالية" } }
+        }
+    }
+
     fun saveOperationalRecord(screenKey: String, input: JSONObject, actorId: Long = 0L): Long {
         if (screenKey == "tank_refills") return saveTankRefillRecord(input, input.optInt("station_id", 0), actorId)
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
@@ -16857,6 +16948,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             val writeDb = writableDatabase
             val stationId = data.optInt("station_id", 0)
+            if (screenKey == "deliveries") requireDeliveryRelationsInStation(writableDatabase, data, stationId)
             if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_level_log", "fuel_quality_tests")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
             if (screenKey in setOf("vehicles", "drivers", "vehicle_locations", "vehicle_trips", "vehicle_expenses", "vehicle_maintenance", "vehicle_insurance")) {
                 require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
@@ -16911,6 +17003,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             for (key in spec.columns) if (data.has(key) && key != "created_by") putOperationalValue(values, key, data.opt(key))
             if (spec.hasUpdatedAt) values.put("updated_at", getCurrentDateTime())
             val stationId = data.optInt("station_id", 0)
+            if (screenKey == "deliveries") requireDeliveryRelationsInStation(writableDatabase, data, stationId)
             if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_level_log", "fuel_quality_tests")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
             val fleetScope = if (stationId > 0) fleetStationPredicate(screenKey, stationId) else null
             if (screenKey in setOf("vehicles", "drivers", "vehicle_locations", "vehicle_trips", "vehicle_expenses", "vehicle_maintenance", "vehicle_insurance")) {
@@ -16960,11 +17053,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             val oldRow = if (screenKey in setOf("attendance", "employees")) operationalRowJson(screenKey, id) else null
             val fleetScope = if (stationId != null && stationId > 0) fleetStationPredicate(screenKey, stationId) else null
+            val deliveryScoped = screenKey == "deliveries" && stationId != null && stationId > 0
             val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id") && screenKey != "calibration_records" && fleetScope == null
             val relationallyScoped = stationId != null && stationId > 0 && (screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests", "calibration_records") || fleetScope != null)
             val where = when {
                 fleetScope != null -> "id = ? AND $fleetScope"
                 scoped -> "id = ? AND station_id = ?"
+                deliveryScoped -> "id = ? AND is_deleted = 0 AND EXISTS (SELECT 1 FROM sales_transactions scope_sale WHERE scope_sale.id = deliveries.sale_id AND scope_sale.station_id = ? AND scope_sale.is_deleted = 0)"
                 screenKey == "calibration_records" && relationallyScoped -> "id = ? AND " + calibrationStationPredicate(stationId!!)
                 screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
                 screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
@@ -16975,7 +17070,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 screenKey == "fuel_quality_tests" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM tank_refills scope_tr JOIN tanks scope_t ON scope_t.id = scope_tr.tank_id WHERE scope_tr.id = fuel_quality_tests.refill_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
                 else -> "id = ?"
             }
-            val whereArgs = if (scoped) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
+            val whereArgs = when {
+                scoped -> arrayOf(id.toString(), stationId.toString())
+                deliveryScoped -> arrayOf(id.toString(), stationId!!.toString())
+                else -> arrayOf(id.toString())
+            }
             val rows = if (spec.softDeleted) db.update(spec.table, ContentValues().apply {
                 put("is_deleted", 1)
                 if (tableHasColumn(db, spec.table, "deleted_at")) put("deleted_at", getCurrentDateTime())
@@ -18770,6 +18869,46 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun restoreDatabase(path: String): Boolean = restoreDatabaseSafe(path).optBoolean("success", false)
+
+    fun exportOperationalCsv(screenKey: String, params: JSONObject = JSONObject(), stationScopeId: Int): String {
+        val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
+        require(stationScopeId > 0) { "معرف المحطة غير صالح للتصدير" }
+        dbLock.lock()
+        return try {
+            val exportDir = File(contextRef.getExternalFilesDir(null), "exports")
+            require(exportDir.exists() || exportDir.mkdirs()) { "تعذر إنشاء مجلد التصدير" }
+            val safeParams = JSONObject(params.toString()).apply {
+                put("station_id", stationScopeId)
+                put("limit", 1000)
+                put("offset", 0)
+            }
+            val total = getOperationalTotalCount(screenKey, safeParams)
+            val columns = listOf("id") + spec.columns
+            val csv = StringBuilder()
+            csv.append(columns.joinToString(",")).append("\n")
+            var offset = 0
+            while (offset < total) {
+                safeParams.put("offset", offset)
+                val rows = getOperationalRows(screenKey, safeParams)
+                if (rows.length() == 0) break
+                for (i in 0 until rows.length()) {
+                    val row = rows.optJSONObject(i) ?: continue
+                    val values = columns.map { key ->
+                        val raw = if (row.has(key) && !row.isNull(key)) row.opt(key).toString() else ""
+                        "\"" + raw.replace("\"", "\"\"") + "\""
+                    }
+                    csv.append(values.joinToString(",")).append("\n")
+                }
+                offset += rows.length()
+            }
+            val file = File(exportDir, "${spec.table}_${System.currentTimeMillis()}.csv")
+            file.writeText(csv.toString(), Charsets.UTF_8)
+            require(file.exists() && file.length() > 0L) { "فشل إنشاء ملف CSV" }
+            file.absolutePath
+        } finally {
+            dbLock.unlock()
+        }
+    }
 
     fun exportToCSV(tableName: String): String {
         dbLock.lock()

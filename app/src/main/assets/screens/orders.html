@@ -447,7 +447,7 @@ body{padding-bottom:100px}
             <div class="modal-footer" style="border-top:none;padding:0 0 12px;">
                 <button class="btn primary" onclick="generateReport()"><i class="fas fa-cog"></i> توليد التقرير</button>
                 <button class="btn" onclick="exportData()"><i class="fas fa-file-export"></i> تصدير CSV</button>
-                <button class="btn" onclick="window.print()"><i class="fas fa-print"></i> طباعة</button>
+                <button class="btn" onclick="printOrdersReport()"><i class="fas fa-print"></i> طباعة</button>
             </div>
             <div id="reportResults">
                 <div class="empty-state"><i class="fas fa-file-alt"></i><p>اختر الفترة ثم اضغط توليد التقرير.</p></div>
@@ -626,6 +626,9 @@ body{padding-bottom:100px}
         var map = {
             'cash': 'نقداً',
             'credit': 'آجل',
+            'retail': 'تجزئة',
+            'wholesale': 'جملة',
+            'fleet': 'أسطول',
             'pending': 'معلق',
             'completed': 'مكتمل',
             'paid': 'مدفوع',
@@ -697,7 +700,7 @@ body{padding-bottom:100px}
 
     function staticOptions(key) {
         var map = {
-            saleType: [ ['cash','نقداً'], ['credit','آجل'] ],
+            saleType: [ ['retail','تجزئة'], ['wholesale','جملة'], ['fleet','أسطول'] ],
             invoiceType: [ ['invoice','فاتورة'], ['receipt','إيصال'] ],
             payment: [ ['cash','نقداً'], ['card','بطاقة'], ['transfer','تحويل'], ['credit','آجل'] ]
         };
@@ -802,10 +805,10 @@ body{padding-bottom:100px}
     }
 
     function customerRule() {
-        var saleType = document.querySelector('[data-key="sale_type"]');
+        var paymentMethod = document.querySelector('[data-key="payment_method"]');
         var customer = document.querySelector('[data-key="customer_party_id"]');
-        if (!saleType || !customer) return;
-        if (saleType.value === 'cash') {
+        if (!paymentMethod || !customer) return;
+        if (String(paymentMethod.value || '').toLowerCase() === 'cash') {
             var general = optionRows('customer').find(function(x) {
                 return x.is_general === 1 || x.is_general === true || String(nameOf(x, ['name_ar','name'])).includes('عام');
             });
@@ -915,9 +918,9 @@ body{padding-bottom:100px}
         }
 
         var saleType = document.querySelector('[data-key="sale_type"]');
-        if (saleType) {
-            saleType.addEventListener('change', customerRule);
-        }
+        var paymentMethod = document.querySelector('[data-key="payment_method"]');
+        if (saleType) saleType.addEventListener('change', customerRule);
+        if (paymentMethod) paymentMethod.addEventListener('change', customerRule);
 
         var calcKeys = ['liters','price_per_liter','quantity','unit_price','discount_amount','discount_percent','tax_rate','vat_rate','service_fee','commission'];
         for (var p = 0; p < calcKeys.length; p++) {
@@ -945,13 +948,14 @@ body{padding-bottom:100px}
         setter('cashier_id', row.cashier_id || (state.ctx && state.ctx.cashier ? state.ctx.cashier.id : ''));
         if (!row.sale_type) {
             var st = document.querySelector('[data-key="sale_type"]');
-            if (st) st.value = 'cash';
+            if (st) st.value = 'retail';
         }
         if (!row.payment_method) {
             var pm = document.querySelector('[data-key="payment_method"]');
             if (pm) pm.value = 'cash';
         }
         updateDriver();
+        customerRule();
         calculateTotals();
     }
 
@@ -991,7 +995,7 @@ body{padding-bottom:100px}
     }
 
     function collectFormData() {
-        var payload = {};
+        var payload = { order_type: 'order' };
         var inputs = document.querySelectorAll('#recordForm [data-key]');
         for (var i = 0; i < inputs.length; i++) {
             var el = inputs[i];
@@ -1003,7 +1007,7 @@ body{padding-bottom:100px}
             payload[key] = val;
         }
 
-        if (payload.sale_type === 'cash') {
+        if (String(payload.payment_method || '').toLowerCase() === 'cash') {
             var general = optionRows('customer').find(function(x) {
                 return x.is_general === 1 || x.is_general === true || String(nameOf(x, ['name_ar','name'])).includes('عام');
             });
@@ -1023,15 +1027,11 @@ body{padding-bottom:100px}
 
     function validateForm(payload) {
         var errors = [];
-        if (!payload.station_id) errors.push('المحطة مطلوبة');
         if (!payload.shift_id) errors.push('الوردية مطلوبة');
-        if (!payload.sale_type) errors.push('نوع البيع مطلوب');
-        if (payload.sale_type === 'credit' && !payload.customer_party_id) {
+        if (!payload.sale_type) errors.push('تصنيف البيع مطلوب');
+        if (!payload.payment_method) errors.push('طريقة الدفع مطلوبة');
+        if (String(payload.payment_method).toLowerCase() === 'credit' && !payload.customer_party_id) {
             errors.push('يجب اختيار العميل عند البيع الآجل');
-        }
-        if (!payload.cashier_id) errors.push('أمين الصندوق غير محدد');
-        if (payload.sale_type === 'cash' && !payload.payment_method) {
-            errors.push('طريقة الدفع مطلوبة');
         }
         return errors;
     }
@@ -1253,10 +1253,11 @@ body{padding-bottom:100px}
             var kind = hasFuel ? 'fuel' : (hasProduct ? 'product' : '');
 
             if (mode === 'all') return true;
-            if (mode === 'cash') return saleType === 'cash';
-            if (mode === 'credit') return saleType === 'credit';
-            if (mode === 'fuel') return kind === 'fuel';
-            if (mode === 'product') return kind === 'product';
+            var paymentMethod = String(row.payment_method || '').toLowerCase();
+            if (mode === 'cash') return paymentMethod === 'cash';
+            if (mode === 'credit') return paymentMethod === 'credit';
+            if (mode === 'fuel') return hasFuel;
+            if (mode === 'product') return hasProduct;
             return true;
         });
 
@@ -1281,8 +1282,17 @@ body{padding-bottom:100px}
         $('offlineBanner').classList.remove('show');
         setLoading(true);
         try {
-            var result = await callBridge('getSalesTransactionRecords', [JSON.stringify({ limit: 500 })]);
-            state.rows = rowsOf(result);
+            var result = await callBridge('getOrdersPage', [JSON.stringify({ limit: 100, offset: 0 })]);
+            state.rows = rowsOf(result).map(function(row) {
+                return Object.assign({}, row, {
+                    id: row.id || row.order_id,
+                    sale_code: row.sale_code || row.order_number,
+                    customer_name_ar: row.customer_name_ar || row.customer_name,
+                    vehicle_name_ar: row.vehicle_name_ar || row.vehicle_name,
+                    driver_name_ar: row.driver_name_ar || row.driver_name,
+                    shift_code: row.shift_code || row.shift_id
+                });
+            });
             state.loadedAt = new Date();
             applyFilter();
         } catch (e) {
@@ -1305,33 +1315,26 @@ body{padding-bottom:100px}
         $('reportModal').classList.add('show');
     }
 
-    function generateReport() {
+    async function generateReport() {
         var from = $('reportFrom').value || today();
         var to = $('reportTo').value || today();
-        var filtered = state.rows.filter(function(row) {
-            var date = row.sale_date || row.created_at || '';
-            return date >= from && date <= to;
-        });
-
+        var reportResponse;
+        try {
+            reportResponse = await callBridge('generateSalesTransactionReport', [JSON.stringify({ order_type:'order', from_date:from, to_date:to, limit:1000 })]);
+        } catch (e) {
+            toast(e.message || 'تعذر توليد التقرير من SQLite', 'error');
+            return;
+        }
+        var report = dataOf(reportResponse) || {};
+        var filtered = Array.isArray(report.rows) ? report.rows : [];
         if (!filtered.length) {
             $('reportResults').innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i><p>لا توجد طلبات في هذه الفترة.</p></div>';
             return;
         }
-
-        var gross = 0, net = 0, discount = 0, fuel = 0, product = 0, tax = 0, vat = 0;
-        for (var i = 0; i < filtered.length; i++) {
-            var r = filtered[i];
-            gross += num(r.gross_amount);
-            net += num(r.net_amount);
-            discount += num(r.discount_amount);
-            fuel += num(r.fuel_subtotal);
-            product += num(r.product_subtotal);
-            tax += num(r.tax_amount);
-            vat += num(r.vat_amount);
-        }
-
+        var totals = report.totals || {};
+        var gross = num(totals.gross_amount), net = num(totals.net_amount), discount = num(totals.discount_amount), fuel = num(totals.fuel_subtotal), product = num(totals.product_subtotal), tax = num(totals.tax_amount), vat = num(totals.vat_amount);
         var html = '<div class="report-grid">';
-        html += '<div class="report-card"><b>' + filtered.length + '</b><span>عدد الطلبات</span></div>';
+        html += '<div class="report-card"><b>' + num(report.total_count || filtered.length) + '</b><span>عدد الطلبات</span></div>';
         html += '<div class="report-card"><b>' + money(gross) + '</b><span>الإجمالي الإجمالي</span></div>';
         html += '<div class="report-card"><b>' + money(net) + '</b><span>الصافي</span></div>';
         html += '<div class="report-card"><b>' + money(discount) + '</b><span>الخصميات</span></div>';
@@ -1340,66 +1343,44 @@ body{padding-bottom:100px}
         html += '<div class="report-card"><b>' + money(tax) + '</b><span>قيمة الضريبة</span></div>';
         html += '<div class="report-card"><b>' + money(vat) + '</b><span>القيمة المضافة</span></div>';
         html += '</div>';
-
-        // جدول تفصيلي
         html += '<div class="report-table-wrap"><table class="report-table">';
-        html += '<thead><tr><th>#</th><th>الرمز</th><th>العميل</th><th>الإجمالي</th><th>الصافي</th><th>الحالة</th><th>التاريخ</th></tr></thead>';
-        html += '<tbody>';
+        html += '<thead><tr><th>#</th><th>الرمز</th><th>العميل</th><th>الإجمالي</th><th>الصافي</th><th>طريقة الدفع</th><th>التاريخ</th></tr></thead><tbody>';
         var maxShow = Math.min(filtered.length, 100);
         for (var j = 0; j < maxShow; j++) {
             var r = filtered[j];
-            html += '<tr>';
-            html += '<td>' + (j + 1) + '</td>';
-            html += '<td>' + esc(r.sale_code || r.id) + '</td>';
-            html += '<td>' + esc(nameOf(r, ['customer_name_ar','customer_name'])) + '</td>';
-            html += '<td>' + money(r.gross_amount) + '</td>';
-            html += '<td>' + money(r.net_amount) + '</td>';
-            html += '<td>' + esc(label(r.sale_type)) + '</td>';
-            html += '<td>' + esc((r.sale_date || r.created_at || '').slice(0, 10)) + '</td>';
-            html += '</tr>';
+            html += '<tr><td>' + (j + 1) + '</td><td>' + esc(r.sale_code || r.id) + '</td><td>' + esc(nameOf(r, ['customer_name_ar','customer_name'])) + '</td><td>' + money(r.gross_amount) + '</td><td>' + money(r.net_amount) + '</td><td>' + esc(label(r.payment_method)) + '</td><td>' + esc((r.sale_date || r.created_at || '').slice(0, 10)) + '</td></tr>';
         }
         html += '</tbody></table>';
-        if (filtered.length > 100) {
-            html += '<div class="empty-state" style="padding:10px;">يعرض 100 من ' + filtered.length + '</div>';
-        }
+        if (num(report.total_count) > 100) html += '<div class="empty-state" style="padding:10px;">يعرض 100 من ' + num(report.total_count) + '</div>';
         html += '</div>';
-
         $('reportResults').innerHTML = html;
-        toast('تم توليد التقرير بنجاح', 'success');
+        toast('تم توليد التقرير من SQLite بنجاح', 'success');
+    }
+
+    function printOrdersReport() {
+        if (!bridge || typeof bridge.printCurrentPage !== 'function') {
+            toast('عقد الطباعة غير متاح في Android Bridge', 'error');
+            return;
+        }
+        try { bridge.printCurrentPage(); } catch (e) { toast(e.message || 'فشل بدء الطباعة', 'error'); }
     }
 
     function exportData() {
-        var rows = state.filtered;
-        if (!rows.length) {
+        if (!state.rows.length) {
             toast('لا توجد بيانات للتصدير', 'warning');
             return;
         }
-        var keys = [];
-        for (var i = 0; i < rows.length; i++) {
-            var r = rows[i];
-            for (var k in r) {
-                if (r.hasOwnProperty(k) && keys.indexOf(k) === -1) {
-                    keys.push(k);
-                }
-            }
+        if (!bridge || typeof bridge.exportOperationalCsv !== 'function') {
+            toast('عقد تصدير CSV غير متاح في Android Bridge', 'error');
+            return;
         }
-        var csv = '\ufeff' + keys.join(',') + '\n';
-        for (var j = 0; j < rows.length; j++) {
-            var row = rows[j];
-            var line = [];
-            for (var k2 = 0; k2 < keys.length; k2++) {
-                var val = row[keys[k2]] !== undefined ? String(row[keys[k2]]) : '';
-                line.push('"' + val.replace(/"/g, '""') + '"');
-            }
-            csv += line.join(',') + '\n';
+        try {
+            bridge.exportOperationalCsv('sales_transactions', JSON.stringify({ order_type:'order' }));
+        } catch (e) {
+            toast(e.message || 'فشل بدء تصدير CSV', 'error');
         }
-        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'orders_export.csv';
-        a.click();
-        toast('تم تصدير البيانات', 'success');
     }
+
 
     // ============================================================
     // 11. دوال مساعدة للواجهة
@@ -1510,6 +1491,13 @@ body{padding-bottom:100px}
     window.openDetails = openDetails;
     window.reloadData = reloadData;
     window.applySearch = applySearch;
+    window.onOperationalExportResult = function(result) {
+        try {
+            var value = typeof result === 'string' ? JSON.parse(result) : result;
+            if (value && value.success) toast('تم إنشاء ملف CSV: ' + (value.path || ''), 'success');
+            else toast((value && value.error) || 'فشل إنشاء ملف CSV', 'error');
+        } catch (e) { toast('تعذر قراءة نتيجة تصدير CSV', 'error'); }
+    };
 
     init().catch(function(err) {
         console.error('خطأ في التهيئة:', err);
