@@ -2632,8 +2632,8 @@
 
             async function onScreenSelectedForPermissions(screenId) {
                 const sid = Number(screenId || 0);
-                currentSelectedScreenId = sid;
                 const previousScreenId = Number(currentSelectedScreenId || 0);
+                currentSelectedScreenId = sid;
                 if (previousScreenId !== sid) window.__screenPermCurrentChecked = [];
                 window.__screenPermFilter = '';
 
