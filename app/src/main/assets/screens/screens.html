@@ -2633,7 +2633,8 @@
             async function onScreenSelectedForPermissions(screenId) {
                 const sid = Number(screenId || 0);
                 currentSelectedScreenId = sid;
-                window.__screenPermCurrentChecked = [];
+                const previousScreenId = Number(currentSelectedScreenId || 0);
+                if (previousScreenId !== sid) window.__screenPermCurrentChecked = [];
                 window.__screenPermFilter = '';
 
                 const filterInput = document.getElementById('screenPermFilter');
@@ -2665,7 +2666,10 @@
                 if (!container) return;
                 const q = (window.__screenPermFilter || '').trim().toLowerCase();
                 const checkedSet = new Set((window.__screenPermCurrentChecked || []).map(Number));
+                const selectedScreen = allScreens.find(s => Number(s.id || s.screen_id) === Number(currentSelectedScreenId || 0));
+                const screenModule = selectedScreen?.module || '';
                 const items = allPermissions.filter(p => {
+                    if (screenModule && p.module && p.module !== screenModule) return false;
                     if (!q) return true;
                     const name = (p.permission_name || '').toLowerCase();
                     const ar = (p.permission_name_ar || '').toLowerCase();
