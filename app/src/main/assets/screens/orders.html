@@ -948,13 +948,14 @@ body{padding-bottom:100px}
         setter('cashier_id', row.cashier_id || (state.ctx && state.ctx.cashier ? state.ctx.cashier.id : ''));
         if (!row.sale_type) {
             var st = document.querySelector('[data-key="sale_type"]');
-            if (st) st.value = 'cash';
+            if (st) st.value = 'retail';
         }
         if (!row.payment_method) {
             var pm = document.querySelector('[data-key="payment_method"]');
             if (pm) pm.value = 'cash';
         }
         updateDriver();
+        customerRule();
         calculateTotals();
     }
 
