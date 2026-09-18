@@ -1491,6 +1491,13 @@ body{padding-bottom:100px}
     window.openDetails = openDetails;
     window.reloadData = reloadData;
     window.applySearch = applySearch;
+    window.onOperationalExportResult = function(result) {
+        try {
+            var value = typeof result === 'string' ? JSON.parse(result) : result;
+            if (value && value.success) toast('تم إنشاء ملف CSV: ' + (value.path || ''), 'success');
+            else toast((value && value.error) || 'فشل إنشاء ملف CSV', 'error');
+        } catch (e) { toast('تعذر قراءة نتيجة تصدير CSV', 'error'); }
+    };
 
     init().catch(function(err) {
         console.error('خطأ في التهيئة:', err);
