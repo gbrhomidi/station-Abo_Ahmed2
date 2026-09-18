@@ -3000,58 +3000,13 @@
            ============================================================ */
         function getFilteredData() {
             let data = [...allLogs];
-
-            // فلتر النوع
-            if (currentFilter === 'user_activity') data = data.filter(l => l._type === 'user_activity');
-            else if (currentFilter === 'audit') data = data.filter(l => l._type === 'audit');
-            else if (currentFilter === 'system') data = data.filter(l => l._type === 'system');
-            else if (currentFilter === 'sms') data = data.filter(l => l._type === 'sms');
-            else if (currentFilter === 'sync') data = data.filter(l => l._type === 'sync');
-            else if (currentFilter === 'ai_suggest') {
+            // All time/type/search/status/date filtering is performed by SQLite.
+            // AI recommendations remain a derived view over the already-scoped result.
+            if (currentFilter === 'ai_suggest') {
                 const insights = LocalDB.get('ai_log_insights', []);
-                const ids = insights.map(i => i.logId);
-                data = data.filter(l => ids.includes(l.id));
+                const ids = new Set(insights.map(i => i.logId).filter(id => id));
+                data = data.filter(l => ids.has(l.id));
             }
-
-            // فلتر زمني
-            const start = window._timeFilterStart;
-            if (start) {
-                const s = new Date(start + 'T00:00:00').getTime();
-                data = data.filter(l => {
-                    const d = getLogTimestamp(l);
-                    return !Number.isNaN(d) && d >= s;
-                });
-            }
-            const end = window._timeFilterEnd;
-            if (end) {
-                const e = new Date(end + 'T23:59:59.999').getTime();
-                data = data.filter(l => {
-                    const d = getLogTimestamp(l);
-                    return !Number.isNaN(d) && d <= e;
-                });
-            }
-
-            // بحث نصي
-            if (searchQuery && fuseInstance) {
-                const results = fuseInstance.search(searchQuery);
-                const ids = results.map(r => r.item.id);
-                data = data.filter(l => ids.includes(l.id));
-            } else if (searchQuery) {
-                const q = searchQuery.toLowerCase();
-                data = data.filter(l =>
-                    (l.username || '').toLowerCase().includes(q) ||
-                    (l.action || '').toLowerCase().includes(q) ||
-                    (l.action_type || '').toLowerCase().includes(q) ||
-                    (l.description || '').toLowerCase().includes(q) ||
-                    (l.table_name || '').toLowerCase().includes(q) ||
-                    (l.log_type || '').toLowerCase().includes(q) ||
-                    (l.message || '').toLowerCase().includes(q) ||
-                    (l.phone_number || '').toLowerCase().includes(q) ||
-                    (l.ip_address || '').toLowerCase().includes(q) ||
-                    (l.device_id || '').toLowerCase().includes(q)
-                );
-            }
-
             return data;
         }
 
