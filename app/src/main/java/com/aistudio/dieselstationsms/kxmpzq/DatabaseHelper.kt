@@ -13242,15 +13242,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (stationId != null) {
                 require(stationId > 0) { "معرف المحطة غير صالح" }
                 conditions += """(
-                    (log_type = 'user_activity' AND EXISTS (SELECT 1 FROM user_activity_log ual WHERE ual.id = activity.record_id AND ual.station_id = ?))
-                    OR (log_type = 'system' AND EXISTS (SELECT 1 FROM system_logs sl WHERE sl.id = activity.record_id AND sl.station_id = ?))
+                    (log_type = 'user_activity' AND EXISTS (SELECT 1 FROM user_activity_log ual WHERE ual.id = activity.id AND ual.station_id = ?))
+                    OR (log_type = 'system' AND EXISTS (SELECT 1 FROM system_logs sl WHERE sl.id = activity.id AND sl.station_id = ?))
                     OR (log_type = 'audit' AND activity.user_id IS NOT NULL AND EXISTS (SELECT 1 FROM users au WHERE au.id = activity.user_id AND au.station_id = ?))
-                    OR (log_type = 'sms' AND EXISTS (SELECT 1 FROM sms_logs sms2 LEFT JOIN parties sp ON sp.id = sms2.customer_party_id LEFT JOIN users su ON su.id = sms2.created_by WHERE sms2.id = activity.record_id AND (sp.station_id = ? OR su.station_id = ?)))
-                    OR (log_type = 'sync' AND EXISTS (SELECT 1 FROM sync_logs sy2 INNER JOIN sync_devices sd ON sd.device_id = sy2.device_id WHERE sy2.id = activity.record_id AND sd.station_id = ?))
+                    OR (log_type = 'sms' AND EXISTS (SELECT 1 FROM sms_logs sms2 LEFT JOIN parties sp ON sp.id = sms2.customer_party_id LEFT JOIN users su ON su.id = sms2.created_by WHERE sms2.id = activity.id AND (sp.station_id = ? OR su.station_id = ?)))
+                    OR (log_type = 'sync' AND EXISTS (SELECT 1 FROM sync_logs sy2 INNER JOIN sync_devices sd ON sd.device_id = sy2.device_id WHERE sy2.id = activity.id AND sd.station_id = ?))
                 )""".trimIndent()
                 repeat(6) { args += stationId.toString() }
             }
             if (type.isNotEmpty()) { conditions += "log_type = ?"; args += type }
+            if (params.optString("user", "").trim().isNotEmpty()) { conditions += "LOWER(COALESCE(username,'')) LIKE ?"; args += "%" + params.optString("user").trim().lowercase(Locale.ROOT) + "%" }
+            if (params.optString("ip", "").trim().isNotEmpty()) { conditions += "LOWER(COALESCE(ip_address,'')) LIKE ?"; args += "%" + params.optString("ip").trim().lowercase(Locale.ROOT) + "%" }
+            if (params.optString("table", "").trim().isNotEmpty()) { conditions += "LOWER(COALESCE(table_name,'')) LIKE ?"; args += "%" + params.optString("table").trim().lowercase(Locale.ROOT) + "%" }
+            if (params.optString("action", "").trim().isNotEmpty()) { conditions += "LOWER(COALESCE(action,'')) LIKE ?"; args += "%" + params.optString("action").trim().lowercase(Locale.ROOT) + "%" }
             if (status.isNotEmpty()) { conditions += "LOWER(COALESCE(status, '')) = ?"; args += status }
             if (dateFrom.isNotEmpty()) { conditions += "date(created_at) >= date(?)"; args += dateFrom }
             if (dateTo.isNotEmpty()) { conditions += "date(created_at) <= date(?)"; args += dateTo }
