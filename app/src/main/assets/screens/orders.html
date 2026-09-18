@@ -1281,8 +1281,17 @@ body{padding-bottom:100px}
         $('offlineBanner').classList.remove('show');
         setLoading(true);
         try {
-            var result = await callBridge('getSalesTransactionRecords', [JSON.stringify({ limit: 500, order_type: 'order' })]);
-            state.rows = rowsOf(result);
+            var result = await callBridge('getOrdersPage', [JSON.stringify({ limit: 100, offset: 0 })]);
+            state.rows = rowsOf(result).map(function(row) {
+                return Object.assign({}, row, {
+                    id: row.id || row.order_id,
+                    sale_code: row.sale_code || row.order_number,
+                    customer_name_ar: row.customer_name_ar || row.customer_name,
+                    vehicle_name_ar: row.vehicle_name_ar || row.vehicle_name,
+                    driver_name_ar: row.driver_name_ar || row.driver_name,
+                    shift_code: row.shift_code || row.shift_id
+                });
+            });
             state.loadedAt = new Date();
             applyFilter();
         } catch (e) {
