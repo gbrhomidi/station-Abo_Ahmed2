@@ -45,7 +45,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 36
+        const val VERSION = 37
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -247,6 +247,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     33 -> ensureFuelCommerceSchema(db)
                     34 -> migrateV34ToV35(db)
                     35 -> migrateV35ToV36(db)
+                    36 -> migrateV36ToV37(db)
                 }
             }
             ensureModule006Schema(db)
@@ -307,6 +308,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureSmsSettings(db)
         ensureLegacySettingsSchema(db)
         ensureManagementIdentitySchema(db)
+        ensureScreenPermissionsSchema(db)
     }
 
     /**
@@ -333,6 +335,33 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """.trimIndent())
+    }
+
+    private fun ensureScreenPermissionsSchema(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS screen_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                screen_id INTEGER NOT NULL,
+                permission_id INTEGER NOT NULL,
+                is_granted INTEGER NOT NULL DEFAULT 1,
+                granted_by INTEGER,
+                granted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_by INTEGER,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(screen_id, permission_id),
+                FOREIGN KEY (screen_id) REFERENCES screens(id) ON DELETE CASCADE,
+                FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
+                FOREIGN KEY (granted_by) REFERENCES users(id),
+                FOREIGN KEY (updated_by) REFERENCES users(id)
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_screen_permissions_screen ON screen_permissions(screen_id, is_granted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_screen_permissions_permission ON screen_permissions(permission_id, is_granted)")
+    }
+
+    private fun migrateV36ToV37(db: SQLiteDatabase) {
+        ensureScreenPermissionsSchema(db)
+        Log.d(TAG, "Migrated screen permission bindings to V37")
     }
 
     private fun ensureManagementIdentitySchema(db: SQLiteDatabase) {
@@ -11203,6 +11232,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    fun getUserPermissionIds(userId: Long): JSONArray {
+        require(userId > 0L) { "معرف المستخدم غير صالح" }
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                """SELECT DISTINCT permission_id
+                   FROM user_permissions
+                   WHERE user_id = ? AND is_granted = 1
+                   ORDER BY permission_id""",
+                arrayOf(userId.toString())
+            ).use { cursor ->
+                val result = JSONArray()
+                while (cursor.moveToNext()) result.put(cursor.getLong(0))
+                result
+            }
+        } finally { dbLock.unlock() }
+    }
+
     fun getUserPermissions(userId: Long): JSONArray {
         dbLock.lock()
         return try {
@@ -12000,17 +12047,151 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
     }
 
+    fun getScreenPermissionIds(screenId: Long): JSONArray {
+        require(screenId > 0L) { "معرف الشاشة غير صالح" }
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                """SELECT permission_id
+                   FROM screen_permissions
+                   WHERE screen_id = ? AND is_granted = 1
+                   ORDER BY permission_id""",
+                arrayOf(screenId.toString())
+            ).use { cursor ->
+                val result = JSONArray()
+                while (cursor.moveToNext()) result.put(cursor.getLong(0))
+                result
+            }
+        } finally { dbLock.unlock() }
+    }
+
     fun getScreenPermissions(screenId: Long): JSONArray {
         dbLock.lock()
         return try {
             readableDatabase.rawQuery(
-                """SELECT p.id, p.permission_code, p.permission_name, p.permission_name_ar, p.description,
-                          p.module, p.action, p.created_at, 'module' AS source
-                   FROM permissions p JOIN screens s ON s.module = p.module
-                   WHERE s.id = ? AND s.archived = 0 AND p.is_deleted = 0
+                """SELECT p.id AS permission_id, p.permission_code, p.permission_name, p.permission_name_ar,
+                          p.description, p.module, p.action, p.created_at,
+                          'screen' AS source, sp.is_granted
+                   FROM screen_permissions sp
+                   JOIN screens s ON s.id = sp.screen_id
+                   JOIN permissions p ON p.id = sp.permission_id
+                   WHERE sp.screen_id = ? AND sp.is_granted = 1
+                     AND s.archived = 0 AND p.is_deleted = 0
                    ORDER BY p.action, p.permission_name""",
                 arrayOf(screenId.toString())
             ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally { dbLock.unlock() }
+    }
+
+    /** ربط عدة صلاحيات مباشرة بشاشة ضمن وحدة الشاشة. */ 
+    fun grantScreenPermissionsBatch(data: JSONObject): JSONObject {
+        dbLock.lock()
+        return try {
+            val screenId = data.optLong("screen_id", 0L)
+            val arr = data.optJSONArray("permission_ids")
+                ?: throw IllegalArgumentException("قائمة الصلاحيات مطلوبة")
+            require(screenId > 0L && arr.length() > 0) { "الشاشة وقائمة الصلاحيات مطلوبتان" }
+
+            val db = writableDatabase
+            val screenModule = db.rawQuery(
+                "SELECT module FROM screens WHERE id = ? AND archived = 0 LIMIT 1",
+                arrayOf(screenId.toString())
+            ).use { c -> if (c.moveToFirst()) c.getString(0) else null }
+                ?: throw IllegalArgumentException("الشاشة غير موجودة أو مؤرشفة")
+
+            val ids = linkedSetOf<Long>()
+            for (i in 0 until arr.length()) {
+                val permissionId = arr.optLong(i, 0L)
+                require(permissionId > 0L) { "معرف صلاحية غير صالح" }
+                ids.add(permissionId)
+            }
+
+            var granted = 0
+            var skipped = 0
+            db.beginTransaction()
+            try {
+                for (permissionId in ids) {
+                    val validScope = db.rawQuery(
+                        "SELECT 1 FROM permissions WHERE id = ? AND is_deleted = 0 AND module = ? LIMIT 1",
+                        arrayOf(permissionId.toString(), screenModule)
+                    ).use { it.moveToFirst() }
+                    require(validScope) { "الصلاحية $permissionId لا تنتمي إلى وحدة الشاشة" }
+
+                    val existing = db.rawQuery(
+                        "SELECT id, is_granted FROM screen_permissions WHERE screen_id = ? AND permission_id = ? LIMIT 1",
+                        arrayOf(screenId.toString(), permissionId.toString())
+                    ).use { c ->
+                        if (c.moveToFirst()) c.getLong(0) to c.getInt(1) else 0L to 0
+                    }
+
+                    val values = ContentValues().apply {
+                        put("screen_id", screenId)
+                        put("permission_id", permissionId)
+                        put("is_granted", 1)
+                        if (data.optLong("granted_by", 0L) > 0L) put("granted_by", data.optLong("granted_by"))
+                        put("granted_at", getCurrentDateTime())
+                        put("updated_at", getCurrentDateTime())
+                    }
+
+                    if (existing.first > 0L) {
+                        db.update("screen_permissions", values, "id = ?", arrayOf(existing.first.toString()))
+                        if (existing.second == 1) skipped++ else granted++
+                    } else {
+                        require(db.insert("screen_permissions", null, values) > 0L) { "تعذر ربط الصلاحية $permissionId بالشاشة" }
+                        granted++
+                    }
+                }
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+
+            JSONObject().apply {
+                put("success", true)
+                put("granted_count", granted)
+                put("skipped_count", skipped)
+                put("requested_permissions", ids.size)
+            }
+        } finally { dbLock.unlock() }
+    }
+
+    /** سحب عدة صلاحيات مباشرة من شاشة مع الإبقاء على سجل الربط للتدقيق. */
+    fun revokeScreenPermissionsBatch(data: JSONObject): JSONObject {
+        dbLock.lock()
+        return try {
+            val screenId = data.optLong("screen_id", 0L)
+            val arr = data.optJSONArray("permission_ids")
+                ?: throw IllegalArgumentException("قائمة الصلاحيات مطلوبة")
+            require(screenId > 0L && arr.length() > 0) { "الشاشة وقائمة الصلاحيات مطلوبتان" }
+            val ids = linkedSetOf<Long>()
+            for (i in 0 until arr.length()) {
+                val permissionId = arr.optLong(i, 0L)
+                require(permissionId > 0L) { "معرف صلاحية غير صالح" }
+                ids.add(permissionId)
+            }
+
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                val values = ContentValues().apply {
+                    put("is_granted", 0)
+                    if (data.optLong("granted_by", 0L) > 0L) put("updated_by", data.optLong("granted_by"))
+                    put("updated_at", getCurrentDateTime())
+                }
+                var affected = 0
+                for (permissionId in ids) {
+                    affected += db.update(
+                        "screen_permissions",
+                        values,
+                        "screen_id = ? AND permission_id = ? AND is_granted = 1",
+                        arrayOf(screenId.toString(), permissionId.toString())
+                    )
+                }
+                db.setTransactionSuccessful()
+                JSONObject().apply {
+                    put("success", true)
+                    put("affected_rows", affected)
+                    put("requested_permissions", ids.size)
+                }
+            } finally { db.endTransaction() }
         } finally { dbLock.unlock() }
     }
 
