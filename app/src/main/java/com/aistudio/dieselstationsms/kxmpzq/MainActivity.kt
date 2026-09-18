@@ -4936,29 +4936,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val params = JSONObject(jsonData.ifBlank { "{}" })
-                val limit = params.optInt("limit", 50)
-                val offset = params.optInt("offset", 0)
-
-                val arr = JSONArray()
-                db.readableDatabase.rawQuery(
-                    "SELECT al.*, u.username, u.full_name FROM user_activity_log al LEFT JOIN users u ON al.user_id = u.id WHERE (al.station_id = ? OR al.station_id IS NULL) ORDER BY al.created_at DESC LIMIT ? OFFSET ?",
-                    arrayOf(stationId.toString(), limit.toString(), offset.toString())
-                ).use { cursor ->
-                    while (cursor.moveToNext()) {
-                        val obj = JSONObject()
-                        for (i in 0 until cursor.columnCount) {
-                            val colName = cursor.getColumnName(i)
-                            when (cursor.getType(i)) {
-                                android.database.Cursor.FIELD_TYPE_INTEGER -> obj.put(colName, cursor.getLong(i))
-                                android.database.Cursor.FIELD_TYPE_FLOAT -> obj.put(colName, cursor.getDouble(i))
-                                android.database.Cursor.FIELD_TYPE_STRING -> obj.put(colName, cursor.getString(i))
-                                android.database.Cursor.FIELD_TYPE_NULL -> obj.put(colName, JSONObject.NULL)
-                            }
-                        }
-                        arr.put(obj)
-                    }
-                }
-                dataResponse(arr)
+                val result = db.getActivityLogs(params, stationId.toInt())
+                dataResponse(result)
             } catch (e: Exception) {
                 DebugLogger.logException("Logs", e)
                 errorResponse(e.message)
