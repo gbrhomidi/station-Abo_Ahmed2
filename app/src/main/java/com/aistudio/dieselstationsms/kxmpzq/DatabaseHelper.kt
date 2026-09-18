@@ -16181,16 +16181,37 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getOperationalReport(screenKey: String, params: JSONObject = JSONObject()): JSONObject {
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
-        val rows = getOperationalRows(screenKey, params)
-        val totals = JSONObject()
-        spec.numericColumns.forEach { key ->
-            var total = 0.0
-            for (i in 0 until rows.length()) total += rows.optJSONObject(i)?.optDouble(key, 0.0) ?: 0.0
-            totals.put(key, total)
-        }
         val pageSize = params.optInt("limit", 200).coerceIn(1, 1000)
         val offset = params.optInt("offset", 0).coerceAtLeast(0)
+        val pageParams = JSONObject(params.toString()).apply {
+            put("limit", pageSize)
+            put("offset", offset)
+        }
+        val rows = getOperationalRows(screenKey, pageParams)
         val totalCount = getOperationalTotalCount(screenKey, params)
+        val totals = JSONObject()
+        spec.numericColumns.forEach { totals.put(it, 0.0) }
+
+        // Aggregate the complete filtered SQLite result set in Kotlin/SQLite pages.
+        // The WebView never computes report totals from its rendered JavaScript array.
+        val scanParams = JSONObject(params.toString()).apply {
+            put("limit", 1000)
+            put("offset", 0)
+        }
+        var scanOffset = 0
+        while (scanOffset < totalCount) {
+            scanParams.put("offset", scanOffset)
+            val scanRows = getOperationalRows(screenKey, scanParams)
+            if (scanRows.length() == 0) break
+            for (i in 0 until scanRows.length()) {
+                val row = scanRows.optJSONObject(i) ?: continue
+                spec.numericColumns.forEach { key ->
+                    totals.put(key, totals.optDouble(key, 0.0) + row.optDouble(key, 0.0))
+                }
+            }
+            scanOffset += scanRows.length()
+        }
+
         val page = (offset / pageSize) + 1
         val totalPages = if (totalCount == 0) 0 else ((totalCount + pageSize - 1) / pageSize)
         return JSONObject().apply {
@@ -18829,6 +18850,46 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun restoreDatabase(path: String): Boolean = restoreDatabaseSafe(path).optBoolean("success", false)
+
+    fun exportOperationalCsv(screenKey: String, params: JSONObject = JSONObject(), stationScopeId: Int): String {
+        val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
+        require(stationScopeId > 0) { "معرف المحطة غير صالح للتصدير" }
+        dbLock.lock()
+        return try {
+            val exportDir = File(contextRef.getExternalFilesDir(null), "exports")
+            require(exportDir.exists() || exportDir.mkdirs()) { "تعذر إنشاء مجلد التصدير" }
+            val safeParams = JSONObject(params.toString()).apply {
+                put("station_id", stationScopeId)
+                put("limit", 1000)
+                put("offset", 0)
+            }
+            val total = getOperationalTotalCount(screenKey, safeParams)
+            val columns = listOf("id") + spec.columns
+            val csv = StringBuilder()
+            csv.append(columns.joinToString(",")).append("\n")
+            var offset = 0
+            while (offset < total) {
+                safeParams.put("offset", offset)
+                val rows = getOperationalRows(screenKey, safeParams)
+                if (rows.length() == 0) break
+                for (i in 0 until rows.length()) {
+                    val row = rows.optJSONObject(i) ?: continue
+                    val values = columns.map { key ->
+                        val raw = if (row.has(key) && !row.isNull(key)) row.opt(key).toString() else ""
+                        """ + raw.replace(""", """") + """
+                    }
+                    csv.append(values.joinToString(",")).append("\n")
+                }
+                offset += rows.length()
+            }
+            val file = File(exportDir, "${spec.table}_${System.currentTimeMillis()}.csv")
+            file.writeText(csv.toString(), Charsets.UTF_8)
+            require(file.exists() && file.length() > 0L) { "فشل إنشاء ملف CSV" }
+            file.absolutePath
+        } finally {
+            dbLock.unlock()
+        }
+    }
 
     fun exportToCSV(tableName: String): String {
         dbLock.lock()
