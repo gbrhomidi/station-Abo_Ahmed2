@@ -2059,12 +2059,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 	                        return errorResponse("الفرع لا يطابق الفرع المرتبط بالمحطة المحددة")
 	                    }
 
+                    val systemRoleId = db.readableDatabase.rawQuery(
+                        "SELECT id FROM roles WHERE role_code = ? AND is_deleted = 0 AND is_active = 1 ORDER BY level ASC, id ASC LIMIT 1",
+                        arrayOf("SUPER_ADMIN")
+                    ).use { cursor ->
+                        if (!cursor.moveToFirst()) return errorResponse("الدور الأساسي SUPER_ADMIN غير موجود في SQLite")
+                        cursor.getLong(0)
+                    }
+
 	                    // قائمة حقول صريحة: لا تُقبل id أو hashes أو role/station/company من JavaScript.
 	                    val userData = JSONObject().apply {
                         put("username", username)
                         put("full_name", fullName)
 	                        put("password", password)
-	                        put("role_id", 1)
+	                        put("role_id", systemRoleId)
 	                        put("station_id", stationId)
 	                        put("branch_id", branchId)
                         put("preferred_language", "ar")
@@ -2090,7 +2098,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     successResponse(id, "تم إنشاء مستخدم النظام بنجاح")
                 } catch (e: Exception) {
                     DebugLogger.logException("SystemSetupCreate", e)
-                    errorResponse("تعذر إنشاء مستخدم النظام")
+                    errorResponse(e.message?.takeIf { it.isNotBlank() } ?: "تعذر إنشاء مستخدم النظام")
                 }
             }
         }
