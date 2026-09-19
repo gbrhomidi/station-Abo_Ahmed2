@@ -2160,7 +2160,16 @@
                     // إلى النسخة المحلية عند فتحها رغم توفر قاعدة SQLite.
                     result = bridge.getActivityLogs(JSON.stringify({
                         limit: toSafeInt(p.limit, 500, 1, 2000),
-                        offset: toSafeInt(p.offset, 0, 0, Number.MAX_SAFE_INTEGER)
+                        offset: toSafeInt(p.offset, 0, 0, Number.MAX_SAFE_INTEGER),
+                        type: String(p.type ?? ''),
+                        status: String(p.status ?? ''),
+                        date_from: String(p.date_from ?? ''),
+                        date_to: String(p.date_to ?? ''),
+                        search: String(p.search ?? ''),
+                        user: String(p.user ?? ''),
+                        ip: String(p.ip ?? ''),
+                        table: String(p.table ?? ''),
+                        action: String(p.action ?? '')
                     }));
                     break;
                 case 'getSmsMessages':
@@ -2507,9 +2516,11 @@
                 case 'cleanup':
                     cleanupOldLogs();
                     break;
-                case 'audit':
-                    showToast('📋 عرض سجل التدقيق', 'info');
+                case 'audit': {
+                    const auditBtn = Array.from(document.querySelectorAll('.filter-chip')).find(b => b.textContent.includes('تدقيق'));
+                    setFilter('audit', auditBtn);
                     break;
+                }
                 case 'ai_advisor':
                     openAIAdvisor();
                     break;
@@ -2563,6 +2574,33 @@
         /* ============================================================
            9. Load Data from Database
            ============================================================ */
+        function buildActivityQueryParams(extra = {}) {
+            const params = {
+                limit: 2000,
+                offset: 0,
+                type: currentFilter === 'ai_suggest' ? '' : currentFilter,
+                date_from: window._timeFilterStart || '',
+                date_to: window._timeFilterEnd || '',
+                search: searchQuery || ''
+            };
+            if (advancedSearchActive) {
+                params.user = document.getElementById('advUser')?.value.trim() || '';
+                params.date_from = document.getElementById('advFrom')?.value || params.date_from;
+                params.date_to = document.getElementById('advTo')?.value || params.date_to;
+                params.ip = document.getElementById('advIp')?.value.trim() || '';
+                params.table = document.getElementById('advTable')?.value.trim() || '';
+                params.action = document.getElementById('advAction')?.value.trim() || '';
+                params.status = document.getElementById('advStatus')?.value || '';
+            }
+            return { ...params, ...extra };
+        }
+
+        let reloadTimer = null;
+        function scheduleDataReload() {
+            clearTimeout(reloadTimer);
+            reloadTimer = setTimeout(() => loadData(), 250);
+        }
+
         async function loadData() {
             if (isLoadingData) return;
             isLoadingData = true;
@@ -2570,13 +2608,12 @@
             showLoading(true);
             try {
                 const [activityRes, currentUserRes] = await Promise.all([
-                    apiCall('getActivityLogs', { limit: 500 }),
+                    apiCall('getActivityLogs', buildActivityQueryParams()),
                     apiCall('getCurrentUser', {})
                 ]);
                 if (!activityRes.success || !Array.isArray(activityRes.data)) {
                     throw new Error(activityRes.error || activityRes.message || 'فشل قراءة سجل النشاط');
                 }
-
                 baseLogs = activityRes.data.map(log => ({
                     ...log,
                     _type: log.log_type || 'user_activity',
@@ -2600,11 +2637,9 @@
                     else currentUserRole = ROLES.VIEWER;
                 }
 
-                // تحميل الإعدادات
-                loadSettings();
-
+                await loadSettings();
                 initFuse();
-                applyTimeFilter();
+                currentPage = 1;
                 renderCards();
                 updateStats();
                 updateCharts();
@@ -2612,21 +2647,23 @@
                 generateAIInsights();
             } catch (e) {
                 console.error('Load error:', e);
-                baseLogs = LocalDB.get('logs', []);
-                allLogs = [...baseLogs];
                 allUsers = LocalDB.get('users', []);
+                const cached = LocalDB.get('logs', []);
+                baseLogs = Array.isArray(cached) ? cached : [];
+                allLogs = [...baseLogs];
                 initFuse();
-                applyTimeFilter();
+                currentPage = 1;
                 renderCards();
                 updateStats();
                 updateCharts();
                 updateAlerts();
-                showToast('⚠️ تعذر الاتصال بقاعدة البيانات؛ عُرضت آخر نسخة محلية', 'warning');
+                showToast('❌ تعذر تحميل سجل النشاط من SQLite: ' + getErrorMessage(e, 'خطأ غير معروف'), 'error');
             } finally {
                 isLoadingData = false;
                 showLoading(false);
             }
         }
+
 
         function renderSkeleton() {
             const container = document.getElementById('cardsContainer');
@@ -2669,8 +2706,9 @@
         function handleSearch(query) {
             searchQuery = query.trim();
             currentPage = 1;
-            renderCards();
+            scheduleDataReload();
         }
+
 
         /* ============================================================
            11. Time Filters
@@ -2687,10 +2725,10 @@
                 return;
             }
             applyTimeFilter();
-            renderCards();
-            updateStats();
-            updateCharts();
+            currentPage = 1;
+            loadData();
         }
+
 
         function applyTimeFilter() {
             const now = new Date();
@@ -2759,7 +2797,7 @@
             document.body.style.overflow = '';
         }
 
-        function applyAdvancedSearch() {
+        async function applyAdvancedSearch() {
             const user = document.getElementById('advUser').value.trim();
             const from = document.getElementById('advFrom').value;
             const to = document.getElementById('advTo').value;
@@ -2768,39 +2806,16 @@
             const action = document.getElementById('advAction').value.trim();
             const status = document.getElementById('advStatus').value;
 
-            let filtered = [...allLogs];
-
-            if (user) filtered = filtered.filter(l => (l.username || '').toLowerCase().includes(user.toLowerCase()));
-            if (from) {
-                const f = new Date(from + 'T00:00:00').getTime();
-                filtered = filtered.filter(l => {
-                    const d = getLogTimestamp(l);
-                    return !isNaN(d) && d >= f;
-                });
+            if (from && to && from > to) {
+                showToast('❌ تاريخ البداية يجب أن يسبق أو يساوي تاريخ النهاية', 'error');
+                return;
             }
-            if (to) {
-                const t = new Date(to + 'T23:59:59.999').getTime();
-                filtered = filtered.filter(l => {
-                    const d = getLogTimestamp(l);
-                    return !isNaN(d) && d <= t;
-                });
-            }
-            if (ip) filtered = filtered.filter(l => (l.ip_address || '').includes(ip));
-            if (table) filtered = filtered.filter(l => (l.table_name || l.source || '').toLowerCase().includes(table
-            .toLowerCase()));
-            if (action) filtered = filtered.filter(l => (l.action || l.action_type || l.log_type || '').toLowerCase()
-                .includes(action.toLowerCase()));
-            if (status) filtered = filtered.filter(l => getStatusValue(l) === status);
-
             advancedSearchActive = Boolean(user || from || to || ip || table || action || status);
-            allLogs = filtered;
             currentPage = 1;
-            renderCards();
-            updateStats();
-            updateCharts();
             closeAdvancedSearch();
-            showToast('✅ تم تطبيق البحث المتقدم – ' + filtered.length + ' نتيجة', 'success');
+            await loadData();
         }
+
 
         function resetAdvancedSearch() {
             document.getElementById('advUser').value = '';
@@ -2811,17 +2826,13 @@
             document.getElementById('advAction').value = '';
             document.getElementById('advStatus').value = '';
             advancedSearchActive = false;
-            allLogs = [...baseLogs];
             currentPage = 1;
             initFuse();
             applyTimeFilter();
-            renderCards();
-            updateStats();
-            updateCharts();
-            updateAlerts();
             closeAdvancedSearch();
-            showToast('🔄 تم إعادة تعيين البحث', 'info');
+            loadData();
         }
+
 
         /* ============================================================
            13. Compare Periods
@@ -2851,65 +2862,51 @@
             document.body.style.overflow = '';
         }
 
-        function runComparison() {
+        async function runComparison() {
             const from1 = document.getElementById('compareFrom1').value;
             const to1 = document.getElementById('compareTo1').value;
             const from2 = document.getElementById('compareFrom2').value;
             const to2 = document.getElementById('compareTo2').value;
-
             if (!from1 || !to1 || !from2 || !to2) {
-                showToast('❌ الرجاء تحديد جميع التواريخ', 'error');
-                return;
+                showToast('❌ الرجاء تحديد جميع التواريخ', 'error'); return;
             }
-
-            const t1 = new Date(from1 + 'T00:00:00').getTime();
-            const t2 = new Date(to1 + 'T23:59:59.999').getTime();
-            const t3 = new Date(from2 + 'T00:00:00').getTime();
-            const t4 = new Date(to2 + 'T23:59:59.999').getTime();
-            if (t1 > t2 || t3 > t4) {
-                showToast('❌ يجب أن يكون تاريخ البداية قبل تاريخ النهاية', 'error');
-                return;
+            if (from1 > to1 || from2 > to2) {
+                showToast('❌ يجب أن يكون تاريخ البداية قبل أو يساوي النهاية', 'error'); return;
             }
-
-            const data1 = allLogs.filter(l => {
-                const d = getLogTimestamp(l);
-                return !isNaN(d) && d >= t1 && d <= t2;
-            });
-            const data2 = allLogs.filter(l => {
-                const d = getLogTimestamp(l);
-                return !isNaN(d) && d >= t3 && d <= t4;
-            });
-
-            const container = document.getElementById('compareResults');
-            if (data1.length === 0 && data2.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>لا توجد بيانات في الفترتين</p></div>';
-                return;
+            showLoading(true);
+            try {
+                const [r1, r2] = await Promise.all([
+                    apiCall('getActivityLogs', {limit:2000, date_from:from1, date_to:to1, type:'', status:'', search:''}),
+                    apiCall('getActivityLogs', {limit:2000, date_from:from2, date_to:to2, type:'', status:'', search:''})
+                ]);
+                if (!r1.success || !r2.success) throw new Error(r1.error || r2.error || 'فشل قراءة بيانات المقارنة');
+                const data1 = Array.isArray(r1.data) ? r1.data : [];
+                const data2 = Array.isArray(r2.data) ? r2.data : [];
+                if (data1.length === 0 && data2.length === 0) {
+                    document.getElementById('compareResults').innerHTML = '<div class="empty-state"><p>لا توجد بيانات في الفترتين</p></div>';
+                    return;
+                }
+                const users1 = new Set(data1.map(l => l.username || l.user_id).filter(Boolean)).size;
+                const users2 = new Set(data2.map(l => l.username || l.user_id).filter(Boolean)).size;
+                const errors1 = data1.filter(l => ['fail','error','failed'].includes(getStatusValue(l))).length;
+                const errors2 = data2.filter(l => ['fail','error','failed'].includes(getStatusValue(l))).length;
+                document.getElementById('compareResults').innerHTML = `
+                    <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+                        <thead><tr><th>المقياس</th><th>الفترة الأولى</th><th>الفترة الثانية</th><th>الفرق</th></tr></thead>
+                        <tbody>
+                            <tr><td>عدد النشاطات</td><td>${data1.length}</td><td>${data2.length}</td><td>${data1.length-data2.length}</td></tr>
+                            <tr><td>مستخدمين نشطين</td><td>${users1}</td><td>${users2}</td><td>${users1-users2}</td></tr>
+                            <tr><td>الأخطاء</td><td>${errors1}</td><td>${errors2}</td><td>${errors1-errors2}</td></tr>
+                        </tbody>
+                    </table>`;
+                showToast('✅ تمت المقارنة من SQLite بنجاح', 'success');
+            } catch (e) {
+                showToast('❌ فشل المقارنة: ' + getErrorMessage(e), 'error');
+            } finally {
+                showLoading(false);
             }
-
-            const users1 = new Set(data1.map(l => l.username || l.user_id).filter(Boolean)).size;
-            const users2 = new Set(data2.map(l => l.username || l.user_id).filter(Boolean)).size;
-            const errors1 = data1.filter(l => {
-                const s = getStatusValue(l);
-                return s === 'fail' || s === 'error' || s === 'failed';
-            }).length;
-            const errors2 = data2.filter(l => {
-                const s = getStatusValue(l);
-                return s === 'fail' || s === 'error' || s === 'failed';
-            }).length;
-
-            let html = `
-                <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
-                    <thead><tr><th>المقياس</th><th>الفترة الأولى</th><th>الفترة الثانية</th><th>الفرق</th></tr></thead>
-                    <tbody>
-                        <tr><td>عدد النشاطات</td><td>${data1.length}</td><td>${data2.length}</td><td style="color:${data1.length > data2.length ? 'var(--success)' : 'var(--error)'};">${data1.length - data2.length}</td></tr>
-                        <tr><td>مستخدمين نشطين</td><td>${users1}</td><td>${users2}</td><td style="color:${users1 > users2 ? 'var(--success)' : 'var(--error)'};">${users1 - users2}</td></tr>
-                        <tr><td>الأخطاء</td><td>${errors1}</td><td>${errors2}</td><td style="color:${errors1 < errors2 ? 'var(--success)' : 'var(--error)'};">${errors1 - errors2}</td></tr>
-                    </tbody>
-                </table>
-            `;
-            container.innerHTML = html;
-            showToast('✅ تمت المقارنة بنجاح', 'success');
         }
+
 
         /* ============================================================
            14. Settings
@@ -2991,58 +2988,13 @@
            ============================================================ */
         function getFilteredData() {
             let data = [...allLogs];
-
-            // فلتر النوع
-            if (currentFilter === 'user_activity') data = data.filter(l => l._type === 'user_activity');
-            else if (currentFilter === 'audit') data = data.filter(l => l._type === 'audit');
-            else if (currentFilter === 'system') data = data.filter(l => l._type === 'system');
-            else if (currentFilter === 'sms') data = data.filter(l => l._type === 'sms');
-            else if (currentFilter === 'sync') data = data.filter(l => l._type === 'sync');
-            else if (currentFilter === 'ai_suggest') {
+            // All time/type/search/status/date filtering is performed by SQLite.
+            // AI recommendations remain a derived view over the already-scoped result.
+            if (currentFilter === 'ai_suggest') {
                 const insights = LocalDB.get('ai_log_insights', []);
-                const ids = insights.map(i => i.logId);
-                data = data.filter(l => ids.includes(l.id));
+                const ids = new Set(insights.map(i => i.logId).filter(id => id));
+                data = data.filter(l => ids.has(l.id));
             }
-
-            // فلتر زمني
-            const start = window._timeFilterStart;
-            if (start) {
-                const s = new Date(start + 'T00:00:00').getTime();
-                data = data.filter(l => {
-                    const d = getLogTimestamp(l);
-                    return !Number.isNaN(d) && d >= s;
-                });
-            }
-            const end = window._timeFilterEnd;
-            if (end) {
-                const e = new Date(end + 'T23:59:59.999').getTime();
-                data = data.filter(l => {
-                    const d = getLogTimestamp(l);
-                    return !Number.isNaN(d) && d <= e;
-                });
-            }
-
-            // بحث نصي
-            if (searchQuery && fuseInstance) {
-                const results = fuseInstance.search(searchQuery);
-                const ids = results.map(r => r.item.id);
-                data = data.filter(l => ids.includes(l.id));
-            } else if (searchQuery) {
-                const q = searchQuery.toLowerCase();
-                data = data.filter(l =>
-                    (l.username || '').toLowerCase().includes(q) ||
-                    (l.action || '').toLowerCase().includes(q) ||
-                    (l.action_type || '').toLowerCase().includes(q) ||
-                    (l.description || '').toLowerCase().includes(q) ||
-                    (l.table_name || '').toLowerCase().includes(q) ||
-                    (l.log_type || '').toLowerCase().includes(q) ||
-                    (l.message || '').toLowerCase().includes(q) ||
-                    (l.phone_number || '').toLowerCase().includes(q) ||
-                    (l.ip_address || '').toLowerCase().includes(q) ||
-                    (l.device_id || '').toLowerCase().includes(q)
-                );
-            }
-
             return data;
         }
 
@@ -3794,35 +3746,27 @@
             const to = document.getElementById('reportTo').value;
             const type = document.getElementById('reportType').value;
             const status = document.getElementById('reportStatus').value;
-
             if (!from || !to) { showToast('❌ الرجاء اختيار نطاق التاريخ', 'error'); return; }
-            const start = new Date(from + 'T00:00:00').getTime();
-            const end = new Date(to + 'T23:59:59.999').getTime();
-            if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) {
-                showToast('❌ يجب أن يكون تاريخ البداية قبل تاريخ النهاية', 'error');
-                return;
-            }
-
+            if (from > to) { showToast('❌ يجب أن يكون تاريخ البداية قبل أو يساوي النهاية', 'error'); return; }
             showLoading(true);
             try {
-                const filtered = allLogs.filter(item => {
-                    const time = getLogTimestamp(item);
-                    const dateMatch = !Number.isNaN(time) && time >= start && time <= end;
-                    const typeMatch = !type || item._type === type;
-                    const s = getStatusValue(item);
-                    const statusMatch = !status || s === status;
-                    return dateMatch && typeMatch && statusMatch;
+                const result = await apiCall('getActivityLogs', {
+                    limit: 2000, offset: 0, date_from: from, date_to: to,
+                    type: type || '', status: status === 'fail' ? 'failed' : (status || ''), search: ''
                 });
-                reportData = filtered;
-                renderReportResults(filtered);
-                showToast('✅ تم توليد التقرير من السجلات المحملة فعلياً', 'success');
+                if (!result.success) throw new Error(result.error || result.message || 'فشل قراءة بيانات التقرير');
+                const data = Array.isArray(result.data) ? result.data : [];
+                reportData = data;
+                renderReportResults(data);
+                showToast(data.length ? '✅ تم توليد التقرير من SQLite' : 'لا توجد بيانات ضمن الفترة المحددة.', data.length ? 'success' : 'info');
             } catch (e) {
-                showToast('❌ فشل توليد التقرير', 'error');
-                console.error(e);
+                document.getElementById('reportResults').innerHTML = '<div class="empty-state"><p>تعذر توليد التقرير من قاعدة البيانات.</p><p style="font-size:0.75rem;">' + escapeHtml(getErrorMessage(e)) + '</p></div>';
+                showToast('❌ فشل توليد التقرير: ' + getErrorMessage(e), 'error');
             } finally {
                 showLoading(false);
             }
         }
+
 
         function renderReportResults(data) {
             const container = document.getElementById('reportResults');
@@ -3897,53 +3841,33 @@
             const from = document.getElementById('reportFrom').value;
             const to = document.getElementById('reportTo').value;
             if (!from || !to) { showToast('❌ الرجاء اختيار نطاق التاريخ', 'error'); return; }
-            const start = new Date(from + 'T00:00:00').getTime();
-            const end = new Date(to + 'T23:59:59.999').getTime();
-            if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) {
-                showToast('❌ يجب أن يكون تاريخ البداية قبل تاريخ النهاية', 'error');
-                return;
-            }
-
+            if (from > to) { showToast('❌ يجب أن يكون تاريخ البداية قبل أو يساوي النهاية', 'error'); return; }
             showLoading(true);
             try {
-                const filtered = allLogs.filter(item => {
-                    const time = getLogTimestamp(item);
-                    return !Number.isNaN(time) && time >= start && time <= end;
-                });
-
-                reportData = filtered;
-                const total = filtered.length;
-                const errors = filtered.filter(l => {
-                    const s = getStatusValue(l);
-                    return s === 'fail' || s === 'error' || s === 'failed';
-                }).length;
-                const users = new Set(filtered.map(l => l.username || l.user_id).filter(Boolean)).size;
-                const audit = filtered.filter(l => l._type === 'audit').length;
-
-                let html = `
+                const result = await apiCall('getActivityLogs', { limit: 2000, date_from: from, date_to: to, type: '', status: '', search: '' });
+                if (!result.success) throw new Error(result.error || result.message || 'فشل قراءة بيانات الامتثال');
+                const data = Array.isArray(result.data) ? result.data : [];
+                reportData = data;
+                const errors = data.filter(l => ['fail','error','failed'].includes(getStatusValue(l))).length;
+                const users = new Set(data.map(l => l.username || l.user_id).filter(Boolean)).size;
+                const audit = data.filter(l => l._type === 'audit' || l.log_type === 'audit').length;
+                document.getElementById('reportResults').innerHTML = `
                     <div style="text-align:center;font-weight:700;margin-bottom:8px;">📋 تقرير الامتثال</div>
-                    <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
-                        <thead><tr><th style="padding:6px 10px;border-bottom:2px dashed var(--border-color);">المقياس</th><th style="padding:6px 10px;border-bottom:2px dashed var(--border-color);">القيمة</th></tr></thead>
-                        <tbody>
-                            <tr><td>الفترة</td><td>${escapeHtml(from)} إلى ${escapeHtml(to)}</td></tr>
-                            <tr><td>إجمالي النشاطات</td><td>${total}</td></tr>
-                            <tr><td>الأخطاء</td><td style="color:${errors > 0 ? 'var(--error)' : 'var(--success)'};">${errors}</td></tr>
-                            <tr><td>مستخدمين نشطين</td><td>${users}</td></tr>
-                            <tr><td>سجلات التدقيق</td><td>${audit}</td></tr>
-                            <tr><td>المسؤول</td><td>${escapeHtml(allUsers.length > 0 ? allUsers[0].username || 'admin' : 'غير معروف')}</td></tr>
-                        </tbody>
-                    </table>
-                    <div style="margin-top:8px;font-size:0.7rem;color:var(--text-muted);text-align:center;">تم التوليد تلقائياً – تاريخ: ${new Date().toLocaleString('ar')}</div>
-                `;
-
-                document.getElementById('reportResults').innerHTML = html;
-                showToast('✅ تم توليد تقرير الامتثال', 'success');
+                    <table style="width:100%;border-collapse:collapse;font-size:0.8rem;"><tbody>
+                        <tr><td>الفترة</td><td>${escapeHtml(from)} إلى ${escapeHtml(to)}</td></tr>
+                        <tr><td>إجمالي النشاطات</td><td>${data.length}</td></tr>
+                        <tr><td>الأخطاء</td><td>${errors}</td></tr>
+                        <tr><td>مستخدمين نشطين</td><td>${users}</td></tr>
+                        <tr><td>سجلات التدقيق</td><td>${audit}</td></tr>
+                    </tbody></table>`;
+                showToast(data.length ? '✅ تم توليد تقرير الامتثال من SQLite' : 'لا توجد بيانات ضمن الفترة المحددة.', data.length ? 'success' : 'info');
             } catch (e) {
-                showToast('❌ فشل توليد التقرير', 'error');
+                showToast('❌ فشل تقرير الامتثال: ' + getErrorMessage(e), 'error');
             } finally {
                 showLoading(false);
             }
         }
+
 
         function mapLogsForExport(logs) {
             return logs.map(l => ({
@@ -4069,14 +3993,14 @@
                 c.classList.remove('active');
                 c.setAttribute('aria-selected', 'false');
             });
-            if (btn) { btn.classList.add('active');
-                btn.setAttribute('aria-selected', 'true'); }
+            if (btn) {
+                btn.classList.add('active');
+                btn.setAttribute('aria-selected', 'true');
+            }
             currentPage = 1;
-            renderCards();
-            updateStats();
-            updateCharts();
-            updateAlerts();
+            loadData();
         }
+
 
         /* ============================================================
            26. Pull-to-Refresh

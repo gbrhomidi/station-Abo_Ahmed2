@@ -2059,12 +2059,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 	                        return errorResponse("الفرع لا يطابق الفرع المرتبط بالمحطة المحددة")
 	                    }
 
+                    val systemRoleId = db.readableDatabase.rawQuery(
+                        "SELECT id FROM roles WHERE role_code = ? AND is_deleted = 0 AND is_active = 1 ORDER BY level ASC, id ASC LIMIT 1",
+                        arrayOf("SUPER_ADMIN")
+                    ).use { cursor ->
+                        if (!cursor.moveToFirst()) return errorResponse("الدور الأساسي SUPER_ADMIN غير موجود في SQLite")
+                        cursor.getLong(0)
+                    }
+
 	                    // قائمة حقول صريحة: لا تُقبل id أو hashes أو role/station/company من JavaScript.
 	                    val userData = JSONObject().apply {
                         put("username", username)
                         put("full_name", fullName)
 	                        put("password", password)
-	                        put("role_id", 1)
+	                        put("role_id", systemRoleId)
 	                        put("station_id", stationId)
 	                        put("branch_id", branchId)
                         put("preferred_language", "ar")
@@ -2090,7 +2098,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     successResponse(id, "تم إنشاء مستخدم النظام بنجاح")
                 } catch (e: Exception) {
                     DebugLogger.logException("SystemSetupCreate", e)
-                    errorResponse("تعذر إنشاء مستخدم النظام")
+                    errorResponse(e.message?.takeIf { it.isNotBlank() } ?: "تعذر إنشاء مستخدم النظام")
                 }
             }
         }
@@ -4936,29 +4944,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val params = JSONObject(jsonData.ifBlank { "{}" })
-                val limit = params.optInt("limit", 50)
-                val offset = params.optInt("offset", 0)
-
-                val arr = JSONArray()
-                db.readableDatabase.rawQuery(
-                    "SELECT al.*, u.username, u.full_name FROM user_activity_log al LEFT JOIN users u ON al.user_id = u.id WHERE (al.station_id = ? OR al.station_id IS NULL) ORDER BY al.created_at DESC LIMIT ? OFFSET ?",
-                    arrayOf(stationId.toString(), limit.toString(), offset.toString())
-                ).use { cursor ->
-                    while (cursor.moveToNext()) {
-                        val obj = JSONObject()
-                        for (i in 0 until cursor.columnCount) {
-                            val colName = cursor.getColumnName(i)
-                            when (cursor.getType(i)) {
-                                android.database.Cursor.FIELD_TYPE_INTEGER -> obj.put(colName, cursor.getLong(i))
-                                android.database.Cursor.FIELD_TYPE_FLOAT -> obj.put(colName, cursor.getDouble(i))
-                                android.database.Cursor.FIELD_TYPE_STRING -> obj.put(colName, cursor.getString(i))
-                                android.database.Cursor.FIELD_TYPE_NULL -> obj.put(colName, JSONObject.NULL)
-                            }
-                        }
-                        arr.put(obj)
-                    }
-                }
-                dataResponse(arr)
+                val result = db.getActivityLogs(params, stationId.toInt())
+                dataResponse(result)
             } catch (e: Exception) {
                 DebugLogger.logException("Logs", e)
                 errorResponse(e.message)

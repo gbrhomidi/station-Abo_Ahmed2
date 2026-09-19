@@ -10963,7 +10963,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     require(cursor.moveToFirst()) { "المحطة المحددة غير موجودة" }
                     val actualBranch = if (cursor.isNull(0)) 0L else cursor.getLong(0)
                     val actualCompany = if (cursor.isNull(1)) 0L else cursor.getLong(1)
-                    require(branchId <= 0L || branchId == actualBranch) { "معرف الفرع لا يطابق المحطة المحددة" }
+                    // A station may legitimately have no branch linkage yet. In that case the
+                    // independently supplied branch remains valid; enforce consistency only when
+                    // SQLite actually contains a branch relationship for the selected station.
+                    require(actualBranch <= 0L || branchId <= 0L || branchId == actualBranch) { "معرف الفرع لا يطابق المحطة المحددة" }
                     require(companyId <= 0L || companyId == actualCompany) { "معرف الشركة لا يطابق المحطة المحددة" }
                 }
             }
@@ -11913,7 +11916,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             readableDatabase.rawQuery(
-                "SELECT id, station_code, station_name, station_name_ar FROM stations WHERE is_deleted = 0 ORDER BY station_name",
+                "SELECT id, station_code, station_name, station_name_ar, branch_id FROM stations WHERE is_deleted = 0 ORDER BY station_name",
                 null
             ).use { cursor -> cursorToJsonArray(cursor) }
         } finally { dbLock.unlock() }
@@ -13217,112 +13220,107 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      * ولا يمكن تمريرها من JavaScript.
      */
     fun getActivityLogs(limit: Int = 500): JSONArray {
-        val safeLimit = limit.coerceIn(1, 2000)
+        return getActivityLogs(JSONObject().apply { put("limit", limit) }, null)
+    }
+
+    /** Reads the activity feed from real SQLite tables with optional scope and filters. */
+    fun getActivityLogs(params: JSONObject, stationId: Int?): JSONArray {
+        val safeLimit = params.optInt("limit", 500).coerceIn(1, 2000)
+        val safeOffset = params.optInt("offset", 0).coerceAtLeast(0)
+        val type = params.optString("type", "").trim().lowercase(Locale.ROOT)
+        val status = params.optString("status", "").trim().lowercase(Locale.ROOT)
+        val dateFrom = params.optString("date_from", "").trim()
+        val dateTo = params.optString("date_to", "").trim()
+        val search = params.optString("search", "").trim()
+        require(type.isEmpty() || type in setOf("user_activity", "audit", "system", "sms", "sync"))
+        require(status.isEmpty() || status in setOf("success","failed","fail","error","warning","pending","sent","delivered","cancelled","queued","sending","partial","in_progress"))
+        require(dateFrom.isEmpty() || Regex("""^\d{4}-\d{2}-\d{2}$""").matches(dateFrom))
+        require(dateTo.isEmpty() || Regex("""^\d{4}-\d{2}-\d{2}$""").matches(dateTo))
+        if (dateFrom.isNotEmpty() && dateTo.isNotEmpty()) require(dateFrom <= dateTo) { "تاريخ البداية يجب أن يسبق أو يساوي تاريخ النهاية" }
         dbLock.lock()
         return try {
             val db = readableDatabase
+            val conditions = mutableListOf<String>()
+            val args = mutableListOf<String>()
+            if (stationId != null) {
+                require(stationId > 0) { "معرف المحطة غير صالح" }
+                conditions += """(
+                    (log_type = 'user_activity' AND EXISTS (SELECT 1 FROM user_activity_log ual WHERE ual.id = activity.id AND ual.station_id = ?))
+                    OR (log_type = 'system' AND EXISTS (SELECT 1 FROM system_logs sl WHERE sl.id = activity.id AND sl.station_id = ?))
+                    OR (log_type = 'audit' AND activity.user_id IS NOT NULL AND EXISTS (SELECT 1 FROM users au WHERE au.id = activity.user_id AND au.station_id = ?))
+                    OR (log_type = 'sms' AND EXISTS (SELECT 1 FROM sms_logs sms2 LEFT JOIN parties sp ON sp.id = sms2.customer_party_id LEFT JOIN users su ON su.id = sms2.created_by WHERE sms2.id = activity.id AND (sp.station_id = ? OR su.station_id = ?)))
+                    OR (log_type = 'sync' AND EXISTS (SELECT 1 FROM sync_logs sy2 INNER JOIN sync_devices sd ON sd.device_id = sy2.device_id WHERE sy2.id = activity.id AND sd.station_id = ?))
+                )""".trimIndent()
+                repeat(6) { args += stationId.toString() }
+            }
+            if (type.isNotEmpty()) { conditions += "log_type = ?"; args += type }
+            if (params.optString("user", "").trim().isNotEmpty()) { conditions += "LOWER(COALESCE(username,'')) LIKE ?"; args += "%" + params.optString("user").trim().lowercase(Locale.ROOT) + "%" }
+            if (params.optString("ip", "").trim().isNotEmpty()) { conditions += "LOWER(COALESCE(ip_address,'')) LIKE ?"; args += "%" + params.optString("ip").trim().lowercase(Locale.ROOT) + "%" }
+            if (params.optString("table", "").trim().isNotEmpty()) { conditions += "LOWER(COALESCE(table_name,'')) LIKE ?"; args += "%" + params.optString("table").trim().lowercase(Locale.ROOT) + "%" }
+            if (params.optString("action", "").trim().isNotEmpty()) { conditions += "LOWER(COALESCE(action,'')) LIKE ?"; args += "%" + params.optString("action").trim().lowercase(Locale.ROOT) + "%" }
+            if (status.isNotEmpty()) { conditions += "LOWER(COALESCE(status, '')) = ?"; args += status }
+            if (dateFrom.isNotEmpty()) { conditions += "date(created_at) >= date(?)"; args += dateFrom }
+            if (dateTo.isNotEmpty()) { conditions += "date(created_at) <= date(?)"; args += dateTo }
+            if (search.isNotEmpty()) {
+                conditions += "(LOWER(COALESCE(username,'')) LIKE ? OR LOWER(COALESCE(action,'')) LIKE ? OR LOWER(COALESCE(description,'')) LIKE ? OR LOWER(COALESCE(table_name,'')) LIKE ? OR LOWER(COALESCE(message_type,'')) LIKE ? OR LOWER(COALESCE(phone_number,'')) LIKE ? OR LOWER(COALESCE(device_id,'')) LIKE ?)"
+                val like = "%" + search.lowercase(Locale.ROOT) + "%"
+                repeat(7) { args += like }
+            }
+            val whereSql = if (conditions.isEmpty()) "" else " WHERE " + conditions.joinToString(" AND ")
             val sql = """
-                SELECT id, uuid, username, user_id, action, action_type, action_category,
-                       description, description_ar, table_name, record_id, ip_address,
-                       device_id, user_agent, old_values, new_values, changed_columns,
-                       status, is_success, error_message, log_type, message_type,
-                       phone_number, sent_at, started_at, sync_type, stack_trace,
-                       source_table, created_at
+                SELECT id, uuid, username, user_id, action, action_type, action_category, description, description_ar,
+                       table_name, record_id, ip_address, device_id, user_agent, old_values, new_values, changed_columns,
+                       status, is_success, error_message, log_type, message_type, phone_number, sent_at, started_at,
+                       sync_type, stack_trace, source_table, created_at
                 FROM (
-                    SELECT ual.id, ual.uuid, u.username, ual.user_id,
-                           ual.action, NULL AS action_type, ual.action_category,
-                           ual.description, ual.description_ar,
-                           ual.target_table AS table_name, ual.target_id AS record_id,
-                           ual.ip_address, ual.device_id, ual.user_agent,
-                           ual.old_values, ual.new_values, ual.changed_columns,
-                           CASE WHEN ual.is_success = 1 THEN 'success' ELSE 'failed' END AS status,
-                           ual.is_success, ual.error_message,
-                           'user_activity' AS log_type, NULL AS message_type,
-                           NULL AS phone_number, NULL AS sent_at, NULL AS started_at,
-                           NULL AS sync_type, NULL AS stack_trace,
-                           'user_activity_log' AS source_table, ual.created_at
-                    FROM user_activity_log ual
-                    LEFT JOIN users u ON u.id = ual.user_id
-
+                    SELECT ual.id, ual.uuid, u.username, ual.user_id, ual.action, NULL AS action_type, ual.action_category,
+                           ual.description, ual.description_ar, ual.target_table AS table_name, ual.target_id AS record_id,
+                           ual.ip_address, ual.device_id, ual.user_agent, ual.old_values, ual.new_values, ual.changed_columns,
+                           CASE WHEN ual.is_success = 1 THEN 'success' ELSE 'failed' END AS status, ual.is_success, ual.error_message,
+                           'user_activity' AS log_type, NULL AS message_type, NULL AS phone_number, NULL AS sent_at, NULL AS started_at,
+                           NULL AS sync_type, NULL AS stack_trace, 'user_activity_log' AS source_table, ual.created_at
+                    FROM user_activity_log ual LEFT JOIN users u ON u.id = ual.user_id
                     UNION ALL
-
-                    SELECT al.id, al.uuid, u.username, al.user_id,
-                           al.action_type AS action, al.action_type, 'audit' AS action_category,
-                           COALESCE(al.new_row_json, al.old_row_json, al.action_type) AS description,
-                           NULL AS description_ar, al.table_name, al.record_id,
-                           al.ip_address, NULL AS device_id, al.user_agent,
-                           al.old_row_json AS old_values, al.new_row_json AS new_values,
-                           al.changed_columns, 'success' AS status, 1 AS is_success,
-                           NULL AS error_message, 'audit' AS log_type, NULL AS message_type,
-                           NULL AS phone_number, NULL AS sent_at, NULL AS started_at,
-                           NULL AS sync_type, NULL AS stack_trace,
-                           'audit_logs' AS source_table, al.created_at
-                    FROM audit_logs al
-                    LEFT JOIN users u ON u.id = al.user_id
-
+                    SELECT al.id, al.uuid, u.username, al.user_id, al.action_type AS action, al.action_type, 'audit' AS action_category,
+                           COALESCE(al.new_row_json, al.old_row_json, al.action_type) AS description, NULL AS description_ar, al.table_name, al.record_id,
+                           al.ip_address, NULL AS device_id, al.user_agent, al.old_row_json AS old_values, al.new_row_json AS new_values, al.changed_columns,
+                           'success' AS status, 1 AS is_success, NULL AS error_message, 'audit' AS log_type, NULL AS message_type, NULL AS phone_number,
+                           NULL AS sent_at, NULL AS started_at, NULL AS sync_type, NULL AS stack_trace, 'audit_logs' AS source_table, al.created_at
+                    FROM audit_logs al LEFT JOIN users u ON u.id = al.user_id
                     UNION ALL
-
-                    SELECT sl.id, sl.uuid, u.username, sl.user_id,
-                           sl.log_type AS action, sl.log_type, 'system' AS action_category,
-                           sl.message AS description, sl.message_ar AS description_ar,
-                           'system_logs' AS table_name, sl.id AS record_id,
-                           sl.ip_address, sl.device_id, NULL AS user_agent,
-                           NULL AS old_values, NULL AS new_values, NULL AS changed_columns,
-                           CASE
-                               WHEN sl.log_level IN ('error', 'critical') THEN 'failed'
-                               WHEN sl.log_level = 'warning' THEN 'warning'
-                               ELSE 'success'
-                           END AS status,
-                           CASE WHEN sl.log_level IN ('error', 'critical') THEN 0 ELSE 1 END AS is_success,
-                           CASE WHEN sl.log_level IN ('error', 'critical') THEN sl.message ELSE NULL END AS error_message,
-                           'system' AS log_type, NULL AS message_type,
-                           NULL AS phone_number, NULL AS sent_at, NULL AS started_at,
-                           NULL AS sync_type, sl.stack_trace,
+                    SELECT sl.id, sl.uuid, u.username, sl.user_id, sl.log_type AS action, sl.log_type, 'system' AS action_category,
+                           sl.message AS description, sl.message_ar AS description_ar, 'system_logs' AS table_name, sl.id AS record_id,
+                           sl.ip_address, sl.device_id, NULL AS user_agent, NULL AS old_values, NULL AS new_values, NULL AS changed_columns,
+                           CASE WHEN sl.log_level IN ('error','critical') THEN 'failed' WHEN sl.log_level = 'warning' THEN 'warning' ELSE 'success' END AS status,
+                           CASE WHEN sl.log_level IN ('error','critical') THEN 0 ELSE 1 END AS is_success,
+                           CASE WHEN sl.log_level IN ('error','critical') THEN sl.message ELSE NULL END AS error_message,
+                           'system' AS log_type, NULL AS message_type, NULL AS phone_number, NULL AS sent_at, NULL AS started_at, NULL AS sync_type, sl.stack_trace,
                            'system_logs' AS source_table, sl.created_at
-                    FROM system_logs sl
-                    LEFT JOIN users u ON u.id = sl.user_id
-
+                    FROM system_logs sl LEFT JOIN users u ON u.id = sl.user_id
                     UNION ALL
-
-                    SELECT sy.id, sy.uuid, NULL AS username, NULL AS user_id,
-                           sy.sync_type AS action, sy.sync_type, 'sync' AS action_category,
-                           sy.entity_type AS description, NULL AS description_ar,
-                           sy.entity_type AS table_name, NULL AS record_id,
-                           NULL AS ip_address, sy.device_id, NULL AS user_agent,
-                           NULL AS old_values, NULL AS new_values, NULL AS changed_columns,
-                           sy.status, CASE WHEN sy.status = 'success' THEN 1 ELSE 0 END AS is_success,
-                           sy.error_message, 'sync' AS log_type, NULL AS message_type,
-                           NULL AS phone_number, NULL AS sent_at, sy.started_at,
-                           sy.sync_type, NULL AS stack_trace,
-                           'sync_logs' AS source_table, sy.created_at
+                    SELECT sy.id, sy.uuid, NULL AS username, NULL AS user_id, sy.sync_type AS action, sy.sync_type, 'sync' AS action_category,
+                           sy.entity_type AS description, NULL AS description_ar, sy.entity_type AS table_name, NULL AS record_id, NULL AS ip_address,
+                           sy.device_id, NULL AS user_agent, NULL AS old_values, NULL AS new_values, NULL AS changed_columns, sy.status,
+                           CASE WHEN sy.status = 'success' THEN 1 ELSE 0 END AS is_success, sy.error_message, 'sync' AS log_type, NULL AS message_type,
+                           NULL AS phone_number, NULL AS sent_at, sy.started_at, sy.sync_type, NULL AS stack_trace, 'sync_logs' AS source_table, sy.created_at
                     FROM sync_logs sy
-
                     UNION ALL
-
-                    SELECT sms.id, sms.uuid, u.username, sms.created_by,
-                           sms.message_type AS action, sms.message_type, 'sms' AS action_category,
-                           sms.message_content AS description, NULL AS description_ar,
-                           'sms_logs' AS table_name, sms.id AS record_id,
-                           NULL AS ip_address, sms.device_id, NULL AS user_agent,
-                           NULL AS old_values, NULL AS new_values, NULL AS changed_columns,
-                           sms.status,
-                           CASE WHEN sms.status IN ('failed', 'cancelled') THEN 0 ELSE 1 END AS is_success,
-                           sms.error_message, 'sms' AS log_type, sms.message_type,
-                           sms.phone_number, sms.sent_at, NULL AS started_at,
-                           NULL AS sync_type, NULL AS stack_trace,
-                           'sms_logs' AS source_table, sms.created_at
-                    FROM sms_logs sms
-                    LEFT JOIN users u ON u.id = sms.created_by
+                    SELECT sms.id, sms.uuid, u.username, sms.created_by, sms.message_type AS action, sms.message_type, 'sms' AS action_category,
+                           sms.message_content AS description, NULL AS description_ar, 'sms_logs' AS table_name, sms.id AS record_id, NULL AS ip_address,
+                           sms.device_id, NULL AS user_agent, NULL AS old_values, NULL AS new_values, NULL AS changed_columns, sms.status,
+                           CASE WHEN sms.status IN ('failed','cancelled') THEN 0 ELSE 1 END AS is_success, sms.error_message, 'sms' AS log_type, sms.message_type,
+                           sms.phone_number, sms.sent_at, NULL AS started_at, NULL AS sync_type, NULL AS stack_trace, 'sms_logs' AS source_table, sms.created_at
+                    FROM sms_logs sms LEFT JOIN users u ON u.id = sms.created_by
                 ) activity
-                ORDER BY created_at DESC, id DESC
-                LIMIT ?
+                $whereSql
+                ORDER BY datetime(created_at) DESC, id DESC
+                LIMIT ? OFFSET ?
             """.trimIndent()
-            db.rawQuery(sql, arrayOf(safeLimit.toString())).use { cursor -> cursorToJsonArray(cursor) }
-        } finally {
-            dbLock.unlock()
-        }
+            args += safeLimit.toString()
+            args += safeOffset.toString()
+            db.rawQuery(sql, args.toTypedArray()).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
     }
-
     /** حذف سجل من جدول ثابت مسموح به؛ audit_logs غير قابل للحذف من الواجهة. */
     fun deleteActivityLog(sourceTable: String, id: Long): Int {
         if (id <= 0) return 0
