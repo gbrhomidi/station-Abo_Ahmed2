@@ -10963,7 +10963,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     require(cursor.moveToFirst()) { "المحطة المحددة غير موجودة" }
                     val actualBranch = if (cursor.isNull(0)) 0L else cursor.getLong(0)
                     val actualCompany = if (cursor.isNull(1)) 0L else cursor.getLong(1)
-                    require(branchId <= 0L || branchId == actualBranch) { "معرف الفرع لا يطابق المحطة المحددة" }
+                    // A station may legitimately have no branch linkage yet. In that case the
+                    // independently supplied branch remains valid; enforce consistency only when
+                    // SQLite actually contains a branch relationship for the selected station.
+                    require(actualBranch <= 0L || branchId <= 0L || branchId == actualBranch) { "معرف الفرع لا يطابق المحطة المحددة" }
                     require(companyId <= 0L || companyId == actualCompany) { "معرف الشركة لا يطابق المحطة المحددة" }
                 }
             }
