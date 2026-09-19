@@ -11916,7 +11916,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             readableDatabase.rawQuery(
-                "SELECT id, station_code, station_name, station_name_ar FROM stations WHERE is_deleted = 0 ORDER BY station_name",
+                "SELECT id, station_code, station_name, station_name_ar, branch_id FROM stations WHERE is_deleted = 0 ORDER BY station_name",
                 null
             ).use { cursor -> cursorToJsonArray(cursor) }
         } finally { dbLock.unlock() }
