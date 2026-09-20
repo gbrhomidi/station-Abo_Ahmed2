@@ -8390,9 +8390,63 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun generateDeliveryReport(jsonData: String = "{}") = operationalReport("sales", "deliveries", jsonData)
         @JavascriptInterface
-        fun saveDeliveryRecord(jsonData: String) = operationalSave("sales", "deliveries", jsonData)
+        fun saveDeliveryRecord(jsonData: String): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val input = JSONObject(jsonData.ifBlank { "{}" }).apply {
+                    put("station_id", stationId)
+                    put("cashier_id", activity.currentUserId)
+                }
+                val deliveryId = db.addDelivery(input, stationId, activity.currentUserId)
+                val persisted = db.getOperationalRecord("deliveries", deliveryId)
+                    ?: throw IllegalStateException("فشل إعادة قراءة سجل التوصيل بعد الحفظ")
+                require(persisted.optLong("id", deliveryId) == deliveryId) {
+                    "فشل التحقق من معرف التوصيل المحفوظ في SQLite"
+                }
+                val saleId = persisted.optLong("sale_id", 0L)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", deliveryId)
+                    put("delivery_id", deliveryId)
+                    put("sale_id", saleId)
+                    put("message", "تم حفظ التوصيل فعلياً والتحقق من SQLite")
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("SaveDeliveryRecord", e)
+                errorResponse(e.message ?: "فشل حفظ التوصيل")
+            }
+        }
         @JavascriptInterface
-        fun updateDeliveryRecord(id: Long, jsonData: String) = operationalUpdate("sales", "deliveries", id, jsonData)
+        fun updateDeliveryRecord(id: Long, jsonData: String): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val input = JSONObject(jsonData.ifBlank { "{}" })
+                val rows = db.updateDeliveryRecord(id, input, stationId, activity.currentUserId)
+                if (rows <= 0) {
+                    errorResponse("لم يتم تعديل سجل التوصيل")
+                } else {
+                    val persisted = db.getOperationalRecord("deliveries", id)
+                        ?: throw IllegalStateException("فشل إعادة قراءة سجل التوصيل بعد التعديل")
+                    require(persisted.optLong("id", id) == id) {
+                        "فشل التحقق من معرف التوصيل بعد التعديل"
+                    }
+                    dataResponseObject(JSONObject().apply {
+                        put("success", true)
+                        put("id", id)
+                        put("delivery_id", id)
+                        put("message", "تم تعديل التوصيل فعلياً والتحقق من SQLite")
+                        put("record", persisted)
+                    }).toString()
+                }
+            } catch (e: Exception) {
+                DebugLogger.logException("UpdateDeliveryRecord", e)
+                errorResponse(e.message ?: "فشل تعديل التوصيل")
+            }
+        }
         @JavascriptInterface
         fun deleteDeliveryRecord(id: Long) = operationalDelete("sales", "deliveries", id)
         @JavascriptInterface
