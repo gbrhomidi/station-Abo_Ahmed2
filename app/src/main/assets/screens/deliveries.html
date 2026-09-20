@@ -4376,7 +4376,7 @@
             }
 
             const response =
-                await invoke('getVehicles');
+                await invoke('getVehicleRecords', [JSON.stringify({ limit: 500 })]);
 
             const vehicleRows = rowsFrom(response);
             let driverRows = [];
