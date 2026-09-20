@@ -4376,10 +4376,26 @@
             }
 
             const response =
-                await invoke('getVehicles');
+                await invoke('getVehicleRecords', [JSON.stringify({ limit: 500 })]);
 
-            state.vehicles =
-                rowsFrom(response);
+            const vehicleRows = rowsFrom(response);
+            let driverRows = [];
+            if (bridge && typeof bridge.getDriverRecords === 'function') {
+                driverRows = rowsFrom(await invoke('getDriverRecords', [JSON.stringify({ limit: 500 })]));
+            }
+            state.vehicles = vehicleRows.map(vehicle => {
+                const vehicleId = Number(vehicle.id ?? vehicle.vehicle_id ?? 0);
+                const linkedDrivers = driverRows.filter(driver =>
+                    Number(driver.vehicle_id ?? 0) === vehicleId &&
+                    String(driver.status || 'active').toLowerCase() === 'active'
+                );
+                const driver = linkedDrivers.length === 1 ? linkedDrivers[0] : null;
+                return Object.assign({}, vehicle, {
+                    id: vehicleId || vehicle.id,
+                    driver_id: driver ? Number(driver.id) : '',
+                    driver_name: driver ? (driver.full_name_ar || driver.full_name || driver.driver_code || '') : (linkedDrivers.length > 1 ? 'أكثر من سائق مرتبط — اختر العلاقة الصحيحة' : '')
+                });
+            });
 
         } catch (error) {
 
@@ -4396,20 +4412,11 @@
         vehicle
     ) {
 
-        return (
-            vehicle.name ||
-            vehicle.vehicle_name ||
-            vehicle.vehicle_name_ar ||
-            vehicle.plate_number_ar ||
-            vehicle.plate_number ||
-            vehicle.vehicle_code ||
-            (
-                vehicle.id
-                    ? 'مركبة #' +
-                      vehicle.id
-                    : 'مركبة'
-            )
-        );
+        const plate = vehicle.plate_number_ar || vehicle.plate_number || vehicle.vehicle_code || '';
+        const brand = vehicle.brand || '';
+        const model = vehicle.model || '';
+        const label = [plate, brand, model].filter(Boolean).join(' | ');
+        return label || (vehicle.id ? 'مركبة #' + vehicle.id : 'مركبة');
     }
 
     function driverName(
@@ -4578,11 +4585,9 @@
 
                             $('f_driver_display')
                                 .value =
-                                vehicle
-                                    ? driverName(
-                                        vehicle
-                                    )
-                                    : '';
+                                driverId && vehicle
+                                    ? driverName(vehicle)
+                                    : (vehicle && vehicle.driver_name ? vehicle.driver_name : '');
 
                             menu.classList
                                 .remove('show');

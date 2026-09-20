@@ -7494,8 +7494,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     val currentShift = db.getCurrentShift(stationId) ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
                     data.put("shift_id", currentShift.optLong("shift_id", 0L))
                     data.put("cashier_id", activity.currentUserId)
+                    data.put("order_type", "order")
                 }
-                successResponse(db.saveOperationalRecord(key, data, activity.currentUserId), "تم الحفظ فعلياً")
+                val savedId = db.saveOperationalRecord(key, data, activity.currentUserId)
+                val persisted = db.getOperationalRecord(key, savedId)
+                    ?: throw IllegalStateException("فشل التحقق من السجل المحفوظ في SQLite: $savedId")
+                require(persisted.optLong("id", savedId) == savedId) {
+                    "فشل التحقق من معرف السجل المحفوظ في SQLite"
+                }
+                successResponse(savedId, "تم الحفظ فعلياً والتحقق من SQLite")
             }
             catch (e: Exception) { DebugLogger.logException("OperationalSave-$key", e); errorResponse(e.message) }
         }

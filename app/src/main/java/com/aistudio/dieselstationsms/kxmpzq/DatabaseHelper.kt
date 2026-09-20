@@ -10946,12 +10946,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             db.rawQuery("SELECT 1 FROM roles WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(roleId.toString())).use {
                 require(it.moveToFirst()) { "الدور المحدد غير موجود" }
             }
-            val requestedEmployeeId = data.optLong("employee_id", 0L)
-            val employeeId = if (requestedEmployeeId > 0L) requestedEmployeeId else {
-                db.rawQuery("SELECT id FROM employees WHERE id = 1 AND is_deleted = 0 LIMIT 1", null).use {
-                    if (it.moveToFirst()) 1L else 0L
-                }
-            }
+            // employee_id is optional in the users schema. Never infer an employee by a hardcoded
+            // primary key: the caller must provide a real employee_id when an employee relationship
+            // is actually required by the operation.
+            val employeeId = data.optLong("employee_id", 0L)
             if (employeeId > 0L) db.rawQuery("SELECT 1 FROM employees WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(employeeId.toString())).use {
                 require(it.moveToFirst()) { "الموظف المرتبط غير موجود" }
             }
