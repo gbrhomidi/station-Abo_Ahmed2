@@ -1692,7 +1692,7 @@
 
         <button
             class="filter-chip"
-            data-filter="completed">
+            data-filter="delivered">
             توصيلات تمت
         </button>
 
@@ -3043,20 +3043,24 @@
 
         if (
             [
+                'delivered',
                 'completed',
                 'complete',
                 'done',
+                'تم التسليم',
                 'تمت',
                 'مكتملة',
                 'مكتمل'
             ].includes(s)
         ) {
-            return 'completed';
+            return 'delivered';
         }
 
         if (
             [
                 'pending',
+                'assigned',
+                'out_for_delivery',
                 'postponed',
                 'deferred',
                 'مؤجلة',
@@ -3085,8 +3089,8 @@
         status
     ) {
 
-        if (status === 'completed')
-            return 'تمت';
+        if (status === 'delivered')
+            return 'تم التسليم';
 
         if (status === 'cancelled')
             return 'ملغاة';
@@ -3098,7 +3102,7 @@
         status
     ) {
 
-        if (status === 'completed')
+        if (status === 'delivered')
             return 'status-completed';
 
         if (status === 'cancelled')
@@ -3125,7 +3129,7 @@
             const response =
                 await invoke(
                     'getDeliveriesPage',
-                    [JSON.stringify({ limit: 100, offset: 0 })]
+                    [JSON.stringify({ limit: 1000, offset: 0 })]
                 );
 
             state.rows =
@@ -3258,14 +3262,14 @@
         const completed =
             rows.filter(
                 r =>
-                    r.status ===
-                    'completed'
+                    normalizeStatus(r.status) ===
+                    'delivered'
             ).length;
 
         const pending =
             rows.filter(
                 r =>
-                    r.status ===
+                    normalizeStatus(r.status) ===
                     'pending'
             ).length;
 
@@ -4366,7 +4370,7 @@
 
             if (
                 !bridge ||
-                typeof bridge.getVehicles !==
+                typeof bridge.getVehicleRecords !==
                 'function'
             ) {
 
@@ -4754,15 +4758,21 @@
 
             if (state.editingId) {
 
-                await invoke('updateDeliveryRecord',[Number(state.editingId),JSON.stringify(payload)]);
-
+                const updated = await invoke(
+                    'updateDeliveryRecord',
+                    [Number(state.editingId), JSON.stringify(payload)]
+                );
+                const updatedData = dataOf(updated) || updated;
+                if (!updatedData || updatedData.success === false) {
+                    throw new Error((updatedData && updatedData.error) || 'فشل تعديل التوصيل في SQLite');
+                }
                 toast(
-                    'تم تعديل التوصيل بنجاح.'
+                    'تم تعديل التوصيل فعلياً والتحقق من SQLite.'
                 );
 
             } else {
 
-                await invoke(
+                const saved = await invoke(
                     'saveDeliveryRecord',
                     [
                         JSON.stringify(
@@ -4770,9 +4780,16 @@
                         )
                     ]
                 );
+                const savedData = dataOf(saved) || saved;
+                const savedId = Number(
+                    savedData && (savedData.delivery_id || savedData.id)
+                );
+                if (!(savedId > 0)) {
+                    throw new Error('تم تنفيذ الحفظ دون إرجاع معرف توصيل SQLite صالح');
+                }
 
                 toast(
-                    'تم حفظ التوصيل فعلياً.'
+                    'تم حفظ التوصيل فعلياً والتحقق من SQLite.'
                 );
             }
 
@@ -4824,8 +4841,11 @@
 
         if (
             ![
-                'completed',
                 'pending',
+                'assigned',
+                'out_for_delivery',
+                'delivered',
+                'failed',
                 'cancelled'
             ].includes(status)
         ) {
@@ -4839,10 +4859,6 @@
 
         const required =
             [
-                [
-                    'f_sale_id',
-                    'معرف الطلب'
-                ],
                 [
                     'f_shift_id',
                     'الوردية'
@@ -4863,10 +4879,6 @@
                     'f_total_amount',
                     'الإجمالي'
                 ],
-                [
-                    'f_location',
-                    'الموقع'
-                ]
             ];
 
         for (
@@ -5035,6 +5047,7 @@
 
         if (!state.editingId) {
             delete payload.id;
+            delete payload.sale_id;
         }
 
         return payload;
@@ -5234,7 +5247,7 @@
             $('reportResults').innerHTML = '<div class="empty-state">لا توجد توصيلات في هذه الفترة.</div>';
             return;
         }
-        const completed = rows.filter(r => normalizeStatus(r.status) === 'completed').length;
+        const completed = rows.filter(r => normalizeStatus(r.status) === 'delivered').length;
         const pending = rows.filter(r => normalizeStatus(r.status) === 'pending').length;
         const cancelled = rows.filter(r => normalizeStatus(r.status) === 'cancelled').length;
         const quantity = Number(totals.quantity || 0);
@@ -5242,7 +5255,7 @@
         $('reportResults').innerHTML = `
             <div class="report-summary">
                 <div class="report-box"><strong>${Number(report.total_count || rows.length)}</strong><span>إجمالي التوصيلات</span></div>
-                <div class="report-box"><strong>${completed}</strong><span>تمت (ضمن الصفحة)</span></div>
+                <div class="report-box"><strong>${completed}</strong><span>تم التسليم (ضمن الصفحة)</span></div>
                 <div class="report-box"><strong>${pending}</strong><span>مؤجلة (ضمن الصفحة)</span></div>
                 <div class="report-box"><strong>${cancelled}</strong><span>ملغاة (ضمن الصفحة)</span></div>
                 <div class="report-box"><strong>${quantity.toLocaleString('ar-YE')}</strong><span>إجمالي الكمية</span></div>
@@ -5269,7 +5282,18 @@
             toast('عقد تصدير CSV غير متاح في Android Bridge', true);
             return;
         }
-        try { bridge.exportOperationalCsv('deliveries', JSON.stringify({})); }
+        try {
+            const from = $('reportFrom').value || today();
+            const to = $('reportTo').value || today();
+            if (from > to) {
+                toast('تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية.', true);
+                return;
+            }
+            bridge.exportOperationalCsv(
+                'deliveries',
+                JSON.stringify({ from_date: from, to_date: to })
+            );
+        }
         catch (e) { toast(e.message || 'فشل بدء تصدير CSV', true); }
     }
 
