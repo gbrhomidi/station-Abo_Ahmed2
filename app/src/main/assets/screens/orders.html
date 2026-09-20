@@ -671,8 +671,9 @@ body{padding-bottom:100px}
                 try {
                     var raw = await firstAvailable(refsConfig[key], [JSON.stringify({ limit: 500 })]);
                     state.refs[key] = rowsOf(raw);
-                } catch (_) {
+                } catch (e) {
                     state.refs[key] = [];
+                    toast('تعذر تحميل مرجع ' + key + ': ' + (e.message || 'خطأ غير معروف'), 'error');
                 }
             }
         }
@@ -682,8 +683,9 @@ body{padding-bottom:100px}
         try {
             var raw = await callBridge('getSalesTransactionFormContext', []);
             state.ctx = dataOf(raw);
-        } catch (_) {
+        } catch (e) {
             state.ctx = null;
+            toast(e.message || 'تعذر تحميل سياق نموذج الطلب من SQLite', 'error');
         }
         await loadRefs();
         if (state.ctx && state.ctx.station) {
@@ -1056,14 +1058,22 @@ body{padding-bottom:100px}
             }
             var args = state.editing ? [Number(idOf(state.editing)), JSON.stringify(payload)] : [JSON.stringify(payload)];
             var savedResponse = await callBridge(method, args);
+            var savedData = dataOf(savedResponse) || savedResponse;
+            if (savedData && savedData.success === false) {
+                throw new Error(savedData.error || savedData.message || 'فشل حفظ الطلب في SQLite');
+            }
             if (!state.editing) {
-                var savedData = dataOf(savedResponse) || savedResponse;
                 var savedId = Number(savedData && (savedData.id || savedData.sale_id || (savedData.record && savedData.record.id)));
                 if (!(savedId > 0)) {
                     throw new Error('تم تنفيذ الحفظ دون إرجاع معرف SQLite صالح للطلب');
                 }
+            } else {
+                var updatedId = Number(idOf(savedData && savedData.record ? savedData.record : savedData));
+                if (!(updatedId > 0)) {
+                    throw new Error('تم تعديل الطلب دون إرجاع السجل المحفوظ من SQLite');
+                }
             }
-            toast(state.editing ? 'تم تعديل الطلب بنجاح' : 'تم حفظ الطلب بنجاح', 'success');
+            toast(state.editing ? 'تم تعديل الطلب فعلياً والتحقق من SQLite' : 'تم حفظ الطلب فعلياً والتحقق من SQLite', 'success');
             closeModal(null, 'formModal');
             await reloadData();
         } catch (e) {
@@ -1146,8 +1156,8 @@ body{padding-bottom:100px}
             var station = esc(nameOf(row, ['station_name_ar','station_name']));
             var cashier = esc(nameOf(row, ['cashier_name_ar','cashier_name','cashier_display_name']));
             var total = num(row.net_amount || row.gross_amount);
-            var type = label(row.sale_type);
-            var isCredit = String(row.sale_type).toLowerCase() === 'credit';
+            var type = label(row.payment_method);
+            var isCredit = String(row.payment_method).toLowerCase() === 'credit';
 
             html += '<article class="order-card">';
             html += '<div class="card-head">';
@@ -1289,7 +1299,7 @@ body{padding-bottom:100px}
         $('offlineBanner').classList.remove('show');
         setLoading(true);
         try {
-            var result = await callBridge('getOrdersPage', [JSON.stringify({ limit: 100, offset: 0 })]);
+            var result = await callBridge('getOrdersPage', [JSON.stringify({ limit: 1000, offset: 0 })]);
             state.rows = rowsOf(result).map(function(row) {
                 return Object.assign({}, row, {
                     id: row.id || row.order_id,
