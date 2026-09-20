@@ -15,8 +15,8 @@ android {
         applicationId = "com.aistudio.dieselstationsms.kxmpzq"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "4.0 Pro"
+        versionCode = 5
+        versionName = "5.0 Pro"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -28,8 +28,36 @@ android {
     }
 
     signingConfigs {
-        // التوقيع الافتراضي للـ debug (موجود مسبقاً)
-        // لا نحتاج لتعريفه، لكننا نستخدمه مباشرة
+        // Release must always use the same persistent keystore.
+        // The CI workflow injects these values from GitHub Secrets.
+        create("release") {
+            val keystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+                ?: providers.gradleProperty("RELEASE_KEYSTORE_PATH").orNull
+            val keystorePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                ?: providers.gradleProperty("RELEASE_KEYSTORE_PASSWORD").orNull
+            val keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                ?: providers.gradleProperty("RELEASE_KEY_ALIAS").orNull
+            val keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+                ?: providers.gradleProperty("RELEASE_KEY_PASSWORD").orNull
+
+            require(!keystorePath.isNullOrBlank()) {
+                "RELEASE_KEYSTORE_PATH is required for release signing."
+            }
+            require(!keystorePassword.isNullOrBlank()) {
+                "RELEASE_KEYSTORE_PASSWORD is required for release signing."
+            }
+            require(!keyAlias.isNullOrBlank()) {
+                "RELEASE_KEY_ALIAS is required for release signing."
+            }
+            require(!keyPassword.isNullOrBlank()) {
+                "RELEASE_KEY_PASSWORD is required for release signing."
+            }
+
+            storeFile = file(keystorePath)
+            storePassword = keystorePassword
+            this.keyAlias = keyAlias
+            this.keyPassword = keyPassword
+        }
     }
 
     buildTypes {
@@ -41,7 +69,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             buildConfigField("boolean", "DEBUG_MODE", "false")
         }
         debug {
