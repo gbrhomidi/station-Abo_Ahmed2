@@ -40,23 +40,41 @@ android {
             val keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
                 ?: providers.gradleProperty("RELEASE_KEY_PASSWORD").orNull
 
-            require(!keystorePath.isNullOrBlank()) {
-                "RELEASE_KEYSTORE_PATH is required for release signing."
+            // Debug/test validation must not require production signing secrets.
+            // The Release build is guarded below and fails explicitly if they
+            // are missing.
+            if (!keystorePath.isNullOrBlank() &&
+                !keystorePassword.isNullOrBlank() &&
+                !keyAlias.isNullOrBlank() &&
+                !keyPassword.isNullOrBlank()
+            ) {
+                storeFile = file(keystorePath)
+                storePassword = keystorePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
             }
-            require(!keystorePassword.isNullOrBlank()) {
-                "RELEASE_KEYSTORE_PASSWORD is required for release signing."
-            }
-            require(!keyAlias.isNullOrBlank()) {
-                "RELEASE_KEY_ALIAS is required for release signing."
-            }
-            require(!keyPassword.isNullOrBlank()) {
-                "RELEASE_KEY_PASSWORD is required for release signing."
-            }
+        }
+    }
 
-            storeFile = file(keystorePath)
-            storePassword = keystorePassword
-            this.keyAlias = keyAlias
-            this.keyPassword = keyPassword
+    val releaseBuildRequested = gradle.startParameter.taskNames.any {
+        it.contains("Release", ignoreCase = true)
+    }
+
+    if (releaseBuildRequested) {
+        val requiredReleaseSigning = listOf(
+            "RELEASE_KEYSTORE_PATH",
+            "RELEASE_KEYSTORE_PASSWORD",
+            "RELEASE_KEY_ALIAS",
+            "RELEASE_KEY_PASSWORD"
+        )
+
+        val missingReleaseSigning = requiredReleaseSigning.filter { name ->
+            (System.getenv(name) ?: providers.gradleProperty(name).orNull).isNullOrBlank()
+        }
+
+        require(missingReleaseSigning.isEmpty()) {
+            "Release signing configuration is incomplete. Missing: " +
+                missingReleaseSigning.joinToString()
         }
     }
 
