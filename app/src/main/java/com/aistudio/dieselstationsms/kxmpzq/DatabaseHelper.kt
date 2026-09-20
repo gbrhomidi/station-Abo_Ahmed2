@@ -9197,11 +9197,72 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(stationScopeId > 0) { "معرف المحطة مطلوب" }
         val db = readableDatabase
         val sql = """
-            SELECT s.id AS sale_id, s.sale_code, s.invoice_number, s.invoice_series, s.receipt_number, s.station_id, COALESCE( st.station_name_ar, st.station_name, '' ) AS station_name, s.shift_id, COALESCE( sh.shift_code, '' ) AS shift_code, s.customer_party_id, COALESCE( p.commercial_name_ar, p.commercial_name, p.legal_name, '' ) AS customer_name, s.vehicle_id, COALESCE( v.plate_number_ar, v.plate_number, v.vehicle_code, '' ) AS vehicle_name, s.driver_id, COALESCE( d.full_name_ar, d.full_name, d.driver_code, '' ) AS driver_name, s.fuel_type_id, COALESCE( f.fuel_name_ar, f.fuel_name, '' ) AS fuel_type_name, s.pump_id, COALESCE( pu.pump_name_ar, pu.pump_name, pu.pump_code, '' ) AS pump_name, s.nozzle_id, COALESCE( n.nozzle_number, n.nozzle_code, '' ) AS nozzle_name, s.liters AS quantity, s.price_per_liter, s.fuel_subtotal, s.product_id, s.quantity AS product_quantity, s.unit_price, s.product_subtotal, s.subtotal, s.discount_amount, s.tax_amount, s.vat_amount, s.service_fee, s.commission, s.gross_amount, s.net_amount AS total_amount, s.payment_method, s.payment_status, s.paid_amount, s.remaining_amount, s.is_credit, s.status, s.order_type, s.delivery_location AS location, s.delivery_time, s.cashier_id, s.created_at FROM sales_transactions s LEFT JOIN parties p ON p.id = s.customer_party_id LEFT JOIN stations st ON st.id = s.station_id LEFT JOIN shifts sh ON sh.id = s.shift_id LEFT JOIN vehicles v ON v.id = s.vehicle_id LEFT JOIN drivers d ON d.id = s.driver_id LEFT JOIN fuel_types f ON f.id = s.fuel_type_id LEFT JOIN pumps pu ON pu.id = s.pump_id LEFT JOIN pump_nozzles n ON n.id = s.nozzle_id WHERE s.station_id =? AND s.customer_party_id =? AND s.is_deleted = 0 AND s.order_type ='order' ORDER BY datetime(s.created_at) DESC, s.id DESC LIMIT 1
-            """.trimIndent()
+            SELECT
+                fs.id AS fuel_sale_id,
+                s.id AS sale_id,
+                s.sale_code,
+                s.invoice_number,
+                s.invoice_series,
+                s.receipt_number,
+                s.station_id,
+                COALESCE(st.station_name_ar, st.station_name, '') AS station_name,
+                s.shift_id,
+                COALESCE(sh.shift_code, '') AS shift_code,
+                s.customer_party_id,
+                COALESCE(p.commercial_name_ar, p.commercial_name, p.legal_name, '') AS customer_name,
+                s.vehicle_id,
+                COALESCE(v.plate_number_ar, v.plate_number, v.vehicle_code, '') AS vehicle_name,
+                s.driver_id,
+                COALESCE(d.full_name_ar, d.full_name, d.driver_code, '') AS driver_name,
+                fs.fuel_type_id,
+                COALESCE(f.fuel_name_ar, f.fuel_name, f.fuel_code, '') AS fuel_type_name,
+                fs.pump_id,
+                COALESCE(pu.pump_name_ar, pu.pump_name, pu.pump_code, '') AS pump_name,
+                s.nozzle_id,
+                COALESCE(n.nozzle_number, n.nozzle_code, '') AS nozzle_name,
+                fs.quantity,
+                fs.price_per_liter,
+                fs.total_amount,
+                s.payment_method,
+                s.payment_status,
+                s.paid_amount,
+                s.remaining_amount,
+                s.is_credit,
+                s.status,
+                s.order_type,
+                s.delivery_location AS location,
+                s.delivery_time,
+                s.cashier_id,
+                fs.sale_date,
+                fs.sale_time,
+                s.created_at
+            FROM fuel_sales fs
+            JOIN sales_transactions s ON s.id = fs.sale_id
+            LEFT JOIN parties p ON p.id = s.customer_party_id
+            LEFT JOIN stations st ON st.id = s.station_id
+            LEFT JOIN shifts sh ON sh.id = s.shift_id
+            LEFT JOIN vehicles v ON v.id = s.vehicle_id
+            LEFT JOIN drivers d ON d.id = s.driver_id
+            LEFT JOIN fuel_types f ON f.id = fs.fuel_type_id
+            LEFT JOIN pumps pu ON pu.id = fs.pump_id
+            LEFT JOIN pump_nozzles n ON n.id = s.nozzle_id
+            WHERE s.station_id = ?
+              AND (fs.customer_id = ? OR s.customer_party_id = ?)
+              AND fs.is_deleted = 0
+              AND s.is_deleted = 0
+            ORDER BY datetime(
+                CASE
+                    WHEN TRIM(COALESCE(fs.sale_date, '') || ' ' || COALESCE(fs.sale_time, '')) <> ''
+                    THEN TRIM(COALESCE(fs.sale_date, '') || ' ' || COALESCE(fs.sale_time, ''))
+                    ELSE s.created_at
+                END
+            ) DESC, fs.id DESC
+            LIMIT 1
+        """.trimIndent()
         return db.rawQuery(
             sql, arrayOf(
                 stationScopeId.toString(),
+                partyId.toString(),
                 partyId.toString()
             )
         ).use { cursor ->
@@ -9463,8 +9524,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(deliveryDate.isNotEmpty()) { "تاريخ التوصيل مطلوب" }
         val status = data.optString("status", "pending").trim()
         require(status in setOf("pending", "assigned", "out_for_delivery", "delivered", "failed", "cancelled")) { "حالة التوصيل غير صحيحة" }
-        if (vehicleId != null) db.rawQuery("SELECT id FROM vehicles WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'", arrayOf(vehicleId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المركبة خارج نطاق المحطة أو غير نشطة" } }
-        if (driverId != null) db.rawQuery("SELECT id FROM drivers WHERE id = ? AND (station_id = ? OR station_id IS NULL) AND is_deleted = 0 AND status = 'active'", arrayOf(driverId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "السائق خارج نطاق المحطة أو غير نشط" } }
+        if (partyId != null) db.rawQuery("SELECT id FROM parties WHERE id = ? AND station_id = ? AND is_deleted = 0 AND is_active = 1", arrayOf(partyId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "العميل خارج نطاق المحطة أو غير نشط" } }
+        if (vehicleId != null) db.rawQuery("SELECT v.id FROM vehicles v JOIN parties p ON p.id = v.party_id WHERE v.id = ? AND p.station_id = ? AND v.is_deleted = 0 AND p.is_deleted = 0 AND p.is_active = 1 AND v.status = 'active'", arrayOf(vehicleId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المركبة خارج نطاق المحطة أو غير نشطة" } }
+        if (driverId != null) db.rawQuery("SELECT id FROM drivers WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'", arrayOf(driverId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "السائق خارج نطاق المحطة أو غير نشط" } }
+        if (vehicleId != null && driverId != null) db.rawQuery("SELECT id FROM drivers WHERE id = ? AND vehicle_id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'", arrayOf(driverId.toString(), vehicleId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "السائق المحدد غير مرتبط بالمركبة المختارة" } }
 
         dbLock.lock()
         return try {
@@ -9513,12 +9576,164 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("created_at", getCurrentDateTime())
                     put("updated_at", getCurrentDateTime())
                 }
-                db.insertOrThrow("deliveries", null, cv)
+                val deliveryId = db.insertOrThrow("deliveries", null, cv)
+                require(deliveryId > 0L) { "فشل إنشاء معرف التوصيل في SQLite" }
                 db.setTransactionSuccessful()
-                saleId
+                deliveryId
             } finally { db.endTransaction() }
         } finally { dbLock.unlock() }
     }
+
+    /**
+     * Updates a delivery and keeps its linked sales transaction synchronized.
+     * The station scope is derived from the persisted sale/party relation, never
+     * from an untrusted HTML station id.
+     */
+    fun updateDeliveryRecord(id: Long, input: JSONObject, stationScopeId: Int, actorId: Long = 0L): Int {
+        require(id > 0L) { "معرف التوصيل غير صالح" }
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        val db = writableDatabase
+        dbLock.lock()
+        return try {
+            db.beginTransaction()
+            try {
+                var saleId = 0L
+                var existingPartyId = 0L
+                var existingShiftId = 0L
+                db.rawQuery(
+                    """
+                    SELECT d.sale_id, d.party_id, d.shift_id
+                    FROM deliveries d
+                    LEFT JOIN sales_transactions s ON s.id = d.sale_id
+                    WHERE d.id = ?
+                      AND d.is_deleted = 0
+                      AND (s.station_id = ? OR (d.sale_id IS NULL AND EXISTS (
+                          SELECT 1 FROM parties p WHERE p.id = d.party_id AND p.station_id = ? AND p.is_deleted = 0
+                      )))
+                    LIMIT 1
+                    """.trimIndent(),
+                    arrayOf(id.toString(), stationScopeId.toString(), stationScopeId.toString())
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) { "التوصيل غير موجود ضمن محطة الجلسة الحالية" }
+                    saleId = if (cursor.isNull(0)) 0L else cursor.getLong(0)
+                    existingPartyId = if (cursor.isNull(1)) 0L else cursor.getLong(1)
+                    existingShiftId = if (cursor.isNull(2)) 0L else cursor.getLong(2)
+                }
+
+                val partyId = input.optLong("party_id", existingPartyId).takeIf { it > 0L }
+                val vehicleId = input.optLong("vehicle_id", 0L).takeIf { it > 0L }
+                val driverId = input.optLong("driver_id", 0L).takeIf { it > 0L }
+                val shiftId = input.optLong("shift_id", existingShiftId).takeIf { it > 0L }
+                val quantity = input.optDouble("quantity", Double.NaN)
+                require(quantity.isFinite() && quantity > 0.0) { "كمية التوصيل يجب أن تكون أكبر من صفر" }
+
+                val fuelTypeId = input.optLong("fuel_type_id", 0L).toInt().takeIf { it > 0 }
+                    ?: input.optString("fuel_type", "").trim().takeIf { it.isNotEmpty() }?.let { fuel ->
+                        db.rawQuery(
+                            "SELECT id FROM fuel_types WHERE (fuel_code = ? OR fuel_name = ? OR fuel_name_ar = ?) AND is_deleted = 0 AND is_active = 1 LIMIT 1",
+                            arrayOf(fuel, fuel, fuel)
+                        ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+                    }
+                    ?: 0
+                require(fuelTypeId > 0) { "نوع الوقود مطلوب للتوصيل" }
+
+                val price = input.optDouble("price_per_liter", Double.NaN)
+                require(price.isFinite() && price >= 0.0) { "سعر الوقود غير صالح" }
+                val total = input.optDouble("total_amount", Double.NaN)
+                require(total.isFinite() && total >= 0.0) { "إجمالي التوصيل غير صالح" }
+                val deliveryDate = input.optString("delivery_date", "").trim()
+                require(deliveryDate.isNotEmpty()) { "تاريخ التوصيل مطلوب" }
+                val status = input.optString("status", "pending").trim()
+                require(status in setOf("pending", "assigned", "out_for_delivery", "delivered", "failed", "cancelled")) { "حالة التوصيل غير صحيحة" }
+
+                if (partyId != null) {
+                    db.rawQuery(
+                        "SELECT id FROM parties WHERE id = ? AND station_id = ? AND is_deleted = 0 AND is_active = 1",
+                        arrayOf(partyId.toString(), stationScopeId.toString())
+                    ).use { cursor -> require(cursor.moveToFirst()) { "العميل خارج نطاق المحطة أو غير نشط" } }
+                }
+                if (vehicleId != null) {
+                    db.rawQuery(
+                        "SELECT v.id FROM vehicles v JOIN parties p ON p.id = v.party_id WHERE v.id = ? AND p.station_id = ? AND v.is_deleted = 0 AND p.is_deleted = 0 AND p.is_active = 1 AND v.status = 'active'",
+                        arrayOf(vehicleId.toString(), stationScopeId.toString())
+                    ).use { cursor -> require(cursor.moveToFirst()) { "المركبة خارج نطاق المحطة أو غير نشطة" } }
+                }
+                if (driverId != null) {
+                    db.rawQuery(
+                        "SELECT id FROM drivers WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'",
+                        arrayOf(driverId.toString(), stationScopeId.toString())
+                    ).use { cursor -> require(cursor.moveToFirst()) { "السائق خارج نطاق المحطة أو غير نشط" } }
+                }
+                if (vehicleId != null && driverId != null) {
+                    db.rawQuery(
+                        "SELECT id FROM drivers WHERE id = ? AND vehicle_id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'",
+                        arrayOf(driverId.toString(), vehicleId.toString(), stationScopeId.toString())
+                    ).use { cursor -> require(cursor.moveToFirst()) { "السائق المحدد غير مرتبط بالمركبة المختارة" } }
+                }
+                if (shiftId != null) {
+                    db.rawQuery(
+                        "SELECT id FROM shifts WHERE id = ? AND station_id = ? AND is_deleted = 0",
+                        arrayOf(shiftId.toString(), stationScopeId.toString())
+                    ).use { cursor -> require(cursor.moveToFirst()) { "الوردية خارج نطاق محطة الجلسة الحالية" } }
+                }
+
+                val deliveryValues = ContentValues().apply {
+                    if (saleId > 0L) put("sale_id", saleId)
+                    if (partyId != null) put("party_id", partyId)
+                    if (shiftId != null) put("shift_id", shiftId)
+                    if (vehicleId != null) put("vehicle_id", vehicleId) else putNull("vehicle_id")
+                    if (driverId != null) put("driver_id", driverId) else putNull("driver_id")
+                    put("delivery_date", deliveryDate)
+                    put("quantity", quantity)
+                    put("fuel_type", fuelTypeId.toString())
+                    put("price_per_liter", price)
+                    put("total_amount", total)
+                    put("status", status)
+                    put("location", input.optString("location", ""))
+                    put("notes", input.optString("notes", ""))
+                    put("updated_at", getCurrentDateTime())
+                }
+                val rows = db.update(
+                    "deliveries",
+                    deliveryValues,
+                    "id = ? AND is_deleted = 0",
+                    arrayOf(id.toString())
+                )
+                require(rows > 0) { "لم يتم تعديل سجل التوصيل" }
+
+                if (saleId > 0L) {
+                    val saleValues = ContentValues().apply {
+                        if (partyId != null) put("customer_party_id", partyId)
+                        if (vehicleId != null) put("vehicle_id", vehicleId) else putNull("vehicle_id")
+                        if (driverId != null) put("driver_id", driverId) else putNull("driver_id")
+                        if (shiftId != null) put("shift_id", shiftId)
+                        put("fuel_type_id", fuelTypeId)
+                        put("liters", quantity)
+                        put("price_per_liter", price)
+                        put("fuel_subtotal", quantity * price)
+                        put("subtotal", quantity * price)
+                        put("gross_amount", total)
+                        put("net_amount", total)
+                        put("delivery_location", input.optString("location", ""))
+                        put("updated_at", getCurrentDateTime())
+                    }
+                    db.update(
+                        "sales_transactions",
+                        saleValues,
+                        "id = ? AND station_id = ? AND is_deleted = 0",
+                        arrayOf(saleId.toString(), stationScopeId.toString())
+                    )
+                }
+                db.setTransactionSuccessful()
+                rows
+            } finally {
+                db.endTransaction()
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
 
     fun getDeliveries(stationScopeId: Int): JSONArray {
         dbLock.lock()
