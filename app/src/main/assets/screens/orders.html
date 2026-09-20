@@ -353,8 +353,8 @@ body{padding-bottom:100px}
             <span class="sub" id="subtitle">متكاملة مع الحسابات الضريبية والآجلة</span>
         </div>
         <div class="header-actions">
-            <button class="icon-btn" id="themeToggle" title="الوضع"><i class="fas fa-moon" id="themeIcon"></i></button>
-            <button class="icon-btn" onclick="goHome()" title="رجوع"><i class="fas fa-home"></i></button>
+            <button class="icon-btn" id="themeToggle" title="الوضع"><span id="themeIcon" aria-hidden="true">🌙</span></button>
+            <button class="icon-btn" onclick="goHome()" title="الرئيسية"><span aria-hidden="true">🏠</span></button>
             <!-- تم حذف أيقونة التقارير من الأعلى -->
         </div>
     </div>
@@ -1055,7 +1055,14 @@ body{padding-bottom:100px}
                 throw new Error('عقد حفظ الطلب غير متاح');
             }
             var args = state.editing ? [Number(idOf(state.editing)), JSON.stringify(payload)] : [JSON.stringify(payload)];
-            await callBridge(method, args);
+            var savedResponse = await callBridge(method, args);
+            if (!state.editing) {
+                var savedData = dataOf(savedResponse) || savedResponse;
+                var savedId = Number(savedData && (savedData.id || savedData.sale_id || (savedData.record && savedData.record.id)));
+                if (!(savedId > 0)) {
+                    throw new Error('تم تنفيذ الحفظ دون إرجاع معرف SQLite صالح للطلب');
+                }
+            }
             toast(state.editing ? 'تم تعديل الطلب بنجاح' : 'تم حفظ الطلب بنجاح', 'success');
             closeModal(null, 'formModal');
             await reloadData();
@@ -1407,7 +1414,7 @@ body{padding-bottom:100px}
         }
         localStorage.setItem('theme', dark ? 'light' : 'dark');
         var icon = $('themeIcon');
-        if (icon) icon.className = dark ? 'fas fa-moon' : 'fas fa-sun';
+        if (icon) icon.textContent = dark ? '🌙' : '🌞';
     }
 
     function initTheme() {
@@ -1415,10 +1422,10 @@ body{padding-bottom:100px}
         if (saved === 'dark') {
             document.documentElement.dataset.theme = 'dark';
             var icon = $('themeIcon');
-            if (icon) icon.className = 'fas fa-sun';
+            if (icon) icon.textContent = '🌞';
         } else {
             var icon2 = $('themeIcon');
-            if (icon2) icon2.className = 'fas fa-moon';
+            if (icon2) icon2.textContent = '🌙';
         }
     }
 
