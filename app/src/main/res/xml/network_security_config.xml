@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  محطة أبو أحمد - إعدادات أمان الشبكة (مُحسَّنة وآمنة)
+  ═══════════════════════════════════════════════════════════════
+
+  ✅ التحسينات والتحديثات:
+  1. تمت إزالة جميع استثناءات الخادم المحلي (localhost, 127.0.0.1, ::1)
+     لأننا لم نعد نستخدم NanoHTTPD (تم تعطيل الخادم المحلي نهائياً).
+  2. تم إزالة الثقة بشهادات المستخدم (user certificates) لتقليل
+     مخاطر هجمات Man-in-the-Middle (MITM).
+  3. تم الحفاظ على Certificate Pinning لنطاقات Gemini API لضمان
+     الاتصال الآمن مع Google.
+  4. تم الحفاظ على إعدادات HTTPS الصارمة لجميع الاتصالات الأخرى.
+  5. تم إزالة <debug-overrides> (لم تكن موجودة أصلاً، ولكن تم التأكيد).
+  ═══════════════════════════════════════════════════════════════
+-->
+<network-security-config>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- الإعدادات الأساسية (تطبق على كل الاتصالات)                  -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <!-- الثقة فقط بالشهادات النظامية (المثبتة مسبقاً) -->
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- نطاقات Gemini API – مع تثبيت إلزامي للشهادات                -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <domain-config>
+        <domain includeSubdomains="true">generativelanguage.googleapis.com</domain>
+        <domain includeSubdomains="true">googleapis.com</domain>
+
+        <!-- منع أي اتصال غير مشفر -->
+        <cleartextTrafficPermitted>false</cleartextTrafficPermitted>
+
+        <!-- Certificate Pinning مع بصمات موثوقة (صالحة حتى 2027) -->
+        <pin-set expiration="2027-01-01">
+            <!-- Primary Pin: Public Key (EC prime256v1) -->
+            <pin digest="SHA-256">xqMIOq/TKCdAwLfr9h5XTauakQnjCKBQnRqcGiezy3A=</pin>
+
+            <!-- Backup Pin 1: GTS Root R1 -->
+            <pin digest="SHA-256">Vfd95KMHNCyP4qPm+nrX+Ir2v8E8Ihr8aRr4D45E1gk=</pin>
+
+            <!-- Backup Pin 2: WR2 Intermediate CA -->
+            <pin digest="SHA-256">Y9mvm0exBk1JoQ57f9Vm28eKZ71WHYAPSfwAqo3eT0I=</pin>
+        </pin-set>
+
+        <!-- الثقة بالشهادات النظامية فقط -->
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </domain-config>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- ملاحظة: تمت إزالة <debug-overrides> لأنها تسمح باتصالات    -->
+    <!-- غير مشفرة في بيئات التطوير، مما يشكل ثغرة أمنية.           -->
+    <!-- يمكن إعادة تفعيلها بحذر شديد في بيئات الاختبار فقط.        -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+
+</network-security-config>

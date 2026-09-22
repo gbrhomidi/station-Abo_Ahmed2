@@ -1,0 +1,106 @@
+[
+  {
+    "screen": "main.html",
+    "bridgeMethods": [],
+    "hasMock": false,
+    "ui": {
+      "hasCharts": false,
+      "hasTables": false,
+      "hasFilters": true
+    }
+  },
+  {
+    "screen": "screens/sales-reports.html",
+    "bridgeMethods": [],
+    "hasMock": false,
+    "ui": {
+      "hasCharts": true,
+      "hasTables": true,
+      "hasFilters": true
+    }
+  },
+  {
+    "screen": "screens/eod-report.html",
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": false,
+    "ui": {
+      "hasCharts": false,
+      "hasTables": false,
+      "hasFilters": true
+    }
+  },
+  {
+    "screen": "screens/inventory-reports.html",
+    "bridgeMethods": [],
+    "hasMock": false,
+    "ui": {
+      "hasCharts": true,
+      "hasTables": true,
+      "hasFilters": true
+    }
+  },
+  {
+    "screen": "screens/customer-reports.html",
+    "bridgeMethods": [],
+    "hasMock": false,
+    "ui": {
+      "hasCharts": true,
+      "hasTables": true,
+      "hasFilters": true
+    }
+  },
+  {
+    "screen": "screens/fuel-reports.html",
+    "bridgeMethods": [],
+    "hasMock": false,
+    "ui": {
+      "hasCharts": true,
+      "hasTables": true,
+      "hasFilters": true
+    }
+  },
+  {
+    "screen": "screens/kpi.html",
+    "bridgeMethods": [],
+    "hasMock": false,
+    "ui": {
+      "hasCharts": true,
+      "hasTables": true,
+      "hasFilters": true
+    }
+  },
+  {
+    "screen": "screens/forecasts.html",
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": false,
+    "ui": {
+      "hasCharts": false,
+      "hasTables": false,
+      "hasFilters": true
+    }
+  },
+  {
+    "screen": "screens/accounting-reports.html",
+    "bridgeMethods": [
+      "getBalanceSheet"
+    ],
+    "hasMock": false,
+    "ui": {
+      "hasCharts": false,
+      "hasTables": true,
+      "hasFilters": true
+    }
+  }
+]

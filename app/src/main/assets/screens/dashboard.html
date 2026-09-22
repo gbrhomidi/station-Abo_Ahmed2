@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body { font-family: 'Tajawal', sans-serif; background: var(--bg-primary); margin: 0; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        .title { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin: 0; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .kpi-card { background: white; padding: 1.5rem; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; flex-direction: column; position: relative; overflow: hidden; }
+        .kpi-card::before { content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 4px; background: var(--primary-color); }
+        .kpi-icon { position: absolute; left: 1.5rem; top: 1.5rem; font-size: 2rem; color: var(--primary-light); opacity: 0.5; }
+        .kpi-title { font-size: 0.875rem; color: var(--text-secondary); margin: 0 0 0.5rem 0; font-weight: 500; }
+        .kpi-value { font-size: 1.75rem; font-weight: 700; color: var(--text-primary); margin: 0 0 0.5rem 0; }
+        .kpi-trend { font-size: 0.875rem; }
+        .trend-up { color: var(--success-color); }
+        .trend-down { color: var(--danger-color); }
+        
+        .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; }
+        .chart-card { background: white; padding: 1.5rem; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .chart-title { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin: 0 0 1.5rem 0; }
+        
+        .quick-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .link-card { background: white; padding: 1rem; border-radius: 12px; text-align: center; color: var(--text-primary); text-decoration: none; font-weight: 500; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: transform 0.2s; border: 1px solid var(--border-color); }
+        .link-card:hover { transform: translateY(-2px); border-color: var(--primary-color); color: var(--primary-color); }
+        .link-card i { display: block; font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--primary-color); }
+        
+        @media (max-width: 768px) {
+            .charts-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+    <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+</head>
+<body>
+    <div class="header">
+        <h1 class="title"><i class="fas fa-chart-pie me-2"></i> لوحة التحكم</h1>
+        <button class="btn btn-primary" style="padding: 0.5rem 1rem; border-radius: 8px; border: none; background: var(--primary-color); color: white; cursor: pointer;" onclick="loadDashboard()"><i class="fas fa-sync"></i> تحديث</button>
+    </div>
+
+    <div class="quick-links">
+        <a href="sales-reports.html" class="link-card"><i class="fas fa-shopping-cart"></i> المبيعات</a>
+        <a href="fuel-reports.html" class="link-card"><i class="fas fa-gas-pump"></i> الوقود</a>
+        <a href="inventory-reports.html" class="link-card"><i class="fas fa-boxes"></i> المخزون</a>
+        <a href="accounting-reports.html" class="link-card"><i class="fas fa-file-invoice-dollar"></i> الحسابات</a>
+        <a href="eod-report.html" class="link-card"><i class="fas fa-calendar-check"></i> إقفال اليوم</a>
+    </div>
+
+    <div class="kpi-grid" id="kpiGrid">
+        <div class="kpi-card">
+            <i class="fas fa-money-bill-wave kpi-icon"></i>
+            <h3 class="kpi-title">مبيعات اليوم</h3>
+            <p class="kpi-value" id="kpiSalesToday">0.00</p>
+            <span class="kpi-trend" id="trendSalesToday">جاري التحميل...</span>
+        </div>
+        <div class="kpi-card" style="--primary-color: var(--success-color);">
+            <i class="fas fa-gas-pump kpi-icon"></i>
+            <h3 class="kpi-title">لترات الوقود (اليوم)</h3>
+            <p class="kpi-value" id="kpiFuelToday">0.0</p>
+            <span class="kpi-trend" id="trendFuelToday">جاري التحميل...</span>
+        </div>
+        <div class="kpi-card" style="--primary-color: var(--warning-color);">
+            <i class="fas fa-exclamation-triangle kpi-icon"></i>
+            <h3 class="kpi-title">تنبيهات المخزون</h3>
+            <p class="kpi-value" id="kpiStockAlerts">0</p>
+            <span class="kpi-trend">أصناف تحتاج إعادة طلب</span>
+        </div>
+        <div class="kpi-card" style="--primary-color: var(--danger-color);">
+            <i class="fas fa-hand-holding-usd kpi-icon"></i>
+            <h3 class="kpi-title">الديون المستحقة</h3>
+            <p class="kpi-value" id="kpiDebts">0.00</p>
+            <span class="kpi-trend">إجمالي أرصدة العملاء</span>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <div class="chart-card">
+            <h3 class="chart-title">حالة الخزانات</h3>
+            <div id="tanksContainer" style="display: flex; flex-direction: column; gap: 1rem;">جاري التحميل...</div>
+        </div>
+        <div class="chart-card">
+            <h3 class="chart-title">الورديات المفتوحة</h3>
+            <div id="shiftsContainer" style="display: flex; flex-direction: column; gap: 1rem;">جاري التحميل...</div>
+        </div>
+    </div>
+
+    <script>
+        const bridge = window.AndroidInterface;
+        const fmtMoney = (val) => Number(val || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const fmtNum = (val) => Number(val || 0).toLocaleString('en-US');
+        
+        async function loadDashboard() {
+            try {
+                if (!bridge) throw new Error('Android Bridge غير متاح');
+                
+                const responseStr = bridge.getDashboardStats("{}");
+                const res = JSON.parse(responseStr);
+                if (!res.success) throw new Error(res.message);
+                
+                const data = res.data;
+                
+                // Update KPIs
+                document.getElementById('kpiSalesToday').textContent = fmtMoney(data.sales_today);
+                document.getElementById('kpiFuelToday').textContent = fmtNum(data.fuel_liters_today);
+                document.getElementById('kpiStockAlerts').textContent = fmtNum(data.low_stock_count);
+                document.getElementById('kpiDebts').textContent = fmtMoney(data.total_customer_debts);
+                
+                // Update Trends
+                const salesTrend = data.sales_today_vs_yesterday || 0;
+                const salesTrendEl = document.getElementById('trendSalesToday');
+                salesTrendEl.innerHTML = salesTrend >= 0 
+                    ? `<i class="fas fa-arrow-up"></i> ${salesTrend}% عن الأمس`
+                    : `<i class="fas fa-arrow-down"></i> ${Math.abs(salesTrend)}% عن الأمس`;
+                salesTrendEl.className = `kpi-trend ${salesTrend >= 0 ? 'trend-up' : 'trend-down'}`;
+                
+                const fuelTrend = data.fuel_today_vs_yesterday || 0;
+                const fuelTrendEl = document.getElementById('trendFuelToday');
+                fuelTrendEl.innerHTML = fuelTrend >= 0 
+                    ? `<i class="fas fa-arrow-up"></i> ${fuelTrend}% عن الأمس`
+                    : `<i class="fas fa-arrow-down"></i> ${Math.abs(fuelTrend)}% عن الأمس`;
+                fuelTrendEl.className = `kpi-trend ${fuelTrend >= 0 ? 'trend-up' : 'trend-down'}`;
+                
+                // Render Tanks
+                const tanks = data.tanks || [];
+                const tanksHtml = tanks.length ? tanks.map(t => {
+                    const pct = t.capacity > 0 ? Math.min(100, Math.round((t.current_quantity / t.capacity) * 100)) : 0;
+                    const color = pct < 20 ? 'var(--danger-color)' : (pct < 40 ? 'var(--warning-color)' : 'var(--success-color)');
+                    return `
+                        <div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.875rem; margin-bottom: 0.25rem;">
+                                <span>${t.tank_name} (${t.fuel_type})</span>
+                                <span>${fmtNum(t.current_quantity)} / ${fmtNum(t.capacity)} لتر</span>
+                            </div>
+                            <div style="width: 100%; background: var(--bg-secondary); border-radius: 99px; height: 8px; overflow: hidden;">
+                                <div style="width: ${pct}%; background: ${color}; height: 100%; border-radius: 99px;"></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('') : '<div style="color: var(--text-muted); text-align: center; padding: 1rem;">لا توجد خزانات مسجلة</div>';
+                document.getElementById('tanksContainer').innerHTML = tanksHtml;
+                
+                // Render Shifts
+                const shifts = data.open_shifts || [];
+                const shiftsHtml = shifts.length ? shifts.map(s => `
+                    <div style="padding: 1rem; border: 1px solid var(--border-color); border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: 700; margin-bottom: 0.25rem;">وردية ${s.shift_code}</div>
+                            <div style="font-size: 0.875rem; color: var(--text-secondary);"><i class="fas fa-user"></i> ${s.employee_name}</div>
+                        </div>
+                        <div style="text-align: left;">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">المبيعات</div>
+                            <div style="font-weight: 700; color: var(--primary-color);">${fmtMoney(s.current_sales)}</div>
+                        </div>
+                    </div>
+                `).join('') : '<div style="color: var(--text-muted); text-align: center; padding: 1rem;">لا توجد ورديات مفتوحة حالياً</div>';
+                document.getElementById('shiftsContainer').innerHTML = shiftsHtml;
+                
+            } catch (error) {
+                console.error(error);
+                alert('فشل تحميل لوحة التحكم: ' + error.message);
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+    </script>
+    <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
+</body>
+</html>

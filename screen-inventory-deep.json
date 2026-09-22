@@ -1,0 +1,4618 @@
+[
+  {
+    "id": "001",
+    "file": "main.html",
+    "name": "محطة أبو أحمد – لوحة التحكم",
+    "domain": "AI",
+    "jsFunctions": 43,
+    "bridgeMethods": [
+      "getCurrentUser",
+      "exitApplication",
+      "screenExists",
+      "getDashboardStats"
+    ],
+    "hasMock": true,
+    "priority": "P0",
+    "kotlinMethods": [
+      {
+        "method": "getCurrentUser",
+        "status": "MainActivity"
+      },
+      {
+        "method": "exitApplication",
+        "status": "MainActivity"
+      },
+      {
+        "method": "screenExists",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getDashboardStats",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "sms_ai_runs"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)"
+    ]
+  },
+  {
+    "id": "002",
+    "file": "screens/SmsCoreDiagnostics.html",
+    "name": "تشخيصات جوهر الرسائل",
+    "domain": "General / Core",
+    "jsFunctions": 37,
+    "bridgeMethods": [],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "No Bridge Methods found (Static Screen)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "003",
+    "file": "screens/accounting-reports.html",
+    "name": "نظام إدارة محطة الوقود – التقارير المحاسبية",
+    "domain": "Accounting",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet"
+    ],
+    "hasMock": true,
+    "priority": "P1",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "accounts",
+      "transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "004",
+    "file": "screens/activity-log.html",
+    "name": "سجل النشاطات – نظام محطات الوقود",
+    "domain": "Reports & Logs",
+    "jsFunctions": 80,
+    "bridgeMethods": [
+      "getActivityLogs",
+      "getCurrentUser",
+      "getSetting",
+      "setSetting",
+      "deleteActivityLog",
+      "cleanupActivityLogs"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getActivityLogs",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCurrentUser",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getSetting",
+        "status": "MainActivity"
+      },
+      {
+        "method": "setSetting",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deleteActivityLog",
+        "status": "MainActivity"
+      },
+      {
+        "method": "cleanupActivityLogs",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "005",
+    "file": "screens/ai-assistant.html",
+    "name": "نظام إدارة محطة الوقود – المساعد الذكي",
+    "domain": "AI",
+    "jsFunctions": 48,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getSmsAiConfig",
+      "configureSmsAiProvider",
+      "deleteSmsAiProvider",
+      "setSmsAiProviderEnabled",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords",
+      "getAiHealthStatus"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getSmsAiConfig",
+        "status": "MainActivity"
+      },
+      {
+        "method": "configureSmsAiProvider",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deleteSmsAiProvider",
+        "status": "MainActivity"
+      },
+      {
+        "method": "setSmsAiProviderEnabled",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getAiHealthStatus",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "sms_ai_runs"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "006",
+    "file": "screens/assets-v12.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الأصول V12",
+    "domain": "General / Core",
+    "jsFunctions": 48,
+    "bridgeMethods": [],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "No Bridge Methods found (Static Screen)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "007",
+    "file": "screens/attendance.html",
+    "name": "نظام إدارة محطة الوقود – الحضور والانصراف",
+    "domain": "HR",
+    "jsFunctions": 81,
+    "bridgeMethods": [
+      "getEmployees",
+      "getShifts",
+      "getStations",
+      "getUserActivityLog",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getEmployees",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getShifts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getStations",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getUserActivityLog",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "008",
+    "file": "screens/audit-logs.html",
+    "name": "نظام إدارة محطة الوقود – سجلات التدقيق",
+    "domain": "Reports & Logs",
+    "jsFunctions": 65,
+    "bridgeMethods": [],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "No Bridge Methods found (Static Screen)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "009",
+    "file": "screens/backups.html",
+    "name": "نظام إدارة محطة الوقود – النسخ الاحتياطي",
+    "domain": "General / Core",
+    "jsFunctions": 57,
+    "bridgeMethods": [],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "No Bridge Methods found (Static Screen)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "010",
+    "file": "screens/bad-debts.html",
+    "name": "نظام إدارة محطة الوقود – الديون المعدومة",
+    "domain": "Accounting",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "accounts",
+      "transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "011",
+    "file": "screens/balance-sheet.html",
+    "name": "نظام إدارة محطات الوقود – الميزانية العمومية",
+    "domain": "Accounting",
+    "jsFunctions": 48,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "saveBalanceSheet",
+      "getCurrencies"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "saveBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCurrencies",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "accounts",
+      "transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "012",
+    "file": "screens/banks-accounts.html",
+    "name": "نظام إدارة محطات الوقود – البنوك والحسابات",
+    "domain": "Accounting",
+    "jsFunctions": 59,
+    "bridgeMethods": [
+      "generateBankReport",
+      "getBanks",
+      "getBankAccounts",
+      "getCurrencies",
+      "saveBank",
+      "deleteBank",
+      "saveBankAccount",
+      "deleteBankAccount"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "generateBankReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBanks",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBankAccounts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCurrencies",
+        "status": "MainActivity"
+      },
+      {
+        "method": "saveBank",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deleteBank",
+        "status": "MainActivity"
+      },
+      {
+        "method": "saveBankAccount",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deleteBankAccount",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "accounts",
+      "transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "013",
+    "file": "screens/budgets.html",
+    "name": "نظام إدارة محطة الوقود – الميزانيات",
+    "domain": "Accounting",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "accounts",
+      "transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "014",
+    "file": "screens/cash-deposits.html",
+    "name": "نظام إدارة محطة الوقود – الإيداعات النقدية",
+    "domain": "Sales",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "sales_transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "015",
+    "file": "screens/cash-movements.html",
+    "name": "نظام إدارة محطة الوقود – حركات النقدية",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "016",
+    "file": "screens/cashboxes.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الصناديق",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "017",
+    "file": "screens/chart-of-accounts.html",
+    "name": "نظام إدارة محطات الوقود – شجرة الحسابات",
+    "domain": "Accounting",
+    "jsFunctions": 60,
+    "bridgeMethods": [
+      "getChartTrialBalance",
+      "getBalanceSheet",
+      "getChartAccounts",
+      "getBankAccounts",
+      "saveChartAccount",
+      "deleteChartAccount",
+      "cloneChartAccount",
+      "moveChartAccount",
+      "getChartAccountAudit"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getChartTrialBalance",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getChartAccounts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBankAccounts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "saveChartAccount",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deleteChartAccount",
+        "status": "MainActivity"
+      },
+      {
+        "method": "cloneChartAccount",
+        "status": "MainActivity"
+      },
+      {
+        "method": "moveChartAccount",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getChartAccountAudit",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "accounts",
+      "transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "018",
+    "file": "screens/company-settings.html",
+    "name": "نظام إدارة محطات الوقود – إعدادات النظام",
+    "domain": "Administration",
+    "jsFunctions": 33,
+    "bridgeMethods": [],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "No Bridge Methods found (Static Screen)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "019",
+    "file": "screens/contracts.html",
+    "name": "contracts.html",
+    "domain": "General / Core",
+    "jsFunctions": 74,
+    "bridgeMethods": [
+      "getContracts",
+      "getParties",
+      "getCurrencies",
+      "getCurrentUser",
+      "getContractBundle",
+      "deleteContract",
+      "cloneContract",
+      "changeContractStatus",
+      "generateContractReport",
+      "backupDatabase",
+      "getContractAudit"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getContracts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getParties",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCurrencies",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCurrentUser",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getContractBundle",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deleteContract",
+        "status": "MainActivity"
+      },
+      {
+        "method": "cloneContract",
+        "status": "MainActivity"
+      },
+      {
+        "method": "changeContractStatus",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generateContractReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "backupDatabase",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getContractAudit",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "020",
+    "file": "screens/crm.html",
+    "name": "نظام إدارة محطات الوقود – إدارة العلاقات (CRM)",
+    "domain": "CRM",
+    "jsFunctions": 52,
+    "bridgeMethods": [
+      "generateCRMReport",
+      "getParties",
+      "getPartyTypes",
+      "savePartyBundle",
+      "getPartyCrmBundle",
+      "deleteParty"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "generateCRMReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getParties",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getPartyTypes",
+        "status": "MainActivity"
+      },
+      {
+        "method": "savePartyBundle",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getPartyCrmBundle",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deleteParty",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "customers"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "021",
+    "file": "screens/customer-debts.html",
+    "name": "نظام إدارة محطات الوقود – ديون العملاء",
+    "domain": "CRM",
+    "jsFunctions": 54,
+    "bridgeMethods": [
+      "getPayments",
+      "getCustomerDebts",
+      "makePayment",
+      "getCustomers",
+      "getPartyById",
+      "getCustomerSales",
+      "getCustomerLedger",
+      "getDashboardStats",
+      "getLowStockItems",
+      "getSetting",
+      "setSetting"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getPayments",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCustomerDebts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "makePayment",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCustomers",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getPartyById",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCustomerSales",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCustomerLedger",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getDashboardStats",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getLowStockItems",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getSetting",
+        "status": "MainActivity"
+      },
+      {
+        "method": "setSetting",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "customers"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "022",
+    "file": "screens/customer-reports.html",
+    "name": "customer-reports.html",
+    "domain": "CRM",
+    "jsFunctions": 48,
+    "bridgeMethods": [
+      "generateCRMReport",
+      "getCustomerDebts",
+      "getPartyCrmBundle",
+      "updatePartyCreditLimit",
+      "getPartyTypes"
+    ],
+    "hasMock": true,
+    "priority": "P1",
+    "kotlinMethods": [
+      {
+        "method": "generateCRMReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCustomerDebts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getPartyCrmBundle",
+        "status": "MainActivity"
+      },
+      {
+        "method": "updatePartyCreditLimit",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getPartyTypes",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "customers"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "023",
+    "file": "screens/customers.html",
+    "name": "أبو أحمد – النظام المتكامل",
+    "domain": "CRM",
+    "jsFunctions": 65,
+    "bridgeMethods": [
+      "get_customers",
+      "get_party_types",
+      "get_currencies",
+      "get_users",
+      "get_fuel_types",
+      "get_customer_bundle",
+      "get_customer_ledger",
+      "get_customer_sales",
+      "add_contact",
+      "delete_contact",
+      "update_contact",
+      "add_address",
+      "delete_address",
+      "update_address",
+      "delete_customer",
+      "make_payment",
+      "get_party_report",
+      "get_customer_debts",
+      "get_payments",
+      "get_tanks",
+      "get_products"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "get_customers",
+        "status": "Missing"
+      },
+      {
+        "method": "get_party_types",
+        "status": "Missing"
+      },
+      {
+        "method": "get_currencies",
+        "status": "Missing"
+      },
+      {
+        "method": "get_users",
+        "status": "Missing"
+      },
+      {
+        "method": "get_fuel_types",
+        "status": "Missing"
+      },
+      {
+        "method": "get_customer_bundle",
+        "status": "Missing"
+      },
+      {
+        "method": "get_customer_ledger",
+        "status": "Missing"
+      },
+      {
+        "method": "get_customer_sales",
+        "status": "Missing"
+      },
+      {
+        "method": "add_contact",
+        "status": "Missing"
+      },
+      {
+        "method": "delete_contact",
+        "status": "Missing"
+      },
+      {
+        "method": "update_contact",
+        "status": "Missing"
+      },
+      {
+        "method": "add_address",
+        "status": "Missing"
+      },
+      {
+        "method": "delete_address",
+        "status": "Missing"
+      },
+      {
+        "method": "update_address",
+        "status": "Missing"
+      },
+      {
+        "method": "delete_customer",
+        "status": "Missing"
+      },
+      {
+        "method": "make_payment",
+        "status": "Missing"
+      },
+      {
+        "method": "get_party_report",
+        "status": "Missing"
+      },
+      {
+        "method": "get_customer_debts",
+        "status": "Missing"
+      },
+      {
+        "method": "get_payments",
+        "status": "Missing"
+      },
+      {
+        "method": "get_tanks",
+        "status": "Missing"
+      },
+      {
+        "method": "get_products",
+        "status": "Missing"
+      }
+    ],
+    "dbTables": [
+      "customers"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "024",
+    "file": "screens/damaged-products.html",
+    "name": "نظام إدارة محطات الوقود – المنتجات التالفة",
+    "domain": "Inventory",
+    "jsFunctions": 55,
+    "bridgeMethods": [
+      "getDamagedProducts",
+      "addNotification",
+      "updateDamagedProductStatus",
+      "archiveDamagedProduct",
+      "getDashboardStats",
+      "getLowStockItems",
+      "getSetting",
+      "setSetting",
+      "getProducts",
+      "getWarehouses",
+      "getTanks",
+      "getUsers"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getDamagedProducts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "addNotification",
+        "status": "MainActivity"
+      },
+      {
+        "method": "updateDamagedProductStatus",
+        "status": "MainActivity"
+      },
+      {
+        "method": "archiveDamagedProduct",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getDashboardStats",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getLowStockItems",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getSetting",
+        "status": "MainActivity"
+      },
+      {
+        "method": "setSetting",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getProducts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getWarehouses",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getTanks",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getUsers",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "products",
+      "inventory"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "025",
+    "file": "screens/debt-reminders.html",
+    "name": "تذكيرات الديون",
+    "domain": "Accounting",
+    "jsFunctions": 61,
+    "bridgeMethods": [
+      "addNotification",
+      "addSmsMessage",
+      "makePayment",
+      "setSetting"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "addNotification",
+        "status": "MainActivity"
+      },
+      {
+        "method": "addSmsMessage",
+        "status": "MainActivity"
+      },
+      {
+        "method": "makePayment",
+        "status": "MainActivity"
+      },
+      {
+        "method": "setSetting",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "accounts",
+      "transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "026",
+    "file": "screens/deliveries.html",
+    "name": "نظام إدارة محطة الوقود – إدارة التوصيلات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "027",
+    "file": "screens/depreciation.html",
+    "name": "نظام إدارة محطة الوقود – الإهلاك",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "028",
+    "file": "screens/devices.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الأجهزة",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "029",
+    "file": "screens/documents.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الوثائق",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "030",
+    "file": "screens/drivers.html",
+    "name": "نظام إدارة محطة الوقود – إدارة السائقين",
+    "domain": "Fleet",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "031",
+    "file": "screens/employee-payments.html",
+    "name": "نظام إدارة محطة الوقود – دفعات الموظفين",
+    "domain": "HR",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "032",
+    "file": "screens/employees.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الموظفين",
+    "domain": "HR",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "033",
+    "file": "screens/eod-report.html",
+    "name": "نظام إدارة محطة الوقود – تقرير نهاية اليوم",
+    "domain": "Reports & Logs",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "034",
+    "file": "screens/equipment-calibration.html",
+    "name": "نظام إدارة محطة الوقود – معايرة المعدات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "035",
+    "file": "screens/exchange-rates.html",
+    "name": "نظام إدارة محطة الوقود – أسعار الصرف",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "036",
+    "file": "screens/expense-categories.html",
+    "name": "نظام إدارة محطة الوقود – فئات المصروفات",
+    "domain": "Accounting",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "accounts",
+      "transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "037",
+    "file": "screens/expenses.html",
+    "name": "نظام إدارة محطة الوقود – إدارة المصروفات",
+    "domain": "Accounting",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "accounts",
+      "transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "038",
+    "file": "screens/expiry-soon.html",
+    "name": "نظام إدارة محطات الوقود – المنتجات منتهية الصلاحية قريباً",
+    "domain": "General / Core",
+    "jsFunctions": 47,
+    "bridgeMethods": [
+      "getExpirySoonProducts",
+      "extendProductExpiry",
+      "getProducts",
+      "markProductExpired",
+      "getDashboardStats",
+      "getLowStockItems",
+      "getSetting",
+      "setSetting",
+      "getCategories"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getExpirySoonProducts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "extendProductExpiry",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getProducts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "markProductExpired",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getDashboardStats",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getLowStockItems",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getSetting",
+        "status": "MainActivity"
+      },
+      {
+        "method": "setSetting",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCategories",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "039",
+    "file": "screens/first-user-setup.html",
+    "name": "إضافة المستخدم الأول - نظام إدارة محطات الوقود",
+    "domain": "Administration",
+    "jsFunctions": 12,
+    "bridgeMethods": [],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "No Bridge Methods found (Static Screen)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "040",
+    "file": "screens/fixed-assets.html",
+    "name": "نظام إدارة محطة الوقود – الأصول الثابتة",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "041",
+    "file": "screens/forecasts.html",
+    "name": "نظام إدارة محطة الوقود – التنبؤات والتحليلات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "042",
+    "file": "screens/fuel-reports.html",
+    "name": "fuel-reports.html",
+    "domain": "Fuel / Station",
+    "jsFunctions": 32,
+    "bridgeMethods": [
+      "getFuelInventoryReconciliation",
+      "getFuelReport",
+      "getFuelTransactionDetails",
+      "getFuelTypes",
+      "getTanks"
+    ],
+    "hasMock": true,
+    "priority": "P1",
+    "kotlinMethods": [
+      {
+        "method": "getFuelInventoryReconciliation",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getFuelReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getFuelTransactionDetails",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getFuelTypes",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getTanks",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "tanks",
+      "pumps",
+      "fuel_types"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "043",
+    "file": "screens/fuel-sales.html",
+    "name": "نظام إدارة محطة الوقود – مبيعات الوقود",
+    "domain": "Sales",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "sales_transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "044",
+    "file": "screens/fuel-types.html",
+    "name": "نظام إدارة محطة الوقود – أنواع الوقود",
+    "domain": "Fuel / Station",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "tanks",
+      "pumps",
+      "fuel_types"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "045",
+    "file": "screens/inventory-alerts.html",
+    "name": "نظام إدارة محطة الوقود – تنبيهات المخزون",
+    "domain": "Inventory",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "products",
+      "inventory"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "046",
+    "file": "screens/inventory-movements.html",
+    "name": "تفاصيل الحركة",
+    "domain": "Inventory",
+    "jsFunctions": 41,
+    "bridgeMethods": [
+      "getProducts",
+      "getWarehouses",
+      "getSuppliers",
+      "getCustomers",
+      "getMovements",
+      "getMovementStats",
+      "getInventoryDetails",
+      "saveMovement",
+      "getMovement",
+      "deleteMovement",
+      "generateReport",
+      "getInventoryAnalytics",
+      "getProductTrend"
+    ],
+    "hasMock": false,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getProducts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getWarehouses",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getSuppliers",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCustomers",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getMovements",
+        "status": "Missing"
+      },
+      {
+        "method": "getMovementStats",
+        "status": "Missing"
+      },
+      {
+        "method": "getInventoryDetails",
+        "status": "Missing"
+      },
+      {
+        "method": "saveMovement",
+        "status": "Missing"
+      },
+      {
+        "method": "getMovement",
+        "status": "Missing"
+      },
+      {
+        "method": "deleteMovement",
+        "status": "Missing"
+      },
+      {
+        "method": "generateReport",
+        "status": "Missing"
+      },
+      {
+        "method": "getInventoryAnalytics",
+        "status": "Missing"
+      },
+      {
+        "method": "getProductTrend",
+        "status": "Missing"
+      }
+    ],
+    "dbTables": [
+      "products",
+      "inventory"
+    ],
+    "gaps": [
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "047",
+    "file": "screens/inventory-reports.html",
+    "name": "inventory-reports.html",
+    "domain": "Inventory",
+    "jsFunctions": 32,
+    "bridgeMethods": [
+      "generateInventoryReport",
+      "getProductDetails",
+      "getWarehouses",
+      "getCategories"
+    ],
+    "hasMock": true,
+    "priority": "P1",
+    "kotlinMethods": [
+      {
+        "method": "generateInventoryReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getProductDetails",
+        "status": "Missing"
+      },
+      {
+        "method": "getWarehouses",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCategories",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "products",
+      "inventory"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "048",
+    "file": "screens/invoice-templates.html",
+    "name": "نظام إدارة محطة الوقود – قوالب الفواتير",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "049",
+    "file": "screens/journal-entries.html",
+    "name": "نظام إدارة محطات الوقود – القيود المحاسبية",
+    "domain": "General / Core",
+    "jsFunctions": 71,
+    "bridgeMethods": [
+      "generateJournalReport",
+      "getJournalEntries",
+      "getJournalItems",
+      "getChartAccounts",
+      "getCurrencies",
+      "getNextEntryNumber",
+      "saveJournalEntry",
+      "deleteJournalEntry",
+      "postJournalEntry",
+      "reverseJournalEntry"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "generateJournalReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getJournalEntries",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getJournalItems",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getChartAccounts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCurrencies",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getNextEntryNumber",
+        "status": "MainActivity"
+      },
+      {
+        "method": "saveJournalEntry",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deleteJournalEntry",
+        "status": "MainActivity"
+      },
+      {
+        "method": "postJournalEntry",
+        "status": "MainActivity"
+      },
+      {
+        "method": "reverseJournalEntry",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "050",
+    "file": "screens/kpi.html",
+    "name": "kpi.html",
+    "domain": "Dashboard",
+    "jsFunctions": 40,
+    "bridgeMethods": [
+      "getKPIDashboard",
+      "getKPIDetails"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getKPIDashboard",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getKPIDetails",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "051",
+    "file": "screens/ledger.html",
+    "name": "نظام إدارة محطات الوقود – دفتر الأستاذ العام",
+    "domain": "Accounting",
+    "jsFunctions": 49,
+    "bridgeMethods": [
+      "generateLedgerReport",
+      "getChartAccounts",
+      "getLedgerStats",
+      "getLedgerEntries",
+      "getJournalEntryDetails"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "generateLedgerReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getChartAccounts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getLedgerStats",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getLedgerEntries",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getJournalEntryDetails",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "accounts",
+      "transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "052",
+    "file": "screens/login.html",
+    "name": "تسجيل الدخول - نظام إدارة محطات الوقود",
+    "domain": "Reports & Logs",
+    "jsFunctions": 38,
+    "bridgeMethods": [
+      "has_saved_credentials",
+      "save_credentials",
+      "load_credentials",
+      "clear_remembered_credentials",
+      "request_password_reset_sms",
+      "verify_reset_code",
+      "reset_password",
+      "login"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "has_saved_credentials",
+        "status": "Missing"
+      },
+      {
+        "method": "save_credentials",
+        "status": "Missing"
+      },
+      {
+        "method": "load_credentials",
+        "status": "Missing"
+      },
+      {
+        "method": "clear_remembered_credentials",
+        "status": "Missing"
+      },
+      {
+        "method": "request_password_reset_sms",
+        "status": "Missing"
+      },
+      {
+        "method": "verify_reset_code",
+        "status": "Missing"
+      },
+      {
+        "method": "reset_password",
+        "status": "Missing"
+      },
+      {
+        "method": "login",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "053",
+    "file": "screens/maintenance-log.html",
+    "name": "نظام إدارة محطة الوقود – سجل الصيانة",
+    "domain": "AI",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "sms_ai_runs"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "054",
+    "file": "screens/maintenance-requests.html",
+    "name": "نظام إدارة محطة الوقود – طلبات الصيانة",
+    "domain": "AI",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "sms_ai_runs"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "055",
+    "file": "screens/maintenance-schedule.html",
+    "name": "نظام إدارة محطة الوقود – جدولة الصيانة",
+    "domain": "AI",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "sms_ai_runs"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "056",
+    "file": "screens/message-log.html",
+    "name": "سجل الرسائل",
+    "domain": "SMS / Messaging",
+    "jsFunctions": 32,
+    "bridgeMethods": [],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [],
+    "dbTables": [
+      "sms_messages",
+      "sms_templates"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "No Bridge Methods found (Static Screen)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "057",
+    "file": "screens/messages.html",
+    "name": "إدارة الرسائل",
+    "domain": "SMS / Messaging",
+    "jsFunctions": 55,
+    "bridgeMethods": [],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [],
+    "dbTables": [
+      "sms_messages",
+      "sms_templates"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "No Bridge Methods found (Static Screen)"
+    ]
+  },
+  {
+    "id": "058",
+    "file": "screens/meter-readings.html",
+    "name": "نظام إدارة محطة الوقود – قراءات العدادات",
+    "domain": "Fuel / Station",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "tanks",
+      "pumps",
+      "fuel_types"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "059",
+    "file": "screens/notification-inbox.html",
+    "name": "صندوق الإشعارات",
+    "domain": "General / Core",
+    "jsFunctions": 41,
+    "bridgeMethods": [
+      "getCurrentUser",
+      "getNotifications",
+      "markNotificationRead"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getCurrentUser",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getNotifications",
+        "status": "MainActivity"
+      },
+      {
+        "method": "markNotificationRead",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "060",
+    "file": "screens/notification-templates.html",
+    "name": "إدارة قوالب الإشعارات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getNotificationTemplates",
+      "updateNotificationTemplate",
+      "deleteNotificationTemplate"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getNotificationTemplates",
+        "status": "MainActivity"
+      },
+      {
+        "method": "updateNotificationTemplate",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deleteNotificationTemplate",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "061",
+    "file": "screens/orders.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الطلبات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "062",
+    "file": "screens/party-types.html",
+    "name": "نظام إدارة محطات الوقود – أنواع الأطراف",
+    "domain": "General / Core",
+    "jsFunctions": 35,
+    "bridgeMethods": [
+      "generatePartyTypeReport",
+      "getPartyTypes",
+      "savePartyType",
+      "deletePartyType"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "generatePartyTypeReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getPartyTypes",
+        "status": "MainActivity"
+      },
+      {
+        "method": "savePartyType",
+        "status": "Missing"
+      },
+      {
+        "method": "deletePartyType",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "063",
+    "file": "screens/payments.html",
+    "name": "نظام إدارة محطة الوقود – إدارة المدفوعات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "064",
+    "file": "screens/payroll.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الرواتب",
+    "domain": "HR",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "065",
+    "file": "screens/pos.html",
+    "name": "نظام إدارة محطات الوقود – نقاط البيع",
+    "domain": "Sales",
+    "jsFunctions": 57,
+    "bridgeMethods": [
+      "getProductByBarcode",
+      "getNextInvoiceNumber",
+      "completeSale",
+      "printReceipt",
+      "getCustomers",
+      "getEntityTypes",
+      "getEntitiesByType",
+      "getEntityDetails",
+      "searchCustomers",
+      "addCustomer",
+      "searchSales",
+      "saveReturn",
+      "processReturn",
+      "searchInvoices",
+      "retrieveInvoice",
+      "salesReport"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getProductByBarcode",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getNextInvoiceNumber",
+        "status": "MainActivity"
+      },
+      {
+        "method": "completeSale",
+        "status": "MainActivity"
+      },
+      {
+        "method": "printReceipt",
+        "status": "Missing"
+      },
+      {
+        "method": "getCustomers",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEntityTypes",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEntitiesByType",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEntityDetails",
+        "status": "MainActivity"
+      },
+      {
+        "method": "searchCustomers",
+        "status": "Missing"
+      },
+      {
+        "method": "addCustomer",
+        "status": "Missing"
+      },
+      {
+        "method": "searchSales",
+        "status": "MainActivity"
+      },
+      {
+        "method": "saveReturn",
+        "status": "Missing"
+      },
+      {
+        "method": "processReturn",
+        "status": "Missing"
+      },
+      {
+        "method": "searchInvoices",
+        "status": "MainActivity"
+      },
+      {
+        "method": "retrieveInvoice",
+        "status": "MainActivity"
+      },
+      {
+        "method": "salesReport",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "sales_transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "066",
+    "file": "screens/price-change-log.html",
+    "name": "نظام إدارة محطة الوقود – سجل تغيير الأسعار",
+    "domain": "Reports & Logs",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "067",
+    "file": "screens/price-lists.html",
+    "name": "نظام إدارة محطة الوقود – قوائم الأسعار",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "068",
+    "file": "screens/printer-settings.html",
+    "name": "نظام إدارة محطة الوقود – إعدادات الطابعات",
+    "domain": "Administration",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "069",
+    "file": "screens/product-categories.html",
+    "name": "نظام إدارة محطات الوقود – إدارة الفئات",
+    "domain": "Inventory",
+    "jsFunctions": 16,
+    "bridgeMethods": [
+      "getCategories",
+      "saveCategory",
+      "deleteCategory",
+      "searchCategories",
+      "getCategory"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getCategories",
+        "status": "MainActivity"
+      },
+      {
+        "method": "saveCategory",
+        "status": "Missing"
+      },
+      {
+        "method": "deleteCategory",
+        "status": "Missing"
+      },
+      {
+        "method": "searchCategories",
+        "status": "Missing"
+      },
+      {
+        "method": "getCategory",
+        "status": "Missing"
+      }
+    ],
+    "dbTables": [
+      "products",
+      "inventory"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "070",
+    "file": "screens/products.html",
+    "name": "نظام إدارة محطات الوقود – إدارة المنتجات",
+    "domain": "Inventory",
+    "jsFunctions": 39,
+    "bridgeMethods": [
+      "getCategories",
+      "getUnits",
+      "getProducts",
+      "saveProduct",
+      "getProduct",
+      "deleteProduct",
+      "searchProducts",
+      "filterProducts",
+      "exportProducts",
+      "importProducts",
+      "checkProductExists"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getCategories",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getUnits",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getProducts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "saveProduct",
+        "status": "Missing"
+      },
+      {
+        "method": "getProduct",
+        "status": "Missing"
+      },
+      {
+        "method": "deleteProduct",
+        "status": "MainActivity"
+      },
+      {
+        "method": "searchProducts",
+        "status": "Missing"
+      },
+      {
+        "method": "filterProducts",
+        "status": "Missing"
+      },
+      {
+        "method": "exportProducts",
+        "status": "Missing"
+      },
+      {
+        "method": "importProducts",
+        "status": "Missing"
+      },
+      {
+        "method": "checkProductExists",
+        "status": "Missing"
+      }
+    ],
+    "dbTables": [
+      "products",
+      "inventory"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "071",
+    "file": "screens/pumps.html",
+    "name": "نظام إدارة محطة الوقود – إدارة المضخات",
+    "domain": "Fuel / Station",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P1",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "tanks",
+      "pumps",
+      "fuel_types"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "072",
+    "file": "screens/quality-checks.html",
+    "name": "نظام إدارة محطة الوقود – فحوصات الجودة",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "073",
+    "file": "screens/receipt-templates.html",
+    "name": "نظام إدارة محطة الوقود – قوالب الإيصالات",
+    "domain": "Sales",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "sales_transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "074",
+    "file": "screens/receipts.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الإيصالات",
+    "domain": "Sales",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "sales_transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "075",
+    "file": "screens/returned-products.html",
+    "name": "نظام إدارة محطات الوقود – المنتجات المرتجعة",
+    "domain": "Inventory",
+    "jsFunctions": 44,
+    "bridgeMethods": [
+      "getReturns",
+      "deleteReturn",
+      "getDashboardStats",
+      "getLowStockItems",
+      "getSetting",
+      "setSetting",
+      "getProducts",
+      "getCustomers"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getReturns",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deleteReturn",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getDashboardStats",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getLowStockItems",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getSetting",
+        "status": "MainActivity"
+      },
+      {
+        "method": "setSetting",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getProducts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCustomers",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "products",
+      "inventory"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "076",
+    "file": "screens/roles.html",
+    "name": "إدارة الصلاحيات – نظام محطات الوقود",
+    "domain": "Administration",
+    "jsFunctions": 57,
+    "bridgeMethods": [
+      "getPermissions",
+      "getScreens",
+      "getUsers",
+      "getGroups",
+      "getRoles",
+      "deletePermission",
+      "grantUserPermission",
+      "getGrantedPermissions",
+      "revokeUserPermission",
+      "getGroupPermissions",
+      "grantGroupPermission",
+      "revokeGroupPermission",
+      "grantDelegatedPermission",
+      "getDelegatedPermissions",
+      "revokeDelegatedPermission"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getPermissions",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getScreens",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getUsers",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getGroups",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getRoles",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deletePermission",
+        "status": "MainActivity"
+      },
+      {
+        "method": "grantUserPermission",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getGrantedPermissions",
+        "status": "MainActivity"
+      },
+      {
+        "method": "revokeUserPermission",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getGroupPermissions",
+        "status": "MainActivity"
+      },
+      {
+        "method": "grantGroupPermission",
+        "status": "MainActivity"
+      },
+      {
+        "method": "revokeGroupPermission",
+        "status": "MainActivity"
+      },
+      {
+        "method": "grantDelegatedPermission",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getDelegatedPermissions",
+        "status": "MainActivity"
+      },
+      {
+        "method": "revokeDelegatedPermission",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "077",
+    "file": "screens/sales-log.html",
+    "name": "نظام إدارة محطات الوقود – سجل المبيعات",
+    "domain": "Sales",
+    "jsFunctions": 38,
+    "bridgeMethods": [
+      "getSalesTransactions",
+      "getParties",
+      "getFuelTypes",
+      "getPumps",
+      "saveSaleTransaction",
+      "deleteSaleTransaction"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getSalesTransactions",
+        "status": "Missing"
+      },
+      {
+        "method": "getParties",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getFuelTypes",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getPumps",
+        "status": "MainActivity"
+      },
+      {
+        "method": "saveSaleTransaction",
+        "status": "Missing"
+      },
+      {
+        "method": "deleteSaleTransaction",
+        "status": "Missing"
+      }
+    ],
+    "dbTables": [
+      "sales_transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "078",
+    "file": "screens/sales-reports.html",
+    "name": "نظام إدارة محطات الوقود – تقارير المبيعات",
+    "domain": "Sales",
+    "jsFunctions": 39,
+    "bridgeMethods": [
+      "generateSalesReport",
+      "getInvoiceDetails",
+      "getProducts",
+      "getCustomers",
+      "getShifts"
+    ],
+    "hasMock": true,
+    "priority": "P1",
+    "kotlinMethods": [
+      {
+        "method": "generateSalesReport",
+        "status": "Missing"
+      },
+      {
+        "method": "getInvoiceDetails",
+        "status": "Missing"
+      },
+      {
+        "method": "getProducts",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCustomers",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getShifts",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "sales_transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "079",
+    "file": "screens/screens.html",
+    "name": "إدارة شاشات التطبيق – نظام محطات الوقود",
+    "domain": "General / Core",
+    "jsFunctions": 43,
+    "bridgeMethods": [
+      "getScreens",
+      "getModules",
+      "getPermissions",
+      "getScreenPermissions",
+      "deleteScreen"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getScreens",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getModules",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getPermissions",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getScreenPermissions",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deleteScreen",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "080",
+    "file": "screens/settings.html",
+    "name": "نظام إدارة محطات الوقود – إعدادات النظام",
+    "domain": "Administration",
+    "jsFunctions": 33,
+    "bridgeMethods": [],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "No Bridge Methods found (Static Screen)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "081",
+    "file": "screens/shifts.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الورديات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "082",
+    "file": "screens/stations.html",
+    "name": "نظام إدارة محطة الوقود – إدارة المحطات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "083",
+    "file": "screens/stock-levels.html",
+    "name": "stock-levels.html",
+    "domain": "Inventory",
+    "jsFunctions": 49,
+    "bridgeMethods": [
+      "getWarehouses",
+      "getCategories",
+      "getInventorySummary",
+      "getLowStockProducts",
+      "getInventoryAlerts",
+      "getInventoryCharts",
+      "getMovements",
+      "getStockValues",
+      "getAlerts",
+      "filterInventory",
+      "advancedFilter",
+      "searchProducts",
+      "addProduct"
+    ],
+    "hasMock": false,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getWarehouses",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getCategories",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getInventorySummary",
+        "status": "Missing"
+      },
+      {
+        "method": "getLowStockProducts",
+        "status": "Missing"
+      },
+      {
+        "method": "getInventoryAlerts",
+        "status": "Missing"
+      },
+      {
+        "method": "getInventoryCharts",
+        "status": "Missing"
+      },
+      {
+        "method": "getMovements",
+        "status": "Missing"
+      },
+      {
+        "method": "getStockValues",
+        "status": "Missing"
+      },
+      {
+        "method": "getAlerts",
+        "status": "Missing"
+      },
+      {
+        "method": "filterInventory",
+        "status": "Missing"
+      },
+      {
+        "method": "advancedFilter",
+        "status": "Missing"
+      },
+      {
+        "method": "searchProducts",
+        "status": "Missing"
+      },
+      {
+        "method": "addProduct",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "products",
+      "inventory"
+    ],
+    "gaps": [
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "084",
+    "file": "screens/stocktake.html",
+    "name": "نظام إدارة محطة الوقود – الجرد والتسوية",
+    "domain": "Inventory",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "products",
+      "inventory"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "085",
+    "file": "screens/suppliers.html",
+    "name": "نظام إدارة محطات الوقود – الموردين (AI Edition)",
+    "domain": "General / Core",
+    "jsFunctions": 60,
+    "bridgeMethods": [
+      "getSuppliers",
+      "deleteSupplier",
+      "getPartyById"
+    ],
+    "hasMock": true,
+    "priority": "P1",
+    "kotlinMethods": [
+      {
+        "method": "getSuppliers",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deleteSupplier",
+        "status": "Missing"
+      },
+      {
+        "method": "getPartyById",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "086",
+    "file": "screens/sync-log.html",
+    "name": "نظام إدارة محطة الوقود – سجل المزامنة",
+    "domain": "Reports & Logs",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "087",
+    "file": "screens/system-logs.html",
+    "name": "نظام إدارة محطة الوقود – سجلات النظام",
+    "domain": "Reports & Logs",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "088",
+    "file": "screens/tank-filling.html",
+    "name": "نظام إدارة محطة الوقود – تعبئة الخزانات",
+    "domain": "Fuel / Station",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "tanks",
+      "pumps",
+      "fuel_types"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "089",
+    "file": "screens/tanks.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الخزانات",
+    "domain": "Fuel / Station",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P1",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "tanks",
+      "pumps",
+      "fuel_types"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "090",
+    "file": "screens/tasks.html",
+    "name": "tasks.html",
+    "domain": "General / Core",
+    "jsFunctions": 59,
+    "bridgeMethods": [
+      "getPendingTasks",
+      "archiveTask",
+      "resolveTask",
+      "generateTaskReport",
+      "backupData",
+      "getAuditLogs"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getPendingTasks",
+        "status": "MainActivity"
+      },
+      {
+        "method": "archiveTask",
+        "status": "MainActivity"
+      },
+      {
+        "method": "resolveTask",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generateTaskReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "backupData",
+        "status": "Missing"
+      },
+      {
+        "method": "getAuditLogs",
+        "status": "Missing"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "091",
+    "file": "screens/trips.html",
+    "name": "نظام إدارة محطة الوقود – رحلات المركبات",
+    "domain": "Fleet",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "092",
+    "file": "screens/users.html",
+    "name": "إدارة المستخدمين – نظام محطات الوقود",
+    "domain": "Administration",
+    "jsFunctions": 62,
+    "bridgeMethods": [
+      "getUsers",
+      "getRoles",
+      "getStations",
+      "getGroups",
+      "getPermissions",
+      "getUserPermissions",
+      "revokeUserPermission",
+      "deleteUser",
+      "getUserSessions",
+      "terminateSession",
+      "getUserActivityLog",
+      "getUserNotifications",
+      "markNotificationRead",
+      "deleteGroup"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getUsers",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getRoles",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getStations",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getGroups",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getPermissions",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getUserPermissions",
+        "status": "MainActivity"
+      },
+      {
+        "method": "revokeUserPermission",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deleteUser",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getUserSessions",
+        "status": "MainActivity"
+      },
+      {
+        "method": "terminateSession",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getUserActivityLog",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getUserNotifications",
+        "status": "MainActivity"
+      },
+      {
+        "method": "markNotificationRead",
+        "status": "MainActivity"
+      },
+      {
+        "method": "deleteGroup",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "093",
+    "file": "screens/vehicle-expenses.html",
+    "name": "نظام إدارة محطة الوقود – مصروفات المركبات",
+    "domain": "Accounting",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "accounts",
+      "transactions"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "094",
+    "file": "screens/vehicle-tracking.html",
+    "name": "نظام إدارة محطة الوقود – تتبع المركبات",
+    "domain": "Fleet",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "095",
+    "file": "screens/vehicles.html",
+    "name": "نظام إدارة محطة الوقود – إدارة المركبات",
+    "domain": "Fleet",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P2",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "096",
+    "file": "screens/warehouses.html",
+    "name": "نظام إدارة محطة الوقود – إدارة المستودعات",
+    "domain": "Inventory",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getBalanceSheet",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getEodReport",
+        "status": "MainActivity"
+      },
+      {
+        "method": "generate",
+        "status": "Missing"
+      },
+      {
+        "method": "getDatabaseInfo",
+        "status": "MainActivity"
+      },
+      {
+        "method": "getBackupHistoryRecords",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [
+      "products",
+      "inventory"
+    ],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Missing Kotlin Bridge Implementation",
+      "Not using Global Design System (theme.css)"
+    ]
+  },
+  {
+    "id": "097",
+    "file": "screens/whitelist.html",
+    "name": "القائمة البيضاء - إدارة الأرقام",
+    "domain": "General / Core",
+    "jsFunctions": 49,
+    "bridgeMethods": [
+      "getWhitelist",
+      "removeWhitelist",
+      "addSmsMessage",
+      "updateWhitelist"
+    ],
+    "hasMock": true,
+    "priority": "P3",
+    "kotlinMethods": [
+      {
+        "method": "getWhitelist",
+        "status": "MainActivity"
+      },
+      {
+        "method": "removeWhitelist",
+        "status": "MainActivity"
+      },
+      {
+        "method": "addSmsMessage",
+        "status": "MainActivity"
+      },
+      {
+        "method": "updateWhitelist",
+        "status": "MainActivity"
+      }
+    ],
+    "dbTables": [],
+    "gaps": [
+      "Contains Fake/Mock Data (Math.random or setTimeout)",
+      "Not using Global Design System (theme.css)"
+    ]
+  }
+]

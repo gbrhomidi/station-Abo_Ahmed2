@@ -1,0 +1,2439 @@
+/* ============================================================
+   محطة أبو أحمد - نظام التصميم الموحد (Theme & Components)
+   مستوحى من أنظمة ERP و POS العالمية
+   ============================================================ */
+
+/* ===== المتغيرات الأساسية (Light Theme) ===== */
+:root {
+    /* ألوان العلامة التجارية */
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --primary-light: #eff6ff;
+
+    --secondary: #64748b;
+    --secondary-hover: #475569;
+    --secondary-light: #f8fafc;
+
+    /* ألوان الحالة */
+    --success: #10b981;
+    --success-bg: #d1fae5;
+    --success-text: #065f46;
+
+    --danger: #ef4444;
+    --danger-bg: #fee2e2;
+    --danger-text: #991b1b;
+
+    --warning: #f59e0b;
+    --warning-bg: #fef3c7;
+    --warning-text: #92400e;
+
+    --info: #0ea5e9;
+    --info-bg: #e0f2fe;
+    --info-text: #075985;
+
+    /* الخلفيات والأسطح */
+    --bg-app: #f1f5f9;
+    --bg-surface: #ffffff;
+    --bg-surface-hover: #f8fafc;
+
+    /* النصوص */
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+
+    /* الحدود والظلال */
+    --border-color: #e2e8f0;
+    --border-focus: #93c5fd;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+    /* المقاسات */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-full: 9999px;
+
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-6: 24px;
+    --space-8: 32px;
+
+    /* الخطوط */
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-heading: 'Poppins', var(--font-sans);
+    --font-mono: 'IBM Plex Mono', monospace;
+
+    --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ===== الوضع المظلم (Dark Theme) ===== */
+[data-theme="dark"] {
+    --primary: #3b82f6;
+    --primary-hover: #60a5fa;
+    --primary-light: rgba(59, 130, 246, 0.15);
+
+    --secondary: #94a3b8;
+    --secondary-hover: #cbd5e1;
+    --secondary-light: rgba(148, 163, 184, 0.1);
+
+    --bg-app: #0f172a;
+    --bg-surface: #1e293b;
+    --bg-surface-hover: #334155;
+
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #64748b;
+
+    --border-color: #334155;
+    --border-focus: #3b82f6;
+
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+
+    --success-bg: rgba(16, 185, 129, 0.15);
+    --success-text: #34d399;
+    --danger-bg: rgba(239, 68, 68, 0.15);
+    --danger-text: #f87171;
+    --warning-bg: rgba(245, 158, 11, 0.15);
+    --warning-text: #fbbf24;
+    --info-bg: rgba(14, 165, 233, 0.15);
+    --info-text: #38bdf8;
+}
+
+/* ===== إعادة الضبط الأساسية ===== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    line-height: 1.5;
+    direction: rtl;
+    transition: background-color var(--transition-normal), color var(--transition-normal);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* ===== أنماط المحادثة (Conversational UI / Chat Bubbles) ===== */
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    background: var(--bg-surface-hover);
+    background-image: radial-gradient(rgba(37, 99, 235, 0.05) 1px, transparent 1.5px);
+    background-size: 22px 22px;
+    border-radius: var(--radius-md);
+    min-height: 400px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.chat-bubble {
+    position: relative;
+    width: fit-content;
+    max-width: min(75%, 600px);
+    padding: 10px 14px 8px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    animation: bubble-in 0.2s ease-out;
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes bubble-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.chat-bubble--inbound {
+    background: var(--bg-surface);
+    border-top-right-radius: 4px; /* RTL specific */
+    align-self: flex-start;
+    border: 1px solid var(--border-color);
+}
+
+.chat-bubble--outbound {
+    background: var(--primary-light);
+    border-top-left-radius: 4px; /* RTL specific */
+    align-self: flex-end;
+}
+
+.chat-bubble__body {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+.chat-bubble__meta {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.chat-bubble__status {
+    font-size: 0.75rem;
+}
+.chat-bubble__status.sent { color: var(--text-muted); }
+.chat-bubble__status.delivered { color: var(--info); }
+.chat-bubble__status.read { color: var(--success); }
+.chat-bubble__status.failed { color: var(--danger); }
+
+/* Sidebar Conversation List (WhatUp Style) */
+.convo-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    text-decoration: none;
+    color: inherit;
+    border-bottom: 1px solid var(--border-color);
+    transition: background var(--transition-fast);
+    cursor: pointer;
+}
+
+.convo-row:hover {
+    background: var(--bg-surface-hover);
+}
+
+.convo-row--active {
+    background: var(--primary-light);
+    box-shadow: inset -3px 0 0 var(--primary); /* RTL specific */
+}
+
+.convo-row__avatar {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--info));
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.convo-row__body {
+    flex: 1;
+    min-width: 0;
+}
+
+.convo-row__top,
+.convo-row__bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.convo-row__title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.convo-row__time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.convo-row__preview {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.convo-row__badge {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: white;
+    background: var(--primary);
+    border-radius: var(--radius-full);
+    padding: 2px 6px;
+}
+
+/* ===== تخطيط الصفحة (Layout) ===== */
+.page-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: var(--space-4) var(--space-6);
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--space-6);
+    flex-wrap: wrap;
+    gap: var(--space-4);
+}
+
+.page-title-group h1 {
+    font-size: 1.5rem;
+    margin-bottom: var(--space-1);
+}
+
+.page-title-group p {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.page-actions {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+}
+
+/* ===== البطاقات (Cards) ===== */
+.card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: var(--space-4);
+    transition: box-shadow var(--transition-fast);
+}
+
+.card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+/* ===== الأزرار (Buttons) ===== */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: 0.5rem 1rem;
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-decoration: none;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: var(--primary);
+    color: white;
+}
+.btn-primary:hover:not(:disabled) {
+    background-color: var(--primary-hover);
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.btn-secondary {
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+.btn-secondary:hover:not(:disabled) {
+    background-color: var(--bg-surface-hover);
+    border-color: var(--secondary);
+}
+
+.btn-danger {
+    background-color: var(--danger);
+    color: white;
+}
+.btn-danger:hover:not(:disabled) {
+    background-color: #dc2626;
+}
+
+.btn-icon {
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+.btn-icon:hover {
+    background-color: var(--bg-surface-hover);
+    color: var(--primary);
+}
+
+/* ===== النماذج والمدخلات (Forms) ===== */
+.form-group {
+    margin-bottom: var(--space-4);
+}
+
+.form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-2);
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+/* شريط البحث والتصفية الموحد */
+.filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    background: var(--bg-surface);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    margin-bottom: var(--space-4);
+    align-items: center;
+}
+
+.search-input-wrapper {
+    flex: 1;
+    min-width: 250px;
+    position: relative;
+}
+
+.search-input-wrapper i {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+}
+
+.search-input-wrapper .form-control {
+    padding-right: 36px;
+}
+
+/* ===== الجداول (Tables) ===== */
+.table-container {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: right;
+}
+
+.data-table th {
+    background-color: var(--bg-surface-hover);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.data-table td {
+    padding: var(--space-3) var(--space-4);
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+.data-table tbody tr:hover {
+    background-color: var(--bg-surface-hover);
+}
+
+.data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* ===== الشارات (Badges) ===== */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.625rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: var(--radius-full);
+}
+
+.badge-success { background-color: var(--success-bg); color: var(--success-text); }
+.badge-danger { background-color: var(--danger-bg); color: var(--danger-text); }
+.badge-warning { background-color: var(--warning-bg); color: var(--warning-text); }
+.badge-info { background-color: var(--info-bg); color: var(--info-text); }
+.badge-neutral { background-color: var(--secondary-light); color: var(--text-secondary); border: 1px solid var(--border-color); }
+
+/* ===== النوافذ المنبثقة (Modals) ===== */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-normal);
+}
+
+.modal-overlay.active,
+.modal-overlay.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.modal-content {
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-md);
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-lg);
+    transform: scale(0.95);
+    transition: transform var(--transition-normal);
+}
+
+.modal-overlay.active .modal-content {
+    transform: scale(1);
+}
+
+/* The application uses both `active` and `show` modal contracts.  A visible
+   overlay must never inherit the inert pointer-events state from its base rule. */
+.modal-overlay.show :is(.modal, .modal-content, .modal-dialog) {
+    pointer-events: auto;
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.modal-overlay.show :is(input, textarea, select) {
+    pointer-events: auto;
+    touch-action: manipulation;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+/* Bootstrap screens such as inventory use `.modal.fade.show` rather than the
+   custom `.modal-overlay.show` contract.  Keep the active dialog, its content,
+   and its native form controls in the interactive hit-test layer. */
+.modal.fade.show,
+.modal.fade.show :is(.modal-dialog, .modal-content) {
+    pointer-events: auto;
+    touch-action: pan-y;
+}
+
+.modal.fade.show :is(input, textarea, select, button) {
+    pointer-events: auto;
+    touch-action: manipulation;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.modal-header {
+    padding: var(--space-4) var(--space-6);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h2 {
+    font-size: 1.25rem;
+    margin: 0;
+}
+
+.modal-body {
+    padding: var(--space-6);
+    overflow-y: auto;
+}
+
+.modal-footer {
+    padding: var(--space-4) var(--space-6);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    background-color: var(--bg-surface-hover);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+/* ===== التبويبات (Tabs) ===== */
+.tabs-nav {
+    display: flex;
+    gap: var(--space-6);
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: var(--space-4);
+    overflow-x: auto;
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    padding: var(--space-3) 0;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 0.875rem;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+
+.tab-btn:hover {
+    color: var(--text-primary);
+}
+
+.tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.tab-pane {
+    display: none;
+}
+.tab-pane.active {
+    display: block;
+    animation: fadeIn var(--transition-fast);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+
+/* ============================================================
+   GLOBAL DESIGN SYSTEM SPECIFICATION v1.0
+   Shared operational primitives for all WebView screens.
+   ============================================================ */
+
+:root {
+    --font-sans: 'Tajawal', 'Cairo', system-ui, -apple-system, sans-serif;
+    --font-heading: 'Tajawal', 'Cairo', var(--font-sans);
+    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 24%, transparent);
+    --touch-target: 44px;
+    --content-max-width: 1440px;
+    --z-sticky: 100;
+    --z-overlay: 1000;
+    --z-toast: 1100;
+}
+
+html {
+    direction: rtl;
+    min-width: 320px;
+    text-rendering: optimizeLegibility;
+}
+
+body {
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+    -webkit-tap-highlight-color: transparent;
+}
+
+button,
+.btn,
+.btn-icon,
+.tab-btn,
+.refresh-btn,
+.pagination button,
+.pagination a {
+    min-height: var(--touch-target);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    box-shadow: var(--focus-ring);
+}
+
+/* Standard page and responsive layout primitives. */
+.container,
+.page-container {
+    width: min(100% - 2rem, var(--content-max-width));
+    margin-inline: auto;
+}
+
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.cluster {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.grid-auto {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: var(--space-4);
+}
+
+/* KPI cards: data must be supplied by a real bridge/database path. */
+.kpi-grid,
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: var(--space-4);
+}
+
+.kpi-card,
+.stat-card {
+    position: relative;
+    min-height: 132px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: var(--space-4);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.kpi-card:hover,
+.stat-card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.kpi-card .kpi-value,
+.stat-card .stat-value {
+    font-size: clamp(1.25rem, 3vw, 2rem);
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.kpi-card .kpi-label,
+.stat-card .stat-label {
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+}
+
+/* Keep operational metrics readable and consistently centred across RTL WebView
+   screens.  This changes presentation only; values remain supplied by SQLite. */
+:where(.kpi-card, .stat-card, .stats-card, .metric-card, .summary-card, .dashboard-stat) {
+    text-align: center;
+}
+
+:where(.kpi-card, .stat-card, .stats-card, .metric-card, .summary-card, .dashboard-stat) :where(.kpi-value, .stat-value, .metric-value, .summary-value, .value, .kpi-label, .stat-label, .metric-label, .summary-label, .label) {
+    margin-inline: auto;
+    text-align: center;
+}
+
+/* Loading, empty, error, and unavailable states are explicit UI states. */
+.skeleton,
+.skeleton-card {
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-surface-hover);
+    color: transparent;
+    pointer-events: none;
+}
+
+.skeleton::after,
+.skeleton-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent);
+    animation: ds-shimmer 1.2s infinite;
+}
+
+.empty-state,
+.error-state,
+.unavailable-state {
+    display: grid;
+    place-items: center;
+    gap: var(--space-3);
+    min-height: 180px;
+    padding: var(--space-8);
+    text-align: center;
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    background: var(--bg-surface);
+}
+
+.error-state {
+    color: var(--danger-text);
+    border-color: var(--danger);
+    background: var(--danger-bg);
+}
+
+/* Operational alerts and toast notifications. */
+.alert {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+}
+
+.alert-success { color: var(--success-text); background: var(--success-bg); }
+.alert-danger { color: var(--danger-text); background: var(--danger-bg); }
+.alert-warning { color: var(--warning-text); background: var(--warning-bg); }
+.alert-info { color: var(--info-text); background: var(--info-bg); }
+
+.toast-container {
+    position: fixed;
+    inset-inline-end: var(--space-4);
+    inset-block-end: var(--space-4);
+    z-index: var(--z-toast);
+    display: grid;
+    gap: var(--space-2);
+    width: min(360px, calc(100vw - 2rem));
+}
+
+/* Sticky operational controls and data-table safety on narrow WebViews. */
+.sticky-actions {
+    position: sticky;
+    inset-block-end: 0;
+    z-index: var(--z-sticky);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+    border-top: 1px solid var(--border-color);
+    backdrop-filter: blur(8px);
+}
+
+.table-container,
+.table-responsive {
+    max-width: 100%;
+}
+
+.data-table th {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 1;
+}
+
+.pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-4) 0;
+}
+
+.pagination button,
+.pagination a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--touch-target);
+    padding-inline: var(--space-3);
+    color: var(--text-secondary);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+}
+
+.pagination .active,
+.pagination button[aria-current='page'],
+.pagination a[aria-current='page'] {
+    color: #fff;
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+@keyframes ds-shimmer {
+    100% { transform: translateX(100%); }
+}
+
+@media (max-width: 640px) {
+    .page-container,
+    .container {
+        width: min(100% - 1rem, var(--content-max-width));
+        padding-inline: 0;
+    }
+
+    .page-header,
+    .page-actions,
+    .filter-bar {
+        align-items: stretch;
+    }
+
+    .page-actions > *,
+    .filter-bar > *,
+    .search-input-wrapper {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .modal-content {
+        width: calc(100% - 1rem);
+        max-height: 92vh;
+        margin-inline: .5rem;
+    }
+
+    .data-table {
+        min-width: 680px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+    }
+}
+
+@media print {
+    .page-actions,
+    .filter-bar,
+    .toast-container,
+    .sticky-actions,
+    .modal-overlay {
+        display: none !important;
+    }
+
+    body {
+        background: #fff;
+        color: #000;
+    }
+
+    .card,
+    .table-container,
+    .kpi-card,
+    .stat-card {
+        box-shadow: none;
+        break-inside: avoid;
+    }
+}
+
+
+/* Reports data provenance and bridge state. */
+.report-source-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: min(100% - 2rem, var(--content-max-width));
+    margin: var(--space-3) auto;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    background: var(--bg-surface);
+    font-size: .75rem;
+}
+
+.report-source-banner.is-verified {
+    color: var(--success-text);
+    background: var(--success-bg);
+    border-color: var(--success);
+}
+
+.report-source-banner.is-incomplete {
+    color: var(--warning-text);
+    background: var(--warning-bg);
+    border-color: var(--warning);
+}
+
+.report-source-banner.is-unavailable {
+    color: var(--danger-text);
+    background: var(--danger-bg);
+    border-color: var(--danger);
+}
+
+
+/* ===== Report Module Components (Metabase / DashUI Adaptation) ===== */
+.report-screen {
+    --report-card-radius: var(--radius-md);
+    --report-section-gap: var(--space-6);
+}
+
+.report-screen .report-panel,
+.report-screen .chart-card,
+.report-screen .report-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--report-card-radius);
+    box-shadow: var(--shadow-sm);
+    padding: var(--space-4);
+}
+
+.report-screen .report-panel__header,
+.report-screen .chart-card__header,
+.report-screen .report-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding-bottom: var(--space-3);
+    margin-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.report-screen .report-panel__title,
+.report-screen .chart-card__title,
+.report-screen .report-card__title {
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.report-screen .report-grid,
+.report-screen .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--space-4);
+}
+
+.report-screen .report-grid > .span-4 { grid-column: span 4; }
+.report-screen .report-grid > .span-6 { grid-column: span 6; }
+.report-screen .report-grid > .span-8 { grid-column: span 8; }
+.report-screen .report-grid > .span-12 { grid-column: span 12; }
+
+.report-screen .report-toolbar,
+.report-screen .report-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--report-card-radius);
+}
+
+.report-screen .report-toolbar > *,
+.report-screen .report-filters > * {
+    min-width: 160px;
+}
+
+.report-screen .report-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--report-card-radius);
+    background: var(--bg-surface);
+}
+
+.report-screen .report-table-wrap table {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: collapse;
+}
+
+.report-screen .report-table-wrap th {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 1;
+    color: var(--text-secondary);
+    background: var(--bg-surface-hover);
+    font-size: .78rem;
+    font-weight: 700;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.report-screen .report-table-wrap th,
+.report-screen .report-table-wrap td {
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.report-screen .report-table-wrap tbody tr:hover {
+    background: var(--bg-surface-hover);
+}
+
+.report-screen .report-table-wrap tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.report-screen .report-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: var(--space-4);
+}
+
+.report-screen .report-kpi-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-height: 118px;
+    padding: var(--space-4);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--report-card-radius);
+    box-shadow: var(--shadow-sm);
+}
+
+.report-screen .report-kpi-card__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    color: var(--text-secondary);
+    font-size: .82rem;
+}
+
+.report-screen .report-kpi-card__icon {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    color: var(--primary);
+    background: var(--primary-light);
+}
+
+.report-screen .report-kpi-card__value {
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.report-screen .report-kpi-card__meta {
+    color: var(--text-secondary);
+    font-size: .75rem;
+}
+
+.report-screen .report-state {
+    display: grid;
+    place-items: center;
+    gap: var(--space-2);
+    min-height: 160px;
+    padding: var(--space-6);
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+@media (max-width: 800px) {
+    .report-screen .report-grid > .span-4,
+    .report-screen .report-grid > .span-6,
+    .report-screen .report-grid > .span-8 {
+        grid-column: span 12;
+    }
+}
+
+@media print {
+    .report-screen .report-toolbar,
+    .report-screen .report-filters,
+    .report-screen .report-source-banner {
+        display: none !important;
+    }
+}
+
+
+/* Apply report-system primitives to the existing MODULE-001 screen vocabulary. */
+.report-screen .top-bar {
+    background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.report-screen .filter-bar,
+.report-screen .report-filters {
+    padding: var(--space-3);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.report-screen .kpi-grid,
+.report-screen .stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: var(--space-4);
+    padding: var(--space-4) 0;
+}
+
+.report-screen .kpi-card,
+.report-screen .stat-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    min-height: 120px;
+    text-align: right;
+}
+
+.report-screen .kpi-card:hover,
+.report-screen .stat-card:hover {
+    border-color: var(--primary);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.report-screen .kpi-card .kpi-top,
+.report-screen .stat-card .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.report-screen .kpi-card .kpi-icon,
+.report-screen .stat-card .stat-icon {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    margin: 0;
+    border-radius: var(--radius-sm);
+    background: var(--primary-light);
+    color: var(--primary);
+}
+
+.report-screen .kpi-card .kpi-value,
+.report-screen .stat-card .stat-value {
+    color: var(--text-primary);
+    font-weight: 800;
+}
+
+.report-screen .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--space-4);
+    padding: var(--space-4) 0;
+}
+
+.report-screen .chart-card {
+    grid-column: span 6;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.report-screen .chart-card .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-3);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.report-screen .table-wrapper,
+.report-screen .sales-table-wrapper,
+.report-screen .table-section,
+.report-screen .report-results {
+    overflow-x: auto;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.report-screen .data-table,
+.report-screen .sales-table {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: collapse;
+}
+
+.report-screen .data-table th,
+.report-screen .sales-table th {
+    background: var(--bg-surface-hover);
+    color: var(--text-secondary);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.report-screen .data-table th,
+.report-screen .data-table td,
+.report-screen .sales-table th,
+.report-screen .sales-table td {
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.report-screen .data-table tbody tr:hover,
+.report-screen .sales-table tbody tr:hover {
+    background: var(--bg-surface-hover);
+}
+
+.report-screen .pagination-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-4) 0;
+}
+
+@media (max-width: 800px) {
+    .report-screen .chart-card { grid-column: span 12; }
+    .report-screen .kpi-grid,
+    .report-screen .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 480px) {
+    .report-screen .kpi-grid,
+    .report-screen .stats-grid { grid-template-columns: 1fr; }
+}
+
+
+/* ===== Settings Module Components (Apple/ERPNext Adaptation) ===== */
+.settings-layout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+    .settings-layout {
+        flex-direction: row;
+        align-items: flex-start;
+    }
+}
+
+.settings-sidebar {
+    flex: 0 0 240px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-2);
+    box-shadow: var(--shadow-sm);
+}
+
+.settings-sidebar .nav-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    font-weight: 600;
+}
+
+.settings-sidebar .nav-item:hover {
+    background: var(--bg-surface-hover);
+    color: var(--text-primary);
+}
+
+.settings-sidebar .nav-item.active {
+    background: var(--primary-light);
+    color: var(--primary);
+}
+
+.settings-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-width: 0;
+}
+
+.settings-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.settings-card__header {
+    padding: var(--space-4);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-surface-hover);
+}
+
+.settings-card__title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 var(--space-1) 0;
+}
+
+.settings-card__desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.settings-card__body {
+    padding: var(--space-4);
+}
+
+.settings-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.settings-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+@media (min-width: 640px) {
+    .settings-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .settings-row__info {
+        flex: 1;
+        padding-inline-end: var(--space-4);
+    }
+
+    .settings-row__control {
+        flex: 0 0 auto;
+        min-width: 200px;
+    }
+}
+
+.settings-row__label {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.settings-row__help {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.settings-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    background: color-mix(in srgb, var(--bg-surface) 95%, transparent);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border-color);
+    margin-top: var(--space-4);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--border-color);
+    transition: .3s;
+    border-radius: 24px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+input:checked + .toggle-slider {
+    background-color: var(--primary);
+}
+
+input:focus + .toggle-slider {
+    box-shadow: 0 0 1px var(--primary);
+}
+
+input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+}
+
+
+/* ============================================================
+   UI REHABILITATION v2 — MODULE-001 → MODULE-005
+   Shared RTL/mobile-first overrides. Functional contracts remain unchanged.
+   ============================================================ */
+:root {
+    /* Legacy aliases keep existing inline screen styles on the same token source. */
+    --primary-color: var(--primary);
+    --primary-dark: var(--primary-hover);
+    --secondary-color: var(--secondary);
+    --success-color: var(--success);
+    --danger-color: var(--danger);
+    --warning-color: var(--warning);
+    --info-color: var(--info);
+    --bg-primary: var(--bg-app);
+    --bg-secondary: var(--bg-surface-hover);
+    --card-bg: var(--bg-surface);
+    --surface: var(--bg-surface);
+    --text-color: var(--text-primary);
+    --muted: var(--text-muted);
+    --radius-card: var(--radius-md);
+    --space-5: 20px;
+}
+
+html {
+    background: var(--bg-app);
+    direction: rtl;
+}
+
+body.ui-rehab {
+    min-width: 320px;
+    max-width: 100vw;
+    margin: 0;
+    background: var(--bg-app);
+    color: var(--text-primary);
+    overflow-x: hidden;
+}
+
+body.ui-rehab,
+body.ui-rehab button,
+body.ui-rehab input,
+body.ui-rehab select,
+body.ui-rehab textarea {
+    font-family: var(--font-sans);
+}
+
+body.ui-rehab :where(.page-container, .container, .main-content, .content, .page-content) {
+    min-width: 0;
+}
+
+body.ui-rehab :where(.header, .page-header, .top-bar, .topbar, .main-header) {
+    gap: var(--space-4);
+    color: var(--text-primary);
+}
+
+body.ui-rehab :where(.header, .page-header, .top-bar, .topbar) h1,
+body.ui-rehab :where(.header, .page-header, .top-bar, .topbar) .title,
+body.ui-rehab :where(.page-title, .title) {
+    color: var(--text-primary);
+    font-size: clamp(1.15rem, 2.4vw, 1.65rem);
+    line-height: 1.35;
+    letter-spacing: -.01em;
+}
+
+body.ui-rehab :where(.toolbar, .filter-section, .filters, .filter-bar, .report-toolbar, .report-filters, .controls-bar, .action-bar) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+body.ui-rehab :where(.toolbar, .filter-section, .filters, .filter-bar, .report-toolbar, .report-filters, .controls-bar, .action-bar) > * {
+    min-width: 0;
+}
+
+body.ui-rehab :where(.card, .panel, .section-card, .data-panel, .chart-card, .table-container, .table-section, .form-card, .record-card) {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+body.ui-rehab :where(.card, .panel, .section-card, .data-panel, .chart-card, .form-card) {
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+body.ui-rehab :where(.card, .panel, .section-card, .data-panel, .chart-card, .form-card):hover {
+    border-color: color-mix(in srgb, var(--primary) 34%, var(--border-color));
+    box-shadow: var(--shadow-md);
+}
+
+body.ui-rehab :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea, .form-control, .form-input) {
+    min-height: var(--touch-target);
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+}
+
+body.ui-rehab :where(input, select, textarea, .form-control, .form-input)::placeholder {
+    color: var(--text-muted);
+    opacity: 1;
+}
+
+body.ui-rehab :where(input, select, textarea, .form-control, .form-input):focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+body.ui-rehab :where(.btn, button.btn, .action-btn, .refresh-btn, .sidebar-btn, .pagination button, .pagination a) {
+    min-height: var(--touch-target);
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+body.ui-rehab :where(.btn, button.btn, .action-btn, .refresh-btn):hover:not(:disabled) {
+    transform: translateY(-1px);
+}
+
+body.ui-rehab :where(.data-table, table, .sales-table) {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    color: var(--text-primary);
+}
+
+body.ui-rehab :where(.data-table, table, .sales-table) th {
+    color: var(--text-secondary);
+    background: var(--bg-surface-hover);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+body.ui-rehab :where(.data-table, table, .sales-table) th,
+body.ui-rehab :where(.data-table, table, .sales-table) td {
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+body.ui-rehab :where(.data-table, table, .sales-table) tbody tr:hover {
+    background: var(--bg-surface-hover);
+}
+
+body.ui-rehab :where(.table-wrapper, .table-responsive, .table-container, .data-table-wrapper, .products-table-wrapper, .sales-table-wrapper, .report-table-wrap) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+body.ui-rehab :where(.empty-state, .error-state, .loading-state, .unavailable-state, .empty-message) {
+    min-height: 160px;
+    display: grid;
+    place-items: center;
+    gap: var(--space-2);
+    padding: var(--space-6);
+    color: var(--text-secondary);
+    text-align: center;
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+}
+
+body.ui-rehab :where(.error-state, .error-message) {
+    color: var(--danger-text);
+    border-color: var(--danger);
+    background: var(--danger-bg);
+}
+
+body.ui-rehab :where(.kpi-grid, .stats-grid, .stat-grid) {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+    gap: var(--space-4);
+}
+
+body.ui-rehab :where(.kpi-card, .stat-card, .stat-item) {
+    min-width: 0;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+body.ui-rehab :where(.kpi-card, .stat-card, .stat-item) :where(.kpi-title, .kpi-label, .stat-label, .label) {
+    color: var(--text-secondary);
+}
+
+body.ui-rehab :where(.kpi-card, .stat-card, .stat-item) :where(.kpi-value, .stat-value, .value) {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+body.ui-rehab :where(.modal, .modal-content, .modal-dialog) {
+    max-width: min(720px, calc(100vw - 2rem));
+    max-height: min(90svh, 860px);
+    overflow: hidden;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+}
+
+body.ui-rehab :where(.modal-header, .modal-footer) {
+    border-color: var(--border-color);
+    background: var(--bg-surface-hover);
+}
+
+body.ui-rehab :where(.modal-body) {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+body.ui-rehab :where(.modal-close, .btn-close) {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+}
+
+body.ui-rehab :where(.badge, .status-badge, .status, .chip) {
+    max-width: 100%;
+    white-space: nowrap;
+}
+
+/* Keep the broad products table usable without the legacy 200% width rule. */
+body.ui-module-005 #productsTable {
+    width: 100% !important;
+    min-width: 760px;
+}
+
+/* POS needs a stable single-column mobile flow while retaining every control and ID. */
+@media (max-width: 767px) {
+    body.ui-rehab {
+        padding: max(.75rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) max(.75rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left));
+    }
+
+    body.ui-rehab :where(.header, .page-header, .top-bar, .topbar, .main-header) {
+        align-items: stretch;
+        flex-direction: column;
+        margin-bottom: var(--space-4);
+    }
+
+    body.ui-rehab :where(.page-actions, .header-actions, .actions, .action-row) {
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    body.ui-rehab :where(.page-actions, .header-actions, .actions, .action-row) > * {
+        flex: 1 1 140px;
+    }
+
+    body.ui-rehab :where(.toolbar, .filter-section, .filters, .filter-bar, .report-toolbar, .report-filters, .controls-bar) > * {
+        flex: 1 1 100%;
+        width: 100%;
+    }
+
+    body.ui-rehab :where(.search-input-wrapper, .search-box, .filter-group) {
+        width: 100%;
+        min-width: 0;
+    }
+
+    body.ui-rehab :where(.kpi-grid, .stats-grid, .stat-grid) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-3);
+    }
+
+    body.ui-rehab :where(.kpi-card, .stat-card, .stat-item) {
+        padding: var(--space-3);
+    }
+
+    body.ui-rehab :where(.charts-grid, .chart-grid, .report-grid) {
+        grid-template-columns: 1fr;
+    }
+
+    body.ui-rehab :where(.modal, .modal-content, .modal-dialog) {
+        width: calc(100vw - 1rem) !important;
+        max-width: calc(100vw - 1rem);
+        max-height: calc(100svh - 1rem);
+        margin-inline: .5rem;
+        border-radius: var(--radius-md);
+    }
+
+    body.ui-rehab :where(.modal-footer, .sticky-actions, .settings-actions) {
+        flex-wrap: wrap;
+        gap: var(--space-2);
+    }
+
+    body.ui-rehab :where(.modal-footer, .sticky-actions, .settings-actions) > * {
+        flex: 1 1 132px;
+    }
+
+    body.ui-module-002 :where(.pos-layout, .pos-container, .checkout-layout, .sales-layout) {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@media (max-width: 430px) {
+    body.ui-rehab :where(.kpi-grid, .stats-grid, .stat-grid) {
+        grid-template-columns: 1fr;
+    }
+
+    body.ui-rehab :where(.page-title, .title) {
+        font-size: 1.2rem;
+    }
+
+    body.ui-rehab :where(.btn, button.btn, .action-btn, .refresh-btn) {
+        width: 100%;
+    }
+}
+
+@media (min-width: 768px) {
+    body.ui-rehab {
+        padding: var(--space-4) clamp(1rem, 3vw, 2rem);
+    }
+}
+
+@media print {
+    body.ui-rehab {
+        padding: 0;
+        background: #fff;
+    }
+}
+
+
+/* ============================================================
+   UI REHABILITATION v3 — MODULE-006 → MODULE-017
+   Category-aware primitives for operational WebView screens.
+   ============================================================ */
+
+body.ui-rehab :where(.page-shell, .screen-shell, .app-shell, .module-shell) {
+    width: min(100%, var(--content-max-width));
+    min-width: 0;
+    margin-inline: auto;
+}
+
+body.ui-rehab :where(.page-subtitle, .screen-subtitle, .helper-text, .form-help) {
+    color: var(--text-secondary);
+    font-size: .875rem;
+    line-height: 1.6;
+}
+
+body.ui-rehab :where(.section-header, .panel-header, .card-header, .dialog-head, .dialog-header) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+body.ui-rehab :where(.section-header h2, .section-header h3, .panel-header h2, .panel-header h3, .card-header h2, .card-header h3) {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: clamp(1rem, 2vw, 1.2rem);
+}
+
+body.ui-rehab :where(.form-grid, .fields-grid, .detail-grid, .summary-grid) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: var(--space-4);
+}
+
+body.ui-rehab :where(.form-grid > label, .fields-grid > label, .form-group, .field-group) {
+    min-width: 0;
+}
+
+body.ui-rehab :where(.form-grid > label, .form-label, .field-label, .field-group label) {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+body.ui-rehab :where(.table-toolbar, .list-toolbar, .data-toolbar, .table-actions) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    padding: var(--space-3) 0;
+}
+
+body.ui-rehab :where(.record-list, .cards-grid, .records-grid, .entity-grid, .message-list, .timeline) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: var(--space-3);
+}
+
+body.ui-rehab :where(.record-card, .entity-card, .message-card, .timeline-item, .list-card) {
+    min-width: 0;
+    padding: var(--space-4);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+body.ui-rehab :where(.record-card, .entity-card, .message-card, .timeline-item, .list-card) :where(.meta, .muted, .secondary, small) {
+    color: var(--text-secondary);
+}
+
+body.ui-rehab :where(.record-card, .entity-card, .message-card, .timeline-item, .list-card) :where(.value, .amount, .total, strong) {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* MODULE-006 — operational tanks, pumps, meters, filling and checks. */
+body.ui-module-006 :where(.tank-card, .pump-card, .meter-card, .quality-card, .calibration-card, .equipment-card, .gauge-card) {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    color: var(--text-primary);
+}
+
+body.ui-module-006 :where(.progress, .level-bar, .fuel-level, .gauge-track) {
+    height: 10px;
+    overflow: hidden;
+    border-radius: var(--radius-full);
+    background: var(--bg-surface-hover);
+}
+
+body.ui-module-006 :where(.progress-bar, .level-fill, .fuel-fill, .gauge-fill) {
+    min-width: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--primary), var(--info));
+}
+
+body.ui-module-006 :where(.critical, .danger, .status-danger, [data-status="critical"]) {
+    color: var(--danger-text);
+    border-color: var(--danger);
+    background: var(--danger-bg);
+}
+
+body.ui-module-006 :where(.warning, .status-warning, [data-status="warning"]) {
+    color: var(--warning-text);
+    border-color: var(--warning);
+    background: var(--warning-bg);
+}
+
+/* MODULE-007 — inventory and warehouse density. */
+body.ui-module-007 :where(.stock-card, .warehouse-card, .movement-card, .inventory-card, .stocktake-card, .alert-card) {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+}
+
+body.ui-module-007 :where(.quantity, .stock-quantity, .available-quantity, .minimum-level, .inventory-total) {
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+    text-align: start;
+}
+
+body.ui-module-007 :where(.low-stock, .status-low, [data-stock-status="low"]) {
+    color: var(--warning-text);
+    background: var(--warning-bg);
+}
+
+body.ui-module-007 :where(.out-of-stock, .status-out, [data-stock-status="out"]) {
+    color: var(--danger-text);
+    background: var(--danger-bg);
+}
+
+/* MODULE-008 — sales/POS controls remain touch-first and high contrast. */
+body.ui-module-008 :where(.pos-shell, .pos-layout, .checkout-layout, .sales-layout, .cart-panel, .product-panel) {
+    min-width: 0;
+}
+
+body.ui-module-008 :where(.cart, .cart-panel, .checkout-summary, .payment-panel, .product-card) {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+}
+
+body.ui-module-008 :where(.quantity-control, .cart-quantity, .stepper) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+body.ui-module-008 :where(.quantity-control button, .cart-quantity button, .stepper button) {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+}
+
+body.ui-module-008 :where(.total, .grand-total, .amount-due, .cart-total) {
+    color: var(--text-primary);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+/* MODULE-009 — finance tables and numeric readability. */
+body.ui-module-009 :where(.financial-card, .balance-card, .ledger-card, .cash-card, .account-card) {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+}
+
+body.ui-module-009 :where(table .amount, table .debit, table .credit, table .balance, .amount, .currency, .money) {
+    direction: ltr;
+    text-align: start;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+body.ui-module-009 :where(.positive, .credit, .income) { color: var(--success-text); }
+body.ui-module-009 :where(.negative, .debit, .expense) { color: var(--danger-text); }
+
+/* MODULE-010/011 — people, assets and maintenance. */
+body.ui-module-010 :where(.employee-card, .attendance-card, .payroll-card, .payment-card),
+body.ui-module-011 :where(.asset-card, .maintenance-card, .depreciation-card, .request-card) {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+}
+
+body.ui-module-010 :where(.employee-avatar, .avatar),
+body.ui-module-011 :where(.asset-icon, .maintenance-icon) {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    color: var(--primary);
+    background: var(--primary-light);
+}
+
+/* MODULE-012 — messages, notifications and audit-friendly timelines. */
+body.ui-module-012 :where(.conversation, .conversation-list, .message-panel, .notification-panel, .inbox-panel) {
+    min-width: 0;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+body.ui-module-012 :where(.message-bubble, .chat-bubble) {
+    max-width: min(86%, 680px);
+    overflow-wrap: anywhere;
+}
+
+body.ui-module-012 :where(.notification-unread, .unread, [aria-current="true"]) {
+    background: var(--primary-light);
+    box-shadow: inset -3px 0 0 var(--primary);
+}
+
+/* MODULE-014/015/016 — system, sync and printing workspaces. */
+body.ui-module-014 :where(.log-entry, .audit-entry, .document-card),
+body.ui-module-015 :where(.device-card, .sync-card, .backup-card),
+body.ui-module-016 :where(.printer-card, .template-card, .preview-card) {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+}
+
+body.ui-module-014 :where(.severity-critical, .severity-error, [data-severity="error"]) { color: var(--danger-text); }
+body.ui-module-014 :where(.severity-warning, [data-severity="warning"]) { color: var(--warning-text); }
+body.ui-module-014 :where(.severity-info, [data-severity="info"]) { color: var(--info-text); }
+body.ui-module-015 :where(.sync-progress, .backup-progress) { accent-color: var(--primary); }
+
+/* MODULE-017 — assistant output should remain readable and scroll-safe. */
+body.ui-module-017 :where(.ai-shell, .assistant-shell, .ai-panel, .assistant-panel, .ai-output) {
+    min-width: 0;
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+body.ui-module-017 :where(.ai-output, .assistant-output, .response, .markdown-body) {
+    overflow-wrap: anywhere;
+    line-height: 1.75;
+}
+
+body.ui-module-017 :where(pre, code) {
+    max-width: 100%;
+    overflow-x: auto;
+    direction: ltr;
+    text-align: start;
+}
+
+@media (max-width: 767px) {
+    body.ui-rehab :where(.page-shell, .screen-shell, .app-shell, .module-shell) {
+        width: 100%;
+    }
+
+    body.ui-rehab :where(.table-toolbar, .list-toolbar, .data-toolbar, .table-actions, .section-header, .panel-header, .card-header, .dialog-head, .dialog-header) {
+        align-items: stretch;
+    }
+
+    body.ui-rehab :where(.table-toolbar, .list-toolbar, .data-toolbar, .table-actions) > * {
+        flex: 1 1 100%;
+    }
+
+    body.ui-rehab :where(.record-list, .cards-grid, .records-grid, .entity-grid, .message-list, .timeline) {
+        grid-template-columns: 1fr;
+    }
+
+    body.ui-rehab :where(.form-grid, .fields-grid, .detail-grid, .summary-grid) {
+        grid-template-columns: 1fr;
+    }
+
+    body.ui-rehab :where(.data-table, table, .sales-table) {
+        min-width: 640px;
+    }
+
+    body.ui-rehab :where(.pagination, .pager, .pagination-bar) {
+        justify-content: center;
+        gap: var(--space-2);
+    }
+
+    body.ui-module-012 :where(.message-bubble, .chat-bubble) {
+        max-width: 94%;
+    }
+}
+
+@media (max-width: 430px) {
+    body.ui-rehab :where(.data-table, table, .sales-table) {
+        min-width: 580px;
+    }
+
+    body.ui-rehab :where(.record-card, .entity-card, .message-card, .timeline-item, .list-card) {
+        padding: var(--space-3);
+    }
+}
+
+
+/* Legacy operational template bridge: used by finance, HR, printing and compact list screens. */
+body.ui-rehab :where(.app, .app-container) {
+    width: min(100%, var(--content-max-width));
+    min-width: 0;
+    margin-inline: auto;
+    padding-block-end: var(--space-8);
+}
+
+body.ui-rehab :where(.topbar, .top-bar) {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: var(--z-sticky);
+    padding: var(--space-4);
+    background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(10px);
+}
+
+body.ui-rehab :where(.head, .topbar .head) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+}
+
+body.ui-rehab :where(.head h1, .topbar h1) {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: clamp(1.1rem, 2.6vw, 1.45rem);
+}
+
+body.ui-rehab :where(.head p, .topbar p) {
+    margin: var(--space-1) 0 0;
+    color: var(--text-secondary);
+    font-size: .8rem;
+}
+
+body.ui-rehab :where(.filters, .filter-section) {
+    display: grid;
+    grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(120px, 1fr));
+    align-items: center;
+    gap: var(--space-2);
+    margin-block-start: var(--space-4);
+}
+
+body.ui-rehab :where(.stats, .stats-grid) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: var(--space-3);
+    padding-block: var(--space-4);
+}
+
+body.ui-rehab :where(.stat, .stat-item) {
+    min-width: 0;
+    padding: var(--space-4);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+body.ui-rehab :where(.stat span, .stat-item span) {
+    display: block;
+    color: var(--text-secondary);
+    font-size: .78rem;
+}
+
+body.ui-rehab :where(.stat strong, .stat-item strong) {
+    display: block;
+    margin-block-start: var(--space-1);
+    color: var(--text-primary);
+    font-size: clamp(1.1rem, 3vw, 1.55rem);
+    font-variant-numeric: tabular-nums;
+}
+
+body.ui-rehab :where(.panel, .data-panel) {
+    min-width: 0;
+    margin-block-end: var(--space-4);
+    padding: var(--space-4);
+}
+
+body.ui-rehab :where(.panel-title) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-block-end: var(--space-3);
+    color: var(--text-primary);
+}
+
+body.ui-rehab :where(.panel-title h2) {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+body.ui-rehab :where(.grid, .card-grid) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+    gap: var(--space-3);
+}
+
+body.ui-rehab :where(.card) {
+    background: var(--bg-surface);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+body.ui-rehab :where(.card-head) {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+body.ui-rehab :where(.title) { color: var(--text-primary); }
+body.ui-rehab :where(.sub, .field small) { color: var(--text-secondary); }
+
+body.ui-rehab :where(.fields) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+    gap: var(--space-2);
+    margin-block-start: var(--space-3);
+}
+
+body.ui-rehab :where(.field) {
+    min-width: 0;
+    padding: var(--space-2);
+    background: var(--bg-surface-hover);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+}
+
+body.ui-rehab :where(.field b) {
+    display: block;
+    margin-block-start: 2px;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+body.ui-rehab :where(.notice) {
+    margin-block: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    color: var(--warning-text);
+    background: var(--warning-bg);
+    border: 1px solid var(--warning);
+    border-radius: var(--radius-md);
+    line-height: 1.7;
+}
+
+body.ui-rehab :where(.pager, .pager-bar) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-block-start: var(--space-4);
+}
+
+body.ui-rehab :where(.empty, .error) {
+    min-height: 150px;
+    display: grid;
+    place-items: center;
+    padding: var(--space-6);
+    color: var(--text-secondary);
+    text-align: center;
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+body.ui-rehab :where(.error) {
+    color: var(--danger-text);
+    background: var(--danger-bg);
+}
+
+body.ui-rehab :where(.dialog) {
+    max-width: min(720px, 100%);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+}
+
+body.ui-rehab :where(.dialog-head, .dialog-foot) {
+    background: var(--bg-surface-hover);
+    border-color: var(--border-color);
+}
+
+body.ui-rehab :where(.dialog-body) { color: var(--text-primary); }
+body.ui-rehab :where(.form) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+body.ui-rehab :where(.form label) { color: var(--text-secondary); }
+
+body.ui-rehab :where(.loading) {
+    background: color-mix(in srgb, var(--bg-app) 72%, #000 28%);
+    backdrop-filter: blur(3px);
+}
+
+body.ui-rehab :where(.toast) {
+    inset-inline-start: auto;
+    inset-inline-end: var(--space-4);
+    inset-block-end: var(--space-4);
+    max-width: min(360px, calc(100vw - 2rem));
+    background: var(--text-primary);
+    color: var(--bg-surface);
+    box-shadow: var(--shadow-md);
+}
+
+@media (max-width: 767px) {
+    body.ui-rehab :where(.topbar, .top-bar) {
+        position: relative;
+        padding: var(--space-3);
+    }
+
+    body.ui-rehab :where(.head, .topbar .head) {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    body.ui-rehab :where(.actions, .topbar .actions) {
+        width: 100%;
+    }
+
+    body.ui-rehab :where(.actions, .topbar .actions) > * {
+        flex: 1 1 130px;
+    }
+
+    body.ui-rehab :where(.filters, .filter-section) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    body.ui-rehab :where(.filters > :first-child, .filter-section > :first-child) {
+        grid-column: 1 / -1;
+    }
+
+    body.ui-rehab :where(.stats) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    body.ui-rehab :where(.panel, .data-panel) {
+        padding: var(--space-3);
+    }
+
+    body.ui-rehab :where(.form) {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 430px) {
+    body.ui-rehab :where(.filters, .filter-section, .stats) {
+        grid-template-columns: 1fr;
+    }
+
+    body.ui-rehab :where(.filters > :first-child, .filter-section > :first-child) {
+        grid-column: auto;
+    }
+}

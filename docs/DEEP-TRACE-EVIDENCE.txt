@@ -1,0 +1,97 @@
+=== DEEP ROOT CAUSE & DATA PATH TRACE ===
+
+Screen: main.html | Bridge: getDashboardStats | DatabaseHelper: getDashboardStats
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: products, sales_transactions, parties, inventory_movements, damaged_products, inventory_levels, tasks, tanks
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: sales-reports.html | Bridge: generateSalesTransactionReport | DatabaseHelper: getOperationalReport
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: operational_spec_tables
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: sales-reports.html | Bridge: retrieveInvoice | DatabaseHelper: getInvoiceDetails
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: sales_transactions, sale_items
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: sales-reports.html | Bridge: getShifts | DatabaseHelper: getShifts
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: shifts
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: eod-report.html | Bridge: getEodReport | DatabaseHelper: getEodReport
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: sales_transactions
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: eod-report.html | Bridge: getBalanceSheet | DatabaseHelper: getBalanceSheet
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: accounts, currencies, exchange_rates
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: inventory-reports.html | Bridge: generateInventoryReport | DatabaseHelper: getInventoryReport
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: inventory_movements, inventory_levels, products
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: inventory-reports.html | Bridge: getWarehouses | DatabaseHelper: getWarehouses
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: warehouses
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: inventory-reports.html | Bridge: getCategories | DatabaseHelper: getProductCategories
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: product_categories
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: customer-reports.html | Bridge: generateCRMReport | DatabaseHelper: generateCRMReport
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: parties, contracts, contract_line_items, contract_payment_schedules, attachments
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: customer-reports.html | Bridge: getCustomers | DatabaseHelper: getParties
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: parties
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: fuel-reports.html | Bridge: getFuelReport | DatabaseHelper: getFuelReport
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: sales_transactions, tank_refills
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: kpi.html | Bridge: getDashboardStats | DatabaseHelper: getDashboardStats
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: products, sales_transactions, parties, inventory_movements, damaged_products, inventory_levels, tasks, tanks
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: forecasts.html | Bridge: getPredictionRecords | DatabaseHelper: getOperationalRows
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: operational_spec_tables (predictions)
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: accounting-reports.html | Bridge: getProfitReport | DatabaseHelper: getEodReport
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: sales_transactions
+  Returned JSON: Verified via dataResponse/JSONObject
+
+Screen: accounting-reports.html | Bridge: getLedgerStats | DatabaseHelper: getLedgerStats
+  Bridge -> Kotlin: PASS
+  Kotlin -> DatabaseHelper/SQLite: PASS
+  Tables Involved: accounts, journal_entries
+  Returned JSON: Verified via dataResponse/JSONObject

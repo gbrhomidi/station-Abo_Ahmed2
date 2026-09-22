@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ═══════════════════════════════════════════════════════════════
+   محطة أبو أحمد - قيم الأعداد الصحيحة
+  ═══════════════════════════════════════════════════════════════
+  
+  هذا الملف يحتوي على القيم الرقمية الثابتة للتطبيق.
+  يُفضل وضع القيم هنا بدلاً من الكود لتسهيل التعديل.
+  
+  ⚠️ تحذير: لا تضع قيم حساسة (مفاتيح API، كلمات مرور) هنا!
+  ═══════════════════════════════════════════════════════════════
+-->
+<resources>
+
+    <!-- ═══ Google Play Services ═══ -->
+    <!-- 
+      رقم إصدار Google Play Services المطلوب
+      القيمة: 12451000 = الإصدار 12.45.10 (2024)
+      تحديث: تحقق دائماً من أحدث إصدار في:
+      https://developers.google.com/android/guides/releases
+    
+    <integer name="google_play_services_version">12451000</integer>
+    -->
+    <!-- ═══ إعدادات المحطة ═══ -->
+    
+    <!-- الحد الأدنى لكمية البيع (لتر) -->
+    <integer name="min_sale_quantity">1</integer>
+    
+    <!-- الحد الأقصى لكمية البيع (لتر) -->
+    <integer name="max_sale_quantity">50000</integer>
+    
+    <!-- الحد الأدنى لنقاط الولاء للاستبدال -->
+    <integer name="min_loyalty_redeem">100</integer>
+    
+    <!-- نقاط الولاء لكل لتر -->
+    <integer name="loyalty_points_per_liter">1</integer>
+
+    <!-- ═══ إعدادات SMS ═══ -->
+    
+    <!-- الحد الأقصى لرسائل SMS في الدقيقة -->
+    <integer name="max_sms_per_minute">30</integer>
+    
+    <!-- الحد الأقصى لطول رسالة SMS -->
+    <integer name="max_sms_length">1600</integer>
+
+    <!-- ═══ إعدادات المخزون ═══ -->
+    
+    <!-- الحد الأدنى للتنبيه (لتر) -->
+    <integer name="low_stock_threshold">1000</integer>
+    
+    <!-- الحد الأقصى للتعبئة الواحدة (لتر) -->
+    <integer name="max_refill_quantity">100000</integer>
+
+    <!-- ═══ إعدادات التقارير ═══ -->
+    
+    <!-- عدد الأيام الافتراضي للتقارير -->
+    <integer name="default_report_days">30</integer>
+    
+    <!-- الحد الأقصى للمعاملات في التقرير -->
+    <integer name="max_report_transactions">1000</integer>
+
+    <!-- ═══ إعدادات الأمان ═══ -->
+    
+    <!-- عدد محاولات تسجيل الدخول الفاشلة قبل الحظر -->
+    <integer name="max_login_attempts">5</integer>
+    
+    <!-- مدة الحظر (بالدقائق) -->
+    <integer name="lockout_duration_minutes">30</integer>
+
+    <!-- ═══ إعدادات الواجهة ═══ -->
+    
+    <!-- مدة عرض رسالة Toast (بالملي ثانية) -->
+    <integer name="toast_duration">3000</integer>
+    
+    <!-- عدد العناصر في قائمة التمرير -->
+    <integer name="recycler_page_size">20</integer>
+
+</resources>

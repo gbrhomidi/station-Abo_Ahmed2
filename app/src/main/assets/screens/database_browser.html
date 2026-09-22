@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,viewport-fit=cover">
+<title>متصفح قاعدة البيانات</title>
+<link rel="stylesheet" href="file:///android_asset/assets-local/css/fonts/cairo.css">
+<link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+<link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
+<style>
+:root{--bg:#f4f7fb;--surface:#fff;--surface-2:#f8fafc;--surface-3:#eef4f9;--primary:#087ea4;--primary-2:#2563eb;--primary-soft:rgba(37,99,235,.10);--success:#16a34a;--warning:#d97706;--danger:#dc2626;--text:#172033;--muted:#64748b;--border:#d7dee8;--border-strong:#c4cfdd;--accent:#c58a18;--shadow:0 12px 35px rgba(15,23,42,.08);--shadow-lg:0 25px 70px rgba(15,23,42,.16);--radius:20px;--radius-sm:13px;--font-sans:"Cairo","Noto Sans Arabic",Arial,sans-serif}
+[data-theme="dark"]{--bg:#06111f;--surface:#0c1b2d;--surface-2:#102238;--surface-3:#132941;--primary:#55c7f5;--primary-2:#6ea8ff;--primary-soft:rgba(85,199,245,.12);--success:#42e39a;--warning:#ffd166;--danger:#ff7184;--text:#eef7ff;--muted:#aabbd0;--border:#49a9ee;--border-strong:#76c8ff;--accent:#f1cf7a;--shadow:0 14px 40px rgba(0,0,0,.38);--shadow-lg:0 25px 75px rgba(0,0,0,.55)}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}html,body{min-height:100%;font-family:var(--font-sans);direction:rtl}body{background:radial-gradient(circle at 8% 0%,rgba(37,99,235,.09),transparent 32%),var(--bg);color:var(--text);padding-bottom:115px;text-align:center;overflow-x:hidden}button,input,select,textarea{font-family:var(--font-sans)}button{cursor:pointer}.hidden{display:none!important}
+.topbar{position:sticky;top:0;z-index:100;background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:12px 10px}.topbar-row{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%}.title-area{display:flex;align-items:center;gap:9px;min-width:0;flex:1;text-align:right}.title-icon{width:43px;height:43px;min-width:43px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(135deg,var(--primary-2),var(--primary));color:#fff;box-shadow:var(--shadow);font-size:1.15rem}.title-text{min-width:0;text-align:right}.title-text h1{font-size:1.13rem;line-height:1.35;font-weight:950;color:var(--primary);white-space:nowrap}.title-text p{font-size:.65rem;color:var(--muted);margin-top:2px;white-space:nowrap}.header-actions{display:flex;align-items:center;gap:7px;flex-shrink:0}.icon-btn{width:44px;height:44px;min-width:44px;border-radius:13px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:1.25rem;display:grid;place-items:center;box-shadow:var(--shadow)}.icon-btn:active{transform:scale(.95)}[data-theme="dark"] .icon-btn{border-color:#63c7ff!important}
+.page{width:100%;max-width:1280px;margin:auto;padding:13px}.search-row{display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:11px}.search-box{position:relative}.search-box input,.search-box select{width:100%;height:52px;padding:0 48px 0 14px;border:1px solid var(--border);border-radius:16px;background:var(--surface);color:var(--text);outline:none;text-align:center;box-shadow:var(--shadow);font-size:.86rem;appearance:none;-webkit-appearance:none}.search-box input:focus,.search-box select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}.search-box i{position:absolute;right:17px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}.search-box select{cursor:pointer;font-weight:800;padding-left:34px}.search-box.select-box::after{content:"▾";position:absolute;left:16px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;font-size:1rem}
+.search-btn{min-width:84px}.btn{min-height:44px;padding:8px 13px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:.75rem;font-weight:900}.btn.primary{background:linear-gradient(135deg,var(--primary-2),var(--primary));color:#fff;border-color:transparent}.btn.danger{color:var(--danger)}.btn.warning{color:var(--warning)}.btn.success{color:var(--success)}.btn:disabled{opacity:.45;cursor:not-allowed}.btn:active{transform:scale(.97)}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:7px 0 14px}.kpi{background:linear-gradient(145deg,var(--surface),var(--surface-2));border:1px solid var(--border);border-radius:var(--radius);padding:14px 8px;box-shadow:var(--shadow);text-align:center;min-width:0}.kpi .ico{font-size:1.2rem;color:var(--primary);margin-bottom:5px}.kpi strong{display:block;font-size:1.25rem;font-weight:950;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.kpi span{display:block;color:var(--muted);font-size:.62rem;margin-top:3px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.panel{background:linear-gradient(145deg,var(--surface),var(--surface-2));border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px;margin-bottom:14px}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}.panel-head h2{font-size:.96rem;font-weight:950;color:var(--text);min-width:0;flex:1;text-align:right;display:flex;align-items:center;gap:6px}.panel-head h2 i{color:var(--primary)}.badge{padding:5px 10px;border-radius:999px;background:var(--primary-soft);color:var(--primary);font-size:.68rem;font-weight:900;white-space:nowrap}
+.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:14px;max-height:60vh;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}.data-table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0;font-size:.72rem}.data-table th,.data-table td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:center;vertical-align:middle;white-space:nowrap;max-width:230px;overflow:hidden;text-overflow:ellipsis}.data-table th{position:sticky;top:0;z-index:2;background:color-mix(in srgb,var(--surface) 96%,var(--primary-soft));color:var(--primary);font-weight:950;cursor:pointer;user-select:none;font-size:.68rem}.data-table thead th.pk-col{color:var(--warning)}.data-table thead th.fk-col{color:var(--primary-2)}.data-table th.sorted-asc::after{content:" ▲"}.data-table th.sorted-desc::after{content:" ▼"}.data-table tbody tr:active{background:var(--primary-soft)}.data-table tbody tr.selected{background:var(--primary-soft)}.data-table tbody td{background:color-mix(in srgb,var(--surface) 98%,transparent)}
+.row-actions-cell{position:sticky;left:0;z-index:3;background:color-mix(in srgb,var(--surface) 96%,var(--primary-soft))!important;border-left:1px solid var(--border);min-width:86px}.row-actions-cell button{border:none;border-radius:8px;padding:5px 7px;margin:0 2px;font-size:.75rem;background:var(--surface-3);color:var(--text);cursor:pointer;min-width:28px}.row-actions-cell button.edit{background:var(--primary-2);color:#fff}.row-actions-cell button.view{background:var(--accent);color:#fff}.row-actions-cell button.del{background:var(--danger);color:#fff}
+.cell-null{color:var(--muted);font-style:italic}.cell-num{color:var(--primary-2);font-variant-numeric:tabular-nums}.cell-bool{color:var(--success);font-weight:900}.cell-false{color:var(--danger);font-weight:900}.cell-fk{color:var(--primary);text-decoration:underline dotted;cursor:help}
+.pagination{display:flex;justify-content:center;align-items:center;gap:8px;padding-top:12px;flex-wrap:wrap}.pagination span{color:var(--muted);font-size:.74rem;font-weight:800;min-width:100px;text-align:center}
+.empty{padding:36px 12px;color:var(--muted);line-height:2}.empty i{font-size:2.3rem;color:var(--primary);display:block;margin-bottom:8px}
+.related-section{margin-top:14px}.related-title{font-size:.82rem;color:var(--primary);font-weight:950;margin:0 4px 8px;text-align:right;display:flex;align-items:center;gap:6px}.related-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 13px;background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:7px;cursor:pointer;transition:background .2s}.related-header:hover{background:var(--surface-2)}.related-header.open{border-bottom-left-radius:0;border-bottom-right-radius:0;background:var(--primary-soft)}.related-header h4{margin:0;font-size:.78rem;font-weight:900;color:var(--text);text-align:right;flex:1;display:flex;align-items:center;gap:6px;flex-wrap:wrap}.related-header h4 i{color:var(--primary)}.related-header h4 small{color:var(--muted);font-weight:700;font-size:.64rem}.related-header .arrow{transition:transform .25s;color:var(--muted);font-size:.72rem}.related-header.open .arrow{transform:rotate(90deg)}.related-body{display:none;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 14px 14px;padding:10px;margin-top:-7px;margin-bottom:10px}.related-body.open{display:block}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:500;display:grid;grid-template-columns:repeat(5,1fr);gap:7px;padding:9px 8px calc(9px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--surface) 95%,transparent);backdrop-filter:blur(20px);border-top:1px solid var(--border)}.nav-item{min-height:68px;border:1px solid var(--border);border-radius:16px;background:var(--surface-2);color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:.65rem;font-weight:950}.nav-item i{font-size:1.2rem}.nav-item.active{color:var(--primary);border-color:var(--primary);background:var(--primary-soft)}
+.fab{position:fixed;left:17px;bottom:96px;z-index:600;width:54px;height:54px;border:0;border-radius:50%;background:linear-gradient(135deg,var(--primary-2),var(--primary));color:#fff;font-size:1.2rem;box-shadow:0 10px 28px rgba(37,99,235,.35)}.fab:active{transform:scale(.94)}
+.modal-bg{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.68);backdrop-filter:blur(7px);align-items:flex-end;justify-content:center;padding:0;overflow:auto}.modal-bg.show{display:flex}.modal{width:min(760px,100%);max-height:94vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:25px 25px 0 0;box-shadow:var(--shadow-lg);text-align:center}.modal-head{position:sticky;top:0;z-index:3;padding:14px 17px;background:color-mix(in srgb,var(--surface) 96%,transparent);backdrop-filter:blur(15px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}.modal-head h3{font-size:1rem;font-weight:950;flex:1;text-align:right;display:flex;align-items:center;gap:6px;min-width:0}.modal-head h3 i{color:var(--primary)}.close{width:38px;height:38px;min-width:38px;border-radius:11px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:1.05rem}.modal-body{padding:15px}.modal-foot{display:flex;gap:9px;padding:12px 17px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--surface)}.modal-foot .btn{flex:1;min-height:48px}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.field{min-width:0;text-align:center}.field.full{grid-column:1/-1}.field label{display:flex;align-items:center;justify-content:center;gap:5px;color:var(--muted);font-size:.68rem;font-weight:850;margin-bottom:6px;flex-wrap:wrap}.field label small{color:var(--text-muted);font-weight:600;font-size:.62rem;opacity:.7}.field .pk-badge,.field .fk-badge{padding:2px 6px;border-radius:6px;font-size:.58rem;font-weight:950}.field .pk-badge{background:var(--warning);color:#000}.field .fk-badge{background:var(--primary-2);color:#fff}.field input,.field select,.field textarea{width:100%;min-height:45px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);outline:none;padding:8px 10px;text-align:center;font-size:.78rem}.field textarea{min-height:64px;text-align:right;resize:vertical}.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}.field input[readonly],.field select[disabled],.field textarea[readonly]{opacity:.65;background:var(--surface-3);font-weight:900}
+.notice{padding:10px;border-radius:13px;background:var(--primary-soft);color:var(--primary);border:1px solid var(--border);font-size:.7rem;line-height:1.8;margin-bottom:10px;text-align:right}
+.alert-box{display:none;margin:0 0 10px;border:1px solid var(--danger);background:rgba(220,38,38,.09);color:var(--danger);border-radius:13px;padding:10px;font-size:.73rem;font-weight:800;line-height:1.8}.alert-box.show{display:block}
+.detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.detail{padding:9px;border-radius:12px;background:var(--primary-soft);border:1px solid var(--border);text-align:center;min-width:0}.detail small{display:block;color:var(--muted);font-size:.62rem;font-weight:800}.detail b{display:block;margin-top:3px;font-size:.72rem;overflow-wrap:anywhere;word-break:break-word}
+.loading{display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.55);backdrop-filter:blur(5px);place-items:center}.loading.show{display:grid}.spinner{width:52px;height:52px;border:5px solid rgba(255,255,255,.25);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite}
+.toast{position:fixed;left:50%;bottom:94px;transform:translate(-50%,20px);opacity:0;pointer-events:none;z-index:4000;min-width:min(90%,340px);max-width:92%;padding:11px 15px;border-radius:13px;background:var(--surface);border:1px solid var(--border);color:var(--text);box-shadow:var(--shadow-lg);font-size:.76rem;font-weight:850;transition:.25s}.toast.show{opacity:1;transform:translate(-50%,0)}.toast.bad{border-color:var(--danger);color:var(--danger)}.toast.warn{border-color:var(--warning);color:var(--warning)}
+[data-theme="dark"] .panel,[data-theme="dark"] .kpi,[data-theme="dark"] .modal,[data-theme="dark"] .field input,[data-theme="dark"] .field select,[data-theme="dark"] .field textarea,[data-theme="dark"] .detail,[data-theme="dark"] .bottom-nav,[data-theme="dark"] .nav-item,[data-theme="dark"] .search-box input,[data-theme="dark"] .search-box select,[data-theme="dark"] .table-wrap,[data-theme="dark"] .related-header,[data-theme="dark"] .related-body{border-color:#63c7ff!important;box-shadow:0 0 0 1px rgba(99,199,255,.16),0 0 18px rgba(99,199,255,.07)}
+@media(max-width:760px){.stats{grid-template-columns:repeat(2,1fr)}.page{padding:10px}.title-text p{display:none}.bottom-nav{gap:4px}.nav-item{min-height:64px;font-size:.58rem}.nav-item i{font-size:1.05rem}}
+@media(max-width:430px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.field input,.field select,.field textarea{font-size:.72rem;padding:8px 5px}.field label{font-size:.62rem}.bottom-nav{grid-template-columns:repeat(5,minmax(0,1fr));gap:3px}.nav-item{min-height:62px;padding:3px 1px}.nav-item i{font-size:.98rem}.detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.search-row{grid-template-columns:1fr auto}.search-btn{min-width:70px;padding-inline:8px}.kpi strong{font-size:1.05rem}}
+@media(max-width:350px){.title-icon{width:39px;height:39px;min-width:39px}.icon-btn{width:40px;height:40px;min-width:40px}.title-text h1{font-size:.9rem}}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="loading" id="loading"><div class="spinner" aria-label="جاري التحميل"></div></div>
+<div class="toast" id="toast"></div>
+
+<header class="topbar">
+  <div class="topbar-row">
+    <div class="title-area">
+      <div class="title-icon"><i class="fas fa-database"></i></div>
+      <div class="title-text">
+        <h1>متصفح قاعدة البيانات</h1>
+        <p>استعراض وإدارة جميع جداول SQLite</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="themeBtn" type="button" title="تبديل الوضع" aria-label="تبديل الوضع"><span id="themeIcon" aria-hidden="true">🌙</span></button>
+      <button class="icon-btn" type="button" onclick="goHome()" title="الصفحة الرئيسية" aria-label="الصفحة الرئيسية"><span aria-hidden="true">🏠</span></button>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  <!-- اختيار الجدول -->
+  <div class="search-row">
+    <div class="search-box select-box">
+      <i class="fas fa-table"></i>
+      <select id="tableSelect" aria-label="اختر جدولاً">
+        <option value="">— اختر جدولاً —</option>
+      </select>
+    </div>
+    <button class="btn primary search-btn" id="refreshBtn" title="تحديث"><i class="fas fa-sync"></i> تحديث</button>
+  </div>
+
+  <!-- بحث + حجم الصفحة -->
+  <div class="search-row">
+    <div class="search-box">
+      <i class="fas fa-search"></i>
+      <input id="searchInput" type="search" inputmode="search" placeholder="ابحث في الجدول الحالي..." autocomplete="off">
+    </div>
+    <select id="pageSizeSelect" class="btn" style="min-width:78px;padding:8px 6px">
+      <option value="25">25</option>
+      <option value="50" selected>50</option>
+      <option value="100">100</option>
+      <option value="200">200</option>
+    </select>
+  </div>
+
+  <!-- إحصائيات -->
+  <div class="stats" id="statsRow">
+    <div class="kpi"><div class="ico"><i class="fas fa-table"></i></div><strong id="kpiTable">—</strong><span>الجدول الحالي</span></div>
+    <div class="kpi"><div class="ico"><i class="fas fa-list-ol"></i></div><strong id="kpiTotal">0</strong><span>إجمالي الصفوف</span></div>
+    <div class="kpi"><div class="ico"><i class="fas fa-columns"></i></div><strong id="kpiCols">0</strong><span>عدد الأعمدة</span></div>
+    <div class="kpi"><div class="ico"><i class="fas fa-link"></i></div><strong id="kpiRelated">0</strong><span>جداول مرتبطة</span></div>
+  </div>
+
+  <!-- جدول البيانات -->
+  <div class="panel" id="dataPanel">
+    <div class="panel-head">
+      <h2><i class="fas fa-table"></i> <span id="panelTitle">البيانات</span></h2>
+      <span class="badge" id="rowsBadge">0 سجل</span>
+    </div>
+    <div id="contentArea">
+      <div class="empty"><i class="fas fa-database"></i>اختر جدولاً من الأعلى لعرض بياناته</div>
+    </div>
+    <div class="pagination" id="paginationArea" style="display:none">
+      <button class="btn" id="prevBtn" type="button"><i class="fas fa-chevron-right"></i> السابق</button>
+      <span id="pageLabel">صفحة 1 / 1</span>
+      <button class="btn" id="nextBtn" type="button">التالي <i class="fas fa-chevron-left"></i></button>
+    </div>
+  </div>
+
+  <!-- الجداول المرتبطة -->
+  <div id="relatedArea"></div>
+</main>
+
+<button class="fab" id="fabAdd" title="إضافة سجل" aria-label="إضافة سجل"><i class="fas fa-plus"></i></button>
+
+<nav class="bottom-nav" aria-label="إجراءات سريعة">
+  <button class="nav-item active" type="button" onclick="focusSearch()"><i class="fas fa-search"></i><span>بحث</span></button>
+  <button class="nav-item" type="button" onclick="showSchema()"><i class="fas fa-columns"></i><span>الأعمدة</span></button>
+  <button class="nav-item" type="button" onclick="reloadCurrent()"><i class="fas fa-sync"></i><span>تحديث</span></button>
+  <button class="nav-item" type="button" onclick="openAddModal()"><i class="fas fa-plus"></i><span>إضافة</span></button>
+  <button class="nav-item" type="button" onclick="goHome()"><i class="fas fa-home"></i><span>الرئيسية</span></button>
+</nav>
+
+<!-- Modal تعديل/إضافة -->
+<div class="modal-bg" id="editModal">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <h3 id="editModalTitle"><i class="fas fa-plus-circle"></i> إضافة سجل جديد</h3>
+      <button class="close" type="button" onclick="closeModal('editModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="formAlert" class="alert-box"></div>
+      <div class="notice" id="editNotice">جميع الحقول اختيارية إلا ما تشير إليه التسمية. القيم الفارغة تُحفظ كـ NULL. أعمدة المفاتيح الأساسية (PK) للقراءة فقط.</div>
+      <form id="recordForm" onsubmit="event.preventDefault();submitEditForm()">
+        <div class="form-grid" id="formFields"></div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      <button class="btn primary" type="button" onclick="submitEditForm()"><i class="fas fa-save"></i> حفظ</button>
+      <button class="btn" type="button" onclick="closeModal('editModal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal حذف -->
+<div class="modal-bg" id="deleteModal">
+  <div class="modal" style="max-width:420px" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <h3><i class="fas fa-trash-alt" style="color:var(--danger)"></i> تأكيد الحذف</h3>
+      <button class="close" type="button" onclick="closeModal('deleteModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p id="deleteMessage" style="font-size:.78rem;color:var(--text);line-height:1.8;margin:0">
+        سيتم حذف السجل من الجدول الحالي.
+      </p>
+      <div id="deleteModeHint" class="notice" style="margin-top:10px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn danger" type="button" onclick="executeDelete()"><i class="fas fa-trash-alt"></i> حذف</button>
+      <button class="btn" type="button" onclick="closeModal('deleteModal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal تفاصيل السجل -->
+<div class="modal-bg" id="detailModal">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <h3><i class="fas fa-info-circle"></i> تفاصيل السجل</h3>
+      <button class="close" type="button" onclick="closeModal('detailModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-foot">
+      <button class="btn primary" type="button" id="detailEditBtn"><i class="fas fa-edit"></i> تعديل</button>
+      <button class="btn" type="button" onclick="closeModal('detailModal')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal مخطط الجدول -->
+<div class="modal-bg" id="schemaModal">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <h3><i class="fas fa-columns"></i> <span id="schemaTitle">أعمدة الجدول</span></h3>
+      <button class="close" type="button" onclick="closeModal('schemaModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="schemaBody"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* =========================================================
+   الجسر
+   ========================================================= */
+const bridge = window.AndroidInterface || null;
+const $ = id => document.getElementById(id);
+
+const state = {
+  table: null,
+  schema: null,
+  rows: [],
+  total: 0,
+  limit: 50,
+  offset: 0,
+  search: '',
+  sortBy: '',
+  sortDir: 'desc',
+  editing: null,
+  deletingId: null
+};
+
+function parse(raw){
+  if (raw && typeof raw === 'object') return raw;
+  try { return JSON.parse(raw); } catch(e){ return { success:false, error:'استجابة Android غير صالحة' }; }
+}
+function call(name, args=[]){
+  if (!bridge || typeof bridge[name] !== 'function') return Promise.reject(new Error('جسر Android غير متاح: '+name));
+  try {
+    const r = parse(bridge[name](...args));
+    if (r && r.success === false) throw new Error(r.error || r.message || 'فشلت العملية');
+    return Promise.resolve(r);
+  } catch(e) { return Promise.reject(e); }
+}
+function dataOf(r){ return r && Object.prototype.hasOwnProperty.call(r, 'data') ? r.data : r; }
+
+/* =========================================================
+   أدوات
+   ========================================================= */
+function busy(v){ $('loading').classList.toggle('show', !!v); }
+function toast(msg, type='ok'){
+  const t = $('toast');
+  t.className = 'toast show ' + (type==='error' ? 'bad' : type==='warning' ? 'warn' : '');
+  t.textContent = msg;
+  clearTimeout(window.__toast);
+  window.__toast = setTimeout(() => t.classList.remove('show'), 3200);
+}
+function esc(v){ return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function truncate(s, n=80){ s = String(s ?? ''); return s.length > n ? s.slice(0, n) + '…' : s; }
+function openModal(id){ $(id).classList.add('show'); document.body.style.overflow = 'hidden'; }
+function closeModal(id){ $(id).classList.remove('show'); document.body.style.overflow = ''; }
+function goHome(){ location.href = '../main.html'; }
+function focusSearch(){ $('searchInput').focus(); $('searchInput').scrollIntoView({ behavior:'smooth', block:'center' }); }
+function toggleTheme(){
+  const root = document.documentElement;
+  const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', next);
+  localStorage.setItem('db-browser-theme', next);
+  $('themeIcon').textContent = next === 'dark' ? '🌞' : '🌙';
+}
+
+/* =========================================================
+   عرض القيم
+   ========================================================= */
+function renderCellValue(v, col){
+  if (v === null || v === undefined || v === '') return '<span class="cell-null">—</span>';
+  if (col && (col.name.startsWith('is_') || col.name === 'enabled' || col.name === 'archived' || col.name === 'is_active')) {
+    if (v === 1 || v === '1' || v === true) return '<span class="cell-bool">✔ نعم</span>';
+    if (v === 0 || v === '0' || v === false) return '<span class="cell-false">✘ لا</span>';
+  }
+  const str = String(v);
+  if (typeof v === 'number') return '<span class="cell-num">' + esc(v) + '</span>';
+  return esc(truncate(str, 90));
+}
+
+/* =========================================================
+   تحميل الجداول
+   ========================================================= */
+async function loadTables(){
+  try {
+    const r = await call('getDatabaseTables');
+    const tables = dataOf(r) || [];
+    const sel = $('tableSelect');
+    const current = state.table;
+    sel.innerHTML = '<option value="">— اختر جدولاً —</option>';
+    tables.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.table_name;
+      opt.textContent = (t.table_label || t.table_name) + ' (' + (t.row_count ?? 0) + ')';
+      sel.appendChild(opt);
+    });
+    if (current) sel.value = current;
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+/* =========================================================
+   تحميل البيانات
+   ========================================================= */
+async function loadRows(){
+  if (!state.table) return;
+  busy(true);
+  try {
+    const params = JSON.stringify({
+      limit: state.limit,
+      offset: state.offset,
+      search: state.search,
+      sort_by: state.sortBy,
+      sort_dir: state.sortDir
+    });
+    const r = await call('getDatabaseTableData', [state.table, params]);
+    const d = dataOf(r) || {};
+    state.rows = d.rows || [];
+    state.total = d.total || 0;
+    renderMainTable();
+    renderStats();
+  } catch(e) { toast(e.message, 'error'); }
+  finally { busy(false); }
+}
+
+function renderStats(){
+  const cols = state.schema ? (state.schema.columns || []).length : 0;
+  const rel = state.schema ? (state.schema.related_tables || []).length : 0;
+  $('kpiTable').textContent = state.schema ? (state.schema.table_label || state.table) : '—';
+  $('kpiTotal').textContent = state.total;
+  $('kpiCols').textContent = cols;
+  $('kpiRelated').textContent = rel;
+  $('panelTitle').textContent = state.schema ? state.schema.table_label : 'البيانات';
+  $('rowsBadge').textContent = state.total + ' سجل';
+}
+
+/* =========================================================
+   الجدول الرئيسي
+   ========================================================= */
+function renderMainTable(){
+  const area = $('contentArea');
+  const cols = state.schema ? state.schema.columns : [];
+  if (!state.rows.length) {
+    area.innerHTML = '<div class="empty"><i class="fas fa-inbox"></i>لا توجد بيانات في هذا الجدول أو لا توجد نتائج مطابقة</div>';
+    $('paginationArea').style.display = 'none';
+    return;
+  }
+  let head = '<th class="row-actions-cell">إجراءات</th>';
+  cols.forEach(c => {
+    const cls = c.is_pk ? 'pk-col' : (c.is_fk ? 'fk-col' : '');
+    const sorted = state.sortBy === c.name ? (state.sortDir === 'asc' ? ' sorted-asc' : ' sorted-desc') : '';
+    const title = (c.type || '') + (c.is_fk ? ' → ' + (c.fk_table || '') + '.' + (c.fk_column || '') : '');
+    head += `<th class="${cls}${sorted}" data-col="${esc(c.name)}" title="${esc(title)}">${esc(c.label || c.name)}</th>`;
+  });
+  let body = '';
+  state.rows.forEach(row => {
+    const rowId = row.id != null ? row.id : '';
+    body += `<tr data-id="${esc(rowId)}">`;
+    body += `<td class="row-actions-cell">
+      <button class="edit" data-action="edit"   data-id="${esc(rowId)}" title="تعديل">✎</button>
+      <button class="view" data-action="view"   data-id="${esc(rowId)}" title="تفاصيل">👁</button>
+      <button class="del"  data-action="delete" data-id="${esc(rowId)}" title="حذف">🗑</button>
+    </td>`;
+    cols.forEach(c => {
+      const cls = c.is_fk && row[c.name] != null ? 'cell-fk' : '';
+      body += `<td class="${cls}" title="${esc(String(row[c.name] ?? ''))}">${renderCellValue(row[c.name], c)}</td>`;
+    });
+    body += '</tr>';
+  });
+
+  area.innerHTML = `<div class="table-wrap"><table class="data-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  $('paginationArea').style.display = 'flex';
+  renderPagination();
+
+  // ترتيب
+  area.querySelectorAll('th[data-col]').forEach(th => {
+    th.addEventListener('click', () => {
+      const c = th.getAttribute('data-col');
+      if (state.sortBy === c) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      else { state.sortBy = c; state.sortDir = 'asc'; }
+      state.offset = 0;
+      loadRows();
+    });
+  });
+  // إجراءات
+  area.querySelectorAll('button[data-action]').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const a = btn.getAttribute('data-action');
+      const id = btn.getAttribute('data-id');
+      if (a === 'edit')   openEditModal(id);
+      else if (a === 'view') openDetailModal(id);
+      else if (a === 'delete') confirmDelete(id);
+    });
+  });
+  // اختيار صف لعرض المرتبطات
+  area.querySelectorAll('tbody tr[data-id]').forEach(tr => {
+    tr.addEventListener('click', ev => {
+      if (ev.target.closest('button[data-action]')) return;
+      area.querySelectorAll('tbody tr.selected').forEach(x => x.classList.remove('selected'));
+      tr.classList.add('selected');
+      const id = tr.getAttribute('data-id');
+      if (id) loadRelatedForRow(id);
+    });
+  });
+}
+
+function renderPagination(){
+  const totalPages = Math.max(1, Math.ceil(state.total / state.limit));
+  const currentPage = Math.floor(state.offset / state.limit) + 1;
+  $('pageLabel').textContent = `صفحة ${currentPage} / ${totalPages}`;
+  $('prevBtn').disabled = currentPage <= 1;
+  $('nextBtn').disabled = currentPage >= totalPages;
+}
+
+/* =========================================================
+   الجداول المرتبطة
+   ========================================================= */
+function renderRelated(){
+  const area = $('relatedArea');
+  const related = (state.schema && state.schema.related_tables) || [];
+  if (!related.length) { area.innerHTML = ''; return; }
+  const boxes = related.map((r, i) => `
+    <div class="related-header" data-idx="${i}">
+      <h4>
+        <i class="fas fa-link"></i>
+        <span>${esc(r.related_table_label || r.related_table)}</span>
+        <small>(${esc(r.foreign_key_column)} → ${esc(r.referenced_column)})</small>
+      </h4>
+      <span class="arrow"><i class="fas fa-chevron-left"></i></span>
+    </div>
+    <div class="related-body" data-body="${i}">
+      <div class="empty" style="padding:14px"><i class="fas fa-mouse-pointer"></i>اختر صفاً في الجدول الرئيسي لعرض السجلات المرتبطة</div>
+    </div>
+  `).join('');
+  area.innerHTML = `<div class="related-section">
+    <h4 class="related-title"><i class="fas fa-project-diagram"></i> الجداول المرتبطة (${related.length})</h4>
+    ${boxes}
+  </div>`;
+  area.querySelectorAll('.related-header').forEach(h => {
+    h.addEventListener('click', () => {
+      const idx = h.getAttribute('data-idx');
+      const body = area.querySelector(`.related-body[data-body="${idx}"]`);
+      h.classList.toggle('open');
+      body.classList.toggle('open');
+    });
+  });
+}
+
+async function loadRelatedForRow(rowId){
+  const related = (state.schema && state.schema.related_tables) || [];
+  if (!related.length) return;
+  for (let i = 0; i < related.length; i++) {
+    const r = related[i];
+    const body = document.querySelector(`.related-body[data-body="${i}"]`);
+    if (!body) continue;
+    body.innerHTML = '<div style="padding:20px;text-align:center"><div class="spinner" style="margin:auto;width:32px;height:32px;border-width:3px"></div></div>';
+    try {
+      const res = await call('getDatabaseRelatedRows', [r.related_table, r.foreign_key_column, String(rowId), 100]);
+      const rows = dataOf(res) || [];
+      if (!rows.length) {
+        body.innerHTML = '<div class="empty" style="padding:14px"><i class="fas fa-unlink"></i>لا توجد سجلات مرتبطة</div>';
+        continue;
+      }
+      const cols = Object.keys(rows[0]);
+      const th = cols.map(c => `<th>${esc(c)}</th>`).join('');
+      const tb = rows.map(row => `<tr>${cols.map(c => `<td>${renderCellValue(row[c], {name:c})}</td>`).join('')}</tr>`).join('');
+      body.innerHTML = `
+        <div class="table-wrap" style="max-height:42vh">
+          <table class="data-table">
+            <thead><tr>${th}</tr></thead>
+            <tbody>${tb}</tbody>
+          </table>
+        </div>
+        <div class="notice" style="margin-top:8px">${rows.length} سجل مرتبط (حد أقصى 100)</div>
+      `;
+    } catch(e) {
+      body.innerHTML = `<div class="alert-box show">${esc(e.message)}</div>`;
+    }
+  }
+}
+
+/* =========================================================
+   تعديل / إضافة
+   ========================================================= */
+function openAddModal(){
+  if (!state.schema) { toast('اختر جدولاً أولاً', 'error'); return; }
+  state.editing = { mode: 'insert', row: null };
+  buildEditForm('إضافة سجل جديد', null);
+}
+
+async function openEditModal(id){
+  if (!state.schema) { toast('اختر جدولاً أولاً', 'error'); return; }
+  // استخدم الصف المحمّل حالياً إن وُجد، أو اطلبه من SQLite
+  let row = state.rows.find(r => String(r.id) === String(id));
+  if (!row) {
+    try {
+      const r = await call('getDatabaseRecord', [state.table, Number(id)]);
+      row = dataOf(r);
+    } catch(e) { toast(e.message, 'error'); return; }
+  }
+  if (!row) { toast('السجل غير موجود', 'error'); return; }
+  state.editing = { mode: 'update', row };
+  buildEditForm('تعديل السجل #' + id, row);
+}
+
+function buildEditForm(title, existingRow){
+  const fieldsEl = $('formFields');
+  fieldsEl.innerHTML = '';
+  $('formAlert').classList.remove('show');
+  $('editModalTitle').innerHTML = '<i class="fas ' + (existingRow ? 'fa-edit' : 'fa-plus-circle') + '"></i> ' + esc(title);
+  const cols = state.schema.columns || [];
+  cols.forEach(col => {
+    // لا تعرض أعمدة النظام غير القابلة للتحرير
+    if (col.is_pk || col.name === 'id' || col.name === 'uuid' || col.name === 'created_at') return;
+    const wrap = document.createElement('div');
+    wrap.className = 'field';
+    const type = (col.type || '').toUpperCase();
+    const isLong = /TEXT|CLOB|VARCHAR/i.test(type) && col.name !== 'uuid' && (col.name.endsWith('_json') || col.name === 'notes' || col.name === 'description' || col.name === 'remarks' || col.name === 'message_body' || col.name === 'body');
+    const isNum  = /INT|REAL|NUM|DEC|FLOA|DOUB/i.test(type);
+    const isBool = col.name.startsWith('is_') || col.name === 'enabled' || col.name === 'archived';
+    const value = existingRow ? existingRow[col.name] : '';
+    const inputId = 'field_' + col.name;
+
+    let badge = '';
+    if (col.is_pk) badge = '<span class="pk-badge">PK</span>';
+    else if (col.is_fk) badge = `<span class="fk-badge">FK→${esc(col.fk_table || '')}</span>`;
+
+    let inputHtml;
+    if (isBool) {
+      const checked = (value === 1 || value === '1' || value === true) ? 'selected' : '';
+      const unchecked = checked ? '' : 'selected';
+      inputHtml = `<select id="${inputId}" name="${esc(col.name)}" data-type="${esc(type)}" data-kind="bool">
+        <option value="0" ${unchecked}>0 — لا</option>
+        <option value="1" ${checked}>1 — نعم</option>
+      </select>`;
+    } else if (isLong) {
+      inputHtml = `<textarea id="${inputId}" name="${esc(col.name)}" data-type="${esc(type)}" placeholder="${esc(col.name)}">${esc(value ?? '')}</textarea>`;
+    } else {
+      inputHtml = `<input id="${inputId}" name="${esc(col.name)}" data-type="${esc(type)}" type="${isNum ? 'number' : 'text'}" ${isNum ? 'step="any"' : ''} value="${esc(value ?? '')}" placeholder="${esc(col.name)}">`;
+    }
+
+    wrap.innerHTML = `
+      <label for="${inputId}">
+        ${esc(col.label || col.name)}
+        ${badge}
+        <small>${esc(col.name)}</small>
+      </label>
+      ${inputHtml}
+    `;
+    fieldsEl.appendChild(wrap);
+  });
+  $('editNotice').textContent = existingRow
+    ? 'لتعديل قيمة: غيّرها ثم اضغط حفظ. القيم الفارغة تُحفظ كـ NULL.'
+    : 'جميع الحقول اختيارية إلا ما تشير إليه التسمية. أعمدة PK/UUID/created_at لا تُعدَّل.';
+  openModal('editModal');
+}
+
+async function submitEditForm(){
+  if (!state.editing) return;
+  const cols = state.schema.columns || [];
+  const payload = {};
+  cols.forEach(col => {
+    if (col.is_pk || col.name === 'id') return;
+    const el = document.getElementById('field_' + col.name);
+    if (!el) return;
+    const raw = el.value;
+    payload[col.name] = (raw === '' ? null : raw);
+  });
+
+  busy(true);
+  try {
+    let res;
+    if (state.editing.mode === 'insert') {
+      res = await call('insertBrowserRecord', [state.table, JSON.stringify(payload)]);
+    } else {
+      const id = state.editing.row.id;
+      res = await call('updateBrowserRecord', [state.table, Number(id), JSON.stringify(payload)]);
+    }
+    toast(res.message || 'تم الحفظ بنجاح');
+    closeModal('editModal');
+    await loadRows();
+    await loadTables();
+  } catch(e) {
+    $('formAlert').textContent = e.message;
+    $('formAlert').classList.add('show');
+    toast(e.message, 'error');
+  } finally { busy(false); }
+}
+
+/* =========================================================
+   حذف
+   ========================================================= */
+function confirmDelete(id){
+  state.deletingId = id;
+  $('deleteMessage').textContent = 'سيتم حذف السجل #' + id + ' من الجدول الحالي.';
+  $('deleteModeHint').textContent = state.schema && (state.schema.columns || []).some(c => c.name === 'is_deleted')
+    ? 'هذا الجدول يدعم الحذف المنطقي (is_deleted = 1) وسيُطبَّق تلقائياً.'
+    : 'هذا الجدول لا يدعم الحذف المنطقي؛ سيُنفَّذ حذف فعلي من SQLite.';
+  openModal('deleteModal');
+}
+
+async function executeDelete(){
+  if (!state.deletingId) return;
+  busy(true);
+  try {
+    const r = await call('deleteBrowserRecord', [state.table, Number(state.deletingId)]);
+    toast(r.message || 'تم الحذف');
+    closeModal('deleteModal');
+    await loadRows();
+    await loadTables();
+  } catch(e) { toast(e.message, 'error'); }
+  finally { busy(false); state.deletingId = null; }
+}
+
+/* =========================================================
+   تفاصيل السجل
+   ========================================================= */
+async function openDetailModal(id){
+  if (!state.schema) return;
+  let row = state.rows.find(r => String(r.id) === String(id));
+  if (!row) {
+    try { const r = await call('getDatabaseRecord', [state.table, Number(id)]); row = dataOf(r); }
+    catch(e) { toast(e.message, 'error'); return; }
+  }
+  if (!row) { toast('السجل غير موجود', 'error'); return; }
+  const cols = state.schema.columns || [];
+  const html = '<div class="detail-grid">' + cols.map(c => `
+    <div class="detail">
+      <small>${esc(c.label || c.name)}${c.is_pk ? ' (PK)' : (c.is_fk ? ' (FK)' : '')}</small>
+      <b>${esc(truncate(String(row[c.name] ?? '—'), 120))}</b>
+    </div>
+  `).join('') + '</div>';
+  $('detailBody').innerHTML = html;
+  $('detailEditBtn').onclick = () => { closeModal('detailModal'); openEditModal(id); };
+  openModal('detailModal');
+}
+
+/* =========================================================
+   مخطط الجدول
+   ========================================================= */
+function showSchema(){
+  if (!state.schema) { toast('اختر جدولاً أولاً', 'error'); return; }
+  $('schemaTitle').textContent = 'أعمدة ' + (state.schema.table_label || state.table);
+  const cols = state.schema.columns || [];
+  const rows = cols.map(c => `
+    <tr>
+      <td>${esc(c.label || c.name)}</td>
+      <td><small>${esc(c.name)}</small></td>
+      <td>${esc(c.type || '—')}</td>
+      <td>${c.is_pk ? '<span class="pk-badge">PK</span>' : (c.is_fk ? `<span class="fk-badge">FK→${esc(c.fk_table||'')}</span>` : '—')}</td>
+      <td>${c.not_null ? 'نعم' : 'لا'}</td>
+      <td>${esc(c.default_value == null ? '—' : c.default_value)}</td>
+    </tr>
+  `).join('');
+  $('schemaBody').innerHTML = `
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>العربي</th><th>الاسم</th><th>النوع</th><th>المفتاح</th><th>NOT NULL</th><th>افتراضي</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" class="empty">لا توجد أعمدة</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+  openModal('schemaModal');
+}
+
+/* =========================================================
+   الأحداث
+   ========================================================= */
+function reloadCurrent(){
+  if (state.table) loadRows();
+  else loadTables();
+}
+
+async function onTableSelected(tableName){
+  if (!tableName) {
+    state.table = null; state.schema = null; state.rows = []; state.total = 0; state.offset = 0;
+    state.search = ''; state.sortBy = ''; state.sortDir = 'desc';
+    $('searchInput').value = '';
+    $('contentArea').innerHTML = '<div class="empty"><i class="fas fa-database"></i>اختر جدولاً من الأعلى لعرض بياناته</div>';
+    $('paginationArea').style.display = 'none';
+    $('relatedArea').innerHTML = '';
+    renderStats();
+    return;
+  }
+  state.table = tableName;
+  state.offset = 0;
+  state.search = '';
+  state.sortBy = '';
+  state.sortDir = 'desc';
+  $('searchInput').value = '';
+
+  busy(true);
+  try {
+    const r = await call('getDatabaseTableSchema', [tableName]);
+    state.schema = dataOf(r);
+    renderRelated();
+    await loadRows();
+  } catch(e) { toast(e.message, 'error'); }
+  finally { busy(false); }
+}
+
+function attachEvents(){
+  $('themeBtn').addEventListener('click', toggleTheme);
+  $('tableSelect').addEventListener('change', e => onTableSelected(e.target.value));
+  $('refreshBtn').addEventListener('click', async () => {
+    if (state.table) { await loadRows(); await loadTables(); }
+    else await loadTables();
+  });
+  $('pageSizeSelect').addEventListener('change', e => {
+    state.limit = parseInt(e.target.value, 10) || 50;
+    state.offset = 0;
+    loadRows();
+  });
+  $('prevBtn').addEventListener('click', () => {
+    if (state.offset > 0) { state.offset = Math.max(0, state.offset - state.limit); loadRows(); }
+  });
+  $('nextBtn').addEventListener('click', () => {
+    if (state.offset + state.limit < state.total) { state.offset += state.limit; loadRows(); }
+  });
+  $('fabAdd').addEventListener('click', openAddModal);
+
+  let timer = null;
+  $('searchInput').addEventListener('input', e => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      state.search = e.target.value;
+      state.offset = 0;
+      loadRows();
+    }, 350);
+  });
+
+  document.querySelectorAll('.modal-bg').forEach(m => {
+    m.addEventListener('click', e => { if (e.target === m) closeModal(m.id); });
+  });
+}
+
+/* =========================================================
+   التهيئة
+   ========================================================= */
+async function bootstrap(){
+  // الثيم
+  const savedTheme = localStorage.getItem('db-browser-theme') || 'light';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+  $('themeIcon').textContent = savedTheme === 'dark' ? '🌞' : '🌙';
+
+  if (!bridge) {
+    $('contentArea').innerHTML = '<div class="empty"><i class="fas fa-exclamation-triangle"></i>جسر Android غير متاح. افتح هذه الشاشة من داخل التطبيق.</div>';
+    return;
+  }
+  attachEvents();
+  await loadTables();
+}
+
+window.goHome = goHome;
+window.openAddModal = openAddModal;
+window.submitEditForm = submitEditForm;
+window.executeDelete = executeDelete;
+window.closeModal = closeModal;
+window.focusSearch = focusSearch;
+window.showSchema = showSchema;
+window.reloadCurrent = reloadCurrent;
+
+document.addEventListener('DOMContentLoaded', bootstrap);
+</script>
+</body>
+</html>

@@ -1,0 +1,5637 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+
+    <title>نظام إدارة محطة الوقود – إدارة التوصيلات</title>
+
+    <link rel="stylesheet"
+          href="file:///android_asset/assets-local/css/theme.css">
+
+    <link href="file:///android_asset/assets-local/css/css2"
+          rel="stylesheet">
+
+    <link rel="stylesheet"
+          href="file:///android_asset/assets-local/css/all.min.css">
+
+    <style>
+        /* ============================================================
+           SYSTEM - theme-shifts.css v1.0
+           ============================================================ */
+
+        @import url('file:///android_asset/assets-local/css/fonts/cairo.css');
+
+        :root {
+            --bg-color: #f4f7fb;
+            --surface-color: #ffffff;
+            --surface-elevated: #f8fafc;
+            --surface-2: #f8fafc;
+            --surface-3: #eef4f9;
+
+            --primary-color: #087ea4;
+            --primary-hover: #2563eb;
+            --primary-dim: rgba(37,99,235,.10);
+
+            --accent-color: #c58a18;
+            --accent-dim: rgba(197,138,24,.10);
+
+            --success: #16a34a;
+            --success-dim: rgba(22,163,74,.10);
+
+            --error: #dc2626;
+            --error-dim: rgba(220,38,38,.10);
+
+            --warning: #d97706;
+            --warning-dim: rgba(217,119,6,.10);
+
+            --text-color: #172033;
+            --text-muted: #64748b;
+            --data-text-color: #172033;
+            --data-text-muted: #64748b;
+
+            --border-color: #d7dee8;
+            --border-style: solid;
+            --border-width: 1px;
+
+            --modal-border-color: #d7dee8;
+            --modal-border-style: solid;
+
+            --input-bg: #f8fafc;
+            --input-border: #d7dee8;
+            --input-border-style: solid;
+
+            --header-bg: color-mix(in srgb, var(--surface-color) 94%, transparent);
+
+            --glass-bg: color-mix(in srgb, var(--surface-color) 95%, transparent);
+
+            --shadow-glow: 0 12px 35px rgba(15,23,42,.08);
+
+            --radius-sm: 13px;
+            --radius-md: 20px;
+            --radius-lg: 20px;
+
+            --bottom-height: 76px;
+
+            --font-sans: "Cairo", "Noto Sans Arabic", Arial, sans-serif;
+            --shadow: 0 12px 35px rgba(15,23,42,.08);
+            --shadow-lg: 0 25px 70px rgba(15,23,42,.16);
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #06111f;
+            --surface-color: #0c1b2d;
+            --surface-elevated: #102238;
+            --surface-2: #102238;
+            --surface-3: #132941;
+
+            --primary-color: #55c7f5;
+            --primary-hover: #6ea8ff;
+            --primary-dim: rgba(85,199,245,.12);
+
+            --accent-color: #f1cf7a;
+            --accent-dim: rgba(241,207,122,.12);
+
+            --success: #42e39a;
+            --success-dim: rgba(66,227,154,.14);
+
+            --error: #ff7184;
+            --error-dim: rgba(255,113,132,.14);
+
+            --warning: #ffd166;
+            --warning-dim: rgba(255,209,102,.14);
+
+            --text-color: #eef7ff;
+            --text-muted: #aabbd0;
+            --data-text-color: #f8fafc;
+            --data-text-muted: #b7c2d0;
+
+            --border-color: #49a9ee;
+            --border-style: solid;
+            --border-width: 1px;
+
+            --modal-border-color: #49a9ee;
+            --modal-border-style: solid;
+
+            --input-bg: #0e192b;
+            --input-border: #49a9ee;
+            --input-border-style: solid;
+
+            --header-bg: color-mix(in srgb, var(--surface-color) 94%, transparent);
+
+            --glass-bg: color-mix(in srgb, var(--surface-color) 95%, transparent);
+
+            --shadow-glow: 0 14px 40px rgba(0,0,0,.38);
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html {
+            min-height: 100%;
+            background: var(--bg-color);
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: var(--font-sans);
+
+            background:
+                radial-gradient(circle at 8% 0%, rgba(37,99,235,.09), transparent 32%),
+                var(--bg-color);
+            color: var(--text-color);
+
+            transition:
+                background .25s ease,
+                color .25s ease;
+
+            padding-bottom:
+                calc(var(--bottom-height) + env(safe-area-inset-bottom));
+        }
+
+        [data-theme="dark"] body {
+            background:
+                radial-gradient(circle at 8% 0%, rgba(85,199,245,.06), transparent 32%),
+                var(--bg-color);
+        }
+
+        button,
+        input,
+        select,
+        textarea {
+            font: inherit;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        /* ============================================================
+           GLOBAL CENTERING
+           ============================================================ */
+
+        .center-data,
+        .stat-card,
+        .stat-value,
+        .stat-label,
+        .delivery-card,
+        .delivery-card *,
+        .form-group,
+        .form-label,
+        .form-input,
+        .filter-chip,
+        .empty-state,
+        .error-state,
+        .loading-state,
+        .modal-title,
+        .details-table th,
+        .details-table td {
+            text-align: center;
+        }
+
+        /* ============================================================
+           TOP BAR
+           ============================================================ */
+
+        .top-bar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+
+            background: var(--header-bg);
+
+            border-bottom:
+                var(--border-width)
+                var(--border-style)
+                var(--border-color);
+
+            box-shadow: var(--shadow-glow);
+
+            backdrop-filter: blur(20px);
+        }
+
+        .header-top {
+            min-height: 72px;
+
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            gap: 12px;
+            padding: 12px 16px;
+        }
+
+        .top-title {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .top-title h1 {
+            margin: 0;
+
+            font-size: clamp(18px,4vw,25px);
+            font-weight: 900;
+
+            color: var(--text-color);
+        }
+
+        .top-title p {
+            margin: 5px 0 0;
+
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .icon-btn {
+            width: 44px;
+            height: 44px;
+
+            border-radius: var(--radius-sm);
+
+            border:
+                var(--border-width)
+                var(--border-style)
+                var(--border-color);
+
+            background: var(--surface-elevated);
+            color: var(--primary-color);
+
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+
+            transition:
+                transform .18s ease,
+                background .18s ease;
+        }
+
+        .icon-btn:hover {
+            transform: translateY(-2px);
+            background: var(--primary-dim);
+        }
+
+        .icon-btn:active {
+            transform: scale(.95);
+        }
+
+        /* ============================================================
+           SEARCH
+           ============================================================ */
+
+        .search-section {
+            padding: 0 16px 12px;
+        }
+
+        .search-box {
+            position: relative;
+        }
+
+        .search-box i {
+            position: absolute;
+
+            top: 50%;
+            right: 16px;
+
+            transform: translateY(-50%);
+
+            color: var(--primary-color);
+
+            pointer-events: none;
+        }
+
+        #searchInput {
+            width: 100%;
+
+            min-height: 48px;
+
+            padding:
+                10px
+                48px
+                10px
+                16px;
+
+            border-radius: 15px;
+
+            border:
+                var(--border-width)
+                var(--border-style)
+                var(--input-border);
+
+            background: var(--input-bg);
+
+            color: var(--data-text-color);
+
+            outline: none;
+
+            text-align: center;
+
+            transition:
+                border-color .2s ease,
+                box-shadow .2s ease;
+        }
+
+        #searchInput:focus {
+            border-color: var(--primary-color);
+
+            box-shadow:
+                0 0 0 3px
+                color-mix(in srgb, var(--primary-color) 14%, transparent);
+        }
+
+        /* ============================================================
+           FILTERS
+           ============================================================ */
+
+        .filters {
+            display: flex;
+
+            gap: 8px;
+
+            padding:
+                0 16px
+                12px;
+
+            overflow-x: auto;
+
+            scrollbar-width: none;
+        }
+
+        .filters::-webkit-scrollbar {
+            display: none;
+        }
+
+        .filter-chip {
+            flex: 0 0 auto;
+
+            min-width: 90px;
+            min-height: 40px;
+
+            padding: 7px 14px;
+
+            border-radius: 999px;
+
+            border:
+                var(--border-width)
+                var(--border-style)
+                var(--border-color);
+
+            background: var(--surface-elevated);
+
+            color: var(--text-color);
+
+            font-weight: 800;
+
+            white-space: nowrap;
+        }
+
+        .filter-chip.active {
+            background: linear-gradient(135deg, var(--primary-hover), var(--primary-color));
+            color: #fff;
+
+            border-color: transparent;
+        }
+
+        [data-theme="dark"] .filter-chip {
+            color: #dfe9f3;
+        }
+
+        [data-theme="dark"] .filter-chip.active {
+            color: #06111f;
+        }
+
+        /* ============================================================
+           PAGE
+           ============================================================ */
+
+        .page-container {
+            width: min(1200px,100%);
+            margin: 0 auto;
+
+            padding: 16px;
+        }
+
+        /* ============================================================
+           STATS
+           ============================================================ */
+
+        .stats-grid {
+            display: grid;
+
+            grid-template-columns:
+                repeat(4,minmax(0,1fr));
+
+            gap: 12px;
+
+            margin-bottom: 16px;
+        }
+
+        .stat-card {
+            min-height: 128px;
+
+            padding: 15px;
+
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+
+            gap: 6px;
+
+            border-radius: var(--radius-md);
+
+            background: linear-gradient(145deg, var(--surface-color), var(--surface-2));
+
+            border:
+                var(--border-width)
+                var(--border-style)
+                var(--border-color);
+
+            box-shadow: var(--shadow);
+
+            transition: transform .2s ease, box-shadow .2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .stat-icon {
+            width: 42px;
+            height: 42px;
+
+            border-radius: 12px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            background: var(--primary-dim);
+            color: var(--primary-color);
+
+            border:
+                1px solid
+                var(--primary-color);
+        }
+
+        .stat-value {
+            font-size: 22px;
+            font-weight: 950;
+            color: var(--data-text-color);
+        }
+
+        .stat-label {
+            color: var(--data-text-muted);
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        /* ============================================================
+           CONNECTION BAR
+           ============================================================ */
+
+        .connection-bar {
+            display: none;
+
+            margin-bottom: 14px;
+
+            padding: 11px 14px;
+
+            border-radius: 13px;
+
+            text-align: center;
+
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .connection-bar.show {
+            display: block;
+        }
+
+        .connection-bar.offline {
+            background: var(--error-dim);
+            color: var(--error);
+
+            border:
+                1px solid
+                var(--error);
+        }
+
+        .connection-bar.online {
+            background: var(--success-dim);
+            color: var(--success);
+
+            border:
+                1px solid
+                var(--success);
+        }
+
+        /* ============================================================
+           CONTENT STATES
+           ============================================================ */
+
+        .loading-state,
+        .empty-state,
+        .error-state {
+            padding: 40px 20px;
+
+            border-radius: var(--radius-md);
+
+            background: linear-gradient(145deg, var(--surface-color), var(--surface-2));
+
+            border:
+                var(--border-width)
+                var(--border-style)
+                var(--border-color);
+
+            box-shadow: var(--shadow);
+        }
+
+        .loading-state {
+            display: none;
+        }
+
+        .loading-state.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 38px;
+            height: 38px;
+
+            margin: 0 auto 12px;
+
+            border-radius: 50%;
+
+            border:
+                4px solid
+                var(--primary-dim);
+
+            border-top-color:
+                var(--primary-color);
+
+            animation:
+                spin .8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .empty-state i,
+        .error-state i {
+            font-size: 38px;
+            margin-bottom: 12px;
+        }
+
+        .empty-state i {
+            color: var(--text-muted);
+        }
+
+        .error-state i {
+            color: var(--error);
+        }
+
+        /* ============================================================
+           DELIVERY GRID
+           ============================================================ */
+
+        .delivery-grid {
+            display: grid;
+
+            grid-template-columns:
+                repeat(2,minmax(0,1fr));
+
+            gap: 14px;
+        }
+
+        .delivery-card {
+            position: relative;
+
+            padding: 16px;
+
+            border-radius: var(--radius-lg);
+
+            background: linear-gradient(145deg, var(--surface-color), var(--surface-2));
+
+            border:
+                var(--border-width)
+                var(--border-style)
+                var(--border-color);
+
+            box-shadow: var(--shadow);
+
+            overflow: hidden;
+
+            animation:
+                cardIn .38s ease both;
+
+            transition: transform .2s ease, box-shadow .2s ease;
+        }
+
+        @keyframes cardIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .delivery-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .delivery-head {
+            display: flex;
+
+            align-items: center;
+            justify-content: space-between;
+
+            gap: 10px;
+
+            padding-bottom: 12px;
+
+            border-bottom:
+                1px solid
+                var(--border-color);
+        }
+
+        .delivery-title {
+            font-size: 16px;
+            font-weight: 950;
+
+            color: var(--data-text-color);
+        }
+
+        .status-badge {
+            display: inline-flex;
+
+            align-items: center;
+            justify-content: center;
+
+            min-width: 84px;
+            min-height: 30px;
+
+            padding: 5px 10px;
+
+            border-radius: 999px;
+
+            font-size: 11px;
+            font-weight: 900;
+
+            border: 1px solid transparent;
+        }
+
+        .status-completed {
+            background: var(--success-dim);
+            color: var(--success);
+            border-color: var(--success);
+        }
+
+        .status-pending {
+            background: var(--warning-dim);
+            color: var(--warning);
+            border-color: var(--warning);
+        }
+
+        .status-cancelled {
+            background: var(--error-dim);
+            color: var(--error);
+            border-color: var(--error);
+        }
+
+        .delivery-main {
+            display: grid;
+
+            grid-template-columns:
+                repeat(2,minmax(0,1fr));
+
+            gap: 10px;
+
+            padding-top: 14px;
+        }
+
+        .info-item {
+            min-width: 0;
+
+            padding: 10px;
+
+            border-radius: 12px;
+
+            background: var(--surface-2);
+
+            border:
+                1px solid
+                var(--border-color);
+        }
+
+        .info-label {
+            font-size: 10px;
+
+            color: var(--text-muted);
+
+            margin-bottom: 4px;
+
+            font-weight: 800;
+        }
+
+        .info-value {
+            font-size: 13px;
+
+            color: var(--data-text-color);
+
+            font-weight: 900;
+
+            overflow-wrap: anywhere;
+        }
+
+        .delivery-actions {
+            display: grid;
+
+            grid-template-columns:
+                repeat(3,minmax(0,1fr));
+
+            gap: 7px;
+
+            margin-top: 13px;
+        }
+
+        .btn {
+            min-height: 42px;
+
+            border-radius: 11px;
+
+            border:
+                var(--border-width)
+                var(--border-style)
+                var(--border-color);
+
+            background: var(--surface-color);
+
+            color: var(--text-color);
+
+            font-weight: 900;
+
+            padding: 8px 10px;
+
+            transition: transform .15s ease, box-shadow .15s ease;
+        }
+
+        .btn.primary {
+            background: linear-gradient(135deg, var(--primary-hover), var(--primary-color));
+            color: #fff;
+            border: none;
+        }
+
+        .btn.success {
+            background: var(--success);
+            color: #fff;
+            border-color: var(--success);
+        }
+
+        .btn.danger {
+            background: var(--error);
+            color: #fff;
+            border-color: var(--error);
+        }
+
+        .btn:active {
+            transform: scale(.97);
+        }
+
+        /* ============================================================
+           BOTTOM NAV
+           ============================================================ */
+
+        .bottom-nav {
+            position: fixed;
+
+            left: 0;
+            right: 0;
+            bottom: 0;
+
+            z-index: 150;
+
+            min-height:
+                calc(var(--bottom-height) +
+                env(safe-area-inset-bottom));
+
+            padding:
+                8px
+                12px
+                calc(8px + env(safe-area-inset-bottom));
+
+            display: grid;
+
+            grid-template-columns:
+                repeat(2,1fr);
+
+            gap: 10px;
+
+            background: var(--glass-bg);
+
+            border-top:
+                var(--border-width)
+                var(--border-style)
+                var(--border-color);
+
+            backdrop-filter: blur(20px);
+        }
+
+        .bottom-btn {
+            min-height: 54px;
+
+            border-radius: 14px;
+
+            border:
+                var(--border-width)
+                var(--border-style)
+                var(--border-color);
+
+            background: var(--surface-elevated);
+
+            color: var(--text-color);
+
+            display: flex;
+            flex-direction: column;
+
+            align-items: center;
+            justify-content: center;
+
+            gap: 2px;
+
+            font-weight: 900;
+
+            transition: transform .15s ease;
+        }
+
+        .bottom-btn i {
+            color: var(--primary-color);
+            font-size: 17px;
+        }
+
+        .bottom-btn.primary {
+            background: linear-gradient(135deg, var(--primary-hover), var(--primary-color));
+            color: #fff;
+            border: none;
+        }
+
+        .bottom-btn.primary i {
+            color: #fff;
+        }
+
+        .bottom-btn:active {
+            transform: scale(.97);
+        }
+
+        /* ============================================================
+           MODAL
+           ============================================================ */
+
+        .modal-overlay {
+            position: fixed;
+
+            inset: 0;
+
+            z-index: 300;
+
+            display: none;
+
+            align-items: center;
+            justify-content: center;
+
+            padding: 14px;
+
+            background: rgba(0,0,0,.60);
+
+            backdrop-filter: blur(6px);
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            width: min(760px,100%);
+
+            max-height:
+                calc(100vh - 28px);
+
+            overflow: auto;
+
+            border-radius: var(--radius-lg);
+
+            background: linear-gradient(145deg, var(--surface-color), var(--surface-2));
+
+            border:
+                var(--border-width)
+                var(--modal-border-style)
+                var(--modal-border-color);
+
+            box-shadow: var(--shadow-lg);
+
+            animation:
+                modalIn .22s ease;
+        }
+
+        @keyframes modalIn {
+            from {
+                opacity: 0;
+                transform: translateY(15px) scale(.98);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .modal-header {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+
+            display: flex;
+
+            align-items: center;
+            justify-content: space-between;
+
+            gap: 10px;
+
+            padding: 15px;
+
+            background: var(--header-bg);
+
+            border-bottom:
+                1px solid
+                var(--border-color);
+
+            backdrop-filter: blur(20px);
+        }
+
+        .modal-title {
+            margin: 0;
+
+            font-size: 18px;
+            font-weight: 950;
+        }
+
+        .modal-close {
+            width: 40px;
+            height: 40px;
+
+            border-radius: 11px;
+
+            border:
+                var(--border-width)
+                var(--border-style)
+                var(--border-color);
+
+            background: var(--surface-elevated);
+
+            color: var(--error);
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            transition: transform .15s ease;
+        }
+
+        .modal-close:hover {
+            transform: scale(1.05);
+        }
+
+        .modal-body {
+            padding: 16px;
+        }
+
+        .modal-footer {
+            display: grid;
+
+            grid-template-columns:
+                1fr 1fr;
+
+            gap: 10px;
+
+            padding: 12px 16px 16px;
+
+            border-top:
+                1px solid
+                var(--border-color);
+        }
+
+        /* ============================================================
+           FORM
+           ============================================================ */
+
+        .form-grid {
+            display: grid;
+
+            grid-template-columns:
+                repeat(2,minmax(0,1fr));
+
+            gap: 12px;
+        }
+
+        .form-group {
+            min-width: 0;
+        }
+
+        .form-group.full {
+            grid-column: 1 / -1;
+        }
+
+        .form-label {
+            display: block;
+
+            margin-bottom: 6px;
+
+            color: var(--text-color);
+
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .required {
+            color: var(--error);
+        }
+
+        .form-input {
+            width: 100%;
+
+            min-height: 46px;
+
+            padding: 9px 12px;
+
+            border-radius: 12px;
+
+            border:
+                var(--border-width)
+                var(--input-border-style)
+                var(--input-border);
+
+            background: var(--input-bg);
+
+            color: var(--data-text-color);
+
+            outline: none;
+
+            text-align: center;
+
+            appearance: auto;
+
+            transition:
+                border-color .2s ease,
+                box-shadow .2s ease;
+        }
+
+        textarea.form-input {
+            min-height: 95px;
+            resize: vertical;
+        }
+
+        .form-input:focus {
+            border-color: var(--primary-color);
+
+            box-shadow:
+                0 0 0 3px
+                color-mix(in srgb, var(--primary-color) 14%, transparent);
+        }
+
+        .form-input[readonly],
+        .form-input.readonly {
+            opacity: .65;
+            cursor: not-allowed;
+        }
+
+        .form-help {
+            margin-top: 5px;
+
+            font-size: 10px;
+
+            color: var(--text-muted);
+
+            text-align: center;
+        }
+
+        .field-warning {
+            display: none;
+
+            margin-top: 6px;
+
+            padding: 7px;
+
+            border-radius: 9px;
+
+            background: var(--warning-dim);
+
+            border:
+                1px solid
+                var(--warning);
+
+            color: var(--warning);
+
+            font-size: 11px;
+            font-weight: 800;
+
+            text-align: center;
+        }
+
+        .field-warning.show {
+            display: block;
+        }
+
+        /* ============================================================
+           LOOKUP
+           ============================================================ */
+
+        .lookup-wrap {
+            position: relative;
+        }
+
+        .lookup-menu {
+            position: absolute;
+
+            top: calc(100% + 5px);
+
+            left: 0;
+            right: 0;
+
+            z-index: 500;
+
+            max-height: 240px;
+
+            overflow: auto;
+
+            display: none;
+
+            padding: 6px;
+
+            border-radius: 13px;
+
+            background: var(--surface-elevated);
+
+            border:
+                var(--border-width)
+                var(--border-style)
+                var(--border-color);
+
+            box-shadow: var(--shadow-lg);
+        }
+
+        .lookup-menu.show {
+            display: block;
+        }
+
+        .lookup-item {
+            width: 100%;
+
+            padding: 11px 9px;
+
+            border: 0;
+
+            border-bottom:
+                1px solid
+                var(--border-color);
+
+            background: transparent;
+
+            color: var(--data-text-color);
+
+            text-align: center;
+
+            font-weight: 800;
+
+            transition: background .15s ease;
+        }
+
+        .lookup-item:last-child {
+            border-bottom: 0;
+        }
+
+        .lookup-item:hover {
+            background: var(--primary-dim);
+        }
+
+        /* ============================================================
+           FORM NOTICES
+           ============================================================ */
+
+        .form-notices {
+            display: none;
+
+            margin-bottom: 13px;
+
+            padding: 11px;
+
+            border-radius: 12px;
+
+            text-align: center;
+        }
+
+        .form-notices.show {
+            display: block;
+        }
+
+        .form-notices.warning {
+            color: var(--warning);
+            background: var(--warning-dim);
+            border: 1px solid var(--warning);
+        }
+
+        .form-notices.error {
+            color: var(--error);
+            background: var(--error-dim);
+            border: 1px solid var(--error);
+        }
+
+        .form-notices.success {
+            color: var(--success);
+            background: var(--success-dim);
+            border: 1px solid var(--success);
+        }
+
+        .latest-sale-box {
+            display: none;
+
+            grid-column: 1 / -1;
+
+            padding: 13px;
+
+            border-radius: 14px;
+
+            background: var(--primary-dim);
+
+            border:
+                1px solid
+                var(--primary-color);
+
+            color: var(--data-text-color);
+        }
+
+        .latest-sale-box.show {
+            display: block;
+        }
+
+        .latest-sale-title {
+            font-weight: 950;
+            margin-bottom: 8px;
+        }
+
+        .latest-sale-summary {
+            display: grid;
+
+            grid-template-columns:
+                repeat(3,minmax(0,1fr));
+
+            gap: 8px;
+        }
+
+        .latest-sale-summary div {
+            padding: 8px;
+
+            border-radius: 9px;
+
+            background: var(--surface-elevated);
+
+            border:
+                1px solid
+                var(--border-color);
+
+            text-align: center;
+        }
+
+        /* ============================================================
+           DETAILS
+           ============================================================ */
+
+        .details-grid {
+            display: grid;
+
+            grid-template-columns:
+                repeat(2,minmax(0,1fr));
+
+            gap: 10px;
+        }
+
+        .details-item {
+            padding: 11px;
+
+            border-radius: 12px;
+
+            background: var(--surface-2);
+
+            border:
+                1px solid
+                var(--border-color);
+
+            text-align: center;
+        }
+
+        .details-item.full {
+            grid-column: 1 / -1;
+        }
+
+        .details-label {
+            color: var(--text-muted);
+            font-size: 10px;
+            margin-bottom: 5px;
+        }
+
+        .details-value {
+            color: var(--data-text-color);
+            font-size: 13px;
+            font-weight: 900;
+            overflow-wrap: anywhere;
+        }
+
+        /* ============================================================
+           REPORT
+           ============================================================ */
+
+        .report-summary {
+            display: grid;
+
+            grid-template-columns:
+                repeat(3,minmax(0,1fr));
+
+            gap: 10px;
+
+            margin-top: 14px;
+        }
+
+        .report-box {
+            padding: 14px;
+
+            border-radius: 13px;
+
+            background: var(--surface-2);
+
+            border:
+                1px solid
+                var(--border-color);
+
+            text-align: center;
+        }
+
+        .report-box strong {
+            display: block;
+
+            font-size: 20px;
+
+            color: var(--data-text-color);
+        }
+
+        .report-box span {
+            display: block;
+
+            margin-top: 4px;
+
+            color: var(--text-muted);
+
+            font-size: 10px;
+        }
+
+        /* ============================================================
+           TOAST
+           ============================================================ */
+
+        .toast {
+            position: fixed;
+
+            left: 50%;
+            bottom: 92px;
+
+            z-index: 700;
+
+            max-width: min(90vw,500px);
+
+            padding: 12px 17px;
+
+            border-radius: 12px;
+
+            background: #111827;
+            color: #fff;
+
+            transform:
+                translate(-50%,20px);
+
+            opacity: 0;
+
+            pointer-events: none;
+
+            transition:
+                opacity .2s ease,
+                transform .2s ease;
+
+            text-align: center;
+
+            font-weight: 800;
+        }
+
+        .toast.show {
+            opacity: 1;
+
+            transform:
+                translate(-50%,0);
+        }
+
+        /* ============================================================
+           PRINT
+           ============================================================ */
+
+        @media print {
+            .top-bar,
+            .bottom-nav,
+            .header-actions,
+            .delivery-actions,
+            .filters,
+            .search-section {
+                display: none !important;
+            }
+
+            body {
+                padding: 0;
+                background: #fff;
+                color: #000;
+            }
+
+            .delivery-card {
+                break-inside: avoid;
+                box-shadow: none;
+            }
+        }
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+
+        @media (max-width: 900px) {
+            .stats-grid {
+                grid-template-columns:
+                    repeat(2,minmax(0,1fr));
+            }
+
+            .delivery-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 620px) {
+            .header-top {
+                align-items: flex-start;
+            }
+
+            .top-title p {
+                display: none;
+            }
+
+            .stats-grid {
+                grid-template-columns:
+                    repeat(2,minmax(0,1fr));
+            }
+
+            .stat-card {
+                min-height: 112px;
+            }
+
+            .delivery-main {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .form-grid {
+                grid-template-columns:
+                    1fr 1fr;
+            }
+
+            .details-grid {
+                grid-template-columns:
+                    1fr 1fr;
+            }
+
+            .latest-sale-summary {
+                grid-template-columns:
+                    1fr 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 430px) {
+            .page-container {
+                padding: 11px;
+            }
+
+            .search-section,
+            .filters {
+                padding-left: 11px;
+                padding-right: 11px;
+            }
+
+            .header-top {
+                padding-left: 11px;
+                padding-right: 11px;
+            }
+
+            .top-title h1 {
+                font-size: 17px;
+            }
+
+            .icon-btn {
+                width: 40px;
+                height: 40px;
+            }
+
+            .stat-card {
+                min-height: 105px;
+                padding: 10px 6px;
+            }
+
+            .stat-value {
+                font-size: 19px;
+            }
+
+            .delivery-card {
+                padding: 12px;
+            }
+
+            .form-grid {
+                grid-template-columns:
+                    1fr 1fr;
+            }
+
+            .modal-overlay {
+                padding: 8px;
+            }
+
+            .modal-body {
+                padding: 12px;
+            }
+
+            .modal-footer {
+                padding: 10px 12px 12px;
+            }
+        }
+
+        /* ============================================================
+           DARK MODE ENHANCEMENTS
+           ============================================================ */
+
+        [data-theme="dark"] .stat-card,
+        [data-theme="dark"] .delivery-card,
+        [data-theme="dark"] .loading-state,
+        [data-theme="dark"] .empty-state,
+        [data-theme="dark"] .error-state,
+        [data-theme="dark"] .modal,
+        [data-theme="dark"] .info-item,
+        [data-theme="dark"] .details-item,
+        [data-theme="dark"] .report-box,
+        [data-theme="dark"] .latest-sale-summary div {
+            border-color: #63c7ff !important;
+            box-shadow: 0 0 0 1px rgba(99,199,255,.16), 0 0 18px rgba(99,199,255,.07);
+        }
+
+        [data-theme="dark"] .delivery-head {
+            border-bottom-color: rgba(99,199,255,.35);
+        }
+
+        [data-theme="dark"] .modal-header,
+        [data-theme="dark"] .modal-footer {
+            border-color: rgba(99,199,255,.35);
+        }
+    
+.vehicle-preview{margin-top:10px;border:1px solid var(--border-color);border-radius:12px;padding:8px;background:var(--card-bg);}
+.vehicle-preview img{display:block;width:100%;max-height:180px;object-fit:contain;border-radius:8px;}
+.vehicle-preview.empty{display:none;}
+.report-filters{display:grid;gap:12px;margin-top:12px;}
+.report-filter-hidden{display:none!important;}
+.report-table-wrap{overflow-x:auto;border:1px solid var(--border-color);border-radius:12px;}
+.report-table{width:100%;min-width:1050px;border-collapse:collapse;}
+.report-table th,.report-table td{padding:8px 10px;border-bottom:1px solid var(--border-color);text-align:right;white-space:nowrap;}
+.report-table th{position:sticky;top:0;background:var(--card-bg);z-index:1;}
+</style>
+</head>
+
+<body>
+
+<header class="top-bar">
+
+    <div class="header-top">
+
+        <div class="top-title">
+            <h1>
+                <i class="fas fa-truck-loading"></i>
+                إدارة التوصيلات
+            </h1>
+
+            <p id="subtitle">
+                إدارة ومتابعة عمليات التوصيل
+            </p>
+        </div>
+
+        <div class="header-actions">
+
+            <!-- في الوضع الفاتح تظهر 🌙 فقط -->
+            <!-- في الوضع المظلم تظهر 🌞 فقط -->
+
+            <button
+                type="button"
+                class="icon-btn"
+                id="themeToggle"
+                aria-label="تبديل الوضع">
+
+                <span id="themeIcon">🌙</span>
+
+            </button>
+
+            <button
+                type="button"
+                class="icon-btn"
+                onclick="goHome()"
+                aria-label="الرئيسية">
+
+                🏠
+
+            </button>
+
+        </div>
+
+    </div>
+
+    <div class="search-section">
+
+        <div class="search-box">
+
+            <i class="fas fa-search"></i>
+
+            <input
+                id="searchInput"
+                type="search"
+                inputmode="search"
+                autocomplete="off"
+                placeholder="بحث فوري في جميع بيانات التوصيلات...">
+
+        </div>
+
+    </div>
+
+    <div class="filters" id="filterChips">
+
+        <button
+            class="filter-chip active"
+            data-filter="all">
+            الكل
+        </button>
+
+        <button
+            class="filter-chip"
+            data-filter="delivered">
+            توصيلات تمت
+        </button>
+
+        <button
+            class="filter-chip"
+            data-filter="pending">
+            توصيلات مؤجلة
+        </button>
+
+        <button
+            class="filter-chip"
+            data-filter="cancelled">
+            توصيلات ملغاة
+        </button>
+
+    </div>
+
+</header>
+
+<main class="page-container">
+
+    <div
+        id="connectionBar"
+        class="connection-bar">
+    </div>
+
+    <!-- الإحصائيات -->
+
+    <section
+        class="stats-grid"
+        id="statsGrid">
+
+        <article class="stat-card">
+
+            <div class="stat-icon">
+                <i class="fas fa-truck"></i>
+            </div>
+
+            <div
+                class="stat-value"
+                id="statCount">
+                —
+            </div>
+
+            <div class="stat-label">
+                إجمالي التوصيلات
+            </div>
+
+        </article>
+
+        <article class="stat-card">
+
+            <div class="stat-icon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+
+            <div
+                class="stat-value"
+                id="statCompleted">
+                —
+            </div>
+
+            <div class="stat-label">
+                التوصيلات المكتملة
+            </div>
+
+        </article>
+
+        <article class="stat-card">
+
+            <div class="stat-icon">
+                <i class="fas fa-clock"></i>
+            </div>
+
+            <div
+                class="stat-value"
+                id="statPending">
+                —
+            </div>
+
+            <div class="stat-label">
+                التوصيلات المؤجلة
+            </div>
+
+        </article>
+
+        <article class="stat-card">
+
+            <div class="stat-icon">
+                <i class="fas fa-coins"></i>
+            </div>
+
+            <div
+                class="stat-value"
+                id="statTotal">
+                —
+            </div>
+
+            <div class="stat-label">
+                إجمالي المبالغ
+            </div>
+
+        </article>
+
+    </section>
+
+    <!-- Loading -->
+
+    <section
+        id="loadingState"
+        class="loading-state">
+
+        <div class="spinner"></div>
+
+        <strong>
+            جارٍ تحميل بيانات التوصيلات...
+        </strong>
+
+    </section>
+
+    <!-- Empty -->
+
+    <section
+        id="emptyState"
+        class="empty-state"
+        style="display:none">
+
+        <i class="fas fa-truck-loading"></i>
+
+        <h3>
+            لا توجد توصيلات
+        </h3>
+
+        <p>
+            لا توجد بيانات فعلية مطابقة للبحث أو الفلتر الحالي.
+        </p>
+
+    </section>
+
+    <!-- Error -->
+
+    <section
+        id="errorState"
+        class="error-state"
+        style="display:none">
+
+        <i class="fas fa-triangle-exclamation"></i>
+
+        <h3>
+            تعذر تحميل البيانات
+        </h3>
+
+        <p id="errorText">
+            —
+        </p>
+
+        <button
+            class="btn primary"
+            type="button"
+            onclick="loadDeliveries()">
+
+            <i class="fas fa-rotate-right"></i>
+            إعادة المحاولة
+
+        </button>
+
+    </section>
+
+    <!-- Cards -->
+
+    <section
+        id="deliveryGrid"
+        class="delivery-grid">
+    </section>
+
+</main>
+
+<!-- ================================================================
+     BOTTOM NAV
+     ================================================================ -->
+
+<nav
+    class="bottom-nav"
+    aria-label="عمليات التوصيلات">
+
+    <button
+        type="button"
+        class="bottom-btn primary"
+        onclick="openCreateModal()">
+
+        <i class="fas fa-plus"></i>
+
+        <span>
+            طلب جديد
+        </span>
+
+    </button>
+
+    <button
+        type="button"
+        class="bottom-btn"
+        onclick="openReportModal()">
+
+        📊
+
+        <span>
+            تقارير
+        </span>
+
+    </button>
+
+</nav>
+
+<!-- ================================================================
+     CREATE / EDIT MODAL
+     ================================================================ -->
+
+<div
+    class="modal-overlay"
+    id="formModal"
+    onclick="overlayClose(event,'formModal')">
+
+    <div
+        class="modal"
+        onclick="event.stopPropagation()">
+
+        <div class="modal-header">
+
+            <h2
+                class="modal-title"
+                id="formTitle">
+                إضافة توصيل جديد
+            </h2>
+
+            <button
+                type="button"
+                class="modal-close"
+                onclick="closeModal('formModal')">
+
+                <i class="fas fa-times"></i>
+
+            </button>
+
+        </div>
+
+        <div class="modal-body">
+
+            <div
+                id="formNotices"
+                class="form-notices">
+            </div>
+
+            <form
+                id="deliveryForm"
+                class="form-grid"
+                novalidate>
+
+                <!-- ID -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        المعرف
+                    </label>
+
+                    <input
+                        id="f_id" style="display:none"
+                        name="id"
+                        class="form-input readonly"
+                        type="text"
+                        readonly
+                        tabindex="-1"
+                        placeholder="تلقائي">
+
+                </div>
+
+                <!-- Sale ID -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        معرف الطلب
+                    </label>
+
+                    <input type="hidden" id="f_sale_type" name="sale_type" value="fuel">
+                    <input
+                        id="f_sale_id"
+                        name="sale_id"
+                        class="form-input"
+                        type="number"
+                        inputmode="numeric"
+                        min="1"
+                        style="display:none">
+
+                    <div class="form-help" id="saleContextHelp" style="display:none;">
+                        عند اختيار «عميل غير مسجل» أدخل معرف البيع الأصلي؛ سيتم التحقق منه مباشرة من SQLite ولن يتم إنشاء عميل وهمي.
+                    </div>
+
+                    <div
+                        class="field-warning"
+                        id="w_sale_id">
+                    </div>
+
+                </div>
+
+                <!-- CUSTOMER -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        العميل
+                    </label>
+
+                    <div class="lookup-wrap">
+
+                        <input
+                            id="f_party_display"
+                            class="form-input"
+                            type="text"
+                            inputmode="text"
+                            autocomplete="off"
+                            placeholder="اضغط لاختيار العميل">
+
+                        <input
+                            id="f_party_id"
+                            name="party_id"
+                            type="hidden">
+
+                        <div
+                            id="partyMenu"
+                            class="lookup-menu">
+                        </div>
+
+                    </div>
+
+                    <div
+                        class="form-help">
+                        يتم جلب آخر عملية شراء فعلية للعميل بعد اختياره.
+                    </div>
+
+                </div>
+
+                <!-- Vehicle -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        المركبة
+                    </label>
+
+                    <div class="lookup-wrap">
+
+                        <input
+                            id="f_vehicle_display"
+                            class="form-input"
+                            type="text"
+                            inputmode="text"
+                            autocomplete="off"
+                            placeholder="اختر المركبة">
+
+                        <input
+                            id="f_vehicle_id"
+                            name="vehicle_id"
+                            type="hidden">
+
+                        <div
+                            id="vehicleMenu"
+                            class="lookup-menu">
+                        </div>
+
+                    </div>
+
+                    <div id="vehiclePreview" class="vehicle-preview empty">
+                        <img id="vehiclePreviewImg" alt="صورة المركبة" loading="lazy">
+                    </div>
+
+                </div>
+
+                <!-- Driver -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        السائق
+                    </label>
+
+                    <input
+                        id="f_driver_display"
+                        class="form-input"
+                        type="text"
+                        readonly
+                        placeholder="يظهر تلقائياً">
+
+                    <input
+                        id="f_driver_id"
+                        name="driver_id"
+                        type="hidden">
+
+                </div>
+
+                <!-- Shift -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        الوردية
+                    </label>
+
+                    <select
+                        id="f_shift_id"
+                        name="shift_id"
+                        class="form-input">
+
+                        <option value="">
+                            اختر الوردية
+                        </option>
+
+                    </select>
+
+                    <div
+                        class="field-warning"
+                        id="w_shift_id">
+                    </div>
+
+                </div>
+
+                <!-- Quantity -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        الكمية
+                    </label>
+
+                    <input
+                        id="f_quantity"
+                        name="quantity"
+                        class="form-input"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.001"
+                        min="0" readonly>
+
+                </div>
+
+                <!-- Fuel -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        نوع الوقود
+                    </label>
+
+                    <input
+                        id="f_fuel_type"
+                        name="fuel_type"
+                        class="form-input"
+                        type="text"
+                        inputmode="text"
+                        placeholder="يُجلب من آخر عملية شراء" readonly>
+
+                </div>
+
+                <!-- Price -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        السعر / لتر
+                    </label>
+
+                    <input
+                        id="f_price_per_liter"
+                        name="price_per_liter"
+                        class="form-input"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.001"
+                        min="0" readonly>
+
+                </div>
+
+                <!-- Total -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        الإجمالي
+                    </label>
+
+                    <input
+                        id="f_total_amount"
+                        name="total_amount"
+                        class="form-input"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        min="0" readonly>
+
+                    <div
+                        class="form-help">
+                        القيمة مأخوذة من البيع الأصلي ولا تُنشئ بيعاً جديداً.
+                    </div>
+
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">رسوم خدمة التوصيل</label>
+                    <input id="f_delivery_service_fee" name="delivery_service_fee" class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="0">
+                    <div class="form-help">تُرحّل كرسوم خدمة على البيع الأصلي فقط للبيوع الآجلة.</div>
+                </div>
+
+                <!-- Status -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        الحالة <span class="required">*</span>
+                    </label>
+
+                    <select
+                        id="f_status"
+                        name="status"
+                        class="form-input">
+
+                        <option value="delivered">
+                            تم التسليم
+                        </option>
+
+                        <option value="pending">
+                            مؤجلة
+                        </option>
+
+                        <option value="out_for_delivery">
+                            خرجت للتوصيل
+                        </option>
+
+                        <option value="failed">
+                            فشل التوصيل
+                        </option>
+
+                        <option value="cancelled">
+                            ملغاة
+                        </option>
+
+                    </select>
+
+                </div>
+
+                <!-- Delivery date -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        تاريخ التوصيل
+                    </label>
+
+                    <input
+                        id="f_delivery_date"
+                        name="delivery_date"
+                        class="form-input"
+                        type="datetime-local">
+
+                </div>
+
+                <!-- Location -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        الموقع
+                    </label>
+
+                    <input
+                        id="f_location"
+                        name="location"
+                        class="form-input"
+                        type="text"
+                        inputmode="text"
+                        placeholder="يُجلب من آخر عملية شراء ويمكن تعديله">
+
+                    <div
+                        class="field-warning"
+                        id="w_location">
+                    </div>
+
+                </div>
+
+                <!-- Created at -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        تاريخ الإنشاء
+                    </label>
+
+                    <input
+                        id="f_created_at"
+                        name="created_at"
+                        class="form-input readonly"
+                        type="datetime-local"
+                        readonly>
+
+                </div>
+
+                <!-- Latest Sale -->
+
+                <div
+                    id="latestSaleBox"
+                    class="latest-sale-box">
+
+                    <div class="latest-sale-title">
+                        <i class="fas fa-clock-rotate-left"></i>
+                        آخر عملية شراء للعميل
+                    </div>
+
+                    <div
+                        id="latestSaleSummary"
+                        class="latest-sale-summary">
+                    </div>
+
+                </div>
+
+                <!-- Notes -->
+
+                <div class="form-group full">
+
+                    <label class="form-label">
+                        ملاحظات
+                    </label>
+
+                    <textarea
+                        id="f_notes"
+                        name="notes"
+                        class="form-input"
+                        placeholder="أدخل الملاحظات إن وجدت"></textarea>
+
+                </div>
+
+            </form>
+
+        </div>
+
+        <div class="modal-footer">
+
+            <button
+                type="button"
+                class="btn primary"
+                id="saveBtn"
+                onclick="saveDelivery()">
+
+                <i class="fas fa-save"></i>
+                حفظ فعلي
+
+            </button>
+
+            <button
+                type="button"
+                class="btn"
+                onclick="closeModal('formModal')">
+
+                إلغاء
+
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- ================================================================
+     DETAILS MODAL
+     ================================================================ -->
+
+<div
+    class="modal-overlay"
+    id="detailsModal"
+    onclick="overlayClose(event,'detailsModal')">
+
+    <div
+        class="modal"
+        onclick="event.stopPropagation()">
+
+        <div class="modal-header">
+
+            <h2 class="modal-title">
+                تفاصيل التوصيل
+            </h2>
+
+            <button
+                type="button"
+                class="modal-close"
+                onclick="closeModal('detailsModal')">
+
+                <i class="fas fa-times"></i>
+
+            </button>
+
+        </div>
+
+        <div
+            id="detailsBody"
+            class="modal-body">
+        </div>
+
+    </div>
+
+</div>
+
+<!-- ================================================================
+     REPORT MODAL
+     ================================================================ -->
+
+<div
+    class="modal-overlay"
+    id="reportModal"
+    onclick="overlayClose(event,'reportModal')">
+
+    <div
+        class="modal"
+        onclick="event.stopPropagation()">
+
+        <div class="modal-header">
+
+            <h2 class="modal-title">
+                تقرير إدارة التوصيلات
+            </h2>
+
+            <button
+                type="button"
+                class="modal-close"
+                onclick="closeModal('reportModal')">
+
+                <i class="fas fa-times"></i>
+
+            </button>
+
+        </div>
+
+        <div class="modal-body">
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">نوع التقرير</label>
+                    <select id="reportType" class="form-input">
+                        <option value="detailed">تقرير تفصيلي</option>
+                        <option value="customer">توصيلات العميل</option>
+                        <option value="site">توصيلات الموقع</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">من تاريخ</label>
+                    <input id="reportFrom" class="form-input" type="date">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">إلى تاريخ</label>
+                    <input id="reportTo" class="form-input" type="date">
+                </div>
+            </div>
+
+            <label class="form-help" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+                <input id="reportDetailed" type="checkbox">
+                تقرير تفصيلي
+            </label>
+
+            <div id="reportCustomerFilter" class="form-group report-filters report-filter-hidden">
+                <label class="form-label">العميل</label>
+                <select id="reportCustomer" class="form-input"><option value="">اختر العميل</option></select>
+            </div>
+
+            <div id="reportSiteFilter" class="form-group report-filters report-filter-hidden">
+                <label class="form-label">موقع التوصيل</label>
+                <select id="reportSite" class="form-input"><option value="">اختر الموقع</option></select>
+            </div>
+
+            <div
+                class="action-row"
+                style="
+                    display:grid;
+                    grid-template-columns:repeat(3,1fr);
+                    gap:8px;
+                    margin-top:12px;
+                ">
+
+                <button
+                    type="button"
+                    class="btn primary"
+                    onclick="generateReport()">
+
+                    <i class="fas fa-chart-column"></i>
+                    توليد
+
+                </button>
+
+                <button
+                    type="button"
+                    class="btn"
+                    onclick="exportCSV()">
+
+                    <i class="fas fa-file-csv"></i>
+                    CSV
+
+                </button>
+
+                <button
+                    type="button"
+                    class="btn"
+                    onclick="printDeliveriesReport()">
+
+                    <i class="fas fa-print"></i>
+                    طباعة
+
+                </button>
+
+            </div>
+
+            <div
+                id="reportResults"
+                style="margin-top:14px">
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Toast -->
+
+<div
+    id="toast"
+    class="toast">
+</div>
+
+<script>
+(() => {
+
+    'use strict';
+
+    /* ================================================================
+       STATE
+       ================================================================ */
+
+    const bridge = window.AndroidInterface;
+
+    const state = {
+
+        rows: [],
+        filtered: [],
+
+        customers: [],
+        vehicles: [],
+        shifts: [],
+        reportOptions: { customers: [], locations: [] },
+
+        editingId: null,
+        createIdempotencyKey: null,
+
+        filter: 'all',
+
+        loading: false,
+
+        online: true,
+
+        loadedAt: null,
+        latestSaleRequestId: 0,
+        saleKind: 'fuel',
+        saleItems: []
+    };
+
+    const $ = id =>
+        document.getElementById(id);
+
+    /* ================================================================
+       UTILITIES
+       ================================================================ */
+
+    function esc(value) {
+
+        return String(
+            value == null || value === ''
+                ? '—'
+                : value
+        ).replace(
+            /[&<>"']/g,
+            c => ({
+                '&':'&amp;',
+                '<':'&lt;',
+                '>':'&gt;',
+                '"':'&quot;',
+                "'":'&#39;'
+            }[c])
+        );
+    }
+
+    function number(value) {
+
+        const n = Number(value);
+
+        return Number.isFinite(n)
+            ? n
+            : 0;
+    }
+
+    function money(value) {
+
+        if (
+            value === null ||
+            value === undefined ||
+            value === ''
+        ) {
+            return '—';
+        }
+
+        return number(value).toLocaleString(
+            'ar-YE',
+            {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }
+        );
+    }
+
+    function dateTime(value) {
+
+        if (!value) return '—';
+
+        const d = new Date(value);
+
+        if (Number.isNaN(d.getTime())) {
+            return String(value);
+        }
+
+        return d.toLocaleString(
+            'ar-YE',
+            {
+                dateStyle: 'medium',
+                timeStyle: 'short'
+            }
+        );
+    }
+
+    function today() {
+
+        return new Date()
+            .toISOString()
+            .slice(0,10);
+    }
+
+    function nowLocalInput() {
+
+        const d = new Date();
+
+        const pad = n =>
+            String(n).padStart(2,'0');
+
+        return (
+            d.getFullYear() +
+            '-' +
+            pad(d.getMonth()+1) +
+            '-' +
+            pad(d.getDate()) +
+            'T' +
+            pad(d.getHours()) +
+            ':' +
+            pad(d.getMinutes())
+        );
+    }
+
+    function parseResponse(raw) {
+
+        if (raw == null) {
+            throw new Error(
+                'لم يرجع Android Bridge نتيجة.'
+            );
+        }
+
+        const value =
+            typeof raw === 'string'
+                ? JSON.parse(raw)
+                : raw;
+
+        if (
+            value &&
+            value.success === false
+        ) {
+            throw new Error(
+                value.error ||
+                value.message ||
+                'فشلت العملية.'
+            );
+        }
+
+        return value;
+    }
+
+    function dataOf(value) {
+
+        if (
+            value &&
+            Object.prototype.hasOwnProperty.call(
+                value,
+                'data'
+            )
+        ) {
+            return value.data;
+        }
+
+        return value;
+    }
+
+    function invoke(
+        method,
+        args = []
+    ) {
+
+        if (
+            !bridge ||
+            typeof bridge[method] !== 'function'
+        ) {
+            return Promise.reject(
+                new Error(
+                    'العقد ' +
+                    method +
+                    ' غير متاح في Android Bridge.'
+                )
+            );
+        }
+
+        try {
+
+            return Promise.resolve(
+                parseResponse(
+                    bridge[method](...args)
+                )
+            );
+
+        } catch (error) {
+
+            return Promise.reject(error);
+        }
+    }
+
+    function toast(
+        message,
+        bad = false
+    ) {
+
+        const node = $('toast');
+
+        node.textContent = message;
+
+        node.style.background =
+            bad
+                ? 'var(--error)'
+                : 'var(--primary-color)';
+
+        node.classList.add('show');
+
+        clearTimeout(node._timer);
+
+        node._timer =
+            setTimeout(
+                () =>
+                    node.classList.remove('show'),
+                3500
+            );
+    }
+
+    /* ================================================================
+       THEME
+       ================================================================ */
+
+    function applyTheme(theme) {
+
+        document.documentElement
+            .setAttribute(
+                'data-theme',
+                theme
+            );
+
+        /*
+         * المطلوب:
+         * Light = 🌙
+         * Dark  = 🌞
+         */
+
+        $('themeIcon').textContent =
+            theme === 'dark'
+                ? '🌞'
+                : '🌙';
+
+        localStorage.setItem(
+            'deliveries_theme',
+            theme
+        );
+    }
+
+    function initTheme() {
+
+        const saved =
+            localStorage.getItem(
+                'deliveries_theme'
+            );
+
+        if (saved === 'dark' ||
+            saved === 'light') {
+
+            applyTheme(saved);
+            return;
+        }
+
+        const prefersDark =
+            window.matchMedia &&
+            window.matchMedia(
+                '(prefers-color-scheme: dark)'
+            ).matches;
+
+        applyTheme(
+            prefersDark
+                ? 'dark'
+                : 'light'
+        );
+    }
+
+    $('themeToggle').addEventListener(
+        'click',
+        () => {
+
+            const current =
+                document.documentElement
+                    .getAttribute('data-theme');
+
+            applyTheme(
+                current === 'dark'
+                    ? 'light'
+                    : 'dark'
+            );
+
+        }
+    );
+
+    /* ================================================================
+       CONNECTION
+       ================================================================ */
+
+    function updateConnection(
+        online,
+        message = ''
+    ) {
+
+        state.online = online;
+
+        const bar =
+            $('connectionBar');
+
+        if (!online) {
+
+            bar.className =
+                'connection-bar show offline';
+
+            bar.innerHTML =
+                '<i class="fas fa-wifi"></i> ' +
+                esc(
+                    message ||
+                    'انقطع الاتصال بمصدر البيانات.'
+                );
+
+        } else {
+
+            bar.className =
+                'connection-bar show online';
+
+            bar.innerHTML =
+                '<i class="fas fa-wifi"></i> ' +
+                'تم استعادة الاتصال بمصدر البيانات.';
+
+            setTimeout(
+                () =>
+                    bar.classList.remove('show'),
+                2500
+            );
+        }
+    }
+
+    window.addEventListener(
+        'offline',
+        () =>
+            updateConnection(
+                false,
+                'انقطع اتصال الجهاز.'
+            )
+    );
+
+    window.addEventListener(
+        'online',
+        () => {
+
+            updateConnection(
+                true,
+                'تمت استعادة الاتصال.'
+            );
+
+            loadDeliveries();
+        }
+    );
+
+    /* ================================================================
+       LOADING
+       ================================================================ */
+
+    function setLoading(value) {
+
+        state.loading = Boolean(value);
+
+        $('loadingState')
+            .classList.toggle(
+                'show',
+                state.loading
+            );
+    }
+
+    function showError(
+        message
+    ) {
+
+        $('errorState').style.display =
+            'block';
+
+        $('errorText').textContent =
+            message;
+
+        $('emptyState').style.display =
+            'none';
+
+        $('deliveryGrid').innerHTML =
+            '';
+    }
+
+    function clearError() {
+
+        $('errorState').style.display =
+            'none';
+    }
+
+    /* ================================================================
+       ROW NORMALIZATION
+       ================================================================ */
+
+    function rowsFrom(value) {
+
+        const raw =
+            dataOf(value);
+
+        if (Array.isArray(raw)) {
+            return raw;
+        }
+
+        if (
+            raw &&
+            Array.isArray(raw.rows)
+        ) {
+            return raw.rows;
+        }
+
+        if (
+            raw &&
+            Array.isArray(raw.data)
+        ) {
+            return raw.data;
+        }
+
+        if (
+            raw &&
+            raw.rows &&
+            typeof raw.rows === 'object'
+        ) {
+            return Object.values(
+                raw.rows
+            );
+        }
+
+        return [];
+    }
+
+    function normalizeRow(row) {
+
+        return {
+            ...row,
+
+            id:
+                row.id ??
+                row.delivery_id,
+
+            sale_id:
+                row.sale_id,
+
+            party_id:
+                row.party_id ??
+                row.customer_party_id,
+
+            party_name:
+                row.party_name ??
+                row.customer_name ??
+                row.customer_name_ar ??
+                row.commercial_name,
+
+            vehicle_id:
+                row.vehicle_id,
+
+            vehicle_name:
+                row.vehicle_name ??
+                row.vehicle_name_ar ??
+                row.plate_number ??
+                row.plate_number_ar,
+
+            driver_id:
+                row.driver_id,
+
+            driver_name:
+                row.driver_name ??
+                row.driver_name_ar,
+
+            shift_id:
+                row.shift_id,
+
+            shift_code:
+                row.shift_code,
+
+            quantity:
+                row.quantity,
+
+            fuel_type:
+                row.fuel_type ??
+                row.fuel_type_name,
+
+            fuel_type_id:
+                row.fuel_type_id,
+
+            price_per_liter:
+                row.price_per_liter,
+
+            total_amount:
+                row.total_amount ??
+                row.net_amount,
+
+            location:
+                row.location ??
+                row.delivery_location,
+
+            status:
+                normalizeStatus(
+                    row.status
+                ),
+
+            delivery_date:
+                row.delivery_date,
+
+            created_at:
+                row.created_at,
+
+            notes:
+                row.notes
+        };
+    }
+
+    /* ================================================================
+       STATUS
+       ================================================================ */
+
+    function normalizeStatus(
+        status
+    ) {
+
+        const s =
+            String(
+                status ?? ''
+            ).trim().toLowerCase();
+
+        if (
+            [
+                'delivered',
+                'completed',
+                'complete',
+                'done',
+                'تم التسليم',
+                'تمت',
+                'مكتملة',
+                'مكتمل'
+            ].includes(s)
+        ) {
+            return 'delivered';
+        }
+
+        if (
+            [
+                'pending',
+                'assigned',
+                'out_for_delivery',
+                'postponed',
+                'deferred',
+                'مؤجلة',
+                'مؤجل'
+            ].includes(s)
+        ) {
+            return 'pending';
+        }
+
+        if (
+            [
+                'cancelled',
+                'canceled',
+                'ملغاة',
+                'ملغي',
+                'ملغى'
+            ].includes(s)
+        ) {
+            return 'cancelled';
+        }
+
+        return 'pending';
+    }
+
+    function statusLabel(
+        status
+    ) {
+
+        if (status === 'delivered')
+            return 'تم التسليم';
+
+        if (status === 'cancelled')
+            return 'ملغاة';
+
+        return 'مؤجلة';
+    }
+
+    function statusClass(
+        status
+    ) {
+
+        if (status === 'delivered')
+            return 'status-completed';
+
+        if (status === 'cancelled')
+            return 'status-cancelled';
+
+        return 'status-pending';
+    }
+
+    /* ================================================================
+       LOAD DELIVERIES
+       ================================================================ */
+
+    async function loadDeliveries() {
+
+        clearError();
+
+        $('emptyState').style.display =
+            'none';
+
+        setLoading(true);
+
+        try {
+
+            const response =
+                await invoke(
+                    'getDeliveriesPage',
+                    [JSON.stringify({ limit: 1000, offset: 0 })]
+                );
+
+            state.rows =
+                rowsFrom(response)
+                    .map(normalizeRow);
+
+            state.loadedAt =
+                new Date();
+
+            updateConnection(true);
+
+            applyFilters();
+
+        } catch (error) {
+
+            state.rows = [];
+
+            updateConnection(
+                false,
+                error.message
+            );
+
+            showError(
+                error.message ||
+                'تعذر تحميل بيانات التوصيلات.'
+            );
+
+        } finally {
+
+            setLoading(false);
+        }
+    }
+
+    /* ================================================================
+       FILTER / SEARCH
+       ================================================================ */
+
+    function searchableText(row) {
+
+        return Object.values(row)
+            .filter(
+                value =>
+                    value !== null &&
+                    value !== undefined
+            )
+            .join(' ')
+            .toLowerCase();
+    }
+
+    function applyFilters() {
+
+        const search =
+            $('searchInput')
+                .value
+                .trim()
+                .toLowerCase();
+
+        state.filtered =
+            state.rows.filter(row => {
+
+                const matchesSearch =
+                    !search ||
+                    searchableText(row)
+                        .includes(search);
+
+                const matchesFilter =
+                    state.filter === 'all' ||
+                    row.status ===
+                        state.filter;
+
+                return (
+                    matchesSearch &&
+                    matchesFilter
+                );
+            });
+
+        renderStats();
+        renderCards();
+
+    }
+
+    document
+        .querySelectorAll(
+            '.filter-chip'
+        )
+        .forEach(button => {
+
+            button.addEventListener(
+                'click',
+                () => {
+
+                    document
+                        .querySelectorAll(
+                            '.filter-chip'
+                        )
+                        .forEach(
+                            b =>
+                                b.classList
+                                 .remove(
+                                     'active'
+                                 )
+                        );
+
+                    button.classList
+                        .add('active');
+
+                    state.filter =
+                        button.dataset.filter;
+
+                    applyFilters();
+                }
+            );
+        });
+
+    $('searchInput')
+        .addEventListener(
+            'input',
+            applyFilters
+        );
+
+    /* ================================================================
+       STATS
+       ================================================================ */
+
+    function renderStats() {
+
+        const rows =
+            state.filtered;
+
+        const completed =
+            rows.filter(
+                r =>
+                    normalizeStatus(r.status) ===
+                    'delivered'
+            ).length;
+
+        const pending =
+            rows.filter(
+                r =>
+                    normalizeStatus(r.status) ===
+                    'pending'
+            ).length;
+
+        const total =
+            rows.reduce(
+                (sum,row) =>
+                    sum +
+                    number(
+                        row.total_amount
+                    ),
+                0
+            );
+
+        $('statCount')
+            .textContent =
+            rows.length.toLocaleString(
+                'ar-YE'
+            );
+
+        $('statCompleted')
+            .textContent =
+            completed.toLocaleString(
+                'ar-YE'
+            );
+
+        $('statPending')
+            .textContent =
+            pending.toLocaleString(
+                'ar-YE'
+            );
+
+        $('statTotal')
+            .textContent =
+            money(total);
+    }
+
+    /* ================================================================
+       CARDS
+       ================================================================ */
+
+    function renderCards() {
+
+        const grid =
+            $('deliveryGrid');
+
+        if (
+            state.filtered.length === 0
+        ) {
+
+            grid.innerHTML =
+                '';
+
+            $('emptyState').style.display =
+                'block';
+
+            return;
+        }
+
+        $('emptyState').style.display =
+            'none';
+
+        grid.innerHTML =
+            state.filtered
+                .map(
+                    (row,index) =>
+                        deliveryCard(
+                            row,
+                            index
+                        )
+                )
+                .join('');
+    }
+
+    function deliveryCard(
+        row,
+        index
+    ) {
+
+        const title =
+            row.party_name ||
+            (
+                row.party_id
+                    ? 'العميل #' +
+                      row.party_id
+                    : 'توصيل'
+            );
+
+        const vehicle =
+            row.vehicle_name ||
+            (
+                row.vehicle_id
+                    ? 'مركبة #' +
+                      row.vehicle_id
+                    : '—'
+            );
+
+        const driver =
+            row.driver_name ||
+            (
+                row.driver_id
+                    ? 'سائق #' +
+                      row.driver_id
+                    : '—'
+            );
+
+        return `
+            <article
+                class="delivery-card"
+                style="animation-delay:${Math.min(index,12)*35}ms">
+
+                <div class="delivery-head">
+
+                    <div class="delivery-title">
+                        ${esc(title)}
+                    </div>
+
+                    <span
+                        class="status-badge ${statusClass(row.status)}">
+                        ${esc(
+                            statusLabel(row.status)
+                        )}
+                    </span>
+
+                </div>
+
+                <div class="delivery-main">
+
+                    <div class="info-item">
+                        <div class="info-label">
+                            معرف التوصيل
+                        </div>
+
+                        <div class="info-value">
+                            ${esc(row.id)}
+                        </div>
+                    </div>
+
+                    <div class="info-item">
+                        <div class="info-label">
+                            معرف الطلب
+                        </div>
+
+                        <div class="info-value">
+                            ${esc(row.sale_id)}
+                        </div>
+                    </div>
+
+                    <div class="info-item">
+                        <div class="info-label">
+                            المركبة
+                        </div>
+
+                        <div class="info-value">
+                            ${esc(vehicle)}
+                        </div>
+                    </div>
+
+                    <div class="info-item">
+                        <div class="info-label">
+                            السائق
+                        </div>
+
+                        <div class="info-value">
+                            ${esc(driver)}
+                        </div>
+                    </div>
+
+                    <div class="info-item">
+                        <div class="info-label">
+                            الوردية
+                        </div>
+
+                        <div class="info-value">
+                            ${esc(
+                                row.shift_code ||
+                                row.shift_id
+                            )}
+                        </div>
+                    </div>
+
+                    <div class="info-item">
+                        <div class="info-label">
+                            الكمية
+                        </div>
+
+                        <div class="info-value">
+                            ${esc(row.quantity)}
+                        </div>
+                    </div>
+
+                    <div class="info-item">
+                        <div class="info-label">
+                            نوع الوقود
+                        </div>
+
+                        <div class="info-value">
+                            ${esc(row.fuel_type)}
+                        </div>
+                    </div>
+
+                    <div class="info-item">
+                        <div class="info-label">
+                            السعر / لتر
+                        </div>
+
+                        <div class="info-value">
+                            ${money(row.price_per_liter)}
+                        </div>
+                    </div>
+
+                    <div class="info-item">
+                        <div class="info-label">
+                            الإجمالي
+                        </div>
+
+                        <div class="info-value">
+                            ${money(row.total_amount)}
+                        </div>
+                    </div>
+
+                    <div class="info-item">
+                        <div class="info-label">
+                            تاريخ التوصيل
+                        </div>
+
+                        <div class="info-value">
+                            ${esc(
+                                dateTime(
+                                    row.delivery_date
+                                )
+                            )}
+                        </div>
+                    </div>
+
+                    <div class="info-item">
+                        <div class="info-label">
+                            الموقع
+                        </div>
+
+                        <div class="info-value">
+                            ${esc(row.location)}
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="delivery-actions">
+
+                    <button
+                        type="button"
+                        class="btn"
+                        onclick='showDetails(${JSON.stringify(row)})'>
+
+                        <i class="fas fa-eye"></i>
+                        تفاصيل
+
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn primary"
+                        onclick='openEditModal(${JSON.stringify(row)})'>
+
+                        <i class="fas fa-pen"></i>
+                        تعديل
+
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn danger"
+                        onclick="deleteDelivery(${Number(row.id) || 0})">
+
+                        <i class="fas fa-trash"></i>
+                        حذف
+
+                    </button>
+
+                </div>
+
+            </article>
+        `;
+    }
+
+    /* ================================================================
+       FORM RESET
+       ================================================================ */
+
+    function resetForm() {
+
+        $('deliveryForm').reset();
+
+        $('f_id').value =
+            '';
+
+        $('f_party_id').value =
+            '';
+
+        $('f_party_display').value =
+            '';
+
+        $('f_vehicle_id').value =
+            '';
+
+        $('f_vehicle_display').value =
+            '';
+
+        $('f_driver_id').value =
+            '';
+
+        $('f_driver_display').value =
+            '';
+
+        $('f_delivery_service_fee').value = '0';
+        $('vehiclePreview').classList.add('empty');
+        $('vehiclePreviewImg').removeAttribute('src');
+
+        $('f_created_at').value =
+            nowLocalInput();
+
+        $('f_delivery_date').value =
+            nowLocalInput();
+
+        $('f_status').value =
+            'pending';
+
+        $('latestSaleBox')
+            .classList
+            .remove('show');
+
+        $('latestSaleSummary')
+            .innerHTML =
+            '';
+
+        $('formNotices')
+            .className =
+            'form-notices';
+
+        $('formNotices')
+            .innerHTML =
+            '';
+
+        state.editingId =
+            null;
+
+        state.createIdempotencyKey =
+            window.crypto && typeof window.crypto.randomUUID === 'function'
+                ? window.crypto.randomUUID()
+                : 'delivery-' + Date.now();
+
+        clearFieldWarnings();
+    }
+
+    function clearFieldWarnings() {
+
+        document
+            .querySelectorAll(
+                '.field-warning'
+            )
+            .forEach(
+                node => {
+                    node.classList
+                        .remove('show');
+
+                    node.textContent =
+                        '';
+                }
+            );
+    }
+
+    /* ================================================================
+       CREATE
+       ================================================================ */
+
+    async function openCreateModal() {
+
+        resetForm();
+
+        $('formTitle')
+            .textContent =
+            'إضافة توصيل جديد';
+
+        await loadFormContext();
+
+        openModal('formModal');
+    }
+
+    /* ================================================================
+       EDIT
+       ================================================================ */
+
+    async function openEditModal(
+        row
+    ) {
+
+        resetForm();
+
+        state.editingId =
+            row.id;
+
+        $('formTitle')
+            .textContent =
+            'تعديل بيانات التوصيل';
+
+        fillForm(row);
+
+        await loadFormContext();
+
+        /*
+         * بعد تحميل القوائم نعيد ضبط القيم
+         * حتى لا يتم فقدان IDs.
+         */
+
+        if (row.shift_id) {
+            $('f_shift_id').value =
+                String(row.shift_id);
+        }
+
+        updateVehiclePreview(
+            state.vehicles.find(
+                vehicle =>
+                    String(vehicle.id ?? vehicle.vehicle_id ?? '') ===
+                    String(row.vehicle_id ?? '')
+            )
+        );
+
+        openModal('formModal');
+    }
+
+    function fillForm(row) {
+
+        $('f_id').value =
+            row.id ?? '';
+
+        $('f_sale_id').value =
+            row.sale_id ?? '';
+
+        $('f_party_id').value =
+            row.party_id ?? '';
+
+        $('f_party_display').value =
+            row.party_name ??
+            '';
+
+        $('f_vehicle_id').value =
+            row.vehicle_id ?? '';
+
+        $('f_vehicle_display').value =
+            row.vehicle_name ??
+            '';
+
+        $('f_driver_id').value =
+            row.driver_id ?? '';
+
+        $('f_driver_display').value =
+            row.driver_name ??
+            '';
+
+        $('f_shift_id').value =
+            row.shift_id ?? '';
+
+        $('f_quantity').value =
+            row.quantity ?? '';
+
+        $('f_fuel_type').value =
+            row.fuel_type ?? '';
+
+        $('f_price_per_liter').value =
+            row.price_per_liter ?? '';
+
+        $('f_total_amount').value =
+            row.total_amount ?? '';
+
+        $('f_delivery_service_fee').value =
+            row.delivery_service_fee ?? row.service_fee ?? 0;
+
+        $('f_status').value =
+            row.status || 'pending';
+
+        $('f_delivery_date').value =
+            toLocalInput(
+                row.delivery_date
+            );
+
+        $('f_created_at').value =
+            toLocalInput(
+                row.created_at
+            );
+
+        $('f_location').value =
+            row.location ?? '';
+
+        $('f_notes').value =
+            row.notes ?? '';
+
+        updateVehiclePreview(
+            state.vehicles.find(
+                vehicle =>
+                    String(vehicle.id ?? vehicle.vehicle_id ?? '') ===
+                    String(row.vehicle_id ?? '')
+            )
+        );
+    }
+
+    function toLocalInput(
+        value
+    ) {
+
+        if (!value) {
+            return nowLocalInput();
+        }
+
+        const d =
+            new Date(value);
+
+        if (
+            Number.isNaN(
+                d.getTime()
+            )
+        ) {
+            return String(value)
+                .slice(0,16);
+        }
+
+        const pad =
+            n =>
+                String(n)
+                    .padStart(2,'0');
+
+        return (
+            d.getFullYear() +
+            '-' +
+            pad(d.getMonth()+1) +
+            '-' +
+            pad(d.getDate()) +
+            'T' +
+            pad(d.getHours()) +
+            ':' +
+            pad(d.getMinutes())
+        );
+    }
+
+    /* ================================================================
+       FORM CONTEXT
+       ================================================================ */
+
+    async function loadFormContext() {
+
+        await Promise.all([
+            loadCustomers(),
+            loadVehicles(),
+            loadShifts()
+        ]);
+    }
+
+    /* ================================================================
+       CUSTOMERS
+       ================================================================ */
+
+    async function loadCustomers() {
+
+        try {
+
+            let response;
+
+            if (
+                bridge &&
+                typeof bridge.getCustomers ===
+                'function'
+            ) {
+
+                response =
+                    await invoke('getCustomers');
+
+            } else if (
+                bridge &&
+                typeof bridge.getPartyRecords ===
+                'function'
+            ) {
+
+                response =
+                    await invoke(
+                        'getPartyRecords',
+                        ['{}']
+                    );
+
+            } else {
+
+                throw new Error(
+                    'لا يوجد عقد فعلي لجلب العملاء.'
+                );
+            }
+
+            state.customers =
+                rowsFrom(response);
+
+        } catch (error) {
+
+            state.customers = [];
+
+            showFormNotice(
+                error.message,
+                'warning'
+            );
+        }
+    }
+
+    function selectAnonymousCustomer() {
+        $('f_party_id').value = '';
+        $('f_party_display').value = 'عميل غير مسجل';
+        $('f_sale_id').style.display = 'block';
+        $('f_sale_id').removeAttribute('readonly');
+        $('saleContextHelp').style.display = 'block';
+        hideLatestSale();
+        clearFieldWarnings();
+        clearSaleContextFields();
+        showFormNotice('العميل غير المسجل لا ينشئ Customer وهمياً. أدخل معرف البيع الأصلي الموجود في SQLite.', 'warning');
+    }
+
+    function customerName(
+        customer
+    ) {
+
+        return (
+            customer.name ||
+            customer.party_name ||
+            customer.customer_name ||
+            customer.commercial_name_ar ||
+            customer.commercial_name ||
+            customer.legal_name ||
+            (
+                customer.id
+                    ? 'عميل #' + customer.id
+                    : 'عميل'
+            )
+        );
+    }
+
+    $('f_party_display')
+        .addEventListener(
+            'focus',
+            () =>
+                renderCustomerMenu('')
+        );
+
+    $('f_party_display')
+        .addEventListener(
+            'input',
+            event =>
+                renderCustomerMenu(
+                    event.target.value
+                )
+        );
+
+    function renderCustomerMenu(
+        query
+    ) {
+
+        const menu =
+            $('partyMenu');
+
+        const q =
+            String(query || '')
+                .trim()
+                .toLowerCase();
+
+        const rows =
+            state.customers
+                .filter(
+                    customer => {
+
+                        const text =
+                            (
+                                customerName(
+                                    customer
+                                ) +
+                                ' ' +
+                                (
+                                    customer.id ||
+                                    customer.party_id ||
+                                    ''
+                                )
+                            ).toLowerCase();
+
+                        return !q ||
+                            text.includes(q);
+                    }
+                )
+                .slice(0,50);
+
+        menu.innerHTML =
+            '<button type="button" class="lookup-item" data-anonymous="1"><strong>عميل غير مسجل</strong><br><small>بدون إنشاء Customer وهمي</small></button>' +
+            (rows.length
+                ? rows.map(
+                    customer => {
+
+                        const id =
+                            customer.id ??
+                            customer.party_id;
+
+                        return `
+                            <button
+                                type="button"
+                                class="lookup-item"
+                                data-id="${esc(id)}">
+
+                                ${esc(
+                                    customerName(
+                                        customer
+                                    )
+                                )}
+
+                            </button>
+                        `;
+                    }
+                ).join('')
+                :
+                `
+                    <div class="lookup-item">
+                        لا توجد أسماء عملاء متاحة
+                    </div>
+                `)
+
+        menu.classList.add('show');
+
+        menu
+            .querySelectorAll('[data-anonymous]')
+            .forEach(item => item.addEventListener('click', () => {
+                selectAnonymousCustomer();
+                menu.classList.remove('show');
+            }));
+
+        menu
+            .querySelectorAll(
+                '[data-id]'
+            )
+            .forEach(
+                item => {
+
+                    item.addEventListener(
+                        'click',
+                        () => {
+
+                            const id =
+                                item.dataset.id;
+
+                            const customer =
+                                state.customers
+                                    .find(
+                                        c =>
+                                            String(
+                                                c.id ??
+                                                c.party_id
+                                            ) ===
+                                            String(id)
+                                    );
+
+                            $('f_party_id')
+                                .value =
+                                id;
+
+                            $('f_party_display')
+                                .value =
+                                customer
+                                    ? customerName(
+                                        customer
+                                    )
+                                    : '';
+
+                            $('f_sale_id').style.display = 'none';
+
+                            menu.classList
+                                .remove('show');
+
+                            loadLatestCustomerSale(
+                                Number(id)
+                            );
+                        }
+                    );
+                }
+            );
+    }
+
+    /* ================================================================
+       LATEST CUSTOMER SALE
+       ================================================================ */
+
+    async function loadLatestCustomerSale(
+        partyId
+    ) {
+
+        if (!partyId) return;
+        const requestId = ++state.latestSaleRequestId;
+
+        clearFieldWarnings();
+
+        showFormNotice(
+            'جارٍ استرجاع آخر عملية شراء فعلية للعميل...',
+            'warning'
+        );
+
+        try {
+
+            /*
+             * العقد Typed المتخصص:
+             *
+             * getLatestCustomerSaleForDelivery(partyId)
+             *
+             * لا نستخدم getOrdersPage().
+             */
+
+            const response =
+                await invoke(
+                    'getLatestCustomerSaleForDelivery',
+                    [Number(partyId)]
+                );
+            if (requestId !== state.latestSaleRequestId || Number($('f_party_id').value || 0) !== Number(partyId)) return;
+
+            const payload =
+                dataOf(response);
+
+            const sale =
+                payload &&
+                payload.sale
+                    ? payload.sale
+                    : payload;
+
+            if (
+                !payload ||
+                payload.found === false ||
+                !sale
+            ) {
+
+                hideLatestSale();
+                $('f_sale_id').style.display = 'block';
+                $('f_sale_id').removeAttribute('readonly');
+                showFormNotice(
+                    'لم يتم العثور على طلب سابق. أدخل معرف الطلب/البيع المرتبط بالتوصيل يدوياً.',
+                    'warning'
+                );
+
+                return;
+            }
+
+            $('f_sale_id').style.display = 'none';
+            fillFromLatestSale(sale);
+
+            showLatestSale(
+                sale
+            );
+
+            showFormNotice(
+                'تم جلب آخر عملية شراء فعلية للعميل بنجاح. راجع الحقول وأكمل أي بيانات ناقصة.',
+                'success'
+            );
+
+        } catch (error) {
+            if (requestId !== state.latestSaleRequestId) return;
+            hideLatestSale();
+            $('f_sale_id').style.display = 'block';
+            $('f_sale_id').removeAttribute('readonly');
+
+            showFormNotice(
+                error.message ||
+                'تعذر جلب آخر عملية شراء للعميل.',
+                'error'
+            );
+        }
+    }
+
+    function fillFromLatestSale(
+        sale
+    ) {
+        const isProductSale = String(sale.sale_kind || sale.order_type || '').toLowerCase() === 'product';
+        state.saleKind = isProductSale ? 'product' : 'fuel';
+        state.saleItems = Array.isArray(sale.items) ? sale.items : [];
+        $('f_sale_type').value = state.saleKind;
+
+        setIfValue('f_sale_id', sale.sale_id);
+        setIfValue('f_shift_id', sale.shift_id);
+        setIfValue('f_quantity', sale.quantity);
+        setIfValue('f_fuel_type', isProductSale ? 'مشتريات منتجات' : (sale.fuel_type_name ?? sale.fuel_type));
+        setIfValue('f_price_per_liter', isProductSale ? 0 : sale.price_per_liter);
+        setIfValue('f_total_amount', sale.total_amount ?? sale.net_amount);
+        setIfValue('f_location', sale.location ?? sale.delivery_location);
+        setIfValue('f_vehicle_id', sale.vehicle_id);
+        setIfValue('f_driver_id', sale.driver_id);
+        setIfValue('f_vehicle_display', sale.vehicle_name);
+        setIfValue('f_driver_display', sale.driver_name);
+        setIfValue('f_delivery_service_fee', sale.service_fee ?? 0);
+
+        const partyId = Number(sale.customer_party_id || 0);
+        if (partyId > 0) {
+            $('f_party_id').value = String(partyId);
+            $('f_party_display').value = sale.customer_name || 'العميل المرتبط بالبيع';
+        } else {
+            $('f_party_id').value = '';
+            $('f_party_display').value = 'عميل غير مسجل';
+        }
+
+        const fuelGroup = $('f_fuel_type').closest('.form-group');
+        const priceGroup = $('f_price_per_liter').closest('.form-group');
+        if (fuelGroup) fuelGroup.style.display = isProductSale ? 'none' : '';
+        if (priceGroup) priceGroup.style.display = isProductSale ? 'none' : '';
+
+        if (isProductSale && state.saleItems.length) {
+            const names = state.saleItems
+                .filter(item => Number(item.remaining_quantity || item.quantity || 0) > 0)
+                .map(item => `${item.product_name || item.product_name_ar || 'منتج'} × ${Number(item.remaining_quantity || item.quantity || 0).toFixed(2)}`)
+                .join('، ');
+            showFormNotice(`مشتريات مرتبطة بالبيع الأصلي: ${names}`, 'success');
+        }
+
+        const linkedVehicle = state.vehicles.find(
+            vehicle => String(vehicle.id ?? vehicle.vehicle_id ?? '') === String(sale.vehicle_id ?? '')
+        );
+        updateVehiclePreview(linkedVehicle);
+        calculateTotalIfNeeded();
+        validateLatestSaleFields();
+    }
+
+    function setIfValue(
+        id,
+        value
+    ) {
+
+        if (
+            value !== null &&
+            value !== undefined &&
+            value !== ''
+        ) {
+
+            $(id).value =
+                value;
+        }
+    }
+
+    function calculateTotalIfNeeded() {
+
+        const total =
+            $('f_total_amount').value;
+
+        const quantity =
+            number(
+                $('f_quantity').value
+            );
+
+        const price =
+            number(
+                $('f_price_per_liter').value
+            );
+
+        if (
+            !total &&
+            quantity > 0 &&
+            price > 0
+        ) {
+
+            $('f_total_amount')
+                .value =
+                (
+                    quantity *
+                    price
+                ).toFixed(2);
+        }
+    }
+
+    function clearSaleContextFields() {
+        for (const id of ['f_shift_id','f_quantity','f_fuel_type','f_price_per_liter','f_total_amount','f_location','f_vehicle_id','f_driver_id','f_vehicle_display','f_driver_display']) {
+            if ($(id)) $(id).value = '';
+        }
+        updateVehiclePreview(null);
+        $('f_delivery_service_fee').value = '0';
+    }
+
+    async function loadAnonymousSaleContext() {
+        const saleId = Number($('f_sale_id').value || 0);
+        if (!(saleId > 0)) return;
+        clearFieldWarnings();
+        try {
+            showFormNotice('جارٍ التحقق من عملية البيع الأصلية في SQLite...', 'warning');
+            const response = await invoke('getDeliverySaleContext', [saleId]);
+            const payload = dataOf(response) || response;
+            if (!payload || payload.found === false || !payload.sale) {
+                clearSaleContextFields();
+                showFormNotice((payload && payload.message) || 'عملية البيع المحددة غير موجودة.', 'error');
+                return;
+            }
+            const sale = payload.sale;
+            fillFromLatestSale(sale);
+            $('saleContextHelp').style.display = 'block';
+            $('f_delivery_service_fee').value = String(sale.service_fee ?? 0);
+            showLatestSale(sale);
+            if (Number(sale.customer_party_id || 0) > 0) {
+                $('f_party_id').value = String(sale.customer_party_id);
+                $('f_party_display').value = sale.customer_name || 'العميل المرتبط بالبيع';
+                showFormNotice('تم ربط التوصيل بالعميل الموجود في البيع الأصلي دون إنشاء بيع جديد.', 'success');
+            } else {
+                $('f_party_id').value = '';
+                $('f_party_display').value = 'عميل غير مسجل';
+                showFormNotice('تم التحقق من البيع الأصلي للعميل غير المسجل من SQLite دون إنشاء Customer.', 'success');
+            }
+        } catch (error) {
+            clearSaleContextFields();
+            showFormNotice(error.message || 'تعذر التحقق من عملية البيع الأصلية.', 'error');
+        }
+    }
+
+    $('f_sale_id').addEventListener('change', loadAnonymousSaleContext);
+    $('f_sale_id').addEventListener('blur', loadAnonymousSaleContext);
+
+    function validateLatestSaleFields() {
+        const isProductSale = state.saleKind === 'product';
+        const required = isProductSale
+            ? [
+                ['f_sale_id','معرف البيع الأصلي'],
+                ['f_shift_id','الوردية'],
+                ['f_quantity','كمية المشتريات'],
+                ['f_total_amount','الإجمالي'],
+                ['f_location','الموقع']
+              ]
+            : [
+                ['f_sale_id','معرف الطلب'],
+                ['f_shift_id','الوردية'],
+                ['f_party_id','العميل'],
+                ['f_quantity','الكمية'],
+                ['f_fuel_type','نوع الوقود'],
+                ['f_price_per_liter','السعر / لتر'],
+                ['f_total_amount','الإجمالي'],
+                ['f_location','الموقع']
+              ];
+
+        const missing = [];
+        required.forEach(([id,label]) => {
+            const value = $(id).value;
+            if (value === null || value === undefined || String(value).trim() === '') {
+                missing.push(label);
+                const warningId = 'w_' + id.replace('f_', '');
+                const node = $(warningId);
+                if (node) {
+                    node.textContent = 'يرجى إدخال ' + label + '.';
+                    node.classList.add('show');
+                }
+            }
+        });
+        if (missing.length) {
+            showFormNotice('توجد بيانات ناقصة يجب استكمالها: ' + missing.join('، '), 'warning');
+        }
+        return missing.length === 0;
+    }
+
+    function showLatestSale(
+        sale
+    ) {
+
+        $('latestSaleBox')
+            .classList
+            .add('show');
+
+        $('latestSaleSummary')
+            .innerHTML = `
+
+                <div>
+                    <strong>
+                        ${esc(
+                            sale.sale_id
+                        )}
+                    </strong>
+                    <small>
+                        رقم الطلب
+                    </small>
+                </div>
+
+                <div>
+                    <strong>
+                        ${esc(
+                            sale.quantity
+                        )}
+                    </strong>
+                    <small>
+                        الكمية
+                    </small>
+                </div>
+
+                <div>
+                    <strong>
+                        ${money(
+                            sale.total_amount ??
+                            sale.net_amount
+                        )}
+                    </strong>
+                    <small>
+                        الإجمالي
+                    </small>
+                </div>
+
+            `;
+    }
+
+    function hideLatestSale() {
+
+        $('latestSaleBox')
+            .classList
+            .remove('show');
+
+        $('latestSaleSummary')
+            .innerHTML =
+            '';
+    }
+
+    /* ================================================================
+       VEHICLES
+       ================================================================ */
+
+    async function loadVehicles() {
+
+        try {
+
+            if (
+                !bridge ||
+                typeof bridge.getVehicleRecords !==
+                'function'
+            ) {
+
+                throw new Error(
+                    'عقد المركبات غير متاح في Android Bridge.'
+                );
+            }
+
+            const response =
+                await invoke('getVehicleRecords', [JSON.stringify({ limit: 500 })]);
+
+            const vehicleRows = rowsFrom(response);
+            let driverRows = [];
+            if (bridge && typeof bridge.getDriverRecords === 'function') {
+                driverRows = rowsFrom(await invoke('getDriverRecords', [JSON.stringify({ limit: 500 })]));
+            }
+            state.vehicles = vehicleRows.map(vehicle => {
+                const vehicleId = Number(vehicle.id ?? vehicle.vehicle_id ?? 0);
+                const linkedDrivers = driverRows.filter(driver =>
+                    Number(driver.vehicle_id ?? 0) === vehicleId &&
+                    String(driver.status || 'active').toLowerCase() === 'active'
+                );
+                const driver = linkedDrivers.length === 1 ? linkedDrivers[0] : null;
+                return Object.assign({}, vehicle, {
+                    id: vehicleId || vehicle.id,
+                    driver_id: driver ? Number(driver.id) : '',
+                    driver_name: driver ? (driver.full_name_ar || driver.full_name || driver.driver_code || '') : (linkedDrivers.length > 1 ? 'أكثر من سائق مرتبط — اختر العلاقة الصحيحة' : '')
+                });
+            });
+
+        } catch (error) {
+
+            state.vehicles = [];
+
+            showFormNotice(
+                error.message,
+                'warning'
+            );
+        }
+    }
+
+    function vehicleName(
+        vehicle
+    ) {
+
+        const plate = vehicle.plate_number_ar || vehicle.plate_number || vehicle.vehicle_code || '';
+        const brand = vehicle.brand || '';
+        const model = vehicle.model || '';
+        const label = [plate, brand, model].filter(Boolean).join(' | ');
+        return label || (vehicle.id ? 'مركبة #' + vehicle.id : 'مركبة');
+    }
+
+    function updateVehiclePreview(vehicle) {
+        const box = $('vehiclePreview');
+        const image = $('vehiclePreviewImg');
+        const source = vehicle && String(vehicle.vehicle_photo || vehicle.photo_path || vehicle.image_path || '').trim();
+        if (!source) {
+            box.classList.add('empty');
+            image.removeAttribute('src');
+            return;
+        }
+        image.src = source;
+        box.classList.remove('empty');
+    }
+
+    function driverName(
+        vehicle
+    ) {
+
+        return (
+            vehicle.driver_name ||
+            vehicle.driver_name_ar ||
+            vehicle.driver_full_name ||
+            'بدون سائق مرتبط'
+        );
+    }
+
+    $('f_vehicle_display')
+        .addEventListener(
+            'focus',
+            () =>
+                renderVehicleMenu('')
+        );
+
+    $('f_vehicle_display')
+        .addEventListener(
+            'input',
+            event =>
+                renderVehicleMenu(
+                    event.target.value
+                )
+        );
+
+    function renderVehicleMenu(
+        query
+    ) {
+
+        const menu =
+            $('vehicleMenu');
+
+        const q =
+            String(query || '')
+                .trim()
+                .toLowerCase();
+
+        const rows =
+            state.vehicles
+                .filter(
+                    vehicle => {
+
+                        const text =
+                            (
+                                vehicleName(
+                                    vehicle
+                                ) +
+                                ' ' +
+                                driverName(
+                                    vehicle
+                                ) +
+                                ' ' +
+                                (
+                                    vehicle.id ||
+                                    vehicle.vehicle_id ||
+                                    ''
+                                )
+                            ).toLowerCase();
+
+                        return !q ||
+                            text.includes(q);
+                    }
+                )
+                .slice(0,50);
+
+        menu.innerHTML =
+            rows.length
+                ? rows.map(
+                    vehicle => {
+
+                        const id =
+                            vehicle.id ??
+                            vehicle.vehicle_id;
+
+                        const driverId =
+                            vehicle.driver_id ??
+                            vehicle.current_driver_id;
+
+                        return `
+                            <button
+                                type="button"
+                                class="lookup-item"
+                                data-id="${esc(id)}"
+                                data-driver-id="${esc(driverId || '')}">
+
+                                <strong>
+                                    ${esc(
+                                        vehicleName(
+                                            vehicle
+                                        )
+                                    )}
+                                </strong>
+
+                                <br>
+
+                                <small>
+                                    السائق:
+                                    ${esc(
+                                        driverName(
+                                            vehicle
+                                        )
+                                    )}
+                                </small>
+
+                            </button>
+                        `;
+                    }
+                ).join('')
+                :
+                `
+                    <div class="lookup-item">
+                        لا توجد مركبات متاحة
+                    </div>
+                `;
+
+        menu.classList.add('show');
+
+        menu
+            .querySelectorAll(
+                '[data-id]'
+            )
+            .forEach(
+                item => {
+
+                    item.addEventListener(
+                        'click',
+                        () => {
+
+                            const id =
+                                item.dataset.id;
+
+                            const driverId =
+                                item.dataset.driverId;
+
+                            const vehicle =
+                                state.vehicles
+                                    .find(
+                                        v =>
+                                            String(
+                                                v.id ??
+                                                v.vehicle_id
+                                            ) ===
+                                            String(id)
+                                    );
+
+                            $('f_vehicle_id')
+                                .value =
+                                id;
+
+                            $('f_vehicle_display')
+                                .value =
+                                vehicle
+                                    ? vehicleName(
+                                        vehicle
+                                    )
+                                    : '';
+
+                            $('f_driver_id')
+                                .value =
+                                driverId || '';
+
+                            $('f_driver_display')
+                                .value =
+                                driverId && vehicle
+                                    ? driverName(vehicle)
+                                    : (vehicle && vehicle.driver_name ? driverName(vehicle) : '');
+
+                            updateVehiclePreview(vehicle);
+
+                            menu.classList
+                                .remove('show');
+                        }
+                    );
+                }
+            );
+    }
+
+    /* ================================================================
+       SHIFTS
+       ================================================================ */
+
+    async function loadShifts() {
+
+        try {
+
+            let response; if(!bridge||typeof bridge.getCurrentShift!=='function') throw new Error('عقد الوردية الحالية غير متاح في Android Bridge.'); response=await invoke('getCurrentShift'); const current=dataOf(response); state.shifts=current&&current.id?[current]:(current&&current.shift_id?[current]:[]); renderShiftOptions();
+
+        } catch (error) {
+
+            state.shifts = [];
+
+            renderShiftOptions();
+
+            showFormNotice(
+                error.message,
+                'warning'
+            );
+        }
+    }
+
+    function renderShiftOptions() {
+
+        const select =
+            $('f_shift_id');
+
+        const current =
+            select.value;
+
+        select.innerHTML =
+            `
+                <option value="">
+                    اختر الوردية
+                </option>
+            `;
+
+        state.shifts
+            .forEach(
+                shift => {
+
+                    const id =
+                        shift.id ??
+                        shift.shift_id;
+
+                    if (!id) return;
+
+                    const code =
+                        shift.shift_code ||
+                        ('وردية #' + id);
+
+                    const manager =
+                        shift.manager_name ||
+                        shift.manager_name_ar ||
+                        '';
+
+                    select.innerHTML +=
+                        `
+                            <option
+                                value="${esc(id)}">
+
+                                ${esc(code)}
+                                ${manager
+                                    ? ' — ' +
+                                      esc(manager)
+                                    : ''}
+
+                            </option>
+                        `;
+                }
+            );
+
+        if (current) {
+            select.value =
+                current;
+        }
+    }
+
+    /* ================================================================
+       FORM NOTICES
+       ================================================================ */
+
+    function showFormNotice(
+        message,
+        type = 'warning'
+    ) {
+
+        const node =
+            $('formNotices');
+
+        node.className =
+            'form-notices show ' +
+            type;
+
+        node.textContent =
+            message;
+    }
+
+    /* ================================================================
+       TOTAL CALCULATION
+       ================================================================ */
+
+    $('f_quantity')
+        .addEventListener(
+            'input',
+            calculateTotalIfNeeded
+        );
+
+    $('f_price_per_liter')
+        .addEventListener(
+            'input',
+            calculateTotalIfNeeded
+        );
+
+    /* ================================================================
+       SAVE
+       ================================================================ */
+
+    async function saveDelivery() {
+
+        clearFieldWarnings();
+
+        calculateTotalIfNeeded();
+
+        const validation =
+            validateForm();
+
+        if (!validation.valid) {
+
+            showFormNotice(
+                validation.message,
+                'error'
+            );
+
+            return;
+        }
+
+        const payload =
+            buildPayload();
+
+        const saveButton =
+            $('saveBtn');
+
+        saveButton.disabled =
+            true;
+
+        saveButton.innerHTML =
+            `
+                <i class="fas fa-spinner fa-spin"></i>
+                جارٍ الحفظ...
+            `;
+
+        try {
+
+            if (state.editingId) {
+
+                const updated = await invoke(
+                    'updateDeliveryRecord',
+                    [Number(state.editingId), JSON.stringify(payload)]
+                );
+                const updatedData = dataOf(updated) || updated;
+                if (!updatedData || updatedData.success === false) {
+                    throw new Error((updatedData && updatedData.error) || 'فشل تعديل التوصيل في SQLite');
+                }
+                toast(
+                    'تم تعديل التوصيل فعلياً والتحقق من SQLite.'
+                );
+
+            } else {
+
+                const saved = await invoke(
+                    'saveDeliveryRecord',
+                    [
+                        JSON.stringify(
+                            payload
+                        )
+                    ]
+                );
+                const savedData = dataOf(saved) || saved;
+                const savedId = Number(
+                    savedData && (savedData.delivery_id || savedData.id)
+                );
+                if (!(savedId > 0)) {
+                    throw new Error('تم تنفيذ الحفظ دون إرجاع معرف توصيل SQLite صالح');
+                }
+
+                toast(
+                    'تم حفظ التوصيل فعلياً والتحقق من SQLite.'
+                );
+            }
+
+            closeModal(
+                'formModal'
+            );
+
+            await loadDeliveries();
+
+        } catch (error) {
+
+            showFormNotice(
+                error.message ||
+                'فشل حفظ بيانات التوصيل.',
+                'error'
+            );
+
+        } finally {
+
+            saveButton.disabled =
+                false;
+
+            saveButton.innerHTML =
+                `
+                    <i class="fas fa-save"></i>
+                    حفظ فعلي
+                `;
+        }
+    }
+
+    function validateForm() {
+        const partyId = Number($('f_party_id').value || 0);
+        const saleId = Number($('f_sale_id').value || 0);
+        const isProductSale = state.saleKind === 'product';
+
+        if (!(saleId > 0)) {
+            return {valid:false,message:'معرف البيع الأصلي مطلوب.'};
+        }
+        if (!isProductSale && !partyId) {
+            return {valid:false,message:'للبيع غير المسجل يجب اختيار عميل مسجل أو إدخال البيع الأصلي وفق مساره.'};
+        }
+
+        const status = $('f_status').value;
+        if (!['pending','assigned','out_for_delivery','delivered','failed','cancelled'].includes(status)) {
+            return {valid:false,message:'يرجى اختيار حالة توصيل صحيحة.'};
+        }
+
+        const required = isProductSale
+            ? [['f_shift_id','الوردية'],['f_quantity','الكمية'],['f_total_amount','الإجمالي']]
+            : [['f_shift_id','الوردية'],['f_quantity','الكمية'],['f_fuel_type','نوع الوقود'],['f_price_per_liter','السعر / لتر'],['f_total_amount','الإجمالي']];
+
+        for (const [id,label] of required) {
+            const value = $(id).value;
+            if (value === null || value === undefined || String(value).trim() === '') {
+                return {valid:false,message:'يرجى إدخال ' + label + '.'};
+            }
+        }
+
+        const quantity = number($('f_quantity').value);
+        if (quantity <= 0) return {valid:false,message:'الكمية يجب أن تكون أكبر من صفر.'};
+
+        const price = number($('f_price_per_liter').value);
+        if (!isProductSale && price <= 0) return {valid:false,message:'السعر لكل لتر يجب أن يكون أكبر من صفر.'};
+
+        const total = number($('f_total_amount').value);
+        const serviceFee = number($('f_delivery_service_fee').value);
+        if (serviceFee < 0) return {valid:false,message:'رسوم خدمة التوصيل لا يمكن أن تكون سالبة.'};
+        if (total < 0) return {valid:false,message:'الإجمالي لا يمكن أن يكون سالباً.'};
+
+        return {valid:true};
+    }
+
+    function buildPayload() {
+
+        /*
+         * created_at و delivery_date
+         * يُرسلان كقيمة زمنية حالية،
+         * ويجب على Android/SQLite اعتماد
+         * وقت النظام كمصدر نهائي عند الحفظ.
+         */
+
+        const payload = {
+
+            id:
+                state.editingId
+                    ? Number(
+                        state.editingId
+                    )
+                    : undefined,
+
+            sale_id:
+                number(
+                    $('f_sale_id').value
+                ) || null,
+
+            shift_id:
+                number(
+                    $('f_shift_id').value
+                ) || null,
+
+            party_id:
+                number(
+                    $('f_party_id').value
+                ),
+
+            vehicle_id:
+                number(
+                    $('f_vehicle_id').value
+                ) || null,
+
+            driver_id:
+                number(
+                    $('f_driver_id').value
+                ) || null,
+
+            quantity:
+                number(
+                    $('f_quantity').value
+                ),
+
+            fuel_type:
+                $('f_fuel_type').value
+                    .trim(),
+
+            price_per_liter:
+                number(
+                    $('f_price_per_liter')
+                        .value
+                ),
+
+            total_amount:
+                number(
+                    $('f_total_amount')
+                        .value
+                ),
+
+            delivery_service_fee:
+                number(
+                    $('f_delivery_service_fee').value
+                ),
+
+            location:
+                $('f_location')
+                    .value
+                    .trim(),
+
+            status:
+                $('f_status').value,
+
+            delivery_date:
+                $('f_delivery_date').value
+                    ? new Date(
+                        $('f_delivery_date').value
+                    ).toISOString()
+                    : new Date().toISOString(),
+
+            created_at:
+                new Date().toISOString(),
+
+            notes:
+                $('f_notes')
+                    .value
+                    .trim()
+        };
+
+        /*
+         * حذف id في عملية الإنشاء حتى لا
+         * نفرض رقماً على SQLite.
+         */
+
+        if (!state.editingId) {
+            delete payload.id;
+            payload.idempotency_key = state.createIdempotencyKey;
+        } else {
+            delete payload.idempotency_key;
+        }
+
+        return payload;
+    }
+
+    /* ================================================================
+       DELETE
+       ================================================================ */
+
+    async function deleteDelivery(
+        id
+    ) {
+
+        if (!id) {
+
+            toast(
+                'المعرف غير صالح.',
+                true
+            );
+
+            return;
+        }
+
+        const confirmed =
+            window.confirm(
+                'هل أنت متأكد من حذف سجل التوصيل؟'
+            );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+
+            await invoke('deleteDeliveryRecord',[id]);
+
+            toast(
+                'تم حذف سجل التوصيل.'
+            );
+
+            await loadDeliveries();
+
+        } catch (error) {
+
+            toast(
+                error.message ||
+                'فشل حذف السجل.',
+                true
+            );
+        }
+    }
+
+    /* ================================================================
+       DETAILS
+       ================================================================ */
+
+    function showDetails(
+        row
+    ) {
+
+        const fields = [
+
+            ['المعرف', row.id],
+
+            ['معرف الطلب', row.sale_id],
+
+            ['العميل', row.party_name],
+
+            ['معرف العميل', row.party_id],
+
+            ['المركبة', row.vehicle_name],
+
+            ['معرف المركبة', row.vehicle_id],
+
+            ['السائق', row.driver_name],
+
+            ['معرف السائق', row.driver_id],
+
+            ['الوردية', row.shift_code],
+
+            ['معرف الوردية', row.shift_id],
+
+            ['الكمية', row.quantity],
+
+            ['نوع الوقود', row.fuel_type],
+
+            ['السعر / لتر',
+                money(
+                    row.price_per_liter
+                )
+            ],
+
+            ['الإجمالي',
+                money(
+                    row.total_amount
+                )
+            ],
+
+            ['الحالة',
+                statusLabel(
+                    row.status
+                )
+            ],
+
+            ['تاريخ التوصيل',
+                dateTime(
+                    row.delivery_date
+                )
+            ],
+
+            ['الموقع', row.location],
+
+            ['تاريخ الإنشاء',
+                dateTime(
+                    row.created_at
+                )
+            ],
+
+            ['الملاحظات', row.notes]
+
+        ];
+
+        $('detailsBody')
+            .innerHTML =
+
+            `
+                <div class="details-grid">
+
+                    ${fields.map(
+                        ([label,value]) => `
+
+                            <div
+                                class="details-item ${
+                                    label === 'الملاحظات'
+                                        ? 'full'
+                                        : ''
+                                }">
+
+                                <div
+                                    class="details-label">
+                                    ${esc(label)}
+                                </div>
+
+                                <div
+                                    class="details-value">
+                                    ${esc(value)}
+                                </div>
+
+                            </div>
+
+                        `
+                    ).join('')}
+
+                </div>
+            `;
+
+        openModal(
+            'detailsModal'
+        );
+    }
+
+    /* ================================================================
+       REPORT
+       ================================================================ */
+
+    async function openReportModal() {
+        $('reportFrom').value = today();
+        $('reportTo').value = today();
+        $('reportType').value = 'detailed';
+        $('reportDetailed').checked = true;
+        $('reportResults').innerHTML = '';
+        try { await loadReportOptions(); }
+        catch (error) {
+            $('reportResults').innerHTML = '<div class="error-state" style="display:block;">' + esc(error.message || 'تعذر تحميل خيارات التقرير.') + '</div>';
+        }
+        openModal('reportModal');
+    }
+
+    function syncReportFilters() {
+        const type = $('reportDetailed').checked ? 'detailed' : $('reportType').value;
+        $('reportCustomerFilter').classList.toggle('report-filter-hidden', type !== 'customer');
+        $('reportSiteFilter').classList.toggle('report-filter-hidden', type !== 'site');
+    }
+
+    async function loadReportOptions() {
+        const response = await invoke('getDeliveryReportOptions');
+        const options = dataOf(response) || {};
+        state.reportOptions = {
+            customers: Array.isArray(options.customers) ? options.customers : [],
+            locations: Array.isArray(options.locations) ? options.locations : []
+        };
+        $('reportCustomer').innerHTML = '<option value="">اختر العميل</option>' +
+            state.reportOptions.customers.map(c => '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>').join('');
+        $('reportSite').innerHTML = '<option value="">اختر الموقع</option>' +
+            state.reportOptions.locations.map(r => '<option value="' + esc(r.location) + '">' + esc(r.location) + '</option>').join('');
+        syncReportFilters();
+    }
+
+    function renderDeliveryReport(report) {
+        const rows = Array.isArray(report.rows) ? report.rows : [];
+        if (!rows.length) {
+            $('reportResults').innerHTML = '<div class="empty-state">لا توجد نتائج مطابقة للفترة والمرشحات المحددة.</div>';
+            return;
+        }
+        const quantity = rows.reduce((sum,row) => sum + number(row.quantity), 0);
+        const saleAmount = rows.reduce((sum,row) => sum + number(row.sale_amount), 0);
+        const fee = rows.reduce((sum,row) => sum + number(row.delivery_service_fee), 0);
+        const cell = value => '<td>' + esc(value) + '</td>';
+        $('reportResults').innerHTML =
+            '<div class="report-summary">' +
+                '<div class="report-box"><strong>' + rows.length + '</strong><span>عدد التوصيلات</span></div>' +
+                '<div class="report-box"><strong>' + quantity.toLocaleString('ar-YE') + '</strong><span>إجمالي الكمية</span></div>' +
+                '<div class="report-box"><strong>' + money(saleAmount) + '</strong><span>قيمة البيع الأصلية</span></div>' +
+                '<div class="report-box"><strong>' + money(fee) + '</strong><span>رسوم خدمة التوصيل</span></div>' +
+            '</div>' +
+            '<div class="report-table-wrap"><table class="report-table"><thead><tr>' +
+                '<th>التوصيل</th><th>البيع الأصلي</th><th>العميل</th><th>المركبة</th><th>السائق</th><th>الوردية</th><th>التاريخ</th><th>الكمية</th><th>الوقود</th><th>السعر</th><th>قيمة البيع</th><th>رسوم التوصيل</th><th>الحالة</th><th>الموقع</th>' +
+            '</tr></thead><tbody>' +
+            rows.map(row =>
+                '<tr>' +
+                    cell(row.delivery_id) + cell(row.sale_id) + cell(row.customer_name) +
+                    '<td>' + (row.vehicle_photo ? '<img src="' + esc(row.vehicle_photo) + '" alt="صورة المركبة" style="width:46px;height:34px;object-fit:contain;vertical-align:middle;margin-left:6px;border-radius:5px;">' : '') + esc(row.vehicle_name) + '</td>' +
+                    cell(row.driver_name) + cell(row.shift_code) + cell(dateTime(row.delivery_date)) +
+                    cell(row.quantity) + cell(row.fuel_type_name || row.fuel_type) + cell(money(row.price_per_liter)) +
+                    cell(money(row.sale_amount)) + cell(money(row.delivery_service_fee)) + cell(statusLabel(row.status)) + cell(row.location) +
+                '</tr>'
+            ).join('') +
+            '</tbody></table></div>';
+    }
+
+    async function generateReport() {
+        const from = $('reportFrom').value || today();
+        const to = $('reportTo').value || today();
+        if (from > to) {
+            toast('تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية.', true);
+            return;
+        }
+        const type = $('reportDetailed').checked ? 'detailed' : $('reportType').value;
+        const payload = {report_type:type,from_date:from,to_date:to};
+        if (type === 'customer') {
+            const partyId = Number($('reportCustomer').value || 0);
+            if (!(partyId > 0)) { toast('اختر العميل أولاً.', true); return; }
+            payload.party_id = partyId;
+        }
+        if (type === 'site') {
+            const location = $('reportSite').value.trim();
+            if (!location) { toast('اختر موقع التوصيل أولاً.', true); return; }
+            payload.location = location;
+        }
+        try {
+            const response = await invoke('generateDeliveryManagementReport',[JSON.stringify(payload)]);
+            renderDeliveryReport(dataOf(response) || {});
+            toast('تم توليد التقرير من SQLite.');
+        } catch (error) {
+            toast(error.message || 'تعذر توليد تقرير التوصيلات من SQLite.', true);
+        }
+    }
+
+    function printDeliveriesReport() {
+        if (!bridge || typeof bridge.printCurrentPage !== 'function') {
+            toast('عقد الطباعة غير متاح في Android Bridge', true);
+            return;
+        }
+        try { bridge.printCurrentPage(); } catch (e) { toast(e.message || 'فشل بدء الطباعة', true); }
+    }
+
+    function exportCSV() {
+        if (!state.rows.length) {
+            toast('لا توجد بيانات لتصديرها.', true);
+            return;
+        }
+        if (!bridge || typeof bridge.exportOperationalCsv !== 'function') {
+            toast('عقد تصدير CSV غير متاح في Android Bridge', true);
+            return;
+        }
+        try {
+            const from = $('reportFrom').value || today();
+            const to = $('reportTo').value || today();
+            if (from > to) {
+                toast('تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية.', true);
+                return;
+            }
+            bridge.exportOperationalCsv(
+                'deliveries',
+                JSON.stringify({ from_date: from, to_date: to })
+            );
+        }
+        catch (e) { toast(e.message || 'فشل بدء تصدير CSV', true); }
+    }
+
+
+    /* ================================================================
+       MODALS
+       ================================================================ */
+
+    function openModal(
+        id
+    ) {
+
+        $(id)
+            .classList
+            .add('show');
+
+        document.body
+            .style.overflow =
+            'hidden';
+    }
+
+    function closeModal(
+        id
+    ) {
+
+        $(id)
+            .classList
+            .remove('show');
+
+        if (
+            !document.querySelector(
+                '.modal-overlay.show'
+            )
+        ) {
+
+            document.body
+                .style.overflow =
+                '';
+        }
+    }
+
+    function overlayClose(
+        event,
+        id
+    ) {
+
+        if (
+            event.target ===
+            event.currentTarget
+        ) {
+
+            closeModal(id);
+        }
+    }
+
+    window.openCreateModal =
+        openCreateModal;
+
+    window.openEditModal =
+        openEditModal;
+
+    window.showDetails =
+        showDetails;
+
+    window.deleteDelivery =
+        deleteDelivery;
+
+    window.openReportModal =
+        openReportModal;
+
+    window.generateReport =
+        generateReport;
+
+    window.exportCSV =
+        exportCSV;
+
+    window.saveDelivery =
+        saveDelivery;
+
+    window.loadDeliveries =
+        loadDeliveries;
+
+    window.closeModal =
+        closeModal;
+
+    /* ================================================================
+       LOOKUP OUTSIDE CLICK
+       ================================================================ */
+
+    document.addEventListener(
+        'click',
+        event => {
+
+            if (
+                !event.target.closest(
+                    '#f_party_display'
+                ) &&
+                !event.target.closest(
+                    '#partyMenu'
+                )
+            ) {
+
+                $('partyMenu')
+                    .classList
+                    .remove('show');
+            }
+
+            if (
+                !event.target.closest(
+                    '#f_vehicle_display'
+                ) &&
+                !event.target.closest(
+                    '#vehicleMenu'
+                )
+            ) {
+
+                $('vehicleMenu')
+                    .classList
+                    .remove('show');
+            }
+        }
+    );
+
+    /* ================================================================
+       NAVIGATION
+       ================================================================ */
+
+    function goHome() {
+
+        try {
+
+            if (
+                bridge &&
+                typeof bridge.goBack ===
+                'function'
+            ) {
+
+                bridge.goBack();
+                return;
+            }
+
+            if (
+                bridge &&
+                typeof bridge.navigateHome ===
+                'function'
+            ) {
+
+                bridge.navigateHome();
+                return;
+            }
+
+        } catch (error) {
+            /* لا نضع بيانات وهمية */
+        }
+
+        if (
+            window.history.length > 1
+        ) {
+
+            window.history.back();
+        }
+    }
+
+    window.goHome =
+        goHome;
+
+    /* ================================================================
+       KEYBOARD
+       ================================================================ */
+
+    document.addEventListener(
+        'keydown',
+        event => {
+
+            if (
+                event.key ===
+                'Escape'
+            ) {
+
+                document
+                    .querySelectorAll(
+                        '.modal-overlay.show'
+                    )
+                    .forEach(
+                        modal =>
+                            closeModal(
+                                modal.id
+                            )
+                    );
+            }
+        }
+    );
+
+    /* ================================================================
+       PULL TO REFRESH
+       ================================================================ */
+
+    let touchStartY = 0;
+    let pulling = false;
+
+    window.addEventListener(
+        'touchstart',
+        event => {
+
+            if (
+                window.scrollY === 0
+            ) {
+
+                touchStartY =
+                    event.touches[0]
+                        .clientY;
+
+                pulling = true;
+            }
+        },
+        {
+            passive:true
+        }
+    );
+
+    window.addEventListener(
+        'touchend',
+        event => {
+
+            if (!pulling) return;
+
+            const endY =
+                event.changedTouches[0]
+                    .clientY;
+
+            const distance =
+                endY -
+                touchStartY;
+
+            pulling = false;
+
+            if (
+                distance > 90 &&
+                window.scrollY === 0 &&
+                !state.loading
+            ) {
+
+                loadDeliveries();
+            }
+        },
+        {
+            passive:true
+        }
+    );
+
+    /* ================================================================
+       INITIALIZATION
+       ================================================================ */
+
+    async function init() {
+
+        initTheme();
+
+        $('reportFrom').value =
+            today();
+
+        $('reportTo').value =
+            today();
+
+        $('reportType').addEventListener('change', () => {
+            $('reportDetailed').checked = $('reportType').value === 'detailed';
+            syncReportFilters();
+        });
+        $('reportDetailed').addEventListener('change', () => {
+            if ($('reportDetailed').checked) $('reportType').value = 'detailed';
+            syncReportFilters();
+        });
+
+        /*
+         * لا توجد أي بيانات افتراضية.
+         * جميع البيانات تأتي من Android Bridge.
+         */
+
+        await loadDeliveries();
+
+        const querySaleId = Number(new URLSearchParams(window.location.search).get('sale_id') || 0);
+        if (querySaleId > 0) {
+            $('f_sale_id').value = String(querySaleId);
+            $('f_sale_id').readOnly = true;
+            try {
+                showFormNotice('جارٍ تحميل البيع الأصلي من SQLite...', 'warning');
+                const response = await invoke('getDeliverySaleContext', [querySaleId]);
+                const payload = dataOf(response) || response;
+                if (!payload || payload.found === false || !payload.sale) {
+                    throw new Error(payload?.message || 'عملية البيع الأصلية غير موجودة');
+                }
+                fillFromLatestSale(payload.sale);
+                openModal('formModal');
+            } catch (error) {
+                showFormNotice(error.message || 'تعذر تحميل البيع الأصلي للتوصيل', 'error');
+            }
+        }
+    }
+
+    init();
+
+})();
+</script>
+
+<script src="file:///android_asset/assets-local/js/modal-interaction.js"></script></body>
+</html>

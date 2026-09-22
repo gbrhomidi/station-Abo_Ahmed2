@@ -1,0 +1,3690 @@
+<!DOCTYPE html><html lang="ar" dir="rtl" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,viewport-fit=cover">
+<title>إدارة الموظفين</title><link rel="stylesheet" href="file:///android_asset/assets-local/css/fonts/cairo.css">
+<link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+<link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css"><style>
+:root{
+    --bg:#f4f7fb;
+    --surface:#ffffff;
+    --surface-2:#f8fafc;
+    --surface-3:#eef4f9;
+    --primary:#087ea4;
+    --primary-2:#2563eb;
+    --primary-soft:rgba(37,99,235,.10);
+    --success:#16a34a;
+    --warning:#d97706;
+    --danger:#dc2626;
+    --text:#172033;
+    --muted:#64748b;
+    --border:#d7dee8;
+    --border-strong:#c4cfdd;
+    --accent:#c58a18;
+    --shadow:0 12px 35px rgba(15,23,42,.08);
+    --shadow-lg:0 25px 70px rgba(15,23,42,.16);
+    --radius:20px;
+    --radius-sm:13px;
+    --font-sans:"Cairo","Noto Sans Arabic",Arial,sans-serif;
+}
+
+[data-theme="dark"]{
+    --bg:#06111f;
+    --surface:#0c1b2d;
+    --surface-2:#102238;
+    --surface-3:#132941;
+    --primary:#55c7f5;
+    --primary-2:#6ea8ff;
+    --primary-soft:rgba(85,199,245,.12);
+    --success:#42e39a;
+    --warning:#ffd166;
+    --danger:#ff7184;
+    --text:#eef7ff;
+    --muted:#aabbd0;
+    --border:#49a9ee;
+    --border-strong:#76c8ff;
+    --accent:#f1cf7a;
+    --shadow:0 14px 40px rgba(0,0,0,.38);
+    --shadow-lg:0 25px 75px rgba(0,0,0,.55);
+}
+
+*{
+    box-sizing:border-box;
+    margin:0;
+    padding:0;
+    -webkit-tap-highlight-color:transparent;
+}
+
+html,body{
+    min-height:100%;
+    font-family:var(--font-sans);
+    direction:rtl;
+}
+
+body{
+    background:
+        radial-gradient(circle at 8% 0%,rgba(37,99,235,.09),transparent 32%),
+        var(--bg);
+    color:var(--text);
+    padding-bottom:115px;
+    text-align:center;
+}
+
+button,input,select,textarea{
+    font-family:var(--font-sans);
+}
+
+button{
+    cursor:pointer;
+}
+
+.hidden{
+    display:none!important;
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.topbar{
+    position:sticky;
+    top:0;
+    z-index:100;
+    background:color-mix(in srgb,var(--surface) 94%,transparent);
+    backdrop-filter:blur(20px);
+    border-bottom:1px solid var(--border);
+    padding:12px 10px;
+}
+
+.topbar-row{
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    width:100%;
+}
+
+/* أقصى اليمين: الأيقونة + العنوان */
+.title-area{
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+    gap:9px;
+    min-width:0;
+    flex:1;
+    text-align:right;
+    padding-left:95px;
+}
+
+.title-icon{
+    width:43px;
+    height:43px;
+    min-width:43px;
+    border-radius:13px;
+    display:grid;
+    place-items:center;
+    background:linear-gradient(135deg,var(--primary-2),var(--primary));
+    color:#fff;
+    box-shadow:var(--shadow);
+    font-size:1.15rem;
+}
+
+.title-text{
+    min-width:0;
+    text-align:right;
+}
+
+.title-text h1{
+    font-size:1.13rem;
+    line-height:1.35;
+    font-weight:950;
+    color:var(--primary);
+    white-space:nowrap;
+}
+
+.title-text p{
+    font-size:.65rem;
+    color:var(--muted);
+    margin-top:2px;
+    white-space:nowrap;
+}
+
+.header-actions{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    flex-shrink:0;
+    position:absolute;
+    left:10px;
+    top:12px;
+}
+
+.icon-btn{
+    width:44px;
+    height:44px;
+    border-radius:13px;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    color:var(--text);
+    font-size:1.38rem;
+    display:grid;
+    place-items:center;
+    box-shadow:var(--shadow);
+}
+
+.icon-btn:active{
+    transform:scale(.95);
+}
+
+[data-theme="dark"] .icon-btn{
+    border-color:#63c7ff!important;
+}
+
+/* أزرار الوضع والرجوع ثابتة الأبعاد على WebView وAPK */
+.icon-btn,
+.header-actions .icon-btn{
+    width:44px!important;
+    height:44px!important;
+    min-width:44px!important;
+    max-width:44px!important;
+    flex:0 0 44px;
+}
+
+/* =========================================================
+   PAGE / SEARCH / TABS
+   ========================================================= */
+
+.page{
+    width:100%;
+    max-width:1280px;
+    margin:auto;
+    padding:13px;
+}
+
+.search-box{
+    position:relative;
+    margin-bottom:11px;
+}
+
+.search-box input{
+    width:100%;
+    height:52px;
+    padding:0 48px 0 16px;
+    border:1px solid var(--border);
+    border-radius:16px;
+    background:var(--surface);
+    color:var(--text);
+    outline:none;
+    text-align:center;
+    box-shadow:var(--shadow);
+    font-size:.88rem;
+}
+
+.search-box input:focus{
+    border-color:var(--primary);
+    box-shadow:0 0 0 3px var(--primary-soft);
+}
+
+.search-box i{
+    position:absolute;
+    right:18px;
+    top:50%;
+    transform:translateY(-50%);
+    color:var(--muted);
+}
+
+.tabs{
+    display:flex;
+    gap:8px;
+    overflow-x:auto;
+    padding:2px 1px 9px;
+    scrollbar-width:none;
+}
+
+.tabs::-webkit-scrollbar{
+    display:none;
+}
+
+.tab{
+    flex:0 0 auto;
+    padding:9px 14px;
+    border:1px solid var(--border);
+    border-radius:999px;
+    background:var(--surface);
+    color:var(--muted);
+    font-weight:850;
+    font-size:.75rem;
+    white-space:nowrap;
+}
+
+.tab.active{
+    background:var(--primary-soft);
+    color:var(--primary);
+    border-color:var(--primary);
+}
+
+/* =========================================================
+   KPI
+   ========================================================= */
+
+.stats{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:10px;
+    margin:7px 0 14px;
+}
+
+.kpi{
+    background:linear-gradient(145deg,var(--surface),var(--surface-2));
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:15px 10px;
+    box-shadow:var(--shadow);
+    text-align:center;
+}
+
+.kpi .ico{
+    font-size:1.25rem;
+    color:var(--primary);
+    margin-bottom:5px;
+}
+
+.kpi strong{
+    display:block;
+    font-size:1.32rem;
+    font-weight:950;
+}
+
+.kpi span{
+    display:block;
+    color:var(--muted);
+    font-size:.66rem;
+    margin-top:3px;
+    font-weight:800;
+}
+
+/* =========================================================
+   DATA PANEL
+   ========================================================= */
+
+.panel{
+    background:linear-gradient(145deg,var(--surface),var(--surface-2));
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:15px;
+}
+
+.panel-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:12px;
+}
+
+.panel-head h2{
+    font-size:.98rem;
+    font-weight:950;
+}
+
+.badge{
+    padding:5px 10px;
+    border-radius:999px;
+    background:var(--primary-soft);
+    color:var(--primary);
+    font-size:.7rem;
+    font-weight:900;
+}
+
+/* =========================================================
+   EMPLOYEE CARDS
+   ========================================================= */
+
+.cards{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+}
+
+.employee-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:18px;
+    padding:15px;
+    text-align:center;
+    box-shadow:var(--shadow);
+    animation:rise .35s ease both;
+}
+
+.employee-card:hover{
+    transform:translateY(-2px);
+    box-shadow:var(--shadow-lg);
+}
+
+.avatar{
+    width:58px;
+    height:58px;
+    margin:0 auto 9px;
+    border-radius:18px;
+    background:linear-gradient(135deg,var(--primary-2),var(--primary));
+    color:#fff;
+    display:grid;
+    place-items:center;
+    font-size:1.35rem;
+    font-weight:950;
+}
+
+.employee-name{
+    font-size:1rem;
+    font-weight:950;
+}
+
+.employee-code{
+    font-size:.7rem;
+    color:var(--muted);
+    margin-top:3px;
+}
+
+.status{
+    display:inline-flex;
+    margin-top:8px;
+    padding:5px 12px;
+    border-radius:999px;
+    font-size:.68rem;
+    font-weight:900;
+}
+
+.status.active{
+    background:rgba(22,163,74,.12);
+    color:var(--success);
+}
+
+.status.inactive{
+    background:rgba(100,116,139,.12);
+    color:var(--muted);
+}
+
+.card-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:7px;
+    margin-top:12px;
+}
+
+.info{
+    padding:8px 6px;
+    border-radius:11px;
+    background:var(--primary-soft);
+    min-width:0;
+    border:1px solid var(--border);
+    text-align:center;
+}
+
+.info small{
+    display:block;
+    color:var(--muted);
+    font-size:.61rem;
+}
+
+.info b{
+    display:block;
+    color:var(--text);
+    font-size:.72rem;
+    margin-top:2px;
+    overflow-wrap:anywhere;
+}
+
+.actions{
+    display:flex;
+    gap:7px;
+    margin-top:11px;
+}
+
+.btn{
+    min-height:42px;
+    padding:8px 12px;
+    border-radius:12px;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    color:var(--text);
+    font-size:.74rem;
+    font-weight:900;
+    flex:1;
+}
+
+.btn.primary{
+    background:linear-gradient(135deg,var(--primary-2),var(--primary));
+    color:#fff;
+    border-color:transparent;
+}
+
+.btn.danger{
+    color:var(--danger);
+}
+
+.btn.warning{
+    color:var(--warning);
+}
+
+.empty{
+    padding:48px 16px;
+    color:var(--muted);
+    line-height:2;
+}
+
+.empty i{
+    font-size:2.5rem;
+    color:var(--primary);
+    display:block;
+    margin-bottom:10px;
+}
+
+/* =========================================================
+   BOTTOM NAV
+   ========================================================= */
+
+.bottom-nav{
+    position:fixed;
+    bottom:0;
+    left:0;
+    right:0;
+    z-index:500;
+    display:flex;
+    gap:8px;
+    padding:9px 10px calc(9px + env(safe-area-inset-bottom));
+    background:color-mix(in srgb,var(--surface) 95%,transparent);
+    backdrop-filter:blur(20px);
+    border-top:1px solid var(--border);
+}
+
+.nav-item{
+    flex:1;
+    min-height:68px;
+    border:1px solid var(--border);
+    border-radius:16px;
+    background:var(--surface-2);
+    color:var(--muted);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:4px;
+    font-size:1.12rem;
+    font-weight:950;
+}
+
+.nav-item i{
+    font-size:1.35rem;
+}
+
+.nav-item.active{
+    color:var(--primary);
+    border-color:var(--primary);
+    background:var(--primary-soft);
+}
+
+/* =========================================================
+   MODAL
+   ========================================================= */
+
+.modal-bg{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:1000;
+    background:rgba(0,0,0,.68);
+    backdrop-filter:blur(7px);
+    align-items:flex-end;
+    justify-content:center;
+}
+
+.modal-bg.show{
+    display:flex;
+}
+
+.modal{
+    width:min(920px,100%);
+    max-height:94vh;
+    overflow:auto;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-bottom:0;
+    border-radius:25px 25px 0 0;
+    box-shadow:var(--shadow-lg);
+    text-align:center;
+}
+
+.modal-head{
+    position:sticky;
+    top:0;
+    z-index:2;
+    padding:15px 17px;
+    background:color-mix(in srgb,var(--surface) 96%,transparent);
+    backdrop-filter:blur(15px);
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+}
+
+.modal-head h3{
+    font-size:1rem;
+    font-weight:950;
+    flex:1;
+}
+
+.close{
+    width:38px;
+    height:38px;
+    border-radius:11px;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    color:var(--text);
+    font-size:1.1rem;
+}
+
+.modal-body{
+    padding:17px;
+}
+
+/* كل حقلين في الصف */
+.form-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+}
+
+/* حاوية مشتركة لعناصر السطر الواحد داخل نماذج APK */
+.form-row{
+    grid-column:1/-1;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    min-width:0;
+}
+
+.form-row > .field.full,
+.form-row > .field.email-full{
+    grid-column:1/-1;
+}
+
+.field{
+    min-width:0;
+    text-align:center;
+}
+
+.field.full{
+    grid-column:1/-1;
+}
+
+.field label{
+    display:block;
+    color:var(--muted);
+    font-size:.74rem;
+    font-weight:850;
+    margin-bottom:6px;
+}
+
+.field input,
+.field select,
+.field textarea{
+    width:100%;
+    min-height:46px;
+    border:1px solid var(--border);
+    border-radius:12px;
+    background:var(--surface-2);
+    color:var(--text);
+    outline:none;
+    padding:9px 11px;
+    text-align:center;
+    font-size:.82rem;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus{
+    border-color:var(--primary);
+    box-shadow:0 0 0 3px var(--primary-soft);
+}
+
+.field textarea{
+    min-height:90px;
+    resize:vertical;
+}
+
+.field input[readonly]{
+    opacity:.58;
+    background:var(--surface-3);
+    font-weight:900;
+}
+
+.field input[readonly]:focus{
+    border-color:var(--border);
+    box-shadow:none;
+}
+
+.readonly-note{
+    font-size:.63rem;
+    color:var(--muted);
+    margin-top:4px;
+}
+
+/* البريد الإلكتروني بعرض كامل */
+.field.email-full{
+    grid-column:1/-1;
+}
+
+/* الحقول المخفية */
+.field.termination-field.hidden,
+.field.allowance-field.hidden{
+    display:none!important;
+}
+
+/* التنبيهات داخل المودال */
+.alert-box{
+    display:none;
+    margin-top:12px;
+    border:1px solid var(--danger);
+    background:rgba(220,38,38,.09);
+    color:var(--danger);
+    border-radius:13px;
+    padding:10px;
+    font-size:.74rem;
+    font-weight:800;
+    line-height:1.8;
+}
+
+.alert-box.show{
+    display:block;
+}
+
+.modal-foot{
+    display:flex;
+    gap:9px;
+    padding:13px 17px;
+    border-top:1px solid var(--border);
+    position:sticky;
+    bottom:0;
+    background:var(--surface);
+}
+
+.modal-foot .btn{
+    min-height:48px;
+}
+
+/* =========================================================
+   DETAILS / REPORT
+   ========================================================= */
+
+.details-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:9px;
+}
+
+.detail{
+    background:var(--primary-soft);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:10px;
+    text-align:center;
+}
+
+.detail small{
+    display:block;
+    color:var(--muted);
+    font-size:.65rem;
+}
+
+.detail b{
+    display:block;
+    margin-top:3px;
+    overflow-wrap:anywhere;
+    font-size:.76rem;
+}
+
+.report-table-wrap{
+    overflow:auto;
+    border:1px solid var(--border);
+    border-radius:14px;
+}
+
+.report-table{
+    width:100%;
+    border-collapse:collapse;
+    min-width:680px;
+    font-size:.72rem;
+}
+
+.report-table th,
+.report-table td{
+    padding:9px;
+    border-bottom:1px solid var(--border);
+    text-align:center;
+}
+
+.report-table th{
+    background:var(--primary-soft);
+    color:var(--primary);
+    font-weight:950;
+}
+
+/* =========================================================
+   LOADING / OFFLINE / TOAST
+   ========================================================= */
+
+.loading{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:3000;
+    background:rgba(0,0,0,.55);
+    backdrop-filter:blur(5px);
+    place-items:center;
+}
+
+.loading.show{
+    display:grid;
+}
+
+.spinner{
+    width:52px;
+    height:52px;
+    border:5px solid rgba(255,255,255,.25);
+    border-top-color:var(--primary);
+    border-radius:50%;
+    animation:spin 1s linear infinite;
+}
+
+.offline{
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    z-index:2500;
+    background:var(--warning);
+    color:#111;
+    padding:8px;
+    font-size:.76rem;
+    font-weight:900;
+    transform:translateY(-110%);
+    transition:.3s;
+}
+
+.offline.show{
+    transform:translateY(0);
+}
+
+.toast{
+    position:fixed;
+    left:50%;
+    bottom:94px;
+    transform:translate(-50%,20px);
+    opacity:0;
+    pointer-events:none;
+    z-index:4000;
+    min-width:min(90%,340px);
+    max-width:92%;
+    padding:11px 15px;
+    border-radius:13px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    color:var(--text);
+    box-shadow:var(--shadow-lg);
+    font-size:.76rem;
+    font-weight:850;
+    transition:.25s;
+}
+
+.toast.show{
+    opacity:1;
+    transform:translate(-50%,0);
+}
+
+.toast.bad{
+    border-color:var(--danger);
+    color:var(--danger);
+}
+
+.toast.warn{
+    border-color:var(--warning);
+    color:var(--warning);
+}
+
+/* الوضع المظلم: إطار أزرق فاتح لجميع العناصر */
+[data-theme="dark"] .panel,
+[data-theme="dark"] .employee-card,
+[data-theme="dark"] .kpi,
+[data-theme="dark"] .modal,
+[data-theme="dark"] .field input,
+[data-theme="dark"] .field select,
+[data-theme="dark"] .field textarea,
+[data-theme="dark"] .detail,
+[data-theme="dark"] .bottom-nav,
+[data-theme="dark"] .nav-item,
+[data-theme="dark"] .search-box input,
+[data-theme="dark"] .tab{
+    border-color:#63c7ff!important;
+    box-shadow:
+        0 0 0 1px rgba(99,199,255,.16),
+        0 0 18px rgba(99,199,255,.07);
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media(max-width:760px){
+    .stats{
+        grid-template-columns:repeat(2,1fr);
+    }
+
+    .cards{
+        grid-template-columns:1fr;
+    }
+
+    .page{
+        padding:10px;
+    }
+
+    .title-text h1{
+        font-size:1rem;
+    }
+
+    .title-text p{
+        display:none;
+    }
+}
+
+@media(max-width:430px){
+    .form-grid{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:8px;
+    }
+
+    .field input,
+    .field select,
+    .field textarea{
+        padding:8px 5px;
+        font-size:.75rem;
+    }
+
+    .field label{
+        font-size:.66rem;
+    }
+
+    .kpi{
+        padding:11px 6px;
+    }
+
+    .kpi strong{
+        font-size:1.08rem;
+    }
+
+    .nav-item{
+        min-height:66px;
+        font-size:1rem;
+    }
+
+    .nav-item i{
+        font-size:1.2rem;
+    }
+
+    .modal-foot{
+        flex-wrap:wrap;
+    }
+
+    .modal-foot .btn{
+        min-width:calc(50% - 5px);
+    }
+}
+
+@media(max-width:350px){
+    .title-icon{
+        width:39px;
+        min-width:39px;
+        height:39px;
+    }
+
+    .icon-btn{
+        width:44px!important;
+        min-width:44px!important;
+        height:44px!important;
+    }
+
+    .title-text h1{
+        font-size:.9rem;
+    }
+}
+
+@keyframes rise{
+    from{
+        opacity:0;
+        transform:translateY(12px);
+    }
+    to{
+        opacity:1;
+        transform:none;
+    }
+}
+
+@keyframes spin{
+    to{
+        transform:rotate(360deg);
+    }
+}
+
+/* =========================================================
+   PERFORMANCE PANEL - إدارة الأداء والتقييمات الشهرية (منقول من employees.html)
+   ========================================================= */
+.performance-panel{margin-top:16px;background:var(--surface-elevated);border:var(--border-width) var(--border-style) var(--border-color);border-radius:18px;padding:16px;border-color:var(--border);border-style:solid;border-width:1px}.performance-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.performance-head h3{font-size:1rem;font-weight:800}.performance-head p{color:var(--muted);font-size:.72rem;line-height:1.8;margin-top:4px}.performance-badge{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:5px 9px;background:rgba(139,92,246,.12);color:#8b5cf6;font-size:.66rem;font-weight:800;white-space:nowrap}.performance-toolbar{display:flex;flex-wrap:nowrap;align-items:center;gap:12px;margin-bottom:12px}.performance-toolbar .form-group{flex:1 1 auto;min-width:0;margin-bottom:0}.performance-toolbar .form-group label{font-size:.74rem;font-weight:800;color:var(--muted);display:block;margin-bottom:4px}.performance-toolbar .form-group .form-input{width:100%;min-height:42px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);padding:6px 10px;font-size:.82rem;outline:none;text-align:center}.performance-toolbar .form-group .form-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}.performance-toolbar .btn{flex:0 0 auto;min-height:42px;padding:6px 16px;white-space:nowrap}.performance-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:14px 0}.performance-kpi{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:11px}.performance-kpi strong{display:block;font-size:1.05rem;color:var(--text)}.performance-kpi span{display:block;color:var(--muted);font-size:.66rem;margin-top:3px}.performance-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px}.performance-table{width:100%;min-width:620px;border-collapse:collapse;font-size:.72rem}.performance-table th{background:var(--primary-soft);color:var(--primary);padding:9px;text-align:center;white-space:nowrap}.performance-table td{padding:8px;text-align:center;border-top:1px solid var(--border);color:var(--text)}.score-pill{display:inline-flex;min-width:42px;justify-content:center;padding:4px 8px;border-radius:12px;font-weight:800}.score-high{background:rgba(16,185,129,.14);color:var(--success)}.score-mid{background:rgba(245,158,11,.14);color:var(--warning)}.score-low{background:rgba(239,68,68,.14);color:var(--danger)}.performance-empty{padding:22px;text-align:center;color:var(--muted);font-size:.75rem;line-height:1.9}.performance-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.performance-form-grid .form-group.full{grid-column:1/-1}.performance-note{margin-top:10px;padding:9px 11px;background:var(--primary-soft);color:var(--primary);border-radius:10px;font-size:.7rem;line-height:1.8}.performance-history{margin-top:14px}.performance-history h4{font-size:.8rem;color:var(--primary);margin-bottom:8px}.performance-history-item{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px;border-top:1px solid var(--border);font-size:.7rem}.performance-history-item span{color:var(--muted)}
+@media(max-width:640px){.performance-toolbar{flex-wrap:wrap}.performance-toolbar .form-group{flex:1 1 100%}.performance-toolbar .btn{width:100%}.performance-head{flex-direction:column}}
+.segmented-control{display:flex;align-items:center;gap:3px;overflow-x:auto;scrollbar-width:none;margin:0 -13px 12px;padding:4px 13px;background:linear-gradient(135deg,#dbeafe,#bfdbfe 55%,#93c5fd);border:1px solid var(--border);border-radius:0;box-shadow:inset 0 1px 2px rgba(15,23,42,.08);width:calc(100% + 26px);padding-left:0.25rem;padding-right:0.25rem;box-shadow:0 4px 12px rgba(0,0,0,0.12),inset 0 1px 2px rgba(255,255,255,0.7)}
+[data-theme="dark"] .segmented-control{background:linear-gradient(135deg,#e6dccb,#d6c7ae 55%,#f1e3c4);border-color:#d5c3a4;box-shadow:0 4px 12px rgba(0,0,0,0.4),inset 0 1px 2px rgba(255,255,255,0.1)}
+.segmented-control::-webkit-scrollbar{display:none}.segment{flex:0 0 auto;min-height:44px;border:1px solid transparent;border-radius:11px;padding:8px 15px;background:transparent;color:#000000;font-weight:800;font-size:15px;line-height:1.2;white-space:nowrap;transition:background .18s ease,color .18s ease,box-shadow .18s ease,transform .18s ease}
+[data-theme="dark"] .segment{color:#000000}
+.segment:hover{color:var(--text);background:color-mix(in srgb,var(--primary) 8%,transparent)}
+.segment.active{background:var(--primary);color:#000000;box-shadow:0 3px 9px color-mix(in srgb,var(--primary) 28%,transparent)}
+[data-theme="dark"] .segment.active{color:#000000}
+.segment:focus-visible{outline:2px solid var(--primary);outline-offset:2px;box-shadow:0 0 0 3px var(--primary-soft)}
+.field input[type=date]{cursor:pointer}.field input[type=tel]{direction:ltr;text-align:center}.file-path-input{cursor:pointer}.file-path-input[readonly]{opacity:1}.file-path-input::placeholder{color:var(--muted)}
+
+/* APK/WebView compatibility: keep this screen's desktop-correct two-column layout.
+   theme.css contains broad ui-rehab mobile fallbacks that must not collapse this screen. */
+@media (max-width:767px){
+    body.ui-rehab .stats{grid-template-columns:repeat(2,minmax(0,1fr));}
+    body.ui-rehab .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+    body.ui-rehab .modal{
+        width:min(920px,100%);
+        max-width:100%;
+        max-height:94vh;
+        overflow-x:hidden;
+        overflow-y:auto;
+        -webkit-overflow-scrolling:touch;
+        touch-action:pan-y;
+    }
+    body.ui-rehab .modal-body{overflow:visible;}
+    body.ui-rehab .modal-bg{touch-action:pan-y;}
+    body.ui-rehab .title-icon{width:43px;height:43px;min-width:43px;font-size:1.15rem;}
+    body.ui-rehab .icon-btn{width:44px;height:44px;min-width:44px;font-size:1.38rem;}
+}
+@media (max-width:430px){
+    body.ui-rehab .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+}
+
+/* =========================================================
+   تحسين تصميم تشك بوكس في التقارير
+   ========================================================= */
+.report-columns{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0;padding:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;justify-content:center}
+.report-columns label{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:20px;font-size:.78rem;font-weight:800;color:var(--text);cursor:pointer;transition:background .2s,border-color .2s,box-shadow .2s}
+.report-columns label:hover{background:var(--primary-soft);border-color:var(--primary)}
+.report-columns input[type="checkbox"]{width:17px;height:17px;accent-color:var(--primary);cursor:pointer;margin:0}
+</style></head><body class="ui-rehab"><div class="offline" id="offline">
+    اتصال Android Bridge غير متاح — لا توجد بيانات بديلة.
+</div><div class="loading" id="loading">
+    <div class="spinner"></div>
+</div><!-- =========================================================
+     HEADER
+     ========================================================= --><header class="topbar">
+    <div class="topbar-row">    <!-- الجهة اليمنى -->
+    <div class="title-area">
+
+        <div class="title-icon" aria-hidden="true">
+            <i class="fas fa-user-tie"></i>
+        </div>
+
+        <div class="title-text">
+            <h1>إدارة الموظفين</h1>
+            <p id="sessionText">بيانات الموظفين من SQLite</p>
+        </div>
+
+    </div>
+
+    <!-- الجهة الشمالية/المقابلة -->
+    <div class="header-actions">
+
+        <button
+            class="icon-btn"
+            type="button"
+            id="themeBtn"
+            title="تبديل الوضع"
+            aria-label="تبديل الوضع">
+            🌙
+        </button>
+
+        <button
+            class="icon-btn"
+            type="button"
+            onclick="goHome()"
+            title="رجوع"
+            aria-label="رجوع">
+            🏠
+        </button>
+
+    </div>
+
+</div>
+
+</header><main class="page"><!-- البحث -->
+<div class="segmented-control" id="hrSegments" role="tablist" aria-label="شاشات إدارة الموظفين"><button type="button" role="tab" aria-selected="false" data-screen="attendance.html" class="segment">الدوام</button><button type="button" role="tab" aria-selected="false" data-screen="whitelist.html" class="segment">القائمة البيضاء</button><button type="button" role="tab" aria-selected="false" data-screen="payroll.html" class="segment">الرواتب</button><button type="button" role="tab" aria-selected="false" aria-controls="performancePanel" data-screen="employees.html#performancePanel" class="segment">التقييمات</button><button type="button" role="tab" aria-selected="false" data-screen="documents.html" class="segment">المستندات</button><button type="button" role="tab" aria-selected="false" data-screen="contracts.html" class="segment">العقود</button><button type="button" role="tab" aria-selected="false" data-screen="employee-payments.html" class="segment">الدفعات</button></div>
+<div class="search-box">
+    <i class="fas fa-search"></i>
+    <input
+        id="search"
+        type="search"
+        inputmode="search"
+        placeholder="ابحث في جميع بيانات الموظفين..."
+        autocomplete="off">
+</div>
+
+<!-- الفلاتر -->
+<div class="tabs" id="tabs"></div>
+
+<!-- الإحصائيات -->
+<section class="stats">
+
+    <div class="kpi">
+        <div class="ico"><i class="fas fa-users"></i></div>
+        <strong id="kTotal">0</strong>
+        <span>إجمالي الموظفين</span>
+    </div>
+
+    <div class="kpi">
+        <div class="ico"><i class="fas fa-shield-heart"></i></div>
+        <strong id="kInsured">0</strong>
+        <span>مأمنين</span>
+    </div>
+
+    <div class="kpi">
+        <div class="ico"><i class="fas fa-user-check"></i></div>
+        <strong id="kActive">0</strong>
+        <span>نشطون</span>
+    </div>
+
+    <div class="kpi">
+        <div class="ico"><i class="fas fa-money-bill-wave"></i></div>
+        <strong id="kPayroll">0</strong>
+        <span>إجمالي الرواتب</span>
+    </div>
+
+</section>
+
+<!-- السجلات -->
+<section class="panel">
+
+    <div class="panel-head">
+        <h2>
+            <i class="fas fa-address-card"></i>
+            سجلات الموظفين
+        </h2>
+
+        <span class="badge" id="count">0</span>
+    </div>
+
+    <div class="cards" id="cards"></div>
+
+</section>
+
+<!-- =========================================================
+     PERFORMANCE PANEL - إدارة الأداء والتقييمات الشهرية (منقول)
+     ========================================================= -->
+<section class="performance-panel" id="performancePanel">
+  <div class="performance-head"><div><h3><i class="fas fa-chart-line"></i> إدارة الأداء والتقييمات الشهرية</h3><p>سجّل تقييمًا شهريًا لكل موظف، واحفظه فعليًا داخل الحقل <code>extra_data</code> في سجل الموظف.</p></div><span class="performance-badge"><i class="fas fa-database"></i> SQLite / Android Bridge</span></div>
+  <div class="performance-toolbar"><div class="form-group"><label for="performanceMonth">شهر التقييم</label><input class="form-input" id="performanceMonth" type="month"></div><div class="form-group"><label for="performanceEmployeeSelect">الموظف</label><select class="form-input" id="performanceEmployeeSelect"><option value="">اختر الموظف</option></select></div><button type="button" class="btn primary" id="openPerformanceBtn"><i class="fas fa-pen-to-square"></i> إضافة تقييم</button></div>
+  <div class="performance-summary"><div class="performance-kpi"><strong id="performanceReviewed">0</strong><span>تقييمات الشهر</span></div><div class="performance-kpi"><strong id="performanceAverage">—</strong><span>متوسط التقييم</span></div><div class="performance-kpi"><strong id="performanceTop">—</strong><span>أفضل تقييم</span></div></div>
+  <div id="performanceResults"><div class="performance-empty">لا توجد تقييمات محفوظة للشهر المحدد.</div></div>
+</section>
+
+</main><!-- =========================================================
+     BOTTOM NAV
+     ========================================================= --><nav class="bottom-nav"><button
+    class="nav-item active"
+    type="button"
+    onclick="openForm()">
+
+    <i class="fas fa-user-plus"></i>
+    <span>＋ موظف جديد</span>
+
+</button>
+
+<button
+    class="nav-item"
+    type="button"
+    onclick="openReport()">
+
+    <i class="fas fa-chart-column"></i>
+    <span>تقارير</span>
+
+</button>
+
+</nav><!-- =========================================================
+     ADD / EDIT EMPLOYEE MODAL
+     ========================================================= --><div class="modal-bg" id="formModal"><div class="modal">
+
+    <div class="modal-head">
+
+        <h3 id="formTitle">
+            إضافة موظف جديد
+        </h3>
+
+        <button
+            class="close"
+            type="button"
+            onclick="closeModal('formModal')">
+            ×
+        </button>
+
+    </div>
+
+    <div class="modal-body">
+
+        <form
+            id="employeeForm"
+            class="form-grid"
+            autocomplete="off">
+        </form>
+
+        <div
+            id="formAlert"
+            class="alert-box">
+        </div>
+
+    </div>
+
+    <div class="modal-foot">
+
+        <button
+            class="btn primary"
+            id="saveBtn"
+            type="button">
+            <i class="fas fa-save"></i>
+            حفظ فعلي
+        </button>
+
+        <button
+            class="btn warning"
+            id="terminationBtn"
+            type="button"
+            onclick="toggleTermination()">
+            <i class="fas fa-user-slash"></i>
+            تسريح الموظف
+        </button>
+
+        <button
+            class="btn"
+            type="button"
+            onclick="toggleAllowances()">
+            <i class="fas fa-coins"></i>
+            بدلات الموظف
+        </button>
+
+        <button
+            class="btn"
+            type="button"
+            onclick="closeModal('formModal')">
+            إلغاء
+        </button>
+
+    </div>
+
+</div>
+
+</div><!-- =========================================================
+     DETAILS
+     ========================================================= --><div class="modal-bg" id="detailsModal"><div class="modal">
+
+    <div class="modal-head">
+
+        <h3>تفاصيل الموظف</h3>
+
+        <button
+            class="close"
+            onclick="closeModal('detailsModal')">
+            ×
+        </button>
+
+    </div>
+
+    <div class="modal-body">
+
+        <div
+            id="detailsBody"
+            class="details-grid">
+        </div>
+
+    </div>
+
+</div>
+
+</div><!-- =========================================================
+     REPORT
+     ========================================================= --><div class="modal-bg" id="reportModal"><div class="modal">
+
+    <div class="modal-head">
+
+        <h3>تقرير الموظفين</h3>
+
+        <button
+            class="close"
+            onclick="closeModal('reportModal')">
+            ×
+        </button>
+
+    </div>
+
+    <div class="modal-body">
+
+        <div class="form-grid">
+            <div class="field"><label>من تاريخ</label><input id="reportFrom" type="date"></div>
+            <div class="field"><label>إلى تاريخ</label><input id="reportTo" type="date"></div>
+            <div class="field"><label>عدد النتائج في الصفحة</label><input id="reportLimit" type="number" min="1" max="5000" value="100"></div>
+            <div class="field"><label>التجميع</label><select id="reportGroup"><option value="">دون تجميع</option><option value="department">حسب القسم</option><option value="status">حسب الحالة</option><option value="employment_type">حسب نوع التوظيف</option></select></div>
+        </div>
+        <div class="report-columns" id="reportColumns"><label><input type="checkbox" value="employee_code" checked> رقم الموظف</label><label><input type="checkbox" value="full_name" checked> الاسم</label><label><input type="checkbox" value="department" checked> القسم</label><label><input type="checkbox" value="job_title" checked> المسمى</label><label><input type="checkbox" value="employment_type" checked> نوع التوظيف</label><label><input type="checkbox" value="total_salary" checked> إجمالي الراتب</label><label><input type="checkbox" value="status" checked> الحالة</label></div>
+
+        <div class="actions">
+
+            <button
+                class="btn primary"
+                type="button"
+                onclick="generateReport()">
+                <i class="fas fa-database"></i>
+                توليد من SQLite
+            </button>
+
+            <button
+                class="btn"
+                type="button"
+                onclick="exportCSV()">
+                <i class="fas fa-file-export"></i>
+                تصدير CSV
+            </button>
+
+            <button
+                class="btn"
+                type="button"
+                onclick="window.print()">
+                <i class="fas fa-print"></i>
+                طباعة
+            </button>
+
+        </div>
+
+        <div id="reportResults"></div>
+
+    </div>
+
+</div>
+
+</div>
+
+<!-- =========================================================
+     PERFORMANCE MODAL - تقييم الموظف الشهري (منقول)
+     ========================================================= -->
+<div class="modal-bg" id="performanceModal"><div class="modal"><div class="modal-head"><h3>تقييم الموظف الشهري</h3><button type="button" class="close" onclick="closeModal('performanceModal')">×</button></div><div class="modal-body"><div class="performance-note"><i class="fas fa-circle-info"></i> التقييم يُحفظ كتاريخ شهري داخل <code>employees.extra_data</code> عبر `updateEmployeeRecord`، ولا يُعرض كتقييم ناجح قبل عودة نتيجة Android.</div><div class="performance-form-grid" style="margin-top:12px"><div class="field"><label>الموظف</label><select class="form-input" id="reviewEmployee" required></select></div><div class="field"><label>شهر التقييم</label><input class="form-input" id="reviewMonth" type="month" required></div><div class="field"><label>التقييم العام (من 5)</label><input class="form-input" id="reviewScore" type="number" min="1" max="5" step="0.1" required></div><div class="field"><label>الالتزام والانضباط (من 5)</label><input class="form-input" id="reviewDiscipline" type="number" min="1" max="5" step="0.1"></div><div class="field"><label>الإنتاجية (من 5)</label><input class="form-input" id="reviewProductivity" type="number" min="1" max="5" step="0.1"></div><div class="field"><label>التعاون (من 5)</label><input class="form-input" id="reviewTeamwork" type="number" min="1" max="5" step="0.1"></div><div class="field full"><label>أهداف الشهر التالي</label><textarea class="form-input" id="reviewGoals" rows="2"></textarea></div><div class="field full"><label>ملاحظات المدير</label><textarea class="form-input" id="reviewNotes" rows="3"></textarea></div></div><div class="performance-history" id="performanceHistory"></div></div><div class="modal-foot"><button type="button" class="btn primary" id="savePerformanceBtn"><i class="fas fa-save"></i> حفظ التقييم فعليًا</button><button type="button" class="btn" onclick="closeModal('performanceModal')">إلغاء</button></div></div></div>
+
+<div class="toast" id="toast"></div><script>
+(() => {
+
+'use strict';
+
+const bridge = window.AndroidInterface || null;
+const $ = id => document.getElementById(id);
+
+const state = {
+    rows: [],
+    filtered: [],
+    editing: null,
+    filter: 'all',
+    parties: [],
+    user: null,
+    allowancesVisible: false,
+    terminationVisible: false
+};
+
+/* =========================================================
+   LABELS
+   ========================================================= */
+
+const labels = {
+
+    employee_code:'رقم الموظف',
+    full_name:'الاسم الكامل',
+    full_name_ar:'الاسم الكامل بالعربية',
+    national_id:'رقم الهوية',
+    passport_number:'رقم جواز السفر',
+    nationality:'الجنسية',
+    birth_date:'تاريخ الميلاد',
+    gender:'الجنس',
+    marital_status:'الحالة الاجتماعية',
+    phone:'رقم الهاتف',
+    phone2:'رقم هاتف بديل',
+    email:'البريد الإلكتروني',
+    address:'العنوان',
+    emergency_contact:'جهة اتصال للطوارئ',
+    emergency_phone:'هاتف الطوارئ',
+    department:'القسم',
+    job_title:'المسمى الوظيفي',
+    job_title_ar:'المسمى الوظيفي بالعربية',
+    employment_type:'نوع التوظيف',
+    hire_date:'تاريخ التعيين',
+    termination_date:'تاريخ انتهاء الخدمة',
+    termination_reason:'سبب انتهاء الخدمة',
+    station_id:'المحطة',
+    branch_id:'الفرع',
+    basic_salary:'الراتب الأساسي',
+    housing_allowance:'بدل السكن',
+    transport_allowance:'بدل النقل',
+    food_allowance:'بدل الطعام',
+    other_allowances:'بدلات أخرى',
+    total_salary:'إجمالي الراتب',
+    insurance_deduction:'خصم التأمين',
+    status:'الحالة',
+    remarks:'ملاحظات',
+    notes:'ملاحظات',
+    bank_name:'اسم البنك', bank_account:'رقم الحساب البنكي', tax_deduction:'الخصم الضريبي', other_deductions:'خصومات أخرى', extra_data:'بيانات إضافية', contract_path:'مسار العقد', id_doc_path:'مسار وثيقة الهوية', photo_path:'مسار الصورة'
+};
+
+/* =========================================================
+   DEPARTMENTS / JOB TITLES
+   ========================================================= */
+
+const departments = {
+
+    'الإدارة العليا':[
+        'مدير المحطة',
+        'نائب مدير المحطة',
+        'مشرف وردية',
+        'مساعد مدير العمليات'
+    ],
+
+    'الشؤون المالية':[
+        'المدير المالي',
+        'محاسب عام',
+        'أمين صندوق',
+        'محاسب مبيعات يومية',
+        'مسؤول الرواتب والأجور',
+        'مراجع داخلي',
+        'مسؤول تسويات بنكية'
+    ],
+
+    'الشؤون الإدارية':[
+        'المدير الاداري',
+        'النائب الاداري',
+        'مسؤول مشتريات',
+        'أخصائي توظيف وتدريب',
+        'سكرتارية'
+    ],
+
+    'المبيعات':[
+        'عامل',
+        'كاشير',
+        'عامل/كاشير',
+        'مشرف مضخات',
+        'مسؤول مخزن الوقود',
+        'مراقب مخزون الوقود والزيوت',
+        'منسق طلبات الوقود من الموردين'
+    ],
+
+    'خدمة العملاء':[
+        'مدير خدمة عملاء',
+        'موظف استقبال',
+        'عامل مغسلة سيارات',
+        'عامل تلميع وتنظيف داخلي',
+        'بائع البقالة',
+        'مسؤول ولاء العملاء وبطاقات الخصم'
+    ],
+
+    'الصيانة والمرافق':[
+        'فني صيانة مضخات',
+        'مهندس المركبات',
+        'عامل صيانة عامة',
+        'مشرف صيانة'
+    ],
+
+    'الأمن والسلامة':[
+        'حارس',
+        'مشرف أمن',
+        'مراقب كاميرات مراقبة',
+        'مسؤول سلامة وصحة مهنية',
+        'مسعف / ممرض',
+        'مسؤول إطفاء وحرائق'
+    ],
+
+    'البيئة والجودة':[
+        'مسؤول بيئة',
+        'مراقب جودة الوقود',
+        'ممثل قانوني'
+    ],
+
+    'النقل واللوجستيات':[
+        'سائق',
+        'عامل تحميل وتنزيل',
+        'منسق لوجستي'
+    ],
+
+    'التسويق':[
+        'علاقات عامة',
+        'مسؤول تسويق',
+        'مندوب مبيعات',
+        'مسؤول عقود توريد'
+    ],
+
+    'النظافة والخدمات العامة':[
+        'عامل نظافة داخلية',
+        'عامل نظافة خارجية',
+        'عامل عام'
+    ]
+};
+
+/* =========================================================
+   STATIC DOMAIN VALUES
+   ========================================================= */
+
+const employment = [
+    ['full_time','دوام كامل'],
+    ['part_time','دوام جزئي'],
+    ['contract','عقد'],
+    ['temporary','مؤقت']
+];
+
+const gender = [
+    ['male','ذكر'],
+    ['female','أنثى']
+];
+
+const marital = [
+    ['single','عازب'],
+    ['married','متزوج'],
+    ['widowed','أرمل']
+];
+
+const status = [
+    ['active','نشط'],
+    ['on_leave','في إجازة'],
+    ['suspended','موقوف'],
+    ['terminated','منتهية الخدمة']
+];
+
+/* =========================================================
+   FORM DEFINITIONS
+   =========================================================
+   [key,type,required,full,auto,hidden,options,readonly,termination,allowance]
+*/
+
+const defs = [
+
+    ['employee_code','text',0,0,1,1,null,1],
+
+    ['full_name','text',1,1,0,0,null,0],
+
+    ['full_name_ar','text',0,0,0,1],
+
+    ['national_id','text',0,0,0],
+
+    ['passport_number','text',0,0,0],
+
+    ['nationality','text',0,0,0],
+
+    ['birth_date','date',0,0,0],
+
+    ['gender','select',1,0,0,0,gender],
+
+    ['marital_status','select',0,0,0,0,marital],
+
+    ['phone','tel',0,0,0],
+
+    ['phone2','tel',0,0,0],
+
+    ['email','email',0,1,0],
+
+    ['address','textarea',0,1,0],
+
+    ['emergency_contact','text',0,0,0],
+
+    ['emergency_phone','tel',0,0,0],
+
+    ['department','select',1,0,0,0,
+        Object.keys(departments).map(x=>[x,x])
+    ],
+
+    ['job_title','select',1,0,0,0, []],
+
+    ['job_title_ar','text',0,0,0,1],
+
+    ['employment_type','select',1,0,0,0,employment],
+
+    ['hire_date','date',1,0,0],
+
+    ['station_id','number',0,0,0,1,null,0],
+
+    ['branch_id','number',0,0,1,1,null,1],
+
+    ['basic_salary','number',0,0,0],
+
+    ['insurance_deduction','number',0,0,0],
+
+    ['total_salary','number',0,0,0,0,null,0],
+
+    ['status','select',1,0,0,0,status],
+
+    ['termination_date','date',0,0,0,0,null,0,1],
+
+    ['termination_reason','textarea',0,1,0,0,null,0,1],
+
+    ['housing_allowance','number',0,0,0,0,null,0,0,1],
+
+    ['transport_allowance','number',0,0,0,0,null,0,0,1],
+
+    ['food_allowance','number',0,0,0,0,null,0,0,1],
+
+    ['other_allowances','number',0,0,0,0,null,0,0,1],
+
+    ['bank_name','text',0,0,0],
+    ['bank_account','text',0,0,0],
+    ['tax_deduction','number',0,0,0],
+    ['other_deductions','number',0,0,0],
+    ['extra_data','textarea',0,1,0],
+    ['contract_path','text',0,1,0],
+    ['id_doc_path','text',0,1,0],
+    ['photo_path','text',0,1,0],
+    ['remarks','textarea',0,1,0]
+
+];
+
+/* =========================================================
+   UTILITIES
+   ========================================================= */
+
+function esc(v){
+
+    return String(v ?? '—').replace(
+        /[&<>"']/g,
+        c => ({
+            '&':'&amp;',
+            '<':'&lt;',
+            '>':'&gt;',
+            '"':'&quot;',
+            "'":'&#39;'
+        }[c])
+    );
+}
+
+function num(v){
+
+    const n = Number(v);
+
+    return Number.isFinite(n) ? n : 0;
+}
+
+function parse(x){
+
+    const v =
+        typeof x === 'string'
+            ? JSON.parse(x)
+            : x;
+
+    if(
+        v &&
+        v.success === false
+    ){
+        throw Error(
+            v.error ||
+            v.message ||
+            'فشلت العملية'
+        );
+    }
+
+    return v;
+}
+
+function dataOf(x){
+
+    return x &&
+        Object.hasOwn(x,'data')
+        ? x.data
+        : x;
+}
+
+function rowsOf(x){
+
+    const d = dataOf(x);
+
+    if(Array.isArray(d))
+        return d;
+
+    if(Array.isArray(d?.rows))
+        return d.rows;
+
+    if(Array.isArray(d?.data))
+        return d.data;
+
+    if(
+        d &&
+        typeof d === 'object'
+    ){
+        return [d];
+    }
+
+    return [];
+}
+
+function invoke(method,args=[]){
+
+    if(
+        !bridge ||
+        typeof bridge[method] !== 'function'
+    ){
+        return Promise.reject(
+            Error(
+                'العقد '+method+
+                ' غير متاح في Android Bridge'
+            )
+        );
+    }
+
+    try{
+
+        return Promise.resolve(
+            parse(
+                bridge[method](...args)
+            )
+        );
+
+    }catch(e){
+
+        return Promise.reject(e);
+    }
+}
+
+function loading(v){
+
+    $('loading').classList.toggle(
+        'show',
+        !!v
+    );
+}
+
+function toast(message,type='ok'){
+
+    const node = $('toast');
+
+    node.textContent = message;
+
+    node.className =
+        'toast show ' + type;
+
+    clearTimeout(window.__toastTimer);
+
+    window.__toastTimer =
+        setTimeout(
+            () => node.className='toast',
+            3500
+        );
+}
+
+function today(){
+
+    const d = new Date();
+
+    const y = d.getFullYear();
+
+    const m = String(
+        d.getMonth()+1
+    ).padStart(2,'0');
+
+    const day = String(
+        d.getDate()
+    ).padStart(2,'0');
+
+    return `${y}-${m}-${day}`;
+}
+
+function nowDateTime(){
+
+    const d = new Date();
+
+    const y = d.getFullYear();
+
+    const m = String(
+        d.getMonth()+1
+    ).padStart(2,'0');
+
+    const day = String(
+        d.getDate()
+    ).padStart(2,'0');
+
+    const h = String(
+        d.getHours()
+    ).padStart(2,'0');
+
+    const min = String(
+        d.getMinutes()
+    ).padStart(2,'0');
+
+    const sec = String(
+        d.getSeconds()
+    ).padStart(2,'0');
+
+    return `${y}-${m}-${day} ${h}:${min}:${sec}`;
+}
+
+function goHome(){
+
+    location.href='../main.html';
+}
+
+function openModal(id){
+
+    $(id).classList.add('show');
+}
+
+function closeModal(id){
+
+    $(id).classList.remove('show');
+}
+
+function userVal(keys){
+
+    for(const k of keys){
+
+        if(
+            state.user?.[k] != null &&
+            state.user[k] !== ''
+        ){
+            return state.user[k];
+        }
+    }
+
+    return '';
+}
+
+/* =========================================================
+   FORM BUILDER
+   ========================================================= */
+
+function buildForm(row=null){
+
+    state.editing = row;
+
+    state.allowancesVisible = false;
+    state.terminationVisible = false;
+
+    $('formTitle').textContent =
+        row
+            ? 'تعديل بيانات الموظف'
+            : 'إضافة موظف جديد';
+
+    $('formAlert').classList.remove('show');
+    $('formAlert').textContent = '';
+
+    const fieldsMarkup = defs.map(def => {
+
+            const [
+                k,
+                t,
+                req,
+                full,
+                auto,
+                hidden,
+                opts,
+                readonly,
+                termination,
+                allowance
+            ] = def;
+
+            if(hidden)
+                return '';
+
+            let cls =
+                'field' +
+                (full ? ' full' : '') +
+                (k === 'email'
+                    ? ' email-full'
+                    : '') +
+                (termination
+                    ? ' termination-field hidden'
+                    : '') +
+                (allowance
+                    ? ' allowance-field hidden'
+                    : '');
+
+            const val =
+                row?.[k] ?? '';
+
+            if(t === 'textarea'){
+
+                return `
+                <div class="${cls}">
+                    <label>
+                        ${esc(labels[k])}
+                        ${req?' *':''}
+                    </label>
+
+                    <textarea
+                        data-key="${k}"
+                        rows="3"
+                        ${req?'required':''}
+                    >${esc(val)}</textarea>            </div>`;
+        }
+
+        if(t === 'select'){
+
+            let optionsHtml = '<option value="">اختر...</option>';
+
+            // إذا كان job_title، سنقوم بتحديث الخيارات لاحقاً في configureForm
+            if(k === 'job_title'){
+                // سنقوم بملء الخيارات في configureForm بناءً على القسم
+                optionsHtml += '';
+            } else if (opts && Array.isArray(opts)) {
+                optionsHtml += opts
+                    .map(
+                        o =>
+                        `<option value="${esc(o[0])}">
+                            ${esc(o[1])}
+                        </option>`
+                    )
+                    .join('');
+            }
+
+            return `
+            <div class="${cls}">
+                <label>
+                    ${esc(labels[k])}
+                    ${req?' *':''}
+                </label>
+
+                <select
+                    data-key="${k}"
+                    ${req?'required':''}>
+                    ${optionsHtml}
+                </select>
+            </div>`;
+        }
+
+        let inputMode = '';
+
+        if(t === 'number')
+            inputMode='numeric';
+        else if(t === 'tel')
+            inputMode='tel';
+        else if(t === 'email')
+            inputMode='email';
+        else
+            inputMode='text';
+
+        return `
+        <div class="${cls}">
+
+            <label>
+                ${esc(labels[k])}
+                ${req?' *':''}
+            </label>
+
+            <input
+                data-key="${k}"
+                type="${t}"
+                inputmode="${inputMode}"
+                value="${esc(val)}"
+                ${req?'required':''}
+                ${readonly||auto?'readonly':''}
+                ${t==='tel'?'pattern="[+0-9 ()-]{7,}" title="أدخل رقم هاتف صحيحاً"':''}
+                ${k==='basic_salary' ||
+                  k.includes('allowance') ||
+                  k==='insurance_deduction'
+                    ? 'step="0.01"'
+                    : ''}>
+
+            ${auto
+                ? '<div class="readonly-note">يُعبأ تلقائياً</div>'
+                : ''}
+
+        </div>`;
+    }).join('');
+
+    $('employeeForm').innerHTML = fieldsMarkup;
+    groupEmployeeFieldsIntoRows();
+    configureForm(row);
+
+}
+
+/* =========================================================
+FORM CONFIGURATION
+========================================================= */
+
+function groupEmployeeFieldsIntoRows(){
+    const form = $('employeeForm');
+    if(!form) return;
+    const fields = Array.from(form.children).filter(node => node.classList.contains('field'));
+    const fragment = document.createDocumentFragment();
+    let row = null;
+    fields.forEach(field => {
+        const full = field.classList.contains('full') || field.classList.contains('email-full');
+        if(full || !row || row.children.length >= 2){
+            row = document.createElement('div');
+            row.className = 'form-row';
+            fragment.appendChild(row);
+        }
+        row.appendChild(field);
+        if(full) row = null;
+    });
+    form.replaceChildren(fragment);
+}
+
+function configureForm(row){
+
+const code =
+    $('[data-key="employee_code"]');
+
+const station =
+    $('[data-key="station_id"]');
+
+const branch =
+    $('[data-key="branch_id"]');
+
+/* رقم الموظف */
+if(code){
+
+    code.value =
+        row?.employee_code || '';
+
+    code.readOnly = true;
+}
+
+/* المحطة - تُجلب من جلسة المستخدم، وتُخبأ */
+if(station){
+
+    // تقييد النطاق ببيانات المستخدم الحالي دون قيم افتراضية.
+    const stationId = userVal(['station_id','stationId']);
+    station.value = stationId;
+    station.readOnly = true;
+    // إخفاء الحقل بإضافة class
+    station.closest('.field')?.classList.add('hidden');
+}
+
+/* الفرع */
+if(branch){
+
+    branch.value = userVal(['branch_id','branchId']);
+
+    branch.readOnly = true;
+}
+
+/* الاسم الكامل → الاسم العربي */
+const full =
+    $('[data-key="full_name"]');
+
+const fullArabic =
+    $('[data-key="full_name_ar"]');
+
+if(full){
+
+    full.addEventListener(
+        'input',
+        () => {
+
+            if(fullArabic)
+                fullArabic.value =
+                    full.value;
+
+        }
+    );
+
+    if(fullArabic)
+        fullArabic.value =
+            full.value || '';
+}
+
+/* =========================================================
+   القسم ← المسمى الوظيفي ← المسمى الوظيفي بالعربية
+   تحديث ديناميكي متوافق مع Android WebView
+   ========================================================= */
+function getEmployeeFormField(key){
+    const form = $('employeeForm');
+    if(!form) return null;
+    return form.querySelector(`[data-key="${key}"]`);
+}
+
+function getEmployeeJobTitles(department){
+    const key = String(department || '').trim();
+    const titles = departments[key];
+    return Array.isArray(titles) ? titles.slice() : [];
+}
+
+function refreshEmployeeJobTitleOptions(preserveValue = false, preferredValue = ''){
+    const dep = getEmployeeFormField('department');
+    const job = getEmployeeFormField('job_title');
+    const jobArabic = getEmployeeFormField('job_title_ar');
+
+    if(!dep || !job) return;
+
+    const selectedDepartment = String(dep.value || '').trim();
+    const titles = getEmployeeJobTitles(selectedDepartment);
+    const oldValue = preserveValue
+        ? String(preferredValue || job.value || '').trim()
+        : '';
+
+    job.replaceChildren();
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = selectedDepartment
+        ? 'اختر المسمى الوظيفي'
+        : 'اختر القسم أولاً';
+    job.appendChild(placeholder);
+
+    titles.forEach(function(title){
+        const option = document.createElement('option');
+        option.value = title;
+        option.textContent = title;
+        job.appendChild(option);
+    });
+
+    job.disabled = titles.length === 0;
+    job.removeAttribute('readonly');
+
+    if(oldValue && titles.includes(oldValue)){
+        job.value = oldValue;
+    }else{
+        job.value = '';
+    }
+
+    if(jobArabic){
+        jobArabic.value = job.value || '';
+    }
+}
+
+function configureEmployeeDepartmentJobTitle(row){
+    const form = $('employeeForm');
+    const dep = getEmployeeFormField('department');
+    const job = getEmployeeFormField('job_title');
+    const jobArabic = getEmployeeFormField('job_title_ar');
+
+    if(!form || !dep || !job) return;
+
+    dep.value = String(row?.department || '').trim();
+
+    refreshEmployeeJobTitleOptions(
+        Boolean(row?.job_title),
+        row?.job_title || ''
+    );
+
+    if(row?.job_title){
+        const normalizedJobTitle = String(row.job_title).trim();
+        if(Array.from(job.options).some(function(option){
+            return option.value === normalizedJobTitle;
+        })){
+            job.value = normalizedJobTitle;
+        }
+    }
+
+    if(jobArabic){
+        jobArabic.value =
+            job.value ||
+            row?.job_title_ar ||
+            row?.job_title ||
+            '';
+    }
+
+    /* التغيير الأساسي: إعادة بناء القائمة قبل أن يفتح Android قائمة select الأصلية. */
+    dep.addEventListener('change', function(){
+        refreshEmployeeJobTitleOptions(false, '');
+    });
+
+    dep.addEventListener('input', function(){
+        refreshEmployeeJobTitleOptions(false, '');
+    });
+
+    const prepareJobPicker = function(){
+        refreshEmployeeJobTitleOptions(
+            true,
+            job.value || row?.job_title || ''
+        );
+    };
+
+    job.addEventListener('pointerdown', prepareJobPicker, true);
+    job.addEventListener('touchstart', prepareJobPicker, true);
+    job.addEventListener('focus', prepareJobPicker, true);
+
+    job.addEventListener('change', function(){
+        if(jobArabic){
+            jobArabic.value = job.value || '';
+        }
+    });
+}
+
+/* القسم ← المسمى الوظيفي ← المسمى العربي */
+configureEmployeeDepartmentJobTitle(row);
+
+/* التنقل بين الحقول بزر Enter على الهاتف والكيبورد */
+const form = $('employeeForm');
+if(form){
+    form.addEventListener('keydown', event => {
+        if(event.key !== 'Enter' || event.target.tagName === 'TEXTAREA') return;
+        event.preventDefault();
+        const controls = Array.from(form.querySelectorAll('input,select,textarea'))
+            .filter(el => !el.disabled && el.type !== 'hidden' && el.offsetParent !== null);
+        const index = controls.indexOf(event.target);
+        if(index >= 0 && controls[index + 1]) controls[index + 1].focus();
+    });
+}
+
+/* اختيار مسار الملف لحقول العقد والهوية والصورة */
+['contract_path','id_doc_path','photo_path'].forEach(key => {
+    const field = $(`[data-key="${key}"]`);
+    if(!field) return;
+    field.classList.add('file-path-input');
+    field.readOnly = true;
+    field.placeholder = 'انقر لاختيار ملف';
+    field.addEventListener('click', () => {
+        const picker = document.createElement('input');
+        picker.type = 'file';
+        picker.accept = key === 'photo_path' ? 'image/*' : '*/*';
+        picker.style.display = 'none';
+        picker.addEventListener('change', () => {
+            const file = picker.files?.[0];
+            if(!file) return;
+            field.value = file.webkitRelativePath || file.name;
+            field.title = field.value;
+            field.dataset.selectedPath = picker.value || field.value;
+        });
+        document.body.appendChild(picker);
+        picker.click();
+        setTimeout(() => picker.remove(), 60000);
+    });
+});
+
+/* تاريخ التعيين */
+const hire =
+    $('[data-key="hire_date"]');
+
+if(hire && !row)
+    hire.value = today();
+
+/* نوع التوظيف */
+const employmentType =
+    $('[data-key="employment_type"]');
+
+if(employmentType){
+
+    employmentType.value =
+        row?.employment_type ||
+        'full_time';
+}
+
+/* الحالة */
+const statusField =
+    $('[data-key="status"]');
+
+if(statusField){
+
+    statusField.value =
+        row?.status ||
+        'active';
+}
+
+/* الحساب المالي */
+[
+    'basic_salary',
+    'housing_allowance',
+    'transport_allowance',
+    'food_allowance',
+    'other_allowances',
+    'insurance_deduction'
+].forEach(
+    key => {
+
+        const el =
+            $(`[data-key="${key}"]`);
+
+        if(el)
+            el.addEventListener(
+                'input',
+                calcSalary
+            );
+    }
+);
+
+calcSalary();
+
+/*
+ * لا يعتمد نموذج الموظفين على طرف اصطناعي أو party_id.
+ */
+
+/* تركيز الاسم عند إنشاء موظف */
+if(!row){
+
+    setTimeout(
+        () => {
+
+            const name =
+                $('[data-key="full_name"]');
+
+            if(name){
+                name.focus();
+                name.scrollIntoView({
+                    behavior:'smooth',
+                    block:'center'
+                });
+            }
+
+        },
+        250
+    );
+}
+
+}
+
+/* =========================================================
+SALARY CALCULATION
+========================================================= */
+
+function calcSalary(){
+
+const total =
+    $('[data-key="total_salary"]');
+
+if(!total)
+    return;
+
+const result =
+    num(
+        $('[data-key="basic_salary"]')
+            ?.value
+    ) +
+
+    num(
+        $('[data-key="housing_allowance"]')
+            ?.value
+    ) +
+
+    num(
+        $('[data-key="transport_allowance"]')
+            ?.value
+    ) +
+
+    num(
+        $('[data-key="food_allowance"]')
+            ?.value
+    ) +
+
+    num(
+        $('[data-key="other_allowances"]')
+            ?.value
+    ) -
+
+    num(
+        $('[data-key="insurance_deduction"]')
+            ?.value
+    ) - num($('[data-key="tax_deduction"]')?.value) - num($('[data-key="other_deductions"]')?.value);
+
+total.value =
+    result.toFixed(2);
+
+}
+
+
+
+/* =========================================================
+TERMINATION
+========================================================= */
+
+function toggleTermination(){
+
+state.terminationVisible =
+    !state.terminationVisible;
+
+document
+    .querySelectorAll(
+        '.termination-field'
+    )
+    .forEach(
+        x =>
+        x.classList.toggle(
+            'hidden',
+            !state.terminationVisible
+        )
+    );
+
+$('terminationBtn').innerHTML =
+    state.terminationVisible
+        ? '<i class="fas fa-eye-slash"></i> إخفاء بيانات التسريح'
+        : '<i class="fas fa-user-slash"></i> تسريح الموظف';
+
+if(state.terminationVisible){
+
+    setTimeout(
+        () => {
+
+            const date =
+                $('[data-key="termination_date"]');
+
+            if(date){
+
+                date.focus();
+
+                date.scrollIntoView({
+                    behavior:'smooth',
+                    block:'center'
+                });
+            }
+
+        },
+        100
+    );
+}
+
+}
+
+/* =========================================================
+ALLOWANCES
+========================================================= */
+
+function toggleAllowances(){
+
+state.allowancesVisible =
+    !state.allowancesVisible;
+
+document
+    .querySelectorAll(
+        '.allowance-field'
+    )
+    .forEach(
+        x =>
+        x.classList.toggle(
+            'hidden',
+            !state.allowancesVisible
+        )
+    );
+
+if(state.allowancesVisible){
+
+    setTimeout(
+        () => {
+
+            const housing =
+                $('[data-key="housing_allowance"]');
+
+            if(housing){
+
+                housing.focus();
+
+                housing.scrollIntoView({
+                    behavior:'smooth',
+                    block:'center'
+                });
+            }
+
+        },
+        100
+    );
+}
+
+toast(
+    state.allowancesVisible
+        ? 'تم إظهار بدلات الموظف'
+        : 'تم إخفاء بدلات الموظف'
+);
+
+}
+
+/* =========================================================
+COLLECT
+========================================================= */
+
+function collect(){
+
+const payload = {};
+
+document
+    .querySelectorAll(
+        '#employeeForm [data-key]'
+    )
+    .forEach(
+        el => {
+
+            let value =
+                el.value;
+
+            if(el.type === 'number'){
+
+                value =
+                    value === ''
+                        ? 0
+                        : Number(value);
+            }
+
+            payload[
+                el.dataset.key
+            ] = value;
+        }
+    );
+
+if(state.terminationVisible){ payload.status='terminated'; if(!payload.termination_date) { toast('تاريخ انتهاء الخدمة مطلوب عند التسريح','bad'); throw Error('تاريخ انتهاء الخدمة مطلوب'); } }
+
+/* الاسم العربي */
+payload.full_name_ar =
+    payload.full_name || '';
+
+/* المسمى العربي */
+payload.job_title_ar =
+    payload.job_title || '';
+
+/* لا توجد تبعية للطرف الاصطناعي في حفظ الموظف. */
+return payload;
+
+}
+
+/* =========================================================
+SAVE
+========================================================= */
+
+async function saveForm(){
+
+const form =
+    $('employeeForm');
+
+if(!form.reportValidity())
+    return;
+
+$('formAlert')
+    .classList
+    .remove('show');
+
+try{
+
+    const payload =
+        collect();
+
+    loading(true);
+
+    let result;
+
+    if(state.editing){
+
+        result =
+            await invoke(
+                'updateEmployeeRecord',
+                [
+                    Number(
+                        state.editing.id ??
+                        state.editing.employee_id
+                    ),
+                    JSON.stringify(payload)
+                ]
+            );
+
+    }else{
+
+        result =
+            await invoke(
+                'saveEmployeeRecord',
+                [
+                    JSON.stringify(payload)
+                ]
+            );
+    }
+
+    parse(result);
+
+    toast(
+        state.editing
+            ? 'تم تحديث الموظف فعلياً'
+            : 'تم حفظ الموظف فعلياً'
+    );
+
+    closeModal('formModal');
+
+    await reload();
+
+}catch(e){
+
+    $('formAlert').textContent =
+        e.message ||
+        'حدث خطأ أثناء حفظ البيانات';
+
+    $('formAlert')
+        .classList
+        .add('show');
+
+    toast(
+        e.message ||
+        'فشل حفظ البيانات',
+        'bad'
+    );
+
+}finally{
+
+    loading(false);
+}
+
+}
+
+/* =========================================================
+FILTERS
+========================================================= */
+
+function idOf(r,i){
+
+return r?.id ??
+    r?.employee_id ??
+    i;
+
+}
+
+function insurance(r){
+
+return num(
+    r.insurance_deduction
+) > 0;
+
+}
+
+function terminated(r){
+
+return !!String(
+    r.termination_date || ''
+).trim()
+&&
+!!String(
+    r.termination_reason || ''
+).trim();
+
+}
+
+function match(r){
+
+switch(state.filter){
+
+    case 'insured':
+        return insurance(r);
+
+    case 'uninsured':
+        return !insurance(r);
+
+    case 'full_time':
+        return r.employment_type ===
+            'full_time';
+
+    case 'part_time':
+        return r.employment_type ===
+            'part_time';
+
+    case 'contract':
+        return r.employment_type ===
+            'contract';
+
+    case 'temporary':
+        return r.employment_type ===
+            'temporary';
+
+    case 'terminated':
+        return terminated(r);
+
+    default:
+        return true;
+}
+
+}
+
+function apply(){
+
+const query =
+    $('search')
+        .value
+        .trim()
+        .toLowerCase();
+
+state.filtered =
+    state.rows.filter(
+        r =>
+            match(r) &&
+            (
+                !query ||
+                JSON.stringify(r)
+                    .toLowerCase()
+                    .includes(query)
+            )
+    );
+
+render();
+
+}
+
+function renderTabs(){
+
+const tabs = [
+
+    ['all','الكل'],
+
+    ['insured','مأمنين'],
+
+    ['uninsured','غير مأمنين'],
+
+    ['full_time','دوام كامل'],
+
+    ['part_time','دوام جزئي'],
+
+    ['contract','موظفين بعقد'],
+
+    ['temporary','مؤقت'],
+
+    ['terminated','تم تسريحهم']
+
+];
+
+$('tabs').innerHTML =
+    tabs
+        .map(
+            x =>
+            `<button
+                class="tab ${
+                    x[0] === state.filter
+                        ? 'active'
+                        : ''
+                }"
+                data-f="${esc(x[0])}">
+                ${esc(x[1])}
+            </button>`
+        )
+        .join('');
+
+document
+    .querySelectorAll('.tab')
+    .forEach(
+        button => {
+
+            button.onclick =
+                () => {
+
+                    state.filter =
+                        button.dataset.f;
+
+                    renderTabs();
+
+                    apply();
+                };
+        }
+    );
+
+}
+
+/* =========================================================
+RENDER
+========================================================= */
+
+function render(){
+
+const rows =
+    state.filtered;
+
+$('kTotal').textContent =
+    rows.length.toLocaleString('ar');
+
+$('count').textContent =
+    rows.length.toLocaleString('ar');
+
+$('kInsured').textContent =
+    rows
+        .filter(insurance)
+        .length
+        .toLocaleString('ar');
+
+$('kActive').textContent =
+    rows
+        .filter(
+            x =>
+                x.status === 'active'
+        )
+        .length
+        .toLocaleString('ar');
+
+$('kPayroll').textContent =
+    rows
+        .reduce(
+            (sum,row) =>
+                sum +
+                num(row.total_salary),
+            0
+        )
+        .toLocaleString(
+            'ar',
+            {
+                maximumFractionDigits:2
+            }
+        );
+
+if(!rows.length){
+
+    $('cards').innerHTML = `
+        <div
+            class="empty"
+            style="grid-column:1/-1">
+
+            <i class="fas fa-user-slash"></i>
+
+            لا توجد سجلات مطابقة
+            في قاعدة البيانات.
+
+        </div>
+    `;
+
+    return;
+}
+
+$('cards').innerHTML =
+    rows
+        .map(
+            (x,i) => {
+
+                const employmentName =
+                    employment.find(
+                        a =>
+                            a[0] ===
+                            x.employment_type
+                    )?.[1] ??
+                    x.employment_type;
+
+                const statusName =
+                    status.find(
+                        a =>
+                            a[0] ===
+                            x.status
+                    )?.[1] ??
+                    x.status;
+
+                return `
+                <article
+                    class="employee-card"
+                    style="animation-delay:${i*35}ms">
+
+                    <div class="avatar">
+                        <i class="fas fa-user-tie"></i>
+                    </div>
+
+                    <div class="employee-name">
+                        ${esc(
+                            x.full_name_ar ||
+                            x.full_name ||
+                            x.employee_code
+                        )}
+                    </div>
+
+                    <div class="employee-code">
+                        ${esc(x.employee_code)}
+                    </div>
+
+                    <span
+                        class="status ${
+                            x.status === 'active'
+                                ? 'active'
+                                : 'inactive'
+                        }">
+
+                        ${esc(
+                            statusName ||
+                            '—'
+                        )}
+
+                    </span>
+
+                    <div class="card-grid">
+
+                        ${[
+                            ['القسم',x.department],
+                            ['المسمى الوظيفي',x.job_title],
+                            ['نوع التوظيف',employmentName],
+                            ['الهاتف',x.phone],
+                            ['المحطة',x.station_name || x.station_id],
+                            ['الفرع',x.branch_name || x.branch_id],
+                            ['الراتب',x.total_salary],
+                            ['خصم التأمين',x.insurance_deduction]
+                        ]
+                        .map(
+                            a =>
+                            `
+                            <div class="info">
+                                <small>${esc(a[0])}</small>
+                                <b>${esc(a[1])}</b>
+                            </div>
+                            `
+                        )
+                        .join('')}
+
+                    </div>
+
+                    <div class="actions">
+
+                        <button
+                            class="btn"
+                            onclick="showDetails(${JSON.stringify(
+                                idOf(x,i)
+                            )})">
+                            عرض
+                        </button>
+
+                        <button
+                            class="btn warning"
+                            onclick="editRow(${JSON.stringify(
+                                idOf(x,i)
+                            )})">
+                            تعديل
+                        </button>
+
+                        <button
+                            class="btn danger"
+                            onclick="deleteRow(${JSON.stringify(
+                                idOf(x,i)
+                            )})">
+                            حذف
+                        </button>
+
+                    </div>
+
+                </article>
+                `;
+            }
+        )
+        .join('');
+
+}
+
+/* =========================================================
+DATABASE RELOAD
+========================================================= */
+
+async function reload(){
+
+if(!bridge){
+
+    $('offline')
+        .classList
+        .add('show');
+
+    state.rows = [];
+
+    apply();
+
+    return;
+}
+
+loading(true);
+
+try{
+
+    state.rows =
+        rowsOf(
+            await invoke(
+                'getEmployeeRecords',
+                [
+                    JSON.stringify({
+                        limit:500,
+                        search:''
+                    })
+                ]
+            )
+        );
+
+    $('offline')
+        .classList
+        .remove('show');
+
+    apply();
+
+}catch(e){
+
+    state.rows = [];
+
+    apply();
+
+    $('offline')
+        .classList
+        .add('show');
+
+    toast(
+        e.message,
+        'bad'
+    );
+
+}finally{
+
+    loading(false);
+}
+
+}
+
+/* =========================================================
+DETAILS
+========================================================= */
+
+function showDetails(id){
+
+const row =
+    state.rows.find(
+        (x,i) =>
+            String(
+                idOf(x,i)
+            ) === String(id)
+    );
+
+if(!row)
+    return;
+
+$('detailsBody').innerHTML =
+    Object.entries(row)
+        .map(
+            ([key,value]) =>
+            `
+            <div class="detail">
+
+                <small>
+                    ${esc(
+                        labels[key] ||
+                        key
+                    )}
+                </small>
+
+                <b>
+                    ${esc(
+                        typeof value === 'object'
+                            ? JSON.stringify(value)
+                            : value
+                    )}
+                </b>
+
+            </div>
+            `
+        )
+        .join('');
+
+openModal('detailsModal');
+
+}
+
+/* =========================================================
+EDIT
+========================================================= */
+
+function editRow(id){
+
+const row =
+    state.rows.find(
+        (x,i) =>
+            String(
+                idOf(x,i)
+            ) === String(id)
+    );
+
+if(row){
+
+    buildForm(row);
+
+    openModal('formModal');
+}
+
+}
+
+/* =========================================================
+DELETE
+========================================================= */
+
+async function deleteRow(id){
+
+if(
+    !confirm(
+        'هل تريد أرشفة هذا الموظف؟ لن يتم حذف البيانات نهائيًا.'
+    )
+){
+    return;
+}
+
+try{
+
+    loading(true);
+
+    await invoke(
+        'deleteEmployeeRecord',
+        [Number(id)]
+    );
+
+    toast(
+        'تمت أرشفة الموظف'
+    );
+
+    await reload();
+
+}catch(e){
+
+    toast(
+        e.message,
+        'bad'
+    );
+
+}finally{
+
+    loading(false);
+}
+
+}
+
+/* =========================================================
+CURRENT USER
+========================================================= */
+
+async function loadUser(){
+
+if(
+    !bridge ||
+    typeof bridge.getCurrentUser !==
+    'function'
+){
+    return;
+}
+
+try{
+
+    state.user =
+        dataOf(
+            await invoke(
+                'getCurrentUser',
+                []
+            )
+        ) || {};
+
+    const name =
+        userVal([
+            'full_name_ar',
+            'full_name',
+            'name',
+            'username'
+        ]);
+
+    const station =
+        userVal([
+            'station_name',
+            'station_id',
+            'stationId'
+        ]);
+
+    $('sessionText').textContent =
+        (
+            name
+                ? 'المستخدم: '+name
+                : 'الجلسة الحالية'
+        ) +
+        (
+            station
+                ? ' · المحطة: '+station
+                : ''
+        );
+
+}catch(e){}
+
+}
+
+/* =========================================================
+REPORT
+========================================================= */
+
+function openReport(){
+
+openModal('reportModal');
+
+$('reportFrom').value =
+    today();
+
+$('reportTo').value =
+    today();
+
+$('reportResults').innerHTML =
+    `
+    <div class="empty">
+        اضغط «توليد من SQLite»
+        لجلب البيانات الفعلية.
+    </div>
+    `;
+
+}
+
+async function generateReport(){
+
+try{
+
+    loading(true);
+
+    const rows =
+        bridge &&
+        typeof bridge.generateEmployeeReport ===
+        'function'
+
+            ? rowsOf(
+                await invoke(
+                    'generateEmployeeReport',
+                    [
+                        JSON.stringify({
+                            from:
+                                $('reportFrom')
+                                    .value,
+
+                            to:
+                                $('reportTo')
+                                    .value,
+
+                            limit:Math.min(5000, Math.max(1, Number($('reportLimit')?.value || 100))),
+                            offset:0,
+                            group_by:$('reportGroup')?.value || '',
+                            columns:Array.from(document.querySelectorAll('#reportColumns input:checked')).map(x=>x.value)
+                        })
+                    ]
+                )
+            )
+
+            : state.filtered;
+
+        const columns = Array.from(document.querySelectorAll('#reportColumns input:checked')).map(x=>x.value);
+
+    $('reportResults').innerHTML =
+        rows.length
+
+            ? `
+            <div class="report-table-wrap">
+
+                <table class="report-table">
+
+                    <thead>
+                        <tr>
+                            ${columns
+                                .map(
+                                    key =>
+                                    `<th>
+                                        ${esc(
+                                            labels[key]
+                                        )}
+                                    </th>`
+                                )
+                                .join('')}
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        ${rows
+                            .map(
+                                row =>
+                                `
+                                <tr>
+
+                                    ${columns
+                                        .map(
+                                            key => {
+
+                                                let value =
+                                                    row[key];
+
+                                                if(
+                                                    key ===
+                                                    'employment_type'
+                                                ){
+
+                                                    value =
+                                                        employment
+                                                            .find(
+                                                                a =>
+                                                                    a[0] ===
+                                                                    value
+                                                            )?.[1] ||
+                                                        value;
+                                                }
+
+                                                if(
+                                                    key ===
+                                                    'status'
+                                                ){
+
+                                                    value =
+                                                        status
+                                                            .find(
+                                                                a =>
+                                                                    a[0] ===
+                                                                    value
+                                                            )?.[1] ||
+                                                        value;
+                                                }
+
+                                                return `
+                                                <td>
+                                                    ${esc(value)}
+                                                </td>
+                                                `;
+                                            }
+                                        )
+                                        .join('')}
+
+                                </tr>
+                                `
+                            )
+                            .join('')}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+            `
+
+            : `
+            <div class="empty">
+                لا توجد بيانات للتقرير.
+            </div>
+            `;
+
+}catch(e){
+
+    toast(
+        e.message,
+        'bad'
+    );
+
+}finally{
+
+    loading(false);
+}
+
+}
+
+/* =========================================================
+CSV EXPORT
+========================================================= */
+
+function exportCSV(){
+
+const rows =
+    state.filtered;
+
+if(!rows.length){
+
+    toast(
+        'لا توجد بيانات فعلية للتصدير',
+        'warn'
+    );
+
+    return;
+}
+
+const columns =
+    [
+        ...new Set(
+            rows.flatMap(
+                x =>
+                    Object.keys(x || {})
+            )
+        )
+    ];
+
+const csv =
+    '\ufeff' +
+
+    [
+        columns,
+
+        ...rows.map(
+            row =>
+                columns.map(
+                    key =>
+                        String(
+                            row[key] ?? ''
+                        ).replace(
+                            /"/g,
+                            '""'
+                        )
+                )
+        )
+
+    ]
+    .map(
+        line =>
+            line
+                .map(
+                    value =>
+                        `"${value}"`
+                )
+                .join(',')
+    )
+    .join('\n');
+
+const url =
+    URL.createObjectURL(
+        new Blob(
+            [csv],
+            {
+                type:
+                    'text/csv;charset=utf-8'
+            }
+        )
+    );
+
+const a =
+    document.createElement('a');
+
+a.href = url;
+
+a.download =
+    'employees.csv';
+
+a.click();
+
+setTimeout(
+    () =>
+        URL.revokeObjectURL(url),
+    1000
+);
+
+}
+
+/* =========================================================
+THEME
+
+الفاتح = 🌙
+المظلم = 🌞
+========================================================= */
+
+function applyTheme(){
+
+const theme =
+    localStorage.getItem(
+        'employees-theme'
+    ) || 'light';
+
+document.documentElement
+    .dataset
+    .theme = theme;
+
+$('themeBtn').textContent =
+    theme === 'dark'
+        ? '🌞'
+        : '🌙';
+
+}
+
+function toggleTheme(){
+
+const next =
+    document.documentElement
+        .dataset
+        .theme === 'dark'
+            ? 'light'
+            : 'dark';
+
+document.documentElement
+    .dataset
+    .theme = next;
+
+localStorage.setItem(
+    'employees-theme',
+    next
+);
+
+$('themeBtn').textContent =
+    next === 'dark'
+        ? '🌞'
+        : '🌙';
+
+}
+
+/* =========================================================
+   PERFORMANCE FUNCTIONS (منقول من employees.html)
+   ========================================================= */
+
+function performanceMonthDefault(){return new Date().toISOString().slice(0,7)}
+
+function employeeLabel(row){return field(row,['full_name_ar','full_name','employee_code'])||'موظف بلا اسم'}
+
+function employeeExtra(row){if(!row)return {};const raw=row.extra_data;if(!raw)return {};if(typeof raw==='object'&&raw!==null)return raw;try{const value=JSON.parse(raw);return value&&typeof value==='object'?value:{legacy_extra_data:String(raw)}}catch(e){return {legacy_extra_data:String(raw)}}}
+
+function reviewsFor(row){const data=employeeExtra(row);return Array.isArray(data.performance_reviews)?data.performance_reviews.filter(x=>x&&x.month):[]}
+
+function scoreClass(score){return num(score)>=4?'score-high':num(score)>=3?'score-mid':'score-low'}
+
+function field(row, names){for (const name of (names||[])){if (row && row[name] !== undefined && row[name] !== null && row[name] !== '') return row[name];}return '';}
+
+function populatePerformanceEmployees(){const opts=state.rows.map((row,i)=>{const id=idOf(row)||i;return `<option value="${esc(id)}">${esc(employeeLabel(row))}${row.employee_code?' · '+esc(row.employee_code):''}</option>`}).join('');['performanceEmployeeSelect','reviewEmployee'].forEach(id=>{const el=$(id);if(el){const old=el.value;el.innerHTML='<option value="">اختر الموظف</option>'+opts;if(old)el.value=old}})}
+
+function renderPerformancePanel(){const month=$('performanceMonth')?.value||performanceMonthDefault();if($('performanceMonth')&&!$('performanceMonth').value)$('performanceMonth').value=month;populatePerformanceEmployees();const records=[];(state.rows||[]).forEach((row,i)=>reviewsFor(row).filter(x=>x.month===month).forEach(review=>records.push({row,review,id:idOf(row)||i})));const count=records.length;const avg=count?records.reduce((s,x)=>s+num(x.review.score),0)/count:0;const best=records.slice().sort((a,b)=>num(b.review.score)-num(a.review.score))[0];$('performanceReviewed').textContent=count.toLocaleString('ar');$('performanceAverage').textContent=count?avg.toFixed(2)+' / 5':'—';$('performanceTop').textContent=best?employeeLabel(best.row):'—';$('performanceResults').innerHTML=count?'<div class="performance-table-wrap"><table class="performance-table"><thead><tr><th>الموظف</th><th>الشهر</th><th>التقييم العام</th><th>الانضباط</th><th>الإنتاجية</th><th>التعاون</th><th>آخر تحديث</th></tr></thead><tbody>'+records.map(x=>'<tr><td>'+esc(employeeLabel(x.row))+'</td><td>'+esc(x.review.month)+'</td><td><span class="score-pill '+scoreClass(x.review.score)+'">'+num(x.review.score).toFixed(1)+'/5</span></td><td>'+esc(x.review.discipline||'—')+'</td><td>'+esc(x.review.productivity||'—')+'</td><td>'+esc(x.review.teamwork||'—')+'</td><td>'+esc(x.review.updated_at||'—')+'</td></tr>').join('')+'</tbody></table></div>':'<div class="performance-empty">لا توجد تقييمات محفوظة للشهر المحدد.</div>'}
+
+function openPerformanceModal(id){populatePerformanceEmployees();const month=$('performanceMonth')?.value||performanceMonthDefault();$('reviewEmployee').value=id?String(id):($('performanceEmployeeSelect').value||'');$('reviewMonth').value=month;$('reviewScore').value='';$('reviewDiscipline').value='';$('reviewProductivity').value='';$('reviewTeamwork').value='';$('reviewGoals').value='';$('reviewNotes').value='';renderPerformanceHistory();openModal('performanceModal')}
+
+function renderPerformanceHistory(){const row=state.rows.find((x,i)=>String(idOf(x)||i)===String($('reviewEmployee')?.value||''));const reviews=reviewsFor(row).slice().sort((a,b)=>String(b.month).localeCompare(String(a.month)));$('performanceHistory').innerHTML=reviews.length?'<h4><i class="fas fa-clock-rotate-left"></i> السجل السابق</h4>'+reviews.slice(0,6).map(x=>'<div class="performance-history-item"><strong>'+esc(x.month)+'</strong><span>'+num(x.score).toFixed(1)+'/5</span></div>').join(''):''}
+
+async function savePerformanceReview(){const id=$('reviewEmployee').value;const month=$('reviewMonth').value;const score=Number($('reviewScore').value);if(!id||!month||!Number.isFinite(score)||score<1||score>5){toast('اختر الموظف والشهر وأدخل تقييمًا من 1 إلى 5','bad');return}const row=state.rows.find((x,i)=>String(idOf(x)||i)===String(id));if(!row){toast('لم يتم العثور على الموظف في البيانات الحالية','bad');return}const data=employeeExtra(row);const reviews=reviewsFor(row);const review={month,score,discipline:$('reviewDiscipline').value?Number($('reviewDiscipline').value):null,productivity:$('reviewProductivity').value?Number($('reviewProductivity').value):null,teamwork:$('reviewTeamwork').value?Number($('reviewTeamwork').value):null,goals:$('reviewGoals').value.trim(),notes:$('reviewNotes').value.trim(),updated_at:new Date().toISOString()};const index=reviews.findIndex(x=>x.month===month);if(index>=0)reviews[index]=review;else reviews.push(review);data.performance_reviews=reviews.sort((a,b)=>String(a.month).localeCompare(String(b.month)));loading(true);try{const result=await invoke('saveEmployeePerformance',[JSON.stringify({employee_id:Number(id),review_month:month,score,discipline:review.discipline,productivity:review.productivity,teamwork:review.teamwork,goals:review.goals,notes:review.notes,status:'draft'})]);parse(result);toast('تم حفظ التقييم الشهري في SQLite');closeModal('performanceModal');await reload()}catch(e){toast(e.message||'فشل حفظ التقييم في قاعدة البيانات','bad')}finally{loading(false)}}
+
+/* =========================================================
+   PERFORMANCE EVENT BINDING
+   ========================================================= */
+(function initPerformance() {
+    const perfMonth = $('performanceMonth');
+    if (perfMonth) perfMonth.value = performanceMonthDefault();
+    if (perfMonth) perfMonth.addEventListener('change', renderPerformancePanel);
+    const empSelect = $('performanceEmployeeSelect');
+    if (empSelect) empSelect.addEventListener('change', function() {
+        if (this.value) openPerformanceModal(this.value);
+    });
+    const openBtn = $('openPerformanceBtn');
+    if (openBtn) openBtn.addEventListener('click', function() {
+        const selected = $('performanceEmployeeSelect')?.value || '';
+        openPerformanceModal(selected);
+    });
+    const reviewEmp = $('reviewEmployee');
+    if (reviewEmp) reviewEmp.addEventListener('change', renderPerformanceHistory);
+    const savePerfBtn = $('savePerformanceBtn');
+    if (savePerfBtn) savePerfBtn.addEventListener('click', savePerformanceReview);
+})();
+
+/* =========================================================
+EVENTS
+========================================================= */
+
+$('themeBtn').onclick =
+toggleTheme;
+
+$('search').oninput =
+apply;
+
+$('saveBtn').onclick =
+saveForm;
+
+document
+.querySelectorAll('.modal-bg')
+.forEach(
+modal => {
+
+        modal.onclick =
+            event => {
+
+                if(
+                    event.target ===
+                    modal
+                ){
+                    modal.classList
+                        .remove('show');
+                }
+            };
+    }
+);
+
+document.addEventListener(
+'keydown',
+event => {
+
+    if(
+        event.key ===
+        'Escape'
+    ){
+
+        document
+            .querySelectorAll(
+                '.modal-bg'
+            )
+            .forEach(
+                modal =>
+                    modal.classList
+                        .remove('show')
+            );
+    }
+}
+
+);
+
+/* اتصال الشبكة */
+window.addEventListener(
+'offline',
+() =>
+$('offline')
+.classList
+.add('show')
+);
+
+window.addEventListener(
+'online',
+() => {
+
+    $('offline')
+        .classList
+        .remove('show');
+
+    toast(
+        'تمت استعادة الاتصال'
+    );
+
+    reload();
+}
+
+);
+
+/* =========================================================
+PULL TO REFRESH
+========================================================= */
+
+let startY = 0;
+let startTarget = null;
+
+document.addEventListener(
+'touchstart',
+event => {
+
+    startY =
+        event.touches[0]
+            .clientY;
+    startTarget = event.target;
+
+},
+{
+    passive:true
+}
+
+);
+
+document.addEventListener(
+'touchend',
+event => {
+
+    const delta =
+        event.changedTouches[0]
+            .clientY -
+        startY;
+
+    if(startTarget && startTarget.closest && startTarget.closest('.modal')) return;
+
+    if(
+        window.scrollY <= 4 &&
+        delta > 90
+    ){
+
+        reload();
+    }
+
+},
+{
+    passive:true
+}
+
+);
+
+/* =========================================================
+GLOBAL CONTRACTS
+========================================================= */
+
+Object.assign(
+window,
+{
+goHome,
+openForm:() => {
+
+        buildForm();
+
+        openModal(
+            'formModal'
+        );
+    },
+    closeModal,
+    showDetails,
+    editRow,
+    deleteRow,
+    generateReport,
+    exportCSV,
+    toggleTermination,
+    toggleAllowances,
+    openReport,
+    openPerformanceModal,
+    savePerformanceReview,
+    renderPerformancePanel
+}
+
+);
+
+/* Segmented Control: shared visual state, ARIA state, and screen navigation. */
+document.querySelectorAll('#hrSegments .segment').forEach((button, index, buttons) => {
+    button.addEventListener('click', () => {
+        buttons.forEach(item => {
+            item.classList.remove('active');
+            item.setAttribute('aria-selected', 'false');
+        });
+        button.classList.add('active');
+        button.setAttribute('aria-selected', 'true');
+        const target = button.dataset.screen || '';
+        if (target.includes('#')) {
+            document.getElementById(target.split('#')[1])?.scrollIntoView({behavior:'smooth', block:'start'});
+        } else if (target && target !== 'employees.html') {
+            window.location.href = target;
+        }
+    });
+    button.addEventListener('keydown', event => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const next = event.key === 'ArrowRight' ? index - 1 : index + 1;
+        buttons[(next + buttons.length) % buttons.length].focus();
+    });
+});
+/* =========================================================
+INITIALIZATION
+========================================================= */
+
+applyTheme();
+
+renderTabs();
+
+loadUser();
+
+reload();
+
+/* بعد تحميل البيانات، نقوم بتحديث لوحة الأداء */
+setTimeout(() => {
+    renderPerformancePanel();
+}, 300);
+
+})();
+</script>
+
+<script src="file:///android_asset/assets-local/js/modal-interaction.js"></script></body>
+</html>

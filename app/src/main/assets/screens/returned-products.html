@@ -1,0 +1,3480 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport" />
+    <title>نظام إدارة محطات الوقود – المنتجات المرتجعة</title>
+        <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
+<link href="file:///android_asset/assets-local/css/css2" rel="stylesheet" />
+    <link href="file:///android_asset/assets-local/css/all.min.css" rel="stylesheet" />
+    <script src="file:///android_asset/assets-local/js/sweetalert2@11">
+    </script>
+    <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js">
+    </script>
+    <script src="file:///android_asset/assets-local/js/chart.umd.min.js">
+    </script>
+    <style>
+        /* ===================================================================
+           تصميم مميز – لوحة زمردية – ذهبية (Emerald - Gold)
+           مع دعم الوضع الفاتح/المظلم وإطارات مختلفة
+           =================================================================== */
+        :root {
+            --bg-primary: #0a1a12;
+            --bg-secondary: #0e261a;
+            --bg-card: rgba(16, 40, 28, 0.75);
+            --bg-glass: rgba(255, 255, 255, 0.04);
+            --bg-glass-light: rgba(255, 255, 255, 0.08);
+            --text-primary: #e2f3e9;
+            --text-secondary: #8fc4a8;
+            --text-muted: #5a8a72;
+            --border-color: rgba(16, 185, 129, 0.15);
+            --border-glow: rgba(16, 185, 129, 0.25);
+            --gold-primary: #f5c842;
+            --gold-dark: #c99f1e;
+            --gold-glow: 0 0 30px rgba(245, 200, 66, 0.15);
+            --emerald-primary: #10b981;
+            --emerald-dark: #059669;
+            --emerald-glow: 0 0 30px rgba(16, 185, 129, 0.15);
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --shadow-card: 0 20px 50px rgba(0, 0, 0, 0.6);
+            --shadow-glow: 0 0 60px rgba(16, 185, 129, 0.05);
+            --radius-card: 24px;
+            --radius-small: 14px;
+            --transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* الوضع الفاتح */
+        [data-theme="light"] {
+            --bg-primary: #ecfdf5;
+            --bg-secondary: #d1fae5;
+            --bg-card: rgba(255, 255, 255, 0.85);
+            --bg-glass: rgba(0, 0, 0, 0.03);
+            --bg-glass-light: rgba(0, 0, 0, 0.06);
+            --text-primary: #064e3b;
+            --text-secondary: #047857;
+            --text-muted: #6b9b82;
+            --border-color: #a7d7c0;
+            --shadow-card: 0 20px 50px rgba(0, 0, 0, 0.1);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0a1a12;
+            --bg-secondary: #0e261a;
+            --bg-card: rgba(16, 40, 28, 0.75);
+            --bg-glass: rgba(255, 255, 255, 0.04);
+            --bg-glass-light: rgba(255, 255, 255, 0.08);
+            --text-primary: #e2f3e9;
+            --text-secondary: #8fc4a8;
+            --text-muted: #5a8a72;
+            --border-color: rgba(16, 185, 129, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Cairo', 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            direction: rtl;
+            overflow-x: hidden;
+            min-height: 100vh;
+            padding: 0 0 90px 0;
+            background-image: radial-gradient(ellipse at 5% 15%, rgba(16, 185, 129, 0.06) 0%, transparent 55%),
+                radial-gradient(ellipse at 95% 85%, rgba(245, 200, 66, 0.04) 0%, transparent 55%);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--emerald-primary);
+            border-radius: 10px;
+        }
+
+        /* ===================================================================
+           الشريط العلوي
+           =================================================================== */
+        .top-bar {
+            position: sticky;
+            top: 0;
+            z-index: 120;
+            background: rgba(10, 26, 18, 0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 14px 22px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+        }
+        [data-theme="light"] .top-bar {
+            background: rgba(236, 253, 245, 0.9);
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .top-title h2 {
+            font-size: 1.5rem;
+            font-weight: 900;
+            margin: 0;
+            background: linear-gradient(135deg, var(--emerald-primary), var(--gold-primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .top-title h2 i {
+            -webkit-text-fill-color: initial;
+            color: var(--emerald-primary);
+        }
+        .top-title .subtitle {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            -webkit-text-fill-color: var(--text-muted);
+            display: block;
+            font-weight: 400;
+            margin-top: 2px;
+        }
+        .ai-badge {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            font-size: 0.55rem;
+            font-weight: 700;
+            padding: 2px 12px;
+            border-radius: 30px;
+            margin-right: 8px;
+            vertical-align: middle;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+        }
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .icon-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-glass);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 1rem;
+            position: relative;
+        }
+        .icon-btn:hover {
+            background: var(--bg-glass-light);
+            border-color: var(--emerald-primary);
+            color: var(--emerald-primary);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15);
+        }
+        .icon-btn:active {
+            transform: scale(0.92);
+        }
+        .icon-btn.has-badge::after {
+            content: '';
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            width: 8px;
+            height: 8px;
+            background: var(--gold-primary);
+            border-radius: 50%;
+            box-shadow: 0 0 15px var(--gold-primary);
+            animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot {
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.5;
+                transform: scale(1.4);
+            }
+        }
+
+        /* شريط الفلاتر */
+        .filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            padding: 2px 0;
+        }
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-glass);
+            border-radius: var(--radius-small);
+            padding: 4px 14px;
+            border: 1px solid var(--border-color);
+            transition: var(--transition);
+            flex: 1 0 130px;
+            min-width: 110px;
+        }
+        .filter-group:focus-within {
+            border-color: var(--emerald-primary);
+            box-shadow: 0 0 25px var(--border-glow);
+        }
+        .filter-group i {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+        .filter-group input,
+        .filter-group select {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-family: 'Cairo', 'Inter', sans-serif;
+            font-size: 0.8rem;
+            padding: 9px 0;
+            outline: none;
+            width: 100%;
+        }
+        .filter-group input[type="date"] {
+            direction: ltr;
+            font-family: 'Inter', 'Arial', sans-serif;
+        }
+        .filter-group select option {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+        .filter-group input::placeholder {
+            color: var(--text-muted);
+        }
+        .filter-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-right: auto;
+        }
+        .btn-filter {
+            padding: 9px 20px;
+            border-radius: var(--radius-small);
+            border: 1px solid var(--border-color);
+            background: var(--bg-glass);
+            color: var(--text-secondary);
+            font-family: 'Cairo', 'Inter', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            touch-action: manipulation;
+        }
+        .btn-filter:active {
+            transform: scale(0.94);
+        }
+        .btn-filter:hover {
+            background: var(--bg-glass-light);
+            border-color: var(--emerald-primary);
+            color: var(--emerald-primary);
+        }
+        .btn-filter.primary {
+            background: linear-gradient(135deg, var(--emerald-primary), var(--emerald-dark));
+            color: #fff;
+            border-color: var(--emerald-primary);
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.25);
+        }
+        .btn-filter.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 35px rgba(16, 185, 129, 0.35);
+        }
+        .btn-filter.primary i {
+            color: #fff;
+        }
+        .btn-filter.success {
+            background: linear-gradient(135deg, var(--success), #047857);
+            color: #fff;
+            border-color: var(--success);
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.25);
+        }
+        .btn-filter.success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 35px rgba(16, 185, 129, 0.35);
+        }
+        .btn-filter.success i {
+            color: #fff;
+        }
+        .btn-filter.danger {
+            background: linear-gradient(135deg, var(--danger), #b91c1c);
+            color: #fff;
+            border-color: var(--danger);
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.25);
+        }
+        .btn-filter.danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 35px rgba(239, 68, 68, 0.35);
+        }
+        .btn-filter.danger i {
+            color: #fff;
+        }
+
+        /* ===================================================================
+           بطاقات الإحصائيات
+           =================================================================== */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 18px;
+            padding: 20px 24px;
+        }
+        .kpi-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-card);
+            padding: 20px 18px;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--emerald-primary), var(--gold-primary));
+            opacity: 0.7;
+        }
+        .kpi-card:hover {
+            transform: translateY(-6px);
+            border-color: var(--emerald-primary);
+            box-shadow: var(--shadow-glow);
+        }
+        .kpi-card .kpi-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            background: var(--bg-glass-light);
+            color: var(--emerald-primary);
+            margin-bottom: 10px;
+        }
+        .kpi-card .kpi-icon.gold {
+            color: var(--gold-primary);
+        }
+        .kpi-card .kpi-icon.green {
+            color: var(--success);
+            background: rgba(16, 185, 129, 0.12);
+        }
+        .kpi-card .kpi-icon.red {
+            color: var(--danger);
+            background: rgba(239, 68, 68, 0.12);
+        }
+        .kpi-card .kpi-icon.warning {
+            color: var(--warning);
+            background: rgba(245, 158, 11, 0.12);
+        }
+        .kpi-card .kpi-value {
+            font-size: 2.2rem;
+            font-weight: 900;
+            font-family: 'Inter', 'Arial', sans-serif;
+            letter-spacing: -0.5px;
+            line-height: 1.1;
+            color: var(--text-primary);
+            margin: 4px 0 2px;
+            direction: ltr;
+        }
+        .kpi-card .kpi-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+        .kpi-card .kpi-trend {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 3px 12px;
+            border-radius: 30px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .kpi-card .kpi-trend.up {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+        }
+        .kpi-card .kpi-trend.down {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+        @media (max-width: 992px) {
+            .kpi-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        @media (max-width: 768px) {
+            .kpi-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+                padding: 12px 16px;
+            }
+        }
+        @media (max-width: 480px) {
+            .kpi-grid {
+                grid-template-columns: 1fr 1fr;
+                padding: 10px 12px;
+                gap: 10px;
+            }
+            .kpi-card .kpi-value {
+                font-size: 1.4rem;
+            }
+        }
+
+        /* ===================================================================
+           التنبيهات
+           =================================================================== */
+        .alerts-container {
+            padding: 0 24px 18px;
+        }
+        .alert-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 20px;
+            border-radius: var(--radius-small);
+            background: var(--bg-glass);
+            border: 1px solid var(--border-color);
+            margin-bottom: 8px;
+            animation: slideIn 0.5s ease;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .alert-item:hover {
+            transform: translateX(-6px);
+            border-color: var(--emerald-primary);
+        }
+        .alert-item.danger {
+            border-right: 4px solid var(--danger);
+        }
+        .alert-item.warning {
+            border-right: 4px solid var(--warning);
+        }
+        .alert-item.info {
+            border-right: 4px solid var(--emerald-primary);
+        }
+        .alert-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+        .alert-item.danger .alert-icon {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+        .alert-item.warning .alert-icon {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning);
+        }
+        .alert-item.info .alert-icon {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--emerald-primary);
+        }
+        .alert-content {
+            flex: 1;
+        }
+        .alert-title {
+            font-size: 0.9rem;
+            font-weight: 800;
+        }
+        .alert-desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .alert-time {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* ===================================================================
+           الرسوم البيانية
+           =================================================================== */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 0 24px 20px;
+        }
+        .chart-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-card);
+            padding: 18px 16px 14px;
+        }
+        .chart-card .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .chart-card .chart-title {
+            font-size: 0.9rem;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+        .chart-card .chart-title i {
+            color: var(--emerald-primary);
+            margin-left: 8px;
+        }
+        .chart-card .chart-badge {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            padding: 2px 14px;
+            border-radius: 30px;
+            background: var(--bg-glass-light);
+            border: 1px solid var(--border-color);
+        }
+        .chart-card .chart-container {
+            height: 210px;
+            position: relative;
+        }
+        .chart-card .chart-container canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+                padding: 0 16px 16px;
+            }
+            .chart-card .chart-container {
+                height: 170px;
+            }
+        }
+
+        /* ===================================================================
+           جدول المنتجات المرتجعة
+           =================================================================== */
+        .table-section {
+            padding: 0 24px 24px;
+        }
+        .table-wrapper {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-card);
+            overflow: hidden;
+        }
+        .table-scroll {
+            overflow-x: auto;
+            max-height: 480px;
+            overflow-y: auto;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+            min-width: 1200px;
+        }
+        .data-table th {
+            padding: 14px 16px;
+            text-align: center;
+            background: var(--bg-glass-light);
+            color: var(--emerald-primary);
+            font-weight: 800;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            white-space: nowrap;
+        }
+        .data-table td {
+            padding: 12px 16px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+            transition: var(--transition);
+            font-size: 0.8rem;
+            vertical-align: middle;
+        }
+        .data-table tr {
+            transition: var(--transition);
+        }
+        .data-table tr:hover td {
+            background: var(--bg-glass-light);
+            color: var(--text-primary);
+        }
+        .data-table .code-field {
+            color: var(--gold-primary);
+            font-weight: 800;
+            font-family: 'Inter', 'Arial', sans-serif;
+            direction: ltr;
+            background: rgba(245, 200, 66, 0.06);
+            padding: 2px 10px;
+            border-radius: 6px;
+            display: inline-block;
+            font-size: 0.75rem;
+        }
+        .data-table .amount {
+            font-weight: 700;
+            font-family: 'Inter', 'Arial', sans-serif;
+            direction: ltr;
+        }
+        .data-table .status-badge {
+            padding: 3px 14px;
+            border-radius: 30px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            border: 1px solid;
+            display: inline-block;
+        }
+        .status-badge.completed {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--success);
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+        .status-badge.pending {
+            background: rgba(245, 158, 11, 0.12);
+            color: var(--warning);
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+        .status-badge.cancelled {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--danger);
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+        .data-table .btn-action {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: var(--transition);
+            padding: 6px 8px;
+            border-radius: 8px;
+            margin: 0 2px;
+        }
+        .data-table .btn-action:hover {
+            background: var(--bg-glass-light);
+            transform: scale(1.1);
+        }
+        .data-table .btn-action.edit:hover {
+            color: var(--gold-primary);
+        }
+        .data-table .btn-action.delete:hover {
+            color: var(--danger);
+        }
+        .data-table .btn-action.view:hover {
+            color: var(--emerald-primary);
+        }
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state i {
+            font-size: 3.5rem;
+            margin-bottom: 14px;
+            opacity: 0.3;
+            display: block;
+        }
+
+        /* ===================================================================
+           فوتر الجدول
+           =================================================================== */
+        .table-footer {
+            display: flex;
+            justify-content: space-between;
+            padding: 14px 24px;
+            background: var(--bg-glass-light);
+            border-top: 1px solid var(--border-color);
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 0.85rem;
+        }
+        .table-footer .total-item {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .table-footer .total-item .label {
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+        .table-footer .total-item .value {
+            font-weight: 900;
+            color: var(--gold-primary);
+            font-family: 'Inter', 'Arial', sans-serif;
+            font-size: 1rem;
+            direction: ltr;
+        }
+
+        /* ===================================================================
+           مودال إضافة / تعديل مرتجع
+           =================================================================== */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.82);
+            backdrop-filter: blur(18px);
+            z-index: 850;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            overflow-y: auto;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.show {
+            display: flex;
+            opacity: 1;
+        }
+        .modal-content {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-card);
+            width: 100%;
+            max-width: 680px;
+            margin: 20px;
+            padding: 28px 32px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-card);
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: scale(0.95);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .modal-overlay.show .modal-content {
+            transform: scale(1);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 16px;
+        }
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 900;
+            color: var(--emerald-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .modal-close {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-glass);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+            transition: var(--transition);
+            font-size: 1.1rem;
+        }
+        .modal-close:active {
+            transform: scale(0.9);
+        }
+        .modal-close:hover {
+            background: var(--danger);
+            color: #fff;
+            border-color: var(--danger);
+        }
+        .modal-body {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .form-group label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+        }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-small);
+            padding: 10px 14px;
+            color: var(--text-primary);
+            font-family: 'Cairo', 'Inter', sans-serif;
+            font-size: 0.85rem;
+            outline: none;
+            transition: var(--transition);
+            width: 100%;
+        }
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            border-color: var(--emerald-primary);
+            box-shadow: 0 0 25px var(--border-glow);
+        }
+        .form-group textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+        .form-group select option {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+        .modal-footer {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+        .modal-footer .btn-modal {
+            padding: 10px 28px;
+            border-radius: var(--radius-small);
+            border: none;
+            font-family: 'Cairo', 'Inter', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            touch-action: manipulation;
+        }
+        .modal-footer .btn-modal:active {
+            transform: scale(0.94);
+        }
+        .modal-footer .btn-modal.primary {
+            background: linear-gradient(135deg, var(--emerald-primary), var(--emerald-dark));
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.25);
+        }
+        .modal-footer .btn-modal.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 35px rgba(16, 185, 129, 0.35);
+        }
+        .modal-footer .btn-modal.secondary {
+            background: var(--bg-glass-light);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        .modal-footer .btn-modal.secondary:hover {
+            background: var(--bg-glass);
+            border-color: var(--text-muted);
+        }
+
+        /* ===================================================================
+           مودال تفاصيل المرتجع
+           =================================================================== */
+        .details-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.82);
+            backdrop-filter: blur(18px);
+            z-index: 850;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            overflow-y: auto;
+        }
+        .details-overlay.show {
+            display: block;
+            opacity: 1;
+        }
+        .details-content {
+            background: var(--bg-secondary);
+            min-height: 100vh;
+            padding: 24px 28px;
+            border: 1px solid var(--border-color);
+            border-top: none;
+        }
+        .details-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            position: sticky;
+            top: 0;
+            background: var(--bg-secondary);
+            padding: 12px 0;
+            z-index: 10;
+        }
+        .details-title {
+            font-size: 1.2rem;
+            font-weight: 900;
+            color: var(--emerald-primary);
+        }
+        .details-close {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-glass);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+            transition: var(--transition);
+        }
+        .details-close:active {
+            transform: scale(0.9);
+        }
+        .details-close:hover {
+            background: var(--danger);
+            color: #fff;
+            border-color: var(--danger);
+        }
+        .details-profile {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+        .details-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 24px;
+            background: linear-gradient(135deg, var(--emerald-primary), var(--gold-primary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 900;
+            color: var(--bg-primary);
+            margin: 0 auto 14px;
+            box-shadow: 0 8px 30px rgba(16, 185, 129, 0.25);
+        }
+        .details-name {
+            font-size: 1.3rem;
+            font-weight: 800;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+        .details-status {
+            padding: 4px 20px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            border: 1px solid;
+            display: inline-block;
+        }
+        .details-status.completed {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--success);
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+        .details-status.pending {
+            background: rgba(245, 158, 11, 0.12);
+            color: var(--warning);
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+        .details-status.cancelled {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--danger);
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+        .details-section {
+            background: var(--bg-glass);
+            border-radius: var(--radius-small);
+            padding: 18px 20px;
+            margin-bottom: 18px;
+            border: 1px solid var(--border-color);
+        }
+        .details-section-title {
+            font-size: 0.95rem;
+            font-weight: 800;
+            margin-bottom: 14px;
+            color: var(--emerald-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .details-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .details-row:last-child {
+            border-bottom: none;
+        }
+        .details-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        .details-value {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-family: 'Inter', 'Arial', sans-serif;
+            direction: ltr;
+        }
+        .details-value.code {
+            color: var(--gold-primary);
+            font-family: 'Inter', 'Arial', sans-serif;
+        }
+        .details-value.red {
+            color: var(--danger);
+        }
+        .details-value.green {
+            color: var(--success);
+        }
+
+        /* ===================================================================
+           مودال AI Advisor
+           =================================================================== */
+        .ai-modal .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(10px);
+            z-index: 800;
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .ai-modal .modal-overlay.show {
+            display: flex;
+            opacity: 1;
+        }
+        .ai-modal .modal {
+            background: var(--bg-secondary);
+            border-radius: 28px 28px 0 0;
+            width: 100%;
+            max-height: 82vh;
+            overflow-y: auto;
+            padding: 28px 24px;
+            transform: translateY(100%);
+            transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+        }
+        .ai-modal .modal-overlay.show .modal {
+            transform: translateY(0);
+        }
+        .ai-modal .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 22px;
+        }
+        .ai-modal .modal-title {
+            font-size: 1.15rem;
+            font-weight: 900;
+            color: var(--emerald-primary);
+        }
+        .ai-modal .modal-close {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-glass);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+            transition: var(--transition);
+        }
+        .ai-modal .modal-close:active {
+            transform: scale(0.9);
+        }
+        .ai-modal .modal-close:hover {
+            background: var(--danger);
+            color: #fff;
+            border-color: var(--danger);
+        }
+        .ai-insight-card {
+            background: var(--bg-glass);
+            border-radius: var(--radius-small);
+            padding: 16px 18px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border-color);
+            border-right: 4px solid var(--emerald-primary);
+        }
+        .ai-insight-card .insight-title {
+            font-weight: 800;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+        }
+        .ai-insight-card .insight-desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* ===================================================================
+           مودالات القائمة السفلية (نفس تصميم damaged)
+           =================================================================== */
+        .modal-stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+        .modal-stat-card {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-small);
+            padding: 16px;
+            text-align: center;
+        }
+        .modal-stat-card .stat-value {
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: var(--gold-primary);
+            font-family: 'Inter', 'Arial', sans-serif;
+            direction: ltr;
+        }
+        .modal-stat-card .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+        .mini-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+        .mini-table th {
+            text-align: right;
+            padding: 8px 6px;
+            color: var(--emerald-primary);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 700;
+        }
+        .mini-table td {
+            padding: 8px 6px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+        }
+        .settings-group {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .setting-row .setting-label {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+        .setting-row .setting-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            display: block;
+        }
+        .setting-row input,
+        .setting-row select {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-small);
+            padding: 8px 12px;
+            color: var(--text-primary);
+            font-family: 'Cairo', 'Inter', sans-serif;
+            font-size: 0.85rem;
+            outline: none;
+            width: 140px;
+            transition: var(--transition);
+        }
+        .setting-row input:focus,
+        .setting-row select:focus {
+            border-color: var(--emerald-primary);
+            box-shadow: 0 0 25px var(--border-glow);
+        }
+        .setting-row input[type="checkbox"] {
+            width: 40px;
+            height: 24px;
+            appearance: none;
+            background: var(--bg-glass);
+            border: 1px solid var(--border-color);
+            border-radius: 30px;
+            position: relative;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .setting-row input[type="checkbox"]:checked {
+            background: var(--emerald-primary);
+            border-color: var(--emerald-primary);
+        }
+        .setting-row input[type="checkbox"]::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 18px;
+            height: 18px;
+            background: #fff;
+            border-radius: 50%;
+            transition: var(--transition);
+        }
+        .setting-row input[type="checkbox"]:checked::after {
+            right: 18px;
+        }
+        .btn-save-setting {
+            padding: 8px 20px;
+            border-radius: var(--radius-small);
+            border: none;
+            background: linear-gradient(135deg, var(--emerald-primary), var(--emerald-dark));
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            font-family: 'Cairo', 'Inter', sans-serif;
+            font-size: 0.8rem;
+        }
+        .btn-save-setting:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.35);
+        }
+        .report-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .report-actions .btn-report {
+            flex: 1;
+            min-width: 120px;
+            padding: 12px;
+            border-radius: var(--radius-small);
+            border: 1px solid var(--border-color);
+            background: var(--bg-glass);
+            color: var(--text-secondary);
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-family: 'Cairo', 'Inter', sans-serif;
+        }
+        .report-actions .btn-report:hover {
+            background: var(--bg-glass-light);
+            border-color: var(--emerald-primary);
+            color: var(--emerald-primary);
+            transform: translateY(-2px);
+        }
+        .report-actions .btn-report.primary {
+            background: linear-gradient(135deg, var(--emerald-primary), var(--emerald-dark));
+            color: #fff;
+            border-color: var(--emerald-primary);
+        }
+        .report-actions .btn-report.primary:hover {
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.35);
+        }
+
+        /* ===================================================================
+           FAB & Toast & Loading
+           =================================================================== */
+        .fab {
+            position: fixed;
+            bottom: 100px;
+            left: 28px;
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--emerald-primary), var(--emerald-dark));
+            border: none;
+            color: #fff;
+            font-size: 1.6rem;
+            cursor: pointer;
+            box-shadow: 0 8px 30px rgba(16, 185, 129, 0.35);
+            transition: var(--transition);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+        .fab:active {
+            transform: scale(0.9);
+        }
+        .fab:hover {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 12px 45px rgba(16, 185, 129, 0.45);
+        }
+        .toast {
+            position: fixed;
+            top: 85px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 600;
+            opacity: 0;
+            transition: all 0.4s ease;
+            pointer-events: none;
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.6);
+            min-width: 200px;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .toast.success {
+            border-color: var(--success);
+        }
+        .toast.error {
+            border-color: var(--danger);
+        }
+        .toast.warning {
+            border-color: var(--warning);
+        }
+        .toast-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+        }
+        .toast.success .toast-icon {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--success);
+        }
+        .toast.error .toast-icon {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--danger);
+        }
+        .toast.warning .toast-icon {
+            background: rgba(245, 158, 11, 0.12);
+            color: var(--warning);
+        }
+        .loading-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 3000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+        .spinner {
+            width: 56px;
+            height: 56px;
+            border: 5px solid rgba(16, 185, 129, 0.15);
+            border-radius: 50%;
+            border-top: 5px solid var(--emerald-primary);
+            animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+        .offline-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(90deg, var(--warning), #f97316);
+            color: #000;
+            text-align: center;
+            padding: 6px 12px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            z-index: 2000;
+            transform: translateY(-100%);
+            transition: transform 0.35s;
+        }
+        .offline-banner.show {
+            transform: translateY(0);
+        }
+        .pull-indicator {
+            position: fixed;
+            top: -60px;
+            left: 0;
+            right: 0;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            transition: top 0.2s;
+            z-index: 50;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            pointer-events: none;
+        }
+        .pull-indicator.active {
+            top: 0;
+        }
+        .pull-indicator i {
+            margin-left: 10px;
+            transition: transform 0.3s;
+        }
+        .pull-indicator.loading i {
+            animation: spin 0.8s linear infinite;
+        }
+
+        /* ===================================================================
+           القائمة الجانبية والسفلية
+           =================================================================== */
+        .sidebar-toggle {
+            position: fixed;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            background: linear-gradient(145deg, var(--emerald-primary), var(--emerald-dark));
+            color: #fff;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50% 0 0 50%;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: -3px 0 25px rgba(16, 185, 129, 0.3);
+            transition: var(--transition);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .sidebar-toggle:active {
+            transform: translateY(-50%) scale(0.9);
+        }
+        .sidebar-toggle.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .sidebar {
+            position: fixed;
+            top: 50%;
+            right: -140px;
+            transform: translateY(-50%);
+            width: 120px;
+            background: var(--bg-card);
+            backdrop-filter: blur(24px);
+            z-index: 999;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            padding: 14px 12px;
+            border-radius: 18px 0 0 18px;
+            overflow-y: auto;
+            box-shadow: -8px 0 40px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-color);
+            opacity: 0;
+        }
+        .sidebar.open {
+            right: 0;
+            opacity: 1;
+        }
+        .sidebar-content {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .sidebar-btn {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-color);
+            padding: 14px 8px;
+            border-radius: 14px;
+            color: var(--text-secondary);
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-height: 80px;
+            text-align: center;
+            font-size: 0.9rem;
+            font-family: 'Cairo', 'Inter', sans-serif;
+            touch-action: manipulation;
+        }
+        .sidebar-btn:active {
+            transform: scale(0.92);
+        }
+        .sidebar-btn:hover {
+            background: var(--bg-glass-light);
+            border-color: var(--emerald-primary);
+            color: var(--emerald-primary);
+            transform: scale(1.05);
+        }
+        .sidebar-btn i {
+            font-size: 1.6rem;
+        }
+        .sidebar-btn span {
+            font-size: 0.7rem;
+            margin-top: 2px;
+        }
+        .sidebar-btn.ai-btn {
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+        .sidebar-btn.ai-btn i {
+            color: var(--emerald-primary);
+        }
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(10, 26, 18, 0.94);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0 env(safe-area-inset-bottom, 8px) 0;
+            z-index: 300;
+        }
+        [data-theme="light"] .bottom-nav {
+            background: rgba(236, 253, 245, 0.94);
+        }
+        .bottom-nav .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-family: 'Cairo', 'Inter', sans-serif;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: var(--transition);
+            padding: 6px 12px;
+            position: relative;
+            touch-action: manipulation;
+            flex: 1;
+        }
+        .bottom-nav .nav-item:active {
+            transform: scale(0.9);
+        }
+        .bottom-nav .nav-item i {
+            font-size: 22px;
+            transition: var(--transition);
+        }
+        .bottom-nav .nav-item span {
+            font-weight: 700;
+            margin-top: 2px;
+        }
+        .bottom-nav .nav-item.active {
+            color: var(--emerald-primary);
+        }
+        .bottom-nav .nav-item.active i {
+            transform: translateY(-3px);
+            text-shadow: 0 0 25px rgba(16, 185, 129, 0.3);
+        }
+        .bottom-nav .nav-item.active::after {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 24px;
+            height: 3px;
+            background: var(--emerald-primary);
+            border-radius: 10px;
+        }
+
+        /* ===================================================================
+           تحسينات الاستجابة
+           =================================================================== */
+        @media (max-width: 768px) {
+            .top-bar {
+                padding: 10px 16px;
+            }
+            .top-title h2 {
+                font-size: 1.1rem;
+            }
+            .filter-bar {
+                gap: 6px;
+            }
+            .filter-group {
+                min-width: 80px;
+                padding: 2px 10px;
+                flex: 1 0 80px;
+            }
+            .filter-group input,
+            .filter-group select {
+                font-size: 0.7rem;
+                padding: 6px 0;
+            }
+            .btn-filter {
+                padding: 6px 14px;
+                font-size: 0.7rem;
+            }
+            .kpi-grid {
+                padding: 12px 16px;
+                gap: 12px;
+            }
+            .charts-grid {
+                padding: 0 16px 16px;
+                gap: 14px;
+            }
+            .table-section {
+                padding: 0 16px 16px;
+            }
+            .data-table {
+                font-size: 0.7rem;
+                min-width: 900px;
+            }
+            .data-table th,
+            .data-table td {
+                padding: 8px 10px;
+            }
+            .table-footer {
+                font-size: 0.75rem;
+                flex-direction: column;
+                align-items: center;
+                padding: 12px 16px;
+            }
+            .sidebar {
+                width: 100px;
+            }
+            .sidebar-btn {
+                min-height: 70px;
+                font-size: 0.8rem;
+            }
+            .sidebar-btn i {
+                font-size: 1.4rem;
+            }
+            .bottom-nav .nav-item {
+                font-size: 0.65rem;
+            }
+            .bottom-nav .nav-item i {
+                font-size: 18px;
+            }
+            .fab {
+                width: 50px;
+                height: 50px;
+                font-size: 1.3rem;
+                bottom: 85px;
+                left: 16px;
+            }
+            .modal-content {
+                padding: 20px 16px;
+                margin: 12px;
+                max-width: 100%;
+            }
+            .modal-stats-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+            .setting-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            .setting-row input,
+            .setting-row select {
+                width: 100%;
+            }
+            .report-actions .btn-report {
+                min-width: 80px;
+                padding: 10px;
+                font-size: 0.75rem;
+            }
+            .form-row {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            .details-content {
+                padding: 16px;
+            }
+            .details-avatar {
+                width: 64px;
+                height: 64px;
+                font-size: 1.5rem;
+            }
+        }
+        @media (max-width: 480px) {
+            .kpi-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                padding: 10px 12px;
+            }
+            .kpi-card {
+                padding: 14px 12px;
+            }
+            .kpi-card .kpi-value {
+                font-size: 1.4rem;
+            }
+            .filter-group {
+                min-width: 60px;
+                flex: 1 0 70px;
+            }
+            .filter-actions .btn-filter {
+                font-size: 0.6rem;
+                padding: 4px 10px;
+            }
+            .bottom-nav .nav-item {
+                padding: 2px 4px;
+                font-size: 0.6rem;
+            }
+            .bottom-nav .nav-item i {
+                font-size: 15px;
+            }
+            .data-table {
+                min-width: 700px;
+                font-size: 0.65rem;
+            }
+            .data-table th,
+            .data-table td {
+                padding: 6px 8px;
+            }
+            .sidebar {
+                width: 80px;
+            }
+            .sidebar-btn {
+                min-height: 60px;
+                font-size: 0.7rem;
+            }
+            .sidebar-btn i {
+                font-size: 1.2rem;
+            }
+            .modal-stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .report-actions {
+                flex-direction: column;
+            }
+            .report-actions .btn-report {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Pull-to-Refresh -->
+    <div class="pull-indicator" id="pullIndicator">
+        <i class="fas fa-arrow-down"></i>
+        <span>اسحب للتحديث</span>
+    </div>
+    <!-- Offline Banner -->
+    <div class="offline-banner" id="offlineBanner">
+        <i class="fas fa-wifi-slash"></i>
+        أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
+    </div>
+    <!-- Loading -->
+    <div class="loading-indicator" id="loadingIndicator">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- ===================================================================
+    الشريط العلوي
+    =================================================================== -->
+    <header class="top-bar">
+        <div class="header-top">
+            <div class="top-title">
+                <h2>
+                    <i class="fas fa-undo-alt"></i>
+                    المنتجات المرتجعة
+                    <span class="ai-badge">AI</span>
+                </h2>
+                <span class="subtitle">إدارة المنتجات المرتجعة من العملاء والموردين</span>
+            </div>
+            <div class="header-actions">
+                <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
+                    <i class="fas fa-bell"></i>
+                </button>
+                <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
+                    <i class="fas fa-moon" id="themeIcon"></i>
+                </button>
+                <button class="icon-btn" onclick="openAIAdvisor()" style="border-color:rgba(16,185,129,0.3);" title="المستشار الذكي">
+                    <i class="fas fa-robot" style="color:var(--emerald-primary);"></i>
+                </button>
+            </div>
+        </div>
+        <!-- الفلاتر -->
+        <div class="filter-bar">
+            <div class="filter-group">
+                <i class="fas fa-calendar-alt"></i>
+                <input id="filterDateFrom" placeholder="من" type="date">
+            </div>
+            <div class="filter-group">
+                <i class="fas fa-calendar-alt"></i>
+                <input id="filterDateTo" placeholder="إلى" type="date">
+            </div>
+            <div class="filter-group">
+                <i class="fas fa-box"></i>
+                <select id="filterProduct">
+                    <option value="">جميع المنتجات</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <i class="fas fa-user"></i>
+                <select id="filterCustomer">
+                    <option value="">جميع العملاء</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <i class="fas fa-filter"></i>
+                <select id="filterStatus">
+                    <option value="">جميع الحالات</option>
+                    <option value="completed">مكتمل</option>
+                    <option value="pending">قيد الانتظار</option>
+                    <option value="cancelled">ملغي</option>
+                </select>
+            </div>
+            <div class="filter-actions">
+                <button class="btn-filter primary" onclick="loadReturns()">
+                    <i class="fas fa-search"></i>
+                    عرض
+                </button>
+                <button class="btn-filter success" onclick="openAddModal()">
+                    <i class="fas fa-plus"></i>
+                    إضافة
+                </button>
+                <button class="btn-filter" onclick="resetFilters()">
+                    <i class="fas fa-undo"></i>
+                </button>
+                <button class="btn-filter" onclick="exportCSV()">
+                    <i class="fas fa-file-csv"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ===================================================================
+    بطاقات الإحصائيات
+    =================================================================== -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon warning">
+                <i class="fas fa-undo-alt"></i>
+            </div>
+            <div class="kpi-value" id="kpiTotalReturns">0</div>
+            <div class="kpi-label">📦 إجمالي المرتجعات</div>
+            <div class="kpi-trend up">
+                <i class="fas fa-arrow-up"></i>
+                <span id="trendTotal">+0%</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon gold">
+                <i class="fas fa-dollar-sign"></i>
+            </div>
+            <div class="kpi-value" id="kpiTotalValue">0.00</div>
+            <div class="kpi-label">💰 إجمالي قيمة المرتجعات</div>
+            <div class="kpi-trend up">
+                <i class="fas fa-arrow-up"></i>
+                <span id="trendValue">+0%</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon green">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="kpi-value" id="kpiCompleted">0</div>
+            <div class="kpi-label">✅ مكتملة</div>
+            <div class="kpi-trend up">
+                <i class="fas fa-arrow-up"></i>
+                <span id="trendCompleted">+0%</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon red">
+                <i class="fas fa-times-circle"></i>
+            </div>
+            <div class="kpi-value" id="kpiCancelled">0</div>
+            <div class="kpi-label">❌ ملغية</div>
+            <div class="kpi-trend down">
+                <i class="fas fa-arrow-down"></i>
+                <span id="trendCancelled">-0%</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon warning">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="kpi-value" id="kpiPending">0</div>
+            <div class="kpi-label">⏳ قيد الانتظار</div>
+            <div class="kpi-trend up">
+                <i class="fas fa-arrow-up"></i>
+                <span id="trendPending">+0%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================
+    التنبيهات
+    =================================================================== -->
+    <div class="alerts-container" id="alertsContainer"></div>
+
+    <!-- ===================================================================
+    الرسوم البيانية
+    =================================================================== -->
+    <div class="charts-grid">
+        <div class="chart-card">
+            <div class="chart-header">
+                <span class="chart-title">
+                    <i class="fas fa-chart-bar"></i>
+                    التوزيع حسب الحالة
+                </span>
+                <span class="chart-badge">آخر 30 يوم</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="statusChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-header">
+                <span class="chart-title">
+                    <i class="fas fa-chart-line"></i>
+                    اتجاه المرتجعات
+                </span>
+                <span class="chart-badge">آخر 7 أيام</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================
+    جدول المنتجات المرتجعة
+    =================================================================== -->
+    <div class="table-section">
+        <div class="table-wrapper">
+            <div class="table-scroll">
+                <table class="data-table" id="returnTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>كود المرتجع</th>
+                            <th>المنتج</th>
+                            <th>العميل</th>
+                            <th>الكمية</th>
+                            <th>القيمة</th>
+                            <th>السبب</th>
+                            <th>التاريخ</th>
+                            <th>الحالة</th>
+                            <th>إجراء</th>
+                        </tr>
+                    </thead>
+                    <tbody id="returnTableBody">
+                        <tr>
+                            <td colspan="10">
+                                <div class="empty-state">
+                                    <i class="fas fa-undo-alt"></i>
+                                    اختر الفترة واضغط "عرض" لاستعراض المنتجات المرتجعة
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="table-footer">
+                <span class="total-item">
+                    <span class="label">إجمالي الكمية المرتجعة:</span>
+                    <span class="value" id="footerTotalQty">0.0</span>
+                </span>
+                <span class="total-item">
+                    <span class="label">القيمة الإجمالية:</span>
+                    <span class="value" id="footerTotalValue">0.00</span>
+                </span>
+                <span class="total-item">
+                    <span class="label">عدد السجلات:</span>
+                    <span class="value" id="footerCount">0</span>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================
+    الزر العائم (إضافة)
+    =================================================================== -->
+    <button class="fab" onclick="openAddModal()" title="إضافة مرتجع">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <!-- ===================================================================
+    القائمة الجانبية (مكبّرة)
+    =================================================================== -->
+    <div class="sidebar-toggle" id="sidebarToggle">
+        <i class="fas fa-chevron-left"></i>
+    </div>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-content">
+            <button class="sidebar-btn" onclick="handleAction('refresh')">
+                <i class="fas fa-sync-alt"></i>
+                <span>تحديث</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleAction('csv')">
+                <i class="fas fa-file-csv"></i>
+                <span>CSV</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleAction('pdf')">
+                <i class="fas fa-file-pdf"></i>
+                <span>PDF</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleAction('print')">
+                <i class="fas fa-print"></i>
+                <span>طباعة</span>
+            </button>
+            <button class="sidebar-btn ai-btn" onclick="handleAction('ai')">
+                <i class="fas fa-robot"></i>
+                <span>AI</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleAction('home')">
+                <i class="fas fa-home"></i>
+                <span>رجوع</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ===================================================================
+    القائمة السفلية (مكبّرة الخط) - مودالات حقيقية
+    =================================================================== -->
+    <nav class="bottom-nav">
+        <button class="nav-item" onclick="switchTab('summary')">
+            <i class="fas fa-chart-pie"></i>
+            <span>ملخص</span>
+        </button>
+        <button class="nav-item active" onclick="switchTab('returns')">
+            <i class="fas fa-undo-alt"></i>
+            <span>مرتجعات</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('inventory')">
+            <i class="fas fa-warehouse"></i>
+            <span>المخزون</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('reports')">
+            <i class="fas fa-file-alt"></i>
+            <span>تقارير</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('settings')">
+            <i class="fas fa-cog"></i>
+            <span>إعدادات</span>
+        </button>
+    </nav>
+
+    <!-- ===================================================================
+    مودال إضافة / تعديل مرتجع
+    =================================================================== -->
+    <div class="modal-overlay" id="formModal" onclick="closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="formModalTitle">➕ إضافة مرتجع</h3>
+                <button class="modal-close" onclick="closeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId" value="0" />
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>رقم الفاتورة *</label>
+                        <input id="fInvoiceNumber" type="text" placeholder="أدخل رقم الفاتورة الأصلية" required />
+                    </div>
+                    <div class="form-group">
+                        <label>المنتج *</label>
+                        <select id="fProductId">
+                            <option value="">اختر المنتج</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>العميل</label>
+                        <select id="fCustomerId">
+                            <option value="">اختر العميل</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>الكمية *</label>
+                        <input id="fQuantity" type="number" step="0.01" placeholder="أدخل الكمية" />
+                    </div>
+                    <div class="form-group">
+                        <label>القيمة *</label>
+                        <input id="fValue" type="number" step="0.01" placeholder="أدخل القيمة" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>سبب الإرجاع *</label>
+                    <input id="fReason" type="text" placeholder="سبب الإرجاع (مثل: عيب صناعة، طلب خاطئ)" />
+                </div>
+                <div class="form-group">
+                    <label>ملاحظات</label>
+                    <textarea id="fNotes" placeholder="ملاحظات إضافية"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>الحالة</label>
+                        <select id="fStatus">
+                            <option value="completed">مكتمل</option>
+                            <option value="pending">قيد الانتظار</option>
+                            <option value="cancelled">ملغي</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>تاريخ الإرجاع</label>
+                        <input id="fReturnDate" type="date" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-modal secondary" onclick="closeModal()">إلغاء</button>
+                <button class="btn-modal primary" onclick="saveReturn()">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================
+    مودال تفاصيل المرتجع
+    =================================================================== -->
+    <div class="details-overlay" id="detailsOverlay" onclick="closeDetails()">
+        <div class="details-content" id="detailsContent" onclick="event.stopPropagation()">
+            <!-- يتم تعبئتها عبر JS -->
+        </div>
+    </div>
+
+    <!-- ===================================================================
+    مودال AI Advisor
+    =================================================================== -->
+    <div class="ai-modal">
+        <div class="modal-overlay" id="aiModal" onclick="closeAIModal()">
+            <div class="modal" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h3 class="modal-title">🤖 المستشار الذكي – المرتجعات</h3>
+                    <button class="modal-close" onclick="closeAIModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="aiContent">
+                    <div style="text-align:center;color:var(--text-muted);padding:30px;">
+                        <i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:12px;"></i>
+                        <p>جاري تحليل بيانات المرتجعات...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================
+    مودالات القائمة السفلية (نفس تصميم damaged)
+    =================================================================== -->
+
+    <!-- مودال الملخص -->
+    <div class="modal-overlay" id="summaryModal" onclick="closeModalById('summaryModal')">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fas fa-chart-pie"></i> ملخص المحطة</h3>
+                <button class="modal-close" onclick="closeModalById('summaryModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="summaryBody">
+                <div style="text-align:center;padding:20px;">
+                    <i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i>
+                    <p style="color:var(--text-muted);margin-top:10px;">جاري تحميل الملخص...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال المخزون -->
+    <div class="modal-overlay" id="inventoryModal" onclick="closeModalById('inventoryModal')">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fas fa-warehouse"></i> مستويات المخزون</h3>
+                <button class="modal-close" onclick="closeModalById('inventoryModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="inventoryBody">
+                <div style="text-align:center;padding:20px;">
+                    <i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i>
+                    <p style="color:var(--text-muted);margin-top:10px;">جاري تحميل المخزون...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال التقارير -->
+    <div class="modal-overlay" id="reportsModal" onclick="closeModalById('reportsModal')">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fas fa-file-alt"></i> التقارير</h3>
+                <button class="modal-close" onclick="closeModalById('reportsModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="reportsBody">
+                <div style="text-align:center;padding:20px;">
+                    <i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i>
+                    <p style="color:var(--text-muted);margin-top:10px;">جاري تحميل التقارير...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال الإعدادات -->
+    <div class="modal-overlay" id="settingsModal" onclick="closeModalById('settingsModal')">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fas fa-cog"></i> الإعدادات</h3>
+                <button class="modal-close" onclick="closeModalById('settingsModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="settingsBody">
+                <div style="text-align:center;padding:20px;">
+                    <i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i>
+                    <p style="color:var(--text-muted);margin-top:10px;">جاري تحميل الإعدادات...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================
+    Toast
+    =================================================================== -->
+    <div class="toast" id="toast">
+        <div class="toast-icon">
+            <i class="fas fa-check"></i>
+        </div>
+        <span id="toastMessage">تمت العملية بنجاح</span>
+    </div>
+
+    <!-- ===================================================================
+    JavaScript
+    =================================================================== -->
+    <script>
+        // ===================================================================
+        // 1. apiCall الموحدة
+        // ===================================================================
+        function apiCall(action, params) {
+            const p = params || {};
+            if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
+            try {
+                let raw;
+                switch (action) {
+                    case 'getReturns': raw = AndroidInterface.getReturns(JSON.stringify(p)); break;
+                    case 'saveReturn': raw = AndroidInterface.processSaleReturn(JSON.stringify(p)); break;
+                    case 'processReturn': raw = AndroidInterface.processSaleReturn(JSON.stringify(p)); break;
+                    case 'updateReturn': raw = AndroidInterface.updateReturn(Number(p.id), JSON.stringify(p)); break;
+                    case 'deleteReturn': raw = AndroidInterface.deleteReturn(Number(p.id)); break;
+                    case 'getDashboardStats': raw = AndroidInterface.getDashboardStats('{}'); break;
+                    case 'getLowStockItems': raw = AndroidInterface.getLowStockItems(); break;
+                    case 'getProducts': raw = AndroidInterface.getProducts(); break;
+                    case 'getCustomers': raw = AndroidInterface.getCustomers(); break;
+                    case 'getSetting': raw = AndroidInterface.getSetting(String(p.key)); break;
+                    case 'setSetting': raw = AndroidInterface.setSetting(String(p.key), String(p.value)); break;
+                    default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
+                }
+                return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+            } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
+        }
+
+        function showToast(msg, type) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toastMessage');
+            const iconEl = toast.querySelector('.toast-icon i');
+            toast.className = 'toast ' + type;
+            msgEl.textContent = msg;
+            if (type === 'success') iconEl.className = 'fas fa-check';
+            else if (type === 'error') iconEl.className = 'fas fa-times';
+            else if (type === 'warning') iconEl.className = 'fas fa-exclamation-triangle';
+            toast.classList.add('show');
+            clearTimeout(toast._timer);
+            toast._timer = setTimeout(() => toast.classList.remove('show'), 3500);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
+        }
+
+        function formatCurrency(n) {
+            if (n === null || n === undefined || isNaN(n)) return '0.00';
+            return parseFloat(n).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formatNumber(n) {
+            if (n === null || n === undefined || isNaN(n)) return '0';
+            if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+            if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+            return n.toLocaleString('en');
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function getStatusLabel(st) {
+            const map = {
+                'completed': 'مكتمل',
+                'pending': 'قيد الانتظار',
+                'cancelled': 'ملغي'
+            };
+            return map[st] || st;
+        }
+
+        function getStatusClass(st) {
+            const map = {
+                'completed': 'completed',
+                'pending': 'pending',
+                'cancelled': 'cancelled'
+            };
+            return map[st] || 'pending';
+        }
+
+        function getStatusBadge(st) {
+            return `<span class="status-badge ${getStatusClass(st)}">${getStatusLabel(st)}</span>`;
+        }
+
+        function closeModalById(id) {
+            document.getElementById(id).classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        // ===================================================================
+        // 4. تبديل الوضع (فاتح افتراضي)
+        // ===================================================================
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            const isDark = current === 'dark';
+            const newTheme = isDark ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            const icon = document.getElementById('themeIcon');
+            icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+        }
+
+        function loadSavedTheme() {
+            const saved = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', saved);
+            const icon = document.getElementById('themeIcon');
+            icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+        }
+
+        // ===================================================================
+        // 5. تحميل المرتجعات
+        // ===================================================================
+        let returnsData = [];
+        let statusChart = null;
+        let trendChart = null;
+
+        async function loadReturns() {
+            const from = document.getElementById('filterDateFrom').value;
+            const to = document.getElementById('filterDateTo').value;
+            const productId = document.getElementById('filterProduct').value;
+            const customerId = document.getElementById('filterCustomer').value;
+            const status = document.getElementById('filterStatus').value;
+
+            if (!from || !to) {
+                showToast('❌ الرجاء اختيار نطاق التاريخ', 'error');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const params = {
+                    start_date: from,
+                    end_date: to,
+                    product_id: productId || null,
+                    customer_id: customerId || null,
+                    status: status || null,
+                    station_id: 1
+                };
+                const result = await apiCall('getReturns', params);
+                if (result.success && result.data) {
+                    returnsData = result.data;
+                    renderTable(returnsData);
+                    updateKPIs(returnsData);
+                    updateCharts(returnsData);
+                    updateFooter(returnsData);
+                    generateAlerts(returnsData);
+                    generateAIInsights(returnsData);
+                    showToast('✅ تم تحميل البيانات بنجاح', 'success');
+                } else {
+                    showToast(result.message || '❌ لا توجد بيانات', 'warning');
+                    document.getElementById('returnTableBody').innerHTML =
+                        '<tr><td colspan="10"><div class="empty-state"><i class="fas fa-inbox"></i> لا توجد بيانات مطابقة</div></td></tr>';
+                    resetKPIs();
+                }
+            } catch (e) {
+                showToast('❌ فشل تحميل البيانات', 'error');
+                console.error(e);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ===================================================================
+        // 6. عرض الجدول
+        // ===================================================================
+        function renderTable(data) {
+            const tbody = document.getElementById('returnTableBody');
+            if (!data || data.length === 0) {
+                tbody.innerHTML =
+                    '<tr><td colspan="10"><div class="empty-state"><i class="fas fa-inbox"></i> لا توجد بيانات للعرض</div></td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.map((item, idx) => {
+                const statusLabel = getStatusLabel(item.status);
+                const statusClass = getStatusClass(item.status);
+                const productName = item.product_name || item.product_name_ar || '---';
+                const customerName = item.customer_name || '---';
+                const reason = item.reason || '---';
+                const quantity = parseFloat(item.quantity || 0);
+                const value = parseFloat(item.value || item.total_value || 0);
+                const date = item.return_date ? new Date(item.return_date).toLocaleDateString('en-GB') : '---';
+
+                return `
+                        <tr>
+                            <td>${idx + 1}</td>
+                            <td><span class="code-field red">${item.id || '---'}</span></td>
+                            <td>${escapeHtml(productName)}</td>
+                            <td>${escapeHtml(customerName)}</td>
+                            <td class="amount">${formatNumber(quantity)}</td>
+                            <td class="amount">${formatCurrency(value)}</td>
+                            <td style="font-size:0.75rem;max-width:120px;word-break:break-word;">${escapeHtml(reason)}</td>
+                            <td>${date}</td>
+                            <td>${getStatusBadge(item.status)}</td>
+                            <td>
+                                <button class="btn-action edit" onclick="openEditModal(${item.id})" title="تعديل">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn-action delete" onclick="deleteReturn(${item.id})" title="حذف">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                <button class="btn-action view" onclick="viewDetails(${item.id})" title="تفاصيل">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+            }).join('');
+        }
+
+        // ===================================================================
+        // 7. تحديث بطاقات الإحصائيات
+        // ===================================================================
+        function updateKPIs(data) {
+            let totalQty = 0,
+                totalValue = 0,
+                completed = 0,
+                pending = 0,
+                cancelled = 0;
+            data.forEach(item => {
+                const qty = parseFloat(item.quantity || 0);
+                const val = parseFloat(item.value || item.total_value || 0);
+                totalQty += qty;
+                totalValue += val;
+                if (item.status === 'completed') completed++;
+                else if (item.status === 'pending') pending++;
+                else if (item.status === 'cancelled') cancelled++;
+            });
+
+            document.getElementById('kpiTotalReturns').textContent = formatNumber(totalQty);
+            document.getElementById('kpiTotalValue').textContent = formatCurrency(totalValue);
+            document.getElementById('kpiCompleted').textContent = completed;
+            document.getElementById('kpiCancelled').textContent = cancelled;
+            document.getElementById('kpiPending').textContent = pending;
+
+            const previous = [
+                Number(document.getElementById('trendTotal').dataset.value || totalQty),
+                Number(document.getElementById('trendValue').dataset.value || totalValue),
+                Number(document.getElementById('trendCompleted').dataset.value || completed),
+                Number(document.getElementById('trendCancelled').dataset.value || cancelled),
+                Number(document.getElementById('trendPending').dataset.value || pending)
+            ];
+            const current = [totalQty, totalValue, completed, cancelled, pending];
+            const change = (now, before) => before === 0 ? 0 : ((now - before) / Math.abs(before)) * 100;
+            ['trendTotal','trendValue','trendCompleted','trendCancelled','trendPending'].forEach((id, index) => {
+                const el = document.getElementById(id);
+                el.dataset.value = String(current[index]);
+                el.textContent = change(current[index], previous[index]).toFixed(1) + '%';
+            });
+        }
+
+        function resetKPIs() {
+            document.getElementById('kpiTotalReturns').textContent = '0';
+            document.getElementById('kpiTotalValue').textContent = '0.00';
+            document.getElementById('kpiCompleted').textContent = '0';
+            document.getElementById('kpiCancelled').textContent = '0';
+            document.getElementById('kpiPending').textContent = '0';
+        }
+
+        // ===================================================================
+        // 8. فوتر الجدول
+        // ===================================================================
+        function updateFooter(data) {
+            let totalQty = 0,
+                totalValue = 0;
+            data.forEach(item => {
+                totalQty += parseFloat(item.quantity || 0);
+                totalValue += parseFloat(item.value || item.total_value || 0);
+            });
+            document.getElementById('footerTotalQty').textContent = formatNumber(totalQty);
+            document.getElementById('footerTotalValue').textContent = formatCurrency(totalValue);
+            document.getElementById('footerCount').textContent = data.length;
+        }
+
+        // ===================================================================
+        // 9. الرسوم البيانية
+        // ===================================================================
+        function updateCharts(data) {
+            let completed = 0,
+                pending = 0,
+                cancelled = 0;
+            data.forEach(item => {
+                if (item.status === 'completed') completed++;
+                else if (item.status === 'pending') pending++;
+                else if (item.status === 'cancelled') cancelled++;
+            });
+
+            const ctx1 = document.getElementById('statusChart').getContext('2d');
+            if (statusChart) statusChart.destroy();
+            statusChart = new Chart(ctx1, {
+                type: 'doughnut',
+                data: {
+                    labels: ['مكتمل', 'قيد الانتظار', 'ملغي'],
+                    datasets: [{
+                        data: [completed, pending, cancelled],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                        borderColor: 'transparent',
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'left',
+                            labels: { font: { family: 'Cairo' }, boxWidth: 12, padding: 10, color: '#8fc4a8' }
+                        }
+                    },
+                    cutout: '65%'
+                }
+            });
+
+            const grouped = {};
+            data.forEach(item => { const key = String(item.return_date || '').slice(0, 10) || 'غير محدد'; grouped[key] = (grouped[key] || 0) + Number(item.quantity || 0); });
+            const trendKeys = Object.keys(grouped).sort().slice(-7);
+            const days = trendKeys.length ? trendKeys : ['لا توجد بيانات'];
+            const trendData = trendKeys.length ? trendKeys.map(key => grouped[key]) : [0];
+            const ctx2 = document.getElementById('trendChart').getContext('2d');
+            if (trendChart) trendChart.destroy();
+            trendChart = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: days,
+                    datasets: [{
+                        label: 'الكمية المرتجعة',
+                        data: trendData,
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245,158,11,0.08)',
+                        tension: 0.3,
+                        fill: true,
+                        borderWidth: 2.5,
+                        pointBackgroundColor: '#f59e0b',
+                        pointBorderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // ===================================================================
+        // 10. التنبيهات
+        // ===================================================================
+        function generateAlerts(data) {
+            const alerts = [];
+            const pendingItems = data.filter(item => item.status === 'pending');
+            if (pendingItems.length > 0) {
+                alerts.push({
+                    type: 'warning',
+                    icon: 'fa-clock',
+                    title: '⏳ مرتجعات معلقة',
+                    desc: pendingItems.length + ' طلب في انتظار المعالجة',
+                    time: 'الآن'
+                });
+            }
+            const totalQty = data.reduce((s, item) => s + parseFloat(item.quantity || 0), 0);
+            if (totalQty > 50) {
+                alerts.push({
+                    type: 'danger',
+                    icon: 'fa-exclamation-triangle',
+                    title: '⚠️ كميات مرتجعة كبيرة',
+                    desc: 'إجمالي المرتجعات: ' + formatNumber(totalQty) + ' وحدة',
+                    time: 'الآن'
+                });
+            }
+            const highValue = data.filter(item => parseFloat(item.value || 0) > 50000);
+            if (highValue.length > 0) {
+                alerts.push({
+                    type: 'info',
+                    icon: 'fa-flag',
+                    title: '💰 مرتجعات عالية القيمة',
+                    desc: highValue.length + ' مرتجع بقيمة تتجاوز 50,000',
+                    time: 'الآن'
+                });
+            }
+            renderAlerts(alerts);
+        }
+
+        function renderAlerts(alerts) {
+            const container = document.getElementById('alertsContainer');
+            if (!container) return;
+            if (!alerts || alerts.length === 0) { container.innerHTML = ''; return; }
+            container.innerHTML = alerts.slice(0, 3).map((a, i) => `
+                    <div class="alert-item ${a.type}" style="animation-delay:${i*0.1}s">
+                        <div class="alert-icon"><i class="fas ${a.icon}"></i></div>
+                        <div class="alert-content">
+                            <div class="alert-title">${a.title}</div>
+                            <div class="alert-desc">${a.desc}</div>
+                        </div>
+                        <div class="alert-time">${a.time}</div>
+                    </div>
+                `).join('');
+        }
+
+        function showNotifications() {
+            const alerts = [];
+            if (returnsData.some(item => item.status === 'pending')) alerts.push({type: 'warning'});
+            if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
+            showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
+        }
+
+        // ===================================================================
+        // 11. AI Advisor
+        // ===================================================================
+        function generateAIInsights(data) {
+            if (!data || data.length === 0) return;
+            const insights = [];
+            const totalQty = data.reduce((s, item) => s + parseFloat(item.quantity || 0), 0);
+            const totalValue = data.reduce((s, item) => s + parseFloat(item.value || item.total_value || 0), 0);
+            const completed = data.filter(i => i.status === 'completed').length;
+            const pending = data.filter(i => i.status === 'pending').length;
+            const cancelled = data.filter(i => i.status === 'cancelled').length;
+
+            insights.push({
+                title: '📊 نظرة عامة',
+                desc: 'إجمالي المرتجعات: ' + formatNumber(totalQty) + ' وحدة - القيمة: ' + formatCurrency(totalValue) +
+                    ' - مكتمل: ' + completed + ' - معلق: ' + pending + ' - ملغي: ' + cancelled
+            });
+
+            const reasons = {};
+            data.forEach(item => {
+                const r = item.reason || 'غير محدد';
+                reasons[r] = (reasons[r] || 0) + 1;
+            });
+            let maxReason = '',
+                maxCount = 0;
+            Object.entries(reasons).forEach(([k, v]) => { if (v > maxCount) { maxCount = v;
+                    maxReason = k; } });
+            if (maxReason) {
+                insights.push({ title: '🔍 أكثر سبب إرجاع', desc: maxReason + ' (' + maxCount + ' مرات)' });
+            }
+            if (pending > 3) {
+                insights.push({
+                    title: '💡 توصية',
+                    desc: 'يوجد ' + pending + ' طلب مرتجع معلق، يُرجى مراجعتها واتخاذ القرار المناسب.'
+                });
+            }
+            window.__returnInsights = insights;
+        }
+
+        function openAIAdvisor() {
+            document.getElementById('aiModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            const insights = window.__returnInsights || [];
+            const container = document.getElementById('aiContent');
+            if (!insights || insights.length === 0) {
+                container.innerHTML =
+                    `<div style="text-align:center;color:var(--text-muted);padding:30px;"><i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:12px;"></i><p>لا توجد بيانات كافية للتحليل</p></div>`;
+                return;
+            }
+            container.innerHTML = insights.map(i => `
+                    <div class="ai-insight-card">
+                        <div class="insight-title">${i.title}</div>
+                        <div class="insight-desc">${i.desc}</div>
+                    </div>
+                `).join('');
+        }
+
+        function closeAIModal() {
+            document.getElementById('aiModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        // ===================================================================
+        // 12. عمليات CRUD
+        // ===================================================================
+        async function saveReturn() {
+            const id = parseInt(document.getElementById('editId').value) || 0;
+            const invoiceNumber = document.getElementById('fInvoiceNumber').value.trim();
+            const productId = document.getElementById('fProductId').value;
+            const customerId = document.getElementById('fCustomerId').value || null;
+            const quantity = parseFloat(document.getElementById('fQuantity').value);
+            const value = parseFloat(document.getElementById('fValue').value);
+            const reason = document.getElementById('fReason').value.trim();
+            const notes = document.getElementById('fNotes').value.trim();
+            const status = document.getElementById('fStatus').value;
+            const returnDate = document.getElementById('fReturnDate').value || new Date().toISOString().split('T')[0];
+
+            if (!invoiceNumber) { showToast('❌ رقم الفاتورة الأصلية مطلوب', 'error'); return; }
+            if (!productId) { showToast('❌ الرجاء اختيار المنتج', 'error'); return; }
+            if (!quantity || quantity <= 0) { showToast('❌ الرجاء إدخال كمية صحيحة', 'error'); return; }
+            if (!value || value < 0) { showToast('❌ الرجاء إدخال قيمة صحيحة', 'error'); return; }
+            if (!reason) { showToast('❌ الرجاء إدخال سبب الإرجاع', 'error'); return; }
+
+            showLoading(true);
+            try {
+                const params = {
+                    id: id,
+                    invoice_number: invoiceNumber,
+                    product_id: parseInt(productId),
+                    customer_id: customerId ? parseInt(customerId) : null,
+                    quantity: quantity,
+                    value: value,
+                    reason: reason,
+                    notes: notes,
+                    status: status,
+                    return_date: returnDate,
+                    station_id: 1,
+                    created_by: 1
+                };
+                const action = id > 0 ? 'updateReturn' : 'addReturn';
+                const result = await apiCall(action, params);
+                if (result.success) {
+                    showToast(id > 0 ? '✅ تم التعديل بنجاح' : '✅ تمت الإضافة بنجاح', 'success');
+                    closeModal();
+                    loadReturns();
+                } else {
+                    showToast(result.message || '❌ فشلت العملية', 'error');
+                }
+            } catch (e) {
+                showToast('❌ حدث خطأ', 'error');
+                console.error(e);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function deleteReturn(id) {
+            if (!id) return;
+            const confirmed = await Swal.fire({
+                title: 'حذف المرتجع؟',
+                text: 'هل أنت متأكد من حذف هذا السجل؟',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#10b981',
+                confirmButtonText: 'نعم، حذف',
+                cancelButtonText: 'إلغاء'
+            });
+            if (!confirmed.isConfirmed) return;
+
+            showLoading(true);
+            try {
+                const result = await apiCall('deleteReturn', { id: id });
+                if (result.success) {
+                    showToast('✅ تم الحذف بنجاح', 'success');
+                    loadReturns();
+                } else {
+                    showToast(result.message || '❌ فشل الحذف', 'error');
+                }
+            } catch (e) {
+                showToast('❌ حدث خطأ', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ===================================================================
+        // 13. مودال الإضافة / التعديل
+        // ===================================================================
+        function openAddModal() {
+            document.getElementById('editId').value = '0';
+            document.getElementById('fInvoiceNumber').value = '';
+            document.getElementById('formModalTitle').textContent = '➕ إضافة مرتجع';
+            document.getElementById('fProductId').value = '';
+            document.getElementById('fCustomerId').value = '';
+            document.getElementById('fQuantity').value = '';
+            document.getElementById('fValue').value = '';
+            document.getElementById('fReason').value = '';
+            document.getElementById('fNotes').value = '';
+            document.getElementById('fStatus').value = 'completed';
+            document.getElementById('fReturnDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('formModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            loadDropdowns();
+        }
+
+        function openEditModal(id) {
+            const item = returnsData.find(d => d.id === id);
+            if (!item) { showToast('❌ المرتجع غير موجود', 'error'); return; }
+            document.getElementById('editId').value = item.id;
+            document.getElementById('fInvoiceNumber').value = item.invoice_number || '';
+            document.getElementById('formModalTitle').textContent = '✏️ تعديل مرتجع';
+            document.getElementById('fProductId').value = item.product_id || '';
+            document.getElementById('fCustomerId').value = item.customer_id || '';
+            document.getElementById('fQuantity').value = item.quantity || '';
+            document.getElementById('fValue').value = item.value || item.total_value || '';
+            document.getElementById('fReason').value = item.reason || '';
+            document.getElementById('fNotes').value = item.notes || '';
+            document.getElementById('fStatus').value = item.status || 'completed';
+            document.getElementById('fReturnDate').value = item.return_date ? item.return_date.split('T')[0] : new Date().toISOString()
+                .split('T')[0];
+            document.getElementById('formModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            loadDropdowns();
+        }
+
+        function closeModal() {
+            document.getElementById('formModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        // ===================================================================
+        // 14. تفاصيل المرتجع
+        // ===================================================================
+        function viewDetails(id) {
+            const item = returnsData.find(d => d.id === id);
+            if (!item) { showToast('❌ المرتجع غير موجود', 'error'); return; }
+            const statusLabel = getStatusLabel(item.status);
+            const statusClass = getStatusClass(item.status);
+            const productName = item.product_name || item.product_name_ar || '---';
+            const customerName = item.customer_name || '---';
+            const createdBy = item.created_by_name || item.created_by || '---';
+
+            const content = document.getElementById('detailsContent');
+            content.innerHTML = `
+                    <div class="details-header">
+                        <h3 class="details-title">🔄 ${escapeHtml(productName)}</h3>
+                        <button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="details-profile">
+                        <div class="details-avatar">${(productName || 'م').substring(0,2)}</div>
+                        <div class="details-name">${escapeHtml(productName)}</div>
+                        <span class="details-status ${statusClass}">${statusLabel}</span>
+                    </div>
+                    <div class="details-section">
+                        <div class="details-section-title"><i class="fas fa-info-circle"></i> معلومات المرتجع</div>
+                        <div class="details-row"><span class="details-label">كود المرتجع</span><span class="details-value code red">${item.id || '---'}</span></div>
+                        <div class="details-row"><span class="details-label">المنتج</span><span class="details-value">${escapeHtml(productName)}</span></div>
+                        <div class="details-row"><span class="details-label">العميل</span><span class="details-value">${escapeHtml(customerName)}</span></div>
+                        <div class="details-row"><span class="details-label">تاريخ الإرجاع</span><span class="details-value">${item.return_date || '---'}</span></div>
+                    </div>
+                    <div class="details-section">
+                        <div class="details-section-title"><i class="fas fa-box"></i> التفاصيل</div>
+                        <div class="details-row"><span class="details-label">الكمية</span><span class="details-value">${formatNumber(item.quantity || 0)}</span></div>
+                        <div class="details-row"><span class="details-label">القيمة</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(item.value || item.total_value || 0)}</span></div>
+                        <div class="details-row"><span class="details-label">السبب</span><span class="details-value" style="font-size:0.8rem;">${escapeHtml(item.reason || '---')}</span></div>
+                        <div class="details-row"><span class="details-label">ملاحظات</span><span class="details-value" style="font-size:0.8rem;">${escapeHtml(item.notes || '---')}</span></div>
+                    </div>
+                    <div class="details-section">
+                        <div class="details-section-title"><i class="fas fa-users"></i> الجهات</div>
+                        <div class="details-row"><span class="details-label">المنشئ</span><span class="details-value">${escapeHtml(createdBy)}</span></div>
+                        <div class="details-row"><span class="details-label">تاريخ الإنشاء</span><span class="details-value">${item.created_at || '---'}</span></div>
+                    </div>
+                    <div style="height:30px;"></div>
+                `;
+            document.getElementById('detailsOverlay').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeDetails() {
+            document.getElementById('detailsOverlay').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        // ===================================================================
+        // 15. تصدير CSV و PDF
+        // ===================================================================
+        function exportCSV() {
+            const rows = document.querySelectorAll('#returnTableBody tr');
+            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
+                showToast('❌ لا توجد بيانات للتصدير', 'error');
+                return;
+            }
+            let csv = 'كود المرتجع,المنتج,العميل,الكمية,القيمة,السبب,التاريخ,الحالة\n';
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 10 && !row.classList.contains('empty-state')) {
+                    csv += [
+                        cells[1]?.textContent?.trim() || '',
+                        cells[2]?.textContent?.trim() || '',
+                        cells[3]?.textContent?.trim() || '',
+                        cells[4]?.textContent?.trim() || '',
+                        cells[5]?.textContent?.trim() || '',
+                        cells[6]?.textContent?.trim() || '',
+                        cells[7]?.textContent?.trim() || '',
+                        cells[8]?.textContent?.trim() || ''
+                    ].join(',') + '\n';
+                }
+            });
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const from = document.getElementById('filterDateFrom').value || 'start';
+            const to = document.getElementById('filterDateTo').value || 'end';
+            link.download = `مرتجعات_${from}_${to}.csv`;
+            link.href = URL.createObjectURL(blob);
+            link.click();
+            showToast('✅ تم تصدير CSV', 'success');
+        }
+
+        function exportPDF() {
+            const rows = document.querySelectorAll('#returnTableBody tr');
+            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
+                showToast('❌ لا توجد بيانات', 'error');
+                return;
+            }
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'pt', 'a4');
+            doc.setFontSize(18);
+            doc.setTextColor(16, 185, 129);
+            doc.text('🔄 تقرير المنتجات المرتجعة', 40, 50);
+            doc.setFontSize(10);
+            doc.setTextColor(143, 196, 168);
+            const from = document.getElementById('filterDateFrom').value || 'البداية';
+            const to = document.getElementById('filterDateTo').value || 'النهاية';
+            doc.text('الفترة: ' + from + ' إلى ' + to, 40, 75);
+
+            const tableData = [];
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 10 && !row.classList.contains('empty-state')) {
+                    tableData.push([
+                        cells[1]?.textContent?.trim() || '',
+                        cells[2]?.textContent?.trim() || '',
+                        cells[3]?.textContent?.trim() || '',
+                        cells[4]?.textContent?.trim() || '',
+                        cells[5]?.textContent?.trim() || '',
+                        cells[6]?.textContent?.trim() || '',
+                        cells[7]?.textContent?.trim() || '',
+                        cells[8]?.textContent?.trim() || ''
+                    ]);
+                }
+            });
+            if (tableData.length === 0) { showToast('❌ لا توجد بيانات', 'error'); return; }
+            const headers = ['كود', 'المنتج', 'العميل', 'الكمية', 'القيمة', 'السبب', 'التاريخ', 'الحالة'];
+            doc.autoTable({
+                head: [headers],
+                body: tableData,
+                startY: 100,
+                styles: { fontSize: 7, font: 'helvetica', textColor: [200, 200, 200] },
+                headStyles: { fillColor: [16, 185, 129], textColor: [10, 26, 18], fontSize: 8 },
+                alternateRowStyles: { fillColor: [14, 38, 26] },
+                margin: { left: 25, right: 25 },
+                tableWidth: 'auto'
+            });
+            doc.save(`مرتجعات_${from}_${to}.pdf`);
+            showToast('✅ تم تصدير PDF', 'success');
+        }
+
+        // ===================================================================
+        // 16. إعادة تعيين الفلاتر
+        // ===================================================================
+        function resetFilters() {
+            document.getElementById('filterDateFrom').value = '';
+            document.getElementById('filterDateTo').value = '';
+            document.getElementById('filterProduct').value = '';
+            document.getElementById('filterCustomer').value = '';
+            document.getElementById('filterStatus').value = '';
+            showToast('🔄 تم إعادة تعيين الفلاتر', 'success');
+            loadReturns();
+        }
+
+        // ===================================================================
+        // 17. تبديل التبويبات - فتح مودالات
+        // ===================================================================
+        function switchTab(tab) {
+            document.querySelectorAll('.bottom-nav .nav-item').forEach(t => t.classList.remove('active'));
+            const target = document.querySelector(`.bottom-nav .nav-item[onclick*="${tab}"]`);
+            if (target) target.classList.add('active');
+
+            switch (tab) {
+                case 'summary':
+                    openSummaryModal();
+                    break;
+                case 'returns':
+                    // بالفعل في الصفحة
+                    break;
+                case 'inventory':
+                    openInventoryModal();
+                    break;
+                case 'reports':
+                    openReportsModal();
+                    break;
+                case 'settings':
+                    openSettingsModal();
+                    break;
+                default:
+                    showToast('⚠️ عنصر غير معروف', 'warning');
+            }
+        }
+
+        // ===================================================================
+        // 18. دوال فتح المودالات (نفس تصميم damaged)
+        // ===================================================================
+        async function openSummaryModal() {
+            const modal = document.getElementById('summaryModal');
+            const body = document.getElementById('summaryBody');
+            modal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+
+            body.innerHTML =
+                `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل الملخص...</p></div>`;
+
+            try {
+                const result = await apiCall('getDashboardStats', { station_id: 1 });
+                if (result.success && result.data) {
+                    const stats = result.data;
+                    body.innerHTML = `
+                            <div class="modal-stats-grid">
+                                <div class="modal-stat-card">
+                                    <div class="stat-value">${formatNumber(stats.total_sales || 0)}</div>
+                                    <div class="stat-label">💰 إجمالي المبيعات</div>
+                                </div>
+                                <div class="modal-stat-card">
+                                    <div class="stat-value">${formatNumber(stats.total_liters || 0)}</div>
+                                    <div class="stat-label">⛽ إجمالي اللترات</div>
+                                </div>
+                                <div class="modal-stat-card">
+                                    <div class="stat-value">${stats.total_customers || 0}</div>
+                                    <div class="stat-label">👥 العملاء</div>
+                                </div>
+                                <div class="modal-stat-card">
+                                    <div class="stat-value">${formatCurrency(stats.total_due || 0)}</div>
+                                    <div class="stat-label">📄 المستحق</div>
+                                </div>
+                                <div class="modal-stat-card">
+                                    <div class="stat-value">${stats.pending_tasks || 0}</div>
+                                    <div class="stat-label">⚙️ مهام معلقة</div>
+                                </div>
+                                <div class="modal-stat-card">
+                                    <div class="stat-value">${stats.overdue_count || 0}</div>
+                                    <div class="stat-label">⏰ متأخرات</div>
+                                </div>
+                            </div>
+                            <div style="margin-top:16px;background:var(--bg-glass);padding:12px;border-radius:var(--radius-small);border:1px solid var(--border-color);">
+                                <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                                    <span style="color:var(--text-muted);font-size:0.8rem;">اتجاه المبيعات: <strong style="color:var(--gold-primary);">${stats.sales_trend || '+0%'}</strong></span>
+                                    <span style="color:var(--text-muted);font-size:0.8rem;">اتجاه المنتجات: <strong style="color:var(--gold-primary);">${stats.products_trend || '+0%'}</strong></span>
+                                </div>
+                            </div>
+                            <div style="margin-top:12px;text-align:center;font-size:0.8rem;color:var(--text-muted);">آخر تحديث: ${new Date().toLocaleString('ar-SA')}</div>
+                        `;
+                } else {
+                    body.innerHTML =
+                        `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${result.message || 'فشل تحميل البيانات'}</div>`;
+                }
+            } catch (e) {
+                body.innerHTML =
+                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>حدث خطأ في الاتصال</div>`;
+                console.error(e);
+            }
+        }
+
+        async function openInventoryModal() {
+            const modal = document.getElementById('inventoryModal');
+            const body = document.getElementById('inventoryBody');
+            modal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+
+            body.innerHTML =
+                `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل المخزون...</p></div>`;
+
+            try {
+                const result = await apiCall('getLowStockItems', { station_id: 1 });
+                if (result.success && result.data) {
+                    const items = result.data;
+                    if (items.length === 0) {
+                        body.innerHTML =
+                            `<div style="text-align:center;padding:30px;color:var(--success);"><i class="fas fa-check-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>جميع المنتجات ضمن الحدود الآمنة</div>`;
+                        return;
+                    }
+                    let html =
+                        `<div style="margin-bottom:12px;color:var(--warning);font-weight:700;">⚠️ تنبيه: ${items.length} منتج منخفض المخزون</div>
+                            <table class="mini-table"><thead><tr><th>المنتج</th><th>المخزون الحالي</th><th>الحد الأدنى</th></tr></thead><tbody>`;
+                    items.forEach(item => {
+                        html += `
+                                <tr>
+                                    <td>${escapeHtml(item.product_name || item.product_name_ar || '---')}</td>
+                                    <td>${formatNumber(item.quantity_on_hand || 0)}</td>
+                                    <td style="color:var(--danger);">${formatNumber(item.minimum_stock || 0)}</td>
+                                </tr>
+                            `;
+                    });
+                    html += `</tbody></table>`;
+                    body.innerHTML = html;
+                } else {
+                    body.innerHTML =
+                        `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${result.message || 'فشل تحميل البيانات'}</div>`;
+                }
+            } catch (e) {
+                body.innerHTML =
+                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>حدث خطأ في الاتصال</div>`;
+                console.error(e);
+            }
+        }
+
+        async function openReportsModal() {
+            const modal = document.getElementById('reportsModal');
+            const body = document.getElementById('reportsBody');
+            modal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+
+            body.innerHTML =
+                `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل التقارير...</p></div>`;
+
+            try {
+                const today = new Date().toISOString().split('T')[0];
+                const monthAgo = new Date();
+                monthAgo.setDate(monthAgo.getDate() - 30);
+                const from = monthAgo.toISOString().split('T')[0];
+                const countResult = await apiCall('getReturns', { start_date: from, end_date: today, station_id: 1 });
+                let totalCount = 0;
+                if (countResult.success && countResult.data) {
+                    totalCount = countResult.data.length;
+                }
+
+                body.innerHTML = `
+                        <div style="background:var(--bg-glass);padding:16px;border-radius:var(--radius-small);border:1px solid var(--border-color);margin-bottom:16px;">
+                            <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                                <span style="color:var(--text-muted);">📊 إجمالي المرتجعات (آخر 30 يوم)</span>
+                                <span style="font-size:1.5rem;font-weight:900;color:var(--gold-primary);">${totalCount}</span>
+                            </div>
+                        </div>
+                        <div class="report-actions">
+                            <button class="btn-report primary" onclick="exportCSV(); closeModalById('reportsModal');">
+                                <i class="fas fa-file-csv"></i> تصدير CSV
+                            </button>
+                            <button class="btn-report primary" onclick="exportPDF(); closeModalById('reportsModal');">
+                                <i class="fas fa-file-pdf"></i> تصدير PDF
+                            </button>
+                            <button class="btn-report" onclick="window.print(); closeModalById('reportsModal');">
+                                <i class="fas fa-print"></i> طباعة
+                            </button>
+                            <button class="btn-report" onclick="loadReturns(); closeModalById('reportsModal'); showToast('🔄 تم التحديث', 'success');">
+                                <i class="fas fa-sync-alt"></i> تحديث البيانات
+                            </button>
+                        </div>
+                        <div style="margin-top:14px;font-size:0.8rem;color:var(--text-muted);text-align:center;">
+                            يمكنك تصدير التقرير الحالي بصيغة CSV أو PDF، أو طباعته مباشرة.
+                        </div>
+                    `;
+            } catch (e) {
+                body.innerHTML =
+                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>حدث خطأ في الاتصال</div>`;
+                console.error(e);
+            }
+        }
+
+        async function openSettingsModal() {
+            const modal = document.getElementById('settingsModal');
+            const body = document.getElementById('settingsBody');
+            modal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+
+            body.innerHTML =
+                `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل الإعدادات...</p></div>`;
+
+            try {
+                const keys = ['low_stock_threshold', 'max_discount_percent', 'auto_print_receipt', 'vat_percentage'];
+                const settings = {};
+                for (const key of keys) {
+                    try {
+                        const res = await apiCall('getSetting', { key: key });
+                        if (res.success) settings[key] = res.data || '';
+                    } catch (e) { settings[key] = ''; }
+                }
+                const lowStock = settings.low_stock_threshold || '10';
+                const maxDiscount = settings.max_discount_percent || '20';
+                const autoPrint = settings.auto_print_receipt === '1' ? true : false;
+                const vat = settings.vat_percentage || '0';
+
+                body.innerHTML = `
+                        <div class="settings-group">
+                            <div class="setting-row">
+                                <div>
+                                    <span class="setting-label">حد المخزون المنخفض</span>
+                                    <span class="setting-desc">الحد الأدنى للتنبيه قبل نفاذ المنتج</span>
+                                </div>
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <input type="number" id="setting_low_stock" value="${lowStock}" style="width:80px;" />
+                                    <button class="btn-save-setting" onclick="saveSetting('low_stock_threshold', document.getElementById('setting_low_stock').value, 'settingsModal')">حفظ</button>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <div>
+                                    <span class="setting-label">الحد الأقصى للخصم (%)</span>
+                                    <span class="setting-desc">أقصى نسبة خصم مسموح بها في الفاتورة</span>
+                                </div>
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <input type="number" id="setting_max_discount" value="${maxDiscount}" style="width:80px;" />
+                                    <button class="btn-save-setting" onclick="saveSetting('max_discount_percent', document.getElementById('setting_max_discount').value, 'settingsModal')">حفظ</button>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <div>
+                                    <span class="setting-label">طباعة الإيصال تلقائياً</span>
+                                    <span class="setting-desc">طباعة الإيصال مباشرة بعد إتمام البيع</span>
+                                </div>
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <input type="checkbox" id="setting_auto_print" ${autoPrint ? 'checked' : ''} />
+                                    <button class="btn-save-setting" onclick="saveSetting('auto_print_receipt', document.getElementById('setting_auto_print').checked ? '1' : '0', 'settingsModal')">حفظ</button>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <div>
+                                    <span class="setting-label">نسبة ضريبة القيمة المضافة (%)</span>
+                                    <span class="setting-desc">نسبة الضريبة المطبقة على المبيعات</span>
+                                </div>
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <input type="number" id="setting_vat" value="${vat}" style="width:80px;" step="0.1" />
+                                    <button class="btn-save-setting" onclick="saveSetting('vat_percentage', document.getElementById('setting_vat').value, 'settingsModal')">حفظ</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="margin-top:16px;text-align:center;font-size:0.75rem;color:var(--text-muted);">
+                            تم جلب الإعدادات من قاعدة البيانات الفعلية.
+                        </div>
+                    `;
+            } catch (e) {
+                body.innerHTML =
+                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>حدث خطأ في تحميل الإعدادات</div>`;
+                console.error(e);
+            }
+        }
+
+        async function saveSetting(key, value, modalId) {
+            if (!key || value === undefined) return;
+            showLoading(true);
+            try {
+                const result = await apiCall('setSetting', { key: key, value: value.toString() });
+                if (result.success) {
+                    showToast('✅ تم حفظ الإعداد', 'success');
+                    if (modalId === 'settingsModal') openSettingsModal();
+                } else {
+                    showToast(result.message || '❌ فشل الحفظ', 'error');
+                }
+            } catch (e) {
+                showToast('❌ حدث خطأ', 'error');
+                console.error(e);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ===================================================================
+        // 19. القائمة الجانبية
+        // ===================================================================
+        function handleAction(action) {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.remove('open');
+            document.getElementById('sidebarToggle').classList.remove('hidden');
+            switch (action) {
+                case 'refresh':
+                    loadReturns();
+                    showToast('🔄 تم التحديث', 'success');
+                    break;
+                case 'csv':
+                    exportCSV();
+                    break;
+                case 'pdf':
+                    exportPDF();
+                    break;
+                case 'print':
+                    window.print();
+                    break;
+                case 'ai':
+                    openAIAdvisor();
+                    break;
+                case 'home':
+                    window.location.href = '../main.html';
+                    break;
+                default:
+                    showToast('❌ إجراء غير معروف', 'error');
+            }
+        }
+
+        function setupSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('sidebarToggle');
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                sidebar.classList.toggle('open');
+                toggle.classList.toggle('hidden');
+            });
+            document.addEventListener('click', (e) => {
+                if (!sidebar.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
+                    sidebar.classList.remove('open');
+                    toggle.classList.remove('hidden');
+                }
+            });
+        }
+
+        // ===================================================================
+        // 20. تحميل القوائم المنسدلة
+        // ===================================================================
+        async function loadDropdowns() {
+            try {
+                const [productsRes, customersRes] = await Promise.all([
+                    apiCall('getProducts', { station_id: 1 }),
+                    apiCall('getCustomers', { station_id: 1 })
+                ]);
+
+                const productSel = document.getElementById('fProductId');
+                const filterProductSel = document.getElementById('filterProduct');
+                if (productsRes.success && productsRes.data) {
+                    const opts = productsRes.data.map(p =>
+                        `<option value="${p.id}">${p.product_name || p.product_name_ar || 'منتج'}</option>`).join('');
+                    productSel.innerHTML = '<option value="">اختر المنتج</option>' + opts;
+                    filterProductSel.innerHTML = '<option value="">جميع المنتجات</option>' + opts;
+                }
+
+                const customerSel = document.getElementById('fCustomerId');
+                const filterCustomerSel = document.getElementById('filterCustomer');
+                if (customersRes.success && customersRes.data) {
+                    const opts = customersRes.data.map(c =>
+                        `<option value="${c.id}">${c.commercial_name || c.name || 'عميل'}</option>`).join('');
+                    customerSel.innerHTML = '<option value="">اختر العميل</option>' + opts;
+                    filterCustomerSel.innerHTML = '<option value="">جميع العملاء</option>' + opts;
+                }
+            } catch (e) {
+                console.error('Error loading dropdowns:', e);
+            }
+        }
+
+        // ===================================================================
+        // 21. التهيئة النهائية
+        // ===================================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSavedTheme();
+            setupSidebar();
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
+            const today = new Date();
+            const monthAgo = new Date();
+            monthAgo.setDate(monthAgo.getDate() - 30);
+            document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
+            document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
+
+            loadDropdowns();
+            setTimeout(loadReturns, 600);
+
+            document.querySelectorAll('.modal-overlay').forEach(el => {
+                el.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        this.classList.remove('show');
+                        document.body.style.overflow = '';
+                    }
+                });
+            });
+            document.getElementById('aiModal').addEventListener('click', function(e) {
+                if (e.target === this) closeAIModal();
+            });
+            document.getElementById('detailsOverlay').addEventListener('click', function(e) {
+                if (e.target === this) closeDetails();
+            });
+            document.getElementById('formModal').addEventListener('click', function(e) {
+                if (e.target === this) closeModal();
+            });
+        });
+    </script>
+
+    <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
+</body>
+</html>

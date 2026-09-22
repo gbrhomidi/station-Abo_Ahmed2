@@ -1,0 +1,778 @@
+# ============================================================================
+# Build Android APK — Production CI/CD Workflow
+# ============================================================================
+# Project: station-Abo_Ahmed2
+#
+# Branch policy
+# ----------------------------------------------------------------------------
+# main:
+#   Validation + Signed Release APK
+#
+# feature/ai-health-sqlite:
+#   Validation + Signed Release APK
+#
+# Pull Request -> main:
+#   Validation ONLY
+#   No Release signing
+#   No Release keystore
+#
+# workflow_dispatch:
+#   Validation is allowed from any ref.
+#
+#   Signed Release is allowed ONLY when the selected ref is:
+#     - main
+#     - feature/ai-health-sqlite
+#
+# Security
+# ----------------------------------------------------------------------------
+# - GITHUB_TOKEN is read-only.
+# - Release secrets are available ONLY to the release job.
+# - Pull Requests never receive Release signing secrets.
+# - The Release keystore is stored outside the repository workspace.
+# - The keystore is never uploaded as an artifact.
+# - Keystore cleanup runs even when a previous step fails.
+# - No commits are created.
+# - No branches are created.
+# - No tags are created.
+# - No GitHub Releases are created.
+#
+# Reliability
+# ----------------------------------------------------------------------------
+# - Release requires successful validation.
+# - Release APK must exist.
+# - Exactly one final Release APK must be produced.
+# - Release APK must be cryptographically verified with apksigner.
+# - SHA256 checksum is generated for the final APK.
+# - Missing signing secrets cause an explicit failure.
+# - Missing Gradle wrapper causes an explicit failure.
+# - Missing smoke-test script causes an explicit failure.
+#
+# Efficiency
+# ----------------------------------------------------------------------------
+# - Gradle cache enabled.
+# - Gradle build caching enabled.
+# - Obsolete runs for the same ref are cancelled.
+# - No Validation APK artifact is uploaded.
+# - Only the final Release APK + SHA256 are retained.
+#
+# GitHub Actions runtime
+# ----------------------------------------------------------------------------
+# - checkout uses a Node.js 24 compatible release.
+# - setup-java uses v6 / Node.js 24.
+# - upload-artifact uses v6 / Node.js 24.
+#
+# Final Release artifact
+# ----------------------------------------------------------------------------
+# Station_Abo_Ahmed_Release
+#
+#   Station_Abo_Ahmed_Release.apk
+#   SHA256SUMS.txt
+#
+# ============================================================================
+
+
+name: Build Android APK
+
+
+# ============================================================================
+# WORKFLOW TRIGGERS
+# ============================================================================
+
+on:
+
+  # --------------------------------------------------------------------------
+  # Push validation
+  #
+  # main                      -> Validation + Signed Release
+  # feature/ai-health-sqlite  -> Validation + Signed Release
+  # --------------------------------------------------------------------------
+
+  push:
+    branches:
+      - main
+      - feature/ai-health-sqlite
+
+
+  # --------------------------------------------------------------------------
+  # Pull Requests targeting main
+  #
+  # PRs are validation-only.
+  #
+  # IMPORTANT:
+  # Release signing secrets are intentionally NOT exposed to Pull Requests.
+  # --------------------------------------------------------------------------
+
+  pull_request:
+    branches:
+      - main
+
+
+  # --------------------------------------------------------------------------
+  # Manual execution
+  #
+  # Validation can be started manually from any selected ref.
+  #
+  # Signed Release is allowed only when the selected ref is:
+  #
+  #   refs/heads/main
+  #
+  # or:
+  #
+  #   refs/heads/feature/ai-health-sqlite
+  #
+  # A manual run from another branch/tag will perform validation only.
+  # --------------------------------------------------------------------------
+
+  workflow_dispatch:
+
+
+# ============================================================================
+# CONCURRENCY
+# ============================================================================
+#
+# Rapid repair commits should not create a queue of obsolete builds.
+#
+# Example:
+#
+#   commit A -> running
+#   commit B -> running
+#   commit C -> newest
+#
+# Older runs for the same ref are cancelled when the newer run supersedes them.
+#
+# Different branches keep independent concurrency groups.
+#
+# ============================================================================
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+
+# ============================================================================
+# GITHUB TOKEN PERMISSIONS
+# ============================================================================
+#
+# This workflow never:
+#
+#   - pushes commits
+#   - creates branches
+#   - creates tags
+#   - creates releases
+#   - modifies issues
+#   - modifies pull requests
+#
+# Therefore repository read access is sufficient.
+#
+# ============================================================================
+
+permissions:
+  contents: read
+
+
+# ============================================================================
+# GLOBAL GRADLE OPTIONS
+# ============================================================================
+
+env:
+  GRADLE_OPTS: >-
+    -Dorg.gradle.daemon=false
+    -Dorg.gradle.parallel=true
+    -Dorg.gradle.caching=true
+
+
+# ============================================================================
+# JOB 1 — VALIDATION
+# ============================================================================
+#
+# No Release signing secrets are available to this job.
+#
+# Runs for:
+#
+#   - push -> main
+#   - push -> feature/ai-health-sqlite
+#   - pull_request -> main
+#   - workflow_dispatch
+#
+# Validation performs:
+#
+#   1. Repository checkout
+#   2. Java 17 setup
+#   3. Gradle wrapper verification
+#   4. Smoke-test verification
+#   5. Screen smoke tests
+#   6. Kotlin / Robolectric regression tests
+#   7. Debug compilation
+#
+# No Validation APK artifact is uploaded.
+#
+# ============================================================================
+
+jobs:
+
+  validate:
+
+    name: Validate Android Project
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    steps:
+
+      # ----------------------------------------------------------------------
+      # Checkout repository
+      # ----------------------------------------------------------------------
+      #
+      # checkout@v7 is Node.js 24 compatible.
+      #
+      # It also avoids the Node.js 20 deprecation warning reported previously.
+      # ----------------------------------------------------------------------
+
+      - name: Checkout Project
+        uses: actions/checkout@v7
+
+
+      # ----------------------------------------------------------------------
+      # Java 17 + Gradle cache
+      # ----------------------------------------------------------------------
+      #
+      # setup-java@v6 uses Node.js 24 and is the current supported major
+      # version for this workflow.
+      # ----------------------------------------------------------------------
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+
+      # ----------------------------------------------------------------------
+      # Java diagnostic
+      # ----------------------------------------------------------------------
+
+      - name: Verify Java version
+        run: |
+          set -e
+
+          java -version
+
+
+      # ----------------------------------------------------------------------
+      # Verify Gradle wrapper
+      # ----------------------------------------------------------------------
+
+      - name: Verify Gradle wrapper
+        run: |
+          set -e
+
+          if [ ! -f "./gradlew" ]; then
+            echo "::error::gradlew was not found in the repository root."
+            exit 1
+          fi
+
+          if [ ! -f "./gradle/wrapper/gradle-wrapper.properties" ]; then
+            echo "::error::Gradle wrapper configuration was not found."
+            exit 1
+          fi
+
+          chmod +x ./gradlew
+
+          echo "Gradle wrapper verified successfully."
+
+
+      # ----------------------------------------------------------------------
+      # Verify smoke-test script
+      # ----------------------------------------------------------------------
+
+      - name: Verify screen smoke test
+        run: |
+          set -e
+
+          if [ ! -f "./screen-smoke-test.py" ]; then
+            echo "::error::screen-smoke-test.py was not found."
+            exit 1
+          fi
+
+          python3 --version
+
+          echo "Smoke-test script verified successfully."
+
+
+      # ----------------------------------------------------------------------
+      # Smoke tests
+      # ----------------------------------------------------------------------
+
+      - name: Run notification and SMS screens smoke tests
+        run: |
+          set -e
+
+          python3 ./screen-smoke-test.py
+
+
+      # ----------------------------------------------------------------------
+      # Kotlin / Robolectric regression tests
+      # ----------------------------------------------------------------------
+
+      - name: Run Kotlin and Robolectric regression tests
+        run: |
+          set -e
+
+          ./gradlew testDebugUnitTest --no-daemon
+
+
+      # ----------------------------------------------------------------------
+      # Debug compilation
+      #
+      # This validates Android compilation without accessing Release signing
+      # secrets or the production keystore.
+      #
+      # No Debug APK is uploaded.
+      # ----------------------------------------------------------------------
+
+      - name: Compile Debug APK
+        run: |
+          set -e
+
+          ./gradlew assembleDebug --no-daemon
+
+
+# ============================================================================
+# JOB 2 — SIGNED PRODUCTION RELEASE
+# ============================================================================
+#
+# Release is intentionally restricted to the two explicitly approved branches:
+#
+#   main
+#   feature/ai-health-sqlite
+#
+# Pull Requests never enter this job because github.ref for a Pull Request
+# is not refs/heads/main or refs/heads/feature/ai-health-sqlite.
+#
+# Release requires:
+#
+#   validate == success
+#
+# The Release job receives the signing secrets only here.
+#
+# ============================================================================
+
+  release:
+
+    name: Build Signed Release APK
+
+    needs:
+      - validate
+
+    # ------------------------------------------------------------------------
+    # RELEASE BRANCH GATE
+    # ------------------------------------------------------------------------
+    #
+    # Allowed:
+    #
+    #   Push -> main
+    #   Push -> feature/ai-health-sqlite
+    #   Manual -> main
+    #   Manual -> feature/ai-health-sqlite
+    #
+    # Not allowed:
+    #
+    #   Pull Request
+    #   Other branches
+    #   Tags
+    #
+    # ------------------------------------------------------------------------
+
+    if: >
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/feature/ai-health-sqlite'
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    steps:
+
+      # ----------------------------------------------------------------------
+      # Checkout exact revision being released
+      # ----------------------------------------------------------------------
+
+      - name: Checkout Project
+        uses: actions/checkout@v7
+
+
+      # ----------------------------------------------------------------------
+      # Java 17 + Gradle cache
+      # ----------------------------------------------------------------------
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+
+      # ----------------------------------------------------------------------
+      # Java diagnostic
+      # ----------------------------------------------------------------------
+
+      - name: Verify Java version
+        run: |
+          set -e
+
+          java -version
+
+
+      # ----------------------------------------------------------------------
+      # Gradle wrapper
+      # ----------------------------------------------------------------------
+
+      - name: Verify Gradle wrapper
+        run: |
+          set -e
+
+          if [ ! -f "./gradlew" ]; then
+            echo "::error::gradlew was not found in the repository root."
+            exit 1
+          fi
+
+          if [ ! -f "./gradle/wrapper/gradle-wrapper.properties" ]; then
+            echo "::error::Gradle wrapper configuration was not found."
+            exit 1
+          fi
+
+          chmod +x ./gradlew
+
+          echo "Gradle wrapper verified successfully."
+
+
+      # ======================================================================
+      # RELEASE SIGNING SECRETS
+      # ======================================================================
+      #
+      # These secrets are intentionally scoped only to this job.
+      #
+      # Secret values are never printed.
+      # ======================================================================
+
+      - name: Verify signing secrets exist
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
+        run: |
+          set -e
+
+          missing=0
+
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "::error::Missing secret: RELEASE_KEYSTORE_BASE64"
+            missing=1
+          fi
+
+          if [ -z "$RELEASE_KEYSTORE_PASSWORD" ]; then
+            echo "::error::Missing secret: RELEASE_KEYSTORE_PASSWORD"
+            missing=1
+          fi
+
+          if [ -z "$RELEASE_KEY_ALIAS" ]; then
+            echo "::error::Missing secret: RELEASE_KEY_ALIAS"
+            missing=1
+          fi
+
+          if [ -z "$RELEASE_KEY_PASSWORD" ]; then
+            echo "::error::Missing secret: RELEASE_KEY_PASSWORD"
+            missing=1
+          fi
+
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::One or more Release signing secrets are missing."
+            exit 1
+          fi
+
+          echo "All required Release signing secrets are present."
+
+
+      # ======================================================================
+      # DECODE RELEASE KEYSTORE
+      # ======================================================================
+      #
+      # The keystore is placed under RUNNER_TEMP rather than inside the
+      # repository workspace.
+      #
+      # File permissions are restricted to the runner user.
+      # ======================================================================
+
+      - name: Decode Release Keystore
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+
+        run: |
+          set -e
+
+          umask 077
+
+          KEYSTORE="$RUNNER_TEMP/station-release.keystore"
+
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" \
+            | base64 --decode > "$KEYSTORE"
+
+          if [ ! -s "$KEYSTORE" ]; then
+            echo "::error::Decoded Release keystore is empty."
+            rm -f "$KEYSTORE"
+            exit 1
+          fi
+
+          chmod 600 "$KEYSTORE"
+
+          echo "Release keystore decoded successfully."
+
+
+      # ======================================================================
+      # SIGNED RELEASE BUILD
+      # ======================================================================
+
+      - name: Clean and Build Signed Release APK
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/station-release.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
+        run: |
+          set -e
+
+          ./gradlew clean assembleRelease --no-daemon
+
+
+      # ======================================================================
+      # LOCATE FINAL RELEASE APK
+      # ======================================================================
+      #
+      # The workflow expects exactly one final non-unsigned APK.
+      #
+      # Unsigned and unaligned intermediate outputs are excluded.
+      # ======================================================================
+
+      - name: Locate Release APK
+        id: apk
+
+        run: |
+          set -e
+
+          if [ ! -d "app/build/outputs/apk" ]; then
+            echo "::error::Release APK output directory was not found."
+            exit 1
+          fi
+
+          mapfile -t APKS < <(
+            find app/build/outputs/apk \
+              -type f \
+              -name "*.apk" \
+              ! -name "*-unsigned.apk" \
+              ! -name "*-unaligned.apk" \
+              | sort
+          )
+
+          if [ "${#APKS[@]}" -eq 0 ]; then
+            echo "::error::No signed Release APK was produced."
+            exit 1
+          fi
+
+          if [ "${#APKS[@]}" -gt 1 ]; then
+            echo "::error::More than one Release APK was produced."
+
+            printf '%s\n' "${APKS[@]}"
+
+            echo "::error::The workflow expects exactly one Release APK."
+            exit 1
+          fi
+
+          APK="${APKS[0]}"
+
+          if [ ! -s "$APK" ]; then
+            echo "::error::Release APK exists but is empty."
+            exit 1
+          fi
+
+          echo "APK=$APK" >> "$GITHUB_OUTPUT"
+
+          echo "Release APK:"
+          echo "$APK"
+
+
+      # ======================================================================
+      # VERIFY APK SIGNATURE
+      # ======================================================================
+
+      - name: Verify APK Signature
+        env:
+          APK: ${{ steps.apk.outputs.APK }}
+
+        run: |
+          set -e
+
+          BUILD_TOOLS_DIR="$ANDROID_HOME/build-tools"
+
+          if [ ! -d "$BUILD_TOOLS_DIR" ]; then
+            echo "::error::Android SDK build-tools directory was not found."
+            exit 1
+          fi
+
+          APKSIGNER="$(
+            find "$BUILD_TOOLS_DIR" \
+              -maxdepth 2 \
+              -type f \
+              -name "apksigner" \
+              | sort -V \
+              | tail -n 1
+          )"
+
+          if [ -z "$APKSIGNER" ] || [ ! -x "$APKSIGNER" ]; then
+            echo "::error::apksigner was not found."
+            exit 1
+          fi
+
+          echo "Using apksigner:"
+          echo "$APKSIGNER"
+
+          echo
+          echo "===== APK SIGNATURE VERIFICATION ====="
+
+          "$APKSIGNER" verify \
+            --verbose \
+            --print-certs \
+            "$APK"
+
+
+      # ======================================================================
+      # GENERATE SHA256 CHECKSUM
+      # ======================================================================
+
+      - name: Generate SHA256 Checksum
+        env:
+          APK: ${{ steps.apk.outputs.APK }}
+
+        run: |
+          set -e
+
+          mkdir -p release-metadata
+
+          sha256sum "$APK" \
+            | tee release-metadata/SHA256SUMS.txt
+
+          echo
+          echo "===== APK INFORMATION ====="
+
+          ls -lh "$APK"
+
+          echo
+          echo "===== SHA256 ====="
+
+          cat release-metadata/SHA256SUMS.txt
+
+
+      # ======================================================================
+      # PREPARE FINAL RELEASE ARTIFACT
+      # ======================================================================
+      #
+      # Final filenames are normalized here so the user receives exactly:
+      #
+      #   Station_Abo_Ahmed_Release.apk
+      #   SHA256SUMS.txt
+      #
+      # ======================================================================
+
+      - name: Prepare Release Artifact
+        env:
+          APK: ${{ steps.apk.outputs.APK }}
+
+        run: |
+          set -e
+
+          rm -rf release-artifact
+          mkdir -p release-artifact
+
+          cp "$APK" \
+            release-artifact/Station_Abo_Ahmed_Release.apk
+
+          cp release-metadata/SHA256SUMS.txt \
+            release-artifact/SHA256SUMS.txt
+
+          if [ ! -s "release-artifact/Station_Abo_Ahmed_Release.apk" ]; then
+            echo "::error::Final Release APK is missing or empty."
+            exit 1
+          fi
+
+          if [ ! -s "release-artifact/SHA256SUMS.txt" ]; then
+            echo "::error::SHA256SUMS.txt is missing or empty."
+            exit 1
+          fi
+
+          echo "===== FINAL RELEASE ARTIFACT ====="
+
+          ls -lah release-artifact
+
+          echo
+          echo "===== SHA256SUMS.txt ====="
+
+          cat release-artifact/SHA256SUMS.txt
+
+
+      # ======================================================================
+      # CLEAN SIGNING MATERIAL
+      # ======================================================================
+      #
+      # Always execute, including after build/signature failures.
+      #
+      # The cleanup happens before artifact upload because the artifact
+      # contains only the final APK and checksum, never the keystore.
+      # ======================================================================
+
+      - name: Clean Signing Material
+        if: always()
+
+        run: |
+          KEYSTORE="$RUNNER_TEMP/station-release.keystore"
+
+          if [ -f "$KEYSTORE" ]; then
+            rm -f "$KEYSTORE"
+            echo "Release keystore removed from runner temporary storage."
+          else
+            echo "Release keystore was already absent."
+          fi
+
+
+      # ======================================================================
+      # UPLOAD ONLY FINAL RELEASE ARTIFACTS
+      # ======================================================================
+      #
+      # upload-artifact@v6 uses Node.js 24.
+      #
+      # Uploaded files:
+      #
+      #   Station_Abo_Ahmed_Release.apk
+      #   SHA256SUMS.txt
+      #
+      # No Debug APK.
+      # No Validation APK.
+      # No intermediate files.
+      # No keystore.
+      #
+      # ======================================================================
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v6
+
+        with:
+          name: Station_Abo_Ahmed_Release
+          path: |
+            release-artifact/Station_Abo_Ahmed_Release.apk
+            release-artifact/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
