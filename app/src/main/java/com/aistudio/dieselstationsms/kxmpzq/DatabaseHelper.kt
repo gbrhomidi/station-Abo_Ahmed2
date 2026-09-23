@@ -14972,7 +14972,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 WHERE r.role_code IN ('SUPER_ADMIN', 'ADMIN', 'STATION_MANAGER')
                   AND u.status = 'active' AND u.is_deleted = 0
                 ORDER BY r.level ASC LIMIT 1
-            """.trimIndent(), arrayOf((stationScopeId ?: 0).toString(), (stationScopeId ?: 0).toString())).use { cursor ->
+            """.trimIndent(), null).use { cursor ->
                 if (cursor.moveToFirst()) cursor.getString(0) else null
             }
         } finally {
