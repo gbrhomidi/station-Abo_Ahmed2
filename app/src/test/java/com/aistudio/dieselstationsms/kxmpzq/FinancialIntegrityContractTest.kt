@@ -53,11 +53,11 @@ class FinancialIntegrityContractTest {
         assertTrue("Fuel adjustments must persist an independent audit table", source.contains("fuel_sale_adjustments"))
         assertTrue("Fuel adjustments must enforce unique idempotency", source.contains("UNIQUE(station_id, idempotency_key)"))
         assertTrue("Product sale items must have independent damaged quantity", source.contains("damaged_quantity"))
-        assertTrue("Sale-linked damage must be persisted in damaged_products", productAdjustment.contains(""damaged_products""))
+        assertTrue("Sale-linked damage must be persisted in damaged_products", productAdjustment.contains("\"damaged_products\""))
         assertTrue("Fuel return must explicitly restore tank stock", fuelAdjustment.contains("current_quantity=current_quantity+"))
-        assertTrue("Fuel damage must have no tank restoration path", fuelAdjustment.contains("inventory_action") && fuelAdjustment.contains(""none""))
-        assertTrue("Adjustments must post a journal entry", source.contains("postSalesReversalJournal") && source.contains("put("status", "posted")"))
-        assertTrue("Cash refunds must create cash movements", source.contains(""cash_movements"") && source.contains(""refund""))
+        assertTrue("Fuel damage must have no tank restoration path", fuelAdjustment.contains("inventory_action") && fuelAdjustment.contains("\"none\""))
+        assertTrue("Adjustments must post a journal entry", source.contains("postSalesReversalJournal") && source.contains("put(\"status\", \"posted\")"))
+        assertTrue("Cash refunds must create cash movements", source.contains("\"cash_movements\"") && source.contains("\"refund\""))
     }
 
     @Test
