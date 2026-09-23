@@ -51,7 +51,7 @@ class FinancialIntegrityContractTest {
         assertTrue("Product adjustment bridge must be exposed", mainSource.contains("fun processProductSaleAdjustment"))
         assertTrue("Product adjustments must be transactional", productAdjustment.contains("db.beginTransaction()") && productAdjustment.contains("db.setTransactionSuccessful()") && productAdjustment.contains("db.endTransaction()"))
         assertTrue("Fuel adjustments must persist an independent audit table", source.contains("fuel_sale_adjustments"))
-        assertTrue("Fuel adjustments must enforce unique idempotency", Regex("""UNIQUE\\s*\\(\\s*station_id\\s*,\\s*idempotency_key\\s*\\)""").containsMatchIn(source))
+        assertTrue("Fuel adjustments must enforce unique idempotency", Regex("""UNIQUE\s*\(\s*station_id\s*,\s*idempotency_key\s*\)""").containsMatchIn(source))
         assertTrue("Product sale items must have independent damaged quantity", source.contains("damaged_quantity"))
         assertTrue("Sale-linked damage must be persisted in damaged_products", productAdjustment.contains("\"damaged_products\""))
         assertTrue("Fuel return must explicitly restore tank stock", fuelAdjustment.contains("current_quantity=current_quantity+"))
