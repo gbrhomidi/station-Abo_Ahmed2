@@ -1149,6 +1149,10 @@
                     </select>
                 </div>
                 <div class="filter-group">
+                    <div class="filter-group">
+                        <label>⛽ تصنيف المبيعات</label>
+                        <select id="filterSaleType"><option value="all">الكل</option><option value="fuel">وقود فقط</option><option value="product">منتجات فقط</option></select>
+                    </div>
                     <label>📊 نوع التقرير</label>
                     <select id="filterReportType">
                         <option value="summary">ملخص</option>
@@ -1738,6 +1742,7 @@ let pullStartY = 0,
             const customer = document.getElementById('filterCustomer').value;
             const paymentMethod = document.getElementById('filterPaymentMethod').value;
             const reportType = document.getElementById('filterReportType').value;
+            const saleType = document.getElementById('filterSaleType').value;
             const status = document.getElementById('filterStatus').value;
             const shift = document.getElementById('filterShift').value;
 
@@ -1755,6 +1760,7 @@ let pullStartY = 0,
                     customer_id: customer || null,
                     payment_method: paymentMethod || null,
                     report_type: reportType,
+                    sale_type: saleType,
                     status: status || null,
                     shift_id: shift || null,
                     limit: salesPagination.pageSize,
@@ -1764,9 +1770,17 @@ let pullStartY = 0,
                 if (result.success && result.data) {
                     const payload = result.data && !Array.isArray(result.data) && Array.isArray(result.data.rows)
                         ? result.data : result;
-                    const sales = Array.isArray(payload.rows) ? payload.rows
+                    const salesRaw = Array.isArray(payload.rows) ? payload.rows
                         : Array.isArray(result.data) ? result.data
                         : Array.isArray(payload.data) ? payload.data : [];
+                    const sales = salesRaw.map(s => ({
+                        ...s,
+                        sale_category: s.sale_kind,
+                        total_amount: Number(s.amount ?? s.total_amount ?? 0),
+                        net_amount: Number(s.amount ?? s.net_amount ?? 0),
+                        liters: s.sale_kind === 'fuel' ? Number(s.quantity || 0) : 0,
+                        product_quantity: s.sale_kind === 'product' ? Number(s.quantity || 0) : 0
+                    }));
                     salesPagination.totalCount = Number(payload.total_count ?? sales.length);
                     salesPagination.totalPages = salesPagination.totalCount > 0
                         ? Math.ceil(salesPagination.totalCount / salesPagination.pageSize) : 0;

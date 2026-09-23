@@ -3697,6 +3697,10 @@
         await loadFormContext();
 
         openModal('formModal');
+        setTimeout(() => {
+            const field = $('f_party_display');
+            if (field) field.focus({ preventScroll: false });
+        }, 100);
     }
 
     /* ================================================================
@@ -4336,7 +4340,6 @@
             : [
                 ['f_sale_id','معرف الطلب'],
                 ['f_shift_id','الوردية'],
-                ['f_party_id','العميل'],
                 ['f_quantity','الكمية'],
                 ['f_fuel_type','نوع الوقود'],
                 ['f_price_per_liter','السعر / لتر'],
@@ -4579,32 +4582,34 @@
                             vehicle.driver_id ??
                             vehicle.current_driver_id;
 
+                        const source = String(
+                            vehicle.vehicle_photo ||
+                            vehicle.photo_path ||
+                            vehicle.image_path ||
+                            ''
+                        ).trim();
+                        const plate = vehicle.plate_number_ar || vehicle.plate_number || vehicle.vehicle_code || '—';
+                        const brandModel = [vehicle.brand, vehicle.model].filter(Boolean).join(' ') || '—';
+                        const imageHtml = source
+                            ? '<img src="' + esc(source) + '" alt="صورة المركبة" loading="lazy" style="width:58px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--line);">'
+                            : '<span style="width:58px;height:44px;display:grid;place-items:center;border:1px solid var(--line);border-radius:8px;font-size:10px;color:var(--muted);">لا توجد صورة</span>';
                         return `
                             <button
                                 type="button"
                                 class="lookup-item"
                                 data-id="${esc(id)}"
-                                data-driver-id="${esc(driverId || '')}">
+                                data-driver-id="${esc(driverId || '')}"
+                                style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;text-align:right;">
 
-                                <strong>
-                                    ${esc(
-                                        vehicleName(
-                                            vehicle
-                                        )
-                                    )}
-                                </strong>
+                                ${imageHtml}
 
-                                <br>
-
-                                <small>
-                                    السائق:
-                                    ${esc(
-                                        driverName(
-                                            vehicle
-                                        )
-                                    )}
-                                </small>
-
+                                <span>
+                                    <strong>${esc(plate)}</strong>
+                                    <br>
+                                    <small>${esc(brandModel)}</small>
+                                    <br>
+                                    <small>السائق: ${esc(driverName(vehicle))}</small>
+                                </span>
                             </button>
                         `;
                     }
@@ -4905,8 +4910,14 @@
         if (!(saleId > 0)) {
             return {valid:false,message:'معرف البيع الأصلي مطلوب.'};
         }
-        if (!isProductSale && !partyId) {
-            return {valid:false,message:'للبيع غير المسجل يجب اختيار عميل مسجل أو إدخال البيع الأصلي وفق مساره.'};
+        /*
+         * A delivery is linked to the original sale, not to a newly-created
+         * sale/customer. A cash sale may legitimately have NULL party_id.
+         * The SQLite addDelivery() contract already persists party_id as NULL
+         * and verifies the original sale by sale_id.
+         */
+        if (!isProductSale && !partyId && !String($('f_party_display').value || '').includes('غير مسجل')) {
+            return {valid:false,message:'اختر «عميل غير مسجل» إذا كان البيع الأصلي بلا عميل مسجل.'};
         }
 
         const status = $('f_status').value;
@@ -5611,19 +5622,38 @@
 
         const querySaleId = Number(new URLSearchParams(window.location.search).get('sale_id') || 0);
         if (querySaleId > 0) {
+            resetForm();
             $('f_sale_id').value = String(querySaleId);
             $('f_sale_id').readOnly = true;
             try {
-                showFormNotice('جارٍ تحميل البيع الأصلي من SQLite...', 'warning');
+                showFormNotice('جارٍ تهيئة نموذج التوصيل والتحقق من البيع الأصلي من SQLite...', 'warning');
+                // The POS deep-link must initialize the same customer/vehicle/driver/shift
+                // context as a normal "إضافة توصيل جديد" flow before opening the modal.
+                await loadFormContext();
                 const response = await invoke('getDeliverySaleContext', [querySaleId]);
                 const payload = dataOf(response) || response;
                 if (!payload || payload.found === false || !payload.sale) {
                     throw new Error(payload?.message || 'عملية البيع الأصلية غير موجودة');
                 }
                 fillFromLatestSale(payload.sale);
+                updateVehiclePreview(
+                    state.vehicles.find(vehicle =>
+                        String(vehicle.id ?? vehicle.vehicle_id ?? '') ===
+                        String(payload.sale.vehicle_id ?? '')
+                    )
+                );
                 openModal('formModal');
+                setTimeout(() => {
+                    const field = $('f_location');
+                    if (field) {
+                        field.focus({ preventScroll: false });
+                        if (typeof field.select === 'function') field.select();
+                    }
+                }, 100);
+                showFormNotice('تم ربط التوصيل بالبيع الأصلي. يمكنك تعديل موقع التوصيل والبيانات التشغيلية ثم الحفظ.', 'success');
             } catch (error) {
                 showFormNotice(error.message || 'تعذر تحميل البيع الأصلي للتوصيل', 'error');
+                openModal('formModal');
             }
         }
     }

@@ -37,11 +37,44 @@ class FinancialIntegrityContractTest {
         assertTrue("Financial paths must complete idempotency keys", source.contains("completeFinancialIdempotency"))
     }
 
+
+
+    @Test
+    fun saleAdjustmentPathsAreAtomicAuditableAndIdempotent() {
+        val source = locateDatabaseHelper().readText()
+        val fuelAdjustment = functionBody(source, "fun processFuelSaleAdjustment")
+        val productAdjustment = functionBody(source, "fun processProductSaleAdjustment")
+
+        assertTrue("Fuel adjustments must be transactional", fuelAdjustment.contains("db.beginTransaction()") && fuelAdjustment.contains("db.setTransactionSuccessful()") && fuelAdjustment.contains("db.endTransaction()"))
+        val mainSource = locateMainActivity().readText()
+        assertTrue("Fuel adjustment bridge must be exposed", mainSource.contains("fun processFuelSaleAdjustment"))
+        assertTrue("Product adjustment bridge must be exposed", mainSource.contains("fun processProductSaleAdjustment"))
+        assertTrue("Product adjustments must be transactional", productAdjustment.contains("db.beginTransaction()") && productAdjustment.contains("db.setTransactionSuccessful()") && productAdjustment.contains("db.endTransaction()"))
+        assertTrue("Fuel adjustments must persist an independent audit table", source.contains("fuel_sale_adjustments"))
+        assertTrue("Fuel adjustments must enforce unique idempotency", source.contains("UNIQUE(station_id, idempotency_key)"))
+        assertTrue("Product sale items must have independent damaged quantity", source.contains("damaged_quantity"))
+        assertTrue("Sale-linked damage must be persisted in damaged_products", productAdjustment.contains(""damaged_products""))
+        assertTrue("Fuel return must explicitly restore tank stock", fuelAdjustment.contains("current_quantity=current_quantity+"))
+        assertTrue("Fuel damage must have no tank restoration path", fuelAdjustment.contains("inventory_action") && fuelAdjustment.contains(""none""))
+        assertTrue("Adjustments must post a journal entry", source.contains("postSalesReversalJournal") && source.contains("put("status", "posted")"))
+        assertTrue("Cash refunds must create cash movements", source.contains(""cash_movements"") && source.contains(""refund""))
+    }
+
+    @Test
+    fun salesClassificationUsesFuelSalesAndSaleItemsInsteadOfHeaderOnly() {
+        val source = locateDatabaseHelper().readText()
+        assertTrue("Unified sales ledger must union fuel_sales and sale_items", source.contains("FROM fuel_sales fs") && source.contains("FROM sale_items si") && source.contains("getSalesLedgerPage"))
+        assertTrue("Invoice classification must inspect both physical sale sources", source.contains("SELECT 1 FROM fuel_sales WHERE sale_id=?") && source.contains("SELECT 1 FROM sale_items WHERE sale_id=? AND item_type='product'"))
+        assertTrue("Fuel reports must subtract posted adjustments", source.contains("fuel_sale_adjustments") && source.contains("adjusted_amount") && source.contains("adjusted_liters"))
+    }
+
     @Test
     fun webViewValidatorBlocksProtectedTables() {
         assertTrue("Fuel sales must not be reachable through general CRUD", !SecurityValidator.isTableAllowedForGeneralCrud("fuel_sales"))
         assertTrue("Payments must not be reachable through general CRUD", !SecurityValidator.isTableAllowedForGeneralCrud("payments"))
         assertTrue("Financial idempotency keys must not be reachable through general CRUD", !SecurityValidator.isTableAllowedForGeneralCrud("financial_idempotency_keys"))
+        assertTrue("Sale item adjustments must not be reachable through general CRUD", !SecurityValidator.isTableAllowedForGeneralCrud("sale_item_adjustments"))
+        assertTrue("Fuel sale adjustments must not be reachable through general CRUD", !SecurityValidator.isTableAllowedForGeneralCrud("fuel_sale_adjustments"))
         assertTrue("Reference data should remain available through general CRUD", SecurityValidator.isTableAllowedForGeneralCrud("fuel_types"))
     }
 

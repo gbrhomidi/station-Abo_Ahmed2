@@ -1576,8 +1576,9 @@
                 const id = s.id || s.sale_id;
                 const code = s.sale_code || '---';
                 const customerName = s.customer_name || '—';
-                const liters = parseFloat(s.liters || 0);
-                const netAmount = parseFloat(s.net_amount || 0);
+                const liters = s.sale_kind === 'fuel' ? parseFloat(s.quantity || 0) : 0;
+                const productQty = s.sale_kind === 'product' ? parseFloat(s.quantity || 0) : 0;
+                const netAmount = parseFloat(s.amount ?? s.net_amount ?? 0);
                 const paymentStatus = s.payment_status || 'paid';
                 const statusLabel = getStatusLabel(paymentStatus);
                 const statusClass = getStatusClass(paymentStatus);
@@ -1601,7 +1602,7 @@
                             </div>
                             <div class="field-group">
                                 <span class="field-label">${liters > 0 ? 'اللترات' : 'الكمية'}</span>
-                                <span class="field-value">${liters > 0 ? formatNumber(liters) + ' L' : '---'}</span>
+                                <span class="field-value">${liters > 0 ? formatNumber(liters) + ' L' : (productQty > 0 ? formatNumber(productQty) : '---')}</span>
                             </div>
                         </div>
                         <div class="card-footer">
@@ -1628,8 +1629,8 @@
         // 7. الإحصائيات
         // ============================================================
         function updateStats() {
-            const totalAmount = allSales.reduce((sum, s) => sum + parseFloat(s.net_amount || 0), 0);
-            const totalLiters = allSales.reduce((sum, s) => sum + parseFloat(s.liters || 0), 0);
+            const totalAmount = allSales.reduce((sum, s) => sum + parseFloat(s.amount ?? s.net_amount ?? 0), 0);
+            const totalLiters = allSales.reduce((sum, s) => sum + (s.sale_kind === 'fuel' ? parseFloat(s.quantity || 0) : 0), 0);
             const avg = allSales.length > 0 ? totalAmount / allSales.length : 0;
 
             document.getElementById('statTotal').textContent = formatCurrency(totalAmount);
@@ -1687,11 +1688,11 @@
 
             }else if(currentFilter === 'fuel'){
 
-                params.sale_category = 'fuel';
+                params.sale_type = 'fuel';
 
             }else if(currentFilter === 'products'){
 
-                params.sale_category = 'products';
+                params.sale_type = 'product';
 
             }else if(currentFilter === 'credit'){
 

@@ -782,6 +782,7 @@ const ROLES = {
 };
 
 let currentUserRole = null;
+let currentSessionUserId = 0;
 
 /* ============================================================
    1. Typed Android Bridge — لا يوجد execute عام أو fallback تجاري
@@ -811,6 +812,8 @@ const BridgeContracts = {
     getUserNotifications: p => window.AndroidInterface.getUserNotifications(Number((p || {}).userId || (p || {}).user_id || 0)),
     markNotificationRead: p => window.AndroidInterface.markNotificationRead(Number((p || {}).id || 0)),
     getScreenPermissions: p => window.AndroidInterface.getScreenPermissions(Number((p || {}).screenId || (p || {}).screen_id || 0)),
+    getScreenPermissionIds: p => window.AndroidInterface.getScreenPermissionIds(Number((p || {}).screenId || (p || {}).screen_id || 0)),
+    getCurrentUser: () => window.AndroidInterface.getCurrentUser(),
     addUser: p => window.AndroidInterface.addUser(JSON.stringify(p || {})),
     updateUser: p => window.AndroidInterface.updateUser(Number((p || {}).id || 0), JSON.stringify(p || {})),
     deleteUser: p => window.AndroidInterface.deleteUser(Number((p || {}).id || 0)),
@@ -833,6 +836,10 @@ const BridgeContracts = {
     revokeDelegatedPermission: p => window.AndroidInterface.revokeDelegatedPermission(Number((p || {}).id || 0)),
     getGroupPermissions: () => window.AndroidInterface.getGroupPermissions(),
     getGroupPermissionIds: p => window.AndroidInterface.getGroupPermissionIds(Number((p || {}).groupId || (p || {}).group_id || 0)),
+    getGroupScreenPermissionIds: p => window.AndroidInterface.getGroupScreenPermissionIds(
+        Number((p || {}).groupId || (p || {}).group_id || 0),
+        Number((p || {}).screenId || (p || {}).screen_id || 0)
+    ),
     grantGroupPermissionsBatch: p => window.AndroidInterface.grantGroupPermissionsBatch(JSON.stringify(p || {})),
     revokeGroupPermissionsBatch: p => window.AndroidInterface.revokeGroupPermissionsBatch(JSON.stringify(p || {})),
     grantGroupPermission: p => window.AndroidInterface.grantGroupPermission(JSON.stringify(p || {})),
@@ -1015,8 +1022,16 @@ let editingPermId = 0;
 
 window.__grantCurrentChecked = [];
 window.__groupCurrentChecked = [];
+window.__grantUserPermissionIds = [];
+window.__groupPermissionIds = [];
+window.__grantScreenPermissionIds = [];
+window.__groupScreenPermissionIds = [];
 window.__grantPermFilter = '';
 window.__groupPermFilter = '';
+window.__grantScreenRequest = 0;
+window.__groupScreenRequest = 0;
+window.__grantUserRequest = 0;
+window.__groupRequest = 0;
 
 /* ============================================================
    9. Load All Data (حقيقي من قاعدة البيانات)
@@ -1039,6 +1054,16 @@ async function loadAllData() {
         allUsers = Array.isArray(usersRes.data) ? usersRes.data : [];
         allGroups = Array.isArray(groupsRes.data) ? groupsRes.data : [];
         allRoles = Array.isArray(rolesRes.data) ? rolesRes.data : [];
+
+        try {
+            const sessionRes = await apiCall('getCurrentUser', {});
+            if (sessionRes && sessionRes.success && sessionRes.data) {
+                currentSessionUserId = Number(sessionRes.data.id || sessionRes.data.user_id || 0);
+                currentUserRole = sessionRes.data.role_code || sessionRes.data.role || sessionRes.data.role_name || null;
+            }
+        } catch (_) {
+            // العمليات الحساسة تتحقق من جلسة Android نفسها؛ فشل القراءة هنا لا يمنع بقية الشاشة.
+        }
 
         const moduleSelect = document.getElementById('permModule');
         if (moduleSelect && modulesRes && modulesRes.success && Array.isArray(modulesRes.data)) {
@@ -1355,16 +1380,62 @@ function viewPermission(id) {
 /* ============================================================
    12. Checkbox Helpers — Multiple Permissions
    ============================================================ */
+function permissionStateKey(containerId) {
+    return containerId === 'groupPermissionsList' ? '__groupCurrentChecked' : '__grantCurrentChecked';
+}
+
+function screenStateKey(containerId) {
+    return containerId === 'groupPermissionsList' ? '__groupScreenPermissionIds' : '__grantScreenPermissionIds';
+}
+
+function syncPermissionSelection(containerId) {
+    const key = permissionStateKey(containerId);
+    const current = new Set((window[key] || []).map(Number));
+    const selected = getSelectedPermissionIds(containerId);
+    selected.forEach(id => current.add(id));
+
+    // Only checkboxes currently rendered are authoritative for those rows.
+    const container = document.getElementById(containerId);
+    if (container) {
+        container.querySelectorAll('input[type="checkbox"][data-permission-id]').forEach(cb => {
+            const id = Number(cb.dataset.permissionId);
+            if (cb.checked) current.add(id);
+            else current.delete(id);
+        });
+    }
+    window[key] = Array.from(current).filter(id => Number.isFinite(id) && id > 0);
+    return window[key];
+}
+
+function getScreenDisplayName(screen) {
+    if (!screen) return 'شاشة';
+    const description = String(screen.description || '').trim();
+    const name = String(screen.screen_name || '').trim();
+    return description || name || String(screen.module || '').trim() || 'شاشة';
+}
+
+function getSelectedScreenIdForContainer(containerId) {
+    const id = containerId === 'groupPermissionsList' ? 'groupScreenSelect' : 'grantScreen';
+    return Number(document.getElementById(id)?.value || 0);
+}
+
 function renderPermissionCheckboxes(containerId, currentCheckedIds, filterText) {
     const container = document.getElementById(containerId);
     if (!container) return;
+
+    const key = permissionStateKey(containerId);
+    const screenKey = screenStateKey(containerId);
+    const selectedScreenId = getSelectedScreenIdForContainer(containerId);
+    const checkedSet = new Set((currentCheckedIds || window[key] || []).map(Number));
+    const screenPermissionIds = selectedScreenId > 0
+        ? new Set((window[screenKey] || []).map(Number))
+        : null;
     const q = (filterText || '').trim().toLowerCase();
-    const selectedScreenId = Number(document.getElementById('grantScreen')?.value || 0);
-    const selectedScreen = allScreens.find(s => Number(s.id || s.screen_id) === selectedScreenId);
-    const screenModule = selectedScreen?.module || '';
-    const checkedSet = new Set((currentCheckedIds || []).map(Number));
+
     const items = allPermissions.filter(p => {
-        if (screenModule && p.module && p.module !== screenModule) return false;
+        const id = Number(p.id || p.permission_id);
+        if (!id) return false;
+        if (screenPermissionIds && !screenPermissionIds.has(id)) return false;
         if (!q) return true;
         const name = (p.permission_name || '').toLowerCase();
         const ar = (p.permission_name_ar || '').toLowerCase();
@@ -1372,10 +1443,14 @@ function renderPermissionCheckboxes(containerId, currentCheckedIds, filterText) 
         const mod = (p.module || '').toLowerCase();
         return name.includes(q) || ar.includes(q) || code.includes(q) || mod.includes(q);
     });
+
     if (!items.length) {
-        container.innerHTML = '<div class="perm-checkbox-empty">لا توجد صلاحيات مطابقة</div>';
+        container.innerHTML = selectedScreenId > 0
+            ? '<div class="perm-checkbox-empty">لا توجد صلاحيات مرتبطة بهذه الشاشة</div>'
+            : '<div class="perm-checkbox-empty">لا توجد صلاحيات مطابقة</div>';
         return;
     }
+
     container.innerHTML = items.map(p => {
         const id = Number(p.id || p.permission_id);
         const nameAr = p.permission_name_ar || p.permission_name || p.permission_code || ('#' + id);
@@ -1392,26 +1467,40 @@ function renderPermissionCheckboxes(containerId, currentCheckedIds, filterText) 
 function getSelectedPermissionIds(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return [];
-    return Array.from(container.querySelectorAll('input[type="checkbox"][data-permission-id]'))
-        .filter(cb => cb.checked)
-        .map(cb => Number(cb.dataset.permissionId))
-        .filter(id => Number.isFinite(id) && id > 0);
+    const key = permissionStateKey(containerId);
+    const state = new Set((window[key] || []).map(Number));
+    const visible = container.querySelectorAll('input[type="checkbox"][data-permission-id]');
+    visible.forEach(cb => {
+        const id = Number(cb.dataset.permissionId);
+        if (cb.checked) state.add(id);
+        else state.delete(id);
+    });
+    window[key] = Array.from(state).filter(id => Number.isFinite(id) && id > 0);
+    return window[key].slice();
 }
 
 function toggleAllInContainer(containerId, checked) {
     const container = document.getElementById(containerId);
     if (!container) return;
-    container.querySelectorAll('input[type="checkbox"][data-permission-id]')
-        .forEach(cb => { cb.checked = !!checked; });
+    const key = permissionStateKey(containerId);
+    const state = new Set((window[key] || []).map(Number));
+    container.querySelectorAll('input[type="checkbox"][data-permission-id]').forEach(cb => {
+        cb.checked = !!checked;
+        const id = Number(cb.dataset.permissionId);
+        if (checked) state.add(id); else state.delete(id);
+    });
+    window[key] = Array.from(state);
 }
 
 function filterGrantPermissions(v) {
+    syncPermissionSelection('grantPermissionsList');
     window.__grantPermFilter = v || '';
     renderPermissionCheckboxes('grantPermissionsList', window.__grantCurrentChecked || [], window.__grantPermFilter);
 }
 function toggleAllGrantPermissions(v) { toggleAllInContainer('grantPermissionsList', v); }
 
 function filterGroupPermissions(v) {
+    syncPermissionSelection('groupPermissionsList');
     window.__groupPermFilter = v || '';
     renderPermissionCheckboxes('groupPermissionsList', window.__groupCurrentChecked || [], window.__groupPermFilter);
 }
@@ -1422,6 +1511,12 @@ function toggleAllGroupPermissions(v) { toggleAllInContainer('groupPermissionsLi
    ============================================================ */
 function populateGrantFormDropdowns() {
     const userSelect = document.getElementById('grantUser');
+    if (!userSelect) return;
+    const previousUser = userSelect.value;
+    const previousScreen = document.getElementById('grantScreen')?.value || '';
+    const previousState = Array.from(new Set((window.__grantCurrentChecked || []).map(Number)));
+    const previousUserPermissions = Array.from(new Set((window.__grantUserPermissionIds || []).map(Number)));
+    const previousScreenPermissions = Array.from(new Set((window.__grantScreenPermissionIds || []).map(Number)));
     userSelect.innerHTML = '<option value="">اختر المستخدم</option>';
     allUsers.forEach(u => {
         const opt = document.createElement('option');
@@ -1435,56 +1530,93 @@ function populateGrantFormDropdowns() {
     allScreens.forEach(s => {
         const opt = document.createElement('option');
         opt.value = s.id || s.screen_id;
-        opt.textContent = s.screen_name || s.module || 'شاشة';
+        opt.textContent = getScreenDisplayName(s);
+        opt.title = s.screen_name || '';
         screenSelect.appendChild(opt);
     });
 
-    window.__grantCurrentChecked = [];
-    renderPermissionCheckboxes('grantPermissionsList', [], window.__grantPermFilter || '');
+    window.__grantCurrentChecked = previousState;
+    window.__grantUserPermissionIds = previousUserPermissions;
+    window.__grantScreenPermissionIds = previousScreenPermissions;
+    if (previousUser && Array.from(userSelect.options).some(o => o.value === String(previousUser))) {
+        userSelect.value = previousUser;
+    }
+    if (previousScreen && Array.from(screenSelect.options).some(o => o.value === String(previousScreen))) {
+        screenSelect.value = previousScreen;
+    }
+    renderPermissionCheckboxes('grantPermissionsList', window.__grantCurrentChecked, window.__grantPermFilter || '');
 
-    screenSelect.onchange = () => {
+    screenSelect.onchange = async () => {
+        syncPermissionSelection('grantPermissionsList');
         window.__grantPermFilter = '';
         const filter = document.getElementById('grantPermFilter');
         if (filter) filter.value = '';
-        renderPermissionCheckboxes('grantPermissionsList', window.__grantCurrentChecked || [], '');
-        validateGrantScope();
+        const screenId = Number(screenSelect.value || 0);
+        const requestId = ++window.__grantScreenRequest;
+        if (!screenId) {
+            window.__grantScreenPermissionIds = [];
+            window.__grantCurrentChecked = Array.from(window.__grantUserPermissionIds || []);
+            renderPermissionCheckboxes('grantPermissionsList', window.__grantCurrentChecked, '');
+            validateGrantScope();
+            return;
+        }
+        try {
+            const res = await apiCall('getScreenPermissionIds', { screenId });
+            if (requestId !== window.__grantScreenRequest) return;
+            if (!res.success || !Array.isArray(res.data)) throw new Error(res.error || res.message || 'فشل تحميل صلاحيات الشاشة');
+            window.__grantScreenPermissionIds = res.data.map(Number);
+            const allowed = new Set(window.__grantScreenPermissionIds);
+            window.__grantCurrentChecked = (window.__grantUserPermissionIds || []).filter(id => allowed.has(Number(id)));
+            renderPermissionCheckboxes('grantPermissionsList', window.__grantCurrentChecked, '');
+            validateGrantScope();
+        } catch (e) {
+            if (requestId !== window.__grantScreenRequest) return;
+            window.__grantScreenPermissionIds = [];
+            window.__grantCurrentChecked = [];
+            renderPermissionCheckboxes('grantPermissionsList', [], '');
+            showToast(e.error || e.message || 'تعذر تحميل الصلاحيات المرتبطة بالشاشة', 'error');
+        }
     };
 
     userSelect.onchange = async () => {
         const uid = Number(userSelect.value || 0);
+        const requestId = ++window.__grantUserRequest;
         if (uid <= 0) {
+            window.__grantUserPermissionIds = [];
             window.__grantCurrentChecked = [];
-        } else {
-            try {
-                const res = await apiCall('getUserPermissionIds', { userId: uid });
-                if (res.success && Array.isArray(res.data)) {
-                    window.__grantCurrentChecked = res.data.map(Number);
-                } else {
-                    throw new Error((res && (res.error || res.message)) || 'فشل تحميل صلاحيات المستخدم');
-                }
-            } catch (_) {
-                // لا نمسح آخر حالة صحيحة عند فشل القراءة المؤقت.
-            }
+            renderPermissionCheckboxes('grantPermissionsList', [], window.__grantPermFilter || '');
+            return;
         }
-        renderPermissionCheckboxes('grantPermissionsList', window.__grantCurrentChecked, window.__grantPermFilter || '');
+        try {
+            const res = await apiCall('getUserPermissionIds', { userId: uid });
+            if (requestId !== window.__grantUserRequest) return;
+            if (!res.success || !Array.isArray(res.data)) throw new Error(res.error || res.message || 'فشل تحميل صلاحيات المستخدم');
+            window.__grantUserPermissionIds = res.data.map(Number);
+            const screenId = Number(screenSelect.value || 0);
+            if (screenId > 0) {
+                const allowed = new Set((window.__grantScreenPermissionIds || []).map(Number));
+                window.__grantCurrentChecked = window.__grantUserPermissionIds.filter(id => allowed.has(Number(id)));
+            } else {
+                window.__grantCurrentChecked = Array.from(window.__grantUserPermissionIds);
+            }
+            renderPermissionCheckboxes('grantPermissionsList', window.__grantCurrentChecked, window.__grantPermFilter || '');
+        } catch (e) {
+            if (requestId !== window.__grantUserRequest) return;
+            showToast(e.error || e.message || 'فشل تحميل صلاحيات المستخدم', 'error');
+        }
     };
 }
 
 function validateGrantScope() {
-    const screenId = Number(document.getElementById('grantScreen').value || 0);
-    if (!screenId) { document.getElementById('grantScreen').setCustomValidity(''); return true; }
+    const screenId = Number(document.getElementById('grantScreen')?.value || 0);
     const selectedPermIds = getSelectedPermissionIds('grantPermissionsList');
-    const screen = allScreens.find(item => Number(item.id || item.screen_id) === screenId);
-    if (!screen || !screen.module) return true;
-    for (const pid of selectedPermIds) {
-        const permission = allPermissions.find(item => Number(item.id || item.permission_id) === pid);
-        if (permission && permission.module && permission.module !== screen.module) {
-            document.getElementById('grantScreen').setCustomValidity('إحدى الصلاحيات المحددة لا تنتمي إلى وحدة الشاشة');
-            showToast(`الشاشة "${screen.screen_name || ''}" لا تنتمي إلى وحدة "${permission.module}"`, 'error');
-            return false;
-        }
+    if (!screenId) return true;
+    const allowed = new Set((window.__grantScreenPermissionIds || []).map(Number));
+    const invalid = selectedPermIds.filter(id => !allowed.has(Number(id)));
+    if (invalid.length) {
+        showToast('إحدى الصلاحيات المحددة غير مرتبطة بالشاشة المختارة', 'error');
+        return false;
     }
-    document.getElementById('grantScreen').setCustomValidity('');
     return true;
 }
 
@@ -1611,41 +1743,109 @@ async function revokeGrantedPermission(userId, permissionId) {
 function populateGroupSelect() {
     const select = document.getElementById('groupSelectForPerms');
     const screenSelect = document.getElementById('groupScreenSelect');
+    const previousGroup = select?.value || '';
+    const previousScreen = screenSelect?.value || '';
+    const previousState = Array.from(new Set((window.__groupCurrentChecked || []).map(Number)));
+    const previousGroupPermissions = Array.from(new Set((window.__groupPermissionIds || []).map(Number)));
+    const previousScreenPermissions = Array.from(new Set((window.__groupScreenPermissionIds || []).map(Number)));
     if (select) select.innerHTML = '<option value="">-- اختر مجموعة --</option>';
     if (screenSelect) screenSelect.innerHTML = '<option value="">بدون شاشة محددة</option>';
+
     allGroups.forEach(g => {
         const id = g.id || g.group_id;
-        if (select) {
-            const opt = document.createElement('option');
-            opt.value = id;
-            opt.textContent = g.group_name || 'مجموعة';
-            select.appendChild(opt);
-        }
-    });
-    allScreens.forEach(s => {
-        const id = s.id || s.screen_id;
-        if (screenSelect) {
-            const opt = document.createElement('option');
-            opt.value = id;
-            opt.textContent = s.screen_name || s.module || 'شاشة';
-            screenSelect.appendChild(opt);
-        }
+        if (!select) return;
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = g.group_name || 'مجموعة';
+        select.appendChild(opt);
     });
 
-    window.__groupCurrentChecked = [];
-    renderPermissionCheckboxes('groupPermissionsList', [], window.__groupPermFilter || '');
+    allScreens.forEach(s => {
+        const id = s.id || s.screen_id;
+        if (!screenSelect) return;
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = getScreenDisplayName(s);
+        opt.title = s.screen_name || '';
+        screenSelect.appendChild(opt);
+    });
+
+    window.__groupCurrentChecked = previousState;
+    window.__groupPermissionIds = previousGroupPermissions;
+    window.__groupScreenPermissionIds = previousScreenPermissions;
+    if (select && previousGroup && Array.from(select.options).some(o => o.value === String(previousGroup))) {
+        select.value = previousGroup;
+    }
+    if (screenSelect && previousScreen && Array.from(screenSelect.options).some(o => o.value === String(previousScreen))) {
+        screenSelect.value = previousScreen;
+    }
+    renderPermissionCheckboxes('groupPermissionsList', window.__groupCurrentChecked, window.__groupPermFilter || '');
+
+    if (screenSelect) {
+        screenSelect.onchange = async () => {
+            syncPermissionSelection('groupPermissionsList');
+            window.__groupPermFilter = '';
+            const filter = document.getElementById('groupPermFilter');
+            if (filter) filter.value = '';
+            const screenId = Number(screenSelect.value || 0);
+            const requestId = ++window.__groupScreenRequest;
+            if (!screenId) {
+                window.__groupScreenPermissionIds = [];
+                window.__groupCurrentChecked = Array.from(window.__groupPermissionIds || []);
+                renderPermissionCheckboxes('groupPermissionsList', window.__groupCurrentChecked, '');
+                return;
+            }
+            try {
+                const res = await apiCall('getScreenPermissionIds', { screenId });
+                if (requestId !== window.__groupScreenRequest) return;
+                if (!res.success || !Array.isArray(res.data)) throw new Error(res.error || res.message || 'فشل تحميل صلاحيات الشاشة');
+                window.__groupScreenPermissionIds = res.data.map(Number);
+                const allowed = new Set(window.__groupScreenPermissionIds);
+                const groupId = Number(document.getElementById('groupSelectForPerms')?.value || 0);
+                if (groupId > 0) {
+                    const groupScope = await apiCall('getGroupScreenPermissionIds', { groupId, screenId });
+                    if (requestId !== window.__groupScreenRequest) return;
+                    if (!groupScope.success || !Array.isArray(groupScope.data)) throw new Error(groupScope.error || groupScope.message || 'فشل تحميل صلاحيات المجموعة للشاشة');
+                    window.__groupCurrentChecked = groupScope.data.map(Number).filter(id => allowed.has(Number(id)));
+                } else {
+                    window.__groupCurrentChecked = [];
+                }
+                renderPermissionCheckboxes('groupPermissionsList', window.__groupCurrentChecked, '');
+            } catch (e) {
+                if (requestId !== window.__groupScreenRequest) return;
+                window.__groupScreenPermissionIds = [];
+                window.__groupCurrentChecked = [];
+                renderPermissionCheckboxes('groupPermissionsList', [], '');
+                showToast(e.error || e.message || 'تعذر تحميل الصلاحيات المرتبطة بالشاشة', 'error');
+            }
+        };
+    }
 }
 
 async function onGroupSelected(groupId) {
     const gid = Number(groupId || 0);
+    const requestId = ++window.__groupRequest;
     window.__groupCurrentChecked = [];
+    window.__groupPermissionIds = [];
     if (gid > 0) {
         try {
             const res = await apiCall('getGroupPermissionIds', { groupId: gid });
-            if (res.success && Array.isArray(res.data)) {
-                window.__groupCurrentChecked = res.data.map(Number);
+            if (requestId !== window.__groupRequest) return;
+            if (!res.success || !Array.isArray(res.data)) throw new Error(res.error || res.message || 'فشل تحميل صلاحيات المجموعة');
+            window.__groupPermissionIds = res.data.map(Number);
+            const screenId = Number(document.getElementById('groupScreenSelect')?.value || 0);
+            if (screenId > 0) {
+                const groupScope = await apiCall('getGroupScreenPermissionIds', { groupId: gid, screenId });
+                if (!groupScope.success || !Array.isArray(groupScope.data)) throw new Error(groupScope.error || groupScope.message || 'فشل تحميل صلاحيات المجموعة للشاشة');
+                const allowed = new Set((window.__groupScreenPermissionIds || []).map(Number));
+                window.__groupCurrentChecked = groupScope.data.map(Number).filter(id => allowed.has(Number(id)));
+            } else {
+                window.__groupCurrentChecked = Array.from(window.__groupPermissionIds);
             }
-        } catch (_) {}
+        } catch (e) {
+            if (requestId !== window.__groupRequest) return;
+            showToast(e.error || e.message || 'فشل تحميل صلاحيات المجموعة', 'error');
+        }
     }
     renderPermissionCheckboxes('groupPermissionsList', window.__groupCurrentChecked, window.__groupPermFilter || '');
     await loadGroupPermissions(gid);
@@ -1653,7 +1853,7 @@ async function onGroupSelected(groupId) {
 
 function refreshGroupPermissions() {
     const select = document.getElementById('groupSelectForPerms');
-    if (select.value) {
+    if (select?.value) {
         onGroupSelected(select.value);
     } else {
         showToast('⚠️ يرجى اختيار مجموعة', 'warning');
@@ -1678,22 +1878,18 @@ async function loadGroupPermissions(groupId) {
 }
 
 async function grantGroupPermission() {
-    const groupId = Number(document.getElementById('groupSelectForPerms').value || 0);
+    const groupId = Number(document.getElementById('groupSelectForPerms')?.value || 0);
     const permissionIds = getSelectedPermissionIds('groupPermissionsList');
-    const screenId = Number(document.getElementById('groupScreenSelect').value || 0);
+    const screenId = Number(document.getElementById('groupScreenSelect')?.value || 0);
     if (!groupId) { showToast('يرجى اختيار المجموعة', 'error'); return; }
     if (!permissionIds.length) { showToast('يرجى اختيار صلاحية واحدة على الأقل', 'error'); return; }
 
     if (screenId > 0) {
-        const screen = allScreens.find(item => Number(item.id || item.screen_id) === screenId);
-        if (screen && screen.module) {
-            for (const pid of permissionIds) {
-                const permission = allPermissions.find(item => Number(item.id || item.permission_id) === pid);
-                if (permission && permission.module && permission.module !== screen.module) {
-                    showToast(`الشاشة "${screen.screen_name || ''}" لا تنتمي إلى وحدة "${permission.module}"`, 'error');
-                    return;
-                }
-            }
+        const allowed = new Set((window.__groupScreenPermissionIds || []).map(Number));
+        const invalid = permissionIds.filter(id => !allowed.has(Number(id)));
+        if (invalid.length) {
+            showToast('إحدى الصلاحيات المحددة غير مرتبطة بالشاشة المختارة', 'error');
+            return;
         }
     }
 
@@ -1707,16 +1903,25 @@ async function grantGroupPermission() {
         if (!result.success) throw new Error(result.error || result.message || 'فشل ربط الصلاحيات بالمجموعة');
 
         const verify = await apiCall('getGroupPermissionIds', { groupId });
-        const actual = new Set((verify.data || []).map(Number));
+        if (!verify.success || !Array.isArray(verify.data)) throw new Error(verify.error || verify.message || 'فشل التحقق من حفظ صلاحيات المجموعة');
+        const actual = new Set(verify.data.map(Number));
         const missing = permissionIds.filter(id => !actual.has(id));
         if (missing.length) throw new Error('SQLite لم يثبت حفظ صلاحيات المجموعة: ' + missing.join(','));
 
-        window.__groupCurrentChecked = Array.from(actual);
+        window.__groupPermissionIds = Array.from(actual);
+        if (screenId > 0) {
+            const allowed = new Set((window.__groupScreenPermissionIds || []).map(Number));
+            window.__groupCurrentChecked = Array.from(actual).filter(id => allowed.has(Number(id)));
+        } else {
+            window.__groupCurrentChecked = Array.from(actual);
+        }
         renderPermissionCheckboxes('groupPermissionsList', window.__groupCurrentChecked, window.__groupPermFilter || '');
 
-        const msg = result.granted_count > 0
-            ? `تم ربط ${result.granted_count} صلاحية بالمجموعة` + (result.skipped_count ? ` (${result.skipped_count} مرتبطة مسبقاً)` : '')
-            : 'لا تغييرات (جميع الصلاحيات مرتبطة مسبقاً)';
+        const grantedCount = Number(result.granted_count ?? result.affected_rows ?? 0);
+        const skippedCount = Number(result.skipped_count ?? Math.max(0, permissionIds.length - grantedCount));
+        const msg = grantedCount > 0
+            ? `تم ربط ${grantedCount} صلاحية بالمجموعة` + (skippedCount ? ` (${skippedCount} مرتبطة مسبقاً)` : '')
+            : 'لا تغييرات (جميع الصلاحيات المحددة مرتبطة مسبقاً)';
         showToast('✅ ' + msg, 'success');
         await loadGroupPermissions(groupId);
     } catch (e) {
@@ -1804,74 +2009,153 @@ async function revokeGroupPermissionByIds(groupId, permissionId) {
    15. التفويض المؤقت (Delegation)
    ============================================================ */
 function populateDelegateFormDropdowns() {
-    const delegatorSelect = document.getElementById('delegator');
-    delegatorSelect.innerHTML = '<option value="">يحدده Android من جلسة المستخدم</option>';
-    allUsers.forEach(u => {
-        const opt = document.createElement('option');
-        opt.value = u.id || u.user_id;
-        opt.textContent = (u.full_name_ar || u.full_name || u.username || 'مستخدم') + ' (' + (u.username || '') + ')';
-        delegatorSelect.appendChild(opt);
-    });
-
     const delegateeSelect = document.getElementById('delegatee');
+    const permSelect = document.getElementById('delegatePermission');
+    const screenSelect = document.getElementById('delegateScreen');
+    if (!delegateeSelect || !permSelect || !screenSelect) return;
+
+    const previousDelegatee = delegateeSelect.value;
+    const previousPermission = permSelect.value;
+    const previousScreen = screenSelect.value;
+    const previousExpiry = document.getElementById('delegateExpiry')?.value || '';
+    const previousReason = document.getElementById('delegateReason')?.value || '';
+
+    const delegatorSelect = document.getElementById('delegator');
+    if (delegatorSelect) {
+        delegatorSelect.innerHTML = '<option value="">يحدده Android من جلسة المستخدم</option>';
+        const sessionUser = allUsers.find(u => Number(u.id || u.user_id) === Number(currentSessionUserId));
+        if (sessionUser) {
+            const opt = document.createElement('option');
+            opt.value = currentSessionUserId;
+            opt.textContent = (sessionUser.full_name_ar || sessionUser.full_name || sessionUser.username || 'مستخدم') + ' (' + (sessionUser.username || '') + ')';
+            delegatorSelect.appendChild(opt);
+            delegatorSelect.value = String(currentSessionUserId);
+        }
+    }
+
     delegateeSelect.innerHTML = '<option value="">اختر المفوض إليه</option>';
     allUsers.forEach(u => {
+        const id = Number(u.id || u.user_id);
+        if (!id || id === Number(currentSessionUserId)) return;
+        const roleCode = String(u.role_code || u.role || '').toUpperCase();
+        if (roleCode === 'SUPER_ADMIN' || roleCode === 'ADMIN') return;
         const opt = document.createElement('option');
-        opt.value = u.id || u.user_id;
+        opt.value = id;
         opt.textContent = (u.full_name_ar || u.full_name || u.username || 'مستخدم') + ' (' + (u.username || '') + ')';
         delegateeSelect.appendChild(opt);
     });
 
-    const permSelect = document.getElementById('delegatePermission');
-    permSelect.innerHTML = '<option value="">اختر الصلاحية</option>';
-    allPermissions.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.id || p.permission_id;
-        opt.textContent = p.permission_name_ar || p.permission_name || p.permission_code || 'صلاحية';
-        permSelect.appendChild(opt);
-    });
-
-    const screenSelect = document.getElementById('delegateScreen');
     screenSelect.innerHTML = '<option value="">اختر الشاشة</option>';
     allScreens.forEach(s => {
         const opt = document.createElement('option');
         opt.value = s.id || s.screen_id;
-        opt.textContent = s.screen_name || s.module || 'شاشة';
+        opt.textContent = getScreenDisplayName(s);
+        opt.title = s.screen_name || '';
         screenSelect.appendChild(opt);
     });
+
+    // The permission list is screen-scoped. Preserve a previous selection when it is still valid.
+    const renderDelegatePermissions = (allowedIds) => {
+        const allowed = allowedIds == null ? null : new Set(allowedIds.map(Number));
+        permSelect.innerHTML = '<option value="">اختر الصلاحية</option>';
+        allPermissions.forEach(p => {
+            const id = Number(p.id || p.permission_id);
+            if (!id || (allowed && !allowed.has(id))) return;
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = p.permission_name_ar || p.permission_name || p.permission_code || 'صلاحية';
+            permSelect.appendChild(opt);
+        });
+        if (previousPermission && Array.from(permSelect.options).some(o => o.value === String(previousPermission))) {
+            permSelect.value = previousPermission;
+        }
+    };
+
+    renderDelegatePermissions(null);
+
+    screenSelect.onchange = async () => {
+        const screenId = Number(screenSelect.value || 0);
+        const requestId = ++window.__delegateScreenRequest;
+        if (!screenId) {
+            renderDelegatePermissions(null);
+            return;
+        }
+        try {
+            const res = await apiCall('getScreenPermissionIds', { screenId });
+            if (requestId !== window.__delegateScreenRequest) return;
+            if (!res.success || !Array.isArray(res.data)) throw new Error(res.error || res.message || 'فشل تحميل صلاحيات الشاشة');
+            renderDelegatePermissions(res.data.map(Number));
+            if (res.data.length === 0) showToast('لا توجد صلاحيات مرتبطة بهذه الشاشة', 'warning');
+        } catch (e) {
+            if (requestId !== window.__delegateScreenRequest) return;
+            renderDelegatePermissions([]);
+            showToast(e.error || e.message || 'تعذر تحميل الصلاحيات المرتبطة بالشاشة', 'error');
+        }
+    };
+
+    if (previousDelegatee && Array.from(delegateeSelect.options).some(o => o.value === String(previousDelegatee))) {
+        delegateeSelect.value = previousDelegatee;
+    }
+    if (previousScreen && Array.from(screenSelect.options).some(o => o.value === String(previousScreen))) {
+        screenSelect.value = previousScreen;
+        // Refresh screen-scoped permissions without losing the other form values.
+        screenSelect.onchange();
+    } else {
+        if (previousPermission && Array.from(permSelect.options).some(o => o.value === String(previousPermission))) {
+            permSelect.value = previousPermission;
+        }
+    }
+    const expiry = document.getElementById('delegateExpiry');
+    const reason = document.getElementById('delegateReason');
+    if (expiry) expiry.value = previousExpiry;
+    if (reason) reason.value = previousReason;
 }
 
 async function delegatePermission() {
-    if (!true) return;
-    const delegatorId = Number(document.getElementById('delegator').value || 0);
-    const delegateId = Number(document.getElementById('delegatee').value || 0);
-    const permissionId = Number(document.getElementById('delegatePermission').value || 0);
-    const screenId = Number(document.getElementById('delegateScreen').value || 0);
-    const expiresAt = document.getElementById('delegateExpiry').value;
-    const reason = document.getElementById('delegateReason').value.trim();
-    if (!delegateId || !permissionId || !expiresAt) { showToast('يرجى استكمال المفوض إليه والصلاحية وتاريخ الانتهاء', 'error'); return; }
-    if (delegatorId && delegatorId === delegateId) { showToast('لا يمكن تفويض الصلاحية إلى نفس المستخدم', 'error'); return; }
-    const permission = allPermissions.find(item => Number(item.id || item.permission_id) === permissionId);
-    const screen = allScreens.find(item => Number(item.id || item.screen_id) === screenId);
-    if (screen && permission && screen.module && permission.module && screen.module !== permission.module) {
-        showToast('الشاشة المختارة لا تنتمي إلى وحدة الصلاحية', 'error');
+    const delegateId = Number(document.getElementById('delegatee')?.value || 0);
+    const permissionId = Number(document.getElementById('delegatePermission')?.value || 0);
+    const screenId = Number(document.getElementById('delegateScreen')?.value || 0);
+    const expiresAt = document.getElementById('delegateExpiry')?.value || '';
+    const reason = document.getElementById('delegateReason')?.value.trim() || '';
+
+    if (!delegateId || !permissionId || !screenId || !expiresAt) {
+        showToast('يرجى استكمال المفوض إليه والصلاحية والشاشة وتاريخ الانتهاء', 'error');
         return;
     }
+    if (currentSessionUserId > 0 && currentSessionUserId === delegateId) {
+        showToast('لا يمكن تفويض الصلاحية إلى مستخدم الجلسة نفسه', 'error');
+        return;
+    }
+    const target = allUsers.find(u => Number(u.id || u.user_id) === delegateId);
+    const targetRole = String(target?.role_code || target?.role || '').toUpperCase();
+    if (targetRole === 'SUPER_ADMIN' || targetRole === 'ADMIN') {
+        showToast('لا حاجة لتفويض الصلاحيات لمدير النظام', 'error');
+        return;
+    }
+    const screenPermissionIds = await apiCall('getScreenPermissionIds', { screenId }).catch(e => null);
+    if (!screenPermissionIds?.success || !Array.isArray(screenPermissionIds.data) ||
+        !screenPermissionIds.data.map(Number).includes(permissionId)) {
+        showToast('الصلاحية المحددة غير مرتبطة بالشاشة المختارة', 'error');
+        return;
+    }
+
     showLoading(true);
     try {
         const result = await apiCall('grantDelegatedPermission', {
             delegate_id: delegateId,
             permission_id: permissionId,
-            screen_id: screenId || null,
+            screen_id: screenId,
             reason,
             expires_at: expiresAt + ' 23:59:59'
         });
         if (!result.success) throw new Error(result.error || result.message || 'فشل منح التفويض المؤقت');
-        showToast(result.message || 'تم منح التفويض المؤقت', 'success');
+        showToast(result.message || 'تم منح التفويض المؤقت بنجاح', 'success');
         document.getElementById('delegatePermissionForm').reset();
         await loadDelegatedPermissions();
-    } catch (e) { showToast(e.error || e.message || 'فشل حفظ التفويض في قاعدة البيانات', 'error'); }
-    finally { showLoading(false); }
+        populateDelegateFormDropdowns();
+    } catch (e) {
+        showToast(e.error || e.message || 'فشل حفظ التفويض في قاعدة البيانات', 'error');
+    } finally { showLoading(false); }
 }
 
 async function loadDelegatedPermissions() {
@@ -2213,6 +2497,18 @@ function openScreens() {
 /* ============================================================
    24. Init
    ============================================================ */
+document.addEventListener('change', function(e) {
+    const cb = e.target;
+    if (!(cb instanceof HTMLInputElement) || cb.type !== 'checkbox' || !cb.dataset.permissionId) return;
+    const container = cb.closest('#grantPermissionsList, #groupPermissionsList');
+    if (!container) return;
+    const key = permissionStateKey(container.id);
+    const state = new Set((window[key] || []).map(Number));
+    const id = Number(cb.dataset.permissionId);
+    if (cb.checked) state.add(id); else state.delete(id);
+    window[key] = Array.from(state);
+});
+
 document.addEventListener('DOMContentLoaded', function() {
     loadSavedTheme();
     setupSidebar();

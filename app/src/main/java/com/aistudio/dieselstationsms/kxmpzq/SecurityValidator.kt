@@ -14,7 +14,7 @@ object SecurityValidator {
 
     private val BLOCKED_GENERAL_CRUD_TABLES = setOf(
         "fuel_sales", "payments", "invoices", "ledger",
-        "stock_movements", "financial_idempotency_keys", "users", "permissions"
+        "stock_movements", "financial_idempotency_keys", "sale_item_adjustments", "fuel_sale_adjustments", "damaged_products", "users", "permissions"
     )
 
     fun sanitizeOperationalJson(jsonString: String): String {

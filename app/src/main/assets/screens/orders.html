@@ -660,24 +660,44 @@ body{padding-bottom:100px}
     // ============================================================
     // 3. جلب البيانات المساعدة والسياق
     // ============================================================
+    /*
+     * Bridge contracts are not uniform: the dedicated legacy/reference
+     * methods such as getProducts(), getVehicles(), getCustomers(), ...
+     * are zero-argument methods, while the typed operational fallbacks
+     * accept a JSON payload. Passing a JSON argument to a zero-argument
+     * @JavascriptInterface method makes WebView report "Method not found".
+     * Keep the real contract explicit per candidate instead of guessing.
+     */
     var refsConfig = {
-        station: ['getStationList', 'getStations', 'getOperationalStations'],
-        shift: ['getShiftRecordsTyped', 'getShiftRecords', 'getShiftList'],
-        customer: ['getCustomers', 'getCustomerRecords', 'getPartyRecords'],
-        vehicle: ['getVehicles', 'getVehicleRecords'],
-        driver: ['getDrivers', 'getDriverRecords'],
-        fuel: ['getFuelTypes', 'getFuelTypeRecords'],
-        pump: ['getPumps', 'getPumpRecords'],
-        nozzle: ['getNozzles', 'getNozzleRecords'],
-        employee: ['getEmployees', 'getEmployeeRecords'],
-        product: ['getProducts', 'getProductRecords']
+        station: [['getStationList', []], ['getStations', []], ['getOperationalStations', [JSON.stringify({ limit: 500 })]]],
+        shift: [['getShiftRecordsTyped', [JSON.stringify({ limit: 500 })]], ['getShiftRecords', [JSON.stringify({ limit: 500 })]], ['getShiftList', []]],
+        customer: [['getCustomers', []], ['getCustomerRecords', [JSON.stringify({ limit: 500 })]], ['getPartyRecords', [JSON.stringify({ limit: 500 })]]],
+        vehicle: [['getVehicles', []], ['getVehicleRecords', [JSON.stringify({ limit: 500 })]]],
+        driver: [['getDrivers', []], ['getDriverRecords', [JSON.stringify({ limit: 500 })]]],
+        fuel: [['getFuelTypes', []], ['getFuelTypeRecords', [JSON.stringify({ limit: 500 })]]],
+        pump: [['getPumps', []], ['getPumpRecords', [JSON.stringify({ limit: 500 })]]],
+        nozzle: [['getNozzles', []], ['getNozzleRecords', [JSON.stringify({ limit: 500 })]]],
+        employee: [['getEmployees', []], ['getEmployeeRecords', [JSON.stringify({ limit: 500 })]]],
+        product: [['getProducts', []], ['getProductRecords', [JSON.stringify({ limit: 500 })]]]
     };
 
     async function loadRefs() {
         for (var key in refsConfig) {
             if (refsConfig.hasOwnProperty(key)) {
                 try {
-                    var raw = await firstAvailable(refsConfig[key], [JSON.stringify({ limit: 500 })]);
+                    var candidates = refsConfig[key];
+                    var raw = null;
+                    var resolved = false;
+                    for (var i = 0; i < candidates.length; i++) {
+                        var method = candidates[i][0];
+                        var args = candidates[i][1];
+                        if (bridge && typeof bridge[method] === 'function') {
+                            raw = await callBridge(method, args);
+                            resolved = true;
+                            break;
+                        }
+                    }
+                    if (!resolved) throw new Error('لا يوجد عقد فعلي لجلب مرجع ' + key);
                     state.refs[key] = rowsOf(raw);
                 } catch (e) {
                     state.refs[key] = [];
@@ -713,7 +733,13 @@ body{padding-bottom:100px}
         var map = {
             saleType: [ ['retail','تجزئة'], ['wholesale','جملة'], ['fleet','أسطول'] ],
             invoiceType: [ ['invoice','فاتورة'], ['receipt','إيصال'] ],
-            payment: [ ['cash','نقداً'], ['card','بطاقة'], ['transfer','تحويل'], ['credit','آجل'] ]
+            payment: [
+                ['cash','نقداً'],
+                ['credit_card','بطاقة'],
+                ['bank_transfer','تحويل'],
+                ['credit','آجل'],
+                ['cheque','شيك']
+            ]
         };
         return map[key] || [];
     }
@@ -726,7 +752,11 @@ body{padding-bottom:100px}
                 return '<option value="' + esc(id) + '" ' + (String(id) === String(selected) ? 'selected' : '') + '>' + esc(name) + '</option>';
             }).join('');
         }
-        return optionRows(key).map(function(x) {
+        var rows = optionRows(key).slice();
+        if (key === 'customer') {
+            rows.unshift({ id: '', is_general: true, name_ar: 'عميل غير مسجل / عام' });
+        }
+        return rows.map(function(x) {
             var id = x.id || x[key + '_id'];
             var nm;
             if (key === 'vehicle') {
@@ -830,8 +860,10 @@ body{padding-bottom:100px}
     }
 
     function isGeneralCustomerRow(row) {
-        if (!row) return false;
-        return row.is_general === 1 || row.is_general === true || String(nameOf(row,['name_ar','name','full_name_ar','full_name'])).trim().includes('عام');
+        if (!row) return true;
+        return row.is_general === 1 || row.is_general === true ||
+            String(nameOf(row,['name_ar','name','full_name_ar','full_name'])).trim().includes('عام') ||
+            String(row.id || row.party_id || '').trim() === '';
     }
     function customerRule() {
         var paymentMethod = document.querySelector('[data-key="payment_method"]');

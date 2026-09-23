@@ -45,7 +45,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 37
+        const val VERSION = 38
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -191,6 +191,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureVehicleTripLifecycleSchema(db)
             ensureDeliveriesSchema(db)
             ensureFuelSalesSchema(db)
+            ensureSalesAdjustmentSchema(db)
             ensureLegacyAssetsSchema(db)
             ensureModule007Schema(db)
             ensureModule010Schema(db)
@@ -256,6 +257,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureProductReferenceData(db)
             ensureDeliveriesSchema(db)
             ensureFuelSalesSchema(db)
+            ensureSalesAdjustmentSchema(db)
             ensureLegacyAssetsSchema(db)
             ensureVehicleArchiveSchema(db)
             ensureVehicleTripLifecycleSchema(db)
@@ -276,6 +278,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureMaintenanceScheduleStationScopeSchema(db)
         ensureProductReferenceData(db)
         ensureFinancialIdempotencySchema(db)
+        ensureSalesAdjustmentSchema(db)
         ensureReportCacheTable(db)
         createSmsProcessedTable(db)
         createSmsProcessedHashesTable(db)
@@ -1316,6 +1319,73 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      * station/status/timestamp fields required by the operational CRUD contract.
      * Older installations created this table only in migrateV9ToV10.
      */
+    private fun ensureSalesAdjustmentSchema(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sale_item_adjustments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                sale_id INTEGER NOT NULL,
+                sale_item_id INTEGER NOT NULL,
+                station_id INTEGER NOT NULL,
+                adjustment_type TEXT NOT NULL CHECK(adjustment_type IN ('return','damage')),
+                quantity REAL NOT NULL CHECK(quantity > 0),
+                amount REAL NOT NULL CHECK(amount >= 0),
+                refunded_amount REAL DEFAULT 0,
+                customer_credit_reduction REAL DEFAULT 0,
+                payment_refund_id INTEGER,
+                journal_entry_id INTEGER,
+                idempotency_key TEXT NOT NULL,
+                reason TEXT,
+                notes TEXT,
+                status TEXT NOT NULL DEFAULT 'posted',
+                created_by INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(station_id,idempotency_key)
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sale_item_adjustments_item ON sale_item_adjustments(sale_item_id,status)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS fuel_sale_adjustments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                sale_id INTEGER NOT NULL,
+                fuel_sale_id INTEGER,
+                station_id INTEGER NOT NULL,
+                shift_id INTEGER,
+                adjustment_type TEXT NOT NULL CHECK(adjustment_type IN ('return','damage')),
+                quantity REAL NOT NULL CHECK(quantity > 0),
+                amount REAL NOT NULL CHECK(amount >= 0),
+                refunded_amount REAL DEFAULT 0,
+                customer_credit_reduction REAL DEFAULT 0,
+                tank_id INTEGER,
+                inventory_action TEXT NOT NULL DEFAULT 'none',
+                payment_refund_id INTEGER,
+                journal_entry_id INTEGER,
+                idempotency_key TEXT NOT NULL,
+                reason TEXT,
+                notes TEXT,
+                status TEXT NOT NULL DEFAULT 'posted' CHECK(status IN ('posted','reversed','cancelled')),
+                created_by INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(station_id,idempotency_key)
+            )
+        """.trimIndent())
+        ensureColumn(db, "sale_items", "damaged_quantity", "DECIMAL(12,3) DEFAULT 0")
+        ensureColumn(db, "damaged_products", "sale_id", "INTEGER REFERENCES sales_transactions(id)")
+        ensureColumn(db, "damaged_products", "sale_item_id", "INTEGER REFERENCES sale_items(id)")
+        ensureColumn(db, "damaged_products", "source_type", "TEXT DEFAULT 'manual'")
+        ensureColumn(db, "damaged_products", "idempotency_key", "TEXT")
+        ensureColumn(db, "damaged_products", "sale_amount", "REAL DEFAULT 0")
+        ensureColumn(db, "damaged_products", "refunded_amount", "REAL DEFAULT 0")
+        ensureColumn(db, "damaged_products", "customer_credit_reduction", "REAL DEFAULT 0")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_sale_adjustments_sale ON fuel_sale_adjustments(sale_id, status)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_sale_adjustments_station_date ON fuel_sale_adjustments(station_id, created_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_damaged_products_sale ON damaged_products(sale_id, sale_item_id, source_type)")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS uq_damaged_products_idempotency ON damaged_products(station_id, idempotency_key) WHERE idempotency_key IS NOT NULL AND idempotency_key <> ''")
+    }
+
     private fun ensureFuelSalesSchema(db: SQLiteDatabase) {
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS fuel_sales (
@@ -9685,8 +9755,75 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val sortColumn = when (data.optString("sort_by")) { "sale_date" -> "fs.sale_date"; "quantity" -> "fs.quantity"; "total_amount" -> "fs.total_amount"; else -> "fs.id" }
         val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
         val pageArgs = args.toMutableList().apply { add(limit.toString()); add(offset.toString()) }
-        val rows = db.rawQuery("""SELECT fs.id AS fuel_sale_id, fs.sale_id, s.sale_code, s.invoice_number, fs.shift_id, fs.pump_id, fs.fuel_type_id, COALESCE(f.fuel_name, f.fuel_name_ar, '') AS fuel_name, fs.quantity, fs.price_per_liter, fs.total_amount, fs.payment_method, fs.customer_id, fs.vehicle_plate, fs.sale_date, fs.sale_time, fs.notes, fs.created_at FROM fuel_sales fs JOIN sales_transactions s ON s.id = fs.sale_id LEFT JOIN fuel_types f ON f.id = fs.fuel_type_id WHERE $whereSql ORDER BY $sortColumn $direction LIMIT ? OFFSET ?""", pageArgs.toTypedArray()).use { cursorToJsonArray(it) }
+        val rows = db.rawQuery("""SELECT fs.id AS fuel_sale_id, fs.sale_id, s.sale_code, s.invoice_number, fs.shift_id, fs.pump_id, fs.fuel_type_id,
+                    COALESCE(f.fuel_name, f.fuel_name_ar, '') AS fuel_name,
+                    MAX(0, fs.quantity - COALESCE((SELECT SUM(a.quantity) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.adjustment_type IN ('return','damage') AND a.status='posted'),0)) AS quantity,
+                    fs.quantity AS original_quantity, fs.price_per_liter,
+                    MAX(0, fs.total_amount - COALESCE((SELECT SUM(a.amount) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.status='posted'),0)) AS total_amount,
+                    fs.total_amount AS original_total_amount,
+                    COALESCE((SELECT SUM(CASE WHEN a.adjustment_type='return' THEN a.quantity ELSE 0 END) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.status='posted'),0) AS returned_quantity,
+                    COALESCE((SELECT SUM(CASE WHEN a.adjustment_type='damage' THEN a.quantity ELSE 0 END) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.status='posted'),0) AS damaged_quantity,
+                    fs.payment_method, fs.customer_id, fs.vehicle_plate, fs.sale_date, fs.sale_time, fs.notes, fs.created_at
+                    FROM fuel_sales fs JOIN sales_transactions s ON s.id = fs.sale_id LEFT JOIN fuel_types f ON f.id = fs.fuel_type_id
+                    WHERE $whereSql ORDER BY $sortColumn $direction LIMIT ? OFFSET ?""", pageArgs.toTypedArray()).use { cursorToJsonArray(it) }
         return module008Page(rows, total, limit, offset)
+    }
+
+    fun getSalesLedgerPage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val limit = data.optInt("limit", 100).coerceIn(1, 500)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val kind = data.optString("sale_type", data.optString("type", "all")).trim().lowercase()
+        require(kind in setOf("all","fuel","product")) { "نوع المبيعات غير صالح" }
+        val where = mutableListOf("x.station_id=?", "x.is_deleted=0", "x.sale_status NOT IN ('cancelled')")
+        val args = mutableListOf(stationScopeId.toString())
+        if (kind == "fuel") where += "x.sale_kind='fuel'"
+        if (kind == "product") where += "x.sale_kind='product'"
+        val fromDate=data.optString("from_date",data.optString("start_date")).trim()
+        val toDate=data.optString("to_date",data.optString("end_date")).trim()
+        fromDate.takeIf{it.isNotEmpty()}?.let{where += "date(x.sale_date)>=date(?)";args+=it}
+        toDate.takeIf{it.isNotEmpty()}?.let{where += "date(x.sale_date)<=date(?)";args+=it}
+        data.optString("payment_method").trim().takeIf{it.isNotEmpty()}?.let{where += "x.payment_method=?";args+=it}
+        data.optLong("customer_id",0L).takeIf{it>0}?.let{where += "x.customer_party_id=?";args+=it.toString()}
+        data.optLong("product_id",0L).takeIf{it>0}?.let{where += "x.item_id=? AND x.sale_kind='product'";args+=it.toString()}
+        data.optLong("shift_id",0L).takeIf{it>0}?.let{where += "x.shift_id=?";args+=it.toString()}
+        data.optString("search").trim().takeIf{it.isNotEmpty()}?.let{q->val like="%$q%";where += "(x.invoice_number LIKE ? OR x.sale_code LIKE ? OR COALESCE(x.item_name,'') LIKE ? OR COALESCE(x.item_name_ar,'') LIKE ?)";repeat(4){args+=like}}
+        val union = """
+            SELECT s.id AS sale_id, s.station_id, s.shift_id, s.is_deleted, s.status AS sale_status, 'fuel' AS sale_kind, s.invoice_number, s.sale_code, s.created_at AS sale_date,
+                   fs.id AS fuel_sale_id, NULL AS sale_item_id, fs.fuel_type_id AS item_id,
+                   COALESCE(f.fuel_name,'') AS item_name, COALESCE(f.fuel_name_ar,'') AS item_name_ar,
+                   MAX(0, fs.quantity-COALESCE(a.adjusted_qty,0)) AS quantity,
+                   MAX(0, fs.total_amount-COALESCE(a.adjusted_amount,0)) AS amount,
+                   COALESCE(a.returned_qty,0) AS returned_quantity, COALESCE(a.damaged_qty,0) AS damaged_quantity,
+                   s.payment_method, s.customer_party_id
+            FROM fuel_sales fs JOIN sales_transactions s ON s.id=fs.sale_id
+            LEFT JOIN fuel_types f ON f.id=fs.fuel_type_id
+            LEFT JOIN (SELECT sale_id,SUM(quantity) adjusted_qty,SUM(amount) adjusted_amount,
+                              SUM(CASE WHEN adjustment_type='return' THEN quantity ELSE 0 END) returned_qty,
+                              SUM(CASE WHEN adjustment_type='damage' THEN quantity ELSE 0 END) damaged_qty
+                       FROM fuel_sale_adjustments WHERE status='posted' GROUP BY sale_id) a ON a.sale_id=s.id
+            WHERE fs.is_deleted=0
+            GROUP BY fs.id
+            UNION ALL
+            SELECT s.id AS sale_id, s.station_id, s.shift_id, s.is_deleted, s.status AS sale_status, 'product' AS sale_kind, s.invoice_number, s.sale_code, s.created_at AS sale_date,
+                   NULL AS fuel_sale_id, si.id AS sale_item_id, si.product_id AS item_id,
+                   COALESCE(p.product_name,'') AS item_name, COALESCE(p.product_name_ar,'') AS item_name_ar,
+                   MAX(0,si.quantity-COALESCE(si.returned_quantity,0)-COALESCE(si.damaged_quantity,0)) AS quantity,
+                   MAX(0,si.line_total * CASE WHEN si.quantity>0 THEN MAX(0,si.quantity-COALESCE(si.returned_quantity,0)-COALESCE(si.damaged_quantity,0))/si.quantity ELSE 0 END) AS amount,
+                   COALESCE(si.returned_quantity,0) AS returned_quantity, COALESCE(si.damaged_quantity,0) AS damaged_quantity,
+                   s.payment_method, s.customer_party_id
+            FROM sale_items si JOIN sales_transactions s ON s.id=si.sale_id
+            LEFT JOIN products p ON p.id=si.product_id
+            WHERE si.item_type='product' AND s.is_deleted=0
+        """.trimIndent()
+        val from="($union) x"
+        val total=readableDatabase.rawQuery("SELECT COUNT(*) FROM $from WHERE ${where.joinToString(" AND ")}",args.toTypedArray()).use{if(it.moveToFirst())it.getInt(0)else 0}
+        val pageArgs=(args+limit.toString()+offset.toString()).toTypedArray()
+        val rows=readableDatabase.rawQuery("""SELECT x.*, p.commercial_name AS customer_name
+                                              FROM $from LEFT JOIN parties p ON p.id=x.customer_party_id
+                                              WHERE ${where.joinToString(" AND ")}
+                                              ORDER BY x.sale_date DESC,x.sale_id DESC,COALESCE(x.sale_item_id,x.fuel_sale_id) DESC LIMIT ? OFFSET ?""",pageArgs).use{cursorToJsonArray(it)}
+        return module008Page(rows,total,limit,offset)
     }
 
     fun getSalesTransactions(stationId: Int, limit: Int = 200, offset: Int = 0): JSONArray {
@@ -11818,7 +11955,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                           u.deleted_at, u.created_at, u.updated_at, u.created_by, u.updated_by,
                           u.deleted_by, u.is_deleted, u.sync_status, u.sync_version, u.sync_at,
                           u.device_id, u.remarks, u.extra_data,
-                          r.role_name, r.role_name_ar,
+                          r.role_code, r.role_name, r.role_name_ar,
                           s.station_name, s.station_name_ar
                    FROM users u
                    LEFT JOIN roles r ON u.role_id = r.id
@@ -13078,21 +13215,45 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val userId = data.optLong("user_id", 0L)
             require(userId > 0L && arr.length() > 0) { "المستخدم وقائمة الصلاحيات مطلوبان" }
             val ids = linkedSetOf<Long>()
-            for (i in 0 until arr.length()) { val id = arr.optLong(i, 0L); require(id > 0L); ids.add(id) }
+            for (i in 0 until arr.length()) {
+                val id = arr.optLong(i, 0L)
+                require(id > 0L) { "معرف صلاحية غير صالح" }
+                ids.add(id)
+            }
             val db = writableDatabase
             db.beginTransaction()
             try {
                 val created = JSONArray()
+                var grantedCount = 0
+                var skippedCount = 0
                 for (permissionId in ids) {
+                    val alreadyGranted = db.rawQuery(
+                        "SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_id = ? AND is_granted = 1 LIMIT 1",
+                        arrayOf(userId.toString(), permissionId.toString())
+                    ).use { it.moveToFirst() }
+                    if (alreadyGranted) {
+                        skippedCount++
+                        continue
+                    }
                     val req = JSONObject(data.toString()).apply { put("permission_id", permissionId) }
                     val id = grantUserPermission(req)
                     require(id > 0L) { "تعذر منح الصلاحية $permissionId" }
-                    val ok = db.rawQuery("SELECT 1 FROM user_permissions WHERE id = ? AND user_id = ? AND permission_id = ? AND is_granted = 1", arrayOf(id.toString(), userId.toString(), permissionId.toString())).use { it.moveToFirst() }
+                    val ok = db.rawQuery(
+                        "SELECT 1 FROM user_permissions WHERE id = ? AND user_id = ? AND permission_id = ? AND is_granted = 1",
+                        arrayOf(id.toString(), userId.toString(), permissionId.toString())
+                    ).use { it.moveToFirst() }
                     require(ok) { "فشل التحقق من حفظ الصلاحية $permissionId" }
                     created.put(id)
+                    grantedCount++
                 }
                 db.setTransactionSuccessful()
-                JSONObject().apply { put("affected_rows", created.length()); put("requested_permissions", ids.size); put("ids", created) }
+                JSONObject().apply {
+                    put("affected_rows", grantedCount)
+                    put("granted_count", grantedCount)
+                    put("skipped_count", skippedCount)
+                    put("requested_permissions", ids.size)
+                    put("ids", created)
+                }
             } finally { db.endTransaction() }
         } finally { dbLock.unlock() }
     }
@@ -13163,12 +13324,76 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun grantGroupPermissionsBatch(data: JSONObject): JSONObject {
         dbLock.lock()
         return try {
-            val arr=data.optJSONArray("permission_ids")?:throw IllegalArgumentException("قائمة الصلاحيات مطلوبة")
-            val groupId=data.optLong("group_id",0L); val screenId=data.optLong("screen_id",0L)
-            require(groupId>0L&&arr.length()>0){"المجموعة وقائمة الصلاحيات مطلوبتان"}
-            val ids=linkedSetOf<Long>();for(i in 0 until arr.length()){val id=arr.optLong(i,0L);require(id>0L);ids.add(id)}
-            val db=writableDatabase;db.beginTransaction()
-            try{val created=JSONArray();for(permissionId in ids){val req=JSONObject().apply{put("group_id",groupId);put("permission_id",permissionId);if(screenId>0)put("screen_id",screenId)};val id=grantGroupPermission(req);require(id>0){"تعذر ربط الصلاحية $permissionId"};val ok=db.rawQuery("SELECT 1 FROM group_permissions WHERE id = ? AND group_id = ? AND permission_id = ? AND is_granted = 1",arrayOf(id.toString(),groupId.toString(),permissionId.toString())).use{it.moveToFirst()};require(ok){"فشل التحقق من ربط الصلاحية $permissionId"};created.put(id)};db.setTransactionSuccessful();JSONObject().apply{put("affected_rows",created.length());put("requested_permissions",ids.size);put("ids",created)}}finally{db.endTransaction()}
+            val arr = data.optJSONArray("permission_ids") ?: throw IllegalArgumentException("قائمة الصلاحيات مطلوبة")
+            val groupId = data.optLong("group_id", 0L)
+            val screenId = data.optLong("screen_id", 0L)
+            require(groupId > 0L && arr.length() > 0) { "المجموعة وقائمة الصلاحيات مطلوبتان" }
+            val ids = linkedSetOf<Long>()
+            for (i in 0 until arr.length()) {
+                val id = arr.optLong(i, 0L)
+                require(id > 0L) { "معرف صلاحية غير صالح" }
+                ids.add(id)
+            }
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                if (screenId > 0L) {
+                    val screenExists = db.rawQuery(
+                        "SELECT 1 FROM screens WHERE id = ? AND archived = 0 LIMIT 1",
+                        arrayOf(screenId.toString())
+                    ).use { it.moveToFirst() }
+                    require(screenExists) { "الشاشة المحددة غير موجودة أو مؤرشفة" }
+                }
+                val created = JSONArray()
+                var grantedCount = 0
+                var skippedCount = 0
+                for (permissionId in ids) {
+                    if (screenId > 0L) {
+                        val linked = db.rawQuery(
+                            "SELECT 1 FROM screen_permissions WHERE screen_id = ? AND permission_id = ? AND is_granted = 1 LIMIT 1",
+                            arrayOf(screenId.toString(), permissionId.toString())
+                        ).use { it.moveToFirst() }
+                        require(linked) { "الصلاحية $permissionId غير مرتبطة بالشاشة المختارة" }
+                    }
+                    val existingSql = if (screenId > 0L) {
+                        "SELECT 1 FROM group_permissions WHERE group_id = ? AND permission_id = ? AND screen_id = ? AND is_granted = 1 LIMIT 1"
+                    } else {
+                        "SELECT 1 FROM group_permissions WHERE group_id = ? AND permission_id = ? AND screen_id IS NULL AND is_granted = 1 LIMIT 1"
+                    }
+                    val existingArgs = if (screenId > 0L) {
+                        arrayOf(groupId.toString(), permissionId.toString(), screenId.toString())
+                    } else {
+                        arrayOf(groupId.toString(), permissionId.toString())
+                    }
+                    val alreadyGranted = db.rawQuery(existingSql, existingArgs).use { it.moveToFirst() }
+                    if (alreadyGranted) {
+                        skippedCount++
+                        continue
+                    }
+                    val req = JSONObject().apply {
+                        put("group_id", groupId)
+                        put("permission_id", permissionId)
+                        if (screenId > 0L) put("screen_id", screenId)
+                    }
+                    val id = grantGroupPermission(req)
+                    require(id > 0L) { "تعذر ربط الصلاحية $permissionId" }
+                    val ok = db.rawQuery(
+                        "SELECT 1 FROM group_permissions WHERE id = ? AND group_id = ? AND permission_id = ? AND is_granted = 1",
+                        arrayOf(id.toString(), groupId.toString(), permissionId.toString())
+                    ).use { it.moveToFirst() }
+                    require(ok) { "فشل التحقق من ربط الصلاحية $permissionId" }
+                    created.put(id)
+                    grantedCount++
+                }
+                db.setTransactionSuccessful()
+                JSONObject().apply {
+                    put("affected_rows", grantedCount)
+                    put("granted_count", grantedCount)
+                    put("skipped_count", skippedCount)
+                    put("requested_permissions", ids.size)
+                    put("ids", created)
+                }
+            } finally { db.endTransaction() }
         } finally { dbLock.unlock() }
     }
 
@@ -13210,6 +13435,29 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(delegatorId != delegateId) { "لا يمكن تفويض الصلاحية إلى نفس المستخدم" }
             require(expiresAt.isNotBlank()) { "تاريخ انتهاء التفويض مطلوب" }
             require(!db.rawQuery("SELECT id FROM users WHERE id IN (?, ?) AND is_deleted = 0", arrayOf(delegatorId.toString(), delegateId.toString())).use { cursor -> var count = 0; while (cursor.moveToNext()) count++; count == 2 }) { "المستخدم المفوض أو المفوض إليه غير صالح" }
+            val delegateRole = db.rawQuery(
+                "SELECT r.role_code FROM users u LEFT JOIN roles r ON r.id = u.role_id WHERE u.id = ? AND u.is_deleted = 0 LIMIT 1",
+                arrayOf(delegateId.toString())
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else "" }
+            require(delegateRole !in setOf("SUPER_ADMIN", "ADMIN")) { "لا حاجة لتفويض الصلاحيات لمدير النظام" }
+            if (screenId > 0L) {
+                val screenModule = db.rawQuery(
+                    "SELECT module FROM screens WHERE id = ? AND archived = 0 LIMIT 1",
+                    arrayOf(screenId.toString())
+                ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                    ?: throw IllegalArgumentException("الشاشة المحددة غير موجودة أو مؤرشفة")
+                val permissionModule = db.rawQuery(
+                    "SELECT module FROM permissions WHERE id = ? AND is_deleted = 0 LIMIT 1",
+                    arrayOf(permissionId.toString())
+                ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                    ?: throw IllegalArgumentException("الصلاحية المحددة غير موجودة")
+                require(screenModule == permissionModule) { "الشاشة المحددة لا تنتمي إلى وحدة الصلاحية" }
+                val linked = db.rawQuery(
+                    "SELECT 1 FROM screen_permissions WHERE screen_id = ? AND permission_id = ? AND is_granted = 1 LIMIT 1",
+                    arrayOf(screenId.toString(), permissionId.toString())
+                ).use { it.moveToFirst() }
+                require(linked) { "الصلاحية المحددة غير مرتبطة بالشاشة المختارة" }
+            }
             val duplicate = db.rawQuery("SELECT id FROM delegated_permissions WHERE delegator_id = ? AND delegate_id = ? AND permission_id = ? AND (screen_id = ? OR (? = 0 AND screen_id IS NULL)) AND is_active = 1", arrayOf(delegatorId.toString(), delegateId.toString(), permissionId.toString(), screenId.toString(), screenId.toString())).use { cursor -> cursor.moveToFirst() }
             require(!duplicate) { "يوجد تفويض نشط مماثل بالفعل" }
             val cv = ContentValues().apply {
@@ -13246,6 +13494,42 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val rows = writableDatabase.update("delegated_permissions", ContentValues().apply { put("is_active", 0) }, "id = ?", arrayOf(id.toString()))
             if (rows > 0) logActivity("system", "revoke_delegated_permission", "إلغاء تفويض مؤقت رقم $id")
             rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun getGroupScreenPermissionIds(groupId: Long, screenId: Long): JSONArray {
+        require(groupId > 0L && screenId > 0L) { "معرف المجموعة والشاشة غير صالح" }
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                """SELECT DISTINCT permission_id
+                   FROM group_permissions
+                   WHERE group_id = ? AND screen_id = ? AND is_granted = 1
+                   ORDER BY permission_id""",
+                arrayOf(groupId.toString(), screenId.toString())
+            ).use { cursor ->
+                val result = JSONArray()
+                while (cursor.moveToNext()) result.put(cursor.getLong(0))
+                result
+            }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getGroupPermissionIds(groupId: Long): JSONArray {
+        require(groupId > 0L) { "معرف المجموعة غير صالح" }
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                """SELECT DISTINCT permission_id
+                   FROM group_permissions
+                   WHERE group_id = ? AND is_granted = 1
+                   ORDER BY permission_id""",
+                arrayOf(groupId.toString())
+            ).use { cursor ->
+                val result = JSONArray()
+                while (cursor.moveToNext()) result.put(cursor.getLong(0))
+                result
+            }
         } finally { dbLock.unlock() }
     }
 
@@ -13986,20 +14270,66 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return getActivityLogs(JSONObject().apply { put("limit", limit) }, null)
     }
 
+    private val activityLogTypes = setOf("user_activity", "audit", "system", "sms", "sync")
+    private val activityLogStatuses = setOf(
+        "success", "failed", "fail", "error", "warning", "pending",
+        "sent", "delivered", "cancelled", "queued", "sending", "partial", "in_progress"
+    )
+
+    private fun validateActivityLogDate(value: String, fieldName: String): String {
+        if (value.isEmpty()) return ""
+        if (!Regex("""^\d{4}-\d{2}-\d{2}$""").matches(value)) {
+            throw IllegalArgumentException("$fieldName يجب أن يكون بالصيغة YYYY-MM-DD")
+        }
+
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            isLenient = false
+        }
+        val position = ParsePosition(0)
+        formatter.parse(value, position)
+        if (position.index != value.length) {
+            throw IllegalArgumentException("$fieldName يحتوي على تاريخ غير صالح")
+        }
+        return value
+    }
+
     /** Reads the activity feed from real SQLite tables with optional scope and filters. */
     fun getActivityLogs(params: JSONObject, stationId: Int?): JSONArray {
         val safeLimit = params.optInt("limit", 500).coerceIn(1, 2000)
         val safeOffset = params.optInt("offset", 0).coerceAtLeast(0)
-        val type = params.optString("type", "").trim().lowercase(Locale.ROOT)
+
+        val rawType = params.optString("type", "").trim().lowercase(Locale.ROOT)
+        // all و ai_suggest قيمتا واجهة وليستا نوعي سجل في SQLite.
+        // تطبيعُهما هنا أيضاً يجعل عقد قاعدة البيانات آمناً حتى لو استُدعي
+        // هذا المسار من شاشة/جسر آخر غير activity-log.html.
+        val type = when (rawType) {
+            "", "all", "ai_suggest" -> ""
+            else -> rawType
+        }
+        require(type.isEmpty() || type in activityLogTypes) {
+            "نوع سجل النشاط غير مدعوم: $rawType"
+        }
+
         val status = params.optString("status", "").trim().lowercase(Locale.ROOT)
-        val dateFrom = params.optString("date_from", "").trim()
-        val dateTo = params.optString("date_to", "").trim()
+        require(status.isEmpty() || status in activityLogStatuses) {
+            "حالة سجل النشاط غير مدعومة: $status"
+        }
+
+        val dateFrom = validateActivityLogDate(
+            params.optString("date_from", "").trim(),
+            "date_from"
+        )
+        val dateTo = validateActivityLogDate(
+            params.optString("date_to", "").trim(),
+            "date_to"
+        )
+        if (dateFrom.isNotEmpty() && dateTo.isNotEmpty()) {
+            require(dateFrom <= dateTo) {
+                "تاريخ البداية يجب أن يسبق أو يساوي تاريخ النهاية"
+            }
+        }
+
         val search = params.optString("search", "").trim()
-        require(type.isEmpty() || type in setOf("user_activity", "audit", "system", "sms", "sync"))
-        require(status.isEmpty() || status in setOf("success","failed","fail","error","warning","pending","sent","delivered","cancelled","queued","sending","partial","in_progress"))
-        require(dateFrom.isEmpty() || Regex("""^\d{4}-\d{2}-\d{2}$""").matches(dateFrom))
-        require(dateTo.isEmpty() || Regex("""^\d{4}-\d{2}-\d{2}$""").matches(dateTo))
-        if (dateFrom.isNotEmpty() && dateTo.isNotEmpty()) require(dateFrom <= dateTo) { "تاريخ البداية يجب أن يسبق أو يساوي تاريخ النهاية" }
         dbLock.lock()
         return try {
             val db = readableDatabase
@@ -14642,7 +14972,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 WHERE r.role_code IN ('SUPER_ADMIN', 'ADMIN', 'STATION_MANAGER')
                   AND u.status = 'active' AND u.is_deleted = 0
                 ORDER BY r.level ASC LIMIT 1
-            """.trimIndent(), null).use { cursor ->
+            """.trimIndent(), arrayOf((stationScopeId ?: 0).toString(), (stationScopeId ?: 0).toString())).use { cursor ->
                 if (cursor.moveToFirst()) cursor.getString(0) else null
             }
         } finally {
@@ -18216,20 +18546,31 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال التقارير الإضافية
     // ========================================================================
 
-    fun getSalesByFuelType(): JSONArray {
+    fun getSalesByFuelType(stationScopeId: Int? = null): JSONArray {
         val arr = JSONArray()
         val db = readableDatabase
         db.rawQuery("""
             SELECT f.fuel_name, f.fuel_name_ar,
-                   COALESCE(SUM(s.liters), 0) as total_liters,
-                   COALESCE(SUM(s.net_amount), 0) as total_amount,
-                   COUNT(*) as transaction_count
+                   COALESCE(SUM(CASE WHEN s.id IS NOT NULL THEN MAX(0, s.liters - COALESCE(a.adjusted_liters,0)) ELSE 0 END), 0) AS total_liters,
+                   COALESCE(SUM(CASE WHEN s.id IS NOT NULL THEN MAX(0, s.net_amount - COALESCE(a.adjusted_amount,0)) ELSE 0 END), 0) AS total_amount,
+                   COUNT(s.id) AS transaction_count,
+                   COALESCE(SUM(COALESCE(a.returned_liters,0)),0) AS returned_liters,
+                   COALESCE(SUM(COALESCE(a.damaged_liters,0)),0) AS damaged_liters
             FROM fuel_types f
-            LEFT JOIN sales_transactions s ON s.fuel_type_id = f.id AND s.is_deleted = 0
+            LEFT JOIN sales_transactions s ON s.fuel_type_id = f.id AND s.is_deleted = 0 AND s.order_type = 'fuel'
+                AND (? = 0 OR s.station_id = ?)
+            LEFT JOIN (
+                SELECT sale_id,
+                       SUM(quantity) AS adjusted_liters,
+                       SUM(amount) AS adjusted_amount,
+                       SUM(CASE WHEN adjustment_type='return' THEN quantity ELSE 0 END) AS returned_liters,
+                       SUM(CASE WHEN adjustment_type='damage' THEN quantity ELSE 0 END) AS damaged_liters
+                FROM fuel_sale_adjustments WHERE status='posted' GROUP BY sale_id
+            ) a ON a.sale_id = s.id
             WHERE f.is_deleted = 0
             GROUP BY f.id
             ORDER BY total_amount DESC
-        """.trimIndent(), null).use { cursor ->
+        """.trimIndent(), arrayOf((stationScopeId ?: 0).toString(), (stationScopeId ?: 0).toString())).use { cursor ->
             while (cursor.moveToNext()) {
                 arr.put(JSONObject().apply {
                     put("fuel_name", cursor.getString(0))
@@ -18237,6 +18578,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("total_liters", cursor.getDouble(2))
                     put("total_amount", cursor.getDouble(3))
                     put("transaction_count", cursor.getInt(4))
+                    put("returned_liters", cursor.getDouble(5))
+                    put("damaged_liters", cursor.getDouble(6))
                 })
             }
         }
@@ -19912,6 +20255,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
             val rows = db.rawQuery("""
                 SELECT dp.id, dp.product_id, dp.warehouse_id, dp.tank_id, dp.station_id, dp.quantity, dp.reason, dp.notes,
+                       dp.sale_id, dp.sale_item_id, dp.source_type, dp.sale_amount, dp.refunded_amount, dp.customer_credit_reduction, dp.idempotency_key,
                        dp.report_date, dp.reported_by, dp.status, dp.approved_by, dp.approved_at, dp.archived, dp.created_at,
                        p.product_code, p.product_name, p.product_name_ar, COALESCE(p.purchase_price,0) AS unit_price,
                        COALESCE(p.purchase_price,0) * dp.quantity AS total_value, w.warehouse_name,
@@ -19968,7 +20312,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val limitSql = if (limit > 0) " LIMIT $limit" else ""
             val sql = """
                 SELECT dp.id, dp.product_id, dp.warehouse_id, dp.tank_id, dp.station_id,
-                       dp.quantity, dp.reason, dp.notes, dp.report_date, dp.reported_by,
+                       dp.quantity, dp.reason, dp.notes, dp.sale_id, dp.sale_item_id, dp.source_type,
+                       dp.sale_amount, dp.refunded_amount, dp.customer_credit_reduction, dp.idempotency_key, dp.report_date, dp.reported_by,
                        dp.status, dp.approved_by, dp.approved_at, dp.archived, dp.created_at,
                        p.product_code, p.product_name, p.product_name_ar,
                        COALESCE(p.purchase_price, 0) AS unit_price,
@@ -20841,18 +21186,36 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
             }
             val saleId = sale.getLong("sale_id")
+            val hasFuel = db.rawQuery("SELECT 1 FROM fuel_sales WHERE sale_id=? AND is_deleted=0 LIMIT 1", arrayOf(saleId.toString())).use { it.moveToFirst() }
+            val hasProducts = db.rawQuery("SELECT 1 FROM sale_items WHERE sale_id=? AND item_type='product' LIMIT 1", arrayOf(saleId.toString())).use { it.moveToFirst() }
+            val saleKind = when {
+                hasFuel && hasProducts -> "mixed"
+                hasFuel -> "fuel"
+                hasProducts -> "product"
+                else -> "unknown"
+            }
+            sale.put("sale_kind", saleKind)
+            if (hasFuel) {
+                db.rawQuery("""SELECT fs.id fuel_sale_id,fs.quantity,fs.price_per_liter,fs.total_amount,fs.pump_id,fs.fuel_type_id,
+                                      COALESCE((SELECT SUM(a.quantity) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.status='posted'),0) adjusted_quantity,
+                                      COALESCE((SELECT SUM(a.amount) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.status='posted'),0) adjusted_amount
+                               FROM fuel_sales fs WHERE fs.sale_id=? AND fs.is_deleted=0 LIMIT 1""", arrayOf(saleId.toString())).use { c ->
+                    if(c.moveToFirst()) sale.put("fuel_sale", cursorToJsonObject(c))
+                }
+            }
             val items = db.rawQuery(
                 """SELECT si.product_id,
                           si.quantity,
                           COALESCE(si.returned_quantity, 0) AS returned_quantity,
-                          MAX(0, si.quantity - COALESCE(si.returned_quantity, 0)) AS remaining_quantity,
+                          COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'), 0) AS damaged_quantity,
+                          MAX(0, si.quantity - COALESCE(si.returned_quantity, 0) - COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'), 0)) AS remaining_quantity,
                           si.unit_price,
                           si.subtotal,
                           si.discount_amount,
                           si.tax_amount,
                           si.vat_amount,
                           si.line_total AS total_price,
-                          (si.line_total * CASE WHEN si.quantity > 0 THEN MAX(0, si.quantity - COALESCE(si.returned_quantity, 0)) / si.quantity ELSE 0 END) AS net_total_price,
+                          (si.line_total * CASE WHEN si.quantity > 0 THEN MAX(0, si.quantity - COALESCE(si.returned_quantity, 0) - COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'), 0)) / si.quantity ELSE 0 END) AS net_total_price,
                           p.product_name AS name,
                           p.product_name_ar,
                           p.barcode
@@ -20941,6 +21304,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val item = db.rawQuery(
                     """SELECT si.id, si.sale_id, si.product_id, si.quantity,
                               COALESCE(si.returned_quantity, 0) AS returned_quantity,
+                              COALESCE((SELECT SUM(a.quantity)
+                                        FROM sale_item_adjustments a
+                                        WHERE a.sale_item_id=si.id
+                                          AND a.adjustment_type='damage'
+                                          AND a.status='posted'), 0) AS damaged_quantity,
                               si.unit_price, si.subtotal, si.discount_amount, si.tax_amount,
                               si.vat_amount, si.line_total,
                               COALESCE(p.purchase_price, 0) AS purchase_price,
@@ -20973,6 +21341,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("product_id", cursor.getLong(cursor.getColumnIndexOrThrow("product_id")))
                         put("sold_quantity", cursor.getDouble(cursor.getColumnIndexOrThrow("quantity")))
                         put("returned_quantity", cursor.getDouble(cursor.getColumnIndexOrThrow("returned_quantity")))
+                        put("damaged_quantity", cursor.getDouble(cursor.getColumnIndexOrThrow("damaged_quantity")))
                         put("unit_price", cursor.getDouble(cursor.getColumnIndexOrThrow("unit_price")))
                         put("subtotal", cursor.getDouble(cursor.getColumnIndexOrThrow("subtotal")))
                         put("discount_amount", cursor.getDouble(cursor.getColumnIndexOrThrow("discount_amount")))
@@ -21001,7 +21370,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
                 val soldQty = item.getDouble("sold_quantity")
                 val alreadyReturned = item.getDouble("returned_quantity")
-                val available = (soldQty - alreadyReturned).coerceAtLeast(0.0)
+                val alreadyDamaged = item.optDouble("damaged_quantity", 0.0)
+                val available = (soldQty - alreadyReturned - alreadyDamaged).coerceAtLeast(0.0)
                 require(available > 0.000001) { "هذا البند مرتجع بالكامل ولا توجد كمية قابلة للإرجاع" }
                 require(requestedQty <= available + 1e-9) { "كمية الإرجاع تتجاوز الكمية المتاحة (${formatAmount(available)})" }
                 require(item.getString("sale_status") !in setOf("cancelled", "refunded")) { "لا يمكن إرجاع فاتورة ملغاة أو مرتجعة بالكامل" }
@@ -21044,7 +21414,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("returned_quantity", newReturned)
                         put("is_returned", if (newReturned + 1e-9 >= soldQty) 1 else 0)
                     },
-                    "id=? AND sale_id=? AND quantity >= returned_quantity + ?",
+                    "id=? AND sale_id=? AND quantity >= COALESCE(returned_quantity,0) + ?",
                     arrayOf(
                         item.getLong("item_id").toString(),
                         item.getLong("sale_id").toString(),
@@ -21063,46 +21433,21 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val newNet = (oldNet - returnNet).coerceAtLeast(0.0)
 
                 val oldPaid = item.getDouble("sale_paid").coerceAtLeast(0.0)
-                val paidRefund = minOf(returnNet, oldPaid)
+                val requestedPaidRefund = minOf(returnNet, oldPaid)
+                val newPaidCandidate = (oldPaid - requestedPaidRefund).coerceAtLeast(0.0)
+                val newRemainingCandidate = (newNet - newPaidCandidate).coerceAtLeast(0.0)
+                val refundResult = refundOriginalPayment(
+                    db,
+                    item.getLong("sale_id"),
+                    stationId,
+                    actorId,
+                    requestedPaidRefund,
+                    if (notes.isBlank()) "استرداد مرتبط بالمرتجع" else notes
+                )
+                val paidRefund = refundResult.second
                 val creditReduction = (returnNet - paidRefund).coerceAtLeast(0.0)
                 val newPaid = (oldPaid - paidRefund).coerceAtLeast(0.0)
                 val newRemaining = (newNet - newPaid).coerceAtLeast(0.0)
-
-                if (paidRefund > 0.0) {
-                    val originalPayment = db.rawQuery(
-                        """SELECT id, payment_type, payment_method
-                           FROM payments
-                           WHERE sale_id=? AND status='completed' AND is_refund=0 AND amount > 0
-                           ORDER BY id ASC LIMIT 1""",
-                        arrayOf(item.getLong("sale_id").toString())
-                    ).use { cursor ->
-                        if (cursor.moveToFirst()) Triple(cursor.getLong(0), cursor.getString(1), cursor.getString(2)) else null
-                    }
-                    db.insertOrThrow(
-                        "payments",
-                        null,
-                        ContentValues().apply {
-                            put("uuid", UUID.randomUUID().toString())
-                            put("payment_code", "REF-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}")
-                            put("sale_id", item.getLong("sale_id"))
-                            if (!item.isNull("customer_party_id")) put("customer_party_id", item.getLong("customer_party_id"))
-                            put("payment_type", originalPayment?.second ?: item.getString("payment_method"))
-                            put("payment_method", originalPayment?.third ?: item.getString("payment_method"))
-                            put("amount", paidRefund)
-                            put("total_invoice_amount", oldNet)
-                            put("remaining_after", newRemaining)
-                            put("status", "refunded")
-                            put("is_refund", 1)
-                            if (originalPayment != null) put("original_payment_id", originalPayment.first)
-                            put("refund_reason", reason)
-                            put("operator", "user_$actorId")
-                            put("notes", if (notes.isBlank()) "استرداد مرتبط بالمرتجع" else notes)
-                            put("created_by", actorId)
-                            put("created_at", getCurrentDateTime())
-                            put("updated_at", getCurrentDateTime())
-                        }
-                    )
-                }
 
                 if (creditReduction > 0.0) {
                     val customerId = if (!item.isNull("customer_party_id")) item.getLong("customer_party_id") else 0L
@@ -21140,6 +21485,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         }
                     )
                 }
+
+                val journalId = postSalesReversalJournal(
+                    db,
+                    item.getLong("sale_id"),
+                    stationId,
+                    actorId,
+                    returnNet,
+                    paidRefund,
+                    creditReduction,
+                    item.getString("payment_method"),
+                    "عكس مرتجع الفاتورة $invoiceNumber",
+                    "return"
+                )
 
                 val saleRows = db.update(
                     "sales_transactions",
@@ -21223,6 +21581,305 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally {
             dbLock.unlock()
         }
+    }
+
+
+    private fun findFinancialAccount(db: SQLiteDatabase, kind: String): Long {
+        val sql = when (kind) {
+            "revenue" -> "SELECT id FROM accounts WHERE account_type='revenue' AND is_active=1 AND is_deleted=0 ORDER BY CASE WHEN account_category LIKE '%sales%' OR account_category LIKE '%revenue%' THEN 0 ELSE 1 END, id LIMIT 1"
+            "cash" -> "SELECT id FROM accounts WHERE is_cash_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1"
+            "bank" -> "SELECT id FROM accounts WHERE is_bank_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1"
+            "receivable" -> "SELECT id FROM accounts WHERE account_type='asset' AND is_active=1 AND is_deleted=0 AND (account_category LIKE '%receiv%' OR account_name LIKE '%customer%' OR account_name_ar LIKE '%عملاء%' OR account_name_ar LIKE '%ذمم%') ORDER BY id LIMIT 1"
+            else -> throw IllegalArgumentException("نوع الحساب المالي غير معروف")
+        }
+        return db.rawQuery(sql, null).use { c ->
+            require(c.moveToFirst()) { "لا يوجد حساب محاسبي فعال من النوع المطلوب: $kind" }
+            c.getLong(0)
+        }
+    }
+
+    private fun postSalesReversalJournal(
+        db: SQLiteDatabase,
+        saleId: Long,
+        stationId: Int,
+        actorId: Long,
+        amount: Double,
+        paidRefund: Double,
+        creditReduction: Double,
+        paymentMethod: String,
+        reason: String,
+        adjustmentType: String
+    ): Long {
+        require(amount > 0.0) { "قيمة العكس المحاسبي غير صالحة" }
+        val revenue = findFinancialAccount(db, "revenue")
+        val settlementKind = when (paymentMethod) {
+            "cash" -> "cash"
+            "credit", "credit_sale", "credit_account" -> null
+            else -> "bank"
+        }
+        val settlement = settlementKind?.let { findFinancialAccount(db, it) }
+        val receivable = if (creditReduction > 0.0) findFinancialAccount(db, "receivable") else 0L
+        val entryId = db.insertOrThrow("journal_entries", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("entry_number", journalEntryNumber(db, stationId))
+            put("entry_date", getDateOnlyFormat().format(Date()))
+            put("entry_type", "sales")
+            put("reference_type", "sale_$adjustmentType")
+            put("reference_id", saleId)
+            put("reference_code", "SALE-$saleId")
+            put("description", "عكس $adjustmentType للبيع $saleId")
+            put("description_ar", "عكس عملية $adjustmentType لمبيعات البيع رقم $saleId")
+            put("total_debit", amount)
+            put("total_credit", amount)
+            put("is_balanced", 1)
+            put("status", "posted")
+            put("posted_at", getCurrentDateTime())
+            put("posted_by", actorId)
+            put("station_id", stationId)
+            put("created_at", getCurrentDateTime())
+            put("updated_at", getCurrentDateTime())
+            put("created_by", actorId)
+            put("updated_by", actorId)
+            put("is_deleted", 0)
+        })
+        var line = 1
+        db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("journal_entry_id", entryId); put("line_number", line++)
+            put("account_id", revenue); put("debit", amount); put("credit", 0.0)
+            put("description", "عكس إيراد المبيعات"); put("description_ar", "عكس إيراد المبيعات")
+        })
+        if (paidRefund > 0.0) {
+            db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString()); put("journal_entry_id", entryId); put("line_number", line++)
+                put("account_id", settlement ?: throw IllegalStateException("لا يوجد حساب تسوية للمدفوع"))
+                put("debit", 0.0); put("credit", paidRefund)
+                put("description", "استرداد المدفوع"); put("description_ar", "استرداد المدفوع")
+            })
+        }
+        if (creditReduction > 0.0) {
+            db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString()); put("journal_entry_id", entryId); put("line_number", line)
+                put("account_id", receivable); put("debit", 0.0); put("credit", creditReduction)
+                put("description", "تخفيض مديونية العميل"); put("description_ar", "تخفيض مديونية العميل")
+            })
+        }
+        return entryId
+    }
+
+    private fun recordCashRefund(db: SQLiteDatabase, stationId: Int, actorId: Long, amount: Double, saleId: Long, reason: String): Long {
+        require(amount > 0.0) { "مبلغ الاسترداد النقدي غير صالح" }
+        val box = db.rawQuery("SELECT id, current_balance FROM cash_boxes WHERE station_id=? AND status='active' AND is_deleted=0 ORDER BY CASE WHEN responsible_user_id=? THEN 0 ELSE 1 END, id LIMIT 1", arrayOf(stationId.toString(), actorId.toString())).use { c ->
+            require(c.moveToFirst()) { "لا يوجد صندوق نقدي نشط للمحطة" }
+            c.getLong(0) to c.getDouble(1)
+        }
+        val before = box.second
+        require(before + 1e-9 >= amount) { "رصيد الصندوق لا يكفي لتنفيذ الاسترداد النقدي" }
+        val after = before - amount
+        db.update("cash_boxes", ContentValues().apply { put("current_balance", after); put("updated_at", getCurrentDateTime()) }, "id=?", arrayOf(box.first.toString()))
+        return db.insertOrThrow("cash_movements", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("cash_box_id", box.first); put("movement_type", "refund")
+            put("amount", amount); put("balance_before", before); put("balance_after", after)
+            put("description", reason); put("reference_type", "sale_adjustment"); put("reference_id", saleId)
+            put("created_by", actorId.toString()); put("created_at", getCurrentDateTime()); put("is_deleted", 0)
+        })
+    }
+
+    private fun refundOriginalPayment(
+        db: SQLiteDatabase, saleId: Long, stationId: Int, actorId: Long, refundAmount: Double, reason: String
+    ): Pair<Long?, Double> {
+        if (refundAmount <= 0.0) return null to 0.0
+        val payment = db.rawQuery("""SELECT id, payment_method, payment_type, amount, COALESCE(cash_box_id,0)
+                                     FROM payments WHERE sale_id=? AND status IN ('completed','refunded')
+                                     AND is_refund=0 AND is_deleted=0 ORDER BY id LIMIT 1""", arrayOf(saleId.toString())).use { c ->
+            if (!c.moveToFirst()) return null to 0.0
+            longArrayOf(c.getLong(0), c.getString(1)?.hashCode()?.toLong() ?: 0L, c.getDouble(3).toBits(), c.getLong(4))
+        }
+        val paymentId = payment[0]
+        val originalAmount = Double.fromBits(payment[2])
+        val refunded = db.rawQuery("SELECT COALESCE(SUM(amount),0) FROM payments WHERE original_payment_id=? AND is_refund=1 AND is_deleted=0", arrayOf(paymentId.toString())).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+        val available = (originalAmount - refunded).coerceAtLeast(0.0)
+        val actual = minOf(refundAmount, available)
+        if (actual <= 0.0) return null to 0.0
+        val method = db.rawQuery("SELECT payment_method FROM payments WHERE id=?", arrayOf(paymentId.toString())).use { c -> if(c.moveToFirst()) c.getString(0) else "cash" }
+        val refundId = db.insertOrThrow("payments", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("payment_code", "REF-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}")
+            put("sale_id", saleId); put("payment_type", method); put("payment_method", method); put("amount", actual)
+            put("status", "refunded"); put("is_refund", 1); put("original_payment_id", paymentId)
+            put("refund_reason", reason); put("operator", "user_$actorId"); put("created_by", actorId); put("created_at", getCurrentDateTime()); put("updated_at", getCurrentDateTime())
+        })
+        if (method == "cash") recordCashRefund(db, stationId, actorId, actual, saleId, reason)
+        return refundId to actual
+    }
+
+    fun processFuelSaleAdjustment(data: JSONObject): JSONObject {
+        val stationId = data.optInt("station_id", 0)
+        val actorId = data.optLong("created_by", 0L)
+        val saleId = data.optLong("sale_id", 0L)
+        val fuelSaleId = data.optLong("fuel_sale_id", 0L)
+        val type = data.optString("adjustment_type", "return").trim().lowercase()
+        val qty = data.optDouble("quantity", 0.0)
+        val key = data.optString("idempotency_key", "").trim()
+        val reason = data.optString("reason", if (type == "return") "مرتجع مبيعات وقود" else "تالف مبيعات وقود").trim()
+        require(stationId > 0 && actorId > 0 && saleId > 0) { "بيانات عملية تصحيح الوقود غير مكتملة" }
+        require(type in setOf("return","damage")) { "نوع تصحيح الوقود غير صالح" }
+        require(qty.isFinite() && qty > 0.0) { "كمية التصحيح يجب أن تكون أكبر من صفر" }
+        require(key.isNotBlank()) { "مفتاح idempotency مطلوب" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                db.rawQuery("SELECT id FROM fuel_sale_adjustments WHERE station_id=? AND idempotency_key=?", arrayOf(stationId.toString(), key)).use { c ->
+                    if (c.moveToFirst()) {
+                        return JSONObject().apply { put("success", true); put("id", c.getLong(0)); put("idempotent", true) }
+                    }
+                }
+                val sale = db.rawQuery("""SELECT s.id,s.shift_id,s.customer_party_id,s.net_amount,s.paid_amount,s.remaining_amount,s.payment_method,s.status,
+                                                fs.id AS fuel_sale_id,fs.quantity,fs.total_amount,fs.pump_id
+                                         FROM sales_transactions s JOIN fuel_sales fs ON fs.sale_id=s.id
+                                         WHERE s.id=? AND s.station_id=? AND s.is_deleted=0 AND fs.is_deleted=0 LIMIT 1""", arrayOf(saleId.toString(), stationId.toString())).use { c ->
+                    require(c.moveToFirst()) { "عملية بيع الوقود غير موجودة" }
+                    JSONObject().apply {
+                        put("shift_id", c.getLong(1)); put("customer_party_id", if(c.isNull(2)) JSONObject.NULL else c.getLong(2))
+                        put("net_amount", c.getDouble(3)); put("paid_amount", c.getDouble(4)); put("remaining_amount", c.getDouble(5))
+                        put("payment_method", c.getString(6)); put("status", c.getString(7)); put("fuel_sale_id", c.getLong(8))
+                        put("quantity", c.getDouble(9)); put("total_amount", c.getDouble(10)); put("pump_id", if(c.isNull(11)) JSONObject.NULL else c.getLong(11))
+                    }
+                }
+                val adjustedBefore = db.rawQuery("SELECT COALESCE(SUM(quantity),0) FROM fuel_sale_adjustments WHERE sale_id=? AND status='posted'", arrayOf(saleId.toString())).use { c -> if(c.moveToFirst()) c.getDouble(0) else 0.0 }
+                val available = (sale.getDouble("quantity") - adjustedBefore).coerceAtLeast(0.0)
+                require(qty <= available + 1e-9) { "الكمية تتجاوز الكمية المتاحة للتصحيح: $available" }
+                val amount = (sale.getDouble("total_amount") * (qty / sale.getDouble("quantity"))).coerceAtLeast(0.0)
+                require(amount > 0.0) { "قيمة التصحيح غير صالحة" }
+                var tankId = 0L
+                if (type == "return") {
+                    tankId = db.rawQuery("""SELECT p.tank_id FROM pumps p WHERE p.id=? AND p.station_id=? AND p.is_deleted=0 LIMIT 1""", arrayOf(sale.optString("pump_id"), stationId.toString())).use { c -> if(c.moveToFirst()) c.getLong(0) else 0L }
+                    require(tankId > 0) { "لا يمكن تنفيذ مرتجع الوقود بدون خزان مرتبط بالمضخة" }
+                    val rows = db.compileStatement("UPDATE tanks SET current_quantity=current_quantity+?, updated_at=? WHERE id=? AND station_id=? AND is_deleted=0").apply { bindDouble(1, qty); bindString(2,getCurrentDateTime()); bindLong(3,tankId); bindLong(4,stationId.toLong()) }.executeUpdateDelete()
+                    if (rows != 1) throw IllegalStateException("تعذر إعادة الوقود إلى الخزان")
+                }
+                val oldPaid = sale.getDouble("paid_amount").coerceAtLeast(0.0)
+                val paidRefund = minOf(amount, oldPaid)
+                val creditReduction = (amount - paidRefund).coerceAtLeast(0.0)
+                val refund = refundOriginalPayment(db, saleId, stationId, actorId, paidRefund, reason)
+                val actualRefund = refund.second
+                val actualCredit = (amount - actualRefund).coerceAtLeast(0.0)
+                if (actualCredit > 0.0) {
+                    val customerId = if(!sale.isNull("customer_party_id")) sale.getLong("customer_party_id") else 0L
+                    require(customerId > 0) { "لا يوجد عميل لعكس الجزء الآجل من العملية" }
+                    val rows = db.compileStatement("UPDATE parties SET current_balance=MAX(0,COALESCE(current_balance,0)-?), total_due=MAX(0,COALESCE(total_due,0)-?), updated_at=? WHERE id=? AND station_id=? AND is_deleted=0").apply { bindDouble(1,actualCredit); bindDouble(2,actualCredit); bindString(3,getCurrentDateTime()); bindLong(4,customerId); bindLong(5,stationId.toLong()) }.executeUpdateDelete()
+                    require(rows==1) { "تعذر تخفيض مديونية العميل" }
+                    db.insertOrThrow("customer_ledger", null, ContentValues().apply {
+                        put("uuid",UUID.randomUUID().toString()); put("party_id",customerId); put("transaction_date",getCurrentDateTime())
+                        put("transaction_type","sale_adjustment"); put("transaction_id",saleId); put("reference_number","SALE-$saleId")
+                        put("debit",0.0); put("credit",actualCredit); put("balance",getPartyBalance(customerId.toInt())); put("description",reason); put("created_by",actorId)
+                    })
+                }
+                val journalId = postSalesReversalJournal(db,saleId,stationId,actorId,amount,actualRefund,actualCredit,sale.getString("payment_method"),reason,type)
+                val adjId = db.insertOrThrow("fuel_sale_adjustments",null,ContentValues().apply {
+                    put("uuid",UUID.randomUUID().toString()); put("sale_id",saleId); put("fuel_sale_id",sale.getLong("fuel_sale_id")); put("station_id",stationId)
+                    put("shift_id",sale.getLong("shift_id")); put("adjustment_type",type); put("quantity",qty); put("amount",amount); put("refunded_amount",actualRefund)
+                    put("customer_credit_reduction",actualCredit); if(tankId>0) put("tank_id",tankId) else putNull("tank_id"); put("inventory_action",if(type=="return") "tank_in" else "none")
+                    if(refund.first!=null) put("payment_refund_id",refund.first); put("journal_entry_id",journalId); put("idempotency_key",key); put("reason",reason); put("notes",data.optString("notes",""))
+                    put("status","posted"); put("created_by",actorId); put("created_at",getCurrentDateTime()); put("updated_at",getCurrentDateTime())
+                })
+                val newNet=(sale.getDouble("net_amount")-amount).coerceAtLeast(0.0)
+                val newPaid=(sale.getDouble("paid_amount")-actualRefund).coerceAtLeast(0.0)
+                val newRemaining=(newNet-newPaid).coerceAtLeast(0.0)
+                db.execSQL("UPDATE sales_transactions SET liters=MAX(0,liters-?), subtotal=MAX(0,subtotal-?), gross_amount=MAX(0,gross_amount-?), net_amount=?, paid_amount=?, remaining_amount=?, payment_status=?, status=?, updated_at=? WHERE id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(qty,amount,amount,newNet,newPaid,newRemaining,if(newNet<=1e-9)"refunded" else if(newRemaining<=1e-9)"paid" else if(newPaid>1e-9)"partial" else "pending",if(newNet<=1e-9)"refunded" else "completed",getCurrentDateTime(),saleId,stationId))
+                db.execSQL("UPDATE fuel_sales SET quantity=MAX(0,quantity-?), total_amount=MAX(0,total_amount-?), status=?, updated_at=? WHERE id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(qty,amount,if(newNet<=1e-9)"refunded" else "completed",getCurrentDateTime(),sale.getLong("fuel_sale_id"),stationId))
+                db.execSQL("UPDATE shifts SET total_sales=MAX(0,total_sales-?), total_fuel_liters=MAX(0,total_fuel_liters-?), updated_at=? WHERE id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(amount,qty,getCurrentDateTime(),sale.getLong("shift_id"),stationId))
+                db.setTransactionSuccessful()
+                JSONObject().apply{put("success",true);put("id",adjId);put("sale_id",saleId);put("fuel_sale_id",sale.getLong("fuel_sale_id"));put("adjustment_type",type);put("quantity",qty);put("amount",amount);put("cash_refund",actualRefund);put("customer_credit_reduction",actualCredit);put("journal_entry_id",journalId);put("tank_id",if(tankId>0)tankId else JSONObject.NULL)}
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+    fun processSaleDamage(data: JSONObject): JSONObject {
+        val payload = JSONObject(data.toString()).apply { put("adjustment_type","damage") }
+        return processProductSaleAdjustment(payload)
+    }
+
+    fun processProductSaleAdjustment(data: JSONObject): JSONObject {
+        val stationId=data.optInt("station_id",0); val actorId=data.optLong("created_by",0L); val invoice=data.optString("invoice_number").trim()
+        val productId=data.optLong("product_id",0L); val saleId=data.optLong("sale_id",0L); val itemId=data.optLong("sale_item_id",0L)
+        val type=data.optString("adjustment_type","damage").trim().lowercase(); val qty=data.optDouble("quantity",0.0); val key=data.optString("idempotency_key","").trim()
+        require(stationId>0&&actorId>0&&invoice.isNotBlank()&&productId>0&&qty>0&&key.isNotBlank()){"بيانات تصحيح المنتج غير مكتملة"}
+        require(type in setOf("return","damage")){"نوع تصحيح المنتج غير صالح"}
+        // Product returns use the canonical transactional return path so the POS,
+        // legacy return dialog, inventory, customer balance, payment refund,
+        // journal and idempotency rules cannot drift into separate implementations.
+        if (type == "return") return processSaleReturn(data)
+        dbLock.lock()
+        return try {
+            val db=writableDatabase; db.beginTransaction()
+            try {
+                val existingAdjustment = db.rawQuery("SELECT id FROM sale_item_adjustments WHERE station_id=? AND idempotency_key=? AND status='posted'",arrayOf(stationId.toString(),key)).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
+                if(existingAdjustment>0L) return JSONObject().apply{put("success",true);put("id",existingAdjustment);put("idempotent",true)}
+                val item=db.rawQuery("""SELECT si.id,si.sale_id,si.product_id,si.quantity,COALESCE(si.returned_quantity,0),
+                                                COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a
+                                                          WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'),0),
+                                                si.unit_price,si.line_total,
+                                                COALESCE(p.purchase_price,0),s.shift_id,s.customer_party_id,s.net_amount,s.paid_amount,s.payment_method,s.status,s.invoice_number
+                                         FROM sale_items si JOIN sales_transactions s ON s.id=si.sale_id
+                                         LEFT JOIN products p ON p.id=si.product_id
+                                         WHERE s.station_id=? AND s.invoice_number=? AND si.product_id=? AND (?=0 OR si.id=?) AND si.item_type='product' AND s.is_deleted=0 LIMIT 1""",
+                    arrayOf(stationId.toString(),invoice,productId.toString(),itemId.toString(),itemId.toString())).use{c->
+                    require(c.moveToFirst()){"بند المنتج غير موجود في الفاتورة"}
+                    JSONObject().apply{put("item_id",c.getLong(0));put("sale_id",c.getLong(1));put("product_id",c.getLong(2));put("qty",c.getDouble(3));put("returned",c.getDouble(4));put("damaged",c.getDouble(5));put("unit_price",c.getDouble(6));put("line_total",c.getDouble(7));put("purchase_price",c.getDouble(8));put("shift_id",c.getLong(9));if(c.isNull(10))put("customer_id",JSONObject.NULL)else put("customer_id",c.getLong(10));put("net",c.getDouble(11));put("paid",c.getDouble(12));put("payment_method",c.getString(13));put("status",c.getString(14));put("invoice",c.getString(15))}
+                }
+                val available=(item.getDouble("qty")-item.getDouble("returned")-item.getDouble("damaged")).coerceAtLeast(0.0); require(qty<=available+1e-9){"الكمية تتجاوز المتاح"}
+                val amount=item.getDouble("line_total")*(qty/item.getDouble("qty")); require(amount>0)
+                val warehouseId=getOrCreateDefaultWarehouse(db,stationId)
+                if(type=="return"){
+                    ensureInventoryBaselineForProduct(db,item.getLong("product_id"),warehouseId,stationId)
+                    addStockMovementInternal(db,JSONObject().apply{put("product_id",item.getLong("product_id"));put("warehouse_id",warehouseId);put("quantity",qty);put("movement_type","return");put("reference_type","sale_return");put("reference_id",item.getLong("sale_id"));put("unit_cost",item.getDouble("purchase_price"));put("notes","مرتجع منتج مرتبط بالفاتورة")},stationId,actorId)
+                }
+                // Returns are delegated above. Damage keeps the existing sale_items
+                // aggregate in sync while the detailed audit remains in adjustments.
+                if (type == "damage") {
+                    val damageRows = db.compileStatement(
+                        "UPDATE sale_items SET damaged_quantity=COALESCE(damaged_quantity,0)+? WHERE id=? AND sale_id=?"
+                    ).apply {
+                        bindDouble(1, qty)
+                        bindLong(2, item.getLong("item_id"))
+                        bindLong(3, item.getLong("sale_id"))
+                    }.executeUpdateDelete()
+                    require(damageRows == 1) { "تعذر تحديث كمية التالف في بند الفاتورة" }
+                }
+
+                val paidRefund=minOf(amount,item.getDouble("paid")); val refund=refundOriginalPayment(db,item.getLong("sale_id"),stationId,actorId,paidRefund,if(type=="return")"استرداد مرتجع منتج" else "عكس تالف منتج")
+                val actualRefund=refund.second; val credit=(amount-actualRefund).coerceAtLeast(0.0)
+                if(credit>0){
+                    val cid=if(!item.isNull("customer_id"))item.getLong("customer_id")else 0L;require(cid>0){"لا يوجد عميل لعكس الجزء الآجل"}
+                    db.execSQL("UPDATE parties SET current_balance=MAX(0,COALESCE(current_balance,0)-?),total_due=MAX(0,COALESCE(total_due,0)-?),updated_at=? WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(credit,credit,getCurrentDateTime(),cid,stationId))
+                    db.insertOrThrow("customer_ledger",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("party_id",cid);put("transaction_date",getCurrentDateTime());put("transaction_type","sale_adjustment");put("transaction_id",item.getLong("sale_id"));put("reference_number",invoice);put("debit",0.0);put("credit",credit);put("balance",getPartyBalance(cid.toInt()));put("description","عكس $type للفاتورة $invoice");put("created_by",actorId)})
+                }
+                val journal=postSalesReversalJournal(db,item.getLong("sale_id"),stationId,actorId,amount,actualRefund,credit,item.getString("payment_method"),"عكس $type للفاتورة $invoice",type)
+                val adjustmentId=db.insertOrThrow("sale_item_adjustments",null,ContentValues().apply{
+                    put("uuid",UUID.randomUUID().toString());put("sale_id",item.getLong("sale_id"));put("sale_item_id",item.getLong("item_id"));put("station_id",stationId)
+                    put("adjustment_type",type);put("quantity",qty);put("amount",amount);put("refunded_amount",actualRefund);put("customer_credit_reduction",credit)
+                    if(refund.first!=null)put("payment_refund_id",refund.first);put("journal_entry_id",journal);put("idempotency_key",key)
+                    put("reason",data.optString("reason",""));put("notes",data.optString("notes",""));put("status","posted");put("created_by",actorId);put("created_at",getCurrentDateTime())
+                })
+                val dp=if(type=="damage") db.insertOrThrow("damaged_products",null,ContentValues().apply{
+                    put("product_id",item.getLong("product_id"));put("warehouse_id",warehouseId);put("station_id",stationId);put("quantity",qty)
+                    put("reason",data.optString("reason",if(type=="damage")"تالف مرتبط ببيع" else "مرتجع مرتبط ببيع"));put("notes",data.optString("notes",""))
+                    put("report_date",getCurrentDateTime());put("reported_by",actorId);put("status","approved");put("approved_by",actorId);put("approved_at",getCurrentDateTime());put("archived",0)
+                    put("sale_id",item.getLong("sale_id"));put("sale_item_id",item.getLong("item_id"));put("source_type","sale");put("idempotency_key",key);put("sale_amount",amount);put("refunded_amount",actualRefund);put("customer_credit_reduction",credit)
+                }) else 0L
+                val newNet=(item.getDouble("net")-amount).coerceAtLeast(0.0); val newPaid=(item.getDouble("paid")-actualRefund).coerceAtLeast(0.0); val rem=(newNet-newPaid).coerceAtLeast(0.0)
+                db.execSQL("UPDATE sales_transactions SET subtotal=MAX(0,subtotal-?), gross_amount=MAX(0,gross_amount-?), net_amount=?, paid_amount=?, remaining_amount=?, payment_status=?, status=?, updated_at=? WHERE id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(amount,amount,newNet,newPaid,rem,if(newNet<=1e-9)"refunded" else if(rem<=1e-9)"paid" else if(newPaid>1e-9)"partial" else "pending",if(newNet<=1e-9)"refunded" else "completed",getCurrentDateTime(),item.getLong("sale_id"),stationId))
+                db.execSQL("UPDATE shifts SET total_sales=MAX(0,total_sales-?), updated_at=? WHERE id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(amount,getCurrentDateTime(),item.getLong("shift_id"),stationId))
+                db.setTransactionSuccessful()
+                JSONObject().apply{put("success",true);put("id",adjustmentId);put("damaged_product_id",if(dp>0)dp else JSONObject.NULL);put("sale_id",item.getLong("sale_id"));put("sale_item_id",item.getLong("item_id"));put("adjustment_type",type);put("quantity",qty);put("amount",amount);put("cash_refund",actualRefund);put("customer_credit_reduction",credit);put("journal_entry_id",journal)}
+            }finally{db.endTransaction()}
+        }finally{dbLock.unlock()}
     }
 
     private fun formatAmount(value: Double): String =
@@ -24213,12 +24870,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (includeSales) {
                 branches += """
                     SELECT 'sale' as type, s.id, s.sale_code as code, s.created_at as date,
-                           s.liters as quantity, s.net_amount as amount, f.fuel_name,
+                           MAX(0, s.liters-COALESCE(a.adjusted_liters,0)) as quantity,
+                           MAX(0, s.net_amount-COALESCE(a.adjusted_amount,0)) as amount, f.fuel_name,
                            COALESCE(p.commercial_name, p.commercial_name_ar) as party_name, '---' as tank_name,
-                           s.fuel_type_id as fuel_type_id, NULL as tank_id
+                           s.fuel_type_id as fuel_type_id, NULL as tank_id,
+                           COALESCE(a.returned_liters,0) as returned_liters, COALESCE(a.damaged_liters,0) as damaged_liters
                     FROM sales_transactions s
                     LEFT JOIN fuel_types f ON s.fuel_type_id = f.id
                     LEFT JOIN parties p ON s.customer_party_id = p.id
+                    LEFT JOIN (SELECT sale_id,SUM(quantity) adjusted_liters,SUM(amount) adjusted_amount,
+                                      SUM(CASE WHEN adjustment_type='return' THEN quantity ELSE 0 END) returned_liters,
+                                      SUM(CASE WHEN adjustment_type='damage' THEN quantity ELSE 0 END) damaged_liters
+                               FROM fuel_sale_adjustments WHERE status='posted' GROUP BY sale_id) a ON a.sale_id=s.id
                     WHERE s.station_id = ? AND s.is_deleted = 0 AND s.order_type = 'fuel' ${saleFilter.first}
                 """.trimIndent()
                 args += stationId.toString(); args += saleFilter.second
@@ -24228,7 +24891,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     SELECT 'refill' as type, r.id, r.refill_code as code, r.created_at as date,
                            r.delivered_quantity as quantity, 0 as amount, f.fuel_name,
                            COALESCE(p.commercial_name, p.commercial_name_ar) as party_name, t.tank_name,
-                           r.fuel_type_id as fuel_type_id, r.tank_id as tank_id
+                           r.fuel_type_id as fuel_type_id, r.tank_id as tank_id, 0 as returned_liters, 0 as damaged_liters
                     FROM tank_refills r
                     LEFT JOIN fuel_types f ON r.fuel_type_id = f.id
                     LEFT JOIN parties p ON r.supplier_id = p.id

@@ -3177,6 +3177,39 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun processFuelSaleAdjustment(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                dataResponse(db.processFuelSaleAdjustment(operationalScopedJson(jsonData)))
+            } catch (e: Exception) {
+                DebugLogger.logException("FuelSaleAdjustment", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun processSaleDamage(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                dataResponse(db.processSaleDamage(operationalScopedJson(jsonData)))
+            } catch (e: Exception) {
+                DebugLogger.logException("SaleDamage", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun processProductSaleAdjustment(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                dataResponse(db.processProductSaleAdjustment(operationalScopedJson(jsonData)))
+            } catch (e: Exception) {
+                DebugLogger.logException("ProductSaleAdjustment", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
         fun getReturns(jsonData: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getReturns(operationalScopedJson(jsonData))) } catch (e: Exception) { errorResponse(e.message) }
@@ -3899,6 +3932,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun revokeDelegatedPermission(id: Long): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.revokeDelegatedPermission(id); successResponse(rows > 0, if (rows > 0) "تم إلغاء التفويض" else "لم يتم العثور على التفويض") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getGroupScreenPermissionIds(groupId: Long, screenId: Long): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getGroupScreenPermissionIds(groupId, screenId)) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getGroupPermissionIds(groupId: Long): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getGroupPermissionIds(groupId)) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
@@ -5101,13 +5146,28 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val stationId = requireCurrentStationId(db, activity.currentUserId)
-                val params = JSONObject(jsonData.ifBlank { "{}" })
+                val userId = activity.currentUserId
+                if (userId <= 0L) {
+                    return errorResponse("لا توجد جلسة مستخدم صالحة")
+                }
+
+                val stationId = requireCurrentStationId(db, userId)
+                val payload = jsonData.ifBlank { "{}" }.trim()
+                val params = try {
+                    JSONObject(payload)
+                } catch (e: Exception) {
+                    DebugLogger.logException("LogsRequest", e)
+                    return errorResponse("طلب سجل النشاط ليس JSON صالحاً")
+                }
+
                 val result = db.getActivityLogs(params, stationId.toInt())
                 dataResponse(result)
+            } catch (e: IllegalArgumentException) {
+                DebugLogger.logException("LogsValidation", e)
+                errorResponse("معلمات سجل النشاط غير صالحة: ${e.message ?: "قيمة غير صالحة"}")
             } catch (e: Exception) {
                 DebugLogger.logException("Logs", e)
-                errorResponse(e.message)
+                errorResponse(e.message ?: "تعذر قراءة سجل النشاط من SQLite")
             }
         }
 
@@ -5657,7 +5717,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getFuelSales called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val sales = db.getSalesByFuelType()
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val sales = db.getSalesByFuelType(requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(sales)
             } catch (e: Exception) {
                 DebugLogger.logException("Reports", e)
@@ -7602,8 +7663,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         capture.settings.javaScriptEnabled = true
                         capture.settings.defaultTextEncodingName = "UTF-8"
                         capture.setBackgroundColor(android.graphics.Color.WHITE)
-                        capture.alpha = 0.01f
+                        // Keep the capture visually off-screen while preserving full opacity.
+                        // Direct WebView drawing must not inherit a near-zero alpha.
                         val widthPx = 794
+                        capture.translationX = -widthPx.toFloat()
+                        capture.alpha = 1f
                         root.addView(
                             capture,
                             ViewGroup.LayoutParams(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -8677,9 +8741,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun resolveShiftRecord(id: Long, note: String = "") = operationalResolve("sales", "shifts", id, note)
 
         @JavascriptInterface
-        fun getSalesTransactionRecords(jsonData: String = "{}") = operationalList("sales", "sales_transactions", jsonData)
+        fun getSalesTransactionRecords(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getSalesLedgerPage(operationalScopedJson(jsonData), requireCurrentStationId(db, activity.currentUserId)))
+            } catch (e: Exception) {
+                DebugLogger.logException("SalesLedger", e)
+                errorResponse(e.message)
+            }
+        }
         @JavascriptInterface
-        fun generateSalesTransactionReport(jsonData: String = "{}") = operationalReport("sales", "sales_transactions", jsonData)
+        fun generateSalesTransactionReport(jsonData: String = "{}"): String = getSalesTransactionRecords(jsonData)
         @JavascriptInterface
         fun saveSalesTransactionRecord(jsonData: String) = operationalSave("sales", "sales_transactions", jsonData)
         @JavascriptInterface

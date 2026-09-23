@@ -2574,15 +2574,28 @@
         /* ============================================================
            9. Load Data from Database
            ============================================================ */
+        const ACTIVITY_LOG_DB_TYPES = new Set([
+            'user_activity',
+            'audit',
+            'system',
+            'sms',
+            'sync'
+        ]);
+
+        function normalizeActivityLogType(value) {
+            const normalized = String(value ?? '').trim().toLowerCase();
+            if (!normalized || normalized === 'all' || normalized === 'ai_suggest') return '';
+            if (ACTIVITY_LOG_DB_TYPES.has(normalized)) return normalized;
+            throw new Error('نوع سجل النشاط غير مدعوم: ' + normalized);
+        }
+
         function buildActivityQueryParams(extra = {}) {
             const params = {
                 limit: 2000,
                 offset: 0,
-                // "all" و"ai_suggest" فلاتر واجهة وليستا قيمتين يدعمهما
-                // عقد SQLite/DatabaseHelper. تمرير "all" إلى Kotlin كان يحقق
-                // require(type.isEmpty() || type in {...}) ويعيد الخطأ:
-                // "Failed .requirement".
-                type: (currentFilter === 'all' || currentFilter === 'ai_suggest') ? '' : currentFilter,
+                // "all" و"ai_suggest" فلاتر واجهة فقط. يحولان إلى type فارغ
+                // حتى يطلبا كل الأنواع من عقد SQLite بدلاً من إرسال قيمة غير مدعومة.
+                type: normalizeActivityLogType(currentFilter),
                 date_from: window._timeFilterStart || '',
                 date_to: window._timeFilterEnd || '',
                 search: searchQuery || ''
@@ -2633,7 +2646,6 @@
                     (currentUserRes && currentUserRes.success ? currentUserRes : null);
                 if (currentUser) {
                     allUsers = [currentUser];
-                    LocalDB.set('users', allUsers);
                     const role = String(currentUser.role || currentUser.role_name || '').toLowerCase();
                     if (role.includes('admin')) currentUserRole = ROLES.ADMIN;
                     else if (role.includes('manager')) currentUserRole = ROLES.MANAGER;
@@ -2651,10 +2663,11 @@
                 generateAIInsights();
             } catch (e) {
                 console.error('Load error:', e);
-                allUsers = LocalDB.get('users', []);
-                const cached = LocalDB.get('logs', []);
-                baseLogs = Array.isArray(cached) ? cached : [];
-                allLogs = [...baseLogs];
+                // لا نعرض نسخة LocalDB قديمة على أنها سجل SQLite حالي.
+                // عند فشل المصدر الحقيقي نُبقي الشاشة في حالة فارغة/خطأ واضحة.
+                allUsers = [];
+                baseLogs = [];
+                allLogs = [];
                 initFuse();
                 currentPage = 1;
                 renderCards();
@@ -4063,6 +4076,11 @@ let pullStartY = 0,
             loadSavedTheme();
             setupSidebar();
             updateOnlineStatus();
+
+            // تهيئة نطاق التاريخ قبل أول استدعاء إلى SQLite.
+            // currentTimeRange الافتراضي هو week، لذلك يجب أن تكون قيم
+            // date_from/date_to متزامنة مع هذا الاختيار منذ أول طلب.
+            applyTimeFilter();
 
             document.getElementById('themeToggle').addEventListener('click', toggleTheme);
 

@@ -2499,44 +2499,249 @@
     .manual-product-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;max-height:55vh;overflow:auto;text-align:right}
     .manual-product-option{width:100%;text-align:right;padding:12px;border:1px solid var(--input-border-light);border-radius:10px;background:var(--card-color);color:var(--text-color)}
     .manual-product-option strong{display:block}.manual-product-option small{opacity:.75;direction:ltr;display:block;margin-top:4px}
-    #posInvoice{display:none;width:210mm;min-height:297mm;box-sizing:border-box;background:#fff;color:#172b45;direction:rtl;font-family:'Cairo','Noto Sans Arabic',Arial,sans-serif;padding:14mm 10mm 10mm;position:relative;overflow:hidden}
-    #posInvoice .invoice-top{display:grid;grid-template-columns:1fr 1.4fr 1fr;align-items:center;gap:8mm;min-height:32mm;padding:4mm 4mm 5mm;background:#fff;border:2px solid #18385f;border-radius:5mm 5mm 0 0;border-bottom:0}
-    #posInvoice .invoice-brand{text-align:center;font-size:20px;font-weight:800}.invoice-brand-en{display:block;font-size:11px;margin-top:2px}
-    #posInvoice .invoice-logo{width:34mm;height:34mm;border:2px solid #18385f;border-radius:50%;justify-self:end;background:#fff}
-    #posInvoice .invoice-logo{display:flex;align-items:center;justify-content:center;overflow:hidden}
-    #posInvoice .invoice-logo-image{width:100%;height:100%;display:block;object-fit:contain;border-radius:50%;background:#fff}
-    #posInvoice .invoice-meta{display:grid;gap:5px;font-size:13px;text-align:left;direction:rtl}.invoice-meta-row{display:flex;justify-content:space-between;gap:8px}
-    #posInvoice .invoice-title{display:inline-block;background:#18385f;color:#fff;padding:4mm 12mm;border-radius:5mm;font-size:22px;font-weight:800}
-    #posInvoice .invoice-customer{border:2px solid #18385f;padding:3mm 4mm;font-weight:700;min-height:13mm;display:flex;align-items:center;gap:3mm}
-    #posInvoice .invoice-customer .line{flex:1;border-bottom:1px dotted #18385f;min-height:5mm}
+    #posInvoice{
+      display:none;
+      width:210mm;
+      min-height:297mm;
+      box-sizing:border-box;
+      background:#fff;
+      color:#172b45;
+      direction:rtl;
+      font-family:'Cairo','Noto Sans Arabic',Arial,sans-serif;
+      padding:10mm 9mm 8mm;
+      position:relative;
+      overflow:visible;
+    }
+    #posInvoice *{box-sizing:border-box}
+    #posInvoice .invoice-top{
+      position:relative;
+      display:grid;
+      grid-template-columns:1fr 1.5fr 1fr;
+      align-items:center;
+      gap:7mm;
+      min-height:42mm;
+      padding:4mm 5mm;
+      background:#18385f;
+      color:#fff;
+      border:2px solid #18385f;
+      border-radius:5mm;
+      overflow:visible;
+    }
+    #posInvoice .invoice-meta{
+      display:grid;
+      gap:3mm;
+      font-size:12px;
+      text-align:right;
+      direction:rtl;
+      align-self:center;
+    }
+    #posInvoice .invoice-meta-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:4mm;
+      min-height:10mm;
+      padding:2mm 3mm;
+      background:#fff;
+      color:#18385f;
+      border-radius:5mm;
+      border:1px solid rgba(24,56,95,.35);
+      font-weight:800;
+    }
+    #posInvoice .invoice-meta-row span{font-weight:700}
+    #posInvoice .invoice-title-wrap{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:2mm;
+      text-align:center;
+    }
+    #posInvoice .invoice-title{
+      display:inline-block;
+      min-width:42mm;
+      padding:3.2mm 11mm;
+      background:#fff;
+      color:#18385f;
+      border-radius:5mm;
+      font-size:22px;
+      line-height:1.15;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    #posInvoice .invoice-brand-en{
+      display:block;
+      color:#fff;
+      font-size:10px;
+      font-weight:800;
+      letter-spacing:.6px;
+      opacity:.95;
+    }
+    #posInvoice .invoice-payment{
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      gap:10mm;
+      margin-top:1mm;
+      font-weight:900;
+      font-size:13px;
+    }
+    #posInvoice .invoice-logo{
+      width:38mm;
+      height:38mm;
+      border:3px solid #18385f;
+      border-radius:50%;
+      justify-self:end;
+      background:#fff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      overflow:hidden;
+      box-shadow:0 0 0 3px #fff;
+      z-index:2;
+    }
+    #posInvoice .invoice-logo-image{
+      width:100%;
+      height:100%;
+      display:block;
+      object-fit:contain;
+      border-radius:50%;
+      background:#fff;
+    }
+    #posInvoice .invoice-customer{
+      margin-top:4mm;
+      min-height:15mm;
+      padding:3mm 4mm;
+      border:2px solid #18385f;
+      border-radius:2mm;
+      display:flex;
+      align-items:center;
+      gap:3mm;
+      font-weight:800;
+      background:#fff;
+    }
+    #posInvoice .invoice-customer .line{
+      flex:1;
+      min-height:6mm;
+      border-bottom:1.5px dotted #18385f;
+      padding:0 2mm;
+    }
     #posInvoice table{width:100%;border-collapse:collapse;table-layout:fixed}
-    #posInvoice .invoice-items{border:2px solid #18385f;margin-top:4mm}
-    #posInvoice .invoice-items th,#posInvoice .invoice-items td{border:1px solid #18385f;padding:2.4mm 1.8mm;font-size:11px;text-align:center;vertical-align:middle}
-    #posInvoice .invoice-items th{background:#18385f;color:#fff;font-weight:800}
-    #posInvoice .invoice-items .desc{width:43%;text-align:right}.invoice-items .qty{width:12%}.invoice-items .unit{width:20%}.invoice-items .total{width:25%}
-    #posInvoice .invoice-summary{margin-top:4mm;margin-left:auto;margin-right:0;width:62%;border:2px solid #18385f;display:grid;grid-template-columns:1fr 1fr}
-    #posInvoice .invoice-summary>div{padding:2.5mm 3mm;border-bottom:1px solid #18385f}.invoice-summary>div:nth-last-child(-n+2){border-bottom:0}
-    #posInvoice .invoice-total-label{background:#18385f;color:#fff;font-weight:800}.invoice-total-value{font-weight:900;text-align:center}
-    #posInvoice .invoice-footer{margin-top:18mm;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8mm;align-items:end;border-top:2px solid #18385f;padding-top:5mm}
-    #posInvoice .signature{min-height:20mm}.signature .rule{margin-top:12mm;border-bottom:1px dotted #18385f}
-    #posInvoice .receipt-note{grid-column:1/-1;text-align:center;font-weight:700;font-size:12px;margin-top:5mm}
+    #posInvoice .invoice-items{
+      margin-top:4mm;
+      border:2px solid #18385f;
+      page-break-inside:auto;
+    }
+    #posInvoice .invoice-items th,
+    #posInvoice .invoice-items td{
+      border:1px solid #18385f;
+      padding:2.3mm 1.8mm;
+      font-size:11px;
+      text-align:center;
+      vertical-align:middle;
+      overflow-wrap:anywhere;
+    }
+    #posInvoice .invoice-items th{
+      background:#18385f;
+      color:#fff;
+      font-weight:900;
+    }
+    #posInvoice .invoice-items tbody tr{page-break-inside:avoid}
+    #posInvoice .invoice-items .desc{width:43%;text-align:right}
+    #posInvoice .invoice-items .qty{width:12%}
+    #posInvoice .invoice-items .unit{width:20%}
+    #posInvoice .invoice-items .total{width:25%}
+    #posInvoice .invoice-summary{
+      width:58%;
+      margin-top:5mm;
+      margin-right:0;
+      margin-left:auto;
+      border:2px solid #18385f;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      background:#fff;
+    }
+    #posInvoice .invoice-summary>div{
+      padding:2.3mm 3mm;
+      border-bottom:1px solid #18385f;
+      min-height:9mm;
+    }
+    #posInvoice .invoice-summary>div:nth-last-child(-n+2){border-bottom:0}
+    #posInvoice .invoice-total-label{
+      background:#18385f;
+      color:#fff;
+      font-weight:900;
+    }
+    #posInvoice .invoice-total-value{
+      font-weight:900;
+      text-align:center;
+      direction:ltr;
+    }
+    #posInvoice .invoice-summary .invoice-grand-total-label{
+      background:#18385f;
+      color:#fff;
+      font-size:14px;
+      font-weight:900;
+    }
+    #posInvoice .invoice-summary .invoice-grand-total-value{
+      background:#f3f6fa;
+      color:#18385f;
+      font-size:15px;
+      font-weight:900;
+    }
+    #posInvoice .invoice-footer{
+      margin-top:15mm;
+      padding-top:4mm;
+      border-top:2px solid #18385f;
+      display:grid;
+      grid-template-columns:1fr 1fr 1fr;
+      gap:8mm;
+      align-items:end;
+      page-break-inside:avoid;
+    }
+    #posInvoice .signature{min-height:21mm;text-align:center}
+    #posInvoice .signature .rule{
+      margin-top:11mm;
+      border-bottom:1.5px dotted #18385f;
+    }
+    #posInvoice .receipt-note{
+      grid-column:1/-1;
+      margin-top:2mm;
+      text-align:center;
+      font-weight:800;
+      font-size:12px;
+    }
     .invoice-action-row{display:flex;gap:10px;margin-top:12px}.invoice-action-row .btn{flex:1}
     body.invoice-print-mode>*{visibility:hidden!important}
-    body.invoice-print-mode #posInvoice,body.invoice-print-mode #posInvoice *{visibility:visible!important}
-    body.invoice-print-mode #posInvoice{display:block!important;position:absolute!important;left:0!important;top:0!important;margin:0!important;width:210mm!important;min-height:297mm!important;box-shadow:none!important}
+    body.invoice-print-mode #posInvoice,
+    body.invoice-print-mode #posInvoice *{visibility:visible!important}
+    body.invoice-print-mode #posInvoice{
+      display:block!important;
+      position:absolute!important;
+      left:0!important;
+      top:0!important;
+      margin:0!important;
+      width:210mm!important;
+      min-height:297mm!important;
+      box-shadow:none!important;
+      overflow:visible!important;
+    }
     @page{size:A4;margin:0}
     @media(max-width:720px){
       .sales-report-filters{grid-template-columns:1fr}
       #salesReportModal .modal-content,#invoiceRetrieveModal .modal-content,#returnOverlay .return-content,.pos-wide-modal{width:100%!important;max-width:none!important;max-height:100vh!important;border-radius:0!important}
       .manual-product-list{grid-template-columns:1fr}
-      #posInvoice{width:100%;min-height:auto;padding:8mm 5mm}
-      #posInvoice .invoice-top{grid-template-columns:1fr;gap:3mm}
-      #posInvoice .invoice-logo{width:24mm;height:24mm}
-      #posInvoice .invoice-title{font-size:17px;padding:3mm 7mm}
+      #posInvoice{width:100%;min-height:auto;padding:6mm 4mm}
+      #posInvoice .invoice-top{grid-template-columns:1fr;gap:3mm;padding:4mm}
+      #posInvoice .invoice-meta{order:2}
+      #posInvoice .invoice-title-wrap{order:1}
+      #posInvoice .invoice-logo{order:0;justify-self:center;width:27mm;height:27mm}
+      #posInvoice .invoice-title{font-size:17px;padding:3mm 8mm}
       #posInvoice .invoice-items th,#posInvoice .invoice-items td{font-size:9px;padding:1.6mm 1mm}
       #posInvoice .invoice-summary{width:100%}
       #posInvoice .invoice-footer{margin-top:10mm;grid-template-columns:1fr}
     }
+
 </style>
 </head>
 <body>
@@ -2948,7 +3153,11 @@
         
         <div class="horizontal-row">
           <div class="field-group">
-            <label class="form-label">الكمية المراد إرجاعها</label>
+            <label class="form-label">نوع العملية</label>
+            <select id="returnDetailType" class="form-control"><option value="return">مرتجع — يعيد المنتج للمخزون</option><option value="damage">تالف — لا يعيد المنتج للمخزون</option></select>
+          </div>
+          <div class="field-group">
+            <label class="form-label">الكمية</label>
             <input type="number" id="returnDetailQuantity" class="form-control" dir="ltr" min="1">
           </div>
           <div class="field-group">
@@ -3039,6 +3248,7 @@ function apiCall(action, params) {
             case 'addCustomer': raw = AndroidInterface.addParty(JSON.stringify({ party_type_id: Number(p.entity_type_id || 1), commercial_name: p.name, commercial_name_ar: p.name, phone: p.phone, email: p.email || '', credit_limit: Number(p.credit_limit || 0), is_active: true })); break;
             case 'searchSales': raw = AndroidInterface.searchSales(JSON.stringify(p)); break;
             case 'saveReturn': raw = AndroidInterface.processSaleReturn(JSON.stringify(p)); break;
+            case 'processProductSaleAdjustment': raw = AndroidInterface.processProductSaleAdjustment(JSON.stringify(p)); break;
             case 'processReturn': raw = AndroidInterface.processSaleReturn(JSON.stringify(p)); break;
             case 'searchInvoices': raw = AndroidInterface.searchInvoices(JSON.stringify(p)); break;
             case 'retrieveInvoice': raw = AndroidInterface.retrieveInvoice(String(p.invoice_number || '')); break;
@@ -3438,10 +3648,24 @@ function showSuccessCheckmark() {
 
 let manualProductCache = [];
 
+function focusPosField(elementId, selectText = false) {
+    const field = document.getElementById(elementId);
+    if (!field) return;
+    setTimeout(() => {
+        try {
+            field.focus({ preventScroll: false });
+            if (selectText && typeof field.select === 'function') field.select();
+        } catch (_) {
+            try { field.focus(); } catch (_) {}
+        }
+    }, 80);
+}
+
 function openManualProductPicker() {
     const modal = document.getElementById('manualProductPickerModal');
     if (!modal) return;
     modal.style.display = 'flex';
+    focusPosField('manualProductSearch');
     const list = document.getElementById('manualProductList');
     list.innerHTML = '<div class="text-muted text-center">جارٍ تحميل المنتجات من SQLite...</div>';
     apiCall('getProducts', {})
@@ -3496,7 +3720,9 @@ function addProductManually() {
         return;
     }
     addProductByBarcode(barcode);
-    document.getElementById('manualBarcodeInput').value = '';
+    const input = document.getElementById('manualBarcodeInput');
+    input.value = '';
+    focusPosField('manualBarcodeInput');
 }
 
 function addProductToTable(product) {
@@ -3844,8 +4070,8 @@ function renderSalesInvoice(invoice) {
         <span>المحترم</span>
       </div>
 
-      <div style="display:flex;justify-content:flex-start;gap:12mm;align-items:center;margin-top:4mm;font-weight:800">
-        <span>☐ نقداً</span>
+      <div class="invoice-payment">
+        <span>${isCredit ? '☐' : '☑'} نقداً</span>
         <span>${isCredit ? '☑' : '☐'} آجل</span>
       </div>
 
@@ -3866,7 +4092,7 @@ function renderSalesInvoice(invoice) {
         <div>الخصم</div><div class="invoice-total-value">${discount.toFixed(2)}</div>
         <div>الضريبة</div><div class="invoice-total-value">${tax.toFixed(2)}</div>
         <div>رسوم الخدمة</div><div class="invoice-total-value">${serviceFee.toFixed(2)}</div>
-        <div class="invoice-total-label">الإجمالي / TOTAL</div><div class="invoice-total-value">${net.toFixed(2)}</div>
+        <div class="invoice-grand-total-label">الإجمالي / TOTAL</div><div class="invoice-grand-total-value">${net.toFixed(2)}</div>
         <div>المدفوع</div><div class="invoice-total-value">${paid.toFixed(2)}</div>
         <div>المتبقي</div><div class="invoice-total-value">${remaining.toFixed(2)}</div>
       </div>
@@ -3882,12 +4108,17 @@ function renderSalesInvoice(invoice) {
     return section;
 }
 
+function renderReceiptForPrint(invoice) {
+    // Compatibility wrapper retained for existing POS regression contracts.
+    return renderSalesInvoice(invoice);
+}
+
 function buildInvoiceStandaloneHtml() {
     const invoice = document.getElementById('posInvoice');
     if (!invoice) throw new Error('حاوية الفاتورة غير موجودة');
     const styles = Array.from(document.querySelectorAll('style')).map(style => style.textContent || '').join('\n');
     return `<section id="posInvoice">${invoice.innerHTML}</section><style>${styles}
-      #posInvoice{display:block!important;position:relative!important;left:auto!important;top:auto!important;width:794px!important;min-height:1123px!important;margin:0!important;overflow:visible!important;box-shadow:none!important}
+      #posInvoice{display:block!important;position:relative!important;left:auto!important;top:auto!important;width:794px!important;min-height:1123px!important;height:auto!important;margin:0!important;overflow:visible!important;box-shadow:none!important}
     </style>`;
 }
 
@@ -3902,9 +4133,10 @@ async function loadInvoiceForLastSale() {
 async function printReceipt() {
     try {
         showLoading(true);
-        const invoice = await loadInvoiceForLastSale();
+        const response = await loadInvoiceForLastSale();
+        const invoice = response.data || response;
         await loadCurrentStationLogo();
-        renderSalesInvoice(invoice);
+        renderReceiptForPrint(response.data || response);
         document.body.classList.add('invoice-print-mode');
         const printResult = await apiCall('printReceipt');
         if (!printResult.success) throw new Error(printResult.message || printResult.error || 'فشل فتح نافذة الطباعة');
@@ -4248,7 +4480,8 @@ function fillReturnForm(sale) {
     qty.value = returnable > 0 ? returnable : '';
     qty.max = String(Math.max(0, returnable));
     qty.step = '0.01';
-    document.getElementById('returnDetailReason').value = 'تالف';
+    document.getElementById('returnDetailReason').value = 'غير مرغوب';
+    document.getElementById('returnDetailType').value = 'return';
     document.getElementById('returnDetailNotes').value = '';
 }
 
@@ -4275,11 +4508,14 @@ function saveReturn() {
     const saveButton = document.querySelector('#returnOverlay .floating-buttons .btn-success');
     if (saveButton) saveButton.disabled = true;
     showLoading(true);
-    apiCall('saveReturn', {
+    apiCall('processProductSaleAdjustment', {
         invoice_number: invoiceNumber,
+        sale_id: Number(selectedReturnSale.sale_id || 0),
+        sale_item_id: Number(selectedReturnSale.item_id || 0),
         product_id: Number(selectedReturnSale.product_id || 0),
         barcode: String(selectedReturnSale.barcode || ''),
         quantity,
+        adjustment_type: document.getElementById('returnDetailType').value,
         reason,
         notes,
         idempotency_key: activeReturnOperationKey
