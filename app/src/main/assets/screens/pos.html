@@ -160,6 +160,14 @@
       box-shadow: 0 0 8px rgba(0,122,204,0.5);
       outline: none;
     }
+    /* ====== مؤشر تركيز ذهبي لجميع الحقول ====== */
+    input:focus, select:focus, textarea:focus, .modal-input:focus, .quantity-input:focus {
+      outline: 2px solid var(--gold) !important;
+      outline-offset: 1px;
+      box-shadow: 0 0 12px rgba(255, 215, 0, 0.65), 0 0 4px rgba(255, 215, 0, 0.4) !important;
+      border-color: var(--gold) !important;
+      transition: box-shadow 0.2s, outline 0.2s;
+    }
     .horizontal-row {
       display: flex;
       flex-wrap: wrap;
@@ -1204,10 +1212,123 @@
       display: flex;
       gap: 10px;
       margin-top: 15px;
+      flex-wrap: wrap;
     }
     .action-buttons button {
       flex: 1;
+      min-width: 110px;
     }
+
+    /* ======================================================= */
+    /* ===== أزرار الفاتورة السفلية المطوّرة (SVG + Tooltip) ===== */
+    /* ======================================================= */
+    .pos-action-btn {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 6px;
+      min-height: 68px;
+      border-radius: 12px;
+      border: none;
+      font-weight: 700;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1),
+                  box-shadow 0.25s ease,
+                  background 0.25s ease;
+      overflow: visible;
+      color: #fff;
+      line-height: 1.1;
+      text-align: center;
+      font-family: 'Cairo', sans-serif;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2), inset 0 -3px 0 rgba(0,0,0,0.15);
+    }
+    .pos-action-btn svg {
+      width: 26px;
+      height: 26px;
+      fill: currentColor;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.25));
+      transition: transform 0.3s ease;
+    }
+    .pos-action-btn span {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+    }
+    .pos-action-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 18px rgba(0,0,0,0.28), inset 0 -3px 0 rgba(0,0,0,0.2);
+    }
+    .pos-action-btn:hover svg {
+      transform: scale(1.15) rotate(-5deg);
+    }
+    .pos-action-btn:active {
+      transform: translateY(1px) scale(0.97);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25), inset 0 -1px 0 rgba(0,0,0,0.2);
+    }
+    /* Tooltip فوق كل زر */
+    .pos-action-btn::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%) translateY(6px);
+      background: linear-gradient(135deg, #1a1a1a 0%, #333 100%);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,215,0,0.4);
+      z-index: 100;
+    }
+    .pos-action-btn::before {
+      content: "";
+      position: absolute;
+      bottom: calc(100% + 2px);
+      left: 50%;
+      transform: translateX(-50%) translateY(6px);
+      border-width: 6px 6px 0;
+      border-style: solid;
+      border-color: #1a1a1a transparent transparent;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      z-index: 100;
+    }
+    .pos-action-btn:hover::after,
+    .pos-action-btn:hover::before,
+    .pos-action-btn:focus::after,
+    .pos-action-btn:focus::before,
+    .pos-action-btn.touch-show::after,
+    .pos-action-btn.touch-show::before {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    /* ألوان مخصصة لكل زر */
+    #completeSaleBtn.pos-action-btn {
+      background: linear-gradient(145deg, #2ecc71 0%, #27ae60 60%, #1e8449 100%);
+    }
+    #printReceiptBtn.pos-action-btn {
+      background: linear-gradient(145deg, #3498db 0%, #2980b9 60%, #1f6391 100%);
+    }
+    #deliverPurchaseBtn.pos-action-btn {
+      background: linear-gradient(145deg, #17a2b8 0%, #138496 60%, #0d6675 100%);
+    }
+    #whatsappInvoiceBtn.pos-action-btn {
+      background: linear-gradient(145deg, #25D366 0%, #1da851 60%, #128C3A 100%);
+    }
+
     .btn {
       padding: 10px 15px;
       border-radius: 8px;
@@ -1265,6 +1386,13 @@
         font-size: 0.8rem;
         padding: 8px;
       }
+      .pos-action-btn {
+        min-height: 62px;
+        padding: 8px 4px;
+      }
+      .pos-action-btn svg { width: 22px; height: 22px; }
+      .pos-action-btn span { font-size: 0.68rem; }
+      .pos-action-btn::after { font-size: 0.65rem; padding: 4px 8px; }
     }
     #qr-reader {
       width: 100%;
@@ -2499,218 +2627,6 @@
     .manual-product-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;max-height:55vh;overflow:auto;text-align:right}
     .manual-product-option{width:100%;text-align:right;padding:12px;border:1px solid var(--input-border-light);border-radius:10px;background:var(--card-color);color:var(--text-color)}
     .manual-product-option strong{display:block}.manual-product-option small{opacity:.75;direction:ltr;display:block;margin-top:4px}
-    #posInvoice{
-      display:none;
-      width:210mm;
-      min-height:297mm;
-      box-sizing:border-box;
-      background:#fff;
-      color:#172b45;
-      direction:rtl;
-      font-family:'Cairo','Noto Sans Arabic',Arial,sans-serif;
-      padding:10mm 9mm 8mm;
-      position:relative;
-      overflow:visible;
-    }
-    #posInvoice *{box-sizing:border-box}
-    #posInvoice .invoice-top{
-      position:relative;
-      display:grid;
-      grid-template-columns:1fr 1.5fr 1fr;
-      align-items:center;
-      gap:7mm;
-      min-height:42mm;
-      padding:4mm 5mm;
-      background:#18385f;
-      color:#fff;
-      border:2px solid #18385f;
-      border-radius:5mm;
-      overflow:visible;
-    }
-    #posInvoice .invoice-meta{
-      display:grid;
-      gap:3mm;
-      font-size:12px;
-      text-align:right;
-      direction:rtl;
-      align-self:center;
-    }
-    #posInvoice .invoice-meta-row{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:4mm;
-      min-height:10mm;
-      padding:2mm 3mm;
-      background:#fff;
-      color:#18385f;
-      border-radius:5mm;
-      border:1px solid rgba(24,56,95,.35);
-      font-weight:800;
-    }
-    #posInvoice .invoice-meta-row span{font-weight:700}
-    #posInvoice .invoice-title-wrap{
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      gap:2mm;
-      text-align:center;
-    }
-    #posInvoice .invoice-title{
-      display:inline-block;
-      min-width:42mm;
-      padding:3.2mm 11mm;
-      background:#fff;
-      color:#18385f;
-      border-radius:5mm;
-      font-size:22px;
-      line-height:1.15;
-      font-weight:900;
-      white-space:nowrap;
-    }
-    #posInvoice .invoice-brand-en{
-      display:block;
-      color:#fff;
-      font-size:10px;
-      font-weight:800;
-      letter-spacing:.6px;
-      opacity:.95;
-    }
-    #posInvoice .invoice-payment{
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      gap:10mm;
-      margin-top:1mm;
-      font-weight:900;
-      font-size:13px;
-    }
-    #posInvoice .invoice-logo{
-      width:38mm;
-      height:38mm;
-      border:3px solid #18385f;
-      border-radius:50%;
-      justify-self:end;
-      background:#fff;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      overflow:hidden;
-      box-shadow:0 0 0 3px #fff;
-      z-index:2;
-    }
-    #posInvoice .invoice-logo-image{
-      width:100%;
-      height:100%;
-      display:block;
-      object-fit:contain;
-      border-radius:50%;
-      background:#fff;
-    }
-    #posInvoice .invoice-customer{
-      margin-top:4mm;
-      min-height:15mm;
-      padding:3mm 4mm;
-      border:2px solid #18385f;
-      border-radius:2mm;
-      display:flex;
-      align-items:center;
-      gap:3mm;
-      font-weight:800;
-      background:#fff;
-    }
-    #posInvoice .invoice-customer .line{
-      flex:1;
-      min-height:6mm;
-      border-bottom:1.5px dotted #18385f;
-      padding:0 2mm;
-    }
-    #posInvoice table{width:100%;border-collapse:collapse;table-layout:fixed}
-    #posInvoice .invoice-items{
-      margin-top:4mm;
-      border:2px solid #18385f;
-      page-break-inside:auto;
-    }
-    #posInvoice .invoice-items th,
-    #posInvoice .invoice-items td{
-      border:1px solid #18385f;
-      padding:2.3mm 1.8mm;
-      font-size:11px;
-      text-align:center;
-      vertical-align:middle;
-      overflow-wrap:anywhere;
-    }
-    #posInvoice .invoice-items th{
-      background:#18385f;
-      color:#fff;
-      font-weight:900;
-    }
-    #posInvoice .invoice-items tbody tr{page-break-inside:avoid}
-    #posInvoice .invoice-items .desc{width:43%;text-align:right}
-    #posInvoice .invoice-items .qty{width:12%}
-    #posInvoice .invoice-items .unit{width:20%}
-    #posInvoice .invoice-items .total{width:25%}
-    #posInvoice .invoice-summary{
-      width:58%;
-      margin-top:5mm;
-      margin-right:0;
-      margin-left:auto;
-      border:2px solid #18385f;
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      background:#fff;
-    }
-    #posInvoice .invoice-summary>div{
-      padding:2.3mm 3mm;
-      border-bottom:1px solid #18385f;
-      min-height:9mm;
-    }
-    #posInvoice .invoice-summary>div:nth-last-child(-n+2){border-bottom:0}
-    #posInvoice .invoice-total-label{
-      background:#18385f;
-      color:#fff;
-      font-weight:900;
-    }
-    #posInvoice .invoice-total-value{
-      font-weight:900;
-      text-align:center;
-      direction:ltr;
-    }
-    #posInvoice .invoice-summary .invoice-grand-total-label{
-      background:#18385f;
-      color:#fff;
-      font-size:14px;
-      font-weight:900;
-    }
-    #posInvoice .invoice-summary .invoice-grand-total-value{
-      background:#f3f6fa;
-      color:#18385f;
-      font-size:15px;
-      font-weight:900;
-    }
-    #posInvoice .invoice-footer{
-      margin-top:15mm;
-      padding-top:4mm;
-      border-top:2px solid #18385f;
-      display:grid;
-      grid-template-columns:1fr 1fr 1fr;
-      gap:8mm;
-      align-items:end;
-      page-break-inside:avoid;
-    }
-    #posInvoice .signature{min-height:21mm;text-align:center}
-    #posInvoice .signature .rule{
-      margin-top:11mm;
-      border-bottom:1.5px dotted #18385f;
-    }
-    #posInvoice .receipt-note{
-      grid-column:1/-1;
-      margin-top:2mm;
-      text-align:center;
-      font-weight:800;
-      font-size:12px;
-    }
     .invoice-action-row{display:flex;gap:10px;margin-top:12px}.invoice-action-row .btn{flex:1}
     body.invoice-print-mode>*{visibility:hidden!important}
     body.invoice-print-mode #posInvoice,
@@ -2731,18 +2647,311 @@
       .sales-report-filters{grid-template-columns:1fr}
       #salesReportModal .modal-content,#invoiceRetrieveModal .modal-content,#returnOverlay .return-content,.pos-wide-modal{width:100%!important;max-width:none!important;max-height:100vh!important;border-radius:0!important}
       .manual-product-list{grid-template-columns:1fr}
-      #posInvoice{width:100%;min-height:auto;padding:6mm 4mm}
-      #posInvoice .invoice-top{grid-template-columns:1fr;gap:3mm;padding:4mm}
-      #posInvoice .invoice-meta{order:2}
-      #posInvoice .invoice-title-wrap{order:1}
-      #posInvoice .invoice-logo{order:0;justify-self:center;width:27mm;height:27mm}
-      #posInvoice .invoice-title{font-size:17px;padding:3mm 8mm}
-      #posInvoice .invoice-items th,#posInvoice .invoice-items td{font-size:9px;padding:1.6mm 1mm}
-      #posInvoice .invoice-summary{width:100%}
-      #posInvoice .invoice-footer{margin-top:10mm;grid-template-columns:1fr}
+    }
+  </style>
+
+  <!-- ============================================================ -->
+  <!-- أنماط الفاتورة المرجعية المنفصلة (تُستخدم للطباعة وتوليد JPG) -->
+  <!-- ============================================================ -->
+  <style id="posInvoiceStyleBlock">
+    #posInvoice {
+      display: none;
+      width: 210mm;
+      min-height: 297mm;
+      box-sizing: border-box;
+      background: #fff;
+      color: #172b45;
+      direction: rtl;
+      font-family: 'Cairo', 'Noto Sans Arabic', Arial, sans-serif;
+      padding: 10mm 9mm 8mm;
+      position: relative;
+      overflow: visible;
+    }
+    #posInvoice * { box-sizing: border-box; }
+
+    #posInvoice .invoice-header {
+      background-color: #1a3a5a;
+      border-radius: 5mm;
+      padding: 6mm 6mm;
+      display: grid;
+      grid-template-columns: 1fr 1.4fr 1fr;
+      align-items: center;
+      gap: 4mm;
+      min-height: 38mm;
+      position: relative;
+      margin-bottom: 8mm;
+      overflow: visible;
     }
 
-</style>
+    #posInvoice .invoice-logo-circle {
+      width: 34mm;
+      height: 34mm;
+      background-color: #fff;
+      border: 1.5mm solid #1a3a5a;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: absolute;
+      top: 50%;
+      right: -5mm;
+      transform: translateY(-50%);
+      box-shadow: 0 0 0 1.5mm #fff;
+      z-index: 10;
+    }
+    #posInvoice .invoice-logo-circle img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      border-radius: 50%;
+    }
+
+    #posInvoice .invoice-center {
+      grid-column: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2mm;
+      text-align: center;
+    }
+    #posInvoice .invoice-title {
+      background-color: #fff;
+      color: #1a3a5a;
+      padding: 2.5mm 12mm;
+      border-radius: 5mm;
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.15;
+      white-space: nowrap;
+      display: inline-block;
+    }
+    #posInvoice .invoice-brand-en {
+      color: #fff;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      opacity: 0.95;
+    }
+    #posInvoice .invoice-payment {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10mm;
+      margin-top: 1mm;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    #posInvoice .invoice-meta {
+      grid-column: 3;
+      display: flex;
+      flex-direction: column;
+      gap: 2mm;
+      align-self: center;
+    }
+    #posInvoice .invoice-meta-pill {
+      border: 1.2px solid #fff;
+      border-radius: 4mm;
+      padding: 1.5mm 3mm;
+      display: flex;
+      align-items: center;
+      gap: 2mm;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      background-color: transparent;
+      min-height: 7mm;
+    }
+    #posInvoice .invoice-meta-pill > span:first-child {
+      white-space: nowrap;
+    }
+    #posInvoice .invoice-meta-pill .value {
+      flex: 1;
+      text-align: center;
+      border-bottom: 1px dotted #fff;
+      min-height: 1em;
+      padding: 0 2mm;
+    }
+    #posInvoice .invoice-meta-pill .invoice-number-value {
+      color: #ff0000;
+      font-size: 14px;
+      font-weight: 900;
+      border-bottom: 1px dotted #fff;
+    }
+
+    #posInvoice .invoice-customer {
+      border: 2px solid #1a3a5a;
+      border-radius: 4mm;
+      padding: 3mm 4mm;
+      margin-bottom: 5mm;
+      display: flex;
+      align-items: center;
+      color: #1a3a5a;
+      font-weight: 800;
+      font-size: 12px;
+    }
+    #posInvoice .invoice-customer .label-right {
+      white-space: nowrap;
+    }
+    #posInvoice .invoice-customer .line {
+      flex: 1;
+      text-align: center;
+      border-bottom: 2px dotted #1a3a5a;
+      margin: 0 4mm;
+      min-height: 5mm;
+      color: #000;
+      font-weight: 700;
+      padding: 0 2mm;
+      overflow-wrap: anywhere;
+    }
+    #posInvoice .invoice-customer .label-left {
+      white-space: nowrap;
+    }
+
+    #posInvoice .invoice-items {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      border: 2px solid #1a3a5a;
+      border-radius: 3mm;
+      overflow: hidden;
+      margin-bottom: 4mm;
+      table-layout: fixed;
+      page-break-inside: auto;
+    }
+    #posInvoice .invoice-items th,
+    #posInvoice .invoice-items td {
+      border: 1px solid #1a3a5a;
+      padding: 2.2mm 1.5mm;
+      font-size: 11px;
+      text-align: center;
+      vertical-align: middle;
+      overflow-wrap: anywhere;
+    }
+    #posInvoice .invoice-items th {
+      background-color: #1a3a5a;
+      color: #fff;
+      font-weight: 900;
+      line-height: 1.3;
+    }
+    #posInvoice .invoice-items td {
+      color: #000;
+      font-weight: 700;
+    }
+    #posInvoice .invoice-items tbody td:first-child {
+      background: linear-gradient(to bottom, #fdfbf7 0%, #f4eae1 100%);
+    }
+    #posInvoice .invoice-items tbody tr { page-break-inside: avoid; }
+
+    #posInvoice .invoice-items .desc  { width: 45%; text-align: center; }
+    #posInvoice .invoice-items .qty   { width: 10%; }
+    #posInvoice .invoice-items .unit  { width: 22.5%; }
+    #posInvoice .invoice-items .total { width: 22.5%; }
+
+    #posInvoice .invoice-summary {
+      width: 50%;
+      margin-right: auto;
+      margin-left: 0;
+      margin-top: 4mm;
+      margin-bottom: 6mm;
+      border: 2px solid #1a3a5a;
+      border-radius: 3mm;
+      overflow: hidden;
+      background: #fff;
+    }
+    #posInvoice .invoice-summary-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    #posInvoice .invoice-summary-row > div {
+      padding: 2.5mm 3mm;
+      border-bottom: 1px solid #1a3a5a;
+      background-color: #1a3a5a;
+      color: #fff;
+      font-weight: 900;
+      font-size: 12px;
+      text-align: center;
+      min-height: 9mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #posInvoice .invoice-summary-row > div.value {
+      background-color: #fff;
+      color: #1a3a5a;
+      direction: ltr;
+    }
+    #posInvoice .invoice-summary-row:last-child > div {
+      border-bottom: 0;
+    }
+    #posInvoice .invoice-summary-row .grand-label {
+      background-color: #1a3a5a;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 900;
+    }
+    #posInvoice .invoice-summary-row .grand-value {
+      background-color: #f3f6fa;
+      color: #1a3a5a;
+      font-size: 15px;
+      font-weight: 900;
+      direction: ltr;
+    }
+
+    #posInvoice .invoice-footer {
+      margin-top: 10mm;
+      display: flex;
+      flex-direction: column;
+      gap: 2.5mm;
+      page-break-inside: avoid;
+    }
+    #posInvoice .invoice-footer-labels {
+      display: flex;
+      gap: 5mm;
+    }
+    #posInvoice .invoice-footer-labels span {
+      flex: 1;
+      background-color: #1a3a5a;
+      color: #fff;
+      padding: 2.5mm 3mm;
+      border-radius: 3mm;
+      font-size: 11px;
+      font-weight: 900;
+      text-align: center;
+    }
+    #posInvoice .invoice-footer-dots {
+      display: flex;
+      gap: 5mm;
+    }
+    #posInvoice .invoice-footer-dots span {
+      flex: 1;
+      border-bottom: 1.5px dotted #1a3a5a;
+      min-height: 6mm;
+    }
+    #posInvoice .receipt-note {
+      margin-top: 4mm;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 800;
+      color: #1a3a5a;
+    }
+
+    @media(max-width:720px){
+      #posInvoice{width:100%;min-height:auto;padding:6mm 4mm}
+      #posInvoice .invoice-header{grid-template-columns:1fr;gap:4mm;padding:5mm}
+      #posInvoice .invoice-meta{order:3}
+      #posInvoice .invoice-center{order:2;margin-top:8mm}
+      #posInvoice .invoice-logo-circle{width:26mm;height:26mm;right:-3mm}
+      #posInvoice .invoice-title{font-size:17px;padding:2.5mm 8mm}
+      #posInvoice .invoice-items th,#posInvoice .invoice-items td{font-size:9px;padding:1.6mm 1mm}
+      #posInvoice .invoice-summary{width:100%}
+      #posInvoice .invoice-footer{margin-top:8mm}
+    }
+  </style>
 </head>
 <body>
 <!-- شريط المعلومات العلوي -->
@@ -2751,8 +2960,9 @@
     <h2 style="color: silver; text-shadow: 0 0 10px silver; font-weight: bold;">نقاط البيع</h2>
   </div>
   <div class="top-actions" aria-label="إجراءات الشاشة">
-    <button id="darkModeToggle" class="mode-toggle-btn emoji-top-btn" type="button" title="تبديل الوضع" aria-label="تبديل الوضع"><span id="darkModeIcon">🌙</span></button>
+    <!-- تم عكس الأيقونات: 🏠 يساراً، 🌙 يميناً -->
     <button id="homeButton" class="mode-toggle-btn emoji-top-btn" type="button" title="الرئيسية" aria-label="الرئيسية">🏠</button>
+    <button id="darkModeToggle" class="mode-toggle-btn emoji-top-btn" type="button" title="تبديل الوضع" aria-label="تبديل الوضع"><span id="darkModeIcon">🌙</span></button>
   </div>
 </div>
 
@@ -2919,11 +3129,33 @@
     </div>
 
     <input type="hidden" id="quantityOnHand" name="quantity_on_hand">
+
+    <!-- ====== الأزرار السفلية المحسّنة بـ SVG + Tooltip ====== -->
     <div class="action-buttons">
-      <button class="btn btn-success" id="completeSaleBtn">ترحيل الفاتورة</button>
-      <button class="btn btn-primary" id="printReceiptBtn">طباعة</button>
-      <button class="btn btn-info" id="deliverPurchaseBtn" type="button">توصيل المشتريات</button>
-      <button class="btn btn-primary" id="whatsappInvoiceBtn" type="button">إرسال واتساب</button>
+      <button class="btn pos-action-btn" id="completeSaleBtn" type="button" data-tooltip="ترحيل الفاتورة">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+        </svg>
+        <span>ترحيل الفاتورة</span>
+      </button>
+      <button class="btn pos-action-btn" id="printReceiptBtn" type="button" data-tooltip="طباعة الفاتورة">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
+        </svg>
+        <span>طباعة</span>
+      </button>
+      <button class="btn pos-action-btn" id="deliverPurchaseBtn" type="button" data-tooltip="توصيل المشتريات">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+        </svg>
+        <span>توصيل</span>
+      </button>
+      <button class="btn pos-action-btn" id="whatsappInvoiceBtn" type="button" data-tooltip="إرسال واتساب">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+        </svg>
+        <span>واتساب</span>
+      </button>
     </div>
   </div>
   
@@ -3306,7 +3538,7 @@ let scannerRequested = false;
 let torchTrack = null;
 let lastScannedBarcode = '';
 let lastScannedAt = 0;
-let audioDing = new Audio('/static/sound/Ding.mp3'); // سيتم استبداله بملف صوتي محلي لاحقاً
+let audioDing = new Audio('/static/sound/Ding.mp3');
 let inactivityTimer;
 let sleepModeTimer;
 const INACTIVITY_TIMEOUT = 10000;
@@ -3393,7 +3625,6 @@ function initBarcodeScanner() {
             try {
                 cameras = typeof Html5Qrcode.getCameras === 'function' ? await Html5Qrcode.getCameras() : [];
             } catch (cameraError) {
-                // Permission may be requested only when start() receives constraints.
                 console.warn('Camera enumeration unavailable; using facingMode fallback', cameraError);
             }
             const list = Array.isArray(cameras) ? cameras : [];
@@ -3779,7 +4010,6 @@ function addProductToTable(product) {
 }
 
 function showDoubleClickActions(event, row, product) {
-    // إزالة أي أزرار سابقة
     const existingActions = document.querySelector('.double-click-actions');
     if (existingActions) existingActions.remove();
 
@@ -3881,7 +4111,6 @@ function generateInvoiceNumber() {
 }
 
 function resetForm() {
-    // لا تبق الكاميرا ومحرك فك الباركود قيد التشغيل بعد إتمام أو إعادة ضبط فاتورة.
     stopScanner();
     generateInvoiceNumber();
     document.getElementById('productsTableBody').innerHTML = '';
@@ -3947,7 +4176,9 @@ function completeSale() {
                 showSuccessCheckmark();
                 lastSaleId = sale.sale_id;
                 lastInvoiceNumber = sale.invoice_number || document.getElementById('invoiceNumber').value;
-                showToast('تم ترحيل البيع وتحديث المخزون فعلياً', 'success');
+                const saleSms = sale.sms || {};
+                showToast('تم ترحيل البيع وتحديث المخزون فعلياً' +
+                    (isCredit ? (saleSms.queued ? ' — تم وضع SMS في طابور الإرسال' : ' — تعذر تجهيز SMS: ' + (saleSms.reason || 'غير معروف')) : ''), 'success');
                 resetForm();
             } else { showToast(sale.error || sale.message || data.error || data.message || 'تعذر ترحيل الفاتورة؛ لم يُخصم المخزون', 'error'); }
         })
@@ -4001,7 +4232,14 @@ async function loadCurrentStationLogo(forceReload) {
         .then(profileResponse => {
             if (!profileResponse.success) throw new Error(profileResponse.message || profileResponse.error || 'تعذر جلب بيانات المحطة الحالية');
             const profile = profileResponse.data || profileResponse;
-            const photo = parseStationPhotoValue(profile.station_photo);
+            const photoValue = profile.station_photo
+                || profile.station_logo
+                || profile.logo
+                || profile.photo
+                || profile.station_image
+                || profile.image
+                || '';
+            const photo = parseStationPhotoValue(photoValue);
             if (!photo.uri) {
                 stationLogoDataUrl = '';
                 return '';
@@ -4027,6 +4265,7 @@ function renderSalesInvoice(invoice) {
     const customerName = invoice.customer_name || 'بيع نقدي';
     const payment = invoice.payment_type || 'cash';
     const isCredit = String(payment).toLowerCase() === 'credit' || String(payment) === 'آجل' || Number(invoice.is_credit || 0) === 1;
+
     const rows = items.map((item, index) => {
         const originalQty = Number(item.quantity || 0);
         const returnedQty = Number(item.returned_quantity || 0);
@@ -4042,6 +4281,12 @@ function renderSalesInvoice(invoice) {
         </tr>`;
     }).join('');
 
+    const emptyRows = items.length === 0
+        ? Array.from({ length: 6 }).map(() =>
+            `<tr><td class="desc"></td><td class="qty"></td><td class="unit"></td><td class="total"></td></tr>`
+          ).join('')
+        : '';
+
     const subtotal = Number(invoice.subtotal ?? 0);
     const discount = Number(invoice.discount_amount ?? 0);
     const tax = Number(invoice.tax_amount ?? 0) + Number(invoice.vat_amount ?? 0);
@@ -4052,27 +4297,36 @@ function renderSalesInvoice(invoice) {
 
     const section = document.getElementById('posInvoice');
     section.innerHTML = `
-      <div class="invoice-top">
-        <div class="invoice-meta">
-          <div class="invoice-meta-row"><strong>التاريخ:</strong><span>${escapeReceiptValue(invoice.sale_date || '')}</span></div>
-          <div class="invoice-meta-row"><strong>NO:</strong><span dir="ltr">${escapeReceiptValue(invoice.invoice_number || '')}</span></div>
+      <div class="invoice-header">
+        <div class="invoice-logo-circle">
+          ${stationLogoDataUrl
+            ? `<img src="${escapeReceiptValue(stationLogoDataUrl)}" alt="صورة المحطة">`
+            : ''}
         </div>
-        <div style="text-align:center">
+        <div class="invoice-center">
           <div class="invoice-title">فاتورة بيع</div>
           <span class="invoice-brand-en">SALES INVOICE</span>
+          <div class="invoice-payment">
+            <span>${isCredit ? '☐' : '☑'} نقداً</span>
+            <span>${isCredit ? '☑' : '☐'} آجل</span>
+          </div>
         </div>
-        <div class="invoice-logo" aria-label="صورة المحطة">${stationLogoDataUrl ? `<img class="invoice-logo-image" src="${escapeReceiptValue(stationLogoDataUrl)}" alt="صورة المحطة">` : ''}</div>
+        <div class="invoice-meta">
+          <div class="invoice-meta-pill">
+            <span>التاريخ:</span>
+            <span class="value">${escapeReceiptValue(invoice.sale_date || '')}</span>
+          </div>
+          <div class="invoice-meta-pill">
+            <span>NO:</span>
+            <span class="value invoice-number-value" dir="ltr">${escapeReceiptValue(invoice.invoice_number || '')}</span>
+          </div>
+        </div>
       </div>
 
       <div class="invoice-customer">
-        <span>مطلوب من الأخ/ الأخت:</span>
+        <span class="label-right">مطلوب من الأخ/ الأخت:</span>
         <span class="line">${escapeReceiptValue(customerName)}</span>
-        <span>المحترم</span>
-      </div>
-
-      <div class="invoice-payment">
-        <span>${isCredit ? '☐' : '☑'} نقداً</span>
-        <span>${isCredit ? '☑' : '☐'} آجل</span>
+        <span class="label-left">المحترم</span>
       </div>
 
       <table class="invoice-items">
@@ -4084,42 +4338,73 @@ function renderSalesInvoice(invoice) {
             <th class="total">القيمة الإجمالية<br><span style="font-size:9px">Total Amount</span></th>
           </tr>
         </thead>
-        <tbody>${rows || '<tr><td colspan="4">لا توجد بنود</td></tr>'}</tbody>
+        <tbody>${rows || emptyRows || '<tr><td colspan="4">لا توجد بنود</td></tr>'}</tbody>
       </table>
 
       <div class="invoice-summary">
-        <div class="invoice-total-label">الإجمالي الفرعي</div><div class="invoice-total-value">${subtotal.toFixed(2)}</div>
-        <div>الخصم</div><div class="invoice-total-value">${discount.toFixed(2)}</div>
-        <div>الضريبة</div><div class="invoice-total-value">${tax.toFixed(2)}</div>
-        <div>رسوم الخدمة</div><div class="invoice-total-value">${serviceFee.toFixed(2)}</div>
-        <div class="invoice-grand-total-label">الإجمالي / TOTAL</div><div class="invoice-grand-total-value">${net.toFixed(2)}</div>
-        <div>المدفوع</div><div class="invoice-total-value">${paid.toFixed(2)}</div>
-        <div>المتبقي</div><div class="invoice-total-value">${remaining.toFixed(2)}</div>
+        <div class="invoice-summary-row">
+          <div>الإجمالي الفرعي</div>
+          <div class="value">${subtotal.toFixed(2)}</div>
+        </div>
+        <div class="invoice-summary-row">
+          <div>الخصم</div>
+          <div class="value">${discount.toFixed(2)}</div>
+        </div>
+        <div class="invoice-summary-row">
+          <div>الضريبة</div>
+          <div class="value">${tax.toFixed(2)}</div>
+        </div>
+        <div class="invoice-summary-row">
+          <div>رسوم الخدمة</div>
+          <div class="value">${serviceFee.toFixed(2)}</div>
+        </div>
+        <div class="invoice-summary-row">
+          <div class="grand-label">الإجمالي / TOTAL</div>
+          <div class="grand-value">${net.toFixed(2)}</div>
+        </div>
+        <div class="invoice-summary-row">
+          <div>المدفوع</div>
+          <div class="value">${paid.toFixed(2)}</div>
+        </div>
+        <div class="invoice-summary-row">
+          <div>المتبقي</div>
+          <div class="value">${remaining.toFixed(2)}</div>
+        </div>
       </div>
 
       <div class="invoice-footer">
-        <div class="signature"><strong>اسم المستلم:</strong><div class="rule"></div></div>
-        <div class="signature"><strong>التوقيع:</strong><div class="rule"></div></div>
-        <div class="signature"><strong>المبيعات:</strong><div class="rule"></div></div>
-        <div class="receipt-note">استلمت البضاعة الموضحة أعلاه كاملة وسليمة</div>
+        <div class="invoice-footer-labels">
+          <span>اسم المستلم</span>
+          <span>التوقيع</span>
+          <span>المبيعات</span>
+        </div>
+        <div class="invoice-footer-dots">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
       </div>
+
+      <div class="receipt-note">استلمت البضاعة الموضحة أعلاه كاملة وسليمة</div>
     `;
     section.dataset.invoiceNumber = String(invoice.invoice_number || '');
     return section;
 }
 
 function renderReceiptForPrint(invoice) {
-    // Compatibility wrapper retained for existing POS regression contracts.
     return renderSalesInvoice(invoice);
 }
 
 function buildInvoiceStandaloneHtml() {
     const invoice = document.getElementById('posInvoice');
     if (!invoice) throw new Error('حاوية الفاتورة غير موجودة');
-    const styles = Array.from(document.querySelectorAll('style')).map(style => style.textContent || '').join('\n');
-    return `<section id="posInvoice">${invoice.innerHTML}</section><style>${styles}
-      #posInvoice{display:block!important;position:relative!important;left:auto!important;top:auto!important;width:794px!important;min-height:1123px!important;height:auto!important;margin:0!important;overflow:visible!important;box-shadow:none!important}
-    </style>`;
+    const styleBlock = document.getElementById('posInvoiceStyleBlock');
+    const styles = styleBlock ? styleBlock.textContent : '';
+    const invoiceHtml = invoice.outerHTML;
+    return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=794, initial-scale=1"><style>${styles}
+      html,body{margin:0;padding:0;background:#fff;direction:rtl;font-family:'Cairo','Noto Sans Arabic',Arial,sans-serif;}
+      #posInvoice{display:block!important;position:relative!important;left:auto!important;top:auto!important;width:794px!important;min-height:1123px!important;height:auto!important;margin:0!important;overflow:visible!important;box-shadow:none!important;}
+    </style></head><body>${invoiceHtml}</body></html>`;
 }
 
 async function loadInvoiceForLastSale() {
@@ -4178,6 +4463,7 @@ async function sendInvoiceWhatsApp() {
         if (!response.success) throw new Error(response.message || response.error || 'تعذر فتح WhatsApp');
         showToast(response.message || 'تم إنشاء JPG وفتح WhatsApp. اضغط إرسال داخل التطبيق.', 'success');
     } catch (error) {
+        console.error('WhatsApp invoice error:', error);
         showToast(error.message || 'تعذر إنشاء أو مشاركة فاتورة WhatsApp', 'error');
     } finally {
         showLoading(false);
@@ -4200,7 +4486,6 @@ async function deliverLastPurchase() {
         showToast(error.message || 'تعذر فتح شاشة توصيل المشتريات', 'error');
     }
 }
-
 
 // ============================================================
 // 9. دوال العملاء
@@ -4233,6 +4518,8 @@ function renderCreditCustomerResults(query = '') {
     }
     matches.forEach(customer => {
         const row = document.createElement('tr');
+        row.style.cursor = 'pointer';
+        row.title = 'انقر مرتين لتحديد هذا العميل';
         const code = document.createElement('td');
         code.textContent = customer.party_code || String(customerDatabaseId(customer));
         const name = document.createElement('td');
@@ -4245,6 +4532,12 @@ function renderCreditCustomerResults(query = '') {
         button.addEventListener('click', () => selectCreditCustomer(customer));
         action.appendChild(button);
         row.append(code, name, action);
+
+        // ====== النقر المزدوج لتحديد العميل مباشرة ======
+        row.addEventListener('dblclick', function () {
+            selectCreditCustomer(customer);
+        });
+
         resultsContainer.appendChild(row);
     });
 }
@@ -4721,7 +5014,22 @@ function fetchSalesReport() {
 // ============================================================
 function handleButtonClick(action) {
     switch(action) {
-        case 'newSale': resetForm(); showToast('تم بدء عملية بيع جديدة', 'success'); break;
+        case 'newSale':
+            resetForm();
+            showToast('تم بدء عملية بيع جديدة', 'success');
+            // ====== تركيز تلقائي على حقل طريقة الدفع بعد النقر على "جديد" ======
+            setTimeout(() => {
+                const paymentField = document.getElementById('paymentType');
+                if (paymentField) {
+                    try {
+                        paymentField.focus({ preventScroll: false });
+                        if (typeof paymentField.select === 'function') paymentField.select();
+                    } catch (_) {
+                        try { paymentField.focus(); } catch (__) {}
+                    }
+                }
+            }, 200);
+            break;
         case 'return': openReturnOverlay(); break;
         case 'invoiceRetrieveModal': retrieveInvoice(); break;
         case 'salesReport': toggleSalesReport(); break;
@@ -4867,6 +5175,39 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('darkModeToggle').addEventListener('click', toggleMode);
     document.getElementById('homeButton').addEventListener('click', function () { window.location.href = '../main.html'; });
     loadCurrentStationLogo();
+
+    // ====== معالج التركيز العام: يضمن انتقال التركيز للحقل الذي يلمسه المستخدم ======
+    document.addEventListener('touchstart', function (e) {
+        const t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) {
+            setTimeout(() => { try { t.focus(); } catch (_) {} }, 50);
+        }
+    }, { passive: true });
+    document.addEventListener('mousedown', function (e) {
+        const t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) {
+            setTimeout(() => { try { t.focus(); } catch (_) {} }, 0);
+        }
+    });
+
+    // ====== إظهار التلميح على الأزرار السفلية عند اللمس (للجوال) ======
+    document.querySelectorAll('.pos-action-btn').forEach(btn => {
+        let touchTimer = null;
+        btn.addEventListener('touchstart', function () {
+            btn.classList.add('touch-show');
+            if (touchTimer) clearTimeout(touchTimer);
+            touchTimer = setTimeout(() => { btn.classList.remove('touch-show'); }, 1600);
+        }, { passive: true });
+        btn.addEventListener('touchend', function () {
+            if (touchTimer) clearTimeout(touchTimer);
+            touchTimer = setTimeout(() => { btn.classList.remove('touch-show'); }, 1200);
+        }, { passive: true });
+        btn.addEventListener('touchcancel', function () {
+            btn.classList.remove('touch-show');
+            if (touchTimer) clearTimeout(touchTimer);
+        });
+    });
+
     document.getElementById('paymentType').addEventListener('change', function() {
         const customerRow = document.getElementById('customerInfoRow');
         if (this.value === 'آجل') {
@@ -4929,7 +5270,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setupSidebar();
 
-    // لا نطلب صلاحية الكاميرا تلقائياً؛ يبدأ المسح بعد ضغط المستخدم على زر التشغيل.
     scannerActive = false;
     scannerButtonState(false);
     document.addEventListener('visibilitychange', function () {

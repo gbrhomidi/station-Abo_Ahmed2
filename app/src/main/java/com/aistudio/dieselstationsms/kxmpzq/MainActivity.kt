@@ -3134,6 +3134,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val data = JSONObject(jsonData).apply { put("station_id", stationId) }
                 val result = db.completeSale(data, stationId, activity.currentUserId)
+                if (result.optBoolean("success", false) &&
+                    data.optString("payment_type", "").trim() in setOf("credit", "آجل", "credit_sale", "credit_account")) {
+                    val saleId = result.optLong("sale_id", 0L)
+                    if (saleId > 0L) result.put("sms", queueCreditSaleSms(db, saleId, stationId, activity.currentUserId))
+                }
                 dataResponse(result)
             } catch (e: Exception) {
                 DebugLogger.logException("Sale", e)
@@ -5592,8 +5597,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val notes = data.optString("notes", "").trim()
                 if (customerId <= 0 || amount <= 0) return errorResponse("بيانات غير صالحة")
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val success = db.processPayment(customerId, amount, method, operator, notes, requireCurrentStationId(db, activity.currentUserId))
-                successResponse(success, if (success) "تم التسديد بنجاح" else "فشل التسديد")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val paymentId = db.processPayment(customerId, amount, method, operator, notes, stationId)
+                if (paymentId > 0L) {
+                    val sms = queuePaymentSms(db, paymentId, stationId, activity.currentUserId)
+                    return JSONObject().apply {
+                        put("success", true)
+                        put("message", "تم التسديد بنجاح")
+                        put("payment_id", paymentId)
+                        put("sms", sms)
+                    }.toString()
+                }
+                successResponse(false, "فشل التسديد")
             } catch (e: Exception) {
                 DebugLogger.logException("Payment", e)
                 errorResponse(e.message)
@@ -8893,11 +8908,16 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     currentUserId
                 )
 
+                val smsResult = if (input.optString("payment_method").trim() in setOf("credit", "آجل", "credit_sale", "credit_account")) {
+                    queueCreditSaleSms(db, saleId, stationScopeId, currentUserId)
+                } else JSONObject().put("queued", false).put("reason", "not_credit")
+
                 JSONObject().apply {
                     put("success", true)
                     put("id", saleId)
                     put("sale_id", saleId)
                     put("message", "تم حفظ مبيعات الوقود فعلياً")
+                    put("sms", smsResult)
                 }.toString()
 
             } catch (e: Exception) {
@@ -9457,9 +9477,168 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val obj = JSONObject(jsonData)
                 val debtId = obj.optLong("debt_id", 0)
                 require(debtId > 0) { "معرف الدين مطلوب" }
-                // In a real scenario we would fetch the phone and amount, format template and send
-                successResponse(debtId, "تم الإرسال بنجاح")
-            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val rows = db.getDueSoonDebtReminders(stationId, 10)
+                var found: JSONObject? = null
+                for (i in 0 until rows.length()) {
+                    val row = rows.getJSONObject(i)
+                    if (row.optLong("transaction_id", 0L) == debtId ||
+                        row.optLong("customer_party_id", 0L) == obj.optLong("customer_party_id", -1L)) {
+                        found = row
+                        break
+                    }
+                }
+                requireNotNull(found) { "الدين غير موجود ضمن المستحقات القريبة" }
+                dataResponse(queueDueReminder(db, found, stationId, activity.currentUserId))
+            } catch (e: Exception) { errorResponse(e.message ?: "تعذر إرسال تذكير الدين") }
+        }
+
+
+        private fun queueSms(
+            db: DatabaseHelper,
+            phoneRaw: String,
+            body: String,
+            eventId: String,
+            entityId: String,
+            userId: Long
+        ): JSONObject {
+            val out = JSONObject()
+            val phone = PhoneUtils.normalize(phoneRaw)
+            if (phone == null) return out.put("queued", false).put("reason", "customer_phone_missing_or_invalid")
+            if (db.getSetting("sms_send_enabled") == "0") return out.put("queued", false).put("reason", "sms_disabled")
+            val normalized = SmsMessageNormalizer.normalizeForSms(body)
+            if (normalized.isBlank()) return out.put("queued", false).put("reason", "empty_message")
+            val result = SmsOutboxRepository.enqueue(
+                db = db,
+                recipient = phone,
+                body = normalized,
+                eventId = eventId,
+                businessEntityId = entityId,
+                dedupeKey = "$eventId:$phone"
+            ) ?: return out.put("queued", false).put("reason", "outbox_rejected")
+            SmsOutboxWorker.schedule(this@MainActivity)
+            out.put("queued", true)
+                .put("message_id", result.messageId)
+                .put("parts_count", result.partsCount)
+            return out
+        }
+
+        private fun queueCreditSaleSms(db: DatabaseHelper, saleId: Long, stationId: Int, userId: Long): JSONObject {
+            val ctx = db.getCreditSaleSmsContext(saleId, stationId)
+                ?: return JSONObject().put("queued", false).put("reason", "sale_context_not_found")
+            val amount = ctx.optDouble("amount", 0.0)
+            val balance = ctx.optDouble("total_outstanding", 0.0)
+            val location = ctx.optString("delivery_location").trim().ifBlank { ctx.optString("customer_address").trim() }.ifBlank { "عنوان العميل" }
+            val body = "قيدنا عليكم: ${formatYER(amount)}\n" +
+                "قيمة ${ctx.optString("detail_text")} الى $location\n" +
+                "الرصيد الإجمالي عليكم: ${formatYER(balance)}"
+            return queueSms(db, ctx.optString("phone"), body, "credit-sale:$saleId", "sale:$saleId", userId)
+                .put("customer_name", ctx.optString("customer_name"))
+                .put("balance", balance)
+        }
+
+        private fun queuePaymentSms(db: DatabaseHelper, paymentId: Long, stationId: Int, userId: Long): JSONObject {
+            val ctx = db.getPaymentSmsContext(paymentId, stationId)
+                ?: return JSONObject().put("queued", false).put("reason", "payment_context_not_found")
+            val amount = ctx.optDouble("amount", 0.0)
+            val balance = ctx.optDouble("total_outstanding", 0.0)
+            val institution = ctx.optString("institution").trim()
+            val methodLabel = when (ctx.optString("payment_method").trim()) {
+                "bank_transfer" -> if (institution.isNotBlank()) "بنك $institution" else "تحويل بنكي"
+                "cheque" -> "شيك"
+                "credit_card" -> "بطاقة"
+                "mobile_money" -> "محفظة إلكترونية"
+                "cash" -> "نقداً"
+                else -> ctx.optString("payment_method").ifBlank { "طريقة دفع" }
+            }
+            val body = "قيدنا لكم: ${formatYER(amount)}\n" +
+                "مسددة عبر $methodLabel\n" +
+                "الرصيد الإجمالي عليكم: ${formatYER(balance)}"
+            return queueSms(db, ctx.optString("phone"), body, "payment:$paymentId", "payment:$paymentId", userId)
+                .put("customer_name", ctx.optString("customer_name"))
+                .put("balance", balance)
+        }
+
+        private fun formatYER(value: Double): String {
+            val rounded = kotlin.math.round(value)
+            val text = if (kotlin.math.abs(value - rounded) < 0.000001) rounded.toLong().toString()
+                       else String.format(Locale.US, "%,.2f", value)
+            return "$text ر. ي"
+        }
+
+        private fun queueDueReminder(db: DatabaseHelper, row: JSONObject, stationId: Int, userId: Long): JSONObject {
+            val customerId = row.optLong("customer_party_id", 0L)
+            val phone = row.optString("phone")
+            val total = row.optDouble("total_outstanding", 0.0)
+            val days = row.optInt("days_remaining", 999)
+            if (customerId <= 0L || phone.isBlank() || total <= 0.0) {
+                return JSONObject().put("queued", false).put("reason", "invalid_customer_contact_or_balance")
+            }
+            val message = if (days == 1) {
+                "مرحبا 🙋\nتاريخ استحقاق تسديد ما عليكم يوم غد\nلذلك يرجى التسديد فوراً\nأجمالي ما عليكم: ${formatYER(total)}"
+            } else {
+                "مرحبا 🙋\nنُعلمكم بإن تاريخ استحقاق تسديد ما عليكم يقترب\nلذلك يرجى الوفاء و سرعة التسديد\nحيث و إن أجمالي ما عليكم: ${formatYER(total)}"
+            }
+            val candidate = row.optLong("transaction_id", 0L)
+            if (candidate <= 0L) return JSONObject().put("queued", false).put("reason", "no_due_invoice")
+            val queued = queueSms(db, phone, message, "debt-reminder:${customerId}:${row.optString("nearest_due_date")}", "party:$customerId", userId)
+            if (queued.optBoolean("queued", false)) {
+                db.recordQueuedDebtReminder(customerId, candidate, PhoneUtils.normalize(phone) ?: phone, message, userId)
+            }
+            return queued.put("customer_name", row.optString("customer_name")).put("balance", total)
+        }
+
+        @JavascriptInterface
+        fun getDueSoonDebtRemindersTyped(jsonData: String = "{}"): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+                val obj = JSONObject(jsonData.ifBlank { "{}" })
+                val days = obj.optInt("days", 10).coerceIn(0, 365)
+                dataResponse(db.getDueSoonDebtReminders(requireCurrentStationId(db, activity.currentUserId), days))
+            } catch (e: Exception) {
+                errorResponse(e.message ?: "تعذر تحميل مستحقات العملاء القريبة")
+            }
+        }
+
+        @JavascriptInterface
+        fun sendDueSoonDebtRemindersTyped(jsonData: String = "{}"): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+                val obj = JSONObject(jsonData.ifBlank { "{}" })
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val autoOneDay = obj.optBoolean("automatic_one_day", false)
+                val requested = mutableSetOf<Long>()
+                obj.optJSONArray("customer_party_ids")?.let { arr ->
+                    for (i in 0 until arr.length()) requested += arr.optLong(i, 0L)
+                }
+                val rows = db.getDueSoonDebtReminders(stationId, obj.optInt("days", 10).coerceIn(0, 365))
+                val results = JSONArray()
+                var queued = 0
+                var skipped = 0
+                for (i in 0 until rows.length()) {
+                    val row = rows.getJSONObject(i)
+                    val customerId = row.optLong("customer_party_id", 0L)
+                    val daysRemaining = row.optInt("days_remaining", 999)
+                    val eligible = row.optBoolean("eligible", false)
+                    if (!eligible || customerId <= 0L) { skipped++; continue }
+                    if (autoOneDay && daysRemaining > 1) continue
+                    if (!autoOneDay && requested.isNotEmpty() && customerId !in requested) continue
+                    val result = queueDueReminder(db, row, stationId, activity.currentUserId)
+                    if (result.optBoolean("queued", false)) queued++ else skipped++
+                    results.put(result.put("days_remaining", daysRemaining))
+                }
+                dataResponse(JSONObject().apply {
+                    put("queued_count", queued)
+                    put("skipped_count", skipped)
+                    put("results", results)
+                })
+            } catch (e: Exception) {
+                errorResponse(e.message ?: "تعذر إرسال تذكيرات الديون")
+            }
         }
 
         @JavascriptInterface

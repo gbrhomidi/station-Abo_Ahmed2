@@ -1841,6 +1841,22 @@
                 width: 100%;
             }
         }
+    
+        .due-alert-btn{position:relative;display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(239,68,68,.55);background:linear-gradient(135deg,#7f1d1d,#dc2626);color:#fff;border-radius:14px;padding:10px 15px;font-weight:800;cursor:pointer;box-shadow:0 0 0 0 rgba(239,68,68,.55);animation:duePulse 1.8s infinite;overflow:hidden}
+        .due-alert-btn .due-count{background:#fff;color:#b91c1c;border-radius:999px;min-width:22px;height:22px;display:grid;place-items:center;font-size:12px}
+        @keyframes duePulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}50%{box-shadow:0 0 0 10px rgba(239,68,68,0)}}
+        .due-reminder-overlay{position:fixed;inset:0;background:rgba(2,6,23,.68);backdrop-filter:blur(8px);z-index:100000;display:none;align-items:center;justify-content:center;padding:18px}
+        .due-reminder-overlay.show{display:flex}
+        .due-reminder-card{width:min(760px,96vw);max-height:88vh;overflow:auto;background:var(--card-bg,#fff);color:var(--text-primary,#111827);border:1px solid rgba(148,163,184,.28);border-radius:28px;box-shadow:0 30px 90px rgba(0,0,0,.35);padding:26px;position:relative}
+        .due-reminder-card h3{margin:0 0 8px;font-size:22px}.due-reminder-card p{line-height:1.8;color:var(--text-secondary,#64748b)}
+        .due-reminder-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:20px}
+        .due-reminder-actions button{border:0;border-radius:13px;padding:11px 18px;font-weight:800;cursor:pointer}
+        .due-ok{background:#059669;color:#fff}.due-cancel{background:#e5e7eb;color:#111827}.due-delay{background:#f59e0b;color:#fff}.due-view{background:#2563eb;color:#fff}
+        .due-detail-modal{position:fixed;inset:0;z-index:100001;background:rgba(2,6,23,.7);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:16px}
+        .due-detail-modal.show{display:flex}.due-detail-card{width:min(980px,97vw);max-height:88vh;overflow:auto;background:var(--card-bg,#fff);border-radius:24px;padding:20px;box-shadow:0 30px 90px rgba(0,0,0,.4)}
+        .due-detail-table{width:100%;border-collapse:separate;border-spacing:0 8px}.due-detail-table th{font-size:12px;color:#64748b;text-align:right;padding:8px}.due-detail-table td{padding:12px;background:rgba(148,163,184,.09);border-top:1px solid rgba(148,163,184,.15);border-bottom:1px solid rgba(148,163,184,.15)}.due-detail-table td:first-child{border-radius:0 10px 10px 0}.due-detail-table td:last-child{border-radius:10px 0 0 10px}.due-red{color:#dc2626;font-weight:900}.due-blue{color:#2563eb;font-weight:900}
+        .due-bubble{position:fixed;top:82px;right:20px;z-index:100002;background:#dc2626;color:#fff;border-radius:999px;padding:10px 15px;display:none;align-items:center;gap:8px;box-shadow:0 12px 35px rgba(0,0,0,.28);cursor:pointer;font-weight:800}.due-bubble.show{display:flex}
+
     </style>
 </head>
 <body>
@@ -2349,6 +2365,10 @@
                     return bridge.getSetting(String(p.key ?? ''));
                 case 'setSetting':
                     return bridge.setSetting(String(p.key ?? ''), String(p.value ?? ''));
+                case 'getDueSoonDebtRemindersTyped':
+                    return bridge.getDueSoonDebtRemindersTyped(JSON.stringify(p));
+                case 'sendDueSoonDebtRemindersTyped':
+                    return bridge.sendDueSoonDebtRemindersTyped(JSON.stringify(p));
                 default:
                     throw new Error(`Bridge action غير مدعوم: ${action}`);
             }
@@ -2976,8 +2996,11 @@
                 if (!result.success) throw new Error(result.error || result.message || 'فشل التسديد في قاعدة البيانات');
                 const reloaded = await loadDebts();
                 if (!reloaded) throw new Error('تمت العملية، لكن تعذر إعادة تحميل الرصيد للتحقق منه');
-                showToast('✅ تم التسديد والتحقق من الرصيد المحدث', 'success');
+                const sms = result.sms || {};
+                showToast('✅ تم التسديد والتحقق من الرصيد المحدث' +
+                    (sms.queued ? ' — تم وضع SMS في طابور الإرسال' : ' — تعذر تجهيز SMS: ' + (sms.reason || 'غير معروف')), 'success');
                 closePaymentModal();
+                setTimeout(()=>refreshDueReminderCandidates(false), 300);
             } catch (e) {
                 showToast(`❌ ${e.message || 'فشل التسديد'}`, 'error');
                 console.error('Customer payment failed:', e);
@@ -3031,6 +3054,78 @@
                 }
             } catch (e) { console.error('Error loading customers:', e); }
         }
+
+
+        let dueReminderRows = [];
+        let dueReminderDeferred = false;
+
+        function ensureDueReminderUI() {
+            if (!document.getElementById('dueReminderButton')) {
+                const actions = document.querySelector('.header-actions');
+                if (actions) {
+                    const b = document.createElement('button');
+                    b.id='dueReminderButton'; b.className='due-alert-btn'; b.style.display='none';
+                    b.title='مستحقات محققة'; b.innerHTML='<i class="fas fa-bell"></i><span>مستحقات محققة</span><span class="due-count">0</span>';
+                    b.onclick=openDueReminderNotice; actions.insertBefore(b, actions.firstChild);
+                }
+            }
+            if (!document.getElementById('dueReminderOverlay')) {
+                const o=document.createElement('div'); o.id='dueReminderOverlay'; o.className='due-reminder-overlay';
+                o.innerHTML=`<div class="due-reminder-card">
+                    <h3>🔔 مستحقات العملاء تقترب</h3>
+                    <p id="dueReminderText">يوجد عملاء اقتربت تواريخ استحقاق ديونهم. هل تصرح للتطبيق بإرسال رسائل SMS تذكيرية الآن؟</p>
+                    <div class="due-reminder-actions">
+                      <button class="due-view" onclick="openDueReminderDetails()">إطلاع</button>
+                      <button class="due-delay" onclick="deferDueReminder()">تأجيل</button>
+                      <button class="due-cancel" onclick="closeDueReminderNotice()">إلغاء</button>
+                      <button class="due-ok" onclick="approveDueReminders()">موافق - يتم الإرسال فوراً</button>
+                    </div></div>`;
+                document.body.appendChild(o);
+            }
+            if (!document.getElementById('dueDetailModal')) {
+                const o=document.createElement('div'); o.id='dueDetailModal'; o.className='due-detail-modal';
+                o.innerHTML=`<div class="due-detail-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h3 style="margin:0">العملاء الذين سيصلهم التذكير</h3><button class="details-close" onclick="closeDueReminderDetails()"><i class="fas fa-times"></i></button></div>
+                <div id="dueDetailContent" style="margin-top:14px"></div></div>`;
+                document.body.appendChild(o);
+            }
+            if (!document.getElementById('dueReminderBubble')) {
+                const b=document.createElement('div'); b.id='dueReminderBubble'; b.className='due-bubble'; b.innerHTML='<i class="fas fa-bell"></i><span>تذكيرات مستحقة</span>'; b.onclick=openDueReminderNotice; document.body.appendChild(b);
+            }
+        }
+
+        async function refreshDueReminderCandidates(showNotice=true) {
+            ensureDueReminderUI();
+            try {
+                const result=await apiCall('getDueSoonDebtRemindersTyped', JSON.stringify({days:10}));
+                if(!result.success) return;
+                dueReminderRows=Array.isArray(result.data)?result.data:[];
+                const eligible=dueReminderRows.filter(r=>r.eligible && Number(r.days_remaining)<=10);
+                const btn=document.getElementById('dueReminderButton');
+                if(btn){btn.style.display=eligible.length?'inline-flex':'none'; const c=btn.querySelector('.due-count'); if(c)c.textContent=eligible.length;}
+                if(showNotice && eligible.length && !dueReminderDeferred) openDueReminderNotice();
+            }catch(e){console.warn('Due reminders:',e);}
+        }
+
+        function openDueReminderNotice(){ensureDueReminderUI();document.getElementById('dueReminderOverlay').classList.add('show');document.body.style.overflow='hidden';}
+        function closeDueReminderNotice(){document.getElementById('dueReminderOverlay')?.classList.remove('show');document.body.style.overflow='';}
+        function deferDueReminder(){dueReminderDeferred=true;closeDueReminderNotice();document.getElementById('dueReminderBubble')?.classList.add('show');}
+        function approveDueReminders(){
+            closeDueReminderNotice();
+            apiCall('sendDueSoonDebtRemindersTyped',JSON.stringify({days:10})).then(r=>{
+                if(!r.success)throw new Error(r.error||r.message||'تعذر إرسال التذكيرات');
+                showToast(`تمت إضافة ${r.data?.queued_count||0} رسالة إلى طابور SMS`,'success');
+                document.getElementById('dueReminderBubble')?.classList.remove('show');
+                refreshDueReminderCandidates(false);
+            }).catch(e=>showToast(e.message||'تعذر إرسال التذكيرات','error'));
+        }
+        function openDueReminderDetails(){
+            ensureDueReminderUI();
+            const rows=dueReminderRows.filter(r=>r.eligible && Number(r.days_remaining)<=10);
+            const html=rows.length?`<div style="overflow:auto"><table class="due-detail-table"><thead><tr><th>العميل</th><th>الهاتف</th><th>الدين القريب</th><th>إجمالي غير المسدد</th><th>الاستحقاق</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHtml(r.customer_name||'---')}</td><td dir="ltr">${escapeHtml(r.phone||'---')}</td><td class="due-red">${formatCurrency(r.due_soon_amount||0)}</td><td class="due-blue">${formatCurrency(r.total_outstanding||0)}</td><td>${escapeHtml(r.nearest_due_date||'---')}</td></tr>`).join('')}</tbody></table></div>`:'<div style="padding:30px;text-align:center">لا توجد مستحقات مؤهلة حالياً.</div>';
+            document.getElementById('dueDetailContent').innerHTML=html;
+            document.getElementById('dueDetailModal').classList.add('show');
+        }
+        function closeDueReminderDetails(){document.getElementById('dueDetailModal')?.classList.remove('show');}
 
         // ===================================================================
         // 13. تفاصيل العميل وسجل المعاملات
@@ -3637,7 +3732,7 @@
             document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
 
             loadDropdowns();
-            setTimeout(loadDebts, 600);
+            setTimeout(async()=>{ await loadDebts(); await refreshDueReminderCandidates(true); }, 600);
 
             document.querySelectorAll('.modal-overlay').forEach(el => {
                 el.addEventListener('click', function(e) {

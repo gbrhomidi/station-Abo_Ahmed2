@@ -1692,9 +1692,11 @@
                     state.lastSavedSaleId = saleId;
                     state.pendingIdempotencyKey = null;
 
+                    const sms = saved.sms || {};
                     toast(
                         'تم حفظ عملية البيع فعلياً — رقم البيع ' +
-                        saleId
+                        saleId +
+                        (sms.queued ? ' — تم وضع SMS في طابور الإرسال' : (payload.payment_method === 'credit' ? ' — تعذر تجهيز SMS: ' + (sms.reason || 'غير معروف') : ''))
                     );
 
                     showDeliveryAction(saleId);

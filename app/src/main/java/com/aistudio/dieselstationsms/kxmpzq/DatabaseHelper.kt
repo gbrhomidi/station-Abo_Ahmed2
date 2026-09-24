@@ -14039,7 +14039,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun processPayment(customerId: Int, amount: Double, method: String, operator: String = "System", notes: String = "", stationScopeId: Int? = null, idempotencyKey: String? = null): Boolean {
+    fun processPayment(customerId: Int, amount: Double, method: String, operator: String = "System", notes: String = "", stationScopeId: Int? = null, idempotencyKey: String? = null): Long {
         require(customerId > 0) { "معرف العميل غير صالح" }
         require(amount > 0.0 && amount.isFinite()) { "مبلغ التسديد غير صالح" }
         if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
@@ -14051,16 +14051,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.beginTransaction()
         try {
             val existingPaymentId = findFinancialIdempotency(db, "payment", paymentStationId, normalizedIdempotencyKey)
-            if (existingPaymentId != null) return true
+            if (existingPaymentId != null) return existingPaymentId
             require(reserveFinancialIdempotency(db, "payment", paymentStationId, normalizedIdempotencyKey)) { "مفتاح العملية مستخدم مسبقاً" }
             val partyBalance = db.rawQuery(
                 "SELECT COALESCE(total_due, 0) FROM parties WHERE id = ? AND is_deleted = 0$partyScopeClause LIMIT 1",
                 listOf(customerId.toString()).plus(stationScopeId?.toString()).filterNotNull().toTypedArray()
             ).use { cursor ->
-                if (!cursor.moveToFirst()) return false
+                if (!cursor.moveToFirst()) return 0L
                 cursor.getDouble(0)
             }
-            if (partyBalance + 0.000001 < amount) return false
+            if (partyBalance + 0.000001 < amount) return 0L
 
             var unapplied = amount
             val invoices = db.rawQuery(
@@ -14092,7 +14092,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     unapplied -= applied
                 }
             }
-            if (unapplied > 0.000001) return false
+            if (unapplied > 0.000001) return 0L
 
             val partyUpdated = db.compileStatement(
                 """UPDATE parties
@@ -14125,7 +14125,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
             db.setTransactionSuccessful()
             runCatching { logActivity(operator, "payment", "تسديد مبلغ $amount للعميل $customerId") }
-            return true
+            return paymentId
         } finally {
             db.endTransaction()
         }
@@ -22340,6 +22340,270 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+
+    /**
+     * سياق SMS موثّق للبيع الآجل: يعتمد على السجلات المالية الفعلية
+     * ولا يثق بأي إجمالي أو هاتف قادم من WebView.
+     */
+    fun getCreditSaleSmsContext(saleId: Long, stationScopeId: Int): JSONObject? {
+        require(saleId > 0 && stationScopeId > 0) { "معرف البيع أو المحطة غير صالح" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val sale = db.rawQuery(
+                """
+                SELECT s.id, s.customer_party_id, s.net_amount, s.remaining_amount,
+                       s.due_date, s.delivery_location, s.liters, s.quantity,
+                       s.payment_method, p.commercial_name,
+                       COALESCE(${primaryPartyContactSql("p", "phone")}, '') AS phone,
+                       COALESCE(${primaryPartyAddressSql("p", "address_line1")}, '') AS customer_address
+                FROM sales_transactions s
+                JOIN parties p ON p.id = s.customer_party_id
+                WHERE s.id = ? AND s.station_id = ? AND s.is_deleted = 0
+                  AND s.payment_method = 'credit' AND s.is_credit = 1
+                  AND p.is_deleted = 0
+                LIMIT 1
+                """.trimIndent(),
+                arrayOf(saleId.toString(), stationScopeId.toString())
+            ).use { c ->
+                if (!c.moveToFirst()) return null
+                JSONObject().apply {
+                    put("sale_id", c.getLong(0))
+                    put("customer_party_id", c.getLong(1))
+                    put("amount", c.getDouble(2))
+                    put("remaining_amount", c.getDouble(3))
+                    put("due_date", if (c.isNull(4)) JSONObject.NULL else c.getString(4))
+                    put("delivery_location", if (c.isNull(5)) "" else c.getString(5))
+                    put("liters", if (c.isNull(6)) 0.0 else c.getDouble(6))
+                    put("quantity", if (c.isNull(7)) 0.0 else c.getDouble(7))
+                    put("payment_method", c.getString(8))
+                    put("customer_name", c.getString(9))
+                    put("phone", c.getString(10))
+                    put("customer_address", c.getString(11))
+                }
+            } ?: return null
+
+            val customerId = sale.getLong("customer_party_id")
+            val details = db.rawQuery(
+                """
+                SELECT COALESCE(pt.product_name_ar, pt.product_name, f.fuel_name, '') AS item_name,
+                       COALESCE(si.quantity, s.liters, s.quantity, 0) AS qty,
+                       COALESCE(si.unit_of_measure, CASE WHEN f.id IS NOT NULL THEN 'لتر' ELSE 'وحدة' END) AS uom
+                FROM sales_transactions s
+                LEFT JOIN sale_items si ON si.sale_id = s.id AND si.is_returned = 0
+                LEFT JOIN fuel_types f ON f.id = COALESCE(si.fuel_type_id, s.fuel_type_id)
+                LEFT JOIN products pt ON pt.id = si.product_id
+                WHERE s.id = ?
+                ORDER BY si.line_number ASC, si.id ASC
+                """.trimIndent(),
+                arrayOf(saleId.toString())
+            ).use { c ->
+                val lines = mutableListOf<String>()
+                while (c.moveToNext()) {
+                    val name = c.getString(0).ifBlank { "وقود" }
+                    val qty = c.getDouble(1)
+                    val uom = c.getString(2).ifBlank { "لتر" }
+                    lines += "${formatSmsNumber(qty)} $uom $name"
+                }
+                if (lines.isEmpty()) {
+                    val fuel = db.rawQuery(
+                        "SELECT COALESCE(f.fuel_name,'وقود'), COALESCE(s.liters,0) FROM sales_transactions s LEFT JOIN fuel_types f ON f.id=s.fuel_type_id WHERE s.id=? LIMIT 1",
+                        arrayOf(saleId.toString())
+                    ).use { q -> if (q.moveToFirst()) "${formatSmsNumber(q.getDouble(1))} لتر ${q.getString(0)}" else "عملية بيع" }
+                    fuel
+                } else lines.joinToString("، ")
+            }
+            sale.put("detail_text", details)
+
+            val totals = db.rawQuery(
+                """
+                SELECT COALESCE(SUM(CASE WHEN payment_method='credit' AND is_credit=1 THEN remaining_amount ELSE 0 END),0),
+                       COALESCE(SUM(CASE WHEN payment_method='credit' AND is_credit=1 THEN net_amount ELSE 0 END),0)
+                FROM sales_transactions
+                WHERE customer_party_id = ? AND station_id = ? AND is_deleted = 0
+                """.trimIndent(),
+                arrayOf(customerId.toString(), stationScopeId.toString())
+            ).use { c -> if (c.moveToFirst()) doubleArrayOf(c.getDouble(0), c.getDouble(1)) else doubleArrayOf(0.0,0.0) }
+            sale.put("total_outstanding", totals[0])
+            sale.put("total_credit_sales", totals[1])
+            sale
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * سياق SMS للتسديد بعد اكتمال المعاملة، ويحسب الرصيد من الفواتير
+     * المتبقية فعلياً، لا من قيمة مرسلة من الواجهة.
+     */
+    fun getPaymentSmsContext(paymentId: Long, stationScopeId: Int): JSONObject? {
+        require(paymentId > 0 && stationScopeId > 0) { "معرف التسديد أو المحطة غير صالح" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery(
+                """
+                SELECT pay.id, pay.customer_party_id, pay.amount, pay.payment_method,
+                       COALESCE(p.commercial_name,'عميل'),
+                       COALESCE(${primaryPartyContactSql("p", "phone")}, ''),
+                       COALESCE(ba.account_name_ar, ba.account_name, '')
+                FROM payments pay
+                JOIN parties p ON p.id = pay.customer_party_id
+                LEFT JOIN bank_accounts ba ON ba.id = pay.bank_account_id
+                WHERE pay.id = ? AND p.station_id = ? AND pay.is_deleted = 0
+                LIMIT 1
+                """.trimIndent(),
+                arrayOf(paymentId.toString(), stationScopeId.toString())
+            ).use { c ->
+                if (!c.moveToFirst()) return null
+                val customerId = c.getLong(1)
+                val amount = c.getDouble(2)
+                val method = c.getString(3)
+                val totalPaid = db.rawQuery(
+                    "SELECT COALESCE(SUM(paid_amount),0) FROM sales_transactions WHERE customer_party_id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(customerId.toString(), stationScopeId.toString())
+                ).use { q -> if (q.moveToFirst()) q.getDouble(0) else 0.0 }
+                val outstanding = db.rawQuery(
+                    "SELECT COALESCE(SUM(CASE WHEN payment_method='credit' AND is_credit=1 THEN remaining_amount ELSE 0 END),0) FROM sales_transactions WHERE customer_party_id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(customerId.toString(), stationScopeId.toString())
+                ).use { q -> if (q.moveToFirst()) q.getDouble(0) else 0.0 }
+                JSONObject().apply {
+                    put("payment_id", c.getLong(0))
+                    put("customer_party_id", customerId)
+                    put("amount", amount)
+                    put("payment_method", method)
+                    put("customer_name", c.getString(4))
+                    put("phone", c.getString(5))
+                    put("institution", c.getString(6))
+                    put("total_paid", totalPaid)
+                    put("total_outstanding", outstanding)
+                }
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * العملاء الذين لديهم دين مستحق خلال 10 أيام، مجمّعين حسب العميل.
+     * last_reminder_at يؤخذ من سجل الرسائل الحقيقي لمنع التكرار خلال 48 ساعة.
+     */
+    fun getDueSoonDebtReminders(stationScopeId: Int, days: Int = 10): JSONArray {
+        require(stationScopeId > 0 && days >= 0) { "معلمات الاستحقاق غير صالحة" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val sql = """
+                SELECT p.id AS customer_party_id,
+                       p.commercial_name AS customer_name,
+                       COALESCE(${primaryPartyContactSql("p", "phone")}, '') AS phone,
+                       SUM(CASE WHEN s.due_date IS NOT NULL
+                                  AND date(s.due_date) BETWEEN date('now') AND date('now', '+' || ? || ' day')
+                                THEN s.remaining_amount ELSE 0 END) AS due_soon_amount,
+                       SUM(s.remaining_amount) AS total_outstanding,
+                       MIN(CASE WHEN s.due_date IS NOT NULL
+                                  AND date(s.due_date) BETWEEN date('now') AND date('now', '+' || ? || ' day')
+                                THEN date(s.due_date) END) AS nearest_due_date,
+                       MIN(CASE WHEN s.due_date IS NOT NULL
+                                  AND date(s.due_date) BETWEEN date('now') AND date('now', '+' || ? || ' day')
+                                THEN s.id END) AS transaction_id,
+                       MIN(CASE WHEN s.due_date IS NOT NULL
+                                  AND date(s.due_date) BETWEEN date('now') AND date('now', '+' || ? || ' day')
+                                THEN CAST(julianday(date(s.due_date)) - julianday(date('now')) AS INTEGER) END) AS days_remaining,
+                       (SELECT MAX(COALESCE(sl.created_at, ''))
+                          FROM sms_logs sl
+                         WHERE sl.customer_party_id = p.id
+                           AND sl.message_type = 'reminder'
+                           AND sl.status IN ('queued','sending','sent','delivered')
+                       ) AS last_reminder_at
+                FROM parties p
+                JOIN sales_transactions s ON s.customer_party_id = p.id
+                    AND s.station_id = p.station_id
+                    AND s.is_deleted = 0
+                    AND s.remaining_amount > 0
+                    AND s.payment_method = 'credit'
+                    AND s.is_credit = 1
+                WHERE p.station_id = ? AND p.is_deleted = 0 AND p.is_active = 1
+                GROUP BY p.id, p.commercial_name
+                HAVING due_soon_amount > 0
+                ORDER BY date(nearest_due_date) ASC, p.commercial_name COLLATE NOCASE ASC
+            """.trimIndent()
+            val args = arrayOf(days.toString(), days.toString(), days.toString(), days.toString(), stationScopeId.toString())
+            db.rawQuery(sql, args).use { c ->
+                val arr = JSONArray()
+                while (c.moveToNext()) {
+                    val last = if (c.isNull(8)) "" else c.getString(8)
+                    val transactionId = if (c.isNull(6)) 0L else c.getLong(6)
+                    val daysRemaining = if (c.isNull(7)) 999 else c.getInt(7)
+                    val eligible = last.isBlank() || isAtLeast48HoursAgo(last)
+                    arr.put(JSONObject().apply {
+                        put("customer_party_id", c.getLong(0))
+                        put("customer_name", c.getString(1))
+                        put("phone", c.getString(2))
+                        put("due_soon_amount", c.getDouble(3))
+                        put("total_outstanding", c.getDouble(4))
+                        put("nearest_due_date", c.getString(5))
+                        put("days_remaining", daysRemaining)
+                        put("transaction_id", transactionId)
+                        put("last_reminder_at", last)
+                        put("eligible", eligible)
+                    })
+                }
+                arr
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun recordQueuedDebtReminder(customerPartyId: Long, transactionId: Long, phone: String, message: String, createdBy: Long = 0L): Long {
+        require(customerPartyId > 0 && transactionId > 0 && phone.isNotBlank() && message.isNotBlank())
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val now = getCurrentDateTime()
+            val reminderId = db.insertOrThrow("sms_reminders", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("customer_party_id", customerPartyId)
+                put("transaction_id", transactionId)
+                put("reminder_type", "due_date")
+                put("reminder_date", getCurrentDate())
+                put("days_before_due", 10)
+                put("message_content", message)
+                put("message_template", "customer_debt_due_date")
+                put("status", "pending")
+                put("created_by", if (createdBy > 0) createdBy else null)
+                put("created_at", now)
+            })
+            db.insertOrThrow("sms_logs", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("customer_party_id", customerPartyId)
+                put("reminder_id", reminderId)
+                put("phone_number", phone)
+                put("message_content", message)
+                put("message_type", "reminder")
+                put("status", "queued")
+                put("created_at", now)
+            })
+            reminderId
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    private fun isAtLeast48HoursAgo(value: String): Boolean {
+        return try {
+            val parsed = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(value)?.time ?: return true
+            System.currentTimeMillis() - parsed >= 48L * 60L * 60L * 1000L
+        } catch (_: Exception) {
+            true
+        }
+    }
+
+    private fun formatSmsNumber(value: Double): String =
+        if (kotlin.math.abs(value - kotlin.math.round(value)) < 1e-9) value.toLong().toString()
+        else String.format(Locale.US, "%.2f", value).trimEnd('0').trimEnd('.')
+
     // ========================================================================
     // دوال التنظيف
     // ========================================================================
@@ -25399,20 +25663,47 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun getDebtRemindersPage(stationId: Int, status: String? = null): JSONArray {
+        require(stationId > 0) { "معرف المحطة غير صالح" }
         val arr = JSONArray()
         dbLock.lock()
         try {
             val db = readableDatabase
-            // Join parties to get name and phone. We simulate debts by looking at party credit balances if a debts table isn't fully populated
-            // But we use the actual parties table which holds credit limits and current balances.
-            var query = "SELECT id as debt_id, party_name, phone_number as phone, (credit_limit - current_balance) as outstanding_amount, '2026-12-31' as due_date, 0 as is_overdue, null as last_reminder_date FROM parties WHERE party_type = 'customer' AND (credit_limit - current_balance) > 0"
-
-            if (status == "overdue") {
-                // For simulation purposes in this test environment, we just return empty or logic based on actual schema
-                query += " AND 1=0" // We'd need a real due_date column to filter overdue
+            val predicates = mutableListOf(
+                "s.station_id = ?",
+                "s.customer_party_id IS NOT NULL",
+                "s.remaining_amount > 0",
+                "s.payment_method = 'credit'",
+                "s.is_credit = 1",
+                "s.is_deleted = 0",
+                "p.station_id = ?",
+                "p.is_deleted = 0",
+                "p.is_active = 1"
+            )
+            val args = mutableListOf(stationId.toString(), stationId.toString())
+            when (status) {
+                "overdue" -> predicates += "date(s.due_date) < date('now')"
+                "pending" -> predicates += "(s.due_date IS NULL OR date(s.due_date) >= date('now'))"
             }
-
-            db.rawQuery(query, null).use { c ->
+            val query = """
+                SELECT s.id AS debt_id,
+                       s.customer_party_id,
+                       p.commercial_name AS customer_name,
+                       COALESCE(${primaryPartyContactSql("p", "phone")}, '') AS phone,
+                       s.remaining_amount AS outstanding_amount,
+                       s.due_date,
+                       CASE WHEN s.due_date IS NOT NULL AND date(s.due_date) < date('now') THEN 1 ELSE 0 END AS is_overdue,
+                       (SELECT MAX(COALESCE(sl.created_at,''))
+                          FROM sms_logs sl
+                         WHERE sl.customer_party_id=s.customer_party_id
+                           AND sl.message_type='reminder'
+                           AND sl.status IN ('queued','sending','sent','delivered')) AS last_reminder_date
+                FROM sales_transactions s
+                JOIN parties p ON p.id=s.customer_party_id
+                WHERE ${predicates.joinToString(" AND ")}
+                ORDER BY CASE WHEN s.due_date IS NULL THEN 1 ELSE 0 END, date(s.due_date) ASC, s.id ASC
+                LIMIT 500
+            """.trimIndent()
+            db.rawQuery(query, args.toTypedArray()).use { c ->
                 while (c.moveToNext()) arr.put(cursorRowToJson(c))
             }
         } finally { dbLock.unlock() }
