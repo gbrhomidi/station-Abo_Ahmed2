@@ -8947,6 +8947,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             deliveryTime = deliveryTime,
             orderType = orderType,
             paidAmount = paidAmount,
+            serviceFee = serviceFee,
             manageTransaction = manageTransaction
         )
     }
@@ -8975,6 +8976,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         deliveryTime: String? = null,
         orderType: String = "sale",
         paidAmount: Double? = null,
+        serviceFee: Double = 0.0,
         manageTransaction: Boolean = true
     ): Long {
         require(stationId > 0) { "معرف المحطة غير صالح" }
@@ -11688,6 +11690,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      * with the existing Stock Levels JavaScript while exposing the real
      * product/fuel distinction through item_type.
      */
+    private fun Cursor.getStringOrNull(columnName: String): String? {
+        val columnIndex = getColumnIndex(columnName)
+        if (columnIndex < 0 || isNull(columnIndex)) return null
+        return getString(columnIndex)
+    }
+
     fun getStockLevelsPage(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
         dbLock.lock()
         return try {
@@ -11772,6 +11780,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 add(offset.toString())
             }
 
+            val db = readableDatabase
             db.rawQuery(sql, pageArgs.toTypedArray()).use { cursor ->
                 while (cursor.moveToNext()) {
                     val current = cursor.getDouble(cursor.getColumnIndexOrThrow("current_quantity"))
