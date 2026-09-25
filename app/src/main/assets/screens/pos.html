@@ -2615,6 +2615,33 @@
     }
 
     /* ===== POS FIX PACK: responsive modals + reference invoice ===== */
+    #returnOverlay { overflow: hidden; box-sizing: border-box; }
+    #returnOverlay .return-content { width:min(100%,1100px)!important; max-width:1100px!important; max-height:calc(100vh - 24px)!important; margin:0!important; padding:0!important; overflow:auto!important; box-sizing:border-box!important; }
+    #returnOverlay .return-content > .modal-title,#returnOverlay .return-content > .date-range-container,#returnOverlay .return-content > h3,#returnOverlay .return-content > .return-form-grid,#returnOverlay .return-content > .floating-buttons { margin-left:16px; margin-right:16px; }
+    #returnOverlay .return-content > .modal-title { margin-top:16px; }
+    #returnOverlay .return-sales-table-hint { margin:10px 0 0; padding:10px 14px; border:1px solid rgba(37,99,235,.28); border-radius:12px; background:linear-gradient(135deg,rgba(37,99,235,.12),rgba(8,126,164,.08)); color:var(--text-color,#17324d); box-shadow:0 5px 18px rgba(37,99,235,.12); text-align:center; font-size:13px; font-weight:800; line-height:1.6; }
+    #returnOverlay .return-table-container { width:100%!important; max-width:100%!important; margin:0!important; padding:0!important; overflow-x:auto!important; overflow-y:auto!important; box-sizing:border-box!important; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+    #returnOverlay #returnSalesTable { width:max-content!important; min-width:100%!important; max-width:none!important; margin:0!important; border-radius:0!important; table-layout:fixed!important; }
+    #returnOverlay #returnSalesTable th,#returnOverlay #returnSalesTable td { text-align:center!important; vertical-align:middle!important; box-sizing:border-box; overflow-wrap:anywhere; word-break:break-word; }
+    #returnOverlay .return-operation-row { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,.65fr) minmax(0,1fr); gap:12px; }
+    #returnOverlay .return-operation-row .field-group { min-width:0; }
+    #returnOverlay .return-operation-row select,#returnOverlay .return-operation-row input { width:100%; max-width:100%; box-sizing:border-box; }
+    #returnOverlay .return-content * { max-width:100%; box-sizing:border-box; }
+    #salesReportModal .sales-report-print-btn { min-width:150px; }
+    body.sales-report-print-mode > * { visibility:hidden!important; }
+    body.sales-report-print-mode #salesReportModal,body.sales-report-print-mode #salesReportModal * { visibility:visible!important; }
+    body.sales-report-print-mode #salesReportModal { display:flex!important; position:absolute!important; inset:0!important; width:100%!important; height:auto!important; background:#fff!important; align-items:flex-start!important; justify-content:flex-start!important; }
+    body.sales-report-print-mode #salesReportModal .modal-content { width:100%!important; max-width:none!important; max-height:none!important; overflow:visible!important; box-shadow:none!important; border:0!important; border-radius:0!important; }
+    body.sales-report-print-mode #salesReportModal .sales-report-filters,body.sales-report-print-mode #salesReportModal > .modal-content > .action-buttons { display:none!important; }
+    body.sales-report-print-mode #salesReportTable { width:100%!important; table-layout:auto!important; }
+    body.sales-report-print-mode #salesReportTable th,body.sales-report-print-mode #salesReportTable td { white-space:normal!important; word-break:break-word!important; }
+    #salesReportTable { table-layout:auto!important; }
+    #salesReportTable .sales-report-invoice-number { width:max-content; min-width:150px; max-width:45vw; white-space:nowrap; }
+    @media(max-width:720px){
+      #returnOverlay .return-content > .modal-title,#returnOverlay .return-content > .date-range-container,#returnOverlay .return-content > h3,#returnOverlay .return-content > .return-form-grid,#returnOverlay .return-content > .floating-buttons { margin-left:10px; margin-right:10px; }
+      #returnOverlay .return-operation-row { grid-template-columns:minmax(0,1.35fr) minmax(0,.6fr) minmax(0,1fr); gap:8px; }
+      #returnOverlay #returnSalesTable th,#returnOverlay #returnSalesTable td { font-size:12px; padding:9px 6px; }
+    }
     .modal-content,.return-content,.damaged-content{box-sizing:border-box}
     #salesReportModal .modal-content,#invoiceRetrieveModal .modal-content,#returnOverlay .return-content{
       width:min(100%,1100px)!important;max-width:1100px!important;margin:0!important;
@@ -2853,53 +2880,66 @@
     #posInvoice .invoice-items .total { width: 22.5%; }
 
     #posInvoice .invoice-summary {
-      width: 50%;
-      margin-right: auto;
-      margin-left: 0;
-      margin-top: 4mm;
-      margin-bottom: 6mm;
-      border: 2px solid #1a3a5a;
-      border-radius: 3mm;
-      overflow: hidden;
-      background: #fff;
+      width:100%;
+      margin:4mm 0 6mm;
+      border:0;
+      overflow:visible;
+      background:transparent;
     }
     #posInvoice .invoice-summary-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+      display:grid;
+      grid-template-columns:repeat(5,minmax(0,1fr));
+      gap:2.5mm;
+      margin-bottom:3mm;
     }
-    #posInvoice .invoice-summary-row > div {
-      padding: 2.5mm 3mm;
-      border-bottom: 1px solid #1a3a5a;
-      background-color: #1a3a5a;
-      color: #fff;
-      font-weight: 900;
-      font-size: 12px;
-      text-align: center;
-      min-height: 9mm;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    #posInvoice .invoice-summary-row.payment-balance-row {
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:4mm;
+      margin-top:2mm;
     }
-    #posInvoice .invoice-summary-row > div.value {
-      background-color: #fff;
-      color: #1a3a5a;
-      direction: ltr;
+    #posInvoice .invoice-summary-card {
+      min-width:0;
+      border:1.2px solid #1a3a5a;
+      border-radius:3mm;
+      overflow:hidden;
+      background:#fff;
+      text-align:center;
     }
-    #posInvoice .invoice-summary-row:last-child > div {
-      border-bottom: 0;
+    #posInvoice .invoice-summary-card .summary-label {
+      min-height:9mm;
+      padding:2mm 1mm;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:#1a3a5a;
+      color:#fff;
+      font-size:10px;
+      line-height:1.25;
+      font-weight:900;
     }
-    #posInvoice .invoice-summary-row .grand-label {
-      background-color: #1a3a5a;
-      color: #fff;
-      font-size: 14px;
-      font-weight: 900;
+    #posInvoice .invoice-summary-card .summary-value {
+      min-height:10mm;
+      padding:2mm 1mm;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:#fff;
+      color:#000;
+      direction:ltr;
+      font-size:12px;
+      font-weight:800;
+      overflow-wrap:anywhere;
     }
-    #posInvoice .invoice-summary-row .grand-value {
-      background-color: #f3f6fa;
-      color: #1a3a5a;
-      font-size: 15px;
-      font-weight: 900;
-      direction: ltr;
+    #posInvoice .invoice-summary-card.grand .summary-value {
+      background:#f3f6fa;
+      color:#000;
+      font-size:13px;
+      font-weight:900;
+    }
+    #posInvoice .payment-balance-row .invoice-summary-card .summary-value {
+      font-size:15px;
+      font-weight:900;
+      color:#000;
     }
 
     #posInvoice .invoice-footer {
@@ -2949,6 +2989,11 @@
       #posInvoice .invoice-title{font-size:17px;padding:2.5mm 8mm}
       #posInvoice .invoice-items th,#posInvoice .invoice-items td{font-size:9px;padding:1.6mm 1mm}
       #posInvoice .invoice-summary{width:100%}
+      #posInvoice .invoice-summary-row{grid-template-columns:repeat(5,minmax(0,1fr));gap:1.2mm}
+      #posInvoice .invoice-summary-row.payment-balance-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:2mm}
+      #posInvoice .invoice-summary-card .summary-label{font-size:8px;padding:1.5mm .5mm}
+      #posInvoice .invoice-summary-card .summary-value{font-size:9px;padding:1.5mm .5mm}
+      #posInvoice .payment-balance-row .invoice-summary-card .summary-value{font-size:12px}
       #posInvoice .invoice-footer{margin-top:8mm}
     }
   </style>
@@ -3102,32 +3147,18 @@
   <div class="form-grid">
     <h3 class="gold-text">ملخص الفاتورة</h3>
     <div class="horizontal-row">
-      <div class="field-group">
-        <label class="form-label">الإجمالي قبل الضريبة</label>
-        <input type="text" id="subtotal" class="form-control invoice-summary" readonly>
-      </div>
-      <div class="field-group">
-        <label class="form-label">الضريبة</label>
-        <input type="text" id="taxAmount" class="form-control invoice-summary" readonly>
-      </div>
+      <div class="field-group"><label class="form-label">الإجمالي الفرعي</label><input type="number" id="subtotal" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" inputmode="decimal"></div>
+      <div class="field-group"><label class="form-label">الخصم</label><input type="number" id="discountAmount" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" value="0" inputmode="decimal"></div>
     </div>
-    
     <div class="horizontal-row">
-      <div class="field-group">
-        <label class="form-label">الإجمالي النهائي</label>
-        <input type="text" id="totalAmount" class="form-control invoice-summary" readonly>
-      </div>
-      <div class="field-group">
-        <label class="form-label">المبلغ المدفوع</label>
-        <input type="number" id="amountPaid" class="form-control invoice-summary" dir="ltr">
-      </div>
+      <div class="field-group"><label class="form-label">الضريبة</label><input type="number" id="taxAmount" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" value="0" inputmode="decimal"></div>
+      <div class="field-group"><label class="form-label">رسوم الخدمة</label><input type="number" id="serviceFee" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" value="0" inputmode="decimal"></div>
     </div>
-    
-    <div class="field-group">
-      <label class="form-label">الباقي</label>
-      <input type="text" id="remainingAmount" class="form-control invoice-summary" readonly>
+    <div class="horizontal-row">
+      <div class="field-group"><label class="form-label">الإجمالي النهائي</label><input type="number" id="totalAmount" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" inputmode="decimal"></div>
+      <div class="field-group"><label class="form-label">المبلغ المدفوع</label><input type="number" id="amountPaid" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" inputmode="decimal"></div>
     </div>
-
+    <div class="field-group"><label class="form-label">المتبقي</label><input type="number" id="remainingAmount" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" inputmode="decimal"></div>
     <input type="hidden" id="quantityOnHand" name="quantity_on_hand">
 
     <!-- ====== الأزرار السفلية المحسّنة بـ SVG + Tooltip ====== -->
@@ -3189,7 +3220,10 @@
           <tbody id="salesReportTableBody"></tbody>
         </table>
       </div>
-      <button class="modal-btn modal-btn-primary" onclick="closeModal('salesReportModal')">إغلاق</button>
+      <div class="action-buttons" style="margin-top:12px;">
+        <button class="modal-btn modal-btn-primary sales-report-print-btn" type="button" onclick="printSalesReport()">طباعة التقرير</button>
+        <button class="modal-btn modal-btn-primary" type="button" onclick="closeModal('salesReportModal')">إغلاق</button>
+      </div>
     </div>
   </div>
 
@@ -3351,8 +3385,9 @@
         </div>
       </div>
       
-      <div class="table-container" style="max-height: 180px; overflow: auto; width: 130%;">
-        <table class="product-table" id="returnSalesTable">
+      <div class="return-sales-table-hint" id="returnSalesTableHint">قم بالنقر المزدوج على الفاتورة لاختيار عناصرها</div>
+      <div class="return-table-container" style="max-height:180px;">
+        <table class="product-table" id="returnSalesTable" tabindex="-1" aria-describedby="returnSalesTableHint">
           <thead>
             <tr>
               <th>رقم الفاتورة</th>
@@ -3383,24 +3418,10 @@
           </div>
         </div>
         
-        <div class="horizontal-row">
-          <div class="field-group">
-            <label class="form-label">نوع العملية</label>
-            <select id="returnDetailType" class="form-control"><option value="return">مرتجع — يعيد المنتج للمخزون</option><option value="damage">تالف — لا يعيد المنتج للمخزون</option></select>
-          </div>
-          <div class="field-group">
-            <label class="form-label">الكمية</label>
-            <input type="number" id="returnDetailQuantity" class="form-control" dir="ltr" min="1">
-          </div>
-          <div class="field-group">
-            <label class="form-label">سبب الإرجاع</label>
-            <select id="returnDetailReason" class="form-control">
-              <option value="تالف">تالف</option>
-              <option value="غير مرغوب">غير مرغوب</option>
-              <option value="خطأ في الطلب">خطأ في الطلب</option>
-              <option value="أخرى">أخرى</option>
-            </select>
-          </div>
+        <div class="return-operation-row">
+          <div class="field-group"><label class="form-label">نوع العملية</label><select id="returnDetailType" class="form-control"><option value="return">مرتجع — يعيد المنتج للمخزون</option><option value="damage">تالف — لا يعيد المنتج للمخزون</option></select></div>
+          <div class="field-group"><label class="form-label">الكمية</label><input type="number" id="returnDetailQuantity" class="form-control" dir="ltr" min="0.01" step="0.01"></div>
+          <div class="field-group"><label class="form-label">سبب الإرجاع</label><select id="returnDetailReason" class="form-control"></select></div>
         </div>
         
         <div class="field-group">
@@ -3486,6 +3507,7 @@ function apiCall(action, params) {
             case 'retrieveInvoice': raw = AndroidInterface.retrieveInvoice(String(p.invoice_number || '')); break;
             case 'salesReport': raw = AndroidInterface.salesReport(); break;
             case 'printReceipt': raw = AndroidInterface.printCurrentPage(); break;
+            case 'printSalesReport': raw = AndroidInterface.printCurrentPageWithTitle('تقرير المبيعات'); break;
             case 'shareInvoiceJpg': raw = AndroidInterface.shareInvoiceJpg(String(p.invoice_html || ''), String(p.phone || '')); break;
             default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
         }
@@ -4078,28 +4100,53 @@ function removeProduct(row) {
 // ============================================================
 // 7. ملخص الفاتورة
 // ============================================================
-function updateInvoiceSummary() {
-    let subtotal = 0;
+function getInvoiceNumberValue(id, fallback = 0) {
+    const element = document.getElementById(id);
+    const value = Number(element?.value ?? fallback);
+    return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function updateInvoiceSummary(recalculateBase = true) {
+    let calculatedSubtotal = 0;
     document.querySelectorAll('#productsTableBody tr').forEach(row => {
-        subtotal += parseFloat(row.querySelector('.product-total').textContent);
+        const value = Number(row.querySelector('.product-total')?.textContent || 0);
+        if (Number.isFinite(value)) calculatedSubtotal += value;
     });
-    const tax = subtotal * 0.0;
-    const total = subtotal + tax;
-    document.getElementById('subtotal').value = subtotal.toFixed(2);
-    document.getElementById('taxAmount').value = tax.toFixed(2);
-    document.getElementById('totalAmount').value = total.toFixed(2);
+    const subtotalElement = document.getElementById('subtotal');
+    const discountElement = document.getElementById('discountAmount');
+    const taxElement = document.getElementById('taxAmount');
+    const serviceFeeElement = document.getElementById('serviceFee');
+    const totalElement = document.getElementById('totalAmount');
+    if (recalculateBase || !subtotalElement.value) subtotalElement.value = calculatedSubtotal.toFixed(2);
+    if (!discountElement.value) discountElement.value = '0.00';
+    if (!taxElement.value) taxElement.value = '0.00';
+    if (!serviceFeeElement.value) serviceFeeElement.value = '0.00';
+    const subtotal = getInvoiceNumberValue('subtotal', calculatedSubtotal);
+    const discount = getInvoiceNumberValue('discountAmount', 0);
+    const tax = getInvoiceNumberValue('taxAmount', 0);
+    const serviceFee = getInvoiceNumberValue('serviceFee', 0);
+    const derivedTotal = Math.max(0, subtotal - discount + tax + serviceFee);
+    if (recalculateBase || !totalElement.value) totalElement.value = derivedTotal.toFixed(2);
     updateRemainingAmount();
 }
 
 function updateRemainingAmount() {
-    const total = parseFloat(document.getElementById('totalAmount').value) || 0;
-    const paid = parseFloat(document.getElementById('amountPaid').value) || 0;
-    document.getElementById('remainingAmount').value = (total - paid).toFixed(2);
+    const total = getInvoiceNumberValue('totalAmount', 0);
+    const paid = getInvoiceNumberValue('amountPaid', 0);
+    const remainingElement = document.getElementById('remainingAmount');
+    if (remainingElement) remainingElement.value = Math.max(0, total - paid).toFixed(2);
 }
 
-// ============================================================
-// 8. دوال الفاتورة والعمليات
-// ============================================================
+function recalculateInvoiceFromManualFields() {
+    const subtotal = getInvoiceNumberValue('subtotal', 0);
+    const discount = getInvoiceNumberValue('discountAmount', 0);
+    const tax = getInvoiceNumberValue('taxAmount', 0);
+    const serviceFee = getInvoiceNumberValue('serviceFee', 0);
+    const totalElement = document.getElementById('totalAmount');
+    if (totalElement) totalElement.value = Math.max(0, subtotal - discount + tax + serviceFee).toFixed(2);
+    updateRemainingAmount();
+}
+
 function generateInvoiceNumber() {
     apiCall('getNextInvoiceNumber', {})
         .then(data => {
@@ -4122,7 +4169,9 @@ function resetForm() {
     document.getElementById('customerDetailsContainer').style.display = 'none';
     selectedCreditCustomer = null;
     document.getElementById('subtotal').value = '0.00';
+    document.getElementById('discountAmount').value = '0.00';
     document.getElementById('taxAmount').value = '0.00';
+    document.getElementById('serviceFee').value = '0.00';
     document.getElementById('totalAmount').value = '0.00';
     document.getElementById('amountPaid').value = '';
     document.getElementById('amountPaid').readOnly = false;
@@ -4133,7 +4182,12 @@ function resetForm() {
 }
 
 function completeSale() {
-    const total = parseFloat(document.getElementById('totalAmount').value) || 0;
+    const subtotal = getInvoiceNumberValue('subtotal', 0);
+    const discountAmount = getInvoiceNumberValue('discountAmount', 0);
+    const taxAmount = getInvoiceNumberValue('taxAmount', 0);
+    const serviceFee = getInvoiceNumberValue('serviceFee', 0);
+    const total = getInvoiceNumberValue('totalAmount', 0);
+    if (subtotal < 0 || discountAmount < 0 || taxAmount < 0 || serviceFee < 0 || total < 0) { showToast('قيم ملخص الفاتورة غير صالحة', 'error'); return; }
     const paymentType = document.getElementById('paymentType').value;
     const isCredit = paymentType === 'آجل';
     const paid = isCredit ? 0 : (parseFloat(document.getElementById('amountPaid').value) || 0);
@@ -4162,6 +4216,12 @@ function completeSale() {
         payment_type: paymentType,
         entity_id: entityId,
         products: products,
+        subtotal,
+        discount_amount: discountAmount,
+        tax_amount: taxAmount,
+        vat_amount: taxAmount,
+        service_fee: serviceFee,
+        total_amount: total,
         amount_paid: paid,
         idempotency_key: activeSaleOperationKey || (activeSaleOperationKey = newSaleOperationKey())
     };
@@ -4232,13 +4292,7 @@ async function loadCurrentStationLogo(forceReload) {
         .then(profileResponse => {
             if (!profileResponse.success) throw new Error(profileResponse.message || profileResponse.error || 'تعذر جلب بيانات المحطة الحالية');
             const profile = profileResponse.data || profileResponse;
-            const photoValue = profile.station_photo
-                || profile.station_logo
-                || profile.logo
-                || profile.photo
-                || profile.station_image
-                || profile.image
-                || '';
+            const photoValue = profile.station_photo || '';
             const photo = parseStationPhotoValue(photoValue);
             if (!photo.uri) {
                 stationLogoDataUrl = '';
@@ -4343,32 +4397,15 @@ function renderSalesInvoice(invoice) {
 
       <div class="invoice-summary">
         <div class="invoice-summary-row">
-          <div>الإجمالي الفرعي</div>
-          <div class="value">${subtotal.toFixed(2)}</div>
+          <div class="invoice-summary-card"><div class="summary-label">الخصم</div><div class="summary-value">${discount.toFixed(2)}</div></div>
+          <div class="invoice-summary-card"><div class="summary-label">الضريبة</div><div class="summary-value">${tax.toFixed(2)}</div></div>
+          <div class="invoice-summary-card"><div class="summary-label">رسوم الخدمة</div><div class="summary-value">${serviceFee.toFixed(2)}</div></div>
+          <div class="invoice-summary-card"><div class="summary-label">المدفوع</div><div class="summary-value">${paid.toFixed(2)}</div></div>
+          <div class="invoice-summary-card grand"><div class="summary-label">الإجمالي النهائي</div><div class="summary-value">${net.toFixed(2)}</div></div>
         </div>
-        <div class="invoice-summary-row">
-          <div>الخصم</div>
-          <div class="value">${discount.toFixed(2)}</div>
-        </div>
-        <div class="invoice-summary-row">
-          <div>الضريبة</div>
-          <div class="value">${tax.toFixed(2)}</div>
-        </div>
-        <div class="invoice-summary-row">
-          <div>رسوم الخدمة</div>
-          <div class="value">${serviceFee.toFixed(2)}</div>
-        </div>
-        <div class="invoice-summary-row">
-          <div class="grand-label">الإجمالي / TOTAL</div>
-          <div class="grand-value">${net.toFixed(2)}</div>
-        </div>
-        <div class="invoice-summary-row">
-          <div>المدفوع</div>
-          <div class="value">${paid.toFixed(2)}</div>
-        </div>
-        <div class="invoice-summary-row">
-          <div>المتبقي</div>
-          <div class="value">${remaining.toFixed(2)}</div>
+        <div class="invoice-summary-row payment-balance-row">
+          <div class="invoice-summary-card"><div class="summary-label">المـــدفـــوع</div><div class="summary-value">${paid.toFixed(2)}</div></div>
+          <div class="invoice-summary-card"><div class="summary-label">المتبقــــي</div><div class="summary-value">${remaining.toFixed(2)}</div></div>
         </div>
       </div>
 
@@ -4736,7 +4773,7 @@ function searchReturnSales() {
                     const returnable = Number(sale.returnable_quantity ?? sale.net_quantity ?? sale.quantity ?? 0);
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td>${escapePosText(sale.invoice_number)}</td>
+                        <td class="sales-report-invoice-number" data-invoice-length="${String(sale.invoice_number || '').length}">${escapePosText(sale.invoice_number)}</td>
                         <td>${escapePosText(sale.sale_date)}</td>
                         <td>${escapePosText(sale.product_name || 'منتج')}</td>
                         <td>${Number(sale.quantity || 0).toFixed(2)}</td>
@@ -4745,23 +4782,37 @@ function searchReturnSales() {
                         <td>${returnable.toFixed(2)}</td>
                     `;
                     if (returnable <= 0.000001) tr.classList.add('disabled-row');
-                    tr.addEventListener('click', () => {
-                        if (returnable <= 0.000001) {
-                            showToast('تم إرجاع هذه الكمية بالكامل مسبقاً', 'warning');
-                            return;
-                        }
+                    tr.addEventListener('dblclick', () => {
+                        if (returnable <= 0.000001) { showToast('تم إرجاع هذه الكمية بالكامل مسبقاً', 'warning'); return; }
                         document.querySelectorAll('#returnSalesTableBody tr').forEach(r => r.classList.remove('selected-row'));
                         tr.classList.add('selected-row');
                         fillReturnForm(sale);
+                        setTimeout(() => document.getElementById('returnDetailProduct')?.scrollIntoView({ behavior:'smooth', block:'center' }), 80);
                     });
+                    tr.addEventListener('click', () => tr.classList.add('touch-active'));
                     tbody.appendChild(tr);
                 });
+                const returnTable = document.getElementById('returnSalesTable');
+                const firstProductCell = tbody.querySelector('tr td:nth-child(3)');
+                if (returnTable) {
+                    try { returnTable.focus({ preventScroll: true }); } catch (_) { try { returnTable.focus(); } catch (__) {} }
+                }
+                if (firstProductCell) setTimeout(() => firstProductCell.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }), 60);
             } else {
                 tbody.innerHTML = '<tr><td colspan="7">لا توجد بنود مبيعات في الفترة المحددة</td></tr>';
             }
         })
         .catch(error => { showToast(error.message || 'حدث خطأ في البحث عن المبيعات', 'error'); })
         .finally(() => showLoading(false));
+}
+
+function updateReturnReasonOptions(preferredValue) {
+    const type = document.getElementById('returnDetailType')?.value || 'return';
+    const reason = document.getElementById('returnDetailReason');
+    if (!reason) return;
+    const options = type === 'damage' ? ['تالف','منتهي الصلاحية','مثقوب','فاسد','أسباب أخرى'] : ['السعر مرتفع','غير مرغوب به','خطأ في الطلب','زائد عن الحاجة','أسباب أخرى'];
+    reason.replaceChildren(...options.map(value => { const option=document.createElement('option'); option.value=value; option.textContent=value; return option; }));
+    reason.value = preferredValue && options.includes(preferredValue) ? preferredValue : options[0];
 }
 
 function fillReturnForm(sale) {
@@ -4773,8 +4824,8 @@ function fillReturnForm(sale) {
     qty.value = returnable > 0 ? returnable : '';
     qty.max = String(Math.max(0, returnable));
     qty.step = '0.01';
-    document.getElementById('returnDetailReason').value = 'غير مرغوب';
     document.getElementById('returnDetailType').value = 'return';
+    updateReturnReasonOptions('السعر مرتفع');
     document.getElementById('returnDetailNotes').value = '';
 }
 
@@ -4970,6 +5021,20 @@ function toggleSalesReport() {
     if (!start.value) start.value = formatDate(weekAgo);
     if (!end.value) end.value = formatDate(today);
     fetchSalesReport();
+}
+
+function printSalesReport() {
+    const body = document.getElementById('salesReportTableBody');
+    if (!body || !body.children.length) { showToast('لا توجد بيانات تقرير للطباعة', 'warning'); return; }
+    document.body.classList.add('sales-report-print-mode');
+    setTimeout(async () => {
+        try {
+            const response = await apiCall('printSalesReport');
+            if (!response.success) throw new Error(response.message || response.error || 'فشل فتح نافذة الطباعة');
+            showToast(response.message || 'تم إرسال تقرير المبيعات إلى الطباعة', 'success');
+        } catch (error) { showToast(error.message || 'تعذر طباعة تقرير المبيعات', 'error'); }
+        finally { setTimeout(() => document.body.classList.remove('sales-report-print-mode'), 1500); }
+    },100);
 }
 
 function fetchSalesReport() {
@@ -5236,6 +5301,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('customerId').addEventListener('change', function() {
         loadCustomerDetails(this.value);
     });
+    ['subtotal','discountAmount','taxAmount','serviceFee'].forEach(id => { const field=document.getElementById(id); if(field) field.addEventListener('input', recalculateInvoiceFromManualFields); });
+    document.getElementById('totalAmount').addEventListener('input', updateRemainingAmount);
+    document.getElementById('remainingAmount').addEventListener('input', function(){ const total=getInvoiceNumberValue('totalAmount',0); const remaining=getInvoiceNumberValue('remainingAmount',0); document.getElementById('amountPaid').value=Math.max(0,total-remaining).toFixed(2); updateRemainingAmount(); });
+    document.getElementById('returnDetailType').addEventListener('change', () => updateReturnReasonOptions());
+    updateReturnReasonOptions();
     document.getElementById('amountPaid').addEventListener('input', updateRemainingAmount);
     document.getElementById('amountPaid').addEventListener('dblclick', function() {
         this.value = document.getElementById('totalAmount').value;

@@ -1695,16 +1695,16 @@
 	        switch (action) {
 	            case 'getWarehouses': raw = AndroidInterface.getWarehouses(JSON.stringify(p)); break;
 	            case 'getCategories': raw = AndroidInterface.getCategories(); break;
-	            case 'getInventorySummary': raw = AndroidInterface.getInventoryReport(JSON.stringify({ ...p, limit: 200 })); break;
-	            case 'getLowStockProducts': raw = AndroidInterface.getInventoryReport(JSON.stringify({ ...p, report_type: 'below_min', limit: 200 })); break;
+	            case 'getInventorySummary': raw = AndroidInterface.getStockLevelsPage(JSON.stringify({ ...p, limit: 200 })); break;
+	            case 'getLowStockProducts': raw = AndroidInterface.getStockLevelsPage(JSON.stringify({ ...p, report_type: 'below_min', limit: 200 })); break;
 	            case 'getInventoryAlerts': raw = AndroidInterface.getStockAlertRecords(JSON.stringify(p)); break;
-	            case 'getInventoryCharts': raw = AndroidInterface.getInventoryReport(JSON.stringify(p)); break;
+	            case 'getInventoryCharts': raw = AndroidInterface.getStockLevelsPage(JSON.stringify(p)); break;
 	            case 'getMovements': raw = AndroidInterface.getInventoryMovementRecords(JSON.stringify(p)); break;
-	            case 'getStockValues': raw = AndroidInterface.getInventoryReport(JSON.stringify({ ...p, limit: 200 })); break;
+	            case 'getStockValues': raw = AndroidInterface.getStockLevelsPage(JSON.stringify({ ...p, limit: 200 })); break;
 	            case 'getAlerts': raw = AndroidInterface.getStockAlertRecords(JSON.stringify({ ...p, limit: 200 })); break;
-	            case 'filterInventory': raw = AndroidInterface.getInventoryReport(JSON.stringify(p)); break;
-	            case 'advancedFilter': raw = AndroidInterface.getInventoryReport(JSON.stringify(p)); break;
-	            case 'searchProducts': raw = AndroidInterface.getInventoryReport(JSON.stringify({ ...p, search: [p.code, p.name].filter(Boolean).join(' '), limit: 200 })); break;
+	            case 'filterInventory': raw = AndroidInterface.getStockLevelsPage(JSON.stringify(p)); break;
+	            case 'advancedFilter': raw = AndroidInterface.getStockLevelsPage(JSON.stringify(p)); break;
+	            case 'searchProducts': raw = AndroidInterface.getStockLevelsPage(JSON.stringify({ ...p, search: [p.code, p.name].filter(Boolean).join(' '), limit: 200 })); break;
 	            case 'getExpiringProducts': return Promise.reject({ success: false, message: 'بيانات الصلاحية غير موجودة في عقد SQLite الحالي' });
 	            case 'getAuditReport': return Promise.reject({ success: false, message: 'تقرير الجرد غير متاح في عقد SQLite الحالي' });
 	            case 'createPurchaseOrder': return Promise.reject({ success: false, message: 'أوامر الشراء غير متاحة في عقد SQLite الحالي' });

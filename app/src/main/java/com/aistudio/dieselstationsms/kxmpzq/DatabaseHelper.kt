@@ -8920,6 +8920,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         deliveryTime: String? = null,
         orderType: String = "sale",
         paidAmount: Double? = null,
+        serviceFee: Double = 0.0,
         manageTransaction: Boolean = true
     ): Long {
         return insertSaleTransactionInternal(
@@ -8986,6 +8987,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(taxAmount.isFinite() && taxAmount >= 0.0) { "الضريبة غير صالحة" }
         require(grossAmount.isFinite() && grossAmount >= 0.0) { "الإجمالي غير صالح" }
         require(netAmount.isFinite() && netAmount >= 0.0) { "الصافي غير صالح" }
+        require(serviceFee.isFinite() && serviceFee >= 0.0) { "رسوم الخدمة غير صالحة" }
         require(paymentMethod in setOf("cash", "credit_card", "bank_transfer", "credit", "cheque", "mobile_money", "loyalty_points")) { "طريقة الدفع غير مدعومة" }
         require(!isCredit || customerPartyId != null) { "العميل مطلوب للبيع الآجل" }
         val actualPaid = paidAmount ?: if (isCredit) 0.0 else netAmount
@@ -9059,6 +9061,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("discount_amount", discountAmount)
                     put("tax_amount", taxAmount)
                     put("gross_amount", grossAmount)
+                    put("service_fee", serviceFee)
                     put("net_amount", netAmount)
                     put("payment_method", paymentMethod)
                     put("payment_status", if (isCredit) "pending" else "paid")
@@ -10746,6 +10749,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 prepared += JSONObject().apply { put("product_id", productId); put("quantity", quantity); put("unit_price", unitPrice); put("line_total", lineTotal) }
             }
             require(total.isFinite() && total >= 0.0) { "إجمالي البيع غير صالح" }
+            val requestedSubtotal = data.optDouble("subtotal", total)
+            val discountAmount = data.optDouble("discount_amount", 0.0)
+            val taxAmount = data.optDouble("tax_amount", 0.0)
+            val serviceFee = data.optDouble("service_fee", 0.0)
+            val requestedTotal = data.optDouble("total_amount", total)
+            require(requestedSubtotal.isFinite() && requestedSubtotal >= 0.0) { "الإجمالي الفرعي غير صالح" }
+            require(discountAmount.isFinite() && discountAmount >= 0.0) { "الخصم غير صالح" }
+            require(taxAmount.isFinite() && taxAmount >= 0.0) { "الضريبة غير صالحة" }
+            require(serviceFee.isFinite() && serviceFee >= 0.0) { "رسوم الخدمة غير صالحة" }
+            require(requestedTotal.isFinite() && requestedTotal >= 0.0) { "الإجمالي النهائي غير صالح" }
             val paymentType = data.optString("payment_type", "cash")
             val paymentMethod = when (paymentType) {
                 "آجل", "credit" -> "credit"
@@ -10755,9 +10768,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 else -> "cash"
             }
             val isCredit = paymentMethod == "credit"
-            val paidAmount = data.optDouble("amount_paid", if (isCredit) 0.0 else total)
+            val finalTotal = requestedTotal
+            val paidAmount = data.optDouble("amount_paid", if (isCredit) 0.0 else finalTotal)
             require(paidAmount.isFinite() && paidAmount >= 0.0) { "المبلغ المدفوع غير صالح" }
-            require(isCredit || paidAmount + 1e-9 >= total) { "المبلغ المدفوع أقل من الإجمالي" }
+            require(isCredit || paidAmount + 1e-9 >= finalTotal) { "المبلغ المدفوع أقل من الإجمالي" }
             if (isCredit) require(data.optLong("entity_id", 0L) > 0L) { "العميل مطلوب للبيع الآجل" }
 
             db.beginTransaction()
@@ -10779,11 +10793,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 nozzleId = null,
                 liters = 0.0,
                 pricePerLiter = 0.0,
-                subtotal = total,
-                discountAmount = 0.0,
-                taxAmount = 0.0,
-                grossAmount = total,
-                netAmount = total,
+                subtotal = requestedSubtotal,
+                discountAmount = discountAmount,
+                taxAmount = taxAmount,
+                grossAmount = (requestedTotal - serviceFee).coerceAtLeast(0.0),
+                netAmount = finalTotal,
                 paymentMethod = paymentMethod,
                 isCredit = isCredit,
                 dueDate = data.optString("due_date", null),
@@ -10791,8 +10805,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 notes = data.optString("notes", ""),
                 orderType = "product",
                 paidAmount = paidAmount,
+                serviceFee = serviceFee,
                 manageTransaction = false
             )
+            val vatAmount = data.optDouble("vat_amount", taxAmount)
+            require(vatAmount.isFinite() && vatAmount >= 0.0) { "قيمة ضريبة القيمة المضافة غير صالحة" }
+            val vatRows = db.update(
+                "sales_transactions",
+                ContentValues().apply { put("vat_amount", vatAmount); put("updated_at", getCurrentDateTime()) },
+                "id=? AND station_id=? AND is_deleted=0",
+                arrayOf(saleId.toString(), stationScopeId.toString())
+            )
+            require(vatRows == 1) { "تعذر حفظ ضريبة القيمة المضافة" }
 
             prepared.forEachIndexed { index, item ->
                 val productId = item.getLong("product_id")
@@ -11648,6 +11672,181 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("stats", stats)
                 put("categories", categories)
                 put("movement_series", movementSeries)
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+
+    /**
+     * Unified stock-level contract for the Stock Levels screen.
+     *
+     * Products continue to use the existing inventory-report calculation.
+     * Fuel is deliberately read from tanks/fuel_types because fuel is not
+     * represented by inventory_levels. The returned row shape is compatible
+     * with the existing Stock Levels JavaScript while exposing the real
+     * product/fuel distinction through item_type.
+     */
+    fun getStockLevelsPage(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
+        dbLock.lock()
+        return try {
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+
+            val base = getInventoryReport(
+                JSONObject(data.toString()).apply {
+                    if (!has("limit")) put("limit", 200)
+                },
+                stationScopeId
+            )
+
+            val rows = base.optJSONArray("rows") ?: JSONArray()
+            val reportType = data.optString("report_type", "summary").ifBlank { "summary" }
+            val search = data.optString("search", "").trim()
+            val statusFilter = data.optString("status").trim().lowercase()
+            val fuelTypeId = data.optLong("fuel_type_id", 0L)
+            val tankId = data.optLong("tank_id", 0L)
+            val limit = data.optInt("limit", 200).coerceIn(1, 1000)
+            val offset = data.optInt("offset", 0).coerceAtLeast(0)
+
+            val where = mutableListOf(
+                "t.station_id = ?",
+                "t.is_deleted = 0",
+                "t.status <> 'retired'"
+            )
+            val args = mutableListOf(stationScopeId.toString())
+
+            if (fuelTypeId > 0L) {
+                where += "t.fuel_type_id = ?"
+                args += fuelTypeId.toString()
+            }
+            if (tankId > 0L) {
+                where += "t.id = ?"
+                args += tankId.toString()
+            }
+            if (search.isNotBlank()) {
+                where += "(t.tank_code LIKE ? OR t.tank_name LIKE ? OR t.tank_name_ar LIKE ? OR f.fuel_code LIKE ? OR f.fuel_name LIKE ? OR f.fuel_name_ar LIKE ?)"
+                repeat(6) { args += "%$search%" }
+            }
+            when (statusFilter) {
+                "critical", "out" -> where += "COALESCE(t.current_quantity, 0) <= 0"
+                "low" -> where += "COALESCE(t.current_quantity, 0) > 0 AND COALESCE(t.current_quantity, 0) <= COALESCE(t.minimum_level, 0)"
+                "active", "normal" -> where += "COALESCE(t.current_quantity, 0) > COALESCE(t.minimum_level, 0)"
+            }
+            if (reportType == "below_min") {
+                where += "COALESCE(t.current_quantity, 0) <= COALESCE(t.minimum_level, 0)"
+            }
+
+            val fuelRows = JSONArray()
+            var fuelCount = 0
+            var fuelQuantity = 0.0
+            var fuelValue = 0.0
+            var fuelLow = 0
+            var fuelCritical = 0
+
+            val sql = """
+                SELECT
+                    t.id AS tank_id,
+                    t.tank_code,
+                    t.tank_name,
+                    t.tank_name_ar,
+                    t.location,
+                    t.current_quantity,
+                    t.minimum_level,
+                    t.maximum_level,
+                    t.updated_at,
+                    f.id AS fuel_type_id,
+                    f.fuel_code,
+                    f.fuel_name,
+                    f.fuel_name_ar,
+                    f.default_purchase_price
+                FROM tanks t
+                LEFT JOIN fuel_types f ON f.id = t.fuel_type_id
+                WHERE ${where.joinToString(" AND ")}
+                ORDER BY COALESCE(f.fuel_name_ar, f.fuel_name, f.fuel_code, t.tank_name_ar, t.tank_name), t.id
+                LIMIT ? OFFSET ?
+            """.trimIndent()
+
+            val pageArgs = args.toMutableList().apply {
+                add(limit.toString())
+                add(offset.toString())
+            }
+
+            db.rawQuery(sql, pageArgs.toTypedArray()).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val current = cursor.getDouble(cursor.getColumnIndexOrThrow("current_quantity"))
+                    val minimum = cursor.getDouble(cursor.getColumnIndexOrThrow("minimum_level"))
+                    val maximumIndex = cursor.getColumnIndexOrThrow("maximum_level")
+                    val maximum = if (cursor.isNull(maximumIndex)) null else cursor.getDouble(maximumIndex)
+                    val price = cursor.getDouble(cursor.getColumnIndexOrThrow("default_purchase_price"))
+                    val status = when {
+                        current <= 0.0 -> "critical"
+                        current <= minimum -> "low"
+                        maximum != null && current > maximum -> "over"
+                        else -> "active"
+                    }
+                    val row = JSONObject().apply {
+                        put("item_type", "fuel")
+                        put("tank_id", cursor.getLong(cursor.getColumnIndexOrThrow("tank_id")))
+                        put("fuel_type_id", cursor.getLong(cursor.getColumnIndexOrThrow("fuel_type_id")))
+                        put("product_id", JSONObject.NULL)
+                        put("product_code", cursor.getStringOrNull("fuel_code"))
+                        put("barcode", JSONObject.NULL)
+                        put("product_name", cursor.getStringOrNull("fuel_name"))
+                        put("product_name_ar", cursor.getStringOrNull("fuel_name_ar") ?: cursor.getStringOrNull("fuel_name"))
+                        put("category_name", "وقود")
+                        put("warehouse_name", cursor.getStringOrNull("tank_name_ar") ?: cursor.getStringOrNull("tank_name"))
+                        put("location_name", cursor.getStringOrNull("location"))
+                        put("tank_name", cursor.getStringOrNull("tank_name_ar") ?: cursor.getStringOrNull("tank_name"))
+                        put("unit_symbol", "لتر")
+                        put("quantity", current)
+                        put("quantity_on_hand", current)
+                        put("quantity_committed", JSONObject.NULL)
+                        put("available_quantity", current)
+                        put("purchase_price", price)
+                        put("minimum_stock", minimum)
+                        if (maximum == null) put("maximum_stock", JSONObject.NULL) else put("maximum_stock", maximum)
+                        put("reorder_quantity", JSONObject.NULL)
+                        put("stock_value", current * price)
+                        put("status", status)
+                        put("expiry_status", "none")
+                        put("expiry_date", JSONObject.NULL)
+                        put("last_count_date", cursor.getStringOrNull("updated_at"))
+                        put("last_updated", cursor.getStringOrNull("updated_at"))
+                    }
+                    fuelRows.put(row)
+                    fuelCount++
+                    fuelQuantity += current
+                    fuelValue += current * price
+                    if (status == "low") fuelLow++
+                    if (status == "critical") fuelCritical++
+                }
+            }
+
+            val combined = JSONArray()
+            for (i in 0 until rows.length()) combined.put(rows.getJSONObject(i))
+            for (i in 0 until fuelRows.length()) combined.put(fuelRows.getJSONObject(i))
+
+            val stats = (base.optJSONObject("stats") ?: JSONObject()).let { JSONObject(it.toString()) }
+            stats.put("total_quantity", stats.optDouble("total_quantity", 0.0) + fuelQuantity)
+            stats.put("total_value", stats.optDouble("total_value", 0.0) + fuelValue)
+            stats.put("low_stock", stats.optInt("low_stock", 0) + fuelLow)
+            stats.put("critical_stock", stats.optInt("critical_stock", 0) + fuelCritical)
+            stats.put("fuel_count", fuelCount)
+
+            JSONObject().apply {
+                put("report_type", reportType)
+                put("rows", combined)
+                put("count", combined.length())
+                put("total_count", base.optInt("total_count", rows.length()) + fuelCount)
+                put("page", (offset / limit) + 1)
+                put("page_size", limit)
+                put("total_pages", ((base.optInt("total_count", rows.length()) + fuelCount + limit - 1) / limit))
+                put("has_next", combined.length() >= limit)
+                put("has_previous", offset > 0)
+                put("stats", stats)
+                put("categories", base.optJSONArray("categories") ?: JSONArray())
+                put("movement_series", base.optJSONArray("movement_series") ?: JSONArray())
             }
         } finally {
             dbLock.unlock()
@@ -21248,14 +21447,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (startDate.isNotEmpty() && endDate.isNotEmpty()) {
                 require(startDate <= endDate) { "تاريخ البداية يجب ألا يكون بعد تاريخ النهاية" }
             }
-            val sql = """SELECT s.id AS sale_id, s.invoice_number, s.created_at AS sale_date,
+            val sql = """SELECT s.id AS sale_id, si.id AS item_id, s.invoice_number, s.created_at AS sale_date,
                     si.product_id, p.product_name, p.barcode,
                     si.quantity, COALESCE(si.returned_quantity, 0) AS returned_quantity,
-                    MAX(0, si.quantity - COALESCE(si.returned_quantity, 0)) AS returnable_quantity,
-                    MAX(0, si.quantity - COALESCE(si.returned_quantity, 0)) AS net_quantity,
+                    COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'), 0) AS damaged_quantity,
+                    MAX(0, si.quantity - COALESCE(si.returned_quantity, 0) - COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'), 0)) AS returnable_quantity,
+                    MAX(0, si.quantity - COALESCE(si.returned_quantity, 0) - COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'), 0)) AS net_quantity,
                     si.unit_price,
                     si.line_total AS total_price,
-                    (si.line_total * CASE WHEN si.quantity > 0 THEN MAX(0, si.quantity - COALESCE(si.returned_quantity, 0)) / si.quantity ELSE 0 END) AS net_total
+                    (si.line_total * CASE WHEN si.quantity > 0 THEN MAX(0, si.quantity - COALESCE(si.returned_quantity, 0) - COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'), 0)) / si.quantity ELSE 0 END) AS net_total
                     FROM sale_items si JOIN sales_transactions s ON s.id=si.sale_id
                     LEFT JOIN products p ON p.id=si.product_id
                     WHERE ${where.joinToString(" AND ")}
@@ -21589,7 +21789,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             "revenue" -> "SELECT id FROM accounts WHERE account_type='revenue' AND is_active=1 AND is_deleted=0 ORDER BY CASE WHEN account_category LIKE '%sales%' OR account_category LIKE '%revenue%' THEN 0 ELSE 1 END, id LIMIT 1"
             "cash" -> "SELECT id FROM accounts WHERE is_cash_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1"
             "bank" -> "SELECT id FROM accounts WHERE is_bank_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1"
-            "receivable" -> "SELECT id FROM accounts WHERE account_type='asset' AND is_active=1 AND is_deleted=0 AND (account_category LIKE '%receiv%' OR account_name LIKE '%customer%' OR account_name_ar LIKE '%عملاء%' OR account_name_ar LIKE '%ذمم%') ORDER BY id LIMIT 1"
+            "receivable" -> "SELECT id FROM accounts WHERE account_type='asset' AND is_active=1 AND is_deleted=0 AND (account_category LIKE '%receiv%' OR account_code IN ('1103','1103-A') OR lower(account_name) LIKE '%receivable%' OR lower(account_name) LIKE '%debtor%' OR lower(account_name_ar) LIKE '%receiv%' OR account_name_ar LIKE '%المدينون%' OR account_name_ar LIKE '%المدينين%' OR account_name_ar LIKE '%العملاء%' OR account_name_ar LIKE '%ذمم%') ORDER BY CASE WHEN account_code='1103' THEN 0 WHEN account_name_ar LIKE '%المدينون%' THEN 1 ELSE 2 END, id LIMIT 1"
             else -> throw IllegalArgumentException("نوع الحساب المالي غير معروف")
         }
         return db.rawQuery(sql, null).use { c ->
@@ -21826,8 +22026,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                                                 COALESCE(p.purchase_price,0),s.shift_id,s.customer_party_id,s.net_amount,s.paid_amount,s.payment_method,s.status,s.invoice_number
                                          FROM sale_items si JOIN sales_transactions s ON s.id=si.sale_id
                                          LEFT JOIN products p ON p.id=si.product_id
-                                         WHERE s.station_id=? AND s.invoice_number=? AND si.product_id=? AND (?=0 OR si.id=?) AND si.item_type='product' AND s.is_deleted=0 LIMIT 1""",
-                    arrayOf(stationId.toString(),invoice,productId.toString(),itemId.toString(),itemId.toString())).use{c->
+                                         WHERE s.station_id=? AND s.invoice_number=? AND si.item_type='product' AND s.is_deleted=0
+                                           AND (?=0 OR si.id=?)
+                                           AND (?=0 OR si.product_id=?)
+                                         ORDER BY CASE WHEN ? > 0 AND si.id=? THEN 0 ELSE 1 END, si.id LIMIT 1""",
+                    arrayOf(stationId.toString(),invoice,itemId.toString(),itemId.toString(),productId.toString(),productId.toString(),itemId.toString(),itemId.toString())).use{c->
                     require(c.moveToFirst()){"بند المنتج غير موجود في الفاتورة"}
                     JSONObject().apply{put("item_id",c.getLong(0));put("sale_id",c.getLong(1));put("product_id",c.getLong(2));put("qty",c.getDouble(3));put("returned",c.getDouble(4));put("damaged",c.getDouble(5));put("unit_price",c.getDouble(6));put("line_total",c.getDouble(7));put("purchase_price",c.getDouble(8));put("shift_id",c.getLong(9));if(c.isNull(10))put("customer_id",JSONObject.NULL)else put("customer_id",c.getLong(10));put("net",c.getDouble(11));put("paid",c.getDouble(12));put("payment_method",c.getString(13));put("status",c.getString(14));put("invoice",c.getString(15))}
                 }
