@@ -192,6 +192,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureDeliveriesSchema(db)
             ensureFuelSalesSchema(db)
             ensureSalesAdjustmentSchema(db)
+            ensureFuelStocktakeSchema(db)
             ensureLegacyAssetsSchema(db)
             ensureModule007Schema(db)
             ensureModule010Schema(db)
@@ -247,7 +248,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     31 -> migrateV31ToV32(db)
                     32 -> migrateV32ToV33(db)
                     33 -> ensureFuelCommerceSchema(db)
-                    39 -> ensureFuelStocktakeSchema(db)
+                    38 -> ensureFuelStocktakeSchema(db)
                     34 -> migrateV34ToV35(db)
                     35 -> migrateV35ToV36(db)
                     36 -> migrateV36ToV37(db)
@@ -260,6 +261,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureDeliveriesSchema(db)
             ensureFuelSalesSchema(db)
             ensureSalesAdjustmentSchema(db)
+            ensureFuelStocktakeSchema(db)
             ensureLegacyAssetsSchema(db)
             ensureVehicleArchiveSchema(db)
             ensureVehicleTripLifecycleSchema(db)
@@ -28418,9 +28420,83 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.rawQuery("SELECT fs.*, (SELECT COUNT(*) FROM fuel_stocktake_details d WHERE d.fuel_stocktake_id=fs.id AND d.archived=0) line_count FROM fuel_stocktakes fs WHERE fs.station_id=? AND fs.archived=0 ORDER BY fs.id DESC LIMIT ?", arrayOf(stationScopeId.toString(), data.optInt("limit",100).coerceIn(1,500).toString())).use { c -> while(c.moveToNext()) out.put(cursorToJsonObject(c)) }; return out
     }
     fun saveFuelStocktake(data: JSONObject, stationScopeId: Int, userId: Long): Long { val cv=ContentValues().apply{put("station_id",stationScopeId);put("status",data.optString("status","draft"));put("notes",data.optString("notes"));put("created_by",userId)}; return writableDatabase.insertOrThrow("fuel_stocktakes",null,cv) }
-    fun getFuelStocktakeDetails(id: Long, stationScopeId: Int): JSONArray { val out=JSONArray(); readableDatabase.rawQuery("SELECT d.*, t.tank_name AS tank_name, t.tank_code, ft.fuel_name_ar AS fuel_name FROM fuel_stocktake_details d LEFT JOIN tanks t ON t.id=d.tank_id LEFT JOIN fuel_types ft ON ft.id=d.fuel_type_id JOIN fuel_stocktakes fs ON fs.id=d.fuel_stocktake_id WHERE d.fuel_stocktake_id=? AND fs.station_id=? AND d.archived=0 ORDER BY d.id",arrayOf(id.toString(),stationScopeId.toString())).use{c->while(c.moveToNext())out.put(cursorToJsonObject(c))};return out }
-    fun saveFuelStocktakeDetail(data: JSONObject, stationScopeId: Int): Long { val db=writableDatabase; val sid=data.optLong("fuel_stocktake_id"); val tank=data.optLong("tank_id"); val ft=data.optLong("fuel_type_id"); val counted=data.optDouble("counted_quantity",-1.0); require(sid>0&&tank>0&&ft>0&&counted>=0) {"بيانات جرد الوقود غير صالحة"}; var system=0.0; var price=0.0; db.rawQuery("SELECT COALESCE(t.current_quantity,0),COALESCE(ft.default_purchase_price,0) FROM tanks t JOIN fuel_types ft ON ft.id=t.fuel_type_id WHERE t.id=? AND t.station_id=? AND t.is_deleted=0",arrayOf(tank.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "الخزان غير موجود أو خارج نطاق المحطة" };system=c.getDouble(0);price=c.getDouble(1)}; val variance=counted-system; val cv=ContentValues().apply{put("fuel_stocktake_id",sid);put("tank_id",tank);put("fuel_type_id",ft);put("system_quantity",system);put("counted_quantity",counted);put("variance_quantity",variance);put("unit_price",price);put("variance_value",variance*price);put("notes",data.optString("notes"))};return db.insertOrThrow("fuel_stocktake_details",null,cv) }
-    fun updateFuelStocktakeDetail(id: Long,data: JSONObject,stationScopeId:Int):Int { val db=writableDatabase; val counted=data.optDouble("counted_quantity",-1.0); require(counted>=0){"الكمية المعدودة غير صالحة"}; var system=0.0;var price=0.0;db.rawQuery("SELECT COALESCE(t.current_quantity,0),COALESCE(t.unit_price,0) FROM fuel_stocktake_details d JOIN tanks t ON t.id=d.tank_id JOIN fuel_stocktakes fs ON fs.id=d.fuel_stocktake_id WHERE d.id=? AND fs.station_id=? AND d.archived=0",arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "تفصيل الجرد غير موجود" };system=c.getDouble(0);price=c.getDouble(1)};return db.update("fuel_stocktake_details",ContentValues().apply{put("counted_quantity",counted);put("variance_quantity",counted-system);put("unit_price",price);put("variance_value",(counted-system)*price);put("notes",data.optString("notes"))},"id=? AND archived=0",arrayOf(id.toString())) }
-    fun approveFuelStocktake(id:Long,stationScopeId:Int,actorId:Long):Int { val db=writableDatabase;db.beginTransaction();try{var rows=0;db.rawQuery("SELECT tank_id,variance_quantity,variance_value FROM fuel_stocktake_details d JOIN fuel_stocktakes fs ON fs.id=d.fuel_stocktake_id WHERE d.fuel_stocktake_id=? AND fs.station_id=? AND d.archived=0",arrayOf(id.toString(),stationScopeId.toString())).use{c->while(c.moveToNext()){val tank=c.getLong(0);val delta=c.getDouble(1);val value=c.getDouble(2);if(delta!=0.0){addFuelInventoryMovement(JSONObject().apply { put("tank_id", tank); put("movement_type", if (delta > 0) "in" else "out"); put("quantity", kotlin.math.abs(delta)); put("reference_code", "FST-$id"); put("notes", "تسوية جرد الوقود رقم $id") }, stationScopeId, actorId)}rows++}};db.update("fuel_stocktakes",ContentValues().apply{put("status","completed");put("completed_date",getCurrentDateTime());put("total_variance",0.0)},"id=? AND station_id=? AND status IN ('draft','in_progress')",arrayOf(id.toString(),stationScopeId.toString()));db.setTransactionSuccessful();return if(rows>0)1 else 0}finally{db.endTransaction()} }
+    fun getFuelStocktakeDetails(id: Long, stationScopeId: Int): JSONArray { val out=JSONArray(); readableDatabase.rawQuery("SELECT d.*, d.id AS detail_id, t.tank_name AS tank_name, t.tank_code, ft.fuel_name_ar AS fuel_name FROM fuel_stocktake_details d LEFT JOIN tanks t ON t.id=d.tank_id LEFT JOIN fuel_types ft ON ft.id=d.fuel_type_id JOIN fuel_stocktakes fs ON fs.id=d.fuel_stocktake_id WHERE d.fuel_stocktake_id=? AND fs.station_id=? AND d.archived=0 ORDER BY d.id",arrayOf(id.toString(),stationScopeId.toString())).use{c->while(c.moveToNext())out.put(cursorToJsonObject(c))};return out }
+    fun saveFuelStocktakeDetail(data: JSONObject, stationScopeId: Int): Long { val db=writableDatabase; val sid=data.optLong("fuel_stocktake_id"); val tank=data.optLong("tank_id"); val ft=data.optLong("fuel_type_id"); val counted=data.optDouble("counted_quantity",-1.0); require(sid>0&&tank>0&&ft>0&&counted>=0) {"بيانات جرد الوقود غير صالحة"}; var system=0.0; var price=0.0; db.rawQuery("SELECT COALESCE(t.current_quantity,0),COALESCE(ft.default_purchase_price,0) FROM tanks t JOIN fuel_types ft ON ft.id=t.fuel_type_id JOIN fuel_stocktakes fs ON fs.id=? AND fs.station_id=? AND fs.status IN ('draft','in_progress') WHERE t.id=? AND t.station_id=? AND t.fuel_type_id=? AND t.is_deleted=0",arrayOf(sid.toString(),stationScopeId.toString(),tank.toString(),stationScopeId.toString(),ft.toString())).use{c->require(c.moveToFirst()){ "الخزان غير موجود أو خارج نطاق المحطة" };system=c.getDouble(0);price=c.getDouble(1)}; val variance=counted-system; val cv=ContentValues().apply{put("fuel_stocktake_id",sid);put("tank_id",tank);put("fuel_type_id",ft);put("system_quantity",system);put("counted_quantity",counted);put("variance_quantity",variance);put("unit_price",price);put("variance_value",variance*price);put("notes",data.optString("notes"))};return db.insertOrThrow("fuel_stocktake_details",null,cv) }
+    fun updateFuelStocktakeDetail(id: Long,data: JSONObject,stationScopeId:Int):Int { val db=writableDatabase; val counted=data.optDouble("counted_quantity",-1.0); require(counted>=0){"الكمية المعدودة غير صالحة"}; var system=0.0;var price=0.0;db.rawQuery("SELECT COALESCE(t.current_quantity,0),COALESCE(ft.default_purchase_price,0) FROM fuel_stocktake_details d JOIN tanks t ON t.id=d.tank_id JOIN fuel_types ft ON ft.id=t.fuel_type_id JOIN fuel_stocktakes fs ON fs.id=d.fuel_stocktake_id WHERE d.id=? AND fs.station_id=? AND fs.status IN ('draft','in_progress') AND d.archived=0",arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "تفصيل الجرد غير موجود" };system=c.getDouble(0);price=c.getDouble(1)};return db.update("fuel_stocktake_details",ContentValues().apply{put("counted_quantity",counted);put("variance_quantity",counted-system);put("unit_price",price);put("variance_value",(counted-system)*price);put("notes",data.optString("notes"))},"id=? AND archived=0",arrayOf(id.toString())) }
+    fun approveFuelStocktake(id: Long, stationScopeId: Int, actorId: Long): Int {
+        val db = writableDatabase
+        db.beginTransaction()
+        return try {
+            var rows = 0
+            db.rawQuery(
+                "SELECT d.tank_id, d.fuel_type_id, d.variance_quantity, d.unit_price FROM fuel_stocktake_details d JOIN fuel_stocktakes fs ON fs.id=d.fuel_stocktake_id WHERE d.fuel_stocktake_id=? AND fs.station_id=? AND d.archived=0",
+                arrayOf(id.toString(), stationScopeId.toString())
+            ).use { c ->
+                while (c.moveToNext()) {
+                    val tankId = c.getLong(0)
+                    val fuelTypeId = c.getLong(1)
+                    val delta = c.getDouble(2)
+                    val unitCost = c.getDouble(3)
+                    db.rawQuery(
+                        "SELECT current_quantity, capacity_liters, fuel_type_id FROM tanks WHERE id=? AND station_id=? AND is_deleted=0 AND status<>'retired'",
+                        arrayOf(tankId.toString(), stationScopeId.toString())
+                    ).use { tankCursor ->
+                        require(tankCursor.moveToFirst()) { "الخزان خارج نطاق المحطة" }
+                        require(tankCursor.getLong(2) == fuelTypeId) { "نوع الوقود لا يطابق نوع الخزان" }
+                        val before = tankCursor.getDouble(0)
+                        val capacity = tankCursor.getDouble(1)
+                        val after = before + delta
+                        require(after >= -1e-9) { "لا يمكن أن يصبح رصيد الخزان سالباً" }
+                        require(after <= capacity + 1e-9) { "تتجاوز التسوية السعة القصوى للخزان" }
+                        val now = getCurrentDateTime()
+                        val ledgerValues = ContentValues().apply {
+                            put("uuid", UUID.randomUUID().toString())
+                            put("tank_id", tankId)
+                            put("transaction_date", now)
+                            put("transaction_type", "stocktake_adjustment")
+                            put("reference_number", "FST-$id")
+                            put("debit", if (delta > 0) delta else 0.0)
+                            put("credit", if (delta < 0) -delta else 0.0)
+                            put("balance", after.coerceAtLeast(0.0))
+                            put("description", "تسوية جرد الوقود رقم $id (تكلفة الوحدة: $unitCost)")
+                            put("created_at", now)
+                            put("created_by", actorId)
+                        }
+                        db.insertOrThrow("tank_ledger", null, ledgerValues)
+                        val changed = db.compileStatement(
+                            "UPDATE tanks SET current_quantity=?, updated_at=? WHERE id=? AND station_id=? AND is_deleted=0"
+                        ).apply {
+                            bindDouble(1, after.coerceAtLeast(0.0))
+                            bindString(2, now)
+                            bindLong(3, tankId)
+                            bindLong(4, stationScopeId.toLong())
+                        }.executeUpdateDelete()
+                        require(changed == 1) { "تعذر تحديث رصيد الخزان" }
+                    }
+                    rows++
+                }
+            }
+            require(rows > 0) { "لا توجد بنود جرد وقود لاعتمادها" }
+            val totalVariance = db.rawQuery(
+                "SELECT COALESCE(SUM(variance_value),0) FROM fuel_stocktake_details WHERE fuel_stocktake_id=? AND archived=0",
+                arrayOf(id.toString())
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0 }
+            val updated = db.update(
+                "fuel_stocktakes",
+                ContentValues().apply {
+                    put("status", "completed")
+                    put("completed_date", getCurrentDateTime())
+                    put("total_variance", totalVariance)
+                },
+                "id=? AND station_id=? AND status IN ('draft','in_progress')",
+                arrayOf(id.toString(), stationScopeId.toString())
+            )
+            require(updated == 1) { "جلسة جرد الوقود غير قابلة للاعتماد" }
+            db.setTransactionSuccessful()
+            rows
+        } finally {
+            db.endTransaction()
+        }
+    }
 
 }

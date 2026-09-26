@@ -3597,8 +3597,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 activity.runOnUiThread {
                     activity.startActivity(Intent.createChooser(intent, "فتح تقرير حركات المخزون"))
                 }
-                JSONObject().put("path", file.absolutePath).put("file_name", file.name).put("size", file.length()).let {
-                    successResponseObject(it, "تم إنشاء تقرير CSV الحقيقي وفتحه عبر Android")
+                JSONObject().apply {
+                    put("success", true)
+                    put("message", "تم إنشاء تقرير CSV الحقيقي وفتحه عبر Android")
+                    put("data", JSONObject().apply {
+                        put("path", file.absolutePath)
+                        put("file_name", file.name)
+                        put("size", file.length())
+                    })
                 }.toString()
             } catch (e: Exception) {
                 DebugLogger.logException("ExportInventoryMovementReport", e)
@@ -8593,7 +8599,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getInventoryMovementRecords(jsonData: String = "{}") = operationalList("inventory", "inventory_movements", jsonData)
         @JavascriptInterface
-        fun generateInventoryMovementReport(jsonData: String = "{}") = operationalReport("inventory", "inventory_movements", jsonData)
         @JavascriptInterface
         fun saveInventoryMovementRecord(jsonData: String) = operationalSave("inventory", "inventory_movements", jsonData)
         @JavascriptInterface
@@ -8657,9 +8662,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun saveFuelStocktakeDetailRecord(jsonData:String):String { val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try{val a=getActivity()?:return errorResponse("النشاط غير متاح");successResponse(db.saveFuelStocktakeDetail(JSONObject(jsonData),requireCurrentStationId(db,a.currentUserId)),"تم حفظ عد الوقود")}catch(e:Exception){errorResponse(e.message)}}
         @JavascriptInterface
-        fun updateFuelStocktakeDetailRecord(id:Long,jsonData:String):String { val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try{val a=getActivity()?:return errorResponse("النشاط غير متاح");successResponse(db.updateFuelStocktakeDetail(id,JSONObject(jsonData),requireCurrentStationId(db,a.currentUserId)),"تم تحديث عد الوقود")}catch(e:Exception){errorResponse(e.message)}}
+        fun updateFuelStocktakeDetailRecord(id:Long,jsonData:String):String { val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try{val a=getActivity()?:return errorResponse("النشاط غير متاح");successResponse(db.updateFuelStocktakeDetail(id,JSONObject(jsonData),requireCurrentStationId(db,a.currentUserId)) > 0,"تم تحديث عد الوقود")}catch(e:Exception){errorResponse(e.message)}}
         @JavascriptInterface
-        fun resolveFuelStocktakeRecord(id:Long,note:String=""):String { val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try{val a=getActivity()?:return errorResponse("النشاط غير متاح");successResponse(db.approveFuelStocktake(id,requireCurrentStationId(db,a.currentUserId),a.currentUserId),"تم اعتماد جرد الوقود وتطبيق التسويات")}catch(e:Exception){errorResponse(e.message)}}
+        fun resolveFuelStocktakeRecord(id:Long,note:String=""):String { val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try{val a=getActivity()?:return errorResponse("النشاط غير متاح");successResponse(db.approveFuelStocktake(id,requireCurrentStationId(db,a.currentUserId),a.currentUserId) > 0,"تم اعتماد جرد الوقود وتطبيق التسويات")}catch(e:Exception){errorResponse(e.message)}}
 
         @JavascriptInterface
         fun getStocktakeDetailRecords(jsonData: String = "{}"): String = operationalList("inventory", "stocktake_details", jsonData)
