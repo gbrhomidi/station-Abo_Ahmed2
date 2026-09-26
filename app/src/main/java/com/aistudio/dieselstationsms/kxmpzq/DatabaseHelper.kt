@@ -10950,9 +10950,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val warehouseId = data.optLong("warehouse_id", 0L)
             require(warehouseId > 0L) { "المستودع مطلوب" }
             val signedAdjustment = data.optDouble("signed_quantity", 0.0)
+            val subtype = data.optString("movement_subtype", "")
             val referenceId = data.optLong(
                 "reference_id",
-                when (data.optString("movement_subtype", "")) {
+                when (subtype) {
                     "in", "return_supplier" -> data.optLong("supplier_id", 0L)
                     "out", "return_customer" -> data.optLong("customer_id", 0L)
                     else -> 0L
@@ -10972,8 +10973,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (movementType == "adjustment") {
                 require(signedAdjustment.isFinite() && signedAdjustment != 0.0) { "التسوية يجب أن تحتوي على كمية موجبة أو سالبة" }
             }
-            val subtype = data.optString("movement_subtype", "")
-            if (referenceId > 0L) {
+            if (referenceId > 0L && subtype in setOf("in", "return_supplier", "out", "return_customer")) {
                 db.rawQuery(
                     "SELECT id FROM parties WHERE id = ? AND (station_id = ? OR station_id IS NULL) AND is_deleted = 0 AND is_active = 1",
                     arrayOf(referenceId.toString(), stationScopeId.toString())
