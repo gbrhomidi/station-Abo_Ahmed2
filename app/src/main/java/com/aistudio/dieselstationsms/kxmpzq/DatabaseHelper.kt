@@ -8920,7 +8920,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         deliveryTime: String? = null,
         orderType: String = "sale",
         paidAmount: Double? = null,
-        serviceFee: Double = 0.0,
         manageTransaction: Boolean = true
     ): Long {
         return insertSaleTransactionInternal(
@@ -8947,7 +8946,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             deliveryTime = deliveryTime,
             orderType = orderType,
             paidAmount = paidAmount,
-            serviceFee = serviceFee,
             manageTransaction = manageTransaction
         )
     }
@@ -8976,7 +8974,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         deliveryTime: String? = null,
         orderType: String = "sale",
         paidAmount: Double? = null,
-        serviceFee: Double = 0.0,
         manageTransaction: Boolean = true
     ): Long {
         require(stationId > 0) { "معرف المحطة غير صالح" }
@@ -8989,7 +8986,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(taxAmount.isFinite() && taxAmount >= 0.0) { "الضريبة غير صالحة" }
         require(grossAmount.isFinite() && grossAmount >= 0.0) { "الإجمالي غير صالح" }
         require(netAmount.isFinite() && netAmount >= 0.0) { "الصافي غير صالح" }
-        require(serviceFee.isFinite() && serviceFee >= 0.0) { "رسوم الخدمة غير صالحة" }
         require(paymentMethod in setOf("cash", "credit_card", "bank_transfer", "credit", "cheque", "mobile_money", "loyalty_points")) { "طريقة الدفع غير مدعومة" }
         require(!isCredit || customerPartyId != null) { "العميل مطلوب للبيع الآجل" }
         val actualPaid = paidAmount ?: if (isCredit) 0.0 else netAmount
@@ -9063,7 +9059,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("discount_amount", discountAmount)
                     put("tax_amount", taxAmount)
                     put("gross_amount", grossAmount)
-                    put("service_fee", serviceFee)
                     put("net_amount", netAmount)
                     put("payment_method", paymentMethod)
                     put("payment_status", if (isCredit) "pending" else "paid")
@@ -10751,16 +10746,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 prepared += JSONObject().apply { put("product_id", productId); put("quantity", quantity); put("unit_price", unitPrice); put("line_total", lineTotal) }
             }
             require(total.isFinite() && total >= 0.0) { "إجمالي البيع غير صالح" }
-            val requestedSubtotal = data.optDouble("subtotal", total)
-            val discountAmount = data.optDouble("discount_amount", 0.0)
-            val taxAmount = data.optDouble("tax_amount", 0.0)
-            val serviceFee = data.optDouble("service_fee", 0.0)
-            val requestedTotal = data.optDouble("total_amount", total)
-            require(requestedSubtotal.isFinite() && requestedSubtotal >= 0.0) { "الإجمالي الفرعي غير صالح" }
-            require(discountAmount.isFinite() && discountAmount >= 0.0) { "الخصم غير صالح" }
-            require(taxAmount.isFinite() && taxAmount >= 0.0) { "الضريبة غير صالحة" }
-            require(serviceFee.isFinite() && serviceFee >= 0.0) { "رسوم الخدمة غير صالحة" }
-            require(requestedTotal.isFinite() && requestedTotal >= 0.0) { "الإجمالي النهائي غير صالح" }
             val paymentType = data.optString("payment_type", "cash")
             val paymentMethod = when (paymentType) {
                 "آجل", "credit" -> "credit"
@@ -10770,10 +10755,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 else -> "cash"
             }
             val isCredit = paymentMethod == "credit"
-            val finalTotal = requestedTotal
-            val paidAmount = data.optDouble("amount_paid", if (isCredit) 0.0 else finalTotal)
+            val paidAmount = data.optDouble("amount_paid", if (isCredit) 0.0 else total)
             require(paidAmount.isFinite() && paidAmount >= 0.0) { "المبلغ المدفوع غير صالح" }
-            require(isCredit || paidAmount + 1e-9 >= finalTotal) { "المبلغ المدفوع أقل من الإجمالي" }
+            require(isCredit || paidAmount + 1e-9 >= total) { "المبلغ المدفوع أقل من الإجمالي" }
             if (isCredit) require(data.optLong("entity_id", 0L) > 0L) { "العميل مطلوب للبيع الآجل" }
 
             db.beginTransaction()
@@ -10795,11 +10779,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 nozzleId = null,
                 liters = 0.0,
                 pricePerLiter = 0.0,
-                subtotal = requestedSubtotal,
-                discountAmount = discountAmount,
-                taxAmount = taxAmount,
-                grossAmount = (requestedTotal - serviceFee).coerceAtLeast(0.0),
-                netAmount = finalTotal,
+                subtotal = total,
+                discountAmount = 0.0,
+                taxAmount = 0.0,
+                grossAmount = total,
+                netAmount = total,
                 paymentMethod = paymentMethod,
                 isCredit = isCredit,
                 dueDate = data.optString("due_date", null),
@@ -10807,18 +10791,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 notes = data.optString("notes", ""),
                 orderType = "product",
                 paidAmount = paidAmount,
-                serviceFee = serviceFee,
                 manageTransaction = false
             )
-            val vatAmount = data.optDouble("vat_amount", taxAmount)
-            require(vatAmount.isFinite() && vatAmount >= 0.0) { "قيمة ضريبة القيمة المضافة غير صالحة" }
-            val vatRows = db.update(
-                "sales_transactions",
-                ContentValues().apply { put("vat_amount", vatAmount); put("updated_at", getCurrentDateTime()) },
-                "id=? AND station_id=? AND is_deleted=0",
-                arrayOf(saleId.toString(), stationScopeId.toString())
-            )
-            require(vatRows == 1) { "تعذر حفظ ضريبة القيمة المضافة" }
 
             prepared.forEachIndexed { index, item ->
                 val productId = item.getLong("product_id")
@@ -11488,6 +11462,520 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+
+    /**
+     * Unified offline contract for stock-levels.html.
+     *
+     * Products and fuel are intentionally kept as separate inventory models:
+     * - products -> inventory_levels / products.quantity
+     * - fuel -> tanks.current_quantity
+     *
+     * The method returns the complete page dataset in one station-scoped SQLite call
+     * so the WebView does not have to emulate database operations in JavaScript.
+     */
+    fun getStockLevelsPage(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val limit = data.optInt("limit", 500).coerceIn(1, 1000)
+            val offset = data.optInt("offset", 0).coerceAtLeast(0)
+            val stockType = data.optString("stock_type", "all").trim().lowercase().ifBlank { "all" }
+            require(stockType in setOf("all", "products", "fuel")) { "نوع المخزون غير صالح" }
+            val warehouseId = data.optLong("warehouse_id", 0L)
+            val categoryId = data.optLong("category_id", 0L)
+            val fuelTypeId = data.optLong("fuel_type_id", 0L)
+            val productId = data.optLong("product_id", 0L)
+            val statusFilter = data.optString("status", "").trim().lowercase()
+            val expiryFilter = data.optString("expiry_status", "").trim().lowercase()
+            val search = data.optString("search", "").trim()
+            val minValue = data.optDouble("min_value", Double.NaN)
+            val maxValue = data.optDouble("max_value", Double.NaN)
+            val minQty = data.optDouble("min_quantity", Double.NaN)
+            val maxQty = data.optDouble("max_quantity", Double.NaN)
+            val addDate = data.optString("add_date", "").trim()
+            val movementDays = when (data.optString("date_range", "30").trim().lowercase()) {
+                "7" -> 7
+                "current" -> 31
+                "quarter" -> 92
+                else -> 30
+            }
+
+            if (warehouseId > 0L) {
+                db.rawQuery(
+                    "SELECT id FROM warehouses WHERE id=? AND station_id=? AND is_active=1",
+                    arrayOf(warehouseId.toString(), stationScopeId.toString())
+                ).use { require(it.moveToFirst()) { "المخزن خارج نطاق المحطة أو غير نشط" } }
+            }
+            if (categoryId > 0L) {
+                db.rawQuery(
+                    "SELECT id FROM product_categories WHERE id=? AND is_active=1 AND is_deleted=0",
+                    arrayOf(categoryId.toString())
+                ).use { require(it.moveToFirst()) { "الفئة غير موجودة" } }
+            }
+            if (fuelTypeId > 0L) {
+                db.rawQuery(
+                    "SELECT id FROM fuel_types WHERE id=? AND is_active=1 AND is_deleted=0",
+                    arrayOf(fuelTypeId.toString())
+                ).use { require(it.moveToFirst()) { "نوع الوقود غير موجود" } }
+            }
+            if (productId > 0L) {
+                db.rawQuery(
+                    "SELECT id FROM products WHERE id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(productId.toString(), stationScopeId.toString())
+                ).use { require(it.moveToFirst()) { "المنتج غير موجود في نطاق المحطة" } }
+            }
+
+            val rows = JSONArray()
+            val lowRows = JSONArray()
+            val valuesRows = JSONArray()
+            var totalQuantity = 0.0
+            var totalValue = 0.0
+            var lowCount = 0
+            var criticalCount = 0
+            var expiredValue = 0.0
+            var activeItems = 0
+
+            fun matchesCommon(quantity: Double, value: Double, status: String): Boolean {
+                if (statusFilter.isNotBlank() && statusFilter != status) return false
+                if (!minValue.isNaN() && value < minValue) return false
+                if (!maxValue.isNaN() && value > maxValue) return false
+                if (!minQty.isNaN() && quantity < minQty) return false
+                if (!maxQty.isNaN() && quantity > maxQty) return false
+                return true
+            }
+
+            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            val expiryCutoff = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).apply {
+                timeZone = java.util.TimeZone.getDefault()
+            }.let {
+                val cal = java.util.Calendar.getInstance()
+                cal.add(java.util.Calendar.DAY_OF_YEAR, 30)
+                it.format(cal.time)
+            }
+
+            if (stockType != "fuel") {
+                val where = mutableListOf("p.station_id=?", "p.is_deleted=0", "p.status='active'")
+                val args = mutableListOf(stationScopeId.toString())
+                if (categoryId > 0L) { where += "p.category_id=?"; args += categoryId.toString() }
+                if (productId > 0L) { where += "p.id=?"; args += productId.toString() }
+                if (search.isNotBlank()) {
+                    where += "(p.product_name LIKE ? OR p.product_name_ar LIKE ? OR p.product_code LIKE ? OR p.barcode LIKE ?)"
+                    repeat(4) { args += "%$search%" }
+                }
+                if (addDate.isNotBlank()) { where += "date(p.created_at)=date(?)"; args += addDate }
+                if (expiryFilter == "active") where += "(p.has_expiry=0 OR p.expiry_date IS NULL OR date(p.expiry_date)>date(?))".also { args += today }
+                if (expiryFilter == "soon") where += "p.has_expiry=1 AND p.expiry_date IS NOT NULL AND date(p.expiry_date)>date(?) AND date(p.expiry_date)<=date(?)".also { args += today; args += expiryCutoff }
+                if (expiryFilter == "expired") where += "p.has_expiry=1 AND p.expiry_date IS NOT NULL AND date(p.expiry_date)<date(?)".also { args += today }
+                val warehouseJoin = if (warehouseId > 0L) {
+                    "LEFT JOIN inventory_levels il ON il.product_id=p.id AND il.warehouse_id=? LEFT JOIN warehouses w ON w.id=il.warehouse_id AND w.station_id=?"
+                } else {
+                    "LEFT JOIN (SELECT il.product_id, SUM(il.quantity_on_hand) quantity_on_hand, AVG(il.average_cost) average_cost, MAX(il.last_count_date) last_count_date FROM inventory_levels il JOIN warehouses sw ON sw.id=il.warehouse_id WHERE sw.station_id=? AND sw.is_active=1 GROUP BY il.product_id) il ON il.product_id=p.id LEFT JOIN warehouses w ON 1=0"
+                }
+                val joinArgs = if (warehouseId > 0L) mutableListOf(warehouseId.toString(), stationScopeId.toString()) else mutableListOf(stationScopeId.toString())
+                val sql = """
+                    SELECT p.id product_id,p.product_code,p.product_name,p.product_name_ar,
+                           c.category_name,u.unit_name,
+                           COALESCE(il.quantity_on_hand,p.quantity,0) quantity,
+                           COALESCE(il.average_cost,p.purchase_price,0) purchase_price,
+                           p.sale_price,p.minimum_stock,p.maximum_stock,p.reorder_quantity,p.expiry_date,p.has_expiry,
+                           p.created_at,p.updated_at,w.warehouse_name,
+                           CASE WHEN COALESCE(il.quantity_on_hand,p.quantity,0)<=0 THEN 'critical'
+                                WHEN COALESCE(il.quantity_on_hand,p.quantity,0)<=p.minimum_stock THEN 'low'
+                                WHEN p.maximum_stock>0 AND COALESCE(il.quantity_on_hand,p.quantity,0)>p.maximum_stock THEN 'over'
+                                ELSE 'active' END status
+                    FROM products p
+                    LEFT JOIN product_categories c ON c.id=p.category_id
+                    LEFT JOIN units u ON u.id=p.unit_id
+                    $warehouseJoin
+                    WHERE ${where.joinToString(" AND ")}
+                    ORDER BY p.product_name ASC,p.id ASC
+                """.trimIndent()
+                val allArgs = joinArgs + args
+                db.rawQuery(sql, allArgs.toTypedArray()).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val item = cursorToJsonObject(cursor)
+                        val q = item.optDouble("quantity",0.0)
+                        val value = q * item.optDouble("purchase_price",0.0)
+                        val status = item.optString("status","active")
+                        if (!matchesCommon(q,value,status)) continue
+                        val expiryDate = item.optString("expiry_date","")
+                        val expiryStatus = when {
+                            item.optInt("has_expiry",0)==0 || expiryDate.isBlank() -> "active"
+                            expiryDate < today -> "expired"
+                            expiryDate <= expiryCutoff -> "soon"
+                            else -> "active"
+                        }
+                        if (expiryFilter.isNotBlank() && expiryFilter != expiryStatus) continue
+                        item.put("item_type","product")
+                        item.put("stock_type","products")
+                        item.put("current_quantity",q)
+                        item.put("available_quantity",q)
+                        item.put("stock_value",value)
+                        item.put("min_level",item.optDouble("minimum_stock",0.0))
+                        item.put("max_level",item.optDouble("maximum_stock",0.0))
+                        item.put("expiry_status",expiryStatus)
+                        rows.put(item)
+                        valuesRows.put(item)
+                        totalQuantity += q
+                        totalValue += value
+                        if (status=="low" || status=="critical") {
+                            lowCount++
+                            val low = JSONObject(item.toString())
+                            low.put("shortage", (item.optDouble("minimum_stock",0.0)-q).coerceAtLeast(0.0))
+                            lowRows.put(low)
+                        }
+                        if (status=="critical") criticalCount++
+                        if (expiryStatus=="expired") expiredValue += value
+                        if (status=="active") activeItems++
+                    }
+                }
+            }
+
+            if (stockType != "products") {
+                val where = mutableListOf("t.station_id=?","t.is_deleted=0","t.status!='retired'","f.is_deleted=0","f.is_active=1")
+                val args = mutableListOf(stationScopeId.toString())
+                if (fuelTypeId > 0L) { where += "t.fuel_type_id=?"; args += fuelTypeId.toString() }
+                if (search.isNotBlank()) {
+                    where += "(t.tank_code LIKE ? OR t.tank_name LIKE ? OR t.tank_name_ar LIKE ? OR f.fuel_name LIKE ? OR f.fuel_name_ar LIKE ?)"
+                    repeat(5) { args += "%$search%" }
+                }
+                val sql = """
+                    SELECT t.id tank_id,t.tank_code,t.tank_name,t.tank_name_ar,t.fuel_type_id,
+                           t.location,t.current_quantity quantity,t.minimum_level,t.maximum_level,
+                           t.status tank_status,t.created_at,t.updated_at,
+                           f.fuel_code,f.fuel_name,f.fuel_name_ar,f.default_purchase_price,
+                           CASE WHEN COALESCE(t.current_quantity,0)<=0 THEN 'critical'
+                                WHEN COALESCE(t.current_quantity,0)<=COALESCE(t.minimum_level,0) THEN 'low'
+                                WHEN t.maximum_level IS NOT NULL AND t.maximum_level>0 AND t.current_quantity>t.maximum_level THEN 'over'
+                                ELSE 'active' END status
+                    FROM tanks t JOIN fuel_types f ON f.id=t.fuel_type_id
+                    WHERE ${where.joinToString(" AND ")}
+                    ORDER BY f.fuel_name,t.tank_name,t.id
+                """.trimIndent()
+                db.rawQuery(sql,args.toTypedArray()).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val item=cursorToJsonObject(cursor)
+                        val q=item.optDouble("quantity",0.0)
+                        val value=q*item.optDouble("default_purchase_price",0.0)
+                        val status=item.optString("status","active")
+                        if (!matchesCommon(q,value,status)) continue
+                        item.put("item_type","fuel")
+                        item.put("stock_type","fuel")
+                        item.put("product_id",JSONObject.NULL)
+                        item.put("product_code",item.optString("fuel_code"))
+                        item.put("product_name",item.optString("fuel_name_ar").ifBlank { item.optString("fuel_name") })
+                        item.put("category_name","وقود")
+                        item.put("unit_name","لتر")
+                        item.put("current_quantity",q)
+                        item.put("available_quantity",q)
+                        item.put("purchase_price",item.optDouble("default_purchase_price",0.0))
+                        item.put("stock_value",value)
+                        item.put("min_level",item.optDouble("minimum_level",0.0))
+                        item.put("max_level",item.optDouble("maximum_level",0.0))
+                        item.put("expiry_status","active")
+                        rows.put(item)
+                        valuesRows.put(item)
+                        totalQuantity += q
+                        totalValue += value
+                        if (status=="low" || status=="critical") {
+                            lowCount++
+                        }
+                        if (status=="critical") criticalCount++
+                        if (status=="active") activeItems++
+                    }
+                }
+            }
+
+            // ============================================================
+            // مخزون ذكي قابل للتنفيذ: سرعة الاستهلاك، أيام التغطية،
+            // خطر نفاد المخزون، الراكد، وتصنيف ABC.
+            // لا نفترض Lead Time غير موجود في قاعدة البيانات؛ لذلك يعتمد
+            // القرار على الحد الأدنى/كمية إعادة الطلب المعرفة فعلياً.
+            // ============================================================
+            val productDemand30 = mutableMapOf<Long, Double>()
+            val productDemand60 = mutableMapOf<Long, Double>()
+            val productLastOut = mutableMapOf<Long, String>()
+            db.rawQuery(
+                """SELECT product_id,
+                          COALESCE(SUM(CASE WHEN date(created_at)>=date('now','-29 day') THEN ABS(quantity_change) ELSE 0 END),0) demand30,
+                          COALESCE(SUM(ABS(quantity_change)),0) demand60,
+                          COALESCE(MAX(created_at),'') last_out
+                   FROM inventory_movements
+                   WHERE station_id=? AND is_deleted=0 AND status='completed'
+                     AND movement_type IN ('out','damage')
+                     AND date(created_at)>=date('now','-59 day')
+                   GROUP BY product_id""",
+                arrayOf(stationScopeId.toString())
+            ).use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getLong(0)
+                    productDemand30[id] = c.getDouble(1)
+                    productDemand60[id] = c.getDouble(2)
+                    productLastOut[id] = c.getString(3) ?: ""
+                }
+            }
+
+            val fuelDemand30 = mutableMapOf<Long, Double>()
+            val fuelDemand60 = mutableMapOf<Long, Double>()
+            val fuelLastSale = mutableMapOf<Long, String>()
+            db.rawQuery(
+                """SELECT fs.fuel_type_id,
+                          COALESCE(SUM(CASE WHEN date(COALESCE(fs.sale_date,fs.created_at))>=date('now','-29 day') THEN ABS(fs.quantity) ELSE 0 END),0) demand30,
+                          COALESCE(SUM(ABS(fs.quantity)),0) demand60,
+                          COALESCE(MAX(COALESCE(fs.sale_date,fs.created_at)),'') last_sale
+                   FROM fuel_sales fs
+                   JOIN pumps pu ON pu.id=fs.pump_id
+                   WHERE pu.station_id=? AND fs.is_deleted=0
+                     AND date(COALESCE(fs.sale_date,fs.created_at))>=date('now','-59 day')
+                   GROUP BY fs.fuel_type_id""",
+                arrayOf(stationScopeId.toString())
+            ).use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getLong(0)
+                    fuelDemand30[id] = c.getDouble(1)
+                    fuelDemand60[id] = c.getDouble(2)
+                    fuelLastSale[id] = c.getString(3) ?: ""
+                }
+            }
+
+            val intelligenceList = mutableListOf<JSONObject>()
+            var totalConsumptionValue30 = 0.0
+            var deadStockValue = 0.0
+            var highRiskCount = 0
+            var mediumRiskCount = 0
+
+            for (idx in 0 until valuesRows.length()) {
+                val item = valuesRows.optJSONObject(idx) ?: continue
+                val itemType = item.optString("item_type","product")
+                val quantity = item.optDouble("current_quantity",0.0).coerceAtLeast(0.0)
+                val unitCost = item.optDouble("purchase_price",0.0).coerceAtLeast(0.0)
+                val demand30 = if (itemType == "fuel") {
+                    fuelDemand30[item.optLong("fuel_type_id",0L)] ?: 0.0
+                } else {
+                    productDemand30[item.optLong("product_id",0L)] ?: 0.0
+                }
+                val demand60 = if (itemType == "fuel") {
+                    fuelDemand60[item.optLong("fuel_type_id",0L)] ?: 0.0
+                } else {
+                    productDemand60[item.optLong("product_id",0L)] ?: 0.0
+                }
+                val lastOut = if (itemType == "fuel") {
+                    fuelLastSale[item.optLong("fuel_type_id",0L)] ?: ""
+                } else {
+                    productLastOut[item.optLong("product_id",0L)] ?: ""
+                }
+                val avgDailyDemand = demand30 / 30.0
+                val daysCover = if (avgDailyDemand > 0.0) quantity / avgDailyDemand else Double.POSITIVE_INFINITY
+                val minLevel = item.optDouble("min_level",0.0).coerceAtLeast(0.0)
+                val maxLevel = item.optDouble("max_level",0.0).coerceAtLeast(0.0)
+                val reorderQuantity = if (itemType == "product") item.optDouble("reorder_quantity",0.0).coerceAtLeast(0.0) else 0.0
+                val targetOrder = if (itemType == "product") {
+                    maxOf(reorderQuantity, (maxLevel - quantity).coerceAtLeast(0.0))
+                } else {
+                    (maxLevel - quantity).coerceAtLeast(0.0)
+                }
+                val risk = when {
+                    quantity <= 0.0 -> "critical"
+                    avgDailyDemand > 0.0 && daysCover < 7.0 -> "critical"
+                    avgDailyDemand > 0.0 && daysCover < 14.0 -> "high"
+                    avgDailyDemand > 0.0 && daysCover < 30.0 -> "medium"
+                    else -> "low"
+                }
+                if (risk == "critical" || risk == "high") highRiskCount++
+                if (risk == "medium") mediumRiskCount++
+                val deadStock = quantity > 0.0 && demand60 <= 0.0
+                val stockValue = item.optDouble("stock_value",quantity * unitCost)
+                val consumptionValue30 = demand30 * unitCost
+                totalConsumptionValue30 += consumptionValue30
+                if (deadStock) deadStockValue += stockValue
+
+                val intelligence = JSONObject()
+                    .put("item_type", itemType)
+                    .put("product_id", if (itemType == "product") item.optLong("product_id",0L) else JSONObject.NULL)
+                    .put("tank_id", if (itemType == "fuel") item.optLong("tank_id",0L) else JSONObject.NULL)
+                    .put("fuel_type_id", if (itemType == "fuel") item.optLong("fuel_type_id",0L) else JSONObject.NULL)
+                    .put("name", item.optString("product_name",""))
+                    .put("category_name", item.optString("category_name",""))
+                    .put("current_quantity", quantity)
+                    .put("stock_value", stockValue)
+                    .put("demand_30d", demand30)
+                    .put("avg_daily_demand", avgDailyDemand)
+                    .put("days_of_cover", if (daysCover.isFinite()) daysCover else -1.0)
+                    .put("risk_level", risk)
+                    .put("dead_stock", deadStock)
+                    .put("consumption_value_30d", consumptionValue30)
+                    .put("recommended_reorder", targetOrder)
+                    .put("last_out_date", lastOut)
+                    .put("min_level", minLevel)
+                    .put("max_level", maxLevel)
+                intelligenceList += intelligence
+            }
+
+            // ABC حسب قيمة الاستهلاك الفعلية خلال آخر 30 يوماً.
+            intelligenceList.sortByDescending { it.optDouble("consumption_value_30d",0.0) }
+            var cumulativeConsumption = 0.0
+            for (item in intelligenceList) {
+                cumulativeConsumption += item.optDouble("consumption_value_30d",0.0)
+                val share = if (totalConsumptionValue30 > 0.0) cumulativeConsumption / totalConsumptionValue30 else 1.0
+                item.put("abc_class", when {
+                    share <= 0.80 -> "A"
+                    share <= 0.95 -> "B"
+                    else -> "C"
+                })
+                item.put("consumption_share", if (totalConsumptionValue30 > 0.0) item.optDouble("consumption_value_30d",0.0) / totalConsumptionValue30 else 0.0)
+                item.put("priority_score", when (item.optString("risk_level")) {
+                    "critical" -> 100
+                    "high" -> 80
+                    "medium" -> 50
+                    else -> if (item.optBoolean("dead_stock")) 25 else 10
+                })
+            }
+
+            val intelligence=JSONArray()
+            intelligenceList
+                .sortedWith(compareByDescending<JSONObject> { it.optInt("priority_score",0) }
+                    .thenByDescending { it.optDouble("stock_value",0.0) })
+                .take(500)
+                .forEach { intelligence.put(it) }
+
+            val categories=JSONArray()
+            val catMap=linkedMapOf<String,Double>()
+            for(i in 0 until valuesRows.length()) {
+                val row=valuesRows.optJSONObject(i) ?: continue
+                val name=row.optString("category_name","أخرى").ifBlank{"أخرى"}
+                catMap[name]=(catMap[name]?:0.0)+row.optDouble("stock_value",0.0)
+            }
+            catMap.forEach { (name,value) -> categories.put(JSONObject().put("category_name",name).put("total_value",value).put("value",value)) }
+
+            val movementSeries=JSONArray()
+            db.rawQuery(
+                """SELECT date(created_at) day,
+                    COALESCE(SUM(CASE WHEN movement_type IN ('in','return') THEN ABS(quantity_change)
+                                      WHEN movement_type IN ('out','damage') THEN -ABS(quantity_change)
+                                      ELSE quantity_change END),0) value,
+                    COUNT(*) movement_count
+                   FROM inventory_movements
+                   WHERE station_id=? AND is_deleted=0 AND status='completed'
+                     AND date(created_at)>=date('now','-' || ? || ' day')
+                   GROUP BY date(created_at) ORDER BY day""",
+                arrayOf(stationScopeId.toString(), (movementDays - 1).toString())
+            ).use { c -> while(c.moveToNext()) movementSeries.put(cursorToJsonObject(c)) }
+
+            val trendSeries=JSONArray()
+            db.rawQuery(
+                """SELECT strftime('%Y-%m',created_at) month,
+                    COALESCE(SUM(CASE WHEN movement_type IN ('in','return') THEN ABS(quantity_change)
+                                      WHEN movement_type IN ('out','damage') THEN -ABS(quantity_change)
+                                      ELSE quantity_change END),0) value,
+                    COUNT(*) movement_count
+                   FROM inventory_movements
+                   WHERE station_id=? AND is_deleted=0 AND status='completed'
+                     AND date(created_at)>=date('now','-5 month','start of month')
+                   GROUP BY strftime('%Y-%m',created_at) ORDER BY month""",
+                arrayOf(stationScopeId.toString())
+            ).use { c -> while(c.moveToNext()) trendSeries.put(cursorToJsonObject(c)) }
+
+            val expiry=JSONObject().apply {
+                put("active", activeItems)
+                put("soon", valuesRows.let { arr -> (0 until arr.length()).count { arr.optJSONObject(it)?.optString("expiry_status")=="soon" } })
+                put("expired", valuesRows.let { arr -> (0 until arr.length()).count { arr.optJSONObject(it)?.optString("expiry_status")=="expired" } })
+                put("expired_value",expiredValue)
+                put("supported",true)
+            }
+
+            val alerts=JSONArray()
+            db.rawQuery(
+                """SELECT a.id,a.product_id,a.alert_type,a.alert_level,a.current_quantity,
+                          a.threshold_quantity,a.shortage_quantity,a.is_resolved,a.created_at,
+                          p.product_name,p.product_name_ar,p.product_code
+                   FROM stock_alerts a JOIN products p ON p.id=a.product_id
+                   WHERE a.station_id=? AND a.is_resolved=0
+                   ORDER BY CASE a.alert_level WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
+                            datetime(a.created_at) DESC,a.id DESC LIMIT 500""",
+                arrayOf(stationScopeId.toString())
+            ).use { c -> while(c.moveToNext()) alerts.put(cursorToJsonObject(c)) }
+            // Add live fuel alerts; fuel has no stock_alerts table and is therefore derived from tanks.
+            db.rawQuery(
+                """SELECT t.id tank_id,t.tank_code,t.tank_name,t.tank_name_ar,t.current_quantity,
+                          t.minimum_level,f.fuel_name,f.fuel_name_ar,f.fuel_code,t.updated_at
+                   FROM tanks t JOIN fuel_types f ON f.id=t.fuel_type_id
+                   WHERE t.station_id=? AND t.is_deleted=0 AND t.status!='retired'
+                     AND f.is_deleted=0 AND f.is_active=1
+                     AND t.current_quantity<=t.minimum_level
+                   ORDER BY t.current_quantity ASC,t.id ASC""",
+                arrayOf(stationScopeId.toString())
+            ).use { c ->
+                while(c.moveToNext()) {
+                    val q=cursorToJsonObject(c)
+                    q.put("id",-q.optLong("tank_id",0L))
+                    q.put("product_id",JSONObject.NULL)
+                    q.put("product_name",q.optString("fuel_name_ar").ifBlank{q.optString("fuel_name")})
+                    q.put("product_code",q.optString("fuel_code"))
+                    q.put("alert_type",if(q.optDouble("current_quantity",0.0)<=0) "out_of_stock" else "low_stock")
+                    q.put("alert_level",if(q.optDouble("current_quantity",0.0)<=0) "critical" else "warning")
+                    q.put("threshold_quantity",q.optDouble("minimum_level",0.0))
+                    q.put("shortage_quantity",(q.optDouble("minimum_level",0.0)-q.optDouble("current_quantity",0.0)).coerceAtLeast(0.0))
+                    q.put("is_resolved",false)
+                    q.put("created_at",q.optString("updated_at"))
+                    q.put("item_type","fuel")
+                    alerts.put(q)
+                }
+            }
+
+            val stats=JSONObject().apply {
+                put("total_items",valuesRows.length())
+                put("total_quantity",totalQuantity)
+                put("total_value",totalValue)
+                put("low_stock",lowCount)
+                put("critical_stock",criticalCount)
+                put("expired_value",expiredValue)
+                put("fuel_count",(0 until valuesRows.length()).count { valuesRows.optJSONObject(it)?.optString("item_type")=="fuel" })
+                put("product_count",(0 until valuesRows.length()).count { valuesRows.optJSONObject(it)?.optString("item_type")=="product" })
+                put("inventory_health_score",if(valuesRows.length()==0) 0.0 else (100.0-((criticalCount*60.0+lowCount*30.0)/valuesRows.length()*100.0)).coerceIn(0.0,100.0))
+                put("alerts_count",alerts.length())
+                put("unresolved_count",alerts.length())
+                put("critical_alerts", (0 until alerts.length()).count { alerts.optJSONObject(it)?.optString("alert_level")=="critical" })
+                put("turnover_rate", if (totalValue > 0.0) (totalConsumptionValue30 * 12.0 / totalValue) else 0.0)
+                put("dead_stock_value", deadStockValue)
+                put("stockout_risk_high", highRiskCount)
+                put("stockout_risk_medium", mediumRiskCount)
+            }
+
+            val fuelTypes=JSONArray()
+            db.rawQuery("SELECT id fuel_type_id,fuel_code,fuel_name,fuel_name_ar FROM fuel_types WHERE is_deleted=0 AND is_active=1 ORDER BY fuel_name",null).use { c -> while(c.moveToNext()) fuelTypes.put(cursorToJsonObject(c)) }
+            val products=JSONArray()
+            db.rawQuery("SELECT id product_id,product_name,product_name_ar,product_code FROM products WHERE station_id=? AND is_deleted=0 AND status='active' ORDER BY product_name",arrayOf(stationScopeId.toString())).use { c -> while(c.moveToNext()) products.put(cursorToJsonObject(c)) }
+            val warehouses=JSONArray()
+            db.rawQuery("SELECT id warehouse_id,warehouse_name FROM warehouses WHERE station_id=? AND is_active=1 ORDER BY warehouse_name",arrayOf(stationScopeId.toString())).use { c -> while(c.moveToNext()) warehouses.put(cursorToJsonObject(c)) }
+            val categoriesOptions=JSONArray()
+            db.rawQuery("SELECT id category_id,category_name,category_name_ar FROM product_categories WHERE is_deleted=0 AND is_active=1 ORDER BY category_name",null).use { c -> while(c.moveToNext()) categoriesOptions.put(cursorToJsonObject(c)) }
+
+            JSONObject().apply {
+                put("rows",rows)
+                put("low_stock_rows",lowRows)
+                put("values_rows",valuesRows)
+                put("alerts",alerts)
+                put("stats",stats)
+                put("categories",categories)
+                put("movement_series",movementSeries)
+                put("trend_series",trendSeries)
+                put("expiry",expiry)
+                put("fuel_types",fuelTypes)
+                put("products",products)
+                put("warehouses",warehouses)
+                put("category_options",categoriesOptions)
+                put("intelligence",intelligence)
+                put("total_count",rows.length())
+                put("page",offset/limit+1)
+                put("page_size",limit)
+                put("has_next",false)
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
     fun getInventoryReport(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
         dbLock.lock()
         return try {
@@ -11674,188 +12162,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("stats", stats)
                 put("categories", categories)
                 put("movement_series", movementSeries)
-            }
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-
-    /**
-     * Unified stock-level contract for the Stock Levels screen.
-     *
-     * Products continue to use the existing inventory-report calculation.
-     * Fuel is deliberately read from tanks/fuel_types because fuel is not
-     * represented by inventory_levels. The returned row shape is compatible
-     * with the existing Stock Levels JavaScript while exposing the real
-     * product/fuel distinction through item_type.
-     */
-    private fun Cursor.getStringOrNull(columnName: String): String? {
-        val columnIndex = getColumnIndex(columnName)
-        if (columnIndex < 0 || isNull(columnIndex)) return null
-        return getString(columnIndex)
-    }
-
-    fun getStockLevelsPage(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
-        dbLock.lock()
-        return try {
-            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
-
-            val base = getInventoryReport(
-                JSONObject(data.toString()).apply {
-                    if (!has("limit")) put("limit", 200)
-                },
-                stationScopeId
-            )
-
-            val rows = base.optJSONArray("rows") ?: JSONArray()
-            val reportType = data.optString("report_type", "summary").ifBlank { "summary" }
-            val search = data.optString("search", "").trim()
-            val statusFilter = data.optString("status").trim().lowercase()
-            val fuelTypeId = data.optLong("fuel_type_id", 0L)
-            val tankId = data.optLong("tank_id", 0L)
-            val limit = data.optInt("limit", 200).coerceIn(1, 1000)
-            val offset = data.optInt("offset", 0).coerceAtLeast(0)
-
-            val where = mutableListOf(
-                "t.station_id = ?",
-                "t.is_deleted = 0",
-                "t.status <> 'retired'"
-            )
-            val args = mutableListOf(stationScopeId.toString())
-
-            if (fuelTypeId > 0L) {
-                where += "t.fuel_type_id = ?"
-                args += fuelTypeId.toString()
-            }
-            if (tankId > 0L) {
-                where += "t.id = ?"
-                args += tankId.toString()
-            }
-            if (search.isNotBlank()) {
-                where += "(t.tank_code LIKE ? OR t.tank_name LIKE ? OR t.tank_name_ar LIKE ? OR f.fuel_code LIKE ? OR f.fuel_name LIKE ? OR f.fuel_name_ar LIKE ?)"
-                repeat(6) { args += "%$search%" }
-            }
-            when (statusFilter) {
-                "critical", "out" -> where += "COALESCE(t.current_quantity, 0) <= 0"
-                "low" -> where += "COALESCE(t.current_quantity, 0) > 0 AND COALESCE(t.current_quantity, 0) <= COALESCE(t.minimum_level, 0)"
-                "active", "normal" -> where += "COALESCE(t.current_quantity, 0) > COALESCE(t.minimum_level, 0)"
-            }
-            if (reportType == "below_min") {
-                where += "COALESCE(t.current_quantity, 0) <= COALESCE(t.minimum_level, 0)"
-            }
-
-            val fuelRows = JSONArray()
-            var fuelCount = 0
-            var fuelQuantity = 0.0
-            var fuelValue = 0.0
-            var fuelLow = 0
-            var fuelCritical = 0
-
-            val sql = """
-                SELECT
-                    t.id AS tank_id,
-                    t.tank_code,
-                    t.tank_name,
-                    t.tank_name_ar,
-                    t.location,
-                    t.current_quantity,
-                    t.minimum_level,
-                    t.maximum_level,
-                    t.updated_at,
-                    f.id AS fuel_type_id,
-                    f.fuel_code,
-                    f.fuel_name,
-                    f.fuel_name_ar,
-                    f.default_purchase_price
-                FROM tanks t
-                LEFT JOIN fuel_types f ON f.id = t.fuel_type_id
-                WHERE ${where.joinToString(" AND ")}
-                ORDER BY COALESCE(f.fuel_name_ar, f.fuel_name, f.fuel_code, t.tank_name_ar, t.tank_name), t.id
-                LIMIT ? OFFSET ?
-            """.trimIndent()
-
-            val pageArgs = args.toMutableList().apply {
-                add(limit.toString())
-                add(offset.toString())
-            }
-
-            val db = readableDatabase
-            db.rawQuery(sql, pageArgs.toTypedArray()).use { cursor ->
-                while (cursor.moveToNext()) {
-                    val current = cursor.getDouble(cursor.getColumnIndexOrThrow("current_quantity"))
-                    val minimum = cursor.getDouble(cursor.getColumnIndexOrThrow("minimum_level"))
-                    val maximumIndex = cursor.getColumnIndexOrThrow("maximum_level")
-                    val maximum = if (cursor.isNull(maximumIndex)) null else cursor.getDouble(maximumIndex)
-                    val price = cursor.getDouble(cursor.getColumnIndexOrThrow("default_purchase_price"))
-                    val status = when {
-                        current <= 0.0 -> "critical"
-                        current <= minimum -> "low"
-                        maximum != null && current > maximum -> "over"
-                        else -> "active"
-                    }
-                    val row = JSONObject().apply {
-                        put("item_type", "fuel")
-                        put("tank_id", cursor.getLong(cursor.getColumnIndexOrThrow("tank_id")))
-                        put("fuel_type_id", cursor.getLong(cursor.getColumnIndexOrThrow("fuel_type_id")))
-                        put("product_id", JSONObject.NULL)
-                        put("product_code", cursor.getStringOrNull("fuel_code"))
-                        put("barcode", JSONObject.NULL)
-                        put("product_name", cursor.getStringOrNull("fuel_name"))
-                        put("product_name_ar", cursor.getStringOrNull("fuel_name_ar") ?: cursor.getStringOrNull("fuel_name"))
-                        put("category_name", "وقود")
-                        put("warehouse_name", cursor.getStringOrNull("tank_name_ar") ?: cursor.getStringOrNull("tank_name"))
-                        put("location_name", cursor.getStringOrNull("location"))
-                        put("tank_name", cursor.getStringOrNull("tank_name_ar") ?: cursor.getStringOrNull("tank_name"))
-                        put("unit_symbol", "لتر")
-                        put("quantity", current)
-                        put("quantity_on_hand", current)
-                        put("quantity_committed", JSONObject.NULL)
-                        put("available_quantity", current)
-                        put("purchase_price", price)
-                        put("minimum_stock", minimum)
-                        if (maximum == null) put("maximum_stock", JSONObject.NULL) else put("maximum_stock", maximum)
-                        put("reorder_quantity", JSONObject.NULL)
-                        put("stock_value", current * price)
-                        put("status", status)
-                        put("expiry_status", "none")
-                        put("expiry_date", JSONObject.NULL)
-                        put("last_count_date", cursor.getStringOrNull("updated_at"))
-                        put("last_updated", cursor.getStringOrNull("updated_at"))
-                    }
-                    fuelRows.put(row)
-                    fuelCount++
-                    fuelQuantity += current
-                    fuelValue += current * price
-                    if (status == "low") fuelLow++
-                    if (status == "critical") fuelCritical++
-                }
-            }
-
-            val combined = JSONArray()
-            for (i in 0 until rows.length()) combined.put(rows.getJSONObject(i))
-            for (i in 0 until fuelRows.length()) combined.put(fuelRows.getJSONObject(i))
-
-            val stats = (base.optJSONObject("stats") ?: JSONObject()).let { JSONObject(it.toString()) }
-            stats.put("total_quantity", stats.optDouble("total_quantity", 0.0) + fuelQuantity)
-            stats.put("total_value", stats.optDouble("total_value", 0.0) + fuelValue)
-            stats.put("low_stock", stats.optInt("low_stock", 0) + fuelLow)
-            stats.put("critical_stock", stats.optInt("critical_stock", 0) + fuelCritical)
-            stats.put("fuel_count", fuelCount)
-
-            JSONObject().apply {
-                put("report_type", reportType)
-                put("rows", combined)
-                put("count", combined.length())
-                put("total_count", base.optInt("total_count", rows.length()) + fuelCount)
-                put("page", (offset / limit) + 1)
-                put("page_size", limit)
-                put("total_pages", ((base.optInt("total_count", rows.length()) + fuelCount + limit - 1) / limit))
-                put("has_next", combined.length() >= limit)
-                put("has_previous", offset > 0)
-                put("stats", stats)
-                put("categories", base.optJSONArray("categories") ?: JSONArray())
-                put("movement_series", base.optJSONArray("movement_series") ?: JSONArray())
             }
         } finally {
             dbLock.unlock()
@@ -21456,15 +21762,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (startDate.isNotEmpty() && endDate.isNotEmpty()) {
                 require(startDate <= endDate) { "تاريخ البداية يجب ألا يكون بعد تاريخ النهاية" }
             }
-            val sql = """SELECT s.id AS sale_id, si.id AS item_id, s.invoice_number, s.created_at AS sale_date,
+            val sql = """SELECT s.id AS sale_id, s.invoice_number, s.created_at AS sale_date,
                     si.product_id, p.product_name, p.barcode,
                     si.quantity, COALESCE(si.returned_quantity, 0) AS returned_quantity,
-                    COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'), 0) AS damaged_quantity,
-                    MAX(0, si.quantity - COALESCE(si.returned_quantity, 0) - COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'), 0)) AS returnable_quantity,
-                    MAX(0, si.quantity - COALESCE(si.returned_quantity, 0) - COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'), 0)) AS net_quantity,
+                    MAX(0, si.quantity - COALESCE(si.returned_quantity, 0)) AS returnable_quantity,
+                    MAX(0, si.quantity - COALESCE(si.returned_quantity, 0)) AS net_quantity,
                     si.unit_price,
                     si.line_total AS total_price,
-                    (si.line_total * CASE WHEN si.quantity > 0 THEN MAX(0, si.quantity - COALESCE(si.returned_quantity, 0) - COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'), 0)) / si.quantity ELSE 0 END) AS net_total
+                    (si.line_total * CASE WHEN si.quantity > 0 THEN MAX(0, si.quantity - COALESCE(si.returned_quantity, 0)) / si.quantity ELSE 0 END) AS net_total
                     FROM sale_items si JOIN sales_transactions s ON s.id=si.sale_id
                     LEFT JOIN products p ON p.id=si.product_id
                     WHERE ${where.joinToString(" AND ")}
@@ -21798,7 +22103,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             "revenue" -> "SELECT id FROM accounts WHERE account_type='revenue' AND is_active=1 AND is_deleted=0 ORDER BY CASE WHEN account_category LIKE '%sales%' OR account_category LIKE '%revenue%' THEN 0 ELSE 1 END, id LIMIT 1"
             "cash" -> "SELECT id FROM accounts WHERE is_cash_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1"
             "bank" -> "SELECT id FROM accounts WHERE is_bank_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1"
-            "receivable" -> "SELECT id FROM accounts WHERE account_type='asset' AND is_active=1 AND is_deleted=0 AND (account_category LIKE '%receiv%' OR account_code IN ('1103','1103-A') OR lower(account_name) LIKE '%receivable%' OR lower(account_name) LIKE '%debtor%' OR lower(account_name_ar) LIKE '%receiv%' OR account_name_ar LIKE '%المدينون%' OR account_name_ar LIKE '%المدينين%' OR account_name_ar LIKE '%العملاء%' OR account_name_ar LIKE '%ذمم%') ORDER BY CASE WHEN account_code='1103' THEN 0 WHEN account_name_ar LIKE '%المدينون%' THEN 1 ELSE 2 END, id LIMIT 1"
+            "receivable" -> "SELECT id FROM accounts WHERE account_type='asset' AND is_active=1 AND is_deleted=0 AND (account_category LIKE '%receiv%' OR account_name LIKE '%customer%' OR account_name_ar LIKE '%عملاء%' OR account_name_ar LIKE '%ذمم%') ORDER BY id LIMIT 1"
             else -> throw IllegalArgumentException("نوع الحساب المالي غير معروف")
         }
         return db.rawQuery(sql, null).use { c ->
@@ -22035,11 +22340,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                                                 COALESCE(p.purchase_price,0),s.shift_id,s.customer_party_id,s.net_amount,s.paid_amount,s.payment_method,s.status,s.invoice_number
                                          FROM sale_items si JOIN sales_transactions s ON s.id=si.sale_id
                                          LEFT JOIN products p ON p.id=si.product_id
-                                         WHERE s.station_id=? AND s.invoice_number=? AND si.item_type='product' AND s.is_deleted=0
-                                           AND (?=0 OR si.id=?)
-                                           AND (?=0 OR si.product_id=?)
-                                         ORDER BY CASE WHEN ? > 0 AND si.id=? THEN 0 ELSE 1 END, si.id LIMIT 1""",
-                    arrayOf(stationId.toString(),invoice,itemId.toString(),itemId.toString(),productId.toString(),productId.toString(),itemId.toString(),itemId.toString())).use{c->
+                                         WHERE s.station_id=? AND s.invoice_number=? AND si.product_id=? AND (?=0 OR si.id=?) AND si.item_type='product' AND s.is_deleted=0 LIMIT 1""",
+                    arrayOf(stationId.toString(),invoice,productId.toString(),itemId.toString(),itemId.toString())).use{c->
                     require(c.moveToFirst()){"بند المنتج غير موجود في الفاتورة"}
                     JSONObject().apply{put("item_id",c.getLong(0));put("sale_id",c.getLong(1));put("product_id",c.getLong(2));put("qty",c.getDouble(3));put("returned",c.getDouble(4));put("damaged",c.getDouble(5));put("unit_price",c.getDouble(6));put("line_total",c.getDouble(7));put("purchase_price",c.getDouble(8));put("shift_id",c.getLong(9));if(c.isNull(10))put("customer_id",JSONObject.NULL)else put("customer_id",c.getLong(10));put("net",c.getDouble(11));put("paid",c.getDouble(12));put("payment_method",c.getString(13));put("status",c.getString(14));put("invoice",c.getString(15))}
                 }

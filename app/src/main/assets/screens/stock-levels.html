@@ -908,7 +908,66 @@
         .badge-danger { background: var(--error); color: white; }
         .badge-info { background: var(--primary-color); color: white; }
         .badge-purple { background: #9c27b0; color: white; }
-  </style>
+  
+        /* Stock levels: centered, deterministic responsive layout */
+        .filters-panel { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; align-items:end; }
+        .filters-panel .filter-group { min-width:0; text-align:center; }
+        .filters-panel .filter-select, .filters-panel .apply-btn { width:100%; text-align:center; text-align-last:center; }
+        .kpi-grid, .kpi-card, .glass-card, .chart-header, .chart-title, .filter-label,
+        .data-table th, .data-table td, .modal-content, .modal-title, .modal-input,
+        .modal-btn, .alert-card, .alert-content, .action-bar { text-align:center; }
+        .kpi-card { display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        .kpi-content { width:100%; text-align:center; }
+        .advanced-filter-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; width:100%; max-width:100%; overflow:hidden; }
+        .advanced-filter-grid .filter-group { min-width:0; }
+        .advanced-range-row { display:flex; gap:8px; width:100%; min-width:0; }
+        .advanced-range-row .modal-input { min-width:0; width:50%; }
+        .stock-query-modal { width:min(560px,calc(100vw - 24px)); max-width:calc(100vw - 24px); overflow:hidden; }
+        .stock-query-modal .modal-input { width:100%; text-align:center; text-align-last:center; }
+        .table-container { max-width:100%; overflow-x:auto; }
+        @media (max-width:700px) {
+            .filters-panel { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+            .filters-panel .apply-btn { grid-column:1 / -1; }
+            .advanced-filter-grid { grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:6px; }
+            .advanced-range-row { gap:4px; }
+            .advanced-range-row .modal-input { padding:8px 4px; font-size:.8rem; }
+        }
+        @media (max-width:380px) {
+            .filters-panel { gap:7px; }
+            .filters-panel .filter-label { font-size:.75rem; }
+            .filters-panel .filter-select, .filters-panel .apply-btn { padding:8px 4px; font-size:.78rem; }
+            .advanced-filter-grid { gap:4px; }
+            .advanced-filter-grid .filter-label { font-size:.7rem; }
+            .advanced-range-row .modal-input { padding:7px 2px; font-size:.72rem; }
+        }
+
+  
+        /* ============================================================
+           مخزون ذكي - واجهة تحليلية مستوحاة من أفضل أنماط IMS/WMS
+           ============================================================ */
+        .stock-intelligence { margin-top: 18px; }
+        .intelligence-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:14px; }
+        .intelligence-mini { border:1px solid rgba(255,255,255,.10); border-radius:14px; padding:14px; text-align:center; background:rgba(255,255,255,.035); }
+        .intelligence-mini .mini-value { font-size:1.35rem; font-weight:800; margin-top:6px; }
+        .intelligence-mini .mini-label { font-size:.78rem; opacity:.78; }
+        .intelligence-table td, .intelligence-table th { text-align:center !important; vertical-align:middle; }
+        .risk-badge { display:inline-flex; align-items:center; justify-content:center; min-width:72px; padding:5px 9px; border-radius:999px; font-size:.76rem; font-weight:800; }
+        .risk-critical { background:rgba(244,67,54,.18); color:#ff8b83; }
+        .risk-high { background:rgba(255,152,0,.18); color:#ffbd66; }
+        .risk-medium { background:rgba(255,193,7,.16); color:#ffd86b; }
+        .risk-low { background:rgba(76,175,80,.16); color:#8fe39a; }
+        .abc-badge { display:inline-flex; width:30px; height:30px; align-items:center; justify-content:center; border-radius:50%; font-weight:900; background:rgba(0,122,204,.14); }
+        .intelligence-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+        @media (max-width:900px) { .intelligence-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+        @media (max-width:520px) {
+            .intelligence-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+            .intelligence-mini { padding:10px 6px; }
+            .intelligence-mini .mini-value { font-size:1.05rem; }
+            .intelligence-mini .mini-label { font-size:.68rem; }
+            .intelligence-table { min-width:920px; }
+        }
+
+</style>
  </head>
  <body>
   <!-- شريط المعلومات العلوي -->
@@ -1336,6 +1395,39 @@
      </div>
     </div>
    </div>
+   <!-- ===== التحليلات الذكية لمستويات المخزون ===== -->
+   <div class="section stock-intelligence" id="stockIntelligenceSection">
+    <div class="glass-card">
+     <div class="intelligence-toolbar">
+      <div>
+       <h2 class="page-title" style="margin:0;">🧠 ذكاء مستويات المخزون</h2>
+       <div style="opacity:.75;font-size:.82rem;margin-top:5px;">تحليل فعلي من حركات المخزون ومبيعات الوقود المحلية، بدون خدمة سحابية أو قيم افتراضية.</div>
+      </div>
+      <button class="action-btn action-btn-success" onclick="exportStockIntelligence()">
+       <i class="fas fa-file-excel"></i> تصدير التحليل
+      </button>
+     </div>
+     <div class="intelligence-kpis">
+      <div class="intelligence-mini"><div class="mini-label">دوران سنوي تقديري</div><div class="mini-value" id="smartTurnover">0.00</div></div>
+      <div class="intelligence-mini"><div class="mini-label">رأس مال راكد</div><div class="mini-value" id="smartDeadStock">0 ريال</div></div>
+      <div class="intelligence-mini"><div class="mini-label">خطر نفاد مرتفع</div><div class="mini-value" id="smartHighRisk">0</div></div>
+      <div class="intelligence-mini"><div class="mini-label">خطر نفاد متوسط</div><div class="mini-value" id="smartMediumRisk">0</div></div>
+     </div>
+     <div class="table-container">
+      <table class="data-table intelligence-table" id="stockIntelligenceTable">
+       <thead>
+        <tr>
+         <th>#</th><th>العنصر</th><th>نوع المخزون</th><th>الحالي</th><th>استهلاك 30 يوم</th>
+         <th>أيام التغطية</th><th>خطر النفاد</th><th>ABC</th><th>إعادة الطلب المقترحة</th><th>الراكد</th>
+        </tr>
+       </thead>
+       <tbody id="stockIntelligenceTableBody">
+        <tr><td colspan="10" class="text-center">⏳ جاري التحليل...</td></tr>
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
    <!-- ===== قسم الحركات ===== -->
    <div class="section" id="movementsSection">
     <div class="glass-card">
@@ -1521,34 +1613,42 @@
   <!-- ===== النماذج المنبثقة ===== -->
   <!-- نموذج البحث -->
   <div class="modal" id="searchModal">
-   <div class="modal-content">
-    <div class="modal-title">
-     🔍 استعلام عن منتج
-    </div>
-    <p style="margin-bottom: 15px; color: #666;">
-     أدخل كود المنتج أو اسم المنتج للبحث
-    </p>
+   <div class="modal-content stock-query-modal">
+    <div class="modal-title">🔍 استعلام عن مخزون</div>
     <div class="modal-input-group">
-     <input class="modal-input" id="searchCode" placeholder="كود المنتج" type="text">
-     <input class="modal-input" id="searchName" placeholder="اسم المنتج" type="text">
+     <div class="filter-group">
+      <label class="filter-label">نوع المخزون</label>
+      <select class="modal-input" id="searchStockType" onchange="toggleStockQueryFields()">
+       <option value="">اختر نوع المخزون</option>
+       <option value="fuel">وقود</option>
+       <option value="products">منتجات</option>
+      </select>
+     </div>
+     <div class="filter-group" id="fuelQueryGroup" style="display:none;">
+      <label class="filter-label">نوع الوقود</label>
+      <select class="modal-input" id="searchFuelType">
+       <option value="">اختر نوع الوقود</option>
+      </select>
+     </div>
+     <div class="filter-group" id="productQueryGroup" style="display:none;">
+      <label class="filter-label">اسم المنتج</label>
+      <select class="modal-input" id="searchProductName">
+       <option value="">اختر اسم المنتج</option>
+      </select>
+     </div>
     </div>
-    <div style="margin-top: 15px;">
-     <button class="modal-btn modal-btn-cancel" onclick="closeModal('searchModal')">
-      إلغاء
-     </button>
-     <button class="modal-btn modal-btn-primary" onclick="performSearch()">
-      🔍 استعلام
-     </button>
+    <div style="margin-top:15px;display:flex;gap:10px;justify-content:center;">
+     <button class="modal-btn modal-btn-cancel" onclick="closeModal('searchModal')">إلغاء</button>
+     <button class="modal-btn modal-btn-primary" onclick="performSearch()">🔍 استعلام</button>
     </div>
    </div>
   </div>
-  <!-- نموذج الإضافة -->
   <div class="modal" id="addModal">
    <div class="modal-content">
     <div class="modal-title">
      ➕ إضافة منتج جديد
     </div>
-    <div class="modal-input-group" style="flex-direction: column; gap: 12px;">
+    <div class="advanced-filter-grid">
      <input class="modal-input" id="addCode" placeholder="كود المنتج" required="" type="text">
      <input class="modal-input" id="addName" placeholder="اسم المنتج" required="" type="text">
      <input class="modal-input" id="addQuantity" placeholder="الكمية" required="" type="number">
@@ -1649,7 +1749,7 @@
       <label class="filter-label">
        نطاق القيمة
       </label>
-      <div style="display: flex; gap: 10px;">
+      <div class="advanced-range-row">
        <input class="modal-input" id="minValue" placeholder="الحد الأدنى" type="number">
        <input class="modal-input" id="maxValue" placeholder="الحد الأقصى" type="number">
       </div>
@@ -1658,7 +1758,7 @@
       <label class="filter-label">
        نطاق الكمية
       </label>
-      <div style="display: flex; gap: 10px;">
+      <div class="advanced-range-row">
        <input class="modal-input" id="minQuantity" placeholder="الحد الأدنى" type="number">
        <input class="modal-input" id="maxQuantity" placeholder="الحد الأقصى" type="number">
       </div>
@@ -1688,36 +1788,23 @@
 // 1. دوال apiCall و handleAndroidResult (الموحدة)
 // ============================================================
 	function apiCall(action, params) {
-	    const p = params || {};
-	    if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
-	    try {
-	        let raw;
-	        switch (action) {
-	            case 'getWarehouses': raw = AndroidInterface.getWarehouses(JSON.stringify(p)); break;
-	            case 'getCategories': raw = AndroidInterface.getCategories(); break;
-	            case 'getInventorySummary': raw = AndroidInterface.getStockLevelsPage(JSON.stringify({ ...p, limit: 200 })); break;
-	            case 'getLowStockProducts': raw = AndroidInterface.getStockLevelsPage(JSON.stringify({ ...p, report_type: 'below_min', limit: 200 })); break;
-	            case 'getInventoryAlerts': raw = AndroidInterface.getStockAlertRecords(JSON.stringify(p)); break;
-	            case 'getInventoryCharts': raw = AndroidInterface.getStockLevelsPage(JSON.stringify(p)); break;
-	            case 'getMovements': raw = AndroidInterface.getInventoryMovementRecords(JSON.stringify(p)); break;
-	            case 'getStockValues': raw = AndroidInterface.getStockLevelsPage(JSON.stringify({ ...p, limit: 200 })); break;
-	            case 'getAlerts': raw = AndroidInterface.getStockAlertRecords(JSON.stringify({ ...p, limit: 200 })); break;
-	            case 'filterInventory': raw = AndroidInterface.getStockLevelsPage(JSON.stringify(p)); break;
-	            case 'advancedFilter': raw = AndroidInterface.getStockLevelsPage(JSON.stringify(p)); break;
-	            case 'searchProducts': raw = AndroidInterface.getStockLevelsPage(JSON.stringify({ ...p, search: [p.code, p.name].filter(Boolean).join(' '), limit: 200 })); break;
-	            case 'getExpiringProducts': return Promise.reject({ success: false, message: 'بيانات الصلاحية غير موجودة في عقد SQLite الحالي' });
-	            case 'getAuditReport': return Promise.reject({ success: false, message: 'تقرير الجرد غير متاح في عقد SQLite الحالي' });
-	            case 'createPurchaseOrder': return Promise.reject({ success: false, message: 'أوامر الشراء غير متاحة في عقد SQLite الحالي' });
-	            default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
-	        }
-	        return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
-	    } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
-	}
+    const p = params || {};
+    if (!window.AndroidInterface) return Promise.reject({ success:false, message:'جسر Android غير متاح' });
+    try {
+        const payload = { ...p, action };
+        const raw = AndroidInterface.getStockLevelsPage(JSON.stringify(payload));
+        return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+    } catch (e) {
+        return Promise.reject({ success:false, message:e.message || 'فشل استدعاء قاعدة البيانات' });
+    }
+}
 
 // ============================================================
 // 2. دوال مساعدة// ============================================================
 // 2. دوال مساعدة (Toast, Loading)
 // ============================================================
+function escapeHtml(value) { const d=document.createElement('div'); d.textContent=String(value ?? ''); return d.innerHTML; }
+
 function showToast(message, type = 'success') {
     const icon = type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning';
     Swal.fire({
@@ -1751,6 +1838,7 @@ let allInventoryLevels = [];
 let allMovements = [];
 let allAlerts = [];
 let allStockValues = [];
+let allStockIntelligence = [];
 
 // ============================================================
 // 4. دوال التهيئة والتبويبات
@@ -1794,20 +1882,116 @@ function goToMain() {
 async function loadInitialData() {
     showLoading(true);
     try {
-        await Promise.all([
-            loadWarehouses(),
-            loadCategories(),
-            loadInventorySummary(),
-            loadLowStockProducts(),
-            loadAlertsData(),
-            loadChartsData()
-        ]);
+        const result = await apiCall('loadPage', { stock_type:'all', limit:500 });
+        if (!result.success) throw new Error(result.message || 'فشل تحميل بيانات المخزون');
+        applyPageData(result.data || {});
     } catch (e) {
-        console.error('Error loading initial data:', e);
-        showToast('خطأ في تحميل البيانات الأساسية', 'error');
+        console.error('Error loading stock levels:', e);
+        showToast(e.message || 'تعذر تحميل بيانات المخزون من SQLite', 'error');
+        clearPageData();
     } finally {
         showLoading(false);
     }
+}
+
+function applyPageData(data) {
+    const stats = data.stats || {};
+    document.getElementById('totalInventoryValue').textContent = Number(stats.total_value || 0).toLocaleString('en') + ' ريال';
+    document.getElementById('inventoryTrend').textContent = 'إجمالي الكمية الفعلية: ' + Number(stats.total_quantity || 0).toLocaleString('en');
+    document.getElementById('lowStockCount').textContent = Number(stats.low_stock || 0).toLocaleString('en') + ' عنصر';
+    document.getElementById('criticalCount').textContent = 'حرج: ' + Number(stats.critical_stock || 0).toLocaleString('en') + ' عنصر';
+    document.getElementById('expiredValue').textContent = Number(stats.expired_value || 0).toLocaleString('en') + ' ريال';
+    document.getElementById('expiryTrend').textContent = 'القيمة الفعلية من قاعدة البيانات';
+    document.getElementById('turnoverRate').textContent = Number(stats.turnover_rate || 0).toFixed(2) + ' مرة';
+    document.getElementById('turnoverStatus').textContent = 'دوران سنوي تقديري من استهلاك آخر 30 يوماً';
+
+    allWarehouses = data.warehouses || [];
+    allCategories = data.category_options || [];
+    allProducts = data.products || [];
+    allStockValues = data.values_rows || [];
+    allAlerts = data.alerts || [];
+    populateWarehouseDropdowns();
+    populateCategoryDropdowns();
+    populateFuelTypes(data.fuel_types || []);
+    populateProductQueryOptions(allProducts);
+    populateLowStockTable(data.low_stock_rows || []);
+    populateValuesTable(allStockValues);
+    populateAlertsTable(allAlerts);
+    updateMovementChart(data.movement_series || []);
+    updateDistributionChart(data.categories || []);
+    updateTrendChart(data.trend_series || []);
+    updateExpiryChart(data.expiry || {});
+    populateStockIntelligence(data.intelligence || [], stats);
+    updateAlertSummary(stats);
+}
+
+function populateStockIntelligence(items, stats) {
+    allStockIntelligence = Array.isArray(items) ? items : [];
+    const turnover = Number(stats.turnover_rate || 0);
+    const deadValue = Number(stats.dead_stock_value || 0);
+    const highRisk = Number(stats.stockout_risk_high || 0);
+    const mediumRisk = Number(stats.stockout_risk_medium || 0);
+    const turnoverEl = document.getElementById('smartTurnover');
+    const deadEl = document.getElementById('smartDeadStock');
+    const highEl = document.getElementById('smartHighRisk');
+    const mediumEl = document.getElementById('smartMediumRisk');
+    if (turnoverEl) turnoverEl.textContent = turnover.toFixed(2) + '×';
+    if (deadEl) deadEl.textContent = deadValue.toLocaleString('en') + ' ريال';
+    if (highEl) highEl.textContent = highRisk.toLocaleString('en');
+    if (mediumEl) mediumEl.textContent = mediumRisk.toLocaleString('en');
+
+    const tbody = document.getElementById('stockIntelligenceTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!allStockIntelligence.length) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center">لا توجد بيانات كافية للتحليل</td></tr>';
+        return;
+    }
+    allStockIntelligence.forEach((x, idx) => {
+        const risk = String(x.risk_level || 'low').toLowerCase();
+        const riskText = {critical:'حرج', high:'مرتفع', medium:'متوسط', low:'منخفض'}[risk] || risk;
+        const cover = Number(x.days_of_cover);
+        const coverText = cover < 0 ? 'غير متاح' : (cover >= 999 ? '∞' : cover.toFixed(1) + ' يوم');
+        const name = x.name || '---';
+        const type = x.item_type === 'fuel' ? 'وقود' : 'منتجات';
+        const reorder = Number(x.recommended_reorder || 0);
+        const dead = x.dead_stock ? 'نعم' : 'لا';
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${idx + 1}</td>
+            <td>${escapeHtml(name)}</td>
+            <td>${type}</td>
+            <td class="numeric">${Number(x.current_quantity || 0).toLocaleString('en')}</td>
+            <td class="numeric">${Number(x.demand_30d || 0).toLocaleString('en')}</td>
+            <td>${coverText}</td>
+            <td><span class="risk-badge risk-${risk}">${riskText}</span></td>
+            <td><span class="abc-badge">${escapeHtml(x.abc_class || 'C')}</span></td>
+            <td class="numeric">${reorder.toLocaleString('en')}</td>
+            <td>${dead}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function exportStockIntelligence() {
+    exportRowsAsExcel('تحليل_مستويات_المخزون', document.getElementById('stockIntelligenceTable'), 'تحليل مستويات المخزون');
+}
+
+function clearPageData() {
+    populateLowStockTable([]);
+    populateValuesTable([]);
+    populateAlertsTable([]);
+    updateMovementChart([]);
+    updateDistributionChart([]);
+    updateTrendChart([]);
+    updateExpiryChart({active:0,soon:0,expired:0});
+    populateStockIntelligence([], {});
+}
+
+function updateAlertSummary(stats) {
+    document.getElementById('criticalAlert').textContent = Number(stats.critical_alerts || 0) + ' تنبيه حرج غير محلول';
+    document.getElementById('expiringAlert').textContent = Number(stats.unresolved_count || 0) + ' تنبيه مخزون غير محلول';
+    document.getElementById('auditAlert').textContent = 'سجلات التنبيه الفعلية: ' + Number(stats.alerts_count || 0);
 }
 
 async function loadWarehouses() {
@@ -1904,16 +2088,9 @@ async function loadInventorySummary() {
 // ============================================================
 async function loadLowStockProducts() {
     try {
-        const result = await apiCall('getLowStockProducts', {});
-        if (result.success) {
-	            const page = result.data || {};
-	            const products = Array.isArray(page) ? page : (page.rows || []);
-            populateLowStockTable(products);
-        }
-    } catch (e) {
-        console.error('Error loading low stock products:', e);
-        populateLowStockTable([]);
-    }
+        const result = await apiCall('getLowStockProducts', { stock_type:'all', limit:500 });
+        if (result.success) populateLowStockTable((result.data || {}).low_stock_rows || []);
+    } catch (e) { populateLowStockTable([]); }
 }
 
 function populateLowStockTable(products) {
@@ -1956,21 +2133,15 @@ function selectRow(row) {
 // 8. تحميل بيانات التنبيهات
 // ============================================================
 async function loadAlertsData() {
-	    try {
-	        const result = await apiCall('getInventoryAlerts', {});
-	        if (result.success) {
-	            const page = result.data || {};
-	            const alerts = page.stats || page;
-	            document.getElementById('criticalAlert').textContent =
-	                (alerts.critical_count || 0) + ' تنبيه حرج غير محلول';
-	            document.getElementById('expiringAlert').textContent =
-	                (alerts.unresolved_count || 0) + ' تنبيه مخزون غير محلول';
-	            document.getElementById('auditAlert').textContent =
-	                'سجلات التنبيه الفعلية: ' + (page.total_count || 0);
+    try {
+        const result = await apiCall('getInventoryAlerts', { limit:500 });
+        if (result.success) {
+            const data = result.data || {};
+            allAlerts = data.alerts || [];
+            populateAlertsTable(allAlerts);
+            updateAlertSummary(data.stats || {});
         }
-    } catch (e) {
-        console.error('Error loading alerts data:', e);
-    }
+    } catch (e) { console.error(e); }
 }
 
 // ============================================================
@@ -1978,22 +2149,15 @@ async function loadAlertsData() {
 // ============================================================
 async function loadChartsData() {
     try {
-        const result = await apiCall('getInventoryCharts', {});
+        const result = await apiCall('getInventoryCharts', { limit:500 });
         if (result.success) {
             const data = result.data || {};
-            updateMovementChart(data.movement_chart || data.movement_series || []);
-            updateDistributionChart(data.distribution_chart || data.categories || []);
-            updateTrendChart(data.trend_chart || []);
-            updateExpiryChart(data.expiry_chart || { active: 0, expiring: 0, expired: 0 });
+            updateMovementChart(data.movement_series || []);
+            updateDistributionChart(data.categories || []);
+            updateTrendChart(data.trend_series || []);
+            updateExpiryChart(data.expiry || {});
         }
-    } catch (e) {
-        console.error('Error loading charts data:', e);
-        updateMovementChart([]);
-        updateDistributionChart([]);
-        updateTrendChart([]);
-        updateExpiryChart({ active: 0, expiring: 0, expired: 0, supported: false });
-        showToast(e.message || 'بيانات الرسوم غير متاحة', 'warning');
-    }
+    } catch (e) { console.error('Error loading charts data:', e); }
 }
 
 // ============================================================
@@ -2117,17 +2281,14 @@ function updateExpiryChart(data) {
 async function loadMovements() {
     showLoading(true);
     try {
-        const result = await apiCall('getMovements', { limit: 100 });
+        const result = await apiCall('getMovements', { limit:100 });
         if (result.success) {
-            allMovements = result.data || [];
-            populateMovementsTable(allMovements);
+            const rows = (result.data || {}).rows || [];
+            allMovements = rows;
+            populateMovementsTable(rows);
         }
-    } catch (e) {
-        console.error('Error loading movements:', e);
-        populateMovementsTable([]);
-    } finally {
-        showLoading(false);
-    }
+    } catch(e) { populateMovementsTable([]); }
+    finally { showLoading(false); }
 }
 
 function populateMovementsTable(movements) {
@@ -2171,20 +2332,13 @@ function getMovementLabel(type) {
 async function loadStockValues() {
     showLoading(true);
     try {
-        const result = await apiCall('getStockValues', {});
+        const result = await apiCall('getStockValues', { limit:500 });
         if (result.success) {
-	            const productRows = Array.isArray(result.data)
-	                ? result.data
-	                : (Array.isArray(result.data?.rows) ? result.data.rows : []);
-            allStockValues = productRows;
+            allStockValues = (result.data || {}).values_rows || [];
             populateValuesTable(allStockValues);
         }
-    } catch (e) {
-        console.error('Error loading stock values:', e);
-        populateValuesTable([]);
-    } finally {
-        showLoading(false);
-    }
+    } catch(e) { populateValuesTable([]); }
+    finally { showLoading(false); }
 }
 
 function populateValuesTable(values) {
@@ -2210,13 +2364,13 @@ function populateValuesTable(values) {
 async function loadAlerts() {
     showLoading(true);
     try {
-        const result = await apiCall('getAlerts', {});
-	        const page = result.success ? (result.data || {}) : {};
-	        allAlerts = Array.isArray(page) ? page : (page.rows || []);
-        populateAlertsTable(allAlerts);
-    } catch (e) {
-        allAlerts = []; populateAlertsTable([]); showToast(e.message || 'فشل تحميل تنبيهات المخزون', 'error');
-    } finally { showLoading(false); }
+        const result = await apiCall('getAlerts', { limit:500 });
+        if (result.success) {
+            allAlerts = (result.data || {}).alerts || [];
+            populateAlertsTable(allAlerts);
+        }
+    } catch(e) { allAlerts=[]; populateAlertsTable([]); }
+    finally { showLoading(false); }
 }
 
 function populateAlertsTable(alerts) {
@@ -2250,29 +2404,22 @@ async function applyFilters() {
     const category = document.getElementById('categoryFilter').value;
     const dateRange = document.getElementById('dateRangeFilter').value;
     const expiry = document.getElementById('expiryFilter').value;
-    
     showLoading(true);
     try {
         const result = await apiCall('filterInventory', {
-            warehouse_id: warehouse === 'all' ? null : warehouse,
-            category_id: category === 'all' ? null : category,
+            stock_type:'all',
+            warehouse_id: warehouse === 'all' ? 0 : Number(warehouse),
+            category_id: category === 'all' ? 0 : Number(category),
             date_range: dateRange,
-            expiry_status: expiry === 'all' ? null : expiry
-	        });
-	        if (result.success) {
-	            const data = result.data || {};
-	            const stats = data.stats || data;
-	            document.getElementById('totalInventoryValue').textContent =
-	                Number(stats.total_value || 0).toLocaleString('en') + ' ريال';
-            populateLowStockTable(data.rows || []);
-            updateMovementChart(data.movement_series || []);
-            showToast('تم تطبيق الفلاتر بنجاح', 'success');
-        }
+            expiry_status: expiry === 'all' ? '' : expiry,
+            limit:500
+        });
+        if (!result.success) throw new Error(result.message || 'فشل تطبيق الفلاتر');
+        applyPageData(result.data || {});
+        showToast('تم تطبيق الفلاتر على بيانات SQLite الفعلية', 'success');
     } catch (e) {
-        showToast('خطأ في تطبيق الفلاتر', 'error');
-    } finally {
-        showLoading(false);
-    }
+        showToast(e.message || 'خطأ في تطبيق الفلاتر', 'error');
+    } finally { showLoading(false); }
 }
 
 function showAdvancedFilter() {
@@ -2280,33 +2427,31 @@ function showAdvancedFilter() {
 }
 
 async function applyAdvancedFilters() {
-    const minValue = document.getElementById('minValue').value;
-    const maxValue = document.getElementById('maxValue').value;
-    const minQty = document.getElementById('minQuantity').value;
-    const maxQty = document.getElementById('maxQuantity').value;
+    const minValue = document.getElementById('minValue').value.trim();
+    const maxValue = document.getElementById('maxValue').value.trim();
+    const minQty = document.getElementById('minQuantity').value.trim();
+    const maxQty = document.getElementById('maxQuantity').value.trim();
     const addDate = document.getElementById('addDate').value;
-    
+    if (minValue && maxValue && Number(minValue) > Number(maxValue)) return showToast('نطاق القيمة غير صحيح', 'error');
+    if (minQty && maxQty && Number(minQty) > Number(maxQty)) return showToast('نطاق الكمية غير صحيح', 'error');
     showLoading(true);
     try {
         const result = await apiCall('advancedFilter', {
-            min_value: minValue || null,
-            max_value: maxValue || null,
-            min_quantity: minQty || null,
-            max_quantity: maxQty || null,
-            add_date: addDate || null
+            stock_type:'all',
+            min_value:minValue ? Number(minValue) : null,
+            max_value:maxValue ? Number(maxValue) : null,
+            min_quantity:minQty ? Number(minQty) : null,
+            max_quantity:maxQty ? Number(maxQty) : null,
+            add_date:addDate || '',
+            limit:500
         });
-        if (result.success) {
-            const reportRows = result.data && result.data.rows ? result.data.rows : (result.data || []);
-            const filteredRows = reportRows.filter(row => (minValue === '' || Number(row.quantity || 0) * Number(row.purchase_price || 0) >= Number(minValue)) && (maxValue === '' || Number(row.quantity || 0) * Number(row.purchase_price || 0) <= Number(maxValue)) && (minQty === '' || Number(row.quantity || 0) >= Number(minQty)) && (maxQty === '' || Number(row.quantity || 0) <= Number(maxQty)));
-            populateLowStockTable(filteredRows);
-            closeModal('advancedFilterModal');
-            showToast('تم تطبيق التصفية المتقدمة', 'success');
-        }
+        if (!result.success) throw new Error(result.message || 'فشل تطبيق التصفية المتقدمة');
+        applyPageData(result.data || {});
+        closeModal('advancedFilterModal');
+        showToast('تم تطبيق التصفية المتقدمة على قاعدة البيانات', 'success');
     } catch (e) {
-        showToast('خطأ في التصفية المتقدمة', 'error');
-    } finally {
-        showLoading(false);
-    }
+        showToast(e.message || 'خطأ في التصفية المتقدمة', 'error');
+    } finally { showLoading(false); }
 }
 
 async function createOrder(productId, productName) {
@@ -2317,9 +2462,7 @@ async function createOrder(productId, productName) {
 // 13. دوال النماذج المنبثقة// ============================================================
 // 13. دوال النماذج المنبثقة
 // ============================================================
-function showSearchModal() {
-    document.getElementById('searchModal').style.display = 'flex';
-}
+
 
 function showAddModal() {
 	    window.location.href = 'products.html';
@@ -2333,37 +2476,67 @@ function closeModal(modalId) {
     document.getElementById(modalId).style.display = 'none';
 }
 
+function toggleStockQueryFields() {
+    const type = document.getElementById('searchStockType').value;
+    document.getElementById('fuelQueryGroup').style.display = type === 'fuel' ? 'block' : 'none';
+    document.getElementById('productQueryGroup').style.display = type === 'products' ? 'block' : 'none';
+    if (type !== 'fuel') document.getElementById('searchFuelType').value = '';
+    if (type !== 'products') document.getElementById('searchProductName').value = '';
+}
+
+function populateFuelTypes(items) {
+    const select = document.getElementById('searchFuelType');
+    if (!select) return;
+    select.innerHTML = '<option value="">اختر نوع الوقود</option>';
+    (items || []).forEach(f => {
+        const option=document.createElement('option');
+        option.value=f.fuel_type_id || f.id;
+        option.textContent=f.fuel_name_ar || f.fuel_name || f.fuel_code || 'وقود';
+        select.appendChild(option);
+    });
+}
+
+function populateProductQueryOptions(items) {
+    const select = document.getElementById('searchProductName');
+    if (!select) return;
+    select.innerHTML = '<option value="">اختر اسم المنتج</option>';
+    (items || []).forEach(p => {
+        const option=document.createElement('option');
+        option.value=p.product_id || p.id;
+        option.textContent=p.product_name_ar || p.product_name || 'منتج';
+        select.appendChild(option);
+    });
+}
+
+function showSearchModal() {
+    document.getElementById('searchModal').style.display = 'flex';
+    toggleStockQueryFields();
+}
+
 async function performSearch() {
-    const code = document.getElementById('searchCode').value.trim();
-    const name = document.getElementById('searchName').value.trim();
-    if (!code && !name) {
-        showToast('الرجاء إدخال كود أو اسم المنتج', 'error');
-        return;
-    }
+    const type = document.getElementById('searchStockType').value;
+    if (!type) return showToast('اختر نوع المخزون أولاً', 'error');
+    const fuelId = Number(document.getElementById('searchFuelType').value || 0);
+    const productId = Number(document.getElementById('searchProductName').value || 0);
+    if (type === 'fuel' && fuelId <= 0) return showToast('اختر نوع الوقود', 'error');
+    if (type === 'products' && productId <= 0) return showToast('اختر اسم المنتج', 'error');
     showLoading(true);
     try {
-        const result = await apiCall('searchProducts', { code, name });
-        if (result.success) {
-            const products = Array.isArray(result.data)
-                ? result.data
-                : (Array.isArray(result.data?.rows) ? result.data.rows : []);
-            const codeNeedle = code.toLowerCase();
-            const nameNeedle = name.toLowerCase();
-            const filtered = products.filter(product => {
-                const productCode = String(product.product_code || product.code || '').toLowerCase();
-                const productName = String(product.product_name || product.product_name_ar || product.name || '').toLowerCase();
-                return (!codeNeedle || productCode.includes(codeNeedle))
-                    && (!nameNeedle || productName.includes(nameNeedle));
-            });
-            populateLowStockTable(filtered);
-            closeModal('searchModal');
-            showToast(`تم العثور على ${filtered.length} منتج`, 'success');
-        }
-    } catch (e) {
-        showToast('خطأ في البحث', 'error');
-    } finally {
-        showLoading(false);
-    }
+        const result = await apiCall('searchStock', {
+            stock_type:type,
+            fuel_type_id:type === 'fuel' ? fuelId : 0,
+            product_id:type === 'products' ? productId : 0,
+            limit:500
+        });
+        if (!result.success) throw new Error(result.message || 'فشل الاستعلام');
+        const data=result.data || {};
+        populateLowStockTable(data.rows || []);
+        populateValuesTable(data.values_rows || data.rows || []);
+        closeModal('searchModal');
+        showToast(`تم تنفيذ الاستعلام وإرجاع ${(data.rows || []).length} سجل فعلي`, 'success');
+    } catch(e) {
+        showToast(e.message || 'خطأ في الاستعلام', 'error');
+    } finally { showLoading(false); }
 }
 
 async function saveNewProduct() {
@@ -2418,44 +2591,44 @@ async function saveSettings() {
 // 14. دوال التصدير والتنبيهات
 // ============================================================
 function exportLowStockTable() {
-    const table = document.getElementById('lowStockTable');
-    exportTableToCSV(table, 'المنتجات_تحت_الحد_الأدنى');
+    exportRowsAsExcel('المنتجات_تحت_الحد_الأدنى', document.getElementById('lowStockTable'), 'منتجات تحت الحد الأدنى');
 }
-
 function exportMovements() {
-    const table = document.getElementById('movementsTable');
-    exportTableToCSV(table, 'حركات_المخزون');
+    exportRowsAsExcel('حركات_المخزون', document.getElementById('movementsTable'), 'حركات المخزون');
 }
-
 function exportValues() {
-    const table = document.getElementById('valuesTable');
-    exportTableToCSV(table, 'قيم_المخزون');
+    exportRowsAsExcel('قيم_المخزون', document.getElementById('valuesTable'), 'قيم المخزون');
 }
-
 function exportAlerts() {
-    const table = document.getElementById('alertsTable');
-    exportTableToCSV(table, 'تنبيهات_المخزون');
+    exportRowsAsExcel('تنبيهات_المخزون', document.getElementById('alertsTable'), 'تنبيهات المخزون');
 }
-
-function exportTableToCSV(table, filename) {
-    let csv = '';
-    const rows = table.querySelectorAll('tr');
-    rows.forEach(row => {
-        const cells = row.querySelectorAll('th, td');
-        const rowData = [];
-        cells.forEach(cell => {
-            let text = cell.textContent.trim().replace(/,/g, '');
-            rowData.push(text);
-        });
-        csv += rowData.join(',') + '\n';
-    });
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+function xmlEscape(value) {
+    return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+}
+function exportRowsAsExcel(filename, table, title) {
+    if (!table) return showToast('الجدول غير موجود', 'error');
+    const rows = Array.from(table.querySelectorAll('tr')).map(row =>
+        Array.from(row.querySelectorAll('th,td')).map(cell => cell.innerText.trim())
+    ).filter(r => r.some(Boolean));
+    if (rows.length <= 1) return showToast('لا توجد بيانات فعلية للتصدير', 'warning');
+    const workbook = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Worksheet ss:Name="${xmlEscape(title).slice(0,31)}"><Table>
+ ${rows.map(row => '<Row>'+row.map(cell => `<Cell><Data ss:Type="String">${xmlEscape(cell)}</Data></Cell>`).join('')+'</Row>').join('')}
+ </Table></Worksheet>
+</Workbook>`;
+    const blob = new Blob(['\ufeff', workbook], {type:'application/vnd.ms-excel;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `${filename}_${new Date().toISOString().slice(0,10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    showToast('تم التصدير بنجاح', 'success');
+    link.href=url;
+    link.download=`${filename}_${new Date().toISOString().slice(0,10)}.xls`;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    showToast('تم إنشاء ملف Excel فعلي من بيانات الجدول', 'success');
 }
 
 function downloadChart(chartId) {

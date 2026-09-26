@@ -3528,6 +3528,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun getStockLevelsPage(jsonData: String = "{}"): String {
+            DebugLogger.info("WebAppInterface", "getStockLevelsPage called")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getStockLevelsPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
+            } catch (e: Exception) {
+                DebugLogger.logException("StockLevelsPage", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
         fun getInventoryReport(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getInventoryReport called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
@@ -3536,21 +3549,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(db.getInventoryReport(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
             }
             catch (e: Exception) { DebugLogger.logException("InventoryReport", e); errorResponse(e.message) }
-        }
-
-
-        @JavascriptInterface
-        fun getStockLevelsPage(jsonData: String = "{}"): String {
-            DebugLogger.info("WebAppInterface", "getStockLevelsPage called")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try {
-                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val stationId = requireCurrentStationId(db, activity.currentUserId)
-                dataResponse(db.getStockLevelsPage(JSONObject(jsonData.ifBlank { "{}" }), stationId))
-            } catch (e: Exception) {
-                DebugLogger.logException("StockLevelsPage", e)
-                errorResponse(e.message)
-            }
         }
 
         @JavascriptInterface
@@ -7690,7 +7688,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             ?: throw IllegalStateException("حاوية واجهة التطبيق غير متاحة")
                         val capture = WebView(activity)
                         captureWebView = capture
-                        capture.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
                         capture.settings.javaScriptEnabled = true
                         capture.settings.defaultTextEncodingName = "UTF-8"
                         capture.setBackgroundColor(android.graphics.Color.WHITE)
@@ -7720,9 +7717,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         capture.webViewClient = object : WebViewClient() {
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 val target = view ?: return
-                                target.postDelayed({
+                                target.evaluateJavascript(
+                                    "(function(){return Math.max(document.body.scrollHeight,document.documentElement.scrollHeight);})()"
+                                ) { rawHeight ->
                                     try {
-                                        val cssHeight = target.contentHeight.coerceAtLeast(1123)
+                                        val cssHeight = rawHeight?.trim()?.removeSurrounding("\"")?.toDoubleOrNull()?.toInt() ?: 1123
                                         val heightPx = cssHeight.coerceIn(900, 5000)
                                         val lp = target.layoutParams
                                         lp.width = widthPx
@@ -7742,7 +7741,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     } finally {
                                         latch.countDown()
                                     }
-                                }, 120L)
+                                }
                             }
                         }
                         capture.loadDataWithBaseURL("file:///android_asset/", wrappedHtml, "text/html", "UTF-8", null)
@@ -7752,7 +7751,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     }
                 }
 
-                if (!latch.await(6, TimeUnit.SECONDS)) {
+                if (!latch.await(12, TimeUnit.SECONDS)) {
                     captured = IllegalStateException("انتهت مهلة إنشاء صورة الفاتورة")
                 }
                 activity.runOnUiThread {
@@ -7802,10 +7801,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
-        fun printCurrentPage(): String = printCurrentPageWithTitle("فاتورة بيع")
-
-        @JavascriptInterface
-        fun printCurrentPageWithTitle(title: String): String {
+        fun printCurrentPage(): String {
             return try {
                 runOnUiThread {
                     val manager = getSystemService(Context.PRINT_SERVICE) as? PrintManager
@@ -7813,10 +7809,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     if (manager == null || currentWebView == null) {
                         Toast.makeText(this@MainActivity, "خدمة الطباعة غير متاحة حالياً", Toast.LENGTH_SHORT).show()
                     } else {
-                        val safeTitle = title.trim().ifBlank { "طباعة" }
-                        val adapter = currentWebView.createPrintDocumentAdapter(safeTitle)
+                        val adapter = currentWebView.createPrintDocumentAdapter("accounting-report")
                         manager.print(
-                            safeTitle,
+                            "فاتورة بيع",
                             adapter,
                             PrintAttributes.Builder()
                                 .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
