@@ -8599,7 +8599,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getInventoryMovementRecords(jsonData: String = "{}") = operationalList("inventory", "inventory_movements", jsonData)
         @JavascriptInterface
-        @JavascriptInterface
         fun saveInventoryMovementRecord(jsonData: String) = operationalSave("inventory", "inventory_movements", jsonData)
         @JavascriptInterface
         fun updateInventoryMovementRecord(id: Long, jsonData: String) = operationalUpdate("inventory", "inventory_movements", id, jsonData)
