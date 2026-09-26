@@ -45,7 +45,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 38
+        const val VERSION = 39
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -205,6 +205,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureLegacySettingsSchema(db)
             ensureManagementIdentitySchema(db)
             ensureFuelCommerceSchema(db)
+            ensureFuelStocktakeSchema(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
         } finally {
@@ -246,6 +247,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     31 -> migrateV31ToV32(db)
                     32 -> migrateV32ToV33(db)
                     33 -> ensureFuelCommerceSchema(db)
+                    39 -> ensureFuelStocktakeSchema(db)
                     34 -> migrateV34ToV35(db)
                     35 -> migrateV35ToV36(db)
                     36 -> migrateV36ToV37(db)
@@ -303,6 +305,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureModule010Schema(db)
         ensureDeliveriesSchema(db)
         ensureFuelSalesSchema(db)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_tank_ledger_tank_date ON tank_ledger(tank_id, transaction_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_tank_refills_station_date_fuel ON tank_refills(station_id, created_at, fuel_type_id, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_sales_sale_fuel_date ON fuel_sales(fuel_type_id, created_at, is_deleted)")
         ensureLegacyAssetsSchema(db)
         ensureVehicleTripLifecycleSchema(db)
         createTasksTable(db)
@@ -10943,6 +10948,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val warehouseId = data.optLong("warehouse_id", 0L)
             require(warehouseId > 0L) { "المستودع مطلوب" }
             val signedAdjustment = data.optDouble("signed_quantity", 0.0)
+            val referenceId = data.optLong(
+                "reference_id",
+                when (data.optString("movement_subtype", "")) {
+                    "in", "return_supplier" -> data.optLong("supplier_id", 0L)
+                    "out", "return_customer" -> data.optLong("customer_id", 0L)
+                    else -> 0L
+                }
+            )
 
             require(productId > 0) { "المنتج مطلوب" }
             require(quantity.isFinite() && quantity > 0.0) { "كمية الحركة يجب أن تكون رقماً أكبر من صفر" }
@@ -10956,6 +10969,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             if (movementType == "adjustment") {
                 require(signedAdjustment.isFinite() && signedAdjustment != 0.0) { "التسوية يجب أن تحتوي على كمية موجبة أو سالبة" }
+            }
+            val subtype = data.optString("movement_subtype", "")
+            if (referenceId > 0L) {
+                db.rawQuery(
+                    "SELECT id FROM parties WHERE id = ? AND (station_id = ? OR station_id IS NULL) AND is_deleted = 0 AND is_active = 1",
+                    arrayOf(referenceId.toString(), stationScopeId.toString())
+                ).use { cursor -> require(cursor.moveToFirst()) { "الطرف المرتبط خارج نطاق المحطة أو غير نشط" } }
             }
 
             val ownsTransaction = !db.inTransaction()
@@ -10991,7 +11011,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("unit_cost", unitCost)
                     put("total_cost", totalCost)
                     put("reference_type", data.optString("reference_type", ""))
-                    put("reference_id", data.optLong("reference_id", 0))
+                    put("reference_id", referenceId)
                     put("reason", data.optString("notes", ""))
                     put("performed_by", userId)
                     put("status", "completed")
@@ -11259,6 +11279,354 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             dbLock.unlock()
         }
     }
+
+    /**
+     * Unified Inventory Movements contract.
+     *
+     * Products remain sourced from inventory_movements.
+     * Fuel remains sourced from fuel_sales, tank_refills and manual tank_ledger entries.
+     * The UNION is read-only and station-scoped; it does not collapse the underlying models.
+     */
+    fun getUnifiedInventoryMovements(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val stockType = data.optString("stock_type", "all").trim().lowercase(Locale.ROOT).ifBlank { "all" }
+            require(stockType in setOf("all", "products", "fuel")) { "نوع المخزون غير صالح" }
+
+            val branches = mutableListOf<String>()
+            val args = mutableListOf<String>()
+
+            if (stockType == "all" || stockType == "products") {
+                branches += """
+                    SELECT im.id AS movement_id, 'product' AS stock_type, im.product_id AS item_id,
+                           COALESCE(p.product_name_ar, p.product_name, 'منتج غير محدد') AS item_name,
+                           p.product_code AS item_code, im.movement_type, im.movement_subtype,
+                           im.quantity_change AS quantity, im.unit_cost,
+                           im.total_cost, im.created_at AS movement_date, im.status,
+                           im.reference_code, im.from_location AS source_location,
+                           im.to_location AS target_location, w.warehouse_name AS location_name,
+                           im.warehouse_id AS location_id, im.performed_by,
+                           u.username AS performed_by_name,
+                           COALESCE(sp.commercial_name_ar, sp.commercial_name, sp.legal_name, cp.commercial_name_ar, cp.commercial_name, cp.legal_name, '') AS party_name,
+                           'inventory_movements' AS source_table
+                    FROM inventory_movements im
+                    LEFT JOIN products p ON p.id = im.product_id
+                    LEFT JOIN warehouses w ON w.id = im.warehouse_id
+                    LEFT JOIN users u ON u.id = im.performed_by
+                    LEFT JOIN parties sp ON sp.id = im.reference_id AND (sp.station_id = im.station_id OR sp.station_id IS NULL) AND im.movement_subtype IN ('in','return_supplier')
+                    LEFT JOIN parties cp ON cp.id = im.reference_id AND (cp.station_id = im.station_id OR cp.station_id IS NULL) AND im.movement_subtype IN ('out','return_customer')
+                    WHERE im.is_deleted = 0 AND im.station_id = ?
+                """.trimIndent()
+                args += stationScopeId.toString()
+            }
+
+            if (stockType == "all" || stockType == "fuel") {
+                branches += """
+                    SELECT fs.id AS movement_id, 'fuel' AS stock_type, fs.fuel_type_id AS item_id,
+                           COALESCE(f.fuel_name_ar, f.fuel_name, 'وقود غير محدد') AS item_name,
+                           f.fuel_code AS item_code, 'out' AS movement_type, 'fuel_sale' AS movement_subtype,
+                           -ABS(COALESCE(fs.quantity,0)) AS quantity, COALESCE(fs.price_per_liter,0) AS unit_cost,
+                           COALESCE(fs.total_amount,0) AS total_cost, COALESCE(fs.created_at, fs.sale_date) AS movement_date,
+                           COALESCE(fs.status, st.status, 'completed') AS status,
+                           COALESCE(st.invoice_number, st.sale_code, 'بيع وقود #' || fs.id) AS reference_code,
+                           t.tank_name AS source_location, COALESCE(pump.pump_code, '') AS target_location,
+                           t.tank_name AS location_name, t.id AS location_id,
+                           st.cashier_id AS performed_by, u.username AS performed_by_name,
+                           COALESCE(cp.commercial_name, cp.legal_name, cp.name, '') AS party_name,
+                           'fuel_sales' AS source_table
+                    FROM fuel_sales fs
+                    JOIN sales_transactions st ON st.id = fs.sale_id
+                    LEFT JOIN fuel_types f ON f.id = fs.fuel_type_id
+                    LEFT JOIN pumps pump ON pump.id = fs.pump_id
+                    LEFT JOIN tanks t ON t.id = pump.tank_id
+                    LEFT JOIN users u ON u.id = st.cashier_id
+                    LEFT JOIN parties cp ON cp.id = fs.customer_id
+                    WHERE fs.is_deleted = 0 AND st.is_deleted = 0 AND st.station_id = ?
+                """.trimIndent()
+                args += stationScopeId.toString()
+
+                branches += """
+                    SELECT r.id AS movement_id, 'fuel' AS stock_type, r.fuel_type_id AS item_id,
+                           COALESCE(f.fuel_name_ar, f.fuel_name, 'وقود غير محدد') AS item_name,
+                           f.fuel_code AS item_code, 'in' AS movement_type, 'refill' AS movement_subtype,
+                           ABS(COALESCE(COALESCE(r.actual_quantity, r.delivered_quantity),0)) AS quantity,
+                           COALESCE(r.unit_price,0) AS unit_cost,
+                           COALESCE(r.net_amount, r.total_amount, 0) AS total_cost,
+                           r.created_at AS movement_date, r.status,
+                           COALESCE(r.refill_code, r.invoice_number, 'تعبئة #' || r.id) AS reference_code,
+                           COALESCE(p.commercial_name_ar, p.commercial_name, p.legal_name, '') AS source_location,
+                           t.tank_name AS target_location, t.tank_name AS location_name,
+                           t.id AS location_id, r.received_by AS performed_by,
+                           u.username AS performed_by_name,
+                           COALESCE(p.commercial_name_ar, p.commercial_name, p.legal_name, '') AS party_name,
+                           'tank_refills' AS source_table
+                    FROM tank_refills r
+                    LEFT JOIN fuel_types f ON f.id = r.fuel_type_id
+                    LEFT JOIN tanks t ON t.id = r.tank_id
+                    LEFT JOIN parties p ON p.id = r.supplier_id
+                    LEFT JOIN users u ON u.id = r.received_by
+                    WHERE r.is_deleted = 0 AND r.station_id = ?
+                """.trimIndent()
+                args += stationScopeId.toString()
+
+                branches += """
+                    SELECT l.id AS movement_id, 'fuel' AS stock_type, t.fuel_type_id AS item_id,
+                           COALESCE(f.fuel_name_ar, f.fuel_name, 'وقود غير محدد') AS item_name,
+                           f.fuel_code AS item_code,
+                           CASE WHEN COALESCE(l.debit,0) > COALESCE(l.credit,0) THEN 'in' ELSE 'out' END AS movement_type,
+                           l.transaction_type AS movement_subtype,
+                           (COALESCE(l.debit,0) - COALESCE(l.credit,0)) AS quantity,
+                           0.0 AS unit_cost,
+                           0.0 AS total_cost,
+                           l.transaction_date AS movement_date,
+                           'completed' AS status,
+                           COALESCE(l.reference_number, 'خزان #' || l.tank_id) AS reference_code,
+                           '' AS source_location, t.tank_name AS target_location,
+                           t.tank_name AS location_name, t.id AS location_id,
+                           l.created_by AS performed_by, u.username AS performed_by_name,
+                           '' AS party_name, 'tank_ledger' AS source_table
+                    FROM tank_ledger l
+                    JOIN tanks t ON t.id = l.tank_id
+                    LEFT JOIN fuel_types f ON f.id = t.fuel_type_id
+                    LEFT JOIN users u ON u.id = l.created_by
+                    WHERE t.station_id = ? AND t.is_deleted = 0
+                      AND l.transaction_type LIKE 'manual_%'
+                """.trimIndent()
+                args += stationScopeId.toString()
+            }
+
+            val base = branches.joinToString(" UNION ALL ")
+            val filters = mutableListOf<String>()
+            val filterArgs = mutableListOf<String>()
+
+            data.optString("start_date", "").trim().takeIf { it.isNotEmpty() }?.let {
+                filters += "date(movement_date) >= date(?)"; filterArgs += it
+            }
+            data.optString("end_date", "").trim().takeIf { it.isNotEmpty() }?.let {
+                filters += "date(movement_date) <= date(?)"; filterArgs += it
+            }
+            data.optString("movement_type", "").trim().takeIf { it in setOf("in","out","return","damage","transfer","adjustment") }?.let {
+                filters += "movement_type = ?"; filterArgs += it
+            }
+            data.optLong("item_id", 0L).takeIf { it > 0L }?.let {
+                filters += "item_id = ?"; filterArgs += it.toString()
+            }
+            data.optLong("warehouse_id", 0L).takeIf { it > 0L && stockType != "fuel" }?.let {
+                filters += "location_id = ?"; filterArgs += it.toString()
+            }
+            data.optLong("tank_id", 0L).takeIf { it > 0L && stockType == "fuel" }?.let {
+                filters += "location_id = ?"; filterArgs += it.toString()
+            }
+            data.optString("status", "").trim().takeIf { it.isNotEmpty() }?.let {
+                filters += "status = ?"; filterArgs += it
+            }
+            data.optString("query", data.optString("search", "")).trim().takeIf { it.isNotEmpty() }?.let {
+                filters += "(item_name LIKE ? OR item_code LIKE ? OR reference_code LIKE ? OR location_name LIKE ? OR party_name LIKE ?)"
+                repeat(5) { filterArgs += "%$it%" }
+            }
+
+            val whereSql = if (filters.isEmpty()) "" else " WHERE ${filters.joinToString(" AND ")}"
+            val countSql = "SELECT COUNT(*) FROM ($base) movements$whereSql"
+            val countArgs = args + filterArgs
+            val totalCount = db.rawQuery(countSql, countArgs.toTypedArray()).use { c ->
+                if (c.moveToFirst()) c.getInt(0) else 0
+            }
+
+            val pageSize = data.optInt("limit", 30).coerceIn(1, 200)
+            val page = data.optInt("page", 1).coerceAtLeast(1)
+            val offset = data.optInt("offset", (page - 1) * pageSize).coerceAtLeast(0)
+            val sortDirection = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
+            val sql = "SELECT * FROM ($base) movements$whereSql ORDER BY datetime(movement_date) $sortDirection, movement_id $sortDirection LIMIT ? OFFSET ?"
+            val pageArgs = (args + filterArgs) + listOf(pageSize.toString(), offset.toString())
+            val rows = db.rawQuery(sql, pageArgs.toTypedArray()).use { cursorToJsonArray(it) }
+            val totalPages = if (totalCount == 0) 0 else (totalCount + pageSize - 1) / pageSize
+            val aggregateSql = """
+                SELECT COUNT(*) total_movements,
+                       COALESCE(SUM(total_cost),0) total_value,
+                       COALESCE(SUM(CASE WHEN date(movement_date)=date('now') THEN 1 ELSE 0 END),0) today_movements,
+                       COALESCE(SUM(CASE WHEN status IN ('pending','draft','in_progress') THEN 1 ELSE 0 END),0) pending_count,
+                       COALESCE(SUM(CASE WHEN movement_type IN ('in','return') THEN 1 ELSE 0 END),0) inbound_count,
+                       COALESCE(SUM(CASE WHEN movement_type IN ('out','damage') THEN 1 ELSE 0 END),0) outbound_count,
+                       COALESCE(SUM(CASE WHEN movement_type='transfer' THEN 1 ELSE 0 END),0) transfer_count,
+                       COALESCE(SUM(CASE WHEN movement_type='adjustment' THEN 1 ELSE 0 END),0) adjustment_count,
+                       COALESCE(SUM(CASE WHEN quantity>0 THEN quantity ELSE 0 END),0) inbound_quantity,
+                       COALESCE(SUM(CASE WHEN quantity<0 THEN ABS(quantity) ELSE 0 END),0) outbound_quantity
+                FROM ($base) movements$whereSql
+            """.trimIndent()
+            val stats = db.rawQuery(aggregateSql, countArgs.toTypedArray()).use { c ->
+                if (c.moveToFirst()) cursorToJsonObject(c) else JSONObject()
+            }
+            JSONObject().apply {
+                put("rows", rows)
+                put("count", rows.length())
+                put("total_count", totalCount)
+                put("page", (offset / pageSize) + 1)
+                put("page_size", pageSize)
+                put("total_pages", totalPages)
+                put("has_next", (offset / pageSize) + 1 < totalPages)
+                put("has_previous", offset > 0)
+                put("stock_type", stockType)
+                put("stats", stats)
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getUnifiedInventoryMovementStats(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
+        val request = JSONObject(data.toString()).apply {
+            put("limit", 1)
+            put("offset", 0)
+            put("page", 1)
+        }
+        return getUnifiedInventoryMovements(request, stationScopeId).optJSONObject("stats") ?: JSONObject()
+    }
+
+    fun addFuelInventoryMovement(data: JSONObject, stationScopeId: Int, userId: Long): Long {
+        require(stationScopeId > 0 && userId > 0L) { "المحطة والمستخدم مطلوبان" }
+        dbLock.lock()
+        val db = writableDatabase
+        db.beginTransaction()
+        return try {
+            val fuelTypeId = data.optLong("fuel_type_id", 0L)
+            val tankId = data.optLong("tank_id", 0L)
+            val quantity = data.optDouble("quantity", 0.0)
+            val movementType = data.optString("movement_type", "in").trim().lowercase(Locale.ROOT)
+            val unitCost = data.optDouble("unit_cost", 0.0)
+            require(fuelTypeId > 0L && tankId > 0L) { "نوع الوقود والخزان مطلوبان" }
+            require(quantity.isFinite() && quantity > 0.0) { "كمية الوقود يجب أن تكون أكبر من صفر" }
+            require(unitCost.isFinite() && unitCost >= 0.0) { "سعر الوحدة غير صالح" }
+            require(movementType in setOf("in","out","adjustment")) { "نوع حركة الوقود غير صالح" }
+            db.rawQuery("SELECT id, fuel_type_id, current_quantity, capacity_liters FROM tanks WHERE id=? AND station_id=? AND is_deleted=0 AND status<>'retired'", arrayOf(tankId.toString(), stationScopeId.toString())).use { c ->
+                require(c.moveToFirst()) { "الخزان خارج نطاق المحطة أو غير نشط" }
+                require(c.getLong(1) == fuelTypeId) { "نوع الوقود لا يطابق نوع وقود الخزان" }
+                val before = c.getDouble(2)
+                val capacity = c.getDouble(3)
+                val signed = when (movementType) {
+                    "in" -> quantity
+                    "out" -> -quantity
+                    else -> if (data.optString("adjustment_direction","increase") == "decrease") -quantity else quantity
+                }
+                val after = before + signed
+                require(after >= -1e-9) { "لا يمكن أن يصبح رصيد الخزان سالباً" }
+                require(after <= capacity + 1e-9) { "تتجاوز الحركة السعة القصوى للخزان" }
+
+                val reference = data.optString("reference_code","").trim()
+                val reason = data.optString("notes","حركة وقود يدوية")
+                val now = getCurrentDateTime()
+                val ledgerValues = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("tank_id", tankId)
+                    put("transaction_date", data.optString("movement_date", now).ifBlank { now })
+                    put("transaction_type", when (movementType) {
+                        "in" -> "manual_receipt"
+                        "out" -> "manual_issue"
+                        else -> "manual_adjustment"
+                    })
+                    if (reference.isNotBlank()) put("reference_number", reference)
+                    put("debit", if (signed > 0) signed else 0.0)
+                    put("credit", if (signed < 0) -signed else 0.0)
+                    put("balance", after)
+                    put("description", reason)
+                    put("created_at", now)
+                    put("created_by", userId)
+                }
+                val id = db.insertOrThrow("tank_ledger", null, ledgerValues)
+                val changed = db.compileStatement("UPDATE tanks SET current_quantity=?, updated_at=? WHERE id=? AND station_id=? AND is_deleted=0").apply {
+                    bindDouble(1, after.coerceAtLeast(0.0)); bindString(2, now); bindLong(3, tankId); bindLong(4, stationScopeId.toLong())
+                }.executeUpdateDelete()
+                require(changed == 1) { "تعذر تحديث رصيد الخزان" }
+                db.setTransactionSuccessful()
+                id
+            }
+        } finally {
+            db.endTransaction()
+            dbLock.unlock()
+        }
+    }
+
+    fun getFuelInventoryAnalysis(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val fuelTypeId = data.optLong("fuel_type_id", 0L)
+            require(fuelTypeId > 0L) { "نوع الوقود مطلوب" }
+            db.rawQuery("SELECT id FROM fuel_types WHERE id=? AND is_active=1 AND is_deleted=0", arrayOf(fuelTypeId.toString())).use { c ->
+                require(c.moveToFirst()) { "نوع الوقود غير موجود" }
+            }
+            val days = data.optInt("days", 30).coerceIn(1, 365)
+            val rows = JSONArray()
+            val sql = """
+                SELECT date(movement_date) day,
+                       COALESCE(SUM(CASE WHEN movement_type='in' THEN quantity ELSE 0 END),0) inbound,
+                       COALESCE(SUM(CASE WHEN movement_type='out' THEN ABS(quantity) ELSE 0 END),0) outbound,
+                       COUNT(*) movement_count
+                FROM (
+                    SELECT COALESCE(fs.created_at,fs.sale_date) movement_date, 'out' movement_type, ABS(fs.quantity) quantity
+                    FROM fuel_sales fs JOIN sales_transactions st ON st.id=fs.sale_id
+                    WHERE fs.is_deleted=0 AND st.is_deleted=0 AND st.station_id=? AND fs.fuel_type_id=?
+                    UNION ALL
+                    SELECT r.created_at, 'in', ABS(COALESCE(r.actual_quantity,r.delivered_quantity))
+                    FROM tank_refills r
+                    WHERE r.is_deleted=0 AND r.station_id=? AND r.fuel_type_id=?
+                    UNION ALL
+                    SELECT l.transaction_date,
+                           CASE WHEN l.debit>l.credit THEN 'in' ELSE 'out' END,
+                           ABS(COALESCE(l.debit,0)-COALESCE(l.credit,0))
+                    FROM tank_ledger l JOIN tanks t ON t.id=l.tank_id
+                    WHERE t.station_id=? AND t.is_deleted=0 AND t.fuel_type_id=? AND l.transaction_type LIKE 'manual_%'
+                ) movements
+                WHERE date(movement_date) >= date('now', ?)
+                GROUP BY date(movement_date) ORDER BY day ASC
+            """.trimIndent()
+            val args = arrayOf(stationScopeId.toString(), fuelTypeId.toString(), stationScopeId.toString(), fuelTypeId.toString(), stationScopeId.toString(), fuelTypeId.toString(), "-$days days")
+            db.rawQuery(sql, args).use { c -> while (c.moveToNext()) rows.put(cursorToJsonObject(c)) }
+            val summary = db.rawQuery("""
+                SELECT COALESCE(SUM(t.current_quantity),0), COALESCE(SUM(t.capacity_liters),0), COUNT(*)
+                FROM tanks t WHERE t.station_id=? AND t.fuel_type_id=? AND t.is_deleted=0
+            """.trimIndent(), arrayOf(stationScopeId.toString(), fuelTypeId.toString())).use { c ->
+                if (c.moveToFirst()) JSONObject().put("current_quantity",c.getDouble(0)).put("capacity",c.getDouble(1)).put("tank_count",c.getInt(2)) else JSONObject()
+            }
+            JSONObject().put("fuel_type_id", fuelTypeId).put("days", days).put("summary", summary).put("series", rows)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun exportUnifiedInventoryMovementsCsv(data: JSONObject, stationScopeId: Int): String {
+        val request = JSONObject(data.toString()).apply { put("limit", 200); put("page", 1); put("offset", 0) }
+        val page = getUnifiedInventoryMovements(request, stationScopeId)
+        val total = page.optInt("total_count", 0)
+        val allRows = JSONArray()
+        var offset = 0
+        while (offset < total) {
+            val next = JSONObject(data.toString()).apply { put("limit", 200); put("offset", offset); put("page", (offset / 200) + 1) }
+            val rows = getUnifiedInventoryMovements(next, stationScopeId).optJSONArray("rows") ?: JSONArray()
+            if (rows.length() == 0) break
+            for (i in 0 until rows.length()) allRows.put(rows.getJSONObject(i))
+            offset += rows.length()
+        }
+        val exportDir = File(contextRef.getExternalFilesDir(null), "exports")
+        require(exportDir.exists() || exportDir.mkdirs()) { "تعذر إنشاء مجلد التصدير" }
+        val file = File(exportDir, "inventory_movements_${System.currentTimeMillis()}.csv")
+        val bom = "\uFEFF"
+        val columns = listOf("stock_type","item_id","item_name","item_code","movement_type","movement_subtype","quantity","unit_cost","total_cost","movement_date","status","reference_code","source_location","target_location","location_name","party_name","performed_by_name")
+        val csv = StringBuilder(bom).append(columns.joinToString(",")).append("\n")
+        for (i in 0 until allRows.length()) {
+            val row = allRows.getJSONObject(i)
+            csv.append(columns.joinToString(",") { key ->
+                val value = if (row.has(key) && !row.isNull(key)) row.opt(key).toString() else ""
+                "\"" + value.replace("\"","\"\"") + "\""
+            }).append("\n")
+        }
+        file.writeText(csv.toString(), Charsets.UTF_8)
+        require(file.isFile && file.length() > 3) { "فشل إنشاء ملف CSV" }
+        return file.absolutePath
+    }
+
     fun getStockMovementsPage(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
         dbLock.lock()
         return try {
@@ -28014,4 +28382,45 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             dbLock.unlock()
         }
     }
+
+    private fun ensureFuelStocktakeSchema(db: SQLiteDatabase) {
+        db.execSQL("""CREATE TABLE IF NOT EXISTS fuel_stocktakes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            station_id INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'draft',
+            start_date TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            completed_date TEXT,
+            notes TEXT,
+            total_variance REAL NOT NULL DEFAULT 0,
+            created_by INTEGER,
+            archived INTEGER NOT NULL DEFAULT 0
+        )""")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS fuel_stocktake_details (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fuel_stocktake_id INTEGER NOT NULL,
+            tank_id INTEGER NOT NULL,
+            fuel_type_id INTEGER NOT NULL,
+            system_quantity REAL NOT NULL DEFAULT 0,
+            counted_quantity REAL NOT NULL DEFAULT 0,
+            variance_quantity REAL NOT NULL DEFAULT 0,
+            unit_price REAL NOT NULL DEFAULT 0,
+            variance_value REAL NOT NULL DEFAULT 0,
+            notes TEXT,
+            archived INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(fuel_stocktake_id, tank_id)
+        )""")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_stocktakes_station ON fuel_stocktakes(station_id, status, archived)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_stocktake_details_session ON fuel_stocktake_details(fuel_stocktake_id, archived)")
+    }
+
+    fun getFuelStocktakeRecords(data: JSONObject, stationScopeId: Int): JSONArray {
+        val out = JSONArray(); val db = readableDatabase
+        db.rawQuery("SELECT fs.*, (SELECT COUNT(*) FROM fuel_stocktake_details d WHERE d.fuel_stocktake_id=fs.id AND d.archived=0) line_count FROM fuel_stocktakes fs WHERE fs.station_id=? AND fs.archived=0 ORDER BY fs.id DESC LIMIT ?", arrayOf(stationScopeId.toString(), data.optInt("limit",100).coerceIn(1,500).toString())).use { c -> while(c.moveToNext()) out.put(cursorToJsonObject(c)) }; return out
+    }
+    fun saveFuelStocktake(data: JSONObject, stationScopeId: Int, userId: Long): Long { val cv=ContentValues().apply{put("station_id",stationScopeId);put("status",data.optString("status","draft"));put("notes",data.optString("notes"));put("created_by",userId)}; return writableDatabase.insertOrThrow("fuel_stocktakes",null,cv) }
+    fun getFuelStocktakeDetails(id: Long, stationScopeId: Int): JSONArray { val out=JSONArray(); readableDatabase.rawQuery("SELECT d.*, t.tank_name AS tank_name, t.tank_code, ft.fuel_name_ar AS fuel_name FROM fuel_stocktake_details d LEFT JOIN tanks t ON t.id=d.tank_id LEFT JOIN fuel_types ft ON ft.id=d.fuel_type_id JOIN fuel_stocktakes fs ON fs.id=d.fuel_stocktake_id WHERE d.fuel_stocktake_id=? AND fs.station_id=? AND d.archived=0 ORDER BY d.id",arrayOf(id.toString(),stationScopeId.toString())).use{c->while(c.moveToNext())out.put(cursorToJsonObject(c))};return out }
+    fun saveFuelStocktakeDetail(data: JSONObject, stationScopeId: Int): Long { val db=writableDatabase; val sid=data.optLong("fuel_stocktake_id"); val tank=data.optLong("tank_id"); val ft=data.optLong("fuel_type_id"); val counted=data.optDouble("counted_quantity",-1.0); require(sid>0&&tank>0&&ft>0&&counted>=0) {"بيانات جرد الوقود غير صالحة"}; var system=0.0; var price=0.0; db.rawQuery("SELECT COALESCE(t.current_quantity,0),COALESCE(ft.default_purchase_price,0) FROM tanks t JOIN fuel_types ft ON ft.id=t.fuel_type_id WHERE t.id=? AND t.station_id=? AND t.is_deleted=0",arrayOf(tank.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "الخزان غير موجود أو خارج نطاق المحطة" };system=c.getDouble(0);price=c.getDouble(1)}; val variance=counted-system; val cv=ContentValues().apply{put("fuel_stocktake_id",sid);put("tank_id",tank);put("fuel_type_id",ft);put("system_quantity",system);put("counted_quantity",counted);put("variance_quantity",variance);put("unit_price",price);put("variance_value",variance*price);put("notes",data.optString("notes"))};return db.insertOrThrow("fuel_stocktake_details",null,cv) }
+    fun updateFuelStocktakeDetail(id: Long,data: JSONObject,stationScopeId:Int):Int { val db=writableDatabase; val counted=data.optDouble("counted_quantity",-1.0); require(counted>=0){"الكمية المعدودة غير صالحة"}; var system=0.0;var price=0.0;db.rawQuery("SELECT COALESCE(t.current_quantity,0),COALESCE(t.unit_price,0) FROM fuel_stocktake_details d JOIN tanks t ON t.id=d.tank_id JOIN fuel_stocktakes fs ON fs.id=d.fuel_stocktake_id WHERE d.id=? AND fs.station_id=? AND d.archived=0",arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "تفصيل الجرد غير موجود" };system=c.getDouble(0);price=c.getDouble(1)};return db.update("fuel_stocktake_details",ContentValues().apply{put("counted_quantity",counted);put("variance_quantity",counted-system);put("unit_price",price);put("variance_value",(counted-system)*price);put("notes",data.optString("notes"))},"id=? AND archived=0",arrayOf(id.toString())) }
+    fun approveFuelStocktake(id:Long,stationScopeId:Int,actorId:Long):Int { val db=writableDatabase;db.beginTransaction();try{var rows=0;db.rawQuery("SELECT tank_id,variance_quantity,variance_value FROM fuel_stocktake_details d JOIN fuel_stocktakes fs ON fs.id=d.fuel_stocktake_id WHERE d.fuel_stocktake_id=? AND fs.station_id=? AND d.archived=0",arrayOf(id.toString(),stationScopeId.toString())).use{c->while(c.moveToNext()){val tank=c.getLong(0);val delta=c.getDouble(1);val value=c.getDouble(2);if(delta!=0.0){addFuelInventoryMovement(JSONObject().apply { put("tank_id", tank); put("movement_type", if (delta > 0) "in" else "out"); put("quantity", kotlin.math.abs(delta)); put("reference_code", "FST-$id"); put("notes", "تسوية جرد الوقود رقم $id") }, stationScopeId, actorId)}rows++}};db.update("fuel_stocktakes",ContentValues().apply{put("status","completed");put("completed_date",getCurrentDateTime());put("total_variance",0.0)},"id=? AND station_id=? AND status IN ('draft','in_progress')",arrayOf(id.toString(),stationScopeId.toString()));db.setTransactionSuccessful();return if(rows>0)1 else 0}finally{db.endTransaction()} }
+
 }

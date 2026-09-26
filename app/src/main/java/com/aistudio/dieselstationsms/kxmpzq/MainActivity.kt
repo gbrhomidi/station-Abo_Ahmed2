@@ -3491,6 +3491,121 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+
+        @JavascriptInterface
+        fun getFuelTypesForInventoryMovements(): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getFuelTypes()) 
+            } catch (e: Exception) {
+                DebugLogger.logException("InventoryFuelTypes", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getInventoryMovementPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getUnifiedInventoryMovements(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
+            } catch (e: Exception) {
+                DebugLogger.logException("UnifiedInventoryMovements", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getInventoryMovementUnifiedStats(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getUnifiedInventoryMovementStats(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
+            } catch (e: Exception) {
+                DebugLogger.logException("UnifiedInventoryStats", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getInventoryFuelTanks(): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getTanks(requireCurrentStationId(db, activity.currentUserId)))
+            } catch (e: Exception) {
+                DebugLogger.logException("InventoryFuelTanks", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun addFuelInventoryMovement(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val id = db.addFuelInventoryMovement(
+                    JSONObject(jsonData.ifBlank { "{}" }),
+                    requireCurrentStationId(db, activity.currentUserId),
+                    activity.currentUserId
+                )
+                successResponse(id, "تم تسجيل حركة الوقود وتحديث رصيد الخزان ذرياً")
+            } catch (e: Exception) {
+                DebugLogger.logException("AddFuelInventoryMovement", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getFuelInventoryAnalysis(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getFuelInventoryAnalysis(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
+            } catch (e: Exception) {
+                DebugLogger.logException("FuelInventoryAnalysis", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun generateInventoryMovementReport(jsonData: String = "{}"): String =
+            getInventoryMovementPage(jsonData)
+
+        @JavascriptInterface
+        fun exportInventoryMovementReport(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val path = db.exportUnifiedInventoryMovementsCsv(
+                    JSONObject(jsonData.ifBlank { "{}" }),
+                    requireCurrentStationId(db, activity.currentUserId)
+                )
+                val file = File(path).canonicalFile
+                val exportRoot = File(activity.getExternalFilesDir(null), "exports")?.canonicalFile
+                require(file.isFile && exportRoot != null && file.path.startsWith(exportRoot.path + File.separator)) {
+                    "ملف التصدير غير صالح"
+                }
+                val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", file)
+                val intent = Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(uri, "text/csv")
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                require(intent.resolveActivity(activity.packageManager) != null) {
+                    "لا يوجد تطبيق على الجهاز لفتح ملف CSV"
+                }
+                activity.runOnUiThread {
+                    activity.startActivity(Intent.createChooser(intent, "فتح تقرير حركات المخزون"))
+                }
+                JSONObject().put("path", file.absolutePath).put("file_name", file.name).put("size", file.length()).let {
+                    successResponseObject(it, "تم إنشاء تقرير CSV الحقيقي وفتحه عبر Android")
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("ExportInventoryMovementReport", e)
+                errorResponse(e.message)
+            }
+        }
+
         @JavascriptInterface
         fun getStockMovementDetailsAsync(requestId: String, movementId: Long): String =
             runInventoryMovementDetailsRead(requestId) { db, stationId ->
@@ -8532,6 +8647,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 errorResponse(e.message)
             }
         }
+
+        @JavascriptInterface
+        fun getFuelStocktakeRecords(jsonData: String = "{}"): String { val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try{val a=getActivity()?:return errorResponse("النشاط غير متاح");dataResponse(db.getFuelStocktakeRecords(JSONObject(jsonData),requireCurrentStationId(db,a.currentUserId)))}catch(e:Exception){errorResponse(e.message)}}
+        @JavascriptInterface
+        fun saveFuelStocktakeRecord(jsonData: String): String { val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try{val a=getActivity()?:return errorResponse("النشاط غير متاح");successResponse(db.saveFuelStocktake(JSONObject(jsonData),requireCurrentStationId(db,a.currentUserId),a.currentUserId),"تم إنشاء جرد الوقود")}catch(e:Exception){errorResponse(e.message)}}
+        @JavascriptInterface
+        fun getFuelStocktakeDetails(id: Long): String { val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try{val a=getActivity()?:return errorResponse("النشاط غير متاح");dataResponse(db.getFuelStocktakeDetails(id,requireCurrentStationId(db,a.currentUserId)))}catch(e:Exception){errorResponse(e.message)}}
+        @JavascriptInterface
+        fun saveFuelStocktakeDetailRecord(jsonData:String):String { val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try{val a=getActivity()?:return errorResponse("النشاط غير متاح");successResponse(db.saveFuelStocktakeDetail(JSONObject(jsonData),requireCurrentStationId(db,a.currentUserId)),"تم حفظ عد الوقود")}catch(e:Exception){errorResponse(e.message)}}
+        @JavascriptInterface
+        fun updateFuelStocktakeDetailRecord(id:Long,jsonData:String):String { val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try{val a=getActivity()?:return errorResponse("النشاط غير متاح");successResponse(db.updateFuelStocktakeDetail(id,JSONObject(jsonData),requireCurrentStationId(db,a.currentUserId)),"تم تحديث عد الوقود")}catch(e:Exception){errorResponse(e.message)}}
+        @JavascriptInterface
+        fun resolveFuelStocktakeRecord(id:Long,note:String=""):String { val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try{val a=getActivity()?:return errorResponse("النشاط غير متاح");successResponse(db.approveFuelStocktake(id,requireCurrentStationId(db,a.currentUserId),a.currentUserId),"تم اعتماد جرد الوقود وتطبيق التسويات")}catch(e:Exception){errorResponse(e.message)}}
 
         @JavascriptInterface
         fun getStocktakeDetailRecords(jsonData: String = "{}"): String = operationalList("inventory", "stocktake_details", jsonData)
