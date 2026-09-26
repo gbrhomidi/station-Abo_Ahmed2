@@ -101,7 +101,12 @@ class CreditInventoryWorkflowRobolectricTest {
         assertEquals(1, details.length())
         assertEquals(3.0, details.getJSONObject(0).getDouble("system_quantity"), 0.0001)
         assertEquals(-2.0, details.getJSONObject(0).getDouble("quantity_variance"), 0.0001)
-        assertEquals(1, helper.approveStocktake(stocktakeId, 1, actorId))
+        val approvalResult = try {
+            helper.approveStocktake(stocktakeId, 1, actorId)
+        } catch (e: IllegalArgumentException) {
+            throw AssertionError("approveStocktake failed: " + e.message, e)
+        }
+        assertEquals(1, approvalResult)
         assertEquals(1.0, db.rawQuery("SELECT quantity FROM products WHERE id = ?", arrayOf(productId.toString())).use { it.moveToFirst(); it.getDouble(0) }, 0.0001)
         assertEquals(1, db.rawQuery("SELECT COUNT(*) FROM inventory_movements WHERE reference_type = 'stocktake' AND reference_id = ? AND product_id = ?", arrayOf(stocktakeId.toString(), productId.toString())).use { it.moveToFirst(); it.getInt(0) })
         assertTrue(db.rawQuery("PRAGMA foreign_key_check", null).use { !it.moveToFirst() })
