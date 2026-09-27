@@ -34,6 +34,17 @@ class CreditInventoryWorkflowRobolectricTest {
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
     }
 
+    @Test fun `unified inventory movement contract compiles against the real parties schema`() {
+        val result = helper.getUnifiedInventoryMovements(
+            JSONObject().put("stock_type", "all").put("limit", 5).put("page", 1),
+            1
+        )
+        assertTrue(result.has("rows"))
+        assertTrue(result.has("stats"))
+        val stats = helper.getUnifiedInventoryMovementStats(JSONObject().put("stock_type", "all"), 1)
+        assertTrue(stats.has("total_movements"))
+    }
+
     @Test fun `credit sale posts customer debt once, lowers stock, and creates live alert`() {
         val db = helper.writableDatabase
         val roleId = db.rawQuery("SELECT id FROM roles ORDER BY id LIMIT 1", null).use { check(it.moveToFirst()); it.getLong(0) }
