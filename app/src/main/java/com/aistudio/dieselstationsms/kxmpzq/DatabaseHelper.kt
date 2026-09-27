@@ -11454,7 +11454,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        COALESCE(SUM(CASE WHEN movement_type='transfer' THEN 1 ELSE 0 END),0) transfer_count,
                        COALESCE(SUM(CASE WHEN movement_type='adjustment' THEN 1 ELSE 0 END),0) adjustment_count,
                        COALESCE(SUM(CASE WHEN quantity>0 THEN quantity ELSE 0 END),0) inbound_quantity,
-                       COALESCE(SUM(CASE WHEN quantity<0 THEN ABS(quantity) ELSE 0 END),0) outbound_quantity
+                       COALESCE(SUM(CASE WHEN quantity<0 THEN ABS(quantity) ELSE 0 END),0) outbound_quantity,
+                       COUNT(DISTINCT CASE WHEN stock_type = 'product' THEN location_id END) warehouse_count
                 FROM ($base) movements$whereSql
             """.trimIndent()
             val stats = db.rawQuery(aggregateSql, countArgs.toTypedArray()).use { c ->
@@ -12310,8 +12311,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("dead_stock_value", deadStockValue)
                 put("stockout_risk_high", highRiskCount)
                 put("stockout_risk_medium", mediumRiskCount)
-                put("active_warehouse_count", warehouses.length())
-                put("warehouse_count", warehouses.length())
             }
 
             val fuelTypes=JSONArray()
