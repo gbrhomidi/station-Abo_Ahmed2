@@ -1590,6 +1590,19 @@
   </script>
   <script>
    // ============================================================
+// حماية مخرجات SQLite قبل إدراجها في HTML
+// ============================================================
+function escapeHtml(value) {
+    const text = value == null ? '' : String(value);
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// ============================================================
 // 1. دوال apiCall و handleAndroidResult (الموحدة)
 // ============================================================
 function invokeTypedBridge(method, args = []) {
@@ -1840,15 +1853,11 @@ async function loadInitialData() {
 }
 
 async function loadProducts() {
-    try {
-        const result = await apiCall('getProducts', {});
-        if (result.success) {
-            allProducts = bridgeDataArray(result);
-            populateProductDropdowns();
-        }
-    } catch (e) {
-        console.error('Error loading products:', e);
-    }
+    const result = await apiCall('getProducts', {});
+    if (!result.success) throw new Error(result.error || 'تعذر تحميل المنتجات من SQLite');
+    allProducts = bridgeDataArray(result);
+    populateProductDropdowns();
+    return allProducts;
 }
 
 function populateProductDropdowns() {
@@ -1869,13 +1878,11 @@ function populateProductDropdowns() {
 }
 
 async function loadFuelTypes() {
-    try {
-        const result = await apiCall('getFuelTypes', {});
-        if (result.success) {
-            allFuelTypes = bridgeDataArray(result);
-            renderFuelPicker();
-        }
-    } catch (e) { console.error('Error loading fuel types:', e); }
+    const result = await apiCall('getFuelTypes', {});
+    if (!result.success) throw new Error(result.error || 'تعذر تحميل أنواع الوقود من SQLite');
+    allFuelTypes = bridgeDataArray(result);
+    renderFuelPicker();
+    return allFuelTypes;
 }
 
 async function loadTanks() {
@@ -2193,11 +2200,18 @@ function toggleMovementStockType() {
     toggleMovementFields();
 }
 
-function openProductPicker(target) {
+async function openProductPicker(target) {
     window.productPickerTarget = target;
     document.getElementById('productPickerSearch').value = '';
-    renderProductPicker();
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('productPickerModal')).show();
+    try {
+        await loadProducts();
+        renderProductPicker();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('productPickerModal')).show();
+    } catch (e) {
+        console.error('Product picker SQLite load failed:', e);
+        renderProductPicker();
+        showToast(e.message || 'تعذر تحميل المنتجات من SQLite', 'error');
+    }
 }
 
 function renderProductPicker() {
@@ -2233,11 +2247,18 @@ function selectProduct(id) {
     if (target === 'create') loadProductInfo();
 }
 
-function openFuelPicker(target) {
+async function openFuelPicker(target) {
     window.fuelPickerTarget = target;
     document.getElementById('fuelPickerSearch').value = '';
-    renderFuelPicker();
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('fuelPickerModal')).show();
+    try {
+        await loadFuelTypes();
+        renderFuelPicker();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('fuelPickerModal')).show();
+    } catch (e) {
+        console.error('Fuel picker SQLite load failed:', e);
+        renderFuelPicker();
+        showToast(e.message || 'تعذر تحميل أنواع الوقود من SQLite', 'error');
+    }
 }
 
 function renderFuelPicker() {
@@ -2297,7 +2318,7 @@ function toggleAnalyticsSelector() {
 }
 
 async function showCreateModal() {
-    await Promise.all([loadWarehouses(), loadFuelTypes(), loadTanks()]);
+    await Promise.all([loadProducts(), loadWarehouses(), loadFuelTypes(), loadTanks()]);
     const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('createModal'));
     document.getElementById('movement-stock-type').value = 'products';
     document.getElementById('movement-type').value = '';
@@ -2617,9 +2638,9 @@ async function loadAnalytics() {
         const result = await apiCall('getMovementStats', { stock_type: document.getElementById('analytics-stock-type')?.value || 'products' });
         if (result.success) {
             const a = result.data || {};
-            document.getElementById('analytics-total-value').textContent = Number(a.total_value || 0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
-            document.getElementById('analytics-total-products').textContent = Number(a.total_movements || 0).toLocaleString('en');
-            document.getElementById('analytics-total-warehouses').textContent = Number(a.warehouse_count ?? a.active_warehouse_count ?? 0).toLocaleString('en');
+            document.getElementById('analytics-total-value').textContent = Number(a.inventory_value ?? 0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+            document.getElementById('analytics-total-products').textContent = Number(a.total_movements ?? 0).toLocaleString('en');
+            document.getElementById('analytics-total-warehouses').textContent = Number(a.inbound_quantity ?? 0).toLocaleString('en',{maximumFractionDigits:3});
             document.getElementById('analytics-below-min').textContent = Number(a.outbound_quantity ?? 0).toLocaleString('en',{maximumFractionDigits:3});
         }
     } catch (e) { console.error('Error loading analytics:', e); }

@@ -11461,6 +11461,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val stats = db.rawQuery(aggregateSql, countArgs.toTypedArray()).use { c ->
                 if (c.moveToFirst()) cursorToJsonObject(c) else JSONObject()
             }
+
+            // current inventory value: deliberately identical to main.html/getDashboardStats.
+            // total_value remains the monetary value of the selected movement rows.
+            val currentInventoryValue = db.rawQuery(
+                """
+                SELECT COALESCE(SUM(il.quantity_on_hand * p.purchase_price),0)
+                FROM inventory_levels il
+                JOIN products p ON il.product_id = p.id
+                JOIN warehouses w ON il.warehouse_id = w.id
+                WHERE p.station_id = ? AND w.station_id = ? AND p.is_deleted = 0
+                """.trimIndent(),
+                arrayOf(stationScopeId.toString(), stationScopeId.toString())
+            ).use { c ->
+                if (c.moveToFirst()) c.getDouble(0) else 0.0
+            }
+            stats.put("inventory_value", currentInventoryValue)
+            stats.put("movement_value", stats.optDouble("total_value", 0.0))
+
             JSONObject().apply {
                 put("rows", rows)
                 put("count", rows.length())

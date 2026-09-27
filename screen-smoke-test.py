@@ -102,6 +102,9 @@ for name, required in CASES.items():
             ('getInventoryMovementPage' in html and 'getInventoryMovementUnifiedStats' in html, 'real movement/statistics bridge contracts'),
             ('addStockMovement' in html and 'archiveStockMovement' in html, 'real movement write/archive contracts'),
             ('activeMovementFilters' in html and 'currentPage' in html, 'filters and pagination are state-backed'),
+            ('function escapeHtml(' in html, 'HTML escaping helper is defined before use'),
+            ('await loadProducts()' in html and 'await loadFuelTypes()' in html, 'product/fuel pickers refresh from SQLite on open'),
+            ('inventory_value' in html and 'inbound_quantity' in html and 'outbound_quantity' in html, 'analytics cards bind semantic SQLite metrics'),
             (not any(x in html for x in ('Math.random(', 'Mock Data', 'Fake Data')), 'no fake/mock movement data'),
         ]
 

@@ -43,6 +43,9 @@ class CreditInventoryWorkflowRobolectricTest {
         assertTrue(result.has("stats"))
         val stats = helper.getUnifiedInventoryMovementStats(JSONObject().put("stock_type", "all"), 1)
         assertTrue(stats.has("total_movements"))
+        val dashboardValue = helper.getDashboardStats(1).optDouble("inventory_value", -1.0)
+        val movementScreenValue = stats.optDouble("inventory_value", -1.0)
+        assertEquals("قيمة المخزون في حركات المخزون يجب أن تطابق قيمة main.html", dashboardValue, movementScreenValue, 0.0001)
     }
 
     @Test fun `credit sale posts customer debt once, lowers stock, and creates live alert`() {
