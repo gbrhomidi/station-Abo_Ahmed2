@@ -2224,7 +2224,7 @@ function toggleMovementStockType() {
     toggleMovementFields();
 }
 
-async async function openProductPicker(target) {
+async function openProductPicker(target) {
     window.productPickerTarget = target;
     document.getElementById('productPickerSearch').value = '';
     try {
@@ -2271,7 +2271,7 @@ function selectProduct(id) {
     if (target === 'create') loadProductInfo();
 }
 
-async async function openFuelPicker(target) {
+async function openFuelPicker(target) {
     window.fuelPickerTarget = target;
     document.getElementById('fuelPickerSearch').value = '';
     try {
