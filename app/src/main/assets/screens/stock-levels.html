@@ -2178,9 +2178,9 @@ async function loadAlertsData() {
         const result = await apiCall('getInventoryAlerts', { limit:500 });
         if (result.success) {
             const data = result.data || {};
-            allAlerts = data.alerts || [];
+            allAlerts = data.rows || data.alerts || [];
             populateAlertsTable(allAlerts);
-            updateAlertSummary(data.stats || {});
+            updateAlertSummary(data.statistics || data.stats || {});
         }
     } catch (e) { console.error(e); }
 }
@@ -2407,7 +2407,8 @@ async function loadAlerts() {
     try {
         const result = await apiCall('getAlerts', { limit:500 });
         if (result.success) {
-            allAlerts = (result.data || {}).alerts || [];
+            const data = result.data || result;
+            allAlerts = data.rows || data.alerts || [];
             populateAlertsTable(allAlerts);
         }
     } catch(e) { allAlerts=[]; populateAlertsTable([]); }
