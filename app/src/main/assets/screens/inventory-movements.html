@@ -1625,6 +1625,7 @@ function bridgeDataArray(result) {
     if (d && Array.isArray(d.rows)) return d.rows;
     if (d && Array.isArray(d.items)) return d.items;
     if (d && Array.isArray(d.records)) return d.records;
+    if (d && Array.isArray(d.data)) return d.data;
     if (Array.isArray(result.rows)) return result.rows;
     if (Array.isArray(result.items)) return result.items;
     if (Array.isArray(result.records)) return result.records;
@@ -2107,9 +2108,12 @@ function applyFilters() {
         tank_id: stockType === 'fuel' ? Number(document.getElementById('filter-tank').value || 0) : 0,
         status: document.getElementById('filter-status').value
     };
-    filters.item_id = stockType === 'products'
+    const selectedItemId = stockType === 'products'
         ? Number(document.getElementById('filter-product-id').value || 0)
         : Number(document.getElementById('filter-fuel-id').value || 0);
+    filters.item_id = selectedItemId;
+    filters.product_id = stockType === 'products' ? selectedItemId : 0;
+    filters.fuel_type_id = stockType === 'fuel' ? selectedItemId : 0;
     filters.query = stockType === 'products'
         ? document.getElementById('search-product').value.trim()
         : document.getElementById('search-fuel').value.trim();
@@ -2642,6 +2646,8 @@ async function loadProductAnalytics() {
         const result = await apiCall('getMovements', {
             stock_type: stockType,
             item_id: itemId,
+            product_id: stockType === 'products' ? itemId : 0,
+            fuel_type_id: stockType === 'fuel' ? itemId : 0,
             start_date: start,
             end_date: end,
             limit: 5000,
