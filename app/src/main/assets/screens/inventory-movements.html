@@ -757,6 +757,31 @@
     }
     .w-100 { width: 100%; }
 
+    /* حركات المخزون: عمودان ثابتان على جميع قياسات شاشات الهاتف */
+    .stats-grid,.stats-grid-analytics,.filter-fields-grid,.analytics-fields-grid,.movement-fields-grid{
+      display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      gap:10px !important; width:100% !important;
+    }
+    .filter-fields-grid>.form-group,.analytics-fields-grid>.form-group,.movement-fields-grid>.form-group-half,
+    .stats-grid>.stat-card,.stats-grid-analytics>.stat-card{min-width:0 !important;width:100% !important}
+    .field-click-picker{cursor:pointer;user-select:none}
+    .field-click-picker:focus{outline:none;border-color:var(--primary-color);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+    @media (max-width:768px){
+      .stats-grid,.stats-grid-analytics,.filter-fields-grid,.analytics-fields-grid,.movement-fields-grid{
+        grid-template-columns:repeat(2,minmax(0,1fr)) !important
+      }
+      .form-row{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+      .form-row-compact{display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:10px !important}
+      .form-group-half{width:100% !important;min-width:0 !important}
+    }
+    @media (max-width:480px){
+      .stats-grid,.stats-grid-analytics,.filter-fields-grid,.analytics-fields-grid,.movement-fields-grid{
+        grid-template-columns:repeat(2,minmax(0,1fr)) !important
+      }
+      .stat-card{padding:10px 6px !important}.stat-value{font-size:.98rem !important}.stat-label{font-size:.68rem !important}
+      .form-row-compact{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+    }
+
     .selection-button { display:flex; gap:8px; align-items:center; }
     .selection-button .form-control { flex:1 1 auto; }
     .selection-button .btn { flex:0 0 auto; }
@@ -883,7 +908,7 @@
      </div>
      <!-- فلترة -->
      <div class="form-container">
-      <div class="form-row">
+      <div class="form-row filter-fields-grid">
        <div class="form-group">
          <label class="form-label">📦 نوع المخزون</label>
          <select class="form-control" id="filter-stock-type" onchange="onMovementStockTypeChanged()">
@@ -892,9 +917,8 @@
         </div>
         <div class="form-group" id="product-filter-group">
          <label class="form-label">🔍 بحث بالمنتج</label>
-         <div class="selection-button"><input class="form-control" id="search-product" placeholder="اضغط لاختيار منتج من SQLite" readonly type="text">
-          <input id="filter-product-id" type="hidden" value=""><button class="btn btn-primary" type="button" onclick="openProductPicker('filter')">اختيار</button>
-         </div>
+         <input class="form-control field-click-picker" id="search-product" placeholder="اضغط لاختيار منتج من SQLite" readonly type="text" onclick="openProductPicker('filter')" onfocus="openProductPicker('filter')">
+          <input id="filter-product-id" type="hidden" value="">
         </div>
         <div class="form-group hidden-field" id="fuel-filter-group">
          <label class="form-label">⛽ بحث بالوقود</label>
@@ -1250,15 +1274,15 @@
       <h4 style="text-align: center;">
        📈 تحليل حركة المخزون
       </h4>
-      <div class="form-row">
+      <div class="form-row analytics-fields-grid">
         <div class="form-group"><label class="form-label">📦 نوع المخزون</label>
          <select class="form-control" id="analytics-stock-type" onchange="toggleAnalyticsSelector()"><option value="products">المنتجات</option><option value="fuel">الوقود</option></select>
         </div>
         <div class="form-group" id="analytics-product-group"><label class="form-label">🛒 اختر المنتج</label>
-         <div class="selection-button"><input class="form-control" id="analytics-product-name" placeholder="اختر منتجاً" readonly><input id="analytics-product" type="hidden" value=""><button class="btn btn-primary" type="button" onclick="openProductPicker('analytics')">اختيار</button></div>
+         <input class="form-control field-click-picker" id="analytics-product-name" placeholder="اختر منتجاً من SQLite" readonly onclick="openProductPicker('analytics')" onfocus="openProductPicker('analytics')"><input id="analytics-product" type="hidden" value="">
         </div>
         <div class="form-group hidden-field" id="analytics-fuel-group"><label class="form-label">⛽ اختر الوقود</label>
-         <div class="selection-button"><input class="form-control" id="analytics-fuel-name" placeholder="اختر نوع الوقود" readonly><input id="analytics-fuel" type="hidden" value=""><button class="btn btn-primary" type="button" onclick="openFuelPicker('analytics')">اختيار</button></div>
+         <input class="form-control field-click-picker" id="analytics-fuel-name" placeholder="اختر نوع الوقود من SQLite" readonly onclick="openFuelPicker('analytics')" onfocus="openFuelPicker('analytics')"><input id="analytics-fuel" type="hidden" value="">
         </div>
        <div class="form-group">
         <label class="form-label">
@@ -1385,17 +1409,18 @@
           <input class="form-control numeric" id="movement-date" required="" type="datetime-local">
          </div>
         </div>
-        <div class="form-row-compact hidden-field" id="fuel-movement-fields">
+        <div class="form-row-compact movement-fields-grid hidden-field" id="fuel-movement-fields">
          <div class="form-group-half">
           <label class="form-label">⛽ نوع الوقود *</label>
-          <div class="selection-button"><input class="form-control" id="fuel-select-name" placeholder="اختر نوع الوقود" readonly><input id="fuel-select" type="hidden" value=""><button class="btn btn-primary" type="button" onclick="openFuelPicker('create')">اختيار</button></div>
+          <input class="form-control field-click-picker" id="fuel-select-name" placeholder="اختر نوع الوقود من SQLite" readonly onclick="openFuelPicker('create')" onfocus="openFuelPicker('create')">
+          <input id="fuel-select" type="hidden" value="">
          </div>
          <div class="form-group-half">
-          <label class="form-label">🛢️ الخزان *</label>
-          <select class="form-control" id="tank-select"><option value="">اختر الخزان</option></select>
+          <label class="form-label">📦 الكمية *</label>
+          <input class="form-control numeric" id="movement-quantity" step="0.001" type="number" inputmode="decimal" required>
          </div>
         </div>
-        <div class="form-row-compact" id="product-movement-fields">
+        <div class="form-row-compact movement-fields-grid" id="product-movement-fields">
          <div class="form-group-half">
           <label class="form-label">
            🛒 المنتج *
@@ -1405,12 +1430,6 @@
             اختر المنتج
            </option>
           </select>
-         </div>
-         <div class="form-group-half">
-          <label class="form-label">
-           📦 الكمية *
-          </label>
-          <input class="form-control numeric" id="movement-quantity" required="" step="0.001" type="number">
          </div>
         </div>
         <div class="form-row-compact">
@@ -2180,6 +2199,12 @@ function toggleMovementStockType() {
     const productInfo = document.getElementById('product-info');
     product.classList.toggle('hidden-field', type !== 'products');
     fuel.classList.toggle('hidden-field', type !== 'fuel');
+    const quantity = document.getElementById('movement-quantity');
+    if (quantity) {
+        quantity.required = true;
+        quantity.disabled = false;
+        quantity.setAttribute('aria-required', 'true');
+    }
     productInfo.style.display = type === 'products' && document.getElementById('product-select').value ? 'block' : 'none';
     const priceLabel = document.getElementById('unit-price-label');
     if (priceLabel) priceLabel.textContent = type === 'fuel' ? '💰 سعر اللتر' : '💰 سعر الوحدة';
@@ -2200,9 +2225,11 @@ function toggleMovementStockType() {
     toggleMovementFields();
 }
 
-async function openProductPicker(target) {
+async async function openProductPicker(target) {
     window.productPickerTarget = target;
     document.getElementById('productPickerSearch').value = '';
+    if (target === 'filter') document.getElementById('filter-product-id').value = '';
+    if (target === 'analytics') document.getElementById('analytics-product').value = '';
     try {
         await loadProducts();
         renderProductPicker();
@@ -2247,9 +2274,11 @@ function selectProduct(id) {
     if (target === 'create') loadProductInfo();
 }
 
-async function openFuelPicker(target) {
+async async function openFuelPicker(target) {
     window.fuelPickerTarget = target;
     document.getElementById('fuelPickerSearch').value = '';
+    if (target === 'filter') document.getElementById('filter-fuel-id').value = '';
+    if (target === 'analytics') document.getElementById('analytics-fuel').value = '';
     try {
         await loadFuelTypes();
         renderFuelPicker();
