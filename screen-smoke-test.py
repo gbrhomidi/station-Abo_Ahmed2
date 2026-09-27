@@ -105,7 +105,12 @@ for name, required in CASES.items():
             ('function escapeHtml(' in html, 'HTML escaping helper is defined before use'),
             ('await loadProducts()' in html and 'await loadFuelTypes()' in html, 'product/fuel pickers refresh from SQLite on open'),
             ('inventory_value' in html and 'inbound_quantity' in html and 'outbound_quantity' in html, 'analytics cards bind semantic SQLite metrics'),
-            (not any(x in html for x in ('Math.random(', 'Mock Data', 'Fake Data')), 'no fake/mock movement data'),
+            ('grid-template-columns:repeat(2,minmax(0,1fr)) !important' in html, 'stats and field grids are forced to two columns on small and large phones'),
+            ('field-click-picker' in html and 'onclick="openProductPicker(\\'filter\\')"' in html and 'onclick="openFuelPicker(\\'filter\\')"' in html, 'filter product/fuel fields open the SQLite picker directly without outer selection buttons'),
+            ('onclick="openProductPicker(\\'analytics\\')"' in html and 'onclick="openFuelPicker(\\'analytics\\')"' in html, 'analytics product/fuel fields open the SQLite picker directly'),
+            ('onclick="openFuelPicker(\\'create\\')"' in html and 'id="movement-quantity"' in html and 'id="fuel-movement-fields"' in html, 'fuel movement has direct fuel picker and a real quantity field'),
+            ('async function openProductPicker' in html and 'async function openFuelPicker' in html, 'pickers await SQLite data before rendering'),
+            (not any(x in html for ('Math.random(', 'Mock Data', 'Fake Data')), 'no fake/mock movement data'),
         ]
 
     if name == 'inventory-alerts.html':
