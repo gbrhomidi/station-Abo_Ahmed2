@@ -11336,7 +11336,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                            t.tank_name AS source_location, COALESCE(pump.pump_code, '') AS target_location,
                            t.tank_name AS location_name, t.id AS location_id,
                            st.cashier_id AS performed_by, u.username AS performed_by_name,
-                           COALESCE(cp.commercial_name, cp.legal_name, cp.name, '') AS party_name,
+                           COALESCE(cp.commercial_name_ar, cp.commercial_name, cp.legal_name, '') AS party_name,
                            'fuel_sales' AS source_table
                     FROM fuel_sales fs
                     JOIN sales_transactions st ON st.id = fs.sale_id
