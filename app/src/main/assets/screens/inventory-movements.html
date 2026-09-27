@@ -2014,7 +2014,7 @@ function changePage(page) {
     loadMovements();
 }
 
-async async function loadStats() {
+async function loadStats() {
     try {
         const result = await apiCall('getMovementStats', { ...activeMovementFilters });
         if (result.success) {
