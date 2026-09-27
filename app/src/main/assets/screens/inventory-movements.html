@@ -1343,7 +1343,7 @@
    </main>
   </div>
   <nav class="bottom-action-bar" aria-label="الإجراء الرئيسي">
-   <button class="bottom-action-button" type="button" onclick="showCreateModal()">
+   <button class="bottom-action-button" id="open-create-movement-button" type="button" aria-label="إضافة حركة مخزنية جديدة">
     <span class="bottom-action-icon">＋</span>
     <span>حركة جديدة</span>
    </button>
@@ -1545,7 +1545,7 @@
       </form>
      </div>
      <div class="modal-footer">
-      <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">
+      <button class="btn btn-secondary" data-bs-dismiss="modal" type="button" onclick="closeCreateModal()">
        ❌ إلغاء
       </button>
       <button class="btn btn-primary" onclick="saveMovement()" type="button">
@@ -2347,25 +2347,48 @@ async function showCreateModal() {
         showToast('تعذر فتح نافذة إضافة الحركة: عنصر النافذة غير موجود', 'error');
         return;
     }
-    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
-    document.getElementById('movement-stock-type').value = 'products';
-    document.getElementById('movement-type').value = '';
-    document.getElementById('movement-date').value = new Date().toISOString().slice(0,16);
-    document.getElementById('product-select').value = '';
-    document.getElementById('fuel-select').value = '';
-    document.getElementById('fuel-select-name').value = '';
-    document.getElementById('tank-select').value = '';
-    document.getElementById('movement-quantity').value = '';
-    document.getElementById('unit-price').value = '';
-    document.getElementById('source-warehouse').value = '';
-    document.getElementById('target-warehouse').value = '';
-    document.getElementById('supplier-select').value = '';
-    document.getElementById('customer-select').value = '';
-    document.getElementById('movement-reference').value = '';
-    document.getElementById('movement-notes').value = '';
-    document.getElementById('product-info').style.display = 'none';
-    toggleMovementStockType();
-    modal.show();
+
+    // تهيئة النموذج قبل العرض حتى لا يعتمد فتح المودال على أي استعلام SQLite.
+    const setValue = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.value = value;
+    };
+    setValue('movement-stock-type', 'products');
+    setValue('movement-type', '');
+    setValue('movement-date', new Date().toISOString().slice(0,16));
+    ['product-select','fuel-select','fuel-select-name','tank-select','movement-quantity','unit-price',
+     'source-warehouse','target-warehouse','supplier-select','customer-select','movement-reference','movement-notes']
+        .forEach(id => setValue(id, ''));
+    const productInfo = document.getElementById('product-info');
+    if (productInfo) productInfo.style.display = 'none';
+
+    if (typeof toggleMovementStockType === 'function') toggleMovementStockType();
+
+    // العرض لا ينتظر SQLite. استخدم Bootstrap إن كان متاحاً، وإلا استخدم
+    // fallback متوافقاً مع WebView حتى لا يصبح زر الإضافة بلا استجابة.
+    try {
+        if (window.bootstrap && window.bootstrap.Modal) {
+            window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
+        } else {
+            modalElement.classList.add('show');
+            modalElement.style.display = 'block';
+            modalElement.removeAttribute('aria-hidden');
+            modalElement.setAttribute('aria-modal', 'true');
+            document.body.classList.add('modal-open');
+            let backdrop = document.getElementById('create-modal-backdrop');
+            if (!backdrop) {
+                backdrop = document.createElement('div');
+                backdrop.id = 'create-modal-backdrop';
+                backdrop.className = 'modal-backdrop fade show';
+                backdrop.addEventListener('click', () => closeCreateModal());
+                document.body.appendChild(backdrop);
+            }
+        }
+    } catch (error) {
+        console.error('Error showing create movement modal:', error);
+        showToast('تعذر فتح نافذة إضافة الحركة', 'error');
+        return;
+    }
 
     // افتح النافذة فوراً؛ تحميل بيانات SQLite يجب ألا يمنع ظهورها.
     Promise.all([loadProducts(), loadWarehouses(), loadFuelTypes(), loadTanks()])
@@ -2374,6 +2397,31 @@ async function showCreateModal() {
             showToast(error?.message || 'تعذر تحميل بعض بيانات الحركة من SQLite', 'error');
         });
 }
+
+function closeCreateModal() {
+    const modalElement = document.getElementById('createModal');
+    if (!modalElement) return;
+    if (window.bootstrap && window.bootstrap.Modal) {
+        window.bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+        return;
+    }
+    modalElement.classList.remove('show');
+    modalElement.style.display = 'none';
+    modalElement.setAttribute('aria-hidden', 'true');
+    modalElement.removeAttribute('aria-modal');
+    document.body.classList.remove('modal-open');
+    document.getElementById('create-modal-backdrop')?.remove();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const button = document.getElementById('open-create-movement-button');
+    if (!button) return;
+    button.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        void showCreateModal();
+    });
+});
 
 function toggleMovementFields() {
     const type = document.getElementById('movement-type').value;
