@@ -922,9 +922,8 @@
         </div>
         <div class="form-group hidden-field" id="fuel-filter-group">
          <label class="form-label">⛽ بحث بالوقود</label>
-         <div class="selection-button"><input class="form-control" id="search-fuel" placeholder="اضغط لاختيار نوع الوقود من SQLite" readonly type="text">
-          <input id="filter-fuel-id" type="hidden" value=""><button class="btn btn-primary" type="button" onclick="openFuelPicker('filter')">اختيار</button>
-         </div>
+         <input class="form-control field-click-picker" id="search-fuel" placeholder="اضغط لاختيار نوع الوقود من SQLite" readonly type="text" onclick="openFuelPicker('filter')">
+          <input id="filter-fuel-id" type="hidden" value="">
         </div>
        <div class="form-group">
         <label class="form-label">
