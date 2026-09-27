@@ -1675,7 +1675,7 @@ function apiCall(action, params = {}) {
         case 'getMovement': return invokeTypedBridge('getStockMovements', [JSON.stringify({ movement_id: Number(p.movement_id), limit: 1 })]);
         case 'deleteMovement': return invokeTypedBridge('archiveStockMovement', [Number(p.movement_id)]);
         case 'saveMovement': return p.stock_type === 'fuel' ? invokeTypedBridge('addFuelInventoryMovement', [json]) : invokeTypedBridge(p.movement_type === 'transfer' ? 'transferStockMovement' : 'addStockMovement', [json]);
-        case 'generateReport': return p.report_type === 'movement' ? invokeTypedBridge('generateInventoryMovementReport', [json]) : invokeTypedBridge('generateInventoryReport', [json]);
+        case 'generateReport': return invokeTypedBridge('generateInventoryMovementReport', [json]);
         case 'getInventoryAnalytics': return invokeTypedBridge('generateInventoryReport', [JSON.stringify({ report_type: 'summary' })]);
         case 'getProductTrend': return invokeTypedBridge('getProductMovementTrend', [Number(p.product_id), Number(p.days || 30)]);
         case 'getFuelTypes': return invokeTypedBridge('getFuelTypesForInventoryMovements');
