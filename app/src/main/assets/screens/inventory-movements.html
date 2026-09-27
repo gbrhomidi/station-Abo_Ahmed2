@@ -1305,6 +1305,16 @@
         ❌ لم يتم تحميل بيانات التحليل بعد
        </p>
       </div>
+      <div class="table-container" style="margin-top:12px;">
+       <table class="data-table">
+        <thead>
+         <tr><th>التاريخ</th><th>عدد الحركات</th><th>الكمية الواردة</th><th>الكمية الصادرة</th><th>صافي الحركة</th></tr>
+        </thead>
+        <tbody id="analytics-table-body">
+         <tr><td colspan="5" class="text-center">❌ لم يتم تحميل بيانات التحليل بعد</td></tr>
+        </tbody>
+       </table>
+      </div>
      </div>
     </div>
    </main>
@@ -1607,6 +1617,48 @@ function invokeTypedBridge(method, args = []) {
     });
 }
 
+
+function bridgeDataArray(result) {
+    if (!result || result.success !== true) return [];
+    const d = result.data;
+    if (Array.isArray(d)) return d;
+    if (d && Array.isArray(d.rows)) return d.rows;
+    if (d && Array.isArray(d.items)) return d.items;
+    if (d && Array.isArray(d.records)) return d.records;
+    if (Array.isArray(result.rows)) return result.rows;
+    if (Array.isArray(result.items)) return result.items;
+    if (Array.isArray(result.records)) return result.records;
+    return [];
+}
+
+function bridgeDataObject(result) {
+    if (!result || result.success !== true) return {};
+    const d = result.data;
+    if (d && typeof d === 'object' && !Array.isArray(d)) {
+        if (d.stats && typeof d.stats === 'object') return d.stats;
+        if (d.statistics && typeof d.statistics === 'object') return d.statistics;
+        return d;
+    }
+    if (result.stats && typeof result.stats === 'object') return result.stats;
+    if (result.statistics && typeof result.statistics === 'object') return result.statistics;
+    return {};
+}
+
+function movementRows(result) {
+    if (!result || result.success !== true) return [];
+    const d = result.data;
+    if (Array.isArray(d)) return d;
+    if (d && Array.isArray(d.rows)) return d.rows;
+    if (d && Array.isArray(d.data)) return d.data;
+    if (Array.isArray(result.rows)) return result.rows;
+    return [];
+}
+
+function toNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+}
+
 function apiCall(action, params = {}) {
     const p = params || {};
     const json = JSON.stringify(p);
@@ -1790,7 +1842,7 @@ async function loadProducts() {
     try {
         const result = await apiCall('getProducts', {});
         if (result.success) {
-            allProducts = result.data || [];
+            allProducts = bridgeDataArray(result);
             populateProductDropdowns();
         }
     } catch (e) {
@@ -1819,7 +1871,7 @@ async function loadFuelTypes() {
     try {
         const result = await apiCall('getFuelTypes', {});
         if (result.success) {
-            allFuelTypes = result.data || [];
+            allFuelTypes = bridgeDataArray(result);
             renderFuelPicker();
         }
     } catch (e) { console.error('Error loading fuel types:', e); }
@@ -1829,7 +1881,7 @@ async function loadTanks() {
     try {
         const result = await apiCall('getTanks', {});
         if (result.success) {
-            allTanks = result.data || [];
+            allTanks = bridgeDataArray(result);
             const select = document.getElementById('tank-select');
             if (select) {
                 select.innerHTML = '<option value="">اختر الخزان</option>';
@@ -1858,11 +1910,11 @@ async function loadWarehouses() {
     try {
         const result = await apiCall('getWarehouses', {});
         if (result.success) {
-            allWarehouses = result.data || [];
+            allWarehouses = bridgeDataArray(result);
             if (!allWarehouses.length) {
                 await apiCall('ensureOperationalWarehouse', {});
                 const refreshed = await apiCall('getWarehouses', {});
-                allWarehouses = refreshed.data || [];
+                allWarehouses = bridgeDataArray(refreshed);
             }
             populateWarehouseDropdowns();
         }
@@ -1892,7 +1944,7 @@ async function loadSuppliers() {
     try {
         const result = await apiCall('getSuppliers', {});
         if (result.success) {
-            allSuppliers = result.data || [];
+            allSuppliers = bridgeDataArray(result);
             populatePartyDropdowns('filter-supplier', 'supplier-select');
         }
     } catch (e) {
@@ -1904,7 +1956,7 @@ async function loadCustomers() {
     try {
         const result = await apiCall('getCustomers', {});
         if (result.success) {
-            allCustomers = result.data || [];
+            allCustomers = bridgeDataArray(result);
             populatePartyDropdowns('filter-customer', 'customer-select');
         }
     } catch (e) {
@@ -1935,10 +1987,10 @@ async function loadMovements() {
     try {
         const result = await apiCall('getMovements', { ...activeMovementFilters, page: currentPage, limit: pageSize });
         if (!result.success) throw result;
-        const page = result.data || result;
-        allMovements = Array.isArray(page) ? page : (page.rows || []);
+        const page = (result.data && typeof result.data === 'object' && !Array.isArray(result.data)) ? result.data : result;
+        allMovements = movementRows(result);
         populateMovementsTable(allMovements);
-        updatePagination(Number(page.total_count ?? result.total ?? allMovements.length));
+        updatePagination(Number(page.total_count ?? page.total ?? result.total_count ?? result.total ?? allMovements.length));
     } catch (e) {
         console.error('Error loading movements:', e);
         showToast(e.error || 'خطأ في تحميل الحركات من SQLite', 'error');
@@ -2028,11 +2080,11 @@ async function loadStats() {
     try {
         const result = await apiCall('getMovementStats', { ...activeMovementFilters });
         if (result.success) {
-            const s = result.data || {};
-            document.getElementById('total-movements').textContent = (s.total_movements || 0).toLocaleString('en');
-            document.getElementById('total-value').textContent = (s.total_value || 0).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2});
-            document.getElementById('today-movements').textContent = (s.today_movements || 0).toLocaleString('en');
-            document.getElementById('pending-count').textContent = (s.pending_count || 0).toLocaleString('en');
+            const s = bridgeDataObject(result);
+            document.getElementById('total-movements').textContent = toNumber(s.total_movements ?? s.movement_count ?? s.total_count).toLocaleString('en');
+            document.getElementById('total-value').textContent = toNumber(s.total_value ?? s.total_cost ?? s.value).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2});
+            document.getElementById('today-movements').textContent = toNumber(s.today_movements ?? s.today_count).toLocaleString('en');
+            document.getElementById('pending-count').textContent = toNumber(s.pending_count ?? s.pending_movements).toLocaleString('en');
         }
     } catch (e) {
         console.error('Error loading stats:', e);
@@ -2118,6 +2170,12 @@ function toggleMovementStockType() {
     product.classList.toggle('hidden-field', type !== 'products');
     fuel.classList.toggle('hidden-field', type !== 'fuel');
     productInfo.style.display = type === 'products' && document.getElementById('product-select').value ? 'block' : 'none';
+    const priceLabel = document.getElementById('unit-price-label');
+    if (priceLabel) priceLabel.textContent = type === 'fuel' ? '💰 سعر اللتر' : '💰 سعر الوحدة';
+    if (type === 'products') {
+        document.getElementById('fuel-select').value = '';
+        document.getElementById('fuel-select-name').value = '';
+    }
     const movementType = document.getElementById('movement-type');
     if (type === 'fuel') {
         movementType.innerHTML = '<option value="">اختر نوع الحركة</option><option value="in">⛽ استلام / تعبئة الخزان</option><option value="out">🚚 صرف / استهلاك الوقود</option><option value="adjustment">⚖️ تسوية رصيد الخزان</option>';
@@ -2209,7 +2267,8 @@ function selectFuel(id) {
             });
             tank.value = '';
         }
-        if (!document.getElementById('unit-price').value) document.getElementById('unit-price').value = Number(f.default_purchase_price || 0);
+        const fuelPrice = toNumber(f.default_purchase_price ?? f.purchase_price ?? f.unit_price ?? f.current_price ?? f.selling_price);
+        document.getElementById('unit-price').value = fuelPrice > 0 ? fuelPrice.toFixed(2) : '';
     } else if (target === 'filter') {
         document.getElementById('filter-fuel-id').value = String(id);
         document.getElementById('search-fuel').value = name;
@@ -2424,93 +2483,100 @@ async function generateReport() {
     const stockType = document.getElementById('report-stock-type').value;
     showLoading(true);
     try {
-        const result = await apiCall('generateReport', { report_type:type, start_date:from, end_date:to, stock_type:stockType, limit:1000 });
+        const params = { report_type:type, start_date:from, end_date:to, stock_type:stockType, limit:1000, page:1 };
+        const result = await apiCall('generateReport', params);
         if (!result.success) throw result;
-        const page = result.data || result;
-        const data = type === 'movement' ? (page.rows || []) : (page.rows || page.data || []);
+        const page = (result.data && typeof result.data === 'object' && !Array.isArray(result.data)) ? result.data : result;
+        const data = movementRows(result);
         const titles = { movement:'📋 حركات المخزون', stock_detail:'📦 تفاصيل المخزون', movements_summary:'📈 ملخص الحركات', profit_product:'💰 الربح حسب المنتج', profit_supplier:'🏭 الربح حسب المورد', profit_customer:'👥 الربح حسب العميل', below_min:'📉 المنتجات تحت الحد الأدنى', movements_detailed:'📋 حركات مفصلة' };
         document.getElementById('report-title').textContent = `${titles[type] || '📊 التقرير'} — ${stockType === 'fuel' ? 'الوقود' : stockType === 'products' ? 'المنتجات' : 'الكل'}`;
         document.getElementById('report-date-range').textContent = `📅 الفترة: ${from || 'البداية'} إلى ${to || 'النهاية'} — ${data.length} سجل`;
-        updateReportTable(type, data);
-    } catch (e) { showToast(e.error || 'خطأ في توليد التقرير من SQLite', 'error'); }
+        updateReportTable(type, data, stockType);
+    } catch (e) { showToast(e.error || e.message || 'خطأ في توليد التقرير من SQLite', 'error'); }
     finally { showLoading(false); }
 }
 
-function updateReportTable(reportType, data) {
+function updateReportTable(reportType, data, stockType = 'all') {
     const head = document.getElementById('report-table-head');
     const body = document.getElementById('report-table-body');
     head.innerHTML = '';
     body.innerHTML = '';
 
-    let headers = [];
-    const typeMap = {
-        'movement': ['النوع','المخزون','الصنف','الكمية','سعر الوحدة','القيمة','التاريخ','الموقع/الخزان','المرجع','الحالة'],
-        'stock_detail': ['🛒 المنتج', '🏢 المستودع', '📦 الكمية', '💰 متوسط التكلفة', '💵 القيمة', '🕒 آخر جرد'],
-        'movements_summary': ['📝 النوع', '🛒 المنتج', '🏢 المستودع', '📦 الكمية', '💵 القيمة'],
-        'profit_product': ['🛒 المنتج', '💰 المبيعات', '📊 تكلفة البضاعة', '💸 الربح'],
-        'profit_supplier': ['🏭 المورد', '💰 المبيعات', '📊 تكلفة البضاعة', '💸 الربح'],
-        'profit_customer': ['👥 العميل', '💰 المبيعات', '📊 تكلفة البضاعة', '💸 الربح'],
-        'below_min': ['🛒 المنتج', '📦 الكمية المتاحة', '📉 الحد الأدنى'],
-        'movements_detailed': ['#️⃣ الرقم', '📅 التاريخ', '📝 النوع', '🛒 المنتج', '📦 الكمية', '🏢 المستودع', '💵 القيمة', '📝 الملاحظات']
-    };
-    headers = typeMap[reportType] || ['📊 البيانات'];
+    const headers = reportType === 'movement' || reportType === 'movements_detailed'
+        ? ['التاريخ','نوع المخزون','الصنف / الوقود','نوع الحركة','الكمية','سعر الوحدة/اللتر','القيمة','المستودع/الخزان','المورد/العميل','المرجع','الحالة','الملاحظات']
+        : reportType === 'stock_detail'
+        ? ['الصنف','نوع المخزون','المستودع/الخزان','الرصيد','متوسط التكلفة/السعر','إجمالي القيمة','آخر حركة']
+        : reportType === 'movements_summary'
+        ? ['نوع المخزون','نوع الحركة','الصنف / الوقود','الكمية','القيمة','عدد الحركات']
+        : reportType === 'below_min'
+        ? ['الصنف','نوع المخزون','الرصيد','الحد الأدنى','العجز','القيمة']
+        : ['الصنف / الطرف','نوع المخزون','المبيعات','التكلفة','الربح','عدد الحركات'];
 
-    let headerRow = '<tr>';
-    headers.forEach(h => { headerRow += `<th>${h}</th>`; });
-    headerRow += '</tr>';
-    head.innerHTML = headerRow;
+    head.innerHTML = '<tr>' + headers.map(h => '<th>' + h + '</th>').join('') + '</tr>';
 
-    if (!data || data.length === 0) {
-        body.innerHTML = `<tr><td colspan="${headers.length}" class="text-center">❌ لا توجد بيانات لعرضها</td></tr>`;
+    if (!Array.isArray(data) || data.length === 0) {
+        body.innerHTML = '<tr><td colspan="' + headers.length + '" class="text-center">❌ لا توجد بيانات فعلية ضمن نطاق التقرير المحدد</td></tr>';
         return;
     }
 
+    const stockLabel = item => (item.stock_type === 'fuel' || item.item_type === 'fuel') ? '⛽ الوقود' : '🛒 المنتجات';
+    const itemLabel = item => item.item_name || item.product_name_ar || item.product_name || item.fuel_name_ar || item.fuel_name || item.name || '---';
+    const locationLabel = item => item.location_name || item.warehouse_name || item.tank_name || item.storage_name || '---';
+    const partyLabel = item => item.party_name || item.supplier_name || item.customer_name || item.counterparty_name || '---';
+    const qty = item => toNumber(item.quantity ?? item.quantity_change ?? item.qty);
+    const price = item => toNumber(item.unit_cost ?? item.unit_price ?? item.purchase_price ?? item.price);
+    const value = item => toNumber(item.total_cost ?? item.total_value ?? item.value ?? (qty(item) * price(item)));
+
     data.forEach(item => {
-        let row = '<tr onclick="selectReportRow(this)">';
-        if (reportType === 'movement') {
-            row += `<td>${getMovementTypeLabel(item.movement_type, item.movement_subtype)}</td><td>${item.stock_type === 'fuel' ? '⛽ الوقود' : '🛒 المنتجات'}</td><td>${escapeHtml(item.item_name || '---')}</td><td class="numeric">${Number(item.quantity || 0).toLocaleString('en')}</td><td class="numeric">${Number(item.unit_cost || 0).toFixed(2)}</td><td class="numeric">${Number(item.total_cost || 0).toFixed(2)}</td><td>${escapeHtml(item.movement_date || '---')}</td><td>${escapeHtml(item.location_name || '---')}</td><td>${escapeHtml(item.reference_code || '---')}</td><td>${escapeHtml(item.status || '---')}</td>`;
+        const tr = document.createElement('tr');
+        const movement = item.movement_type || item.movement_subtype || '';
+        if (reportType === 'movement' || reportType === 'movements_detailed') {
+            tr.innerHTML =
+                '<td>' + escapeHtml(item.movement_date || item.created_at || '---') + '</td>' +
+                '<td>' + stockLabel(item) + '</td>' +
+                '<td>' + escapeHtml(itemLabel(item)) + '</td>' +
+                '<td>' + escapeHtml(getMovementTypeLabel(movement, item.movement_subtype)) + '</td>' +
+                '<td class="numeric">' + qty(item).toLocaleString('en') + '</td>' +
+                '<td class="numeric">' + price(item).toFixed(2) + '</td>' +
+                '<td class="numeric">' + value(item).toFixed(2) + '</td>' +
+                '<td>' + escapeHtml(locationLabel(item)) + '</td>' +
+                '<td>' + escapeHtml(partyLabel(item)) + '</td>' +
+                '<td>' + escapeHtml(item.reference_code || item.reference || '---') + '</td>' +
+                '<td>' + escapeHtml(item.status || '---') + '</td>' +
+                '<td>' + escapeHtml(item.notes || item.remarks || '---') + '</td>';
         } else if (reportType === 'stock_detail') {
-            row += `<td>${item.product_name || '---'}</td><td>${item.warehouse_name || '---'}</td>
-                    <td class="numeric">${(item.quantity_on_hand || 0).toLocaleString('en')}</td>
-                    <td class="numeric">${(item.average_cost || 0).toFixed(2)}</td>
-                    <td class="numeric">${(item.total_value || 0).toFixed(2)}</td>
-                    <td>${item.last_count_date || '---'}</td>`;
+            tr.innerHTML =
+                '<td>' + escapeHtml(itemLabel(item)) + '</td><td>' + stockLabel(item) + '</td>' +
+                '<td>' + escapeHtml(locationLabel(item)) + '</td>' +
+                '<td class="numeric">' + qty(item).toLocaleString('en') + '</td>' +
+                '<td class="numeric">' + price(item).toFixed(2) + '</td>' +
+                '<td class="numeric">' + value(item).toFixed(2) + '</td>' +
+                '<td>' + escapeHtml(item.last_movement_date || item.last_count_date || item.movement_date || '---') + '</td>';
         } else if (reportType === 'movements_summary') {
-            row += `<td>${getMovementTypeLabel(item.movement_type)}</td><td>${item.product_name || '---'}</td>
-                    <td>${item.warehouse_name || '---'}</td>
-                    <td class="numeric">${(item.quantity_change || 0).toLocaleString('en')}</td>
-                    <td class="numeric">${(item.total_cost || 0).toFixed(2)}</td>`;
-        } else if (reportType === 'profit_product') {
-            row += `<td>${item.product_name || '---'}</td>
-                    <td class="numeric">${(item.total_sales || 0).toFixed(2)}</td>
-                    <td class="numeric">${(item.total_cost || 0).toFixed(2)}</td>
-                    <td class="numeric">${(item.profit || 0).toFixed(2)}</td>`;
-        } else if (reportType === 'profit_supplier') {
-            row += `<td>${item.supplier_name || '---'}</td>
-                    <td class="numeric">${(item.total_sales || 0).toFixed(2)}</td>
-                    <td class="numeric">${(item.total_cost || 0).toFixed(2)}</td>
-                    <td class="numeric">${(item.profit || 0).toFixed(2)}</td>`;
-        } else if (reportType === 'profit_customer') {
-            row += `<td>${item.customer_name || '---'}</td>
-                    <td class="numeric">${(item.total_sales || 0).toFixed(2)}</td>
-                    <td class="numeric">${(item.total_cost || 0).toFixed(2)}</td>
-                    <td class="numeric">${(item.profit || 0).toFixed(2)}</td>`;
+            tr.innerHTML =
+                '<td>' + stockLabel(item) + '</td><td>' + escapeHtml(getMovementTypeLabel(movement)) + '</td>' +
+                '<td>' + escapeHtml(itemLabel(item)) + '</td>' +
+                '<td class="numeric">' + qty(item).toLocaleString('en') + '</td>' +
+                '<td class="numeric">' + value(item).toFixed(2) + '</td>' +
+                '<td class="numeric">' + toNumber(item.movement_count || item.count).toLocaleString('en') + '</td>';
         } else if (reportType === 'below_min') {
-            row += `<td>${item.product_name || '---'}</td>
-                    <td class="numeric">${(item.quantity_on_hand || 0).toLocaleString('en')}</td>
-                    <td class="numeric">${(item.min_stock_level || 0).toLocaleString('en')}</td>`;
-        } else if (reportType === 'movements_detailed') {
-            row += `<td class="numeric">${item.movement_id || '---'}</td>
-                    <td class="numeric">${item.movement_date || '---'}</td>
-                    <td>${getMovementTypeLabel(item.movement_type)}</td>
-                    <td>${item.product_name || '---'}</td>
-                    <td class="numeric">${(item.quantity_change || 0).toLocaleString('en')}</td>
-                    <td>${item.warehouse_name || '---'}</td>
-                    <td class="numeric">${(item.total_cost || 0).toFixed(2)}</td>
-                    <td>${item.notes || '---'}</td>`;
+            const minimum = toNumber(item.minimum_stock ?? item.min_stock_level ?? item.minimum_quantity);
+            const available = qty(item);
+            tr.innerHTML =
+                '<td>' + escapeHtml(itemLabel(item)) + '</td><td>' + stockLabel(item) + '</td>' +
+                '<td class="numeric">' + available.toLocaleString('en') + '</td>' +
+                '<td class="numeric">' + minimum.toLocaleString('en') + '</td>' +
+                '<td class="numeric">' + Math.max(0, minimum - available).toLocaleString('en') + '</td>' +
+                '<td class="numeric">' + value(item).toFixed(2) + '</td>';
+        } else {
+            tr.innerHTML =
+                '<td>' + escapeHtml(itemLabel(item) || partyLabel(item)) + '</td><td>' + stockLabel(item) + '</td>' +
+                '<td class="numeric">' + toNumber(item.total_sales ?? item.sales).toFixed(2) + '</td>' +
+                '<td class="numeric">' + toNumber(item.total_cost ?? item.cost).toFixed(2) + '</td>' +
+                '<td class="numeric">' + toNumber(item.profit).toFixed(2) + '</td>' +
+                '<td class="numeric">' + toNumber(item.movement_count ?? item.count).toLocaleString('en') + '</td>';
         }
-        row += '</tr>';
-        body.innerHTML += row;
+        body.appendChild(tr);
     });
 }
 
@@ -2560,25 +2626,88 @@ async function loadProductAnalytics() {
     const days = Number(document.getElementById('analytics-days').value) || 30;
     showLoading(true);
     try {
-        let result;
-        if (stockType === 'fuel') {
-            const fuelTypeId = Number(document.getElementById('analytics-fuel').value || 0);
-            if (!fuelTypeId) { showToast('يرجى اختيار نوع الوقود أولاً', 'warning'); return; }
-            result = await apiCall('getFuelAnalysis', { fuel_type_id: fuelTypeId, days });
-            const d = result.data || {};
-            const series = d.series || [];
-            document.getElementById('product-analytics-range').textContent = `⛽ ${document.getElementById('analytics-fuel-name').value || 'الوقود'} — ${days} يوم`;
-            renderChart(series.map(x=>x.day), series.map(x=>x.movement_count), series.map(x=>x.inbound), series.map(x=>x.outbound));
-        } else {
-            const productId = Number(document.getElementById('analytics-product').value);
-            if (!productId) { showToast('يرجى اختيار المنتج أولاً', 'warning'); return; }
-            result = await apiCall('getProductTrend', { product_id: productId, days });
-            const d = result.data || {};
-            document.getElementById('product-analytics-range').textContent = `🛒 ${document.getElementById('analytics-product-name').value || 'المنتج'} — ${days} يوم`;
-            renderChart(d.labels || [], d.values || [], d.inbound || [], d.outbound || []);
+        const endDate = new Date();
+        const startDate = new Date(endDate.getTime() - (days - 1) * 86400000);
+        const start = startDate.toISOString().slice(0,10);
+        const end = endDate.toISOString().slice(0,10);
+        const itemId = stockType === 'fuel'
+            ? Number(document.getElementById('analytics-fuel').value || 0)
+            : Number(document.getElementById('analytics-product').value || 0);
+        if (!itemId) {
+            showToast(stockType === 'fuel' ? 'يرجى اختيار نوع الوقود أولاً' : 'يرجى اختيار المنتج أولاً', 'warning');
+            return;
         }
-    } catch (e) { showToast(e.error || 'لا توجد بيانات تحليل حقيقية للفترة المختارة', 'error'); renderChart([], [], [], []); }
-    finally { showLoading(false); }
+
+        // يعتمد التحليل على نفس استعلام SQLite الموحد المستخدم في جدول الحركات؛ لا توجد بيانات مشتقة ثابتة.
+        const result = await apiCall('getMovements', {
+            stock_type: stockType,
+            item_id: itemId,
+            start_date: start,
+            end_date: end,
+            limit: 5000,
+            page: 1
+        });
+        if (!result.success) throw result;
+        const rows = movementRows(result);
+        const byDay = new Map();
+        rows.forEach(row => {
+            const day = String(row.movement_date || row.created_at || '').slice(0,10);
+            if (!day) return;
+            const bucket = byDay.get(day) || { count:0, inbound:0, outbound:0, value:0 };
+            const q = Math.abs(toNumber(row.quantity ?? row.quantity_change ?? row.qty));
+            const t = String(row.movement_type || row.movement_subtype || '').toLowerCase();
+            bucket.count += 1;
+            bucket.value += toNumber(row.total_cost ?? row.total_value ?? row.value ?? (q * toNumber(row.unit_cost ?? row.unit_price)));
+            if (['in','return','return_customer','purchase','receive'].includes(t)) bucket.inbound += q;
+            else if (['out','damage','waste','return_supplier','sale'].includes(t)) bucket.outbound += q;
+            byDay.set(day, bucket);
+        });
+
+        const labels = [];
+        const counts = [];
+        const inbound = [];
+        const outbound = [];
+        for (let i=0; i<days; i++) {
+            const d = new Date(startDate.getTime() + i*86400000);
+            const key = d.toISOString().slice(0,10);
+            const b = byDay.get(key) || {count:0,inbound:0,outbound:0};
+            labels.push(key);
+            counts.push(b.count);
+            inbound.push(b.inbound);
+            outbound.push(b.outbound);
+        }
+
+        document.getElementById('product-analytics-range').textContent =
+            (stockType === 'fuel' ? '⛽ ' + (document.getElementById('analytics-fuel-name').value || 'الوقود')
+                                  : '🛒 ' + (document.getElementById('analytics-product-name').value || 'المنتج')) +
+            ' — ' + days + ' يوم';
+
+        renderChart(labels, counts, inbound, outbound);
+        renderAnalyticsTable(labels, counts, inbound, outbound);
+    } catch (e) {
+        showToast(e.error || e.message || 'لا توجد بيانات تحليل حقيقية للفترة المختارة', 'error');
+        renderChart([], [], [], []);
+        renderAnalyticsTable([], [], [], []);
+    } finally { showLoading(false); }
+}
+
+function renderAnalyticsTable(labels, counts, inbound, outbound) {
+    const body = document.getElementById('analytics-table-body');
+    if (!body) return;
+    body.innerHTML = '';
+    if (!labels.length) {
+        body.innerHTML = '<tr><td colspan="5" class="text-center">❌ لا توجد بيانات تحليل</td></tr>';
+        return;
+    }
+    labels.forEach((day, i) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + day + '</td>' +
+            '<td class="numeric">' + toNumber(counts[i]).toLocaleString('en') + '</td>' +
+            '<td class="numeric">' + toNumber(inbound[i]).toLocaleString('en',{maximumFractionDigits:3}) + '</td>' +
+            '<td class="numeric">' + toNumber(outbound[i]).toLocaleString('en',{maximumFractionDigits:3}) + '</td>' +
+            '<td class="numeric">' + (toNumber(inbound[i]) - toNumber(outbound[i])).toLocaleString('en',{maximumFractionDigits:3}) + '</td>';
+        body.appendChild(tr);
+    });
 }
 
 function renderChart(labels, values, inbound = [], outbound = []) {
