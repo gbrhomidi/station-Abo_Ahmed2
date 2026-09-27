@@ -917,7 +917,7 @@
         </div>
         <div class="form-group" id="product-filter-group">
          <label class="form-label">🔍 بحث بالمنتج</label>
-         <input class="form-control field-click-picker" id="search-product" placeholder="اضغط لاختيار منتج من SQLite" readonly type="text" onclick="openProductPicker('filter')" onfocus="openProductPicker('filter')">
+         <input class="form-control field-click-picker" id="search-product" placeholder="اضغط لاختيار منتج من SQLite" readonly type="text" onclick="openProductPicker('filter')">
           <input id="filter-product-id" type="hidden" value="">
         </div>
         <div class="form-group hidden-field" id="fuel-filter-group">
@@ -1279,10 +1279,10 @@
          <select class="form-control" id="analytics-stock-type" onchange="toggleAnalyticsSelector()"><option value="products">المنتجات</option><option value="fuel">الوقود</option></select>
         </div>
         <div class="form-group" id="analytics-product-group"><label class="form-label">🛒 اختر المنتج</label>
-         <input class="form-control field-click-picker" id="analytics-product-name" placeholder="اختر منتجاً من SQLite" readonly onclick="openProductPicker('analytics')" onfocus="openProductPicker('analytics')"><input id="analytics-product" type="hidden" value="">
+         <input class="form-control field-click-picker" id="analytics-product-name" placeholder="اختر منتجاً من SQLite" readonly onclick="openProductPicker('analytics')"><input id="analytics-product" type="hidden" value="">
         </div>
         <div class="form-group hidden-field" id="analytics-fuel-group"><label class="form-label">⛽ اختر الوقود</label>
-         <input class="form-control field-click-picker" id="analytics-fuel-name" placeholder="اختر نوع الوقود من SQLite" readonly onclick="openFuelPicker('analytics')" onfocus="openFuelPicker('analytics')"><input id="analytics-fuel" type="hidden" value="">
+         <input class="form-control field-click-picker" id="analytics-fuel-name" placeholder="اختر نوع الوقود من SQLite" readonly onclick="openFuelPicker('analytics')"><input id="analytics-fuel" type="hidden" value="">
         </div>
        <div class="form-group">
         <label class="form-label">
@@ -1412,7 +1412,7 @@
         <div class="form-row-compact movement-fields-grid hidden-field" id="fuel-movement-fields">
          <div class="form-group-half">
           <label class="form-label">⛽ نوع الوقود *</label>
-          <input class="form-control field-click-picker" id="fuel-select-name" placeholder="اختر نوع الوقود من SQLite" readonly onclick="openFuelPicker('create')" onfocus="openFuelPicker('create')">
+          <input class="form-control field-click-picker" id="fuel-select-name" placeholder="اختر نوع الوقود من SQLite" readonly onclick="openFuelPicker('create')">
           <input id="fuel-select" type="hidden" value="">
          </div>
          <div class="form-group-half">
@@ -2228,8 +2228,6 @@ function toggleMovementStockType() {
 async async function openProductPicker(target) {
     window.productPickerTarget = target;
     document.getElementById('productPickerSearch').value = '';
-    if (target === 'filter') document.getElementById('filter-product-id').value = '';
-    if (target === 'analytics') document.getElementById('analytics-product').value = '';
     try {
         await loadProducts();
         renderProductPicker();
@@ -2277,8 +2275,6 @@ function selectProduct(id) {
 async async function openFuelPicker(target) {
     window.fuelPickerTarget = target;
     document.getElementById('fuelPickerSearch').value = '';
-    if (target === 'filter') document.getElementById('filter-fuel-id').value = '';
-    if (target === 'analytics') document.getElementById('analytics-fuel').value = '';
     try {
         await loadFuelTypes();
         renderFuelPicker();
