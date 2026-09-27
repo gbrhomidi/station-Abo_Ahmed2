@@ -1815,6 +1815,7 @@ function apiCall(action, params = {}) {
     const p = params || {};
     const json = JSON.stringify(p);
     switch (action) {
+        // AndroidInterface.getStockLevelsPage: the station-scoped SQLite page contract used for the complete stock-level view.
         case 'loadPage':
         case 'getInventorySummary':
         case 'getLowStockProducts':
