@@ -2257,7 +2257,7 @@ function updateExpiryChart(data) {
         data: {
             labels: ['نشط', 'قارب الانتهاء', 'منتهي'],
             datasets: [{
-                data: [data.active || 0, data.expiring || 0, data.expired || 0],
+                data: [data.active || 0, data.soon ?? data.expiring ?? 0, data.expired || 0],
                 backgroundColor: ['rgba(76, 175, 80, 0.7)', 'rgba(255, 193, 7, 0.7)', 'rgba(244, 67, 54, 0.7)'],
                 borderWidth: 1
             }]
