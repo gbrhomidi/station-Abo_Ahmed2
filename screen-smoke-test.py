@@ -110,7 +110,7 @@ for name, required in CASES.items():
             ('onclick="openProductPicker(\'analytics\')"' in html and 'onclick="openFuelPicker(\'analytics\')"' in html, 'analytics product/fuel fields open the SQLite picker directly'),
             ('onclick="openFuelPicker(\'create\')"' in html and 'id="movement-quantity"' in html and 'id="fuel-movement-fields"' in html, 'fuel movement has direct fuel picker and a real quantity field'),
             ('async function openProductPicker' in html and 'async function openFuelPicker' in html, 'pickers await SQLite data before rendering'),
-            (not any(x in html for ('Math.random(', 'Mock Data', 'Fake Data')), 'no fake/mock movement data'),
+            (not any(x in html for x in ('Math.random(', 'Mock Data', 'Fake Data')), 'no fake/mock movement data'),
         ]
 
     if name == 'inventory-alerts.html':
