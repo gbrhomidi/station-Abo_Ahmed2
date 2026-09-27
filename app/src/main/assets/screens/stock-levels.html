@@ -2086,7 +2086,7 @@ async function loadInventorySummary() {
 // ============================================================
 // 7. تحميل المنتجات المنخفضة
 // ============================================================
-async function loadLowStockProducts() {
+async async function loadLowStockProducts() {
     try {
         const result = await apiCall('getLowStockProducts', { stock_type:'all', limit:500 });
         if (result.success) populateLowStockTable((result.data || {}).low_stock_rows || []);
@@ -2399,7 +2399,7 @@ function populateAlertsTable(alerts) {
 // ============================================================
 // 12. دوال الفلاتر والعمليات
 // ============================================================
-async function applyFilters() {
+async async function applyFilters() {
     const warehouse = document.getElementById('warehouseFilter').value;
     const category = document.getElementById('categoryFilter').value;
     const dateRange = document.getElementById('dateRangeFilter').value;
@@ -2513,7 +2513,7 @@ function showSearchModal() {
     toggleStockQueryFields();
 }
 
-async function performSearch() {
+async async function performSearch() {
     const type = document.getElementById('searchStockType').value;
     if (!type) return showToast('اختر نوع المخزون أولاً', 'error');
     const fuelId = Number(document.getElementById('searchFuelType').value || 0);
@@ -2539,7 +2539,7 @@ async function performSearch() {
     } finally { showLoading(false); }
 }
 
-async function saveNewProduct() {
+async async function saveNewProduct() {
     const code = document.getElementById('addCode').value.trim();
     const name = document.getElementById('addName').value.trim();
     const quantity = document.getElementById('addQuantity').value;
