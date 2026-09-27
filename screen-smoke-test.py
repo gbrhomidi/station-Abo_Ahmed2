@@ -15,6 +15,9 @@ CASES = {
     'shifts.html': ['getShiftFormContext', 'saveShiftRecordTyped', 'getOpenShiftForManagement', 'closeOpenShiftForManagement', 'closeOpenShiftBtn'],
     'orders.html': ['getProducts', 'getSalesTransactionRecords', 'getOpenShiftForManagement', 'saveSalesTransactionRecord', 'updateSalesTransactionRecord', 'generateSalesTransactionReport'],
     'deliveries.html': ['getDeliverySaleContext', 'getLatestCustomerSaleForDelivery', 'saveDeliveryRecord', 'updateDeliveryRecord', 'generateDeliveryManagementReport', 'getDeliveryReportOptions'],
+    'stock-levels.html': ['getStockLevelsPage', 'loadPage', 'filterInventory', 'advancedFilter', 'searchStock'],
+    'inventory-movements.html': ['getInventoryMovementPage', 'getInventoryMovementUnifiedStats', 'addStockMovement', 'archiveStockMovement'],
+    'inventory-alerts.html': ['getStockAlertRecords', 'resolveStockAlertRecord', 'inventory-movements.html?product_id='],
 }
 
 class DOMAudit(HTMLParser):
@@ -78,6 +81,36 @@ for name, required in CASES.items():
             ('new Date().toISOString().slice(0, 10)' not in html, 'local-date boundary'),
             ("var readonlyAttr = def.auto ? 'readonly disabled' : (def.readonly ? 'disabled' : '');" in html, 'disabled state is field-definition driven'),
             (not any(x in html for x in ('Math.random(', 'Mock Data', 'Fake Data')), 'no fake/mock order data'),
+        ]
+
+    if name == 'stock-levels.html':
+        checks += [
+            ('async async function' not in html, 'no malformed double-async declarations'),
+            ('async function loadLowStockProducts()' in html, 'low-stock loader is await-safe'),
+            ('async function applyFilters()' in html, 'filter handler is await-safe'),
+            ('async function performSearch()' in html, 'search handler is await-safe'),
+            ('async function saveNewProduct()' in html, 'save handler is await-safe'),
+            ('AndroidInterface.getStockLevelsPage' in html, 'single station-scoped SQLite page bridge'),
+            ('applyPageData(data)' in html and 'data.stats' in html, 'statistics are bound from backend response'),
+            (not any(x in html for x in ('Math.random(', 'Mock Data', 'Fake Data')), 'no fake/mock stock data'),
+        ]
+
+    if name == 'inventory-movements.html':
+        checks += [
+            ('async async function' not in html, 'no malformed double-async declarations'),
+            ('async function loadStats()' in html, 'statistics loader is await-safe'),
+            ('getInventoryMovementPage' in html and 'getInventoryMovementUnifiedStats' in html, 'real movement/statistics bridge contracts'),
+            ('addStockMovement' in html and 'archiveStockMovement' in html, 'real movement write/archive contracts'),
+            ('activeMovementFilters' in html and 'currentPage' in html, 'filters and pagination are state-backed'),
+            (not any(x in html for x in ('Math.random(', 'Mock Data', 'Fake Data')), 'no fake/mock movement data'),
+        ]
+
+    if name == 'inventory-alerts.html':
+        checks += [
+            ('getStockAlertRecords' in html and 'resolveStockAlertRecord' in html, 'real alert read/resolve bridge contracts'),
+            ('inventory-movements.html?product_id=' in html, 'restock action opens a real inventory movement'),
+            ('stock_alerts' in html and 'SQLite' in html, 'SQLite-backed alert source'),
+            (not any(x in html for x in ('Math.random(', 'Mock Data', 'Fake Data')), 'no fake/mock alert data'),
         ]
 
     if name == 'deliveries.html':
