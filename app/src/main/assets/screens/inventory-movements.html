@@ -1591,9 +1591,19 @@ function invokeTypedBridge(method, args = []) {
         try {
             const raw = window.AndroidInterface[method](...args);
             const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-            if (!parsed || parsed.success !== true) { reject(parsed || { success: false, error: 'استجابة غير صالحة من الجسر' }); return; }
+            if (!parsed || parsed.success !== true) {
+                reject(parsed || { success: false, error: 'استجابة غير صالحة من الجسر' });
+                return;
+            }
+            // عقود القراءة التي تُرجع JSONObject مباشرة تحمل rows/stats في المستوى الأعلى.
+            // نوحّد عقد الواجهة بإضافة data alias دون تغيير الاستجابة الأصلية أو البيانات.
+            if (!Object.prototype.hasOwnProperty.call(parsed, 'data')) {
+                parsed.data = parsed;
+            }
             resolve(parsed);
-        } catch (error) { reject({ success: false, error: error.message || 'فشل استدعاء الجسر' }); }
+        } catch (error) {
+            reject({ success: false, error: error.message || 'فشل استدعاء الجسر' });
+        }
     });
 }
 
