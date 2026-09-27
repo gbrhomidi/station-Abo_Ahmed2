@@ -1787,15 +1787,56 @@
    // ============================================================
 // 1. دوال apiCall و handleAndroidResult (الموحدة)
 // ============================================================
-	function apiCall(action, params) {
-    const p = params || {};
-    if (!window.AndroidInterface) return Promise.reject({ success:false, message:'جسر Android غير متاح' });
+	function normalizeBridgeResult(raw) {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!parsed || parsed.success !== true) {
+        throw new Error(parsed?.error || parsed?.message || 'استجابة غير صالحة من SQLite');
+    }
+    // بعض عقود Kotlin تُرجع JSONObject مباشرة (rows/stats/...) بدون غلاف data.
+    // نضيف alias محلياً فقط للحفاظ على عقد الواجهة الموحد دون نسخ أو تغيير بيانات SQLite.
+    if (!Object.prototype.hasOwnProperty.call(parsed, 'data')) {
+        parsed.data = parsed;
+    }
+    return parsed;
+}
+
+function invokeBridge(method, args = []) {
+    if (!window.AndroidInterface || typeof window.AndroidInterface[method] !== 'function') {
+        return Promise.reject(new Error('دالة AndroidInterface.' + method + ' غير متاحة في إصدار التطبيق الحالي'));
+    }
     try {
-        const payload = { ...p, action };
-        const raw = AndroidInterface.getStockLevelsPage(JSON.stringify(payload));
-        return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+        return Promise.resolve(normalizeBridgeResult(window.AndroidInterface[method](...args)));
     } catch (e) {
-        return Promise.reject({ success:false, message:e.message || 'فشل استدعاء قاعدة البيانات' });
+        return Promise.reject(new Error(e?.message || 'فشل استدعاء قاعدة البيانات'));
+    }
+}
+
+function apiCall(action, params = {}) {
+    const p = params || {};
+    const json = JSON.stringify(p);
+    switch (action) {
+        case 'loadPage':
+        case 'getInventorySummary':
+        case 'getLowStockProducts':
+        case 'getInventoryCharts':
+        case 'getStockValues':
+        case 'filterInventory':
+        case 'advancedFilter':
+        case 'searchStock':
+            return invokeBridge('getStockLevelsPage', [json]);
+        case 'getWarehouses':
+            return invokeBridge('getWarehouses', [json]);
+        case 'getCategories':
+            return invokeBridge('getCategories');
+        case 'getInventoryAlerts':
+        case 'getAlerts':
+            return invokeBridge('getStockAlertRecords', [json]);
+        case 'getMovements':
+            return invokeBridge('getInventoryMovementPage', [json]);
+        case 'addProduct':
+            return invokeBridge('addProduct', [json]);
+        default:
+            return Promise.reject(new Error('الإجراء غير مدعوم: ' + action));
     }
 }
 
