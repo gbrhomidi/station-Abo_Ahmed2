@@ -12310,6 +12310,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("dead_stock_value", deadStockValue)
                 put("stockout_risk_high", highRiskCount)
                 put("stockout_risk_medium", mediumRiskCount)
+                put("active_warehouse_count", warehouses.length())
+                put("warehouse_count", warehouses.length())
             }
 
             val fuelTypes=JSONArray()
@@ -12546,7 +12548,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val product = db.rawQuery(
                 """SELECT p.id AS product_id, p.product_code, p.barcode, p.product_name, p.product_name_ar,
                           p.purchase_price, p.sale_price, p.minimum_stock, p.maximum_stock, p.reorder_quantity,
-                          p.status, c.category_name, COALESCE(SUM(il.quantity_on_hand), p.quantity, 0) AS quantity
+                          p.status, c.category_name,
+                          CASE WHEN COUNT(il.id) = 0 THEN COALESCE(p.quantity, 0)
+                               ELSE COALESCE(SUM(il.quantity_on_hand), 0) END AS quantity
                    FROM products p
                    LEFT JOIN product_categories c ON p.category_id = c.id
                    LEFT JOIN inventory_levels il ON p.id = il.product_id AND EXISTS (SELECT 1 FROM warehouses iw WHERE iw.id = il.warehouse_id AND iw.station_id = ? AND iw.is_active = 1)
