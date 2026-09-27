@@ -2342,8 +2342,12 @@ function toggleAnalyticsSelector() {
 }
 
 async function showCreateModal() {
-    await Promise.all([loadProducts(), loadWarehouses(), loadFuelTypes(), loadTanks()]);
-    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('createModal'));
+    const modalElement = document.getElementById('createModal');
+    if (!modalElement) {
+        showToast('تعذر فتح نافذة إضافة الحركة: عنصر النافذة غير موجود', 'error');
+        return;
+    }
+    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
     document.getElementById('movement-stock-type').value = 'products';
     document.getElementById('movement-type').value = '';
     document.getElementById('movement-date').value = new Date().toISOString().slice(0,16);
@@ -2362,6 +2366,13 @@ async function showCreateModal() {
     document.getElementById('product-info').style.display = 'none';
     toggleMovementStockType();
     modal.show();
+
+    // افتح النافذة فوراً؛ تحميل بيانات SQLite يجب ألا يمنع ظهورها.
+    Promise.all([loadProducts(), loadWarehouses(), loadFuelTypes(), loadTanks()])
+        .catch(error => {
+            console.error('Error loading create-movement data:', error);
+            showToast(error?.message || 'تعذر تحميل بعض بيانات الحركة من SQLite', 'error');
+        });
 }
 
 function toggleMovementFields() {
