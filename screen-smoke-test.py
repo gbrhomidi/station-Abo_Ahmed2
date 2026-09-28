@@ -131,7 +131,7 @@ for name, required in CASES.items():
             ('f_delivery_service_fee' in html and 'delivery_service_fee' in html, 'delivery service fee field'),
             ('vehiclePreview' in html and 'vehicle_photo' in html, 'vehicle image preview'),
             ('عميل غير مسجل' in html and 'party_id' in html, 'anonymous customer option without fake id'),
-            ("f_sale_id').style.display = 'block'" in html and 'sale_id' in html, 'anonymous customer requires original sale id'),
+            ("$('saleIdGroup').style.display = 'block'" in html and "$('saleContextHelp').style.display = 'block'" in html and 'sale_id' in html, 'anonymous customer requires and exposes original sale id'),
             ('window.print' in html or 'printCurrentPage' in html, 'delivery report print contract'),
             (not any(x in html for x in ('Math.random(', 'Mock Data', 'Fake Data')), 'no fake/mock delivery data'),
         ]
