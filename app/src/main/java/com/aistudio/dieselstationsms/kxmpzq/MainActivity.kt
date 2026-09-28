@@ -8951,6 +8951,51 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+        /**
+         * يفحص آخر مهمة توصيل للسائق مقابل آخر SMS وارد من رقمه، ويكمل المهمة السابقة إذا تطابق معرفها مع «تم/تمت».
+         */
+        @JavascriptInterface
+        fun prepareDriverForNewDelivery(driverId: Long, partyId: Long = 0L): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val result = db.prepareDriverForNewDelivery(driverId, partyId.takeIf { it > 0L }, stationId)
+                JSONObject().apply { put("success", true); put("data", result) }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("PrepareDriverDelivery", e)
+                errorResponse(e.message ?: "تعذر التحقق من آخر مهمة ورسالة السائق")
+            }
+        }
+
+        /**
+         * يرسل رسالة المهمة الجديدة فورياً بعد ثبوت إكمال آخر مهمة للسائق، مع منع التكرار عبر SmsReplyManager.
+         */
+        @JavascriptInterface
+        fun sendDeliveryTaskSms(deliveryId: Long): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val payload = db.getDeliverySmsPayload(deliveryId, stationId)
+                val phone = payload.optString("driver_phone").trim()
+                require(phone.isNotBlank()) { "رقم هاتف السائق غير موجود" }
+                val message = DeliverySmsScheduler.buildMessage(payload)
+                activity.lifecycleScope.launch(Dispatchers.IO) {
+                    val sent = SmsReplyManager(activity.applicationContext, db).sendReplyOnce(
+                        phone = phone,
+                        message = message,
+                        dedupeKey = "delivery-task-$stationId-$deliveryId"
+                    )
+                    db.markDeliverySmsAttempt(deliveryId, stationId, sent, if (sent) null else "تعذر إرسال رسالة مهمة التوصيل")
+                }
+                JSONObject().apply { put("success", true); put("data", JSONObject().apply { put("queued", true); put("delivery_id", deliveryId) }) }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("DeliveryTaskSms", e)
+                errorResponse(e.message ?: "تعذر تجهيز رسالة مهمة التوصيل")
+            }
+        }
+
         @JavascriptInterface
         fun saveDeliveryRecord(jsonData: String): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -8968,12 +9013,33 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     "فشل التحقق من معرف التوصيل المحفوظ في SQLite"
                 }
                 val saleId = persisted.optLong("sale_id", 0L)
+                val scheduledAt = db.getDeliverySmsScheduledAt(deliveryId, stationId)
+                if (scheduledAt > 0L) DeliverySmsScheduler.schedule(activity, deliveryId, stationId, scheduledAt)
+                if (input.optBoolean("send_new_task_after_save", false)) {
+                    activity.lifecycleScope.launch(Dispatchers.IO) {
+                        try {
+                            val payload = db.getDeliverySmsPayload(deliveryId, stationId)
+                            val phone = payload.optString("driver_phone").trim()
+                            if (phone.isNotBlank()) {
+                                val sent = SmsReplyManager(activity.applicationContext, db).sendReplyOnce(
+                                    phone = phone,
+                                    message = DeliverySmsScheduler.buildMessage(payload),
+                                    dedupeKey = "delivery-task-$stationId-$deliveryId"
+                                )
+                                db.markDeliverySmsAttempt(deliveryId, stationId, sent, if (sent) null else "تعذر إرسال رسالة مهمة التوصيل")
+                            }
+                        } catch (e: Exception) { DebugLogger.logException("DeliveryTaskSmsAfterSave", e) }
+                    }
+                }
                 JSONObject().apply {
                     put("success", true)
-                    put("id", deliveryId)
-                    put("delivery_id", deliveryId)
-                    put("sale_id", saleId)
-                    put("message", "تم حفظ التوصيل فعلياً والتحقق من SQLite")
+                    put("data", JSONObject().apply {
+                        put("id", deliveryId)
+                        put("delivery_id", deliveryId)
+                        put("sale_id", saleId)
+                        put("sms_scheduled_at", if (scheduledAt > 0L) scheduledAt else JSONObject.NULL)
+                        put("message", "تم حفظ التوصيل فعلياً والتحقق من SQLite")
+                    })
                 }.toString()
             } catch (e: Exception) {
                 DebugLogger.logException("SaveDeliveryRecord", e)

@@ -10165,6 +10165,27 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 )
                 require(deliveryId > 0L) { "فشل إنشاء معرف التوصيل في SQLite" }
 
+                if (driverId != null) {
+                    val deliveryMillis = parseDeliveryDateMillis(deliveryDate)
+                    val scheduledAt = if (deliveryMillis > 0L) deliveryMillis - 30L * 60L * 1000L else 0L
+                    db.insertOrThrow("sms_delivery_tasks", null, ContentValues().apply {
+                        put("delivery_id", deliveryId.toString())
+                        put("order_id", deliveryId)
+                        put("sale_id", saleId)
+                        if (partyId != null) put("party_id", partyId) else putNull("party_id")
+                        put("driver_id", driverId)
+                        if (vehicleId != null) put("vehicle_id", vehicleId) else putNull("vehicle_id")
+                        put("station_id", stationScopeId)
+                        put("location", data.optString("location", sale.optString("delivery_location", "")))
+                        put("scheduled_at", scheduledAt)
+                        if (status == "assigned") put("assigned_at", System.currentTimeMillis()) else putNull("assigned_at")
+                        put("status", if (status == "cancelled") "CANCELLED" else "PENDING")
+                        put("attempt_count", 0)
+                        put("created_at", System.currentTimeMillis())
+                        put("updated_at", System.currentTimeMillis())
+                    })
+                }
+
                 val serviceFeeDelta = serviceFee - originalServiceFee
                 if (serviceFeeDelta != 0.0) {
                     val oldNet = sale.optDouble("net_amount", 0.0)
@@ -10429,6 +10450,228 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    /**
+     * يتحقق من آخر مهمة توصيل للسائق ورسالة SMS الواردة الأخيرة، ويكمل المهمة السابقة فقط إذا حملت الرسالة معرفها صراحةً مع «تم» أو «تمت».
+     * عند التطابق تُسجل رسوم خدمة التوصيل كمديونية على الموظف المرتبط بالسائق بصورة idempotent، ويُعاد قرار إرسال المهمة الجديدة بعد حفظها.
+     */
+    fun prepareDriverForNewDelivery(driverId: Long, partyId: Long?, stationScopeId: Int): JSONObject {
+        require(driverId > 0L) { "معرف السائق مطلوب" }
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val db = writableDatabase
+        dbLock.lock()
+        return try {
+            requireDriverInStation(db, driverId, stationScopeId)
+            val driver = db.rawQuery(
+                "SELECT id, full_name_ar, full_name, driver_code, phone, phone2, vehicle_id FROM drivers WHERE id=? AND station_id=? AND is_deleted=0 AND status='active' LIMIT 1",
+                arrayOf(driverId.toString(), stationScopeId.toString())
+            ).use { c ->
+                require(c.moveToFirst()) { "السائق غير موجود أو غير نشط ضمن المحطة الحالية" }
+                JSONObject().apply {
+                    put("id", c.getLong(0))
+                    put("name", c.getString(1).orEmpty().ifBlank { c.getString(2).orEmpty().ifBlank { c.getString(3).orEmpty() } })
+                    put("phone", c.getString(4).orEmpty().ifBlank { c.getString(5).orEmpty() })
+                    put("vehicle_id", if (c.isNull(6)) JSONObject.NULL else c.getLong(6))
+                }
+            }
+            val lastDelivery = db.rawQuery(
+                """SELECT d.id, d.sale_id, d.party_id, d.driver_id, d.vehicle_id, d.status, d.delivery_date, d.quantity, d.location,
+                          d.created_at, COALESCE(s.service_fee,0) AS service_fee, COALESCE(s.order_type,'') AS order_type
+                   FROM deliveries d
+                   LEFT JOIN sales_transactions s ON s.id=d.sale_id AND s.station_id=? AND s.is_deleted=0
+                   WHERE d.driver_id=? AND d.is_deleted=0 AND d.status <> 'cancelled'
+                   ORDER BY d.id DESC LIMIT 1""",
+                arrayOf(stationScopeId.toString(), driverId.toString())
+            ).use { c ->
+                if (!c.moveToFirst()) null else JSONObject().apply {
+                    put("id", c.getLong(0)); put("sale_id", c.getLong(1));
+                    put("party_id", if (c.isNull(2)) JSONObject.NULL else c.getLong(2));
+                    put("driver_id", c.getLong(3)); put("vehicle_id", if (c.isNull(4)) JSONObject.NULL else c.getLong(4));
+                    put("status", c.getString(5)); put("delivery_date", c.getString(6)); put("quantity", c.getDouble(7));
+                    put("location", c.getString(8)); put("created_at", c.getString(9)); put("service_fee", c.getDouble(10)); put("order_type", c.getString(11))
+                }
+            }
+            val phone = driver.optString("phone").trim()
+            val normalizedPhone = normalizeDeliveryPhone(phone)
+            val latestSms = if (normalizedPhone.isBlank()) null else db.rawQuery(
+                "SELECT id, phone_number, message_body, message_type, created_at FROM sms_messages WHERE LOWER(COALESCE(message_type,'incoming')) IN ('incoming','received') ORDER BY datetime(created_at) DESC, id DESC LIMIT 100",
+                null
+            ).use { c ->
+                var result: JSONObject? = null
+                while (c.moveToNext()) {
+                    if (normalizeDeliveryPhone(c.getString(1).orEmpty()) == normalizedPhone) {
+                        result = JSONObject().apply { put("id", c.getLong(0)); put("phone", c.getString(1)); put("body", c.getString(2)); put("type", c.getString(3)); put("created_at", c.getString(4)) }
+                        break
+                    }
+                }
+                result
+            }
+            val previousId = lastDelivery?.optLong("id", 0L) ?: 0L
+            val previousPartyId = lastDelivery?.optLong("party_id", 0L) ?: 0L
+            val customerMatches = partyId == null || partyId <= 0L || previousPartyId == partyId
+            val smsBody = latestSms?.optString("body").orEmpty()
+            val completedId = extractCompletedDeliveryId(smsBody)
+            val smsAfterPreviousTask = latestSms != null && isSmsAfterDelivery(latestSms.optString("created_at"), lastDelivery?.optString("created_at").orEmpty())
+            val matched = previousId > 0L && customerMatches && completedId == previousId && smsAfterPreviousTask
+            var debtRecorded = false
+            if (matched) {
+                if (!lastDelivery!!.optString("status").equals("delivered", true)) {
+                    val completedAt = getCurrentDateTime()
+                    val rows = db.update(
+                        "deliveries",
+                        ContentValues().apply { put("status", "delivered"); put("updated_at", completedAt) },
+                        "id=? AND driver_id=? AND is_deleted=0",
+                        arrayOf(previousId.toString(), driverId.toString())
+                    )
+                    require(rows == 1) { "تعذر تحديث طلب التوصيل السابق إلى «تم التسليم»" }
+                }
+                val taskRows = db.update(
+                    "sms_delivery_tasks",
+                    ContentValues().apply { put("status", "COMPLETED"); put("completed_at", System.currentTimeMillis()); put("updated_at", System.currentTimeMillis()) },
+                    "delivery_id=? AND station_id=? AND status <> 'COMPLETED' AND status <> 'CANCELLED'",
+                    arrayOf(previousId.toString(), stationScopeId.toString())
+                )
+                val serviceFee = lastDelivery.optDouble("service_fee", 0.0)
+                if (serviceFee > 0.0) {
+                    val employeeId = db.rawQuery(
+                        "SELECT e.id FROM employees e JOIN drivers d ON d.party_id=e.party_id WHERE d.id=? AND d.station_id=? AND d.is_deleted=0 AND e.station_id=? AND e.is_deleted=0 ORDER BY e.id LIMIT 1",
+                        arrayOf(driverId.toString(), stationScopeId.toString(), stationScopeId.toString())
+                    ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+                    if (employeeId > 0L) {
+                        val reference = "DELIVERY-FEE-$previousId"
+                        val exists = db.rawQuery("SELECT id FROM employee_payments WHERE station_id=? AND employee_id=? AND reference=? AND is_deleted=0 LIMIT 1", arrayOf(stationScopeId.toString(), employeeId.toString(), reference)).use { it.moveToFirst() }
+                        if (!exists) {
+                            val paymentId = db.insertOrThrow("employee_payments", null, ContentValues().apply {
+                                put("uuid", UUID.randomUUID().toString()); put("employee_id", employeeId); put("station_id", stationScopeId); put("amount", serviceFee)
+                                put("type", "deduction"); put("description", "مديونية رسوم خدمة التوصيل للطلب #$previousId")
+                                put("date", getCurrentDateTime()); put("operator", "system"); put("payment_method", "cash"); put("status", "pending")
+                                put("reference", reference); put("notes", "استحقاق تحصيل رسوم خدمة التوصيل من السائق #$driverId")
+                                put("created_at", getCurrentDateTime()); put("updated_at", getCurrentDateTime()); put("is_deleted", 0)
+                            })
+                            debtRecorded = paymentId > 0L
+                        } else debtRecorded = true
+                    }
+                }
+            }
+            JSONObject().apply {
+                put("success", true); put("driver_id", driverId); put("driver_name", driver.optString("name")); put("driver_phone", phone)
+                put("last_delivery_id", previousId); put("last_delivery_status", lastDelivery?.optString("status") ?: JSONObject.NULL)
+                put("latest_sms", latestSms ?: JSONObject.NULL); put("sms_completed_delivery_id", completedId ?: JSONObject.NULL)
+                put("matched_previous_delivery", matched); put("customer_matches_previous_delivery", customerMatches); put("debt_recorded", debtRecorded); put("force_pending", !matched); put("send_new_task_after_save", matched)
+            }
+        } finally { dbLock.unlock() }
+    }
+
+    /**
+     * يعيد وقت الجدولة المخزن لمهمة SMS مرتبطة بتوصيل محدد ضمن المحطة الحالية.
+     */
+    fun getDeliverySmsScheduledAt(deliveryId: Long, stationScopeId: Int): Long {
+        require(deliveryId > 0L) { "معرف التوصيل مطلوب" }
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        return readableDatabase.rawQuery(
+            "SELECT COALESCE(scheduled_at,0) FROM sms_delivery_tasks WHERE delivery_id=? AND station_id=? LIMIT 1",
+            arrayOf(deliveryId.toString(), stationScopeId.toString())
+        ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+    }
+
+    /**
+     * يسجل نتيجة إرسال رسالة مهمة التوصيل، ويجعل المهمة ASSIGNED بعد نجاح الإرسال لمنع إرسالها مرة أخرى عند المنبه.
+     */
+    fun markDeliverySmsAttempt(deliveryId: Long, stationScopeId: Int, sent: Boolean, failureReason: String?) {
+        require(deliveryId > 0L) { "معرف التوصيل مطلوب" }
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val now = System.currentTimeMillis()
+        val values = ContentValues().apply {
+            put("attempt_count", 1)
+            put("updated_at", now)
+            if (sent) {
+                put("status", "ASSIGNED")
+                put("assigned_at", now)
+                putNull("failure_reason")
+            } else {
+                put("status", "PENDING")
+                put("failure_reason", failureReason ?: "تعذر إرسال رسالة مهمة التوصيل")
+            }
+        }
+        writableDatabase.update("sms_delivery_tasks", values, "delivery_id=? AND station_id=? AND status <> 'COMPLETED' AND status <> 'CANCELLED'", arrayOf(deliveryId.toString(), stationScopeId.toString()))
+    }
+
+    /**
+     * يعيد بيانات التوصيل المطلوبة لبناء رسالة المهمة، مع اسم السائق والعميل ونوع الحمولة والكمية والموقع ورسوم الخدمة.
+     */
+    fun getDeliverySmsPayload(deliveryId: Long, stationScopeId: Int): JSONObject {
+        require(deliveryId > 0L) { "معرف التوصيل مطلوب" }
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val db = readableDatabase
+        return db.rawQuery(
+            """SELECT d.id, d.quantity, d.location, COALESCE(s.service_fee,0), COALESCE(s.order_type,''),
+                      COALESCE(p.commercial_name_ar,p.commercial_name,p.legal_name,'عميل'),
+                      COALESCE(dr.full_name_ar,dr.full_name,dr.driver_code,'سائق'), dr.phone,
+                      COALESCE(f.fuel_name_ar,f.fuel_name,f.fuel_code,'')
+               FROM deliveries d
+               JOIN sales_transactions s ON s.id=d.sale_id AND s.station_id=? AND s.is_deleted=0
+               LEFT JOIN parties p ON p.id=d.party_id
+               LEFT JOIN drivers dr ON dr.id=d.driver_id
+               LEFT JOIN fuel_types f ON f.id=s.fuel_type_id
+               WHERE d.id=? AND d.is_deleted=0 AND d.driver_id IS NOT NULL LIMIT 1""",
+            arrayOf(stationScopeId.toString(), deliveryId.toString())
+        ).use { c ->
+            require(c.moveToFirst()) { "بيانات التوصيل أو السائق غير موجودة ضمن المحطة الحالية" }
+            val orderType = c.getString(4).orEmpty()
+            val payload = JSONObject().apply {
+                put("delivery_id", c.getLong(0)); put("quantity", c.getDouble(1)); put("location", c.getString(2).orEmpty()); put("service_fee", c.getDouble(3))
+                put("payload_type", if (orderType.equals("product", true)) "منتجات" else "وقود")
+                put("customer_name", c.getString(5).orEmpty()); put("driver_name", c.getString(6).orEmpty()); put("driver_phone", c.getString(7).orEmpty()); put("fuel_type", c.getString(8).orEmpty())
+            }
+            if (orderType.equals("product", true)) {
+                val count = db.rawQuery("SELECT COALESCE(SUM(si.quantity-COALESCE(si.returned_quantity,0)),0) FROM sale_items si WHERE si.sale_id=(SELECT sale_id FROM deliveries WHERE id=? AND is_deleted=0) AND si.item_type='product'", arrayOf(deliveryId.toString())).use { x -> if (x.moveToFirst()) x.getDouble(0) else c.getDouble(1) }
+                payload.put("quantity", count.coerceAtLeast(0.0))
+            }
+            payload
+        }
+    }
+
+    /** يتحقق من أن وقت آخر رسالة الواردة جاء بعد إنشاء المهمة السابقة، لمنع استخدام رسالة قديمة لإكمال مهمة جديدة. */
+    private fun isSmsAfterDelivery(smsAt: String, deliveryCreatedAt: String): Boolean {
+        val smsMillis = parseDeliveryDateMillis(smsAt)
+        val deliveryMillis = parseDeliveryDateMillis(deliveryCreatedAt)
+        return smsMillis > 0L && deliveryMillis > 0L && smsMillis >= deliveryMillis
+    }
+
+    /**
+     * يستخرج معرف التوصيل المكتمل من الصيغ العربية الأربع «44 تمت»، «44 تم»، «تمت 44»، «تم 44» من آخر رسالة فقط.
+     */
+    private fun extractCompletedDeliveryId(message: String): Long? {
+        val normalized = normalizeArabicDigits(message).replace('ـ', ' ').trim()
+        val regex = Regex("(?:^|[^0-9])(\\d+)\\s*(?:تمت|تم)(?:$|[^\\p{L}0-9])|(?:^|[^\\p{L}0-9])(?:تمت|تم)\\s*(\\d+)(?:$|[^0-9])")
+        val match = regex.find(normalized) ?: return null
+        val id = match.groupValues.drop(1).firstOrNull { it.isNotBlank() }?.toLongOrNull() ?: return null
+        return id.takeIf { it > 0L }
+    }
+
+    /**
+     * يوحد رقم الهاتف للمقارنة الآمنة بين سجل السائق ورسائل SMS دون تغيير الرقم المخزن في SQLite.
+     */
+    private fun normalizeDeliveryPhone(value: String): String {
+        return normalizeArabicDigits(value).filter { it.isDigit() }
+    }
+
+    /**
+     * يحول الأرقام العربية والهندية إلى أرقام ASCII لتوحيد مطابقة معرفات طلبات التوصيل داخل رسائل SMS.
+     */
+    private fun normalizeArabicDigits(value: String): String = buildString(value.length) {
+        value.forEach { ch ->
+            append(when (ch) {
+                in '٠'..'٩' -> ('0'.code + (ch.code - '٠'.code)).toChar()
+                in '۰'..'۹' -> ('0'.code + (ch.code - '۰'.code)).toChar()
+                else -> ch
+            })
+        }
+    }
+
+   /**
+     * يتحقق من آخر مهمة توصيل للسائق ورسالة SMS الواردة الأخيرة، ويكمل المهمة السابقة فقط إذا حملت الرسالة معرفها صراحةً مع «تم» أو «تمت».
+     * عند التطابق تُسجل رسوم خدمة التوصيل كمديونية على الموظف المرتبط بالسائق بصورة idempotent، ويُعاد قرار إرسال المهمة الجديدة بعد حفظها.
+     */
     fun getDeliveries(stationScopeId: Int): JSONArray {
         dbLock.lock()
         return try {

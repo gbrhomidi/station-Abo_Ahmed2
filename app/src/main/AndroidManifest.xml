@@ -272,6 +272,11 @@
             android:enabled="true"
             android:exported="false" />
 
+        <receiver
+            android:name=".DeliverySmsScheduler"
+            android:enabled="true"
+            android:exported="false" />
+
         <!-- ════════════════════════════════════════════════════════ -->
         <!-- ⚠️ ملاحظات هندسية مهمة                                    -->
         <!-- ════════════════════════════════════════════════════════ -->
