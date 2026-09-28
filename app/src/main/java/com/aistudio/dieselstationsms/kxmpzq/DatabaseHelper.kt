@@ -17570,6 +17570,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private fun operationalHasCreatedAt(table: String): Boolean = table !in setOf("bad_debts", "price_history", "price_list_items", "stocktakes", "stocktake_details", "cash_deposits", "employee_payments", "depreciation")
 
+    /** يحول تاريخ التوصيل أو الطابع الزمني الرقمي إلى epoch milliseconds؛ يدعم صيغ SQLite المستخدمة داخل التطبيق. */
+    private fun parseDeliveryDateMillis(value: String): Long {
+        val normalized = normalizeArabicDigits(value.trim())
+        if (normalized.isBlank()) return 0L
+        normalized.toLongOrNull()?.let { numeric ->
+            if (numeric <= 0L) return 0L
+            // Unix timestamps قد تصل بالثواني أو بالميلي ثانية.
+            return if (numeric < 100_000_000_000L) numeric * 1000L else numeric
+        }
+        return parseAttendanceDate(normalized)?.time ?: 0L
+    }
+
     private fun parseAttendanceDate(value: String): Date? {
         val text = value.trim()
         if (text.isBlank()) return null
