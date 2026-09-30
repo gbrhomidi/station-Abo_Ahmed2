@@ -8564,6 +8564,61 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun resolveTankLevelRecord(id: Long, note: String = "") = operationalResolve("tanks", "tank_level_log", id, note)
 
         @JavascriptInterface
+        fun getNextRefillCode(): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                dataResponse(JSONObject().apply { put("refill_code", db.getNextRefillCode(stationId)) })
+            } catch (e: Exception) {
+                DebugLogger.logException("NextRefillCode", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun saveTankRefillWithPayment(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val data = JSONObject(SecurityValidator.sanitizeOperationalJson(jsonData))
+                val saved = db.saveTankRefillWithPayment(data, stationId, activity.currentUserId)
+                dataResponse(saved)
+            } catch (e: Exception) {
+                DebugLogger.logException("SaveTankRefillWithPayment", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getActiveCashBoxes(): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getActiveCashBoxes(requireCurrentStationId(db, activity.currentUserId)))
+            } catch (e: Exception) {
+                DebugLogger.logException("ActiveCashBoxes", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getSupplierOutstandingBalance(supplierId: Long): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getSupplierOutstandingBalance(
+                    supplierId,
+                    requireCurrentStationId(db, activity.currentUserId)
+                ))
+            } catch (e: Exception) {
+                DebugLogger.logException("SupplierOutstandingBalance", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
         fun getTankRefillRecords(jsonData: String = "{}"): String = operationalList("tanks", "tank_refills", jsonData)
         @JavascriptInterface
         fun generateTankRefillReport(jsonData: String = "{}"): String = operationalReport("tanks", "tank_refills", jsonData)

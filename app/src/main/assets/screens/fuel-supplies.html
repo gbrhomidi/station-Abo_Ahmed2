@@ -1194,6 +1194,7 @@
         const cashBoxId = row ? getCashBoxId(row) : '';
         // تاريخ ووقت الطلب يُدخلان آلياً عند الإنشاء
         const orderDateTime = row ? (get('arrival_date') || nowLocal()) : nowLocal();
+        const defaultStatus = row ? (get('status') || 'completed') : 'completed';
 
         return `
             <!-- ===== رقم الفاتورة والطلب ===== -->
@@ -1213,7 +1214,7 @@
             <div class="form-group">
                 <label class="form-label">الحالة <span class="req">*</span></label>
                 <select class="form-input" data-key="status" required>
-                    ${Object.entries(STATUS_LABELS).map(([k,v]) => `<option value="${k}" ${get('status') === k ? 'selected' : ''}>${v.label}</option>`).join('')}
+                    ${Object.entries(STATUS_LABELS).map(([k,v]) => `<option value="${k}" ${defaultStatus === k ? 'selected' : ''}>${v.label}</option>`).join('')}
                 </select>
             </div>
 
@@ -1361,15 +1362,15 @@
             <div class="payment-notice cash" id="cashNotice">
                 <i class="fas fa-money-bill-wave"></i>
                 <div>
-                    <b>أثر التوريد النقدي:</b> سيتم خصم صافي المبلغ من الصندوق النقدي المحدد،
-                    وإنشاء حركة نقدية (خروج)، ورفع رصيد الخزان بالوقود.
+                    <b>أثر التوريد النقدي:</b>
+                    <span id="cashImpactText">سيتم خصم صافي المبلغ من الصندوق المحدد وإنشاء حركة خروج.</span>
                 </div>
             </div>
             <div class="payment-notice credit" id="creditNotice" style="display:none;">
                 <i class="fas fa-file-invoice-dollar"></i>
                 <div>
-                    <b>أثر التوريد الآجل:</b> سيُضاف صافي المبلغ إلى رصيد المورد كمديونية،
-                    ويُسجّل قيد في دفتر الموردين، ثم يظهر في بطاقة «مديونية الموردين» في لوحة التحكم.
+                    <b>أثر التوريد الآجل:</b>
+                    <span id="creditImpactText">سيُضاف صافي المبلغ إلى مديونية المورد ويُسجل في دفتر الموردين.</span>
                 </div>
             </div>
 
@@ -1465,6 +1466,8 @@
         // تغيير طريقة الدفع
         const pm = $('paymentMethodSelect');
         if (pm) { pm.removeEventListener('change', togglePaymentFields); pm.addEventListener('change', togglePaymentFields); }
+        const cb = $('cashBoxSelect');
+        if (cb) { cb.removeEventListener('change', togglePaymentFields); cb.addEventListener('change', togglePaymentFields); }
         // تغيير المورد
         const sup = $('supplierSelect');
         if (sup) {
@@ -1507,9 +1510,9 @@
         $('tankCurrentQty').textContent = fmt(num(field(tank, ['current_quantity'])), 2) + ' ل';
         $('tankCapacity').textContent = fmt(num(field(tank, ['capacity_liters'])), 2) + ' ل';
         // سعر الشراء: من الخزان (default_purchase_price) أو من نوع الوقود
-        const purchasePrice = num(field(tank, ['default_purchase_price']))
+        const purchasePrice = num(field(tank, ['purchase_price_per_liter','default_purchase_price']))
             || num(field(findFuelType(field(tank, ['fuel_type_id'])) || {}, ['default_purchase_price']));
-        const salePrice = num(field(tank, ['default_sale_price']))
+        const salePrice = num(field(tank, ['selling_price_per_liter','default_sale_price']))
             || num(field(findFuelType(field(tank, ['fuel_type_id'])) || {}, ['default_sale_price']));
         $('tankPurchasePrice').textContent = purchasePrice ? fmt(purchasePrice, 2) : '—';
         $('tankSalePrice').textContent = salePrice ? fmt(salePrice, 2) : '—';
@@ -1545,7 +1548,7 @@
     function onSupplierChange() {
         const supId = $('supplierSelect')?.value;
         if (!supId) { $('supplierBalancePreview').style.display = 'none'; return; }
-        loadSupplierBalance(supId).then(renderSupplierBalance);
+        loadSupplierBalance(supId).then(renderSupplierBalance); togglePaymentFields();
     }
 
     function renderSupplierBalance(balance) {
@@ -1570,11 +1573,25 @@
             if (cashNotice) cashNotice.style.display = 'flex';
             if (creditNotice) creditNotice.style.display = 'none';
             if (cashBoxSelect) cashBoxSelect.required = true;
+            const box = state.lookups.cashBoxes.find(b => Number(b.id) === Number(cashBoxSelect?.value || 0));
+            const amount = num($('netAmount')?.value);
+            const balance = box ? num(field(box, ['current_balance'])) : 0;
+            const impact = $('cashImpactText');
+            if (impact) impact.textContent = box
+                ? `الصندوق: ${field(box, ['box_name_ar','box_name'])} — الرصيد الحالي ${fmt(balance, 2)} ر.ي. وسيُخصم ${fmt(amount, 2)} ر.ي. بعد نجاح الحفظ.`
+                : 'اختر صندوقاً نشطاً لعرض الأثر المالي الفعلي.';
         } else {
             if (cashGroup) cashGroup.style.display = 'none';
             if (cashNotice) cashNotice.style.display = 'none';
             if (creditNotice) creditNotice.style.display = 'flex';
-            if (cashBoxSelect) cashBoxSelect.required = false;
+            if (cashBoxSelect) { cashBoxSelect.required = false; cashBoxSelect.value = ''; }
+            const supplierId = $('supplierSelect')?.value;
+            const supplier = state.lookups.suppliers.find(s => Number(s.id) === Number(supplierId || 0));
+            const amount = num($('netAmount')?.value);
+            const impact = $('creditImpactText');
+            if (impact) impact.textContent = supplier
+                ? `المورد: ${field(supplier, ['commercial_name_ar','commercial_name','legal_name'])} — ستزداد مديونيته بمقدار ${fmt(amount, 2)} ر.ي. بعد نجاح الحفظ.`
+                : 'اختر المورد لعرض الأثر المالي الفعلي.';
         }
     }
 
@@ -1612,6 +1629,7 @@
 
         if ($('totalAmount')) $('totalAmount').value = total.toFixed(2);
         if ($('netAmount')) $('netAmount').value = net.toFixed(2);
+        togglePaymentFields();
     }
 
     function collectForm() {
@@ -1668,6 +1686,7 @@
         if (!(num(payload.ordered_quantity) > 0)) return toast('أدخل الكمية المطلوبة', 'error');
         const method = payload.payment_method || 'cash';
         if (method === 'cash' && !payload.cash_box_id) return toast('اختر الصندوق النقدي', 'error');
+        if (!state.editing) payload.status = 'completed';
 
         // القيم النهائية
         const ordered = num(payload.ordered_quantity);

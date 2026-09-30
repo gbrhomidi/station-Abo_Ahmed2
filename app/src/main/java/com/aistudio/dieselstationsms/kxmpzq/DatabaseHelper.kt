@@ -8386,20 +8386,44 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val arr = JSONArray()
         val db = readableDatabase
         db.rawQuery(
-            "SELECT t.*, f.fuel_name, f.fuel_name_ar FROM tanks t LEFT JOIN fuel_types f ON t.fuel_type_id = f.id WHERE t.station_id=? AND t.is_deleted=0 ORDER BY t.tank_code",
+            """SELECT t.id AS tank_id, t.tank_code, t.tank_name, t.capacity_liters, t.current_quantity,
+                      t.minimum_level, t.status, t.fuel_type_id,
+                      f.fuel_name, f.fuel_name_ar,
+                      COALESCE(f.default_purchase_price,0) AS purchase_price_per_liter,
+                      COALESCE(f.default_sale_price,0) AS selling_price_per_liter,
+                      COALESCE(f.density_standard,0) AS fuel_density,
+                      COALESCE(f.temperature_standard,0) AS fuel_temperature,
+                      COALESCE((
+                          SELECT tr.quality_certificate
+                          FROM tank_refills tr
+                          WHERE tr.tank_id=t.id AND tr.station_id=t.station_id
+                            AND tr.is_deleted=0 AND tr.quality_certificate IS NOT NULL
+                            AND TRIM(tr.quality_certificate) <> ''
+                          ORDER BY tr.id DESC LIMIT 1
+                      ), '') AS quality_certificate
+               FROM tanks t
+               LEFT JOIN fuel_types f ON t.fuel_type_id=f.id AND f.is_deleted=0
+               WHERE t.station_id=? AND t.is_deleted=0
+               ORDER BY t.tank_code""",
             arrayOf(stationId.toString())
         ).use { cursor ->
             while (cursor.moveToNext()) {
                 arr.put(JSONObject().apply {
-                    put("tank_id", cursor.getInt(cursor.getColumnIndexOrThrow("id")))
+                    put("tank_id", cursor.getLong(cursor.getColumnIndexOrThrow("tank_id")))
                     put("tank_code", cursor.getString(cursor.getColumnIndexOrThrow("tank_code")))
                     put("tank_name", cursor.getString(cursor.getColumnIndexOrThrow("tank_name")))
                     put("capacity_liters", cursor.getDouble(cursor.getColumnIndexOrThrow("capacity_liters")))
                     put("current_quantity", cursor.getDouble(cursor.getColumnIndexOrThrow("current_quantity")))
                     put("minimum_level", cursor.getDouble(cursor.getColumnIndexOrThrow("minimum_level")))
                     put("status", cursor.getString(cursor.getColumnIndexOrThrow("status")))
+                    put("fuel_type_id", cursor.getLong(cursor.getColumnIndexOrThrow("fuel_type_id")))
                     put("fuel_name", cursor.getString(cursor.getColumnIndexOrThrow("fuel_name")))
                     put("fuel_name_ar", cursor.getString(cursor.getColumnIndexOrThrow("fuel_name_ar")))
+                    put("purchase_price_per_liter", cursor.getDouble(cursor.getColumnIndexOrThrow("purchase_price_per_liter")))
+                    put("selling_price_per_liter", cursor.getDouble(cursor.getColumnIndexOrThrow("selling_price_per_liter")))
+                    put("fuel_density", cursor.getDouble(cursor.getColumnIndexOrThrow("fuel_density")))
+                    put("fuel_temperature", cursor.getDouble(cursor.getColumnIndexOrThrow("fuel_temperature")))
+                    put("quality_certificate", cursor.getString(cursor.getColumnIndexOrThrow("quality_certificate")))
                 })
             }
         }
@@ -17944,6 +17968,314 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return tank
     }
 
+
+    fun getNextRefillCode(stationScopeId: Int): String {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val datePart = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
+            val prefix = "REF-$datePart-"
+            val maxSeq = db.rawQuery(
+                "SELECT COALESCE(MAX(CAST(SUBSTR(refill_code, ?) AS INTEGER)), 0) FROM tank_refills WHERE refill_code LIKE ? AND is_deleted=0",
+                arrayOf((prefix.length + 1).toString(), "$prefix%")
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+            require(maxSeq < 9999) { "تم استنفاد التسلسل اليومي لفواتير التوريد" }
+            "$prefix${(maxSeq + 1).toString().padStart(4, '0')}"
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getActiveCashBoxes(stationScopeId: Int): JSONArray {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery(
+                """SELECT id, uuid, box_code, box_name, box_name_ar, station_id, current_balance, currency_id, status
+                   FROM cash_boxes
+                   WHERE station_id=? AND status='active' AND is_deleted=0
+                   ORDER BY box_name_ar COLLATE NOCASE, box_name COLLATE NOCASE""",
+                arrayOf(stationScopeId.toString())
+            ).use { cursorToJsonArray(it) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSupplierOutstandingBalance(supplierId: Long, stationScopeId: Int): JSONObject {
+        require(supplierId > 0L && stationScopeId > 0) { "معرف المورد والمحطة مطلوبان" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery(
+                """SELECT p.id, p.current_balance, p.total_due, p.credit_limit,
+                          COALESCE(pt.type_code,'') AS party_type
+                   FROM parties p
+                   JOIN party_types pt ON pt.id=p.party_type_id
+                   WHERE p.id=? AND p.station_id=? AND p.is_deleted=0 AND pt.is_deleted=0
+                   LIMIT 1""",
+                arrayOf(supplierId.toString(), stationScopeId.toString())
+            ).use { cursor ->
+                require(cursor.moveToFirst()) { "المورد غير موجود ضمن المحطة" }
+                require(cursor.getString(cursor.getColumnIndexOrThrow("party_type")).equals("SUPPLIER", ignoreCase = true)) {
+                    "الطرف المحدد ليس مورداً"
+                }
+                JSONObject().apply {
+                    put("supplier_id", cursor.getLong(cursor.getColumnIndexOrThrow("id")))
+                    put("current_balance", cursor.getDouble(cursor.getColumnIndexOrThrow("current_balance")))
+                    put("total_due", cursor.getDouble(cursor.getColumnIndexOrThrow("total_due")))
+                    put("credit_limit", cursor.getDouble(cursor.getColumnIndexOrThrow("credit_limit")))
+                    put("party_type", cursor.getString(cursor.getColumnIndexOrThrow("party_type")))
+                }
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun saveTankRefillWithPayment(input: JSONObject, stationScopeId: Int, actorId: Long): JSONObject {
+        require(stationScopeId > 0 && actorId > 0L) { "المحطة والمستخدم مطلوبان" }
+        val data = JSONObject(input.toString())
+        val paymentMethod = data.optString("payment_method", "cash").trim().lowercase(Locale.ROOT)
+        require(paymentMethod in setOf("cash", "credit")) { "طريقة الدفع غير صالحة" }
+
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                val supplierId = data.optLong("supplier_id", 0L)
+                require(supplierId > 0L) { "المورد مطلوب" }
+
+                // المورد يجب أن يكون SUPPLIER ومملوكاً للمحطة الحالية.
+                val supplierType = db.rawQuery(
+                    """SELECT pt.type_code, p.current_balance, p.total_due
+                       FROM parties p
+                       JOIN party_types pt ON pt.id=p.party_type_id
+                       WHERE p.id=? AND p.station_id=? AND p.is_deleted=0 AND p.is_active=1 AND pt.is_deleted=0
+                       LIMIT 1""",
+                    arrayOf(supplierId.toString(), stationScopeId.toString())
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) { "المورد غير موجود أو لا ينتمي إلى المحطة الحالية" }
+                    cursor.getString(0)
+                }
+                require(supplierType.equals("SUPPLIER", ignoreCase = true)) { "الطرف المحدد ليس مورداً" }
+
+                val tankId = data.optLong("tank_id", 0L)
+                val fuelTypeId = data.optLong("fuel_type_id", 0L)
+                require(tankId > 0L && fuelTypeId > 0L) { "الخزان ونوع الوقود مطلوبان" }
+                val tank = requireTankFuelMatch(db, tankId, fuelTypeId, stationScopeId)
+
+                val ordered = data.optDouble("ordered_quantity", Double.NaN)
+                require(ordered.isFinite() && ordered > 0.0) { "الكمية المطلوبة غير صالحة" }
+                val delivered = ordered
+                val before = tank.optDouble("current_quantity")
+                val actual = before + delivered
+                require(actual.isFinite() && actual <= tank.optDouble("capacity_liters")) { "التوريد يتجاوز سعة الخزان" }
+
+                val unitPrice = data.optDouble("unit_price", Double.NaN)
+                require(unitPrice.isFinite() && unitPrice >= 0.0) { "سعر الشراء غير صالح" }
+                val transport = data.optDouble("transport_cost", 0.0).coerceAtLeast(0.0)
+                val discount = data.optDouble("discount", 0.0).coerceAtLeast(0.0)
+                val tax = data.optDouble("tax_amount", 0.0).coerceAtLeast(0.0)
+                val totalAmount = delivered * unitPrice
+                val netAmount = (totalAmount + transport - discount + tax).coerceAtLeast(0.0)
+                require(netAmount.isFinite()) { "صافي المبلغ غير صالح" }
+
+                val now = getCurrentDateTime()
+                val refillCodeInput = data.optString("refill_code", "").trim()
+                var refillCode = refillCodeInput
+                if (refillCode.isBlank() || !Regex("""^REF-\d{8}-\d{4}$""").matches(refillCode)) {
+                    refillCode = getNextRefillCode(stationScopeId)
+                }
+                // ضمان عدم التكرار حتى لو تغيّر الكود المتوقع بين فتح النموذج والحفظ.
+                var sequenceGuard = 0
+                while (db.rawQuery(
+                    "SELECT 1 FROM tank_refills WHERE refill_code=? LIMIT 1",
+                    arrayOf(refillCode)
+                ).use { it.moveToFirst() }) {
+                    sequenceGuard++
+                    require(sequenceGuard < 10000) { "تعذر توليد رقم فاتورة توريد فريد" }
+                    refillCode = getNextRefillCode(stationScopeId)
+                }
+
+                val status = data.optString("status", "completed").trim().ifBlank { "completed" }
+                require(status == "completed") { "حفظ التوريد المالي يتطلب حالة مكتمل" }
+
+                val cashBoxId = data.optLong("cash_box_id", 0L)
+                var cashBalanceBefore = 0.0
+                if (paymentMethod == "cash") {
+                    require(cashBoxId > 0L) { "الصندوق النقدي مطلوب للدفع النقدي" }
+                    db.rawQuery(
+                        "SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND status='active' AND is_deleted=0 LIMIT 1",
+                        arrayOf(cashBoxId.toString(), stationScopeId.toString())
+                    ).use { cursor ->
+                        require(cursor.moveToFirst()) { "الصندوق غير موجود أو غير نشط أو خارج المحطة" }
+                        cashBalanceBefore = cursor.getDouble(0)
+                    }
+                    require(cashBalanceBefore + 0.000001 >= netAmount) { "رصيد الصندوق غير كافٍ" }
+                } else {
+                    require(cashBoxId <= 0L) { "لا يجوز تحديد صندوق مع الدفع الآجل" }
+                }
+
+                val extra = try {
+                    if (data.has("extra_data") && !data.isNull("extra_data") && data.optString("extra_data").isNotBlank())
+                        JSONObject(data.optString("extra_data"))
+                    else JSONObject()
+                } catch (e: Exception) {
+                    throw IllegalArgumentException("بيانات extra_data غير صالحة")
+                }
+                extra.put("payment_method", paymentMethod)
+                if (paymentMethod == "cash") extra.put("cash_box_id", cashBoxId) else extra.remove("cash_box_id")
+
+                val values = ContentValues().apply {
+                    put("uuid", data.optString("uuid").takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString())
+                    put("refill_code", refillCode)
+                    put("tank_id", tankId)
+                    put("supplier_id", supplierId)
+                    put("station_id", stationScopeId)
+                    put("tanker_number", data.optString("tanker_number", "").trim())
+                    put("tanker_driver", data.optString("tanker_driver", "").trim())
+                    put("tanker_driver_phone", data.optString("tanker_driver_phone", "").trim())
+                    put("seal_number", data.optString("seal_number", "").trim())
+                    put("fuel_type_id", fuelTypeId)
+                    put("ordered_quantity", ordered)
+                    put("delivered_quantity", delivered)
+                    put("actual_quantity", actual)
+                    put("quantity_difference", actual - delivered)
+                    put("tank_level_before", before)
+                    put("tank_level_after", actual)
+                    put("fuel_density", data.optDouble("fuel_density", 0.0))
+                    put("fuel_temperature", data.optDouble("fuel_temperature", 0.0))
+                    put("quality_certificate", data.optString("quality_certificate", "").trim())
+                    put("lab_test_result", data.optString("lab_test_result", "pending").trim().ifBlank { "pending" })
+                    put("lab_test_notes", data.optString("lab_test_notes", "").trim())
+                    put("unit_price", unitPrice)
+                    put("total_amount", totalAmount)
+                    put("transport_cost", transport)
+                    put("discount", discount)
+                    put("tax_amount", tax)
+                    put("net_amount", netAmount)
+                    if (data.has("currency_id") && !data.isNull("currency_id")) put("currency_id", data.optLong("currency_id"))
+                    put("order_date", data.optString("order_date", getCurrentDate()))
+                    put("expected_date", data.optString("expected_date", getCurrentDate()))
+                    put("arrival_date", now)
+                    put("received_by", actorId)
+                    put("approved_by", actorId)
+                    put("status", "completed")
+                    put("invoice_number", data.optString("invoice_number", "").trim())
+                    put("remarks", data.optString("remarks", "").trim())
+                    put("extra_data", extra.toString())
+                    put("created_at", now)
+                    put("updated_at", now)
+                    put("created_by", actorId)
+                }
+                val refillId = db.insertOrThrow("tank_refills", null, values)
+
+                // المخزون: actual_quantity هو مستوى الخزان بعد التوريد؛ الزيادة الفعلية هي delivered_quantity.
+                require(db.update(
+                    "tanks",
+                    ContentValues().apply { put("current_quantity", actual); put("updated_at", now) },
+                    "id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(tankId.toString(), stationScopeId.toString())
+                ) == 1) { "تعذر تحديث كمية الخزان" }
+
+                if (paymentMethod == "cash") {
+                    val cashAfter = cashBalanceBefore - netAmount
+                    require(cashAfter >= -0.000001) { "الرصيد النقدي الناتج غير صالح" }
+                    require(db.update(
+                        "cash_boxes",
+                        ContentValues().apply { put("current_balance", cashAfter); put("updated_at", now) },
+                        "id=? AND station_id=? AND status='active' AND is_deleted=0 AND current_balance>=?",
+                        arrayOf(cashBoxId.toString(), stationScopeId.toString(), netAmount.toString())
+                    ) == 1) { "تعذر خصم قيمة التوريد من الصندوق" }
+
+                    db.insertOrThrow("cash_movements", null, ContentValues().apply {
+                        put("uuid", UUID.randomUUID().toString())
+                        put("cash_box_id", cashBoxId)
+                        put("movement_type", "out")
+                        put("amount", netAmount)
+                        put("balance_before", cashBalanceBefore)
+                        put("balance_after", cashAfter)
+                        put("description", "توريد وقود نقدي: $refillCode")
+                        put("reference_type", "tank_refill")
+                        put("reference_id", refillId)
+                        put("created_by", actorId.toString())
+                        put("created_at", now)
+                    })
+                } else {
+                    val currentBalance = db.rawQuery(
+                        "SELECT current_balance, total_due, total_purchases FROM parties WHERE id=? AND station_id=? AND is_deleted=0 LIMIT 1",
+                        arrayOf(supplierId.toString(), stationScopeId.toString())
+                    ).use { cursor ->
+                        require(cursor.moveToFirst()) { "المورد غير موجود" }
+                        doubleArrayOf(cursor.getDouble(0), cursor.getDouble(1), cursor.getDouble(2))
+                    }
+                    val newBalance = currentBalance[0] + netAmount
+                    val newDue = currentBalance[1] + netAmount
+                    val newPurchases = currentBalance[2] + netAmount
+                    require(db.update(
+                        "parties",
+                        ContentValues().apply {
+                            put("current_balance", newBalance)
+                            put("total_due", newDue)
+                            put("total_purchases", newPurchases)
+                            put("updated_at", now)
+                        },
+                        "id=? AND station_id=? AND is_deleted=0",
+                        arrayOf(supplierId.toString(), stationScopeId.toString())
+                    ) == 1) { "تعذر تحديث مديونية المورد" }
+
+                    db.insertOrThrow("supplier_ledger", null, ContentValues().apply {
+                        put("uuid", UUID.randomUUID().toString())
+                        put("party_id", supplierId)
+                        put("transaction_date", now)
+                        put("transaction_type", "fuel_supply_credit")
+                        put("transaction_id", refillId)
+                        put("reference_number", refillCode)
+                        put("debit", 0.0)
+                        put("credit", netAmount)
+                        put("balance", newBalance)
+                        put("description", "توريد وقود آجل: $refillCode")
+                        put("created_at", now)
+                        put("created_by", actorId)
+                    })
+                }
+
+                // سجل النشاط داخل نفس المعاملة حتى لا ينجح أحد طرفي العملية وحده.
+                logActivity(
+                    "user:$actorId",
+                    "create_fuel_supply",
+                    "إنشاء فاتورة توريد وقود $refillCode بطريقة دفع $paymentMethod بقيمة $netAmount",
+                    stationScopeId,
+                    actorId,
+                    "tank_refills",
+                    refillId
+                )
+
+                db.setTransactionSuccessful()
+                JSONObject().apply {
+                    put("id", refillId)
+                    put("refill_id", refillId)
+                    put("refill_code", refillCode)
+                    put("status", "completed")
+                    put("payment_method", paymentMethod)
+                    put("net_amount", netAmount)
+                    put("delivered_quantity", delivered)
+                    put("actual_quantity", actual)
+                    put("quantity_difference", actual - delivered)
+                    if (paymentMethod == "cash") put("cash_box_id", cashBoxId)
+                }
+            } finally {
+                db.endTransaction()
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
     fun saveTankRefillRecord(input: JSONObject, stationScopeId: Int, actorId: Long): Long {
         require(stationScopeId > 0 && actorId > 0L) { "المحطة والمستخدم مطلوبان" }
         dbLock.lock()
@@ -17953,14 +18285,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             requireOperationalData(operationalSpec("tank_refills")!!, data)
             validateModule006Record("tank_refills", data, db, stationScopeId)
             val tank = requireTankFuelMatch(db, data.optLong("tank_id"), data.optLong("fuel_type_id"), stationScopeId)
-            val added = if (data.has("actual_quantity") && !data.isNull("actual_quantity")) data.optDouble("actual_quantity") else data.optDouble("delivered_quantity")
-            require(added.isFinite() && added > 0.0) { "كمية التعبئة غير صالحة" }
+            val delivered = data.optDouble("delivered_quantity")
+            require(delivered.isFinite() && delivered > 0.0) { "كمية التعبئة غير صالحة" }
             val before = tank.optDouble("current_quantity")
             val status = data.optString("status", "completed").ifBlank { "completed" }
-            val applied = if (status == "completed") added else 0.0
+            val applied = if (status == "completed") delivered else 0.0
             val after = before + applied
             require(after <= tank.optDouble("capacity_liters")) { "التعبئة تتجاوز سعة الخزان" }
-            data.put("tank_level_before", before); data.put("tank_level_after", after); data.put("actual_quantity", added); data.put("quantity_difference", added - data.optDouble("delivered_quantity")); data.put("status", status)
+            data.put("tank_level_before", before); data.put("tank_level_after", after); data.put("actual_quantity", after); data.put("quantity_difference", after - delivered); data.put("status", status)
             val values = ContentValues()
             for (key in operationalSpec("tank_refills")!!.columns) if (data.has(key)) putOperationalValue(values, key, data.opt(key))
             putOperationalValue(values, "uuid", data.optString("uuid")); values.put("created_at", getCurrentDateTime()); values.put("updated_at", getCurrentDateTime())
@@ -17993,12 +18325,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
                 validateModule006Record("tank_refills", data, db, stationScopeId)
                 val tank = requireTankFuelMatch(db, data.optLong("tank_id"), data.optLong("fuel_type_id"), stationScopeId)
-                val oldApplied = if (old.optString("status") == "completed") old.optDouble("actual_quantity") else 0.0
-                val newQty = data.optDouble("actual_quantity")
-                val newApplied = if (data.optString("status") == "completed") newQty else 0.0
+                val oldApplied = if (old.optString("status") == "completed") {
+                    old.optDouble("delivered_quantity").takeIf { it.isFinite() && it > 0.0 }
+                        ?: old.optDouble("actual_quantity")
+                } else 0.0
+                val newDelivered = data.optDouble("delivered_quantity")
+                require(newDelivered.isFinite() && newDelivered > 0.0) { "كمية التوريد الجديدة غير صالحة" }
+                val newApplied = if (data.optString("status") == "completed") newDelivered else 0.0
                 val after = tank.optDouble("current_quantity") - oldApplied + newApplied
                 require(after >= 0.0 && after <= tank.optDouble("capacity_liters")) { "كمية الخزان الناتجة خارج النطاق" }
-                data.put("tank_level_before", after - newApplied); data.put("tank_level_after", after); data.put("quantity_difference", newQty - data.optDouble("delivered_quantity")); data.put("updated_by", actorId)
+                data.put("actual_quantity", after); data.put("tank_level_before", after - newApplied); data.put("tank_level_after", after); data.put("quantity_difference", after - newDelivered); data.put("updated_by", actorId)
                 val values = ContentValues()
                 for (key in operationalSpec("tank_refills")!!.columns) if (data.has(key)) putOperationalValue(values, key, data.opt(key))
                 values.put("updated_at", getCurrentDateTime())
@@ -18017,8 +18353,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             db.beginTransaction()
             try {
-                val old = db.rawQuery("SELECT tank_id, actual_quantity, status FROM tank_refills WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "سجل التعبئة غير موجود ضمن المحطة" }; arrayOf(cursor.getLong(0), java.lang.Double.doubleToRawLongBits(cursor.getDouble(1)), cursor.getString(2)) }
-                val tankId = old[0] as Long; val qty = if ((old[2] as String) == "completed") java.lang.Double.longBitsToDouble(old[1] as Long) else 0.0
+                val old = db.rawQuery("SELECT tank_id, delivered_quantity, actual_quantity, status FROM tank_refills WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(), stationScopeId.toString())).use { cursor ->
+                    require(cursor.moveToFirst()) { "سجل التعبئة غير موجود ضمن المحطة" }
+                    arrayOf(cursor.getLong(0), cursor.getDouble(1), cursor.getDouble(2), cursor.getString(3))
+                }
+                val tankId = old[0] as Long
+                val qty = if ((old[3] as String) == "completed") {
+                    (old[1] as Double).takeIf { it.isFinite() && it > 0.0 } ?: (old[2] as Double)
+                } else 0.0
                 val current = db.rawQuery("SELECT current_quantity FROM tanks WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(tankId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الخزان غير موجود ضمن المحطة" }; cursor.getDouble(0) }
                 require(current >= qty) { "لا يمكن عكس التعبئة لأن كمية الخزان الحالية أقل من الكمية المسجلة" }
                 require(db.update("tanks", ContentValues().apply { put("current_quantity", current - qty); put("updated_at", getCurrentDateTime()) }, "id=? AND station_id=? AND is_deleted=0", arrayOf(tankId.toString(), stationScopeId.toString())) == 1) { "تعذر عكس كمية الخزان" }
