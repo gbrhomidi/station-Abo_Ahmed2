@@ -8197,6 +8197,23 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getVehicleRecords(jsonData: String = "{}") = operationalList("vehicles", "vehicles", jsonData)
         @JavascriptInterface
+        fun getVehiclePhotoPreviewDataUrl(uriString: String): String {
+            return try {
+                val rawPath = uriString.trim()
+                val parsed = Uri.parse(rawPath)
+                val uri = if (parsed.scheme.isNullOrBlank()) Uri.fromFile(File(rawPath)) else parsed
+                require(uri.scheme == "content" || uri.scheme == "file") { "مسار صورة المركبة غير صالح" }
+                val dataUrl = createStationImagePreviewDataUrl(uri)
+                    ?: return errorResponse("تعذر قراءة صورة المركبة")
+                JSONObject().apply {
+                    put("success", true)
+                    put("data", JSONObject().apply { put("dataUrl", dataUrl) })
+                }.toString()
+            } catch (e: Exception) {
+                errorResponse(e.message ?: "تعذر قراءة صورة المركبة")
+            }
+        }
+        @JavascriptInterface
         fun generateVehicleReport(jsonData: String = "{}") = operationalReport("vehicles", "vehicles", jsonData)
         @JavascriptInterface
         fun saveVehicleRecord(jsonData: String) = operationalSave("vehicles", "vehicles", jsonData)
@@ -8954,6 +8971,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         /**
          * يفحص آخر مهمة توصيل للسائق مقابل آخر SMS وارد من رقمه، ويكمل المهمة السابقة إذا تطابق معرفها مع «تم/تمت».
          */
+        @JavascriptInterface
+        fun checkDriverAvailability(driverId: Long): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                dataResponse(db.checkDriverAvailability(driverId, stationId))
+            } catch (e: Exception) {
+                DebugLogger.logException("DriverAvailability", e)
+                errorResponse(e.message ?: "تعذر التحقق من حالة السائق")
+            }
+        }
+
         @JavascriptInterface
         fun prepareDriverForNewDelivery(driverId: Long, partyId: Long = 0L): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")

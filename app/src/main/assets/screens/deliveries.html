@@ -2595,12 +2595,15 @@
         <div class="modal-body">
 
             <div class="form-grid">
-                <div class="form-group">
+                <div class="form-group full">
                     <label class="form-label">نوع التقرير</label>
                     <select id="reportType" class="form-input">
                         <option value="detailed">تقرير تفصيلي</option>
                         <option value="customer">توصيلات العميل</option>
                         <option value="site">توصيلات الموقع</option>
+                        <option value="vehicle">توصيلات المركبة</option>
+                        <option value="driver">توصيلات السائق</option>
+                        <option value="status">حالة التوصيل</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -4426,6 +4429,8 @@
         state.editingId = null;
         state.saleKind = 'fuel';
         state.saleItems = [];
+        state.selectedSalePaymentMethod = '';
+        state.selectedSaleNotes = '';
         state.currentVehicleBusy = false;
         state.currentVehicleBusyReason = '';
         state.currentDriverConfirmedLast = false;
@@ -4724,6 +4729,8 @@
 
         state.saleKind = isProductSale ? 'product' : 'fuel';
         state.saleItems = Array.isArray(sale.items) ? sale.items : [];
+        state.selectedSalePaymentMethod = String(sale.payment_method || '').trim().toLowerCase();
+        state.selectedSaleNotes = String(sale.fuel_sale_notes || sale.notes || '').trim();
 
         $('f_sale_type').value = state.saleKind;
 
@@ -5121,6 +5128,22 @@
         }, 120);
     }
 
+    async function hydrateVehiclePickerImages(grid) {
+        if (!grid || !bridge || typeof bridge.getVehiclePhotoPreviewDataUrl !== 'function') return;
+        const images = Array.from(grid.querySelectorAll('img[data-vehicle-photo-uri]'));
+        await Promise.all(images.map(async img => {
+            const uri = String(img.getAttribute('data-vehicle-photo-uri') || '').trim();
+            if (!uri || /^data:/i.test(uri) || /^https?:/i.test(uri) || /^file:/i.test(uri) === false && /^content:/i.test(uri) === false) return;
+            try {
+                const response = await invoke('getVehiclePhotoPreviewDataUrl', [uri]);
+                const data = dataOf(response) || {};
+                if (data.dataUrl) img.src = data.dataUrl;
+            } catch (error) {
+                console.warn('Vehicle photo preview failed:', error.message);
+            }
+        }));
+    }
+
     function renderVehicleGrid(query) {
 
         const grid = $('vehicleGrid');
@@ -5166,6 +5189,7 @@
                 v.image_path ||
                 ''
             ).trim();
+            const photoDataUrl = String(v.vehicle_photo_data_url || '').trim();
 
             const plate =
                 v.plate_number_ar ||
@@ -5183,7 +5207,7 @@
                 !allowed || allowed.includes(kind);
 
             const photoHtml = photo
-                ? `<img class="v-photo" src="${esc(photo)}" alt="صورة المركبة" loading="lazy">`
+                ? `<img class="v-photo" src="${esc(photoDataUrl || photo)}" data-vehicle-photo-uri="${esc(photo)}" alt="صورة المركبة" loading="lazy">`
                 : `<div class="v-placeholder"><i class="fas fa-truck"></i></div>`;
 
             const compatBadge = allowed
@@ -5213,6 +5237,8 @@
                 </button>
             `;
         }).join('');
+
+        hydrateVehiclePickerImages(grid);
 
         grid.querySelectorAll('.vehicle-tile').forEach(tile => {
             tile.addEventListener('click', async () => {
@@ -5593,30 +5619,28 @@
             ? serviceFee.toFixed(2) + ' ريال'
             : '0 ريال';
 
+        const saleNotes = String(state.selectedSaleNotes || '').trim();
+        const isCashSale =
+            String(state.selectedSalePaymentMethod || '').trim().toLowerCase() === 'cash' ||
+            customerName.includes('مبيعات نقدية');
+        const customerLine = isCashSale && saleNotes
+            ? customerName + '/' + saleNotes
+            : customerName;
+
         const message =
             'مرحباً - ' + driverNameText + '\n' +
             'لديك مهمة توصيل جديدة رقمها - ' + savedId + '\n' +
             'نوع الحمولة - ' + cargoType + '\n' +
             'حجم الحمولة - ' + quantityText + '\n' +
-            'للعميل - ' + customerName + '\n' +
+            'للعميل - ' + customerLine + '\n' +
             'موقع التوصيل - ' + location + '\n' +
             'قم باستلام - ' + feeText + ' من العميل،';
 
-        /* 1. Schedule SMS to driver 30 minutes before delivery time */
-        if (driverPhone && payload.delivery_date) {
-            try {
-                await invoke('scheduleDeliverySms', [JSON.stringify({
-                    delivery_id: savedId,
-                    delivery_date: payload.delivery_date,
-                    driver_phone: driverPhone,
-                    driver_name: driverNameText,
-                    message: message
-                })]);
-            } catch (schedError) {
-                console.warn('Delivery SMS scheduling failed:', schedError.message);
-            }
-        }
-
+        /*
+         * DeliverySmsScheduler is scheduled by saveDeliveryRecord from the
+         * authoritative SQLite delivery time. Keeping scheduling server-side
+         * avoids a second, divergent scheduling path in the WebView.
+         */
         /* 2. Record service fee on driver as pending payroll deduction */
         if (serviceFee > 0 && driverId > 0) {
             try {
@@ -5829,7 +5853,7 @@
                         'success',
                         'تمت إضافة التوصيل بنجاح',
                         'تم حفظ التوصيل رقم ' + savedId +
-                        '. سيتم إرسال SMS للسائق قبل الموعد بنصف ساعة.',
+                        '. سيتم إرسال SMS للسائق وفق وقت التوصيل، وتُرسل فوراً إذا كان الموعد خلال أقل من 30 دقيقة.',
                         () => loadDeliveries()
                     );
                 }

@@ -9490,8 +9490,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                       s.liters AS quantity, s.price_per_liter, s.net_amount, s.service_fee,
                       s.payment_method, s.payment_status, s.paid_amount, s.remaining_amount,
                       s.is_credit, s.status, s.order_type,
-                      s.delivery_location AS location, s.delivery_time, s.created_at
+                      s.delivery_location AS location, s.delivery_time, s.created_at,
+                      COALESCE(fs.notes,'') AS fuel_sale_notes
                FROM sales_transactions s
+               LEFT JOIN fuel_sales fs ON fs.sale_id = s.id AND fs.is_deleted = 0
                LEFT JOIN parties p ON p.id = s.customer_party_id
                LEFT JOIN vehicles v ON v.id = s.vehicle_id
                LEFT JOIN drivers d ON d.id = s.driver_id
@@ -9543,6 +9545,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("location", cursor.getString(idx("location")))
                 put("delivery_time", cursor.getString(idx("delivery_time")))
                 put("created_at", cursor.getString(idx("created_at")))
+                    put("fuel_sale_notes", cursor.getString(idx("fuel_sale_notes")).orEmpty())
             }
             if (saleKind == "product") {
                 val items = db.rawQuery(
@@ -9649,7 +9652,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun getDeliveryManagementReport(data: JSONObject, stationScopeId: Int): JSONObject {
         require(stationScopeId > 0) { "معرف المحطة مطلوب لتقرير التوصيلات" }
         val reportType = data.optString("report_type", "detailed").trim()
-        require(reportType in setOf("detailed", "customer", "site")) { "نوع تقرير التوصيلات غير مدعوم" }
+        require(reportType in setOf("detailed", "customer", "site", "vehicle", "driver", "status")) { "نوع تقرير التوصيلات غير مدعوم" }
 
         val fromDate = data.optString("from_date", "").trim()
         val toDate = data.optString("to_date", "").trim()
@@ -9727,7 +9730,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                LEFT JOIN shifts sh ON sh.id = d.shift_id
                LEFT JOIN fuel_types f ON f.id = s.fuel_type_id
                WHERE $whereSql
-               ORDER BY date(d.delivery_date) ASC, d.id ASC
+               ORDER BY ${when (reportType) {
+                   "vehicle" -> "COALESCE(v.plate_number_ar, v.plate_number, v.vehicle_code, '') ASC, date(d.delivery_date) ASC, d.id ASC"
+                   "driver" -> "COALESCE(dr.full_name_ar, dr.full_name, dr.driver_code, '') ASC, date(d.delivery_date) ASC, d.id ASC"
+                   "status" -> "d.status ASC, date(d.delivery_date) ASC, d.id ASC"
+                   else -> "date(d.delivery_date) ASC, d.id ASC"
+               }}
                LIMIT 5000""",
             args.toTypedArray()
         ).use { cursorToJsonArray(it) }
@@ -10077,8 +10085,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val originalServiceFee = sale.optDouble("service_fee", 0.0)
                 val paymentMethod = sale.optString("payment_method", "credit")
                 val isCredit = sale.optInt("is_credit", 0) == 1 || paymentMethod == "credit"
-                require(serviceFee == 0.0 || (isCredit && partyId != null)) {
-                    "رسوم خدمة التوصيل تحتاج بيعاً آجلاً مرتبطاً بعميل مسجل حتى يمكن ترحيلها إلى الحساب والدفتر الحاليين"
+                require(serviceFee == 0.0 || isCredit || paymentMethod == "cash") {
+                    "رسوم خدمة التوصيل غير صالحة لطريقة الدفع المحددة"
                 }
 
                 val idempotencyKey = data.optString("idempotency_key", "").trim()
@@ -10167,7 +10175,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
                 if (driverId != null) {
                     val deliveryMillis = parseDeliveryDateMillis(deliveryDate)
-                    val scheduledAt = if (deliveryMillis > 0L) deliveryMillis - 30L * 60L * 1000L else 0L
+                    // The SMS window is "up to 30 minutes before delivery". If the
+                    // requested delivery is sooner than 30 minutes (or now/past),
+                    // the task must be eligible immediately instead of being
+                    // scheduled at a timestamp that has already elapsed.
+                    val nowMillis = System.currentTimeMillis()
+                    val thirtyMinutesBefore = deliveryMillis - 30L * 60L * 1000L
+                    val scheduledAt = when {
+                        deliveryMillis <= 0L -> 0L
+                        thirtyMinutesBefore > nowMillis -> thirtyMinutesBefore
+                        else -> nowMillis + 1_000L
+                    }
                     db.insertOrThrow("sms_delivery_tasks", null, ContentValues().apply {
                         put("delivery_id", deliveryId.toString())
                         put("order_id", deliveryId)
@@ -10454,6 +10472,51 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      * يتحقق من آخر مهمة توصيل للسائق ورسالة SMS الواردة الأخيرة، ويكمل المهمة السابقة فقط إذا حملت الرسالة معرفها صراحةً مع «تم» أو «تمت».
      * عند التطابق تُسجل رسوم خدمة التوصيل كمديونية على الموظف المرتبط بالسائق بصورة idempotent، ويُعاد قرار إرسال المهمة الجديدة بعد حفظها.
      */
+    /**
+     * Returns the driver's current delivery availability for the delivery-management UI.
+     * Availability is derived from active delivery/task records in the current station;
+     * it does not depend on a separate Android bridge contract.
+     */
+    fun checkDriverAvailability(driverId: Long, stationScopeId: Int): JSONObject {
+        require(driverId > 0L) { "معرف السائق مطلوب" }
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val db = readableDatabase
+        return db.rawQuery(
+            """SELECT d.id,
+                      COALESCE(d.full_name_ar,d.full_name,d.driver_code,'سائق'),
+                      d.phone
+               FROM drivers d
+               WHERE d.id=? AND d.station_id=? AND d.is_deleted=0 AND d.status='active'
+               LIMIT 1""",
+            arrayOf(driverId.toString(), stationScopeId.toString())
+        ).use { c ->
+            require(c.moveToFirst()) { "السائق غير موجود أو غير نشط ضمن المحطة الحالية" }
+            val driverName = c.getString(1).orEmpty()
+            val active = db.rawQuery(
+                """SELECT d.id, d.status, d.delivery_date
+                   FROM deliveries d
+                   WHERE d.driver_id=? AND d.is_deleted=0
+                     AND d.status IN ('pending','assigned','out_for_delivery')
+                   ORDER BY d.id DESC LIMIT 1""",
+                arrayOf(driverId.toString())
+            ).use { a ->
+                if (a.moveToFirst()) JSONObject().apply {
+                    put("id", a.getLong(0))
+                    put("status", a.getString(1).orEmpty())
+                    put("delivery_date", a.getString(2).orEmpty())
+                } else null
+            }
+            JSONObject().apply {
+                put("available", active == null)
+                put("has_active_task", active != null)
+                put("reason", if (active != null) "لديه مهمة توصيل نشطة رقم ${active.optLong("id")}" else "")
+                put("driver_name", driverName)
+                put("last_task_id", active?.optLong("id") ?: JSONObject.NULL)
+                put("last_task_status", active?.optString("status") ?: JSONObject.NULL)
+            }
+        }
+    }
+
     fun prepareDriverForNewDelivery(driverId: Long, partyId: Long?, stationScopeId: Int): JSONObject {
         require(driverId > 0L) { "معرف السائق مطلوب" }
         require(stationScopeId > 0) { "معرف المحطة مطلوب" }
@@ -10606,13 +10669,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             """SELECT d.id, d.quantity, d.location, COALESCE(s.service_fee,0), COALESCE(s.order_type,''),
                       COALESCE(p.commercial_name_ar,p.commercial_name,p.legal_name,'عميل'),
                       COALESCE(dr.full_name_ar,dr.full_name,dr.driver_code,'سائق'), dr.phone,
-                      COALESCE(f.fuel_name_ar,f.fuel_name,f.fuel_code,'')
+                      COALESCE(f.fuel_name_ar,f.fuel_name,f.fuel_code,''),
+                      COALESCE(s.payment_method,'cash'),
+                      COALESCE(fs.notes,'')
                FROM deliveries d
                JOIN sales_transactions s ON s.id=d.sale_id AND s.station_id=? AND s.is_deleted=0
+               LEFT JOIN fuel_sales fs ON fs.sale_id=s.id AND fs.is_deleted=0
                LEFT JOIN parties p ON p.id=d.party_id
                LEFT JOIN drivers dr ON dr.id=d.driver_id
                LEFT JOIN fuel_types f ON f.id=s.fuel_type_id
-               WHERE d.id=? AND d.is_deleted=0 AND d.driver_id IS NOT NULL LIMIT 1""",
+               WHERE d.id=? AND d.is_deleted=0 AND d.driver_id IS NOT NULL
+               ORDER BY fs.id DESC LIMIT 1""",
             arrayOf(stationScopeId.toString(), deliveryId.toString())
         ).use { c ->
             require(c.moveToFirst()) { "بيانات التوصيل أو السائق غير موجودة ضمن المحطة الحالية" }
@@ -10621,6 +10688,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("delivery_id", c.getLong(0)); put("quantity", c.getDouble(1)); put("location", c.getString(2).orEmpty()); put("service_fee", c.getDouble(3))
                 put("payload_type", if (orderType.equals("product", true)) "منتجات" else "وقود")
                 put("customer_name", c.getString(5).orEmpty()); put("driver_name", c.getString(6).orEmpty()); put("driver_phone", c.getString(7).orEmpty()); put("fuel_type", c.getString(8).orEmpty())
+                put("payment_method", c.getString(9).orEmpty())
+                put("sale_notes", c.getString(10).orEmpty())
             }
             if (orderType.equals("product", true)) {
                 val count = db.rawQuery("SELECT COALESCE(SUM(si.quantity-COALESCE(si.returned_quantity,0)),0) FROM sale_items si WHERE si.sale_id=(SELECT sale_id FROM deliveries WHERE id=? AND is_deleted=0) AND si.item_type='product'", arrayOf(deliveryId.toString())).use { x -> if (x.moveToFirst()) x.getDouble(0) else c.getDouble(1) }

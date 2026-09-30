@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import java.util.Locale
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsReplyManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -13,7 +14,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
- * جدولة وإرسال رسائل مهام التوصيل قبل موعدها بثلاثين دقيقة.
+ * جدولة وإرسال رسائل مهام التوصيل ضمن نافذة تصل إلى 30 دقيقة قبل الموعد.
+ * إذا كان الموعد أقرب من 30 دقيقة، تُرسل المهمة فوراً عند توفرها.
  * تعتمد على بيانات التوصيل الفعلية في SQLite وعلى SmsReplyManager لمنع التكرار.
  */
 class DeliverySmsScheduler : BroadcastReceiver() {
@@ -49,7 +51,7 @@ class DeliverySmsScheduler : BroadcastReceiver() {
         private const val EXTRA_DELIVERY_ID = "delivery_id"
         private const val EXTRA_STATION_ID = "station_id"
 
-        /** ينشئ أو يعيد جدولة منبه المهمة قبل موعد التوصيل بثلاثين دقيقة. */
+        /** ينشئ أو يعيد جدولة منبه المهمة في وقت الإرسال المحسوب من SQLite. */
         fun schedule(context: Context, deliveryId: Long, stationId: Int, scheduledAt: Long) {
             if (deliveryId <= 0L || stationId <= 0 || scheduledAt <= 0L) return
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -95,13 +97,20 @@ class DeliverySmsScheduler : BroadcastReceiver() {
             val typeText = if (type == "وقود" && fuelType.isNotBlank()) "$type - $fuelType" else type
             val quantity = payload.optDouble("quantity", 0.0).toString().trimEnd('0').trimEnd('.')
             val customer = payload.optString("customer_name", "العميل")
+            val paymentMethod = payload.optString("payment_method", "").trim().lowercase(Locale.ROOT)
+            val saleNotes = payload.optString("sale_notes", "").trim()
+            val customerLine = if (paymentMethod == "cash" && saleNotes.isNotBlank()) {
+                "$customer/$saleNotes"
+            } else {
+                customer
+            }
             val location = payload.optString("location", "غير محدد")
             val fee = payload.optDouble("service_fee", 0.0).toString().trimEnd('0').trimEnd('.')
             return "مرحباً - \"$driver\"\n" +
                 "لديك مهمة توصيل جديدة رقمها - \"${payload.optLong("delivery_id")}\"\n" +
                 "نوع الحمولة - $typeText\n" +
                 "حجم الحمولة - \"$quantity\"\n" +
-                "للعميل - \"$customer\"\n" +
+                "للعميل - \"$customerLine\"\n" +
                 "موقع التوصيل - \"$location\"\n" +
                 "قم باستلام - \"$fee\" من العميل،"
         }
