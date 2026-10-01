@@ -4,989 +4,1349 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>إدارة قوالب الإشعارات</title>
-        <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
-<link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
+    <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
+    <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
     <script src="file:///android_asset/assets-local/js/sweetalert2@11"></script>
     <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
     <style>
-        /* ============================================================
-           المتغيرات الأساسية – مستلهمة من crm.html مع دعم Light/Dark
-           ============================================================ */
-        :root {
-            --bg-color: #f5efe6;
-            --surface-color: #faf3e8;
-            --surface-elevated: #fdf8f0;
-            --primary-color: #007ACC;
-            --primary-dim: rgba(0,122,204,0.12);
-            --accent-color: #d4a017;
-            --accent-dim: rgba(212,160,23,0.12);
-            --success: #10b981;
-            --error: #ef4444;
-            --warning: #f59e0b;
-            --text-color: #1a2a3a;
-            --text-muted: #6a7f94;
-            --border-color: #003366;
-            --border-style: dashed;
-            --border-width: 2px;
-            --shadow-glow: 0 0 20px rgba(0,122,204,0.08);
-            --glass-bg: rgba(255,248,240,0.85);
-            --header-bg: linear-gradient(135deg, #e8e0d5 0%, #d5cdc0 100%);
-            --card-hover-bg: rgba(0,122,204,0.04);
-            --fab-shadow: rgba(0,122,204,0.3);
-            --toast-bg: #fdf8f0;
-            --scrollbar-track: #f5efe6;
-            --scrollbar-thumb: rgba(0,51,102,0.2);
-            --skeleton-bg: #e8e0d5;
-            --skeleton-shine: #f5efe6;
-            --modal-border-color: #003366;
-            --modal-border-style: dashed;
-            --input-bg: #fdf8f0;
-            --input-border: #003366;
-            --input-border-style: dashed;
-            --data-text-color: #1a2a3a;
-            --data-text-muted: #4a5a6a;
-            --channel-sms: #2196F3;
-            --channel-email: #4CAF50;
-            --channel-push: #FF9800;
-            --channel-inapp: #9C27B0;
-        }
+/* ============================================================
+   نظام الألوان — وضع فاتح افتراضي + وضع مظلم مخفف
+   إطار فضي رفيع (1px) على جميع البطاقات والحقول
+   ============================================================ */
+:root {
+    /* ═══ الوضع الفاتح (افتراضي) ═══ */
+    --bg-primary: #f0f2f5;
+    --bg-secondary: #ffffff;
+    --bg-card: rgba(255, 255, 255, 0.96);
+    --bg-glass: rgba(0, 0, 0, 0.025);
+    --bg-glass-light: rgba(0, 0, 0, 0.05);
+    --text-primary: #1a2233;
+    --text-secondary: #44546a;
+    --text-muted: #8391a5;
+    --border-color: #d8dde4;
 
-        [data-theme="dark"] {
-            --bg-color: #0a0e1a;
-            --surface-color: #111827;
-            --surface-elevated: #1a2236;
-            --primary-color: #00d4ff;
-            --primary-dim: rgba(0,212,255,0.15);
-            --accent-color: #f59e0b;
-            --accent-dim: rgba(245,158,11,0.15);
-            --success: #10b981;
-            --error: #ef4444;
-            --warning: #f59e0b;
-            --text-color: #f1f5f9;
-            --text-muted: #94a3b8;
-            --border-color: #e8d48b;
-            --border-style: dashed;
-            --border-width: 2px;
-            --shadow-glow: 0 0 20px rgba(0,212,255,0.1);
-            --glass-bg: rgba(22,34,64,0.85);
-            --header-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            --card-hover-bg: rgba(0,212,255,0.05);
-            --fab-shadow: rgba(0,212,255,0.3);
-            --toast-bg: #1a2236;
-            --scrollbar-track: transparent;
-            --scrollbar-thumb: rgba(255,255,255,0.1);
-            --skeleton-bg: #1e293b;
-            --skeleton-shine: #2d3a4f;
-            --modal-border-color: #e8d48b;
-            --modal-border-style: dashed;
-            --input-bg: #1e293b;
-            --input-border: #e8d48b;
-            --input-border-style: dashed;
-            --data-text-color: #f1f5f9;
-            --data-text-muted: #94a3b8;
-            --channel-sms: #2196F3;
-            --channel-email: #4CAF50;
-            --channel-push: #FF9800;
-            --channel-inapp: #9C27B0;
-        }
+    /* إطار فضي رفيع موحّد */
+    --silver-border-color: #c4cad2;
+    --silver-border-color-strong: #a8b0bb;
+    --silver-border: 1px solid var(--silver-border-color);
+    --silver-border-strong: 1px solid var(--silver-border-color-strong);
+    --silver-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 
-        /* ============================================================
-           الأنماط الأساسية
-           ============================================================ */
-        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    --gold-primary: #c89a12;
+    --gold-dark: #a67c00;
+    --gold-light: #f5c842;
+    --gold-glow: 0 0 30px rgba(200, 154, 18, 0.18);
 
-        body {
-            font-family: 'Cairo', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            direction: rtl;
-            overflow-x: hidden;
-            margin: 0;
-            padding: 0;
-            padding-bottom: 80px;
-            transition: background 0.4s ease, color 0.4s ease;
-            touch-action: pan-y;
-        }
+    --emerald-primary: #059669;
+    --emerald-dark: #047857;
+    --emerald-glow: 0 0 30px rgba(5, 150, 105, 0.12);
 
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
-        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+    --success: #059669;
+    --danger: #dc2626;
+    --warning: #d97706;
+    --info: #2563eb;
+    --purple: #7c3aed;
 
-        /* ===== Loading ===== */
-        .loading-indicator {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
-            z-index: 3000;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            backdrop-filter: blur(8px);
-        }
-        .spinner {
-            width: 50px; height: 50px;
-            border: 4px solid rgba(0,212,255,0.2);
-            border-radius: 50%;
-            border-top: 4px solid var(--primary-color);
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.06);
+    --shadow-glow: 0 0 40px rgba(200, 154, 18, 0.08);
 
-        /* ===== Offline Banner ===== */
-        .offline-banner {
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            background: linear-gradient(90deg, var(--warning), #f97316);
-            color: #000;
-            text-align: center;
-            padding: 8px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            z-index: 2000;
-            transform: translateY(-100%);
-            transition: transform 0.3s;
-        }
-        .offline-banner.show { transform: translateY(0); }
+    --radius-card: 20px;
+    --radius-small: 12px;
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-        /* ============================================================
-           الشريط العلوي (Header)
-           ============================================================ */
-        .top-bar {
-            position: sticky;
-            top: 0;
-            display: flex;
-            flex-direction: column;
-            padding: 16px;
-            background: var(--header-bg);
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-            z-index: 100;
-            backdrop-filter: blur(20px);
-            transition: background 0.4s ease;
-        }
-        .header-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
-        .top-title h2 {
-            margin: 0;
-            font-size: 1.3rem;
-            font-weight: 800;
-            background: linear-gradient(90deg, var(--primary-color), #a78bfa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .header-actions {
-            display: flex;
-            gap: 8px;
-        }
-        .icon-btn {
-            width: 40px; height: 40px;
-            border-radius: 12px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-elevated);
-            color: var(--text-muted);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 1rem;
-            position: relative;
-        }
-        .icon-btn:hover {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            border-color: var(--primary-color);
-            transform: translateY(-2px);
-        }
-        .icon-btn:active { transform: scale(0.92); }
-        .icon-btn.has-badge::after {
-            content: '';
-            position: absolute;
-            top: 6px; right: 6px;
-            width: 8px; height: 8px;
-            background: var(--error);
-            border-radius: 50%;
-            box-shadow: 0 0 8px var(--error);
-            animation: pulse-dot 2s infinite;
-        }
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.3); }
-        }
+    --header-bg: rgba(255, 255, 255, 0.94);
+    --nav-bg: rgba(255, 255, 255, 0.96);
+    --sidebar-bg: rgba(255, 255, 255, 0.98);
+    --toast-bg: #ffffff;
 
-        /* ============================================================
-           البحث والفلاتر
-           ============================================================ */
-        .search-wrap {
-            position: relative;
-            margin-bottom: 10px;
-        }
-        .search-input {
-            width: 100%;
-            padding: 12px 44px 12px 16px;
-            border-radius: 14px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-elevated);
-            color: var(--text-color);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.9rem;
-            transition: all 0.3s;
-            outline: none;
-        }
-        .search-input:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px var(--primary-dim);
-        }
-        .search-wrap i {
-            position: absolute;
-            right: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-muted);
-        }
+    color-scheme: light;
 
-        .filter-chips {
-            display: flex;
-            gap: 8px;
-            overflow-x: auto;
-            padding-bottom: 4px;
-            scrollbar-width: none;
-        }
-        .filter-chips::-webkit-scrollbar { display: none; }
-        .filter-chip {
-            padding: 6px 14px;
-            border-radius: 20px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            font-size: 0.75rem;
-            font-family: 'Cairo', sans-serif;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .filter-chip:active { transform: scale(0.95); }
-        .filter-chip.active {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-        .filter-chip:hover:not(.active) {
-            border-color: var(--text-muted);
-            color: var(--text-color);
-        }
+    /* ═══ Aliases متوافقة مع الأنماط القديمة في الملف ═══ */
+    --bg-color: var(--bg-primary);
+    --surface-color: var(--bg-glass);
+    --surface-elevated: var(--bg-secondary);
+    --primary-color: var(--gold-primary);
+    --primary-dim: rgba(200, 154, 18, 0.12);
+    --accent-color: var(--gold-primary);
+    --accent-dim: rgba(200, 154, 18, 0.12);
+    --text-color: var(--text-primary);
+    --border-style: solid;
+    --border-width: 1px;
+    --glass-bg: var(--bg-card);
+    --card-hover-bg: var(--bg-glass-light);
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: var(--gold-primary);
+    --modal-border-color: var(--silver-border-color);
+    --modal-border-style: solid;
+    --input-bg: var(--bg-glass);
+    --input-border: var(--silver-border-color);
+    --input-border-style: solid;
+    --data-text-color: var(--text-primary);
+    --data-text-muted: var(--text-secondary);
+    --skeleton-bg: rgba(0, 0, 0, 0.05);
+    --skeleton-shine: rgba(0, 0, 0, 0.08);
+    --fab-shadow: rgba(200, 154, 18, 0.3);
+}
 
-        /* ============================================================
-           بطاقات الإحصائيات
-           ============================================================ */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            padding: 16px;
-        }
-        .stat-card {
-            background: var(--surface-elevated);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 16px;
-            padding: 16px;
-            position: relative;
-            overflow: hidden;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            cursor: pointer;
-            touch-action: manipulation;
-        }
-        .stat-card:active { transform: scale(0.96); }
-        .stat-card:hover {
-            transform: translateY(-4px);
-            border-color: var(--primary-color);
-            box-shadow: var(--shadow-glow);
-        }
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .stat-card:hover::before { opacity: 1; }
-        .stat-icon {
-            width: 40px; height: 40px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.1rem;
-            margin-bottom: 12px;
-        }
-        .stat-icon.blue { background: var(--primary-dim); color: var(--primary-color); }
-        .stat-icon.green { background: rgba(16,185,129,0.15); color: var(--success); }
-        .stat-icon.orange { background: var(--accent-dim); color: var(--accent-color); }
-        .stat-icon.purple { background: rgba(155,89,182,0.15); color: #9b59b6; }
-        .stat-value {
-            font-size: 1.4rem;
-            font-weight: 800;
-            margin-bottom: 4px;
-            color: var(--data-text-color);
-            text-align: center;
-        }
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-align: center;
-        }
+/* ═══ الوضع المظلم المخفّف (ليس أسود قاتماً) ═══ */
+[data-theme="dark"] {
+    --bg-primary: #1e232b;
+    --bg-secondary: #262c36;
+    --bg-card: rgba(40, 47, 58, 0.88);
+    --bg-glass: rgba(255, 255, 255, 0.035);
+    --bg-glass-light: rgba(255, 255, 255, 0.075);
+    --text-primary: #d8dee6;
+    --text-secondary: #9aa5b4;
+    --text-muted: #6a7686;
+    --border-color: rgba(200, 205, 212, 0.2);
 
-        @media (min-width: 768px) {
-            .stats-grid { grid-template-columns: repeat(4, 1fr); }
-        }
+    --silver-border-color: rgba(192, 197, 204, 0.35);
+    --silver-border-color-strong: rgba(192, 197, 204, 0.55);
+    --silver-border: 1px solid var(--silver-border-color);
+    --silver-border-strong: 1px solid var(--silver-border-color-strong);
+    --silver-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
-        /* ============================================================
-           بطاقات القوالب
-           ============================================================ */
-        .cards-container {
-            padding: 0 16px 80px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            touch-action: pan-y;
-        }
+    --gold-primary: #f5c842;
+    --gold-dark: #c99f1e;
+    --gold-light: #f7d268;
+    --gold-glow: 0 0 30px rgba(245, 200, 66, 0.15);
 
-        .template-card {
-            background: var(--surface-elevated);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 18px;
-            padding: 16px;
-            position: relative;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            cursor: pointer;
-            touch-action: pan-y;
-        }
-        .template-card:hover {
-            border-color: var(--primary-color);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            background: var(--card-hover-bg);
-        }
-        .template-card.selected {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px var(--primary-dim), 0 4px 20px rgba(0,212,255,0.1);
-        }
-        .template-card:active { transform: scale(0.98); }
+    --emerald-primary: #10b981;
+    --emerald-dark: #059669;
+    --emerald-glow: 0 0 30px rgba(16, 185, 129, 0.15);
 
-        .template-card .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 10px;
-        }
-        .template-card .card-code {
-            font-weight: 700;
-            font-size: 0.85rem;
-            color: var(--primary-color);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .template-card .card-status-badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.65rem;
-            font-weight: 700;
-            border: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .card-status-badge.active { background: rgba(16,185,129,0.15); color: var(--success); }
-        .card-status-badge.inactive { background: rgba(148,163,184,0.15); color: var(--text-muted); }
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --info: #3b82f6;
+    --purple: #9b59b6;
 
-        .template-card .card-name {
-            font-size: 1rem;
-            font-weight: 700;
-            margin-bottom: 2px;
-            color: var(--data-text-color);
-        }
-        .template-card .card-channel {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-bottom: 6px;
-        }
-        .template-card .card-channel i { font-size: 0.8rem; }
-        .template-card .card-body {
-            margin: 8px 0 10px;
-        }
-        .template-card .card-body .template-preview {
-            font-size: 0.85rem;
-            color: var(--data-text-muted);
-            line-height: 1.6;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            text-align: center;
-        }
-        .template-card .card-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 8px;
-        }
-        .template-card .card-footer .template-date {
-            font-size: 0.7rem;
-            color: var(--text-muted);
-        }
-        .template-card .card-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
-        }
-        .template-card .card-actions .card-btn {
-            flex: 1;
-            padding: 10px;
-            border-radius: 12px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.8rem;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .template-card .card-actions .card-btn:active { transform: scale(0.95); }
-        .template-card .card-actions .card-btn:hover {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-        .template-card .card-actions .card-btn.danger:hover {
-            background: rgba(239,68,68,0.15);
-            color: var(--error);
-            border-color: var(--error);
-        }
+    --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.4);
+    --shadow-glow: 0 0 40px rgba(245, 200, 66, 0.05);
 
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: var(--text-muted);
-        }
-        .empty-state i { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
+    --header-bg: rgba(30, 35, 43, 0.94);
+    --nav-bg: rgba(30, 35, 43, 0.96);
+    --sidebar-bg: rgba(38, 44, 54, 0.98);
+    --toast-bg: #262c36;
 
-        /* ============================================================
-           الزر العائم (FAB) – إضافة قالب
-           ============================================================ */
-        .fab {
-            position: fixed;
-            bottom: 90px;
-            left: 24px;
-            width: 56px; height: 56px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary-color), #6366f1);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            color: white;
-            font-size: 1.5rem;
-            cursor: pointer;
-            box-shadow: 0 4px 20px var(--fab-shadow);
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            z-index: 200;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            touch-action: manipulation;
-        }
-        .fab:active { transform: scale(0.9); }
-        .fab:hover {
-            transform: scale(1.1) rotate(90deg);
-            box-shadow: 0 6px 30px var(--fab-shadow);
-        }
+    color-scheme: dark;
 
-        /* ============================================================
-           القائمة الجانبية (Sidebar)
-           ============================================================ */
-        .sidebar-toggle {
-            position: fixed;
-            top: 50%;
-            right: 0;
-            transform: translateY(-50%);
-            background: linear-gradient(145deg, #4B0082, #5a1a9a);
-            color: white;
-            width: 38px;
-            height: 38px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50% 0 0 50%;
-            cursor: pointer;
-            z-index: 1001;
-            box-shadow: -3px 0 15px rgba(0,0,0,0.4);
-            transition: all 0.3s ease;
-            border: 1px solid rgba(255,255,255,0.15);
-            touch-action: manipulation;
-            font-size: 1.1rem;
-        }
-        .sidebar-toggle:active {
-            transform: translateY(-50%) scale(0.92);
-        }
-        .sidebar-toggle.hidden {
-            opacity: 0;
-            pointer-events: none;
-            transform: translateX(20px) translateY(-50%);
-        }
-        .sidebar {
-            position: fixed;
-            top: 0;
-            right: -320px;
-            width: 280px;
-            height: 100vh;
-            background: var(--surface-elevated);
-            z-index: 999;
-            transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-            padding: 20px 16px;
-            overflow-y: auto;
-            box-shadow: -8px 0 40px rgba(0,0,0,0.3);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-left: var(--border-width) var(--border-style) var(--border-color);
-            opacity: 1;
-            display: flex;
-            flex-direction: column;
-        }
-        .sidebar.open { right: 0; }
-        .sidebar-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 998;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.35s ease;
-        }
-        .sidebar-overlay.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
-        .sidebar-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 16px;
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-            margin-bottom: 16px;
-        }
-        .sidebar-header h3 {
-            margin: 0;
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: var(--primary-color);
-        }
-        .sidebar-close {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s;
-        }
-        .sidebar-close:hover {
-            background: var(--error);
-            color: white;
-            border-color: var(--error);
-        }
-        .sidebar-content {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            flex: 1;
-        }
-        .sidebar-btn {
-            background: var(--surface-color);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            padding: 12px 14px;
-            border-radius: 12px;
-            color: var(--text-color);
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.25s ease;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 0.9rem;
-            font-family: 'Cairo', sans-serif;
-            touch-action: manipulation;
-            width: 100%;
-            text-align: right;
-        }
-        .sidebar-btn:active { transform: scale(0.96); }
-        .sidebar-btn:hover {
-            background: var(--primary-dim);
-            border-color: var(--primary-color);
-            color: var(--primary-color);
-        }
-        .sidebar-btn i {
-            font-size: 1.1rem;
-            width: 24px;
-            text-align: center;
-        }
-        .sidebar-footer {
-            margin-top: auto;
-            padding-top: 16px;
-            border-top: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .sidebar-footer .sidebar-btn {
-            background: var(--primary-dim);
-            border-color: var(--primary-color);
-            color: var(--primary-color);
-        }
-        .sidebar-footer .sidebar-btn:hover {
-            background: var(--primary-color);
-            color: white;
-        }
+    --skeleton-bg: rgba(255, 255, 255, 0.05);
+    --skeleton-shine: rgba(255, 255, 255, 0.08);
+    --fab-shadow: rgba(245, 200, 66, 0.3);
+}
 
-        /* ============================================================
-           القائمة السفلية (Bottom Navigation)
-           ============================================================ */
-        .bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-top: var(--border-width) var(--border-style) var(--border-color);
-            display: flex;
-            justify-content: space-around;
-            padding: 8px 0 env(safe-area-inset-bottom, 8px) 0;
-            z-index: 300;
-        }
-        .bottom-nav .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 2px;
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.3s;
-            padding: 4px 8px;
-            position: relative;
-            touch-action: manipulation;
-            flex: 1;
-        }
-        .bottom-nav .nav-item:active { transform: scale(0.9); }
-        .bottom-nav .nav-item i { font-size: 18px; transition: all 0.3s; }
-        .bottom-nav .nav-item span { font-weight: 600; margin-top: 2px; }
-        .bottom-nav .nav-item.active { color: var(--primary-color); }
-        .bottom-nav .nav-item.active i { transform: translateY(-3px); text-shadow: 0 0 20px var(--primary-dim); }
-        .bottom-nav .nav-item.active::after {
-            content: '';
-            position: absolute;
-            top: -1px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 20px;
-            height: 3px;
-            background: var(--primary-color);
-            border-radius: 10px;
-        }
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
 
-        /* ============================================================
-           مودالات
-           ============================================================ */
-        .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(8px);
-            z-index: 800;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.3s;
-            padding: 20px;
-        }
-        .modal-overlay.show { display: flex; opacity: 1; }
-        .modal {
-            background: var(--surface-elevated);
-            border-radius: 24px;
-            width: 100%;
-            max-width: 500px;
-            max-height: 90vh;
-            overflow-y: auto;
-            padding: 24px 20px;
-            transform: scale(0.9) translateY(20px);
-            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
-            opacity: 0;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-        }
-        .modal-overlay.show .modal {
-            transform: scale(1) translateY(0);
-            opacity: 1;
-        }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 12px;
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .modal-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); text-align: center; flex: 1; }
-        .modal-close {
-            width: 36px; height: 36px;
-            border-radius: 10px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .modal-close:active { transform: scale(0.9); }
-        .modal-close:hover {
-            background: var(--error);
-            color: white;
-            border-color: var(--error);
-        }
-        .modal-body {
-            max-height: 60vh;
-            overflow-y: auto;
-        }
-        .modal-actions {
-            display: flex;
-            gap: 12px;
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: var(--border-width) var(--border-style) var(--border-color);
-        }
+body {
+    font-family: 'Cairo', 'Inter', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    direction: rtl;
+    overflow-x: hidden;
+    min-height: 100vh;
+    padding: 0 0 90px 0;
+    background-image:
+        radial-gradient(ellipse at 5% 15%, rgba(200, 154, 18, 0.05) 0%, transparent 55%),
+        radial-gradient(ellipse at 95% 85%, rgba(5, 150, 105, 0.035) 0%, transparent 55%);
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.35s ease, color 0.35s ease;
+}
+[data-theme="dark"] body {
+    background-image:
+        radial-gradient(ellipse at 5% 15%, rgba(245, 200, 66, 0.04) 0%, transparent 55%),
+        radial-gradient(ellipse at 95% 85%, rgba(16, 185, 129, 0.03) 0%, transparent 55%);
+}
 
-        /* ===== حقول النموذج ===== */
-        .form-group { margin-bottom: 16px; }
-        .form-label {
-            display: block;
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-            text-align: center;
-        }
-        .form-label .required { color: var(--error); margin-right: 2px; }
-        .form-input {
-            width: 100%;
-            padding: 12px 14px;
-            border-radius: 12px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-color);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.9rem;
-            transition: all 0.3s;
-            outline: none;
-            text-align: center;
-        }
-        .form-input:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px var(--primary-dim);
-        }
-        .form-input.error {
-            border-color: var(--error);
-            box-shadow: 0 0 0 3px rgba(239,68,68,0.2);
-        }
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-        .submit-btn {
-            padding: 14px 20px;
-            border-radius: 14px;
-            border: none;
-            background: linear-gradient(135deg, var(--primary-color), #6366f1);
-            color: white;
-            font-family: 'Cairo', sans-serif;
-            font-size: 1rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s;
-            touch-action: manipulation;
-            flex: 2;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        .submit-btn:active { transform: scale(0.97); }
-        .submit-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px var(--primary-dim);
-        }
-        .submit-btn.danger {
-            background: linear-gradient(135deg, var(--error), #dc2626);
-        }
-        .btn-secondary {
-            padding: 14px 20px;
-            border-radius: 14px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            font-family: 'Cairo', sans-serif;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            touch-action: manipulation;
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        .btn-secondary:active { transform: scale(0.97); }
-        .btn-secondary:hover {
-            background: var(--border-color);
-            color: var(--text-color);
-        }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--gold-primary); border-radius: 10px; }
 
-        /* ===== مودال الجدول (القائمة السفلية) ===== */
-        .modal-table .modal { max-width: 700px; }
-        .modal-body table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.8rem;
-        }
-        .modal-body table th {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            padding: 10px 12px;
-            text-align: center;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            font-weight: 700;
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .modal-body table td {
-            padding: 8px 12px;
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-            text-align: center;
-            color: var(--data-text-color);
-        }
-        .modal-body table tr:hover { background: var(--card-hover-bg); }
+/* ============================================================
+   Loading
+   ============================================================ */
+.loading-indicator {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 3000;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+[data-theme="dark"] .loading-indicator { background: rgba(0, 0, 0, 0.85); }
+.loading-indicator.show, .loading-indicator[style*="display: flex"] { display: flex !important; }
+.spinner {
+    width: 56px;
+    height: 56px;
+    border: 4px solid rgba(200, 154, 18, 0.15);
+    border-top: 4px solid var(--gold-primary);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ============================================================
-           Toast إشعارات
-           ============================================================ */
-        .toast {
-            position: fixed;
-            top: 70px;
-            left: 50%;
-            transform: translateX(-50%) translateY(-20px);
-            background: var(--toast-bg);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 14px;
-            padding: 14px 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 600;
-            opacity: 0;
-            transition: all 0.4s;
-            pointer-events: none;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-        }
-        .toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-        .toast.success { border-color: var(--success); }
-        .toast.error { border-color: var(--error); }
-        .toast.warning { border-color: var(--warning); }
-        .toast-icon {
-            width: 28px; height: 28px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8rem;
-        }
-        .toast.success .toast-icon { background: rgba(16,185,129,0.15); color: var(--success); }
-        .toast.error .toast-icon { background: rgba(239,68,68,0.15); color: var(--error); }
-        .toast.warning .toast-icon { background: var(--accent-dim); color: var(--warning); }
+/* ============================================================
+   Offline Banner
+   ============================================================ */
+.offline-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: linear-gradient(90deg, var(--warning), var(--gold-primary));
+    color: #ffffff;
+    text-align: center;
+    padding: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    z-index: 2000;
+    transform: translateY(-100%);
+    transition: transform 0.3s;
+    border-bottom: var(--silver-border-strong);
+    box-shadow: var(--silver-shadow);
+}
+.offline-banner.show { transform: translateY(0); }
 
-        /* ============================================================
-           الرسوم المتحركة
-           ============================================================ */
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-up {
-            animation: fadeUp 0.5s ease forwards;
-        }
+/* ============================================================
+   الشريط العلوي
+   ============================================================ */
+.top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 120;
+    background: var(--header-bg);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-bottom: var(--silver-border);
+    padding: 14px 22px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+    transition: var(--transition);
+}
+.header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.top-title h2 {
+    font-size: 1.45rem;
+    font-weight: 900;
+    margin: 0;
+    background: linear-gradient(135deg, var(--gold-primary), var(--gold-dark));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.top-title h2 i {
+    -webkit-text-fill-color: initial;
+    color: var(--gold-primary);
+}
+.header-actions { display: flex; gap: 10px; align-items: center; }
 
-        /* ============================================================
-           تحسينات للهواتف
-           ============================================================ */
-        @media (max-width: 768px) {
-            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px; }
-            .stat-card { padding: 12px; }
-            .stat-value { font-size: 1.1rem; }
-            .cards-container { padding: 0 12px 16px; }
-            .bottom-nav .nav-item i { font-size: 15px; }
-            .bottom-nav .nav-item span { font-size: 0.7rem; }
-            .sidebar { width: 260px; right: -280px; padding: 16px 12px; }
-            .sidebar-btn { padding: 10px 12px; font-size: 0.8rem; }
-            .sidebar-btn i { font-size: 0.9rem; }
-            .fab { width: 48px; height: 48px; font-size: 1.2rem; bottom: 80px; left: 16px; }
-            .filter-chip { font-size: 0.65rem; padding: 4px 10px; }
-            .top-title h2 { font-size: 1rem; }
-            .icon-btn { width: 34px; height: 34px; font-size: 0.85rem; }
-            .form-row { grid-template-columns: 1fr; }
-            .modal { padding: 16px; max-width: 100%; margin: 10px; }
-            .modal-actions { flex-direction: column; }
-            .modal-actions .submit-btn,
-            .modal-actions .btn-secondary { width: 100%; }
-        }
+.icon-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 1rem;
+    position: relative;
+    box-shadow: var(--silver-shadow);
+}
+.icon-btn:hover {
+    background: var(--bg-glass-light);
+    border-color: var(--gold-primary);
+    color: var(--gold-primary);
+    transform: translateY(-2px);
+    box-shadow: var(--silver-shadow), 0 4px 12px rgba(200, 154, 18, 0.15);
+}
+.icon-btn:active { transform: scale(0.92); }
+.icon-btn.has-badge::after {
+    content: '';
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 8px; height: 8px;
+    background: var(--danger);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--danger);
+    animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.4); }
+}
 
-        @media (max-width: 480px) {
-            .stats-grid { gap: 6px; padding: 10px; }
-            .stat-card { padding: 10px; }
-            .stat-value { font-size: 0.95rem; }
-            .stat-icon { width: 32px; height: 32px; font-size: 0.85rem; }
-            .bottom-nav .nav-item { padding: 4px 4px; }
-            .bottom-nav .nav-item i { font-size: 13px; }
-            .bottom-nav .nav-item span { font-size: 0.6rem; }
-            .modal { padding: 12px; }
-        }
+/* البحث */
+.search-wrap { position: relative; }
+.search-input {
+    width: 100%;
+    padding: 12px 44px 12px 16px;
+    border-radius: 12px;
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-primary);
+    font-family: 'Cairo', 'Inter', sans-serif;
+    font-size: 0.88rem;
+    outline: none;
+    transition: var(--transition);
+    box-shadow: var(--silver-shadow);
+}
+.search-input:focus {
+    border: var(--silver-border-strong);
+    box-shadow: 0 0 0 3px rgba(200, 154, 18, 0.12), var(--silver-shadow);
+}
+.search-wrap i {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    pointer-events: none;
+}
+
+/* شرائح الفلتر */
+.filter-chips {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 0;
+    scrollbar-width: none;
+}
+.filter-chips::-webkit-scrollbar { display: none; }
+.filter-chip {
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-secondary);
+    font-family: 'Cairo', 'Inter', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    touch-action: manipulation;
+    box-shadow: var(--silver-shadow);
+}
+.filter-chip i { font-size: 0.75rem; }
+.filter-chip:hover { border-color: var(--gold-primary); color: var(--gold-primary); }
+.filter-chip.active {
+    background: var(--gold-primary);
+    color: #ffffff;
+    border-color: var(--gold-dark);
+    box-shadow: 0 2px 8px rgba(200, 154, 18, 0.35);
+}
+
+/* ============================================================
+   بطاقات الإحصائيات
+   ============================================================ */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    padding: 20px 24px;
+}
+.stat-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    border: var(--silver-border-strong);
+    border-radius: var(--radius-card);
+    padding: 18px 16px;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--silver-shadow), var(--shadow-card);
+}
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--gold-primary), var(--gold-dark));
+    opacity: 0.85;
+}
+.stat-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--gold-primary);
+    box-shadow: var(--silver-shadow), 0 12px 32px rgba(200, 154, 18, 0.15);
+}
+.stat-card:active { transform: scale(0.97); }
+.stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    background: var(--bg-glass-light);
+    color: var(--gold-primary);
+    margin-bottom: 10px;
+    border: var(--silver-border);
+}
+.stat-icon.blue { color: var(--info); background: rgba(37, 99, 235, 0.1); }
+.stat-icon.green { color: var(--emerald-primary); background: rgba(5, 150, 105, 0.1); }
+.stat-icon.orange { color: var(--warning); background: rgba(217, 119, 6, 0.1); }
+.stat-icon.purple { color: var(--purple); background: rgba(124, 58, 237, 0.1); }
+.stat-value {
+    font-size: 1.75rem;
+    font-weight: 900;
+    font-family: 'Inter', 'Arial', sans-serif;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+    color: var(--text-primary);
+    margin: 4px 0 2px;
+    direction: ltr;
+}
+.stat-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 700;
+}
+@media (max-width: 992px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 10px 12px; }
+    .stat-card { padding: 12px 10px; }
+    .stat-value { font-size: 1.15rem; }
+    .stat-icon { width: 38px; height: 38px; font-size: 1rem; }
+}
+
+/* ============================================================
+   عنوان القسم
+   ============================================================ */
+.section-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 24px 12px;
+}
+.section-title h3 {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+.count-badge {
+    background: var(--gold-primary) !important;
+    color: #ffffff !important;
+    padding: 3px 12px !important;
+    border-radius: 30px !important;
+    font-size: 0.75rem !important;
+    font-weight: 900 !important;
+    border: var(--silver-border);
+}
+
+/* ============================================================
+   بطاقات القوالب
+   ============================================================ */
+.cards-container {
+    padding: 0 24px 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.template-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    border: var(--silver-border-strong);
+    border-radius: var(--radius-card);
+    padding: 16px 18px;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: var(--silver-shadow), var(--shadow-card);
+}
+.template-card::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--gold-primary);
+    opacity: 0.7;
+    transition: var(--transition);
+}
+.template-card:hover {
+    border-color: var(--gold-primary);
+    box-shadow: var(--silver-shadow), 0 8px 28px rgba(200, 154, 18, 0.12);
+    transform: translateY(-2px);
+}
+.template-card:hover::before { opacity: 1; width: 6px; }
+.template-card.selected {
+    border-color: var(--gold-primary);
+    box-shadow: 0 0 0 2px rgba(200, 154, 18, 0.25), var(--silver-shadow), var(--shadow-card);
+}
+.template-card.selected::before { background: var(--gold-dark); opacity: 1; }
+.template-card:active { transform: scale(0.98); }
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.card-code {
+    font-weight: 800;
+    font-size: 0.9rem;
+    color: var(--gold-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+.card-code i { font-size: 0.9rem; }
+.card-status-badge {
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    border: var(--silver-border);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+.card-status-badge.active {
+    background: rgba(5, 150, 105, 0.1);
+    color: var(--emerald-primary);
+    border-color: rgba(5, 150, 105, 0.35);
+}
+.card-status-badge.inactive {
+    background: rgba(107, 114, 128, 0.1);
+    color: var(--text-muted);
+}
+.card-name {
+    font-size: 0.95rem;
+    font-weight: 800;
+    margin-bottom: 4px;
+    color: var(--text-primary);
+    text-align: right;
+}
+.card-channel {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    font-weight: 700;
+}
+.card-channel i { color: var(--gold-primary); font-size: 0.75rem; }
+.card-body { margin: 8px 0 10px; }
+.template-preview {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-align: center;
+    padding: 8px 10px;
+    background: var(--bg-glass);
+    border: var(--silver-border);
+    border-radius: 10px;
+}
+.card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+.template-date {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 600;
+}
+.template-date i { color: var(--gold-primary); }
+.card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+.card-actions .card-btn {
+    flex: 1;
+    min-width: 70px;
+    padding: 9px 8px;
+    border-radius: 10px;
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-secondary);
+    font-family: 'Cairo', 'Inter', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transition: var(--transition);
+    touch-action: manipulation;
+    box-shadow: var(--silver-shadow);
+}
+.card-actions .card-btn:active { transform: scale(0.95); }
+.card-actions .card-btn:hover {
+    border-color: var(--gold-primary);
+    color: var(--gold-primary);
+    background: var(--bg-glass-light);
+    transform: translateY(-2px);
+}
+.card-actions .card-btn.danger:hover {
+    color: var(--danger);
+    border-color: var(--danger);
+    background: rgba(220, 38, 38, 0.08);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+}
+.empty-state i {
+    font-size: 3.5rem;
+    margin-bottom: 14px;
+    opacity: 0.4;
+    display: block;
+    color: var(--gold-primary);
+}
+.empty-state p { font-size: 0.9rem; }
+
+@media (max-width: 480px) {
+    .cards-container { padding: 0 12px 20px; }
+    .card-actions .card-btn { font-size: 0.7rem; padding: 8px 4px; min-width: 60px; }
+}
+
+/* ============================================================
+   الزر العائم FAB
+   ============================================================ */
+.fab {
+    position: fixed;
+    bottom: 90px;
+    left: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold-primary), var(--gold-dark));
+    border: var(--silver-border-strong);
+    color: #ffffff;
+    font-size: 1.5rem;
+    cursor: pointer;
+    box-shadow: var(--silver-shadow), 0 6px 24px rgba(200, 154, 18, 0.35);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+}
+.fab:active { transform: scale(0.9); }
+.fab:hover {
+    transform: scale(1.1) rotate(90deg);
+    box-shadow: var(--silver-shadow), 0 10px 36px rgba(200, 154, 18, 0.45);
+}
+
+/* ============================================================
+   Sidebar
+   ============================================================ */
+.sidebar-toggle {
+    position: fixed;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    background: var(--gold-primary);
+    color: #ffffff;
+    width: 40px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50% 0 0 50%;
+    cursor: pointer;
+    z-index: 1001;
+    box-shadow: -3px 0 15px rgba(200, 154, 18, 0.3);
+    transition: var(--transition);
+    border: var(--silver-border);
+}
+.sidebar-toggle:active { transform: translateY(-50%) scale(0.9); }
+.sidebar-toggle.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(20px) translateY(-50%);
+}
+.sidebar {
+    position: fixed;
+    top: 0;
+    right: -320px;
+    width: 280px;
+    height: 100vh;
+    background: var(--sidebar-bg);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    z-index: 999;
+    transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 20px 16px;
+    overflow-y: auto;
+    box-shadow: -8px 0 40px rgba(0, 0, 0, 0.18);
+    border-left: var(--silver-border-strong);
+    display: flex;
+    flex-direction: column;
+}
+.sidebar.open { right: 0; }
+.sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 998;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+    backdrop-filter: blur(4px);
+}
+.sidebar-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 16px;
+    border-bottom: var(--silver-border);
+    margin-bottom: 16px;
+}
+.sidebar-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--gold-primary);
+}
+.sidebar-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+}
+.sidebar-close:hover {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+}
+.sidebar-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+}
+.sidebar-btn {
+    background: var(--bg-glass);
+    border: var(--silver-border);
+    padding: 12px 14px;
+    border-radius: 12px;
+    color: var(--text-secondary);
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.9rem;
+    font-family: 'Cairo', 'Inter', sans-serif;
+    touch-action: manipulation;
+    width: 100%;
+    text-align: right;
+    box-shadow: var(--silver-shadow);
+}
+.sidebar-btn:active { transform: scale(0.96); }
+.sidebar-btn:hover {
+    background: var(--bg-glass-light);
+    border-color: var(--gold-primary);
+    color: var(--gold-primary);
+    transform: translateX(-4px);
+}
+.sidebar-btn i {
+    font-size: 1.1rem;
+    width: 24px;
+    text-align: center;
+    color: var(--gold-primary);
+}
+.sidebar-footer {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: var(--silver-border);
+}
+.sidebar-footer .sidebar-btn {
+    background: rgba(200, 154, 18, 0.1);
+    border-color: var(--gold-primary);
+    color: var(--gold-primary);
+}
+.sidebar-footer .sidebar-btn:hover {
+    background: var(--gold-primary);
+    color: #ffffff;
+}
+
+/* ============================================================
+   Bottom Navigation
+   ============================================================ */
+.bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--nav-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: var(--silver-border-strong);
+    display: flex;
+    justify-content: space-around;
+    padding: 8px 0 env(safe-area-inset-bottom, 8px) 0;
+    z-index: 300;
+    overflow-x: auto;
+    scrollbar-width: none;
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.04);
+}
+.bottom-nav::-webkit-scrollbar { display: none; }
+.bottom-nav .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-family: 'Cairo', 'Inter', sans-serif;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: var(--transition);
+    padding: 6px 10px;
+    position: relative;
+    touch-action: manipulation;
+    flex: 1;
+    min-width: 90px;
+}
+.bottom-nav .nav-item:active { transform: scale(0.9); }
+.bottom-nav .nav-item i {
+    font-size: 20px;
+    transition: var(--transition);
+}
+.bottom-nav .nav-item span { font-weight: 700; margin-top: 2px; }
+.bottom-nav .nav-item.active { color: var(--gold-primary); }
+.bottom-nav .nav-item.active i {
+    transform: translateY(-3px);
+    text-shadow: 0 0 20px rgba(200, 154, 18, 0.3);
+}
+.bottom-nav .nav-item.active::after {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 3px;
+    background: var(--gold-primary);
+    border-radius: 10px;
+}
+
+/* ============================================================
+   Overlays / Modals
+   ============================================================ */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    z-index: 950;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+    overflow-y: auto;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+[data-theme="dark"] .modal-overlay { background: rgba(0, 0, 0, 0.82); }
+.modal-overlay.show { display: flex; opacity: 1; }
+.modal {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-card);
+    width: 100%;
+    max-width: 620px;
+    margin: 0;
+    padding: 26px 28px;
+    border: var(--silver-border-strong);
+    box-shadow: var(--silver-shadow), var(--shadow-card);
+    max-height: 92vh;
+    overflow-y: auto;
+    transform: scale(0.95);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-overlay.show .modal { transform: scale(1); }
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: var(--silver-border);
+    padding-bottom: 14px;
+}
+.modal-title {
+    font-size: 1.15rem;
+    font-weight: 900;
+    color: var(--gold-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+    flex: 1;
+}
+.modal-close {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    font-size: 1.05rem;
+    box-shadow: var(--silver-shadow);
+}
+.modal-close:hover {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+}
+.modal-body {
+    max-height: 65vh;
+    overflow-y: auto;
+}
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: var(--silver-border);
+}
+.modal-actions .submit-btn,
+.modal-actions .btn-secondary { flex: 1; }
+
+/* مودال الجدول */
+.modal-table .modal { max-width: 760px; }
+.modal-body table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 6px;
+    font-size: 0.8rem;
+}
+.modal-body table th {
+    background: var(--bg-glass-light);
+    color: var(--gold-primary);
+    padding: 12px;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    font-weight: 800;
+    border: var(--silver-border);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    border-radius: 10px 10px 0 0;
+}
+.modal-body table td {
+    padding: 12px;
+    border: var(--silver-border);
+    text-align: center;
+    color: var(--text-secondary);
+    background: var(--bg-glass);
+    vertical-align: middle;
+    transition: var(--transition);
+}
+.modal-body table tr:hover td {
+    background: var(--bg-glass-light);
+    color: var(--text-primary);
+}
+
+/* ============================================================
+   حقول النموذج
+   ============================================================ */
+.form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.form-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+.form-label .required { color: var(--danger); margin-right: 2px; }
+.form-input {
+    width: 100%;
+    background: var(--bg-glass);
+    border: var(--silver-border);
+    border-radius: var(--radius-small);
+    padding: 11px 14px;
+    color: var(--text-primary);
+    font-family: 'Cairo', 'Inter', sans-serif;
+    font-size: 0.85rem;
+    outline: none;
+    transition: var(--transition);
+    text-align: center;
+    box-shadow: var(--silver-shadow);
+}
+.form-input:focus {
+    border: var(--silver-border-strong);
+    box-shadow: 0 0 0 3px rgba(200, 154, 18, 0.12), var(--silver-shadow);
+}
+.form-input.error {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+}
+textarea.form-input { min-height: 100px; resize: vertical; line-height: 1.8; text-align: right; }
+select.form-input { text-align: center; }
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+/* ============================================================
+   أزرار
+   ============================================================ */
+.submit-btn {
+    padding: 13px 20px;
+    border-radius: var(--radius-small);
+    border: var(--silver-border);
+    background: var(--gold-primary);
+    color: #ffffff;
+    font-family: 'Cairo', 'Inter', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: var(--silver-shadow);
+    flex: 2;
+}
+.submit-btn:hover {
+    background: var(--gold-dark);
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: var(--silver-shadow), 0 6px 20px rgba(200, 154, 18, 0.3);
+}
+.submit-btn:active { transform: scale(0.97); }
+.submit-btn.danger {
+    background: var(--danger);
+    border-color: #b91c1c;
+}
+.submit-btn.danger:hover { background: #b91c1c; box-shadow: var(--silver-shadow), 0 6px 20px rgba(220, 38, 38, 0.3); }
+.btn-secondary {
+    padding: 13px 20px;
+    border-radius: var(--radius-small);
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-secondary);
+    font-family: 'Cairo', 'Inter', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: var(--silver-shadow);
+    flex: 1;
+}
+.btn-secondary:hover {
+    border-color: var(--gold-primary);
+    color: var(--gold-primary);
+    background: var(--bg-glass-light);
+    transform: translateY(-2px);
+}
+.btn-secondary:active { transform: scale(0.97); }
+
+/* ============================================================
+   Toast
+   ============================================================ */
+.toast {
+    position: fixed;
+    top: 85px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: var(--toast-bg);
+    border: var(--silver-border-strong);
+    border-radius: 14px;
+    padding: 12px 22px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 2000;
+    opacity: 0;
+    transition: all 0.4s ease;
+    pointer-events: none;
+    box-shadow: var(--silver-shadow), 0 10px 35px rgba(0, 0, 0, 0.2);
+    min-width: 220px;
+    font-size: 0.85rem;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.success { border-color: var(--emerald-primary); }
+.toast.error { border-color: var(--danger); }
+.toast.warning { border-color: var(--warning); }
+.toast-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    background: rgba(200, 154, 18, 0.12);
+    color: var(--gold-primary);
+    border: var(--silver-border);
+}
+.toast.success .toast-icon { background: rgba(5, 150, 105, 0.12); color: var(--emerald-primary); }
+.toast.error .toast-icon { background: rgba(220, 38, 38, 0.12); color: var(--danger); }
+.toast.warning .toast-icon { background: rgba(217, 119, 6, 0.12); color: var(--warning); }
+
+/* ============================================================
+   محرر المتغيرات الديناميكية
+   ============================================================ */
+.variables-editor { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.variables-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.variables-help { font-size: 0.74rem; color: var(--text-muted); line-height: 1.6; }
+.variable-chips { display: flex; gap: 6px; flex-wrap: wrap; min-height: 24px; }
+.variable-chip {
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-primary);
+    border-radius: 999px;
+    padding: 5px 10px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: var(--transition);
+    font-family: 'Cairo', 'Inter', sans-serif;
+    box-shadow: var(--silver-shadow);
+}
+.variable-chip:hover {
+    border-color: var(--gold-primary);
+    color: var(--gold-primary);
+    background: var(--bg-glass-light);
+    transform: translateY(-1px);
+}
+.variable-picker { max-width: 720px; width: min(94vw, 720px); }
+.variable-picker-grid {
+    display: grid;
+    grid-template-columns: minmax(150px, 0.8fr) minmax(220px, 1.2fr);
+    gap: 10px;
+    min-height: 300px;
+}
+.variable-pane {
+    border: var(--silver-border);
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--bg-glass);
+    box-shadow: var(--silver-shadow);
+}
+.variable-pane-title {
+    padding: 10px 12px;
+    font-weight: 800;
+    font-size: 0.82rem;
+    border-bottom: var(--silver-border);
+    background: var(--bg-glass-light);
+    color: var(--gold-primary);
+    text-align: center;
+}
+.variable-search {
+    padding: 9px 10px;
+    border-bottom: var(--silver-border);
+}
+.variable-search input { width: 100%; box-sizing: border-box; }
+.variable-list { max-height: 330px; overflow: auto; padding: 6px; }
+.variable-table, .variable-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    text-align: right;
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-primary);
+    padding: 9px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: var(--transition);
+    font-family: 'Cairo', 'Inter', sans-serif;
+    margin-bottom: 4px;
+    box-shadow: var(--silver-shadow);
+}
+.variable-table:hover, .variable-field:hover, .variable-table.active {
+    background: rgba(200, 154, 18, 0.1);
+    color: var(--gold-primary);
+    border-color: var(--gold-primary);
+}
+.variable-main { font-weight: 700; font-size: 0.82rem; }
+.variable-sub {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    direction: ltr;
+    text-align: right;
+    word-break: break-all;
+}
+.variable-field-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.variable-samples {
+    font-size: 0.66rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+    word-break: break-word;
+}
+.variable-picker-empty {
+    padding: 18px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+/* ============================================================
+   Skeleton
+   ============================================================ */
+.skeleton-card {
+    background: var(--bg-card) !important;
+    border: var(--silver-border-strong) !important;
+    border-radius: var(--radius-card) !important;
+    box-shadow: var(--silver-shadow);
+}
+.skeleton-row {
+    background: var(--skeleton-bg) !important;
+    position: relative;
+    overflow: hidden;
+}
+.skeleton-row::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
+    animation: skeleton-shine 1.5s infinite;
+}
+@keyframes skeleton-shine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 768px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 12px; }
+    .stat-card { padding: 12px; }
+    .stat-value { font-size: 1.2rem; }
+    .cards-container { padding: 0 12px 16px; }
+    .bottom-nav .nav-item i { font-size: 16px; }
+    .bottom-nav .nav-item span { font-size: 0.7rem; }
+    .sidebar { width: 260px; right: -280px; padding: 16px 12px; }
+    .sidebar-btn { padding: 10px 12px; font-size: 0.8rem; }
+    .fab { width: 52px; height: 52px; font-size: 1.3rem; bottom: 84px; left: 16px; }
+    .filter-chip { font-size: 0.7rem; padding: 6px 12px; }
+    .top-title h2 { font-size: 1.1rem; }
+    .icon-btn { width: 38px; height: 38px; font-size: 0.9rem; }
+    .form-row { grid-template-columns: 1fr; }
+    .modal { padding: 20px 16px; max-width: 100%; margin: 10px; }
+    .modal-actions { flex-direction: column; }
+    .modal-actions .submit-btn,
+    .modal-actions .btn-secondary { width: 100%; }
+    .top-bar { padding: 12px 14px 10px; }
+    .section-title { padding: 0 16px 12px; }
+    .top-title h2 { font-size: 1.15rem; }
+}
+@media (max-width: 480px) {
+    .stats-grid { gap: 8px; padding: 10px; }
+    .stat-card { padding: 10px; }
+    .stat-value { font-size: 1rem; }
+    .stat-icon { width: 34px; height: 34px; font-size: 0.9rem; }
+    .bottom-nav .nav-item { padding: 4px 4px; min-width: 70px; }
+    .bottom-nav .nav-item i { font-size: 15px; }
+    .bottom-nav .nav-item span { font-size: 0.62rem; }
+    .modal { padding: 16px 12px; }
+    .template-card { padding: 14px; }
+    .card-actions .card-btn { font-size: 0.68rem; padding: 8px 4px; }
+}
+@media (max-width: 600px) {
+    .variable-picker-grid { grid-template-columns: 1fr; }
+    .variable-list { max-height: 220px; }
+    .variable-picker { width: calc(100vw - 24px); }
+}
+
+/* ============================================================
+   تحسينات للطباعة
+   ============================================================ */
+@media print {
+    .top-bar, .bottom-nav, .sidebar, .sidebar-toggle, .loading-indicator,
+    .modal-close, .icon-btn, .filter-chips, .fab { display: none !important; }
+    .modal-overlay.show { position: static; background: transparent; }
+    .modal { padding: 0; box-shadow: none; border: none; }
+}
     </style>
 </head>
 <body>
@@ -1016,8 +1376,8 @@
                 <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
                     <i class="fas fa-moon" id="themeIcon"></i>
                 </button>
-                <button class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي" style="background:var(--primary-dim);color:var(--primary-color);">
-                    <i class="fas fa-robot"></i>
+                <button class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي">
+                    <i class="fas fa-robot" style="color:var(--gold-primary)"></i>
                 </button>
             </div>
         </div>
@@ -1027,12 +1387,12 @@
         </div>
         <div class="filter-chips">
             <button class="filter-chip active" data-filter="all" onclick="setFilter('all', this)">الكل</button>
-            <button class="filter-chip" data-filter="active" onclick="setFilter('active', this)">✅ نشط</button>
-            <button class="filter-chip" data-filter="inactive" onclick="setFilter('inactive', this)">❌ غير نشط</button>
-            <button class="filter-chip" data-filter="sms" onclick="setFilter('sms', this)">💬 SMS</button>
-            <button class="filter-chip" data-filter="email" onclick="setFilter('email', this)">📧 Email</button>
-            <button class="filter-chip" data-filter="push" onclick="setFilter('push', this)">🔔 Push</button>
-            <button class="filter-chip" data-filter="in_app" onclick="setFilter('in_app', this)">📱 In-App</button>
+            <button class="filter-chip" data-filter="active" onclick="setFilter('active', this)"><i class="fas fa-check-circle"></i> نشط</button>
+            <button class="filter-chip" data-filter="inactive" onclick="setFilter('inactive', this)"><i class="fas fa-minus-circle"></i> غير نشط</button>
+            <button class="filter-chip" data-filter="sms" onclick="setFilter('sms', this)"><i class="fas fa-comment-sms"></i> SMS</button>
+            <button class="filter-chip" data-filter="email" onclick="setFilter('email', this)"><i class="fas fa-envelope"></i> Email</button>
+            <button class="filter-chip" data-filter="push" onclick="setFilter('push', this)"><i class="fas fa-bell"></i> Push</button>
+            <button class="filter-chip" data-filter="in_app" onclick="setFilter('in_app', this)"><i class="fas fa-mobile-screen"></i> In-App</button>
         </div>
     </header>
 
@@ -1065,9 +1425,9 @@
     <!-- ============================================================
     عنوان القسم
     ============================================================ -->
-    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;padding:0 16px;margin-bottom:12px;">
-        <h3>📋 قائمة قوالب الإشعارات</h3>
-        <span class="count-badge" id="templateCount" style="background:var(--primary-dim);color:var(--primary-color);padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:700;">0</span>
+    <div class="section-title">
+        <h3><i class="fas fa-list-ul" style="color:var(--gold-primary)"></i> قائمة قوالب الإشعارات</h3>
+        <span class="count-badge" id="templateCount">0</span>
     </div>
 
     <!-- ============================================================
@@ -1193,20 +1553,29 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">العنوان (Subject)</label>
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><label class="form-label">العنوان (Subject)</label><button type="button" class="btn-secondary" onclick="openVariablePicker('subject')"><i class="fas fa-code"></i> متغير</button></div>
                         <input type="text" class="form-input" id="subject" placeholder="عنوان الإشعار">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">محتوى الرسالة *</label>
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><label class="form-label">محتوى الرسالة *</label><button type="button" class="btn-secondary" onclick="openVariablePicker('body')"><i class="fas fa-code"></i> متغير</button></div>
                         <textarea class="form-input" id="body" rows="4" placeholder="نص الرسالة... يمكن استخدام {variable}" required></textarea>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">المحتوى (عربي)</label>
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><label class="form-label">المحتوى (عربي)</label><button type="button" class="btn-secondary" onclick="openVariablePicker('bodyAr')"><i class="fas fa-code"></i> متغير</button></div>
                         <textarea class="form-input" id="bodyAr" rows="3" placeholder="نص الرسالة بالعربية..."></textarea>
                     </div>
                     <div class="form-group">
                         <label class="form-label">المتغيرات (Variables)</label>
-                        <input type="text" class="form-input" id="variables" placeholder='مثل: {"customer_name":"اسم العميل","due_amount":"المبلغ"}'>
+                        <div class="variables-editor">
+                            <div class="variables-toolbar">
+                                <button type="button" class="btn-secondary" onclick="openVariablePicker()">
+                                    <i class="fas fa-database"></i> إدراج متغير من قاعدة البيانات
+                                </button>
+                                <span class="variables-help">اختر الحقل من SQLite وسيُدرج المتغير في موضع المؤشر داخل العنوان أو محتوى الرسالة.</span>
+                            </div>
+                            <div class="variable-chips" id="variableChips"></div>
+                            <input type="text" class="form-input" id="variables" placeholder='مثل: {"{customers.name}":"اسم العميل"}'>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">الحالة</label>
@@ -1225,6 +1594,39 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    مودال اختيار متغير من SQLite
+    ============================================================ -->
+    <div class="modal-overlay" id="variablePickerModal" onclick="closeModal(event)">
+        <div class="modal variable-picker" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title">🧩 اختيار متغير من قاعدة البيانات</h3>
+                <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="variables-toolbar" style="margin-bottom:10px;">
+                    <button type="button" class="btn-secondary" id="refreshVariablesBtn" onclick="loadVariableSources(true)"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    <span class="variables-help" id="variableTargetLabel">سيتم الإدراج في الحقل النشط.</span>
+                </div>
+                <div class="variable-picker-grid">
+                    <div class="variable-pane">
+                        <div class="variable-pane-title">الجداول</div>
+                        <div class="variable-search"><input class="form-input" id="variableTableSearch" placeholder="ابحث باسم الجدول..." oninput="filterVariableTables()"></div>
+                        <div class="variable-list" id="variableTableList"><div class="variable-picker-empty">جارٍ التحميل...</div></div>
+                    </div>
+                    <div class="variable-pane">
+                        <div class="variable-pane-title">الحقول</div>
+                        <div class="variable-search"><input class="form-input" id="variableColumnSearch" placeholder="ابحث باسم الحقل..." oninput="filterVariableColumns()"></div>
+                        <div class="variable-list" id="variableColumnList"><div class="variable-picker-empty">اختر جدولاً أولاً</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeModal()"><i class="fas fa-times"></i> إلغاء</button>
             </div>
         </div>
     </div>
@@ -1279,14 +1681,14 @@
     <div class="modal-overlay" id="confirmModal" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="max-width:400px;">
             <div class="modal-header">
-                <h3 class="modal-title" style="color:var(--error);">⚠️ تأكيد الحذف</h3>
+                <h3 class="modal-title" style="color:var(--danger);">⚠️ تأكيد الحذف</h3>
                 <button class="modal-close" onclick="closeModal()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="modal-body" style="text-align:center;padding:20px 0;">
-                <i class="fas fa-trash" style="font-size:3rem;color:var(--error);margin-bottom:12px;display:block;"></i>
-                <p id="confirmMessage" style="font-size:1rem;color:var(--data-text-color);">هل أنت متأكد من حذف هذا القالب؟</p>
+                <i class="fas fa-trash" style="font-size:3rem;color:var(--danger);margin-bottom:12px;display:block;"></i>
+                <p id="confirmMessage" style="font-size:1rem;color:var(--text-primary);">هل أنت متأكد من حذف هذا القالب؟</p>
                 <p style="font-size:0.85rem;color:var(--text-muted);">لا يمكن التراجع عن هذا الإجراء</p>
             </div>
             <div class="modal-actions">
@@ -1341,6 +1743,12 @@
                         // ------------------------------------------------
                         case 'getNotificationTemplates':
                             result = window.AndroidInterface.getNotificationTemplates();
+                            break;
+
+                        case 'getNotificationTemplateVariableSources':
+                            result = window.AndroidInterface.getNotificationTemplateVariableSources(
+                                JSON.stringify(params || {})
+                            );
                             break;
 
                         // ------------------------------------------------
@@ -1557,6 +1965,9 @@
         let allTemplates = [];
         let isInitialLoad = true;
         let deleteTargetId = null;
+        let variableSources = [];
+        let selectedVariableTable = null;
+        let variableTargetId = 'body';
 
         // ============================================================
         // 9. تحميل البيانات
@@ -1566,7 +1977,7 @@
             let skeleton = '';
             for (let i = 0; i < 4; i++) {
                 skeleton += `
-                    <div class="skeleton-card" style="background:var(--surface-elevated);border-radius:18px;padding:16px;border:var(--border-width) var(--border-style) var(--border-color);position:relative;overflow:hidden;">
+                    <div class="skeleton-card" style="background:var(--bg-card);border-radius:var(--radius-card);padding:16px;border:var(--silver-border-strong);position:relative;overflow:hidden;box-shadow:var(--silver-shadow);">
                         <div style="display:flex;align-items:center;margin-bottom:12px;">
                             <div style="width:48px;height:48px;border-radius:14px;background:var(--skeleton-bg);flex-shrink:0;margin-left:12px;"></div>
                             <div style="flex:1;">
@@ -1577,9 +1988,9 @@
                         <div class="skeleton-row" style="height:12px;background:var(--skeleton-bg);border-radius:6px;margin-bottom:8px;"></div>
                         <div class="skeleton-row" style="height:12px;background:var(--skeleton-bg);border-radius:6px;margin-bottom:8px;"></div>
                         <div style="display:flex;gap:10px;margin-top:12px;">
-                            <div class="skeleton-row" style="flex:1;height:40px;background:var(--skeleton-bg);border-radius:6px;"></div>
-                            <div class="skeleton-row" style="flex:1;height:40px;background:var(--skeleton-bg);border-radius:6px;"></div>
-                            <div class="skeleton-row" style="flex:1;height:40px;background:var(--skeleton-bg);border-radius:6px;"></div>
+                            <div class="skeleton-row" style="flex:1;height:40px;background:var(--skeleton-bg);border-radius:10px;"></div>
+                            <div class="skeleton-row" style="flex:1;height:40px;background:var(--skeleton-bg);border-radius:10px;"></div>
+                            <div class="skeleton-row" style="flex:1;height:40px;background:var(--skeleton-bg);border-radius:10px;"></div>
                         </div>
                     </div>
                 `;
@@ -1654,7 +2065,7 @@
             if (filtered.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
-                        <i class="fas fa-list"></i>
+                        <i class="fas fa-inbox"></i>
                         <p>لا توجد قوالب مطابقة</p>
                     </div>
                 `;
@@ -1689,7 +2100,7 @@
                         </div>
                         <div class="card-name">${escapeHtml(name)} ${nameAr ? '| ' + escapeHtml(nameAr) : ''}</div>
                         <div class="card-channel"><i class="fas fa-rss"></i> ${channelLabel}</div>
-                        ${subject ? `<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;"><strong>العنوان:</strong> ${escapeHtml(subject)}</div>` : ''}
+                        ${subject ? `<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;text-align:center;"><strong>العنوان:</strong> ${escapeHtml(subject)}</div>` : ''}
                         <div class="card-body">
                             <div class="template-preview">${escapeHtml(preview)}</div>
                         </div>
@@ -1780,9 +2191,9 @@
                 return;
             }
             container.innerHTML = alerts.slice(0, 3).map((a, i) => `
-                <div class="alert-item ${a.type}" style="animation-delay:${i*0.1}s;padding:10px 16px;background:var(--surface-elevated);border-radius:12px;margin-bottom:8px;border:2px dashed ${a.type === 'danger' ? 'var(--error)' : 'var(--warning)'};display:flex;align-items:center;gap:10px;">
-                    <div class="alert-icon" style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;${a.type === 'danger' ? 'background:rgba(239,68,68,0.15);color:var(--error);' : 'background:rgba(245,158,11,0.15);color:var(--warning);'}"><i class="fas ${a.icon}"></i></div>
-                    <div class="alert-content" style="flex:1;"><div class="alert-title" style="font-size:0.85rem;font-weight:700;color:var(--data-text-color);">${a.title}</div><div class="alert-desc" style="font-size:0.75rem;color:var(--text-muted);">${a.desc}</div></div>
+                <div class="alert-item ${a.type}" style="animation-delay:${i*0.1}s;padding:10px 16px;background:var(--bg-card);border-radius:12px;margin-bottom:8px;border:var(--silver-border-strong);display:flex;align-items:center;gap:10px;box-shadow:var(--silver-shadow);">
+                    <div class="alert-icon" style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;${a.type === 'danger' ? 'background:rgba(220,38,38,0.12);color:var(--danger);border:var(--silver-border);' : 'background:rgba(217,119,6,0.12);color:var(--warning);border:var(--silver-border);'}"><i class="fas ${a.icon}"></i></div>
+                    <div class="alert-content" style="flex:1;"><div class="alert-title" style="font-size:0.85rem;font-weight:700;color:var(--text-primary);">${a.title}</div><div class="alert-desc" style="font-size:0.75rem;color:var(--text-muted);">${a.desc}</div></div>
                     <div class="alert-time" style="font-size:0.7rem;color:var(--text-muted);">${a.time}</div>
                 </div>
             `).join('');
@@ -1799,13 +2210,189 @@
         }
 
         // ============================================================
-        // 14. فتح مودال الإضافة
+        // 14. محرر المتغيرات من SQLite
+        // ============================================================
+        function setVariableTarget(id) {
+            variableTargetId = id || 'body';
+            const labels = { subject: 'العنوان (Subject)', body: 'محتوى الرسالة', bodyAr: 'المحتوى العربي' };
+            const el = document.getElementById('variableTargetLabel');
+            if (el) el.textContent = 'موضع الإدراج: ' + (labels[variableTargetId] || variableTargetId);
+        }
+
+        function openVariablePicker(targetId) {
+            selectedVariableTable = null;
+            setVariableTarget(targetId || variableTargetId || 'body');
+            document.getElementById('variablePickerModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            loadVariableSources(false);
+        }
+
+        async function loadVariableSources(force) {
+            const tableSearch = document.getElementById('variableTableSearch')?.value?.trim() || '';
+            const columnSearch = document.getElementById('variableColumnSearch')?.value?.trim() || '';
+            const refreshBtn = document.getElementById('refreshVariablesBtn');
+            if (refreshBtn) refreshBtn.disabled = true;
+            try {
+                const result = await apiCall('getNotificationTemplateVariableSources', {
+                    table_search: tableSearch,
+                    column_search: columnSearch,
+                    table_name: ''
+                });
+                if (!result || result.success !== true) throw new Error(result?.message || result?.error || 'تعذر تحميل متغيرات قاعدة البيانات');
+                variableSources = Array.isArray(result.data) ? result.data : [];
+                selectedVariableTable = selectedVariableTable && variableSources.find(t => t.table_name === selectedVariableTable.table_name) || variableSources[0] || null;
+                renderVariableTables();
+                renderVariableColumns();
+            } catch (error) {
+                variableSources = [];
+                selectedVariableTable = null;
+                renderVariableTables();
+                renderVariableColumns();
+                showToast('❌ ' + (error?.message || 'تعذر تحميل المتغيرات'), 'error');
+            } finally {
+                if (refreshBtn) refreshBtn.disabled = false;
+            }
+        }
+
+        function filterVariableTables() { renderVariableTables(); }
+        function filterVariableColumns() {
+            renderVariableColumns();
+            if (selectedVariableTable?.table_name) selectVariableTable(selectedVariableTable.table_name);
+        }
+
+        function renderVariableTables() {
+            const list = document.getElementById('variableTableList');
+            if (!list) return;
+            const q = (document.getElementById('variableTableSearch')?.value || '').trim().toLowerCase();
+            const rows = variableSources.filter(t => {
+                const text = `${t.table_name || ''} ${t.table_label || ''}`.toLowerCase();
+                return !q || text.includes(q);
+            });
+            if (!rows.length) {
+                list.innerHTML = '<div class="variable-picker-empty">لا توجد جداول مطابقة</div>';
+                return;
+            }
+            list.innerHTML = rows.map(t => `
+                <button type="button" class="variable-table ${selectedVariableTable?.table_name === t.table_name ? 'active' : ''}" onclick="selectVariableTable('${escapeJs(t.table_name)}')">
+                    <span class="variable-main">${escapeHtml(t.table_label || t.table_name)}</span>
+                    <span class="variable-sub">${escapeHtml(t.table_name || '')} · ${Array.isArray(t.columns) ? t.columns.length : 0} حقلاً</span>
+                </button>
+            `).join('');
+        }
+
+        async function selectVariableTable(tableName) {
+            selectedVariableTable = variableSources.find(t => t.table_name === tableName) || { table_name: tableName, table_label: tableName, columns: [] };
+            renderVariableTables();
+            renderVariableColumns();
+            const list = document.getElementById('variableColumnList');
+            if (list) list.innerHTML = '<div class="variable-picker-empty">جارٍ تحميل الحقول والقيم...</div>';
+            try {
+                const result = await apiCall('getNotificationTemplateVariableSources', {
+                    table_name: tableName,
+                    column_search: document.getElementById('variableColumnSearch')?.value?.trim() || ''
+                });
+                if (!result || result.success !== true) throw new Error(result?.message || result?.error || 'تعذر تحميل حقول الجدول');
+                const selected = Array.isArray(result.data) ? result.data.find(t => t.table_name === tableName) : null;
+                selectedVariableTable = selected || { table_name: tableName, table_label: tableName, columns: [] };
+                renderVariableColumns();
+            } catch (error) {
+                if (list) list.innerHTML = '<div class="variable-picker-empty">تعذر تحميل الحقول</div>';
+                showToast('❌ ' + (error?.message || 'تعذر تحميل الحقول'), 'error');
+            }
+        }
+
+        function renderVariableColumns() {
+            const list = document.getElementById('variableColumnList');
+            if (!list) return;
+            if (!selectedVariableTable) {
+                list.innerHTML = '<div class="variable-picker-empty">اختر جدولاً أولاً</div>';
+                return;
+            }
+            const q = (document.getElementById('variableColumnSearch')?.value || '').trim().toLowerCase();
+            const columns = (selectedVariableTable.columns || []).filter(c => {
+                const text = `${c.name || ''} ${c.label || ''} ${c.type || ''}`.toLowerCase();
+                return !q || text.includes(q);
+            });
+            if (!columns.length) {
+                list.innerHTML = '<div class="variable-picker-empty">لا توجد حقول مطابقة</div>';
+                return;
+            }
+            list.innerHTML = columns.map(c => {
+                const samples = Array.isArray(c.sample_values) && c.sample_values.length ? c.sample_values.slice(0, 3).map(v => escapeHtml(String(v))).join(' · ') : 'لا توجد عينة قيم';
+                return `
+                    <button type="button" class="variable-field" onclick="insertDatabaseVariable('${escapeJs(selectedVariableTable.table_name)}','${escapeJs(c.name)}','${escapeJs(c.label || c.name)}')">
+                        <span class="variable-field-row"><span class="variable-main">${escapeHtml(c.label || c.name)}</span><span class="variable-sub">${escapeHtml(c.type || 'TEXT')}</span></span>
+                        <span class="variable-sub">${escapeHtml(c.name || '')}</span>
+                        <span class="variable-samples">مثال: ${samples}</span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function insertAtCursor(el, text) {
+            if (!el) return;
+            const start = Number.isInteger(el.selectionStart) ? el.selectionStart : el.value.length;
+            const end = Number.isInteger(el.selectionEnd) ? el.selectionEnd : start;
+            el.value = el.value.slice(0, start) + text + el.value.slice(end);
+            const cursor = start + text.length;
+            el.focus();
+            el.setSelectionRange(cursor, cursor);
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+        function insertDatabaseVariable(table, column, label) {
+            const token = `{${table}.${column}}`;
+            const target = document.getElementById(variableTargetId) || document.getElementById('body');
+            insertAtCursor(target, token);
+            let map = {};
+            const raw = document.getElementById('variables').value.trim();
+            if (raw) {
+                try { map = JSON.parse(raw); } catch (_) { map = {}; }
+            }
+            if (!map || typeof map !== 'object' || Array.isArray(map)) map = {};
+            map[token] = label || column;
+            document.getElementById('variables').value = JSON.stringify(map);
+            renderVariableChips();
+            closeModal();
+            showToast('✅ تم إدراج ' + token, 'success');
+            hapticFeedback('light');
+        }
+
+        function renderVariableChips() {
+            const host = document.getElementById('variableChips');
+            if (!host) return;
+            const raw = document.getElementById('variables')?.value?.trim() || '';
+            if (!raw) { host.innerHTML = ''; return; }
+            let map;
+            try { map = JSON.parse(raw); } catch (_) { host.innerHTML = '<span class="variables-help">صيغة المتغيرات الحالية غير JSON؛ يمكنك تصحيحها يدوياً أو إدراج متغير جديد.</span>'; return; }
+            if (!map || typeof map !== 'object' || Array.isArray(map)) { host.innerHTML = ''; return; }
+            host.innerHTML = Object.keys(map).map(token => `<button type="button" class="variable-chip" onclick="insertExistingVariable('${escapeJs(token)}')">${escapeHtml(token)}</button>`).join('');
+        }
+
+        function insertExistingVariable(token) {
+            const target = document.getElementById(variableTargetId) || document.getElementById('body');
+            insertAtCursor(target, token);
+            target.focus();
+        }
+
+        function escapeJs(value) {
+            return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, ' ');
+        }
+
+        document.addEventListener('input', function(e) {
+            if (e.target?.id === 'variables') renderVariableChips();
+        });
+
+        // ============================================================
+        // 15. فتح مودال الإضافة
         // ============================================================
         function openAddModal() {
             document.getElementById('editId').value = '0';
             document.getElementById('modalTitle').textContent = '➕ إضافة قالب جديد';
             document.getElementById('templateForm').reset();
             document.getElementById('isActive').value = '1';
+            setVariableTarget('body');
+            renderVariableChips();
             document.getElementById('formModal').classList.add('show');
             document.body.style.overflow = 'hidden';
             hapticFeedback('light');
@@ -1815,6 +2402,8 @@
         // ============================================================
         // 15. فتح مودال التعديل
         // ============================================================
+        ['subject','body','bodyAr'].forEach(id => document.getElementById(id)?.addEventListener('focus', () => setVariableTarget(id)));
+
         function editTemplate(id) {
             const template = allTemplates.find(t => t.id == id);
             if (!template) {
@@ -1833,6 +2422,8 @@
             document.getElementById('bodyAr').value = template.body_ar || '';
             document.getElementById('variables').value = template.variables || '';
             document.getElementById('isActive').value = (template.is_active == 1 || template.is_active === true) ? '1' : '0';
+            setVariableTarget('body');
+            renderVariableChips();
 
             document.getElementById('formModal').classList.add('show');
             document.body.style.overflow = 'hidden';
@@ -1842,6 +2433,28 @@
         // ============================================================
         // 16. حفظ القالب (إضافة / تعديل)
         // ============================================================
+        function syncVariablesFromContent() {
+            const input = document.getElementById('variables');
+            let map = {};
+            const raw = input?.value?.trim() || '';
+            if (raw) {
+                try { map = JSON.parse(raw); } catch (_) { throw new Error('صيغة Variables يجب أن تكون JSON صحيحة'); }
+            }
+            if (!map || typeof map !== 'object' || Array.isArray(map)) throw new Error('صيغة Variables غير صالحة');
+            const content = [
+                document.getElementById('subject')?.value || '',
+                document.getElementById('body')?.value || '',
+                document.getElementById('bodyAr')?.value || ''
+            ].join('\n');
+            const tokens = content.match(/\{[A-Za-z_][A-Za-z0-9_.]*\}/g) || [];
+            [...new Set(tokens)].forEach(token => {
+                if (!Object.prototype.hasOwnProperty.call(map, token)) map[token] = token.slice(1, -1);
+            });
+            input.value = JSON.stringify(map);
+            renderVariableChips();
+            return input.value;
+        }
+
         async function saveTemplate() {
             const id =
                 parseInt(document.getElementById('editId').value, 10) || 0;
@@ -1893,14 +2506,21 @@
                 body: body,
                 body_ar:
                     document.getElementById('bodyAr').value.trim(),
-                variables:
-                    document.getElementById('variables').value.trim(),
+                variables: '',
                 is_active:
                     parseInt(
                         document.getElementById('isActive').value,
                         10
                     )
             };
+
+            try {
+                data.variables = syncVariablesFromContent();
+            } catch (validationError) {
+                showToast('❌ ' + validationError.message, 'error');
+                document.getElementById('variables').focus();
+                return;
+            }
 
             const isUpdate = id > 0;
             const action = isUpdate ?
@@ -1964,59 +2584,59 @@
             let html = `
                 <div style="text-align:center;padding:8px 0;">
                     <div style="display:grid;gap:10px;text-align:right;">
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">الكود:</span>
-                            <span style="color:var(--data-text-color);">${escapeHtml(template.template_code || '---')}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);">
+                            <span style="font-weight:700;color:var(--text-muted);">الكود:</span>
+                            <span style="color:var(--text-primary);font-weight:700;">${escapeHtml(template.template_code || '---')}</span>
                         </div>
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">الاسم:</span>
-                            <span style="color:var(--data-text-color);">${escapeHtml(template.template_name || '---')}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);">
+                            <span style="font-weight:700;color:var(--text-muted);">الاسم:</span>
+                            <span style="color:var(--text-primary);">${escapeHtml(template.template_name || '---')}</span>
                         </div>
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">الاسم (عربي):</span>
-                            <span style="color:var(--data-text-color);">${escapeHtml(template.template_name_ar || '---')}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);">
+                            <span style="font-weight:700;color:var(--text-muted);">الاسم (عربي):</span>
+                            <span style="color:var(--text-primary);">${escapeHtml(template.template_name_ar || '---')}</span>
                         </div>
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">القناة:</span>
-                            <span style="color:var(--data-text-color);">${channelLabel}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);">
+                            <span style="font-weight:700;color:var(--text-muted);">القناة:</span>
+                            <span style="color:var(--text-primary);">${channelLabel}</span>
                         </div>
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">الحالة:</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);align-items:center;">
+                            <span style="font-weight:700;color:var(--text-muted);">الحالة:</span>
                             <span class="card-status-badge ${statusClass}">${statusText}</span>
                         </div>
                         ${template.subject ? `
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">العنوان:</span>
-                            <span style="color:var(--data-text-color);">${escapeHtml(template.subject)}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);">
+                            <span style="font-weight:700;color:var(--text-muted);">العنوان:</span>
+                            <span style="color:var(--text-primary);">${escapeHtml(template.subject)}</span>
                         </div>
                         ` : ''}
-                        <div style="padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">المحتوى:</span>
-                            <div style="background:var(--surface-color);padding:10px;border-radius:8px;margin-top:4px;color:var(--data-text-color);border:var(--border-width) var(--border-style) var(--border-color);">
+                        <div style="padding:8px 0;border-bottom:var(--silver-border);">
+                            <span style="font-weight:700;color:var(--text-muted);display:block;margin-bottom:6px;">المحتوى:</span>
+                            <div style="background:var(--bg-glass);padding:12px;border-radius:10px;margin-top:4px;color:var(--text-primary);border:var(--silver-border);line-height:1.7;font-size:.82rem;">
                                 ${escapeHtml(template.body || '---')}
                             </div>
                         </div>
                         ${template.body_ar ? `
-                        <div style="padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">المحتوى (عربي):</span>
-                            <div style="background:var(--surface-color);padding:10px;border-radius:8px;margin-top:4px;color:var(--data-text-color);border:var(--border-width) var(--border-style) var(--border-color);">
+                        <div style="padding:8px 0;border-bottom:var(--silver-border);">
+                            <span style="font-weight:700;color:var(--text-muted);display:block;margin-bottom:6px;">المحتوى (عربي):</span>
+                            <div style="background:var(--bg-glass);padding:12px;border-radius:10px;margin-top:4px;color:var(--text-primary);border:var(--silver-border);line-height:1.7;font-size:.82rem;">
                                 ${escapeHtml(template.body_ar)}
                             </div>
                         </div>
                         ` : ''}
                         ${template.variables ? `
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">المتغيرات:</span>
-                            <span style="color:var(--data-text-color);">${escapeHtml(template.variables)}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);gap:10px;">
+                            <span style="font-weight:700;color:var(--text-muted);">المتغيرات:</span>
+                            <span style="color:var(--text-primary);font-family:monospace;font-size:.72rem;direction:ltr;text-align:left;word-break:break-all;">${escapeHtml(template.variables)}</span>
                         </div>
                         ` : ''}
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">تاريخ الإنشاء:</span>
-                            <span style="color:var(--data-text-color);">${escapeHtml(template.created_at || '---')}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);">
+                            <span style="font-weight:700;color:var(--text-muted);">تاريخ الإنشاء:</span>
+                            <span style="color:var(--text-primary);">${escapeHtml(template.created_at || '---')}</span>
                         </div>
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;">
-                            <span style="font-weight:600;color:var(--text-muted);">آخر تحديث:</span>
-                            <span style="color:var(--data-text-color);">${escapeHtml(template.updated_at || '---')}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;">
+                            <span style="font-weight:700;color:var(--text-muted);">آخر تحديث:</span>
+                            <span style="color:var(--text-primary);">${escapeHtml(template.updated_at || '---')}</span>
                         </div>
                     </div>
                 </div>
@@ -2226,7 +2846,7 @@
                             <div style="padding:12px;text-align:center;">
                                 <p>إعدادات نظام قوالب الإشعارات</p>
                                 <ul style="list-style:none;padding:0;text-align:center;">
-                                    <li style="padding:8px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">🔹 عدد القوالب المحملة: ${allTemplates.length}</li>
+                                    <li style="padding:8px 0;border-bottom:var(--silver-border);">🔹 عدد القوالب المحملة: ${allTemplates.length}</li>
                                     <li style="padding:8px 0;">🔹 دعم المتغيرات: {variable}</li>
                                 </ul>
                                 <button class="submit-btn" onclick="showToast('تم حفظ الإعدادات', 'success')" style="margin-top:12px;">حفظ الإعدادات</button>
@@ -2277,7 +2897,7 @@
                     <td>${escapeHtml(t.template_code || '---')}</td>
                     <td>${escapeHtml(t.template_name || '---')}</td>
                     <td>${getChannelLabel(t.channel)}</td>
-                    <td><span class="card-status-badge ${statusClass}" style="font-size:0.7rem;padding:2px 8px;">${statusText}</span></td>
+                    <td><span class="card-status-badge ${statusClass}" style="font-size:0.7rem;padding:3px 10px;">${statusText}</span></td>
                     <td>${escapeHtml(t.created_at ? t.created_at.substring(0, 10) : '---')}</td>
                 </tr>`;
             });
@@ -2464,7 +3084,7 @@
                         <p>❌ غير النشطة: ${total - active}</p>
                         <p>📡 القنوات المستخدمة: ${channels}</p>
                         <p style="font-size:0.85rem;color:var(--text-muted);">${channelList}</p>
-                        <hr style="border:var(--border-width) var(--border-style) var(--border-color);margin:12px 0;">
+                        <hr style="border:none;border-top:1px solid var(--silver-border-color);margin:12px 0;">
                         <p style="font-weight:bold;">💡 التوصية: ${suggestion}</p>
                     </div>
                 `,

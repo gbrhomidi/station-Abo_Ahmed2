@@ -4,860 +4,1152 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>صندوق الإشعارات</title>
-        <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
-<link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
+    <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
+    <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
     <script src="file:///android_asset/assets-local/js/sweetalert2@11"></script>
     <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
     <style>
-        /* ============================================================
-           المتغيرات الأساسية – دعم Light/Dark
-           ============================================================ */
-        :root {
-            --bg-color: #f5efe6;
-            --surface-color: #faf3e8;
-            --surface-elevated: #fdf8f0;
-            --primary-color: #007ACC;
-            --primary-dim: rgba(0,122,204,0.12);
-            --accent-color: #d4a017;
-            --accent-dim: rgba(212,160,23,0.12);
-            --success: #10b981;
-            --error: #ef4444;
-            --warning: #f59e0b;
-            --text-color: #1a2a3a;
-            --text-muted: #6a7f94;
-            --border-color: #003366;
-            --border-style: dashed;
-            --border-width: 2px;
-            --shadow-glow: 0 0 20px rgba(0,122,204,0.08);
-            --glass-bg: rgba(255,248,240,0.85);
-            --header-bg: linear-gradient(135deg, #e8e0d5 0%, #d5cdc0 100%);
-            --card-hover-bg: rgba(0,122,204,0.04);
-            --fab-shadow: rgba(0,122,204,0.3);
-            --toast-bg: #fdf8f0;
-            --scrollbar-track: #f5efe6;
-            --scrollbar-thumb: rgba(0,51,102,0.2);
-            --skeleton-bg: #e8e0d5;
-            --skeleton-shine: #f5efe6;
-            --modal-border-color: #003366;
-            --modal-border-style: dashed;
-            --input-bg: #fdf8f0;
-            --input-border: #003366;
-            --input-border-style: dashed;
-            --data-text-color: #1a2a3a;
-            --data-text-muted: #4a5a6a;
-            --channel-sms: #2196F3;
-            --channel-email: #4CAF50;
-            --channel-push: #FF9800;
-            --channel-inapp: #9C27B0;
-            --priority-low: #6a7f94;
-            --priority-normal: #2196F3;
-            --priority-high: #FF9800;
-            --priority-urgent: #ef4444;
-        }
+/* ============================================================
+   نظام الألوان — وضع فاتح افتراضي + وضع مظلم مخفف
+   إطار فضي رفيع (1px) على جميع البطاقات والحقول
+   ============================================================ */
+:root {
+    /* ═══ الوضع الفاتح (افتراضي) ═══ */
+    --bg-primary: #f0f2f5;
+    --bg-secondary: #ffffff;
+    --bg-card: rgba(255, 255, 255, 0.96);
+    --bg-glass: rgba(0, 0, 0, 0.025);
+    --bg-glass-light: rgba(0, 0, 0, 0.05);
+    --text-primary: #1a2233;
+    --text-secondary: #44546a;
+    --text-muted: #8391a5;
+    --border-color: #d8dde4;
 
-        [data-theme="dark"] {
-            --bg-color: #0a0e1a;
-            --surface-color: #111827;
-            --surface-elevated: #1a2236;
-            --primary-color: #00d4ff;
-            --primary-dim: rgba(0,212,255,0.15);
-            --accent-color: #f59e0b;
-            --accent-dim: rgba(245,158,11,0.15);
-            --success: #10b981;
-            --error: #ef4444;
-            --warning: #f59e0b;
-            --text-color: #f1f5f9;
-            --text-muted: #94a3b8;
-            --border-color: #e8d48b;
-            --border-style: dashed;
-            --border-width: 2px;
-            --shadow-glow: 0 0 20px rgba(0,212,255,0.1);
-            --glass-bg: rgba(22,34,64,0.85);
-            --header-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            --card-hover-bg: rgba(0,212,255,0.05);
-            --fab-shadow: rgba(0,212,255,0.3);
-            --toast-bg: #1a2236;
-            --scrollbar-track: transparent;
-            --scrollbar-thumb: rgba(255,255,255,0.1);
-            --skeleton-bg: #1e293b;
-            --skeleton-shine: #2d3a4f;
-            --modal-border-color: #e8d48b;
-            --modal-border-style: dashed;
-            --input-bg: #1e293b;
-            --input-border: #e8d48b;
-            --input-border-style: dashed;
-            --data-text-color: #f1f5f9;
-            --data-text-muted: #94a3b8;
-            --channel-sms: #2196F3;
-            --channel-email: #4CAF50;
-            --channel-push: #FF9800;
-            --channel-inapp: #9C27B0;
-            --priority-low: #94a3b8;
-            --priority-normal: #2196F3;
-            --priority-high: #FF9800;
-            --priority-urgent: #ef4444;
-        }
+    /* إطار فضي رفيع موحّد */
+    --silver-border-color: #c4cad2;
+    --silver-border-color-strong: #a8b0bb;
+    --silver-border: 1px solid var(--silver-border-color);
+    --silver-border-strong: 1px solid var(--silver-border-color-strong);
+    --silver-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 
-        /* ============================================================
-           الأنماط الأساسية
-           ============================================================ */
-        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    --gold-primary: #c89a12;
+    --gold-dark: #a67c00;
+    --gold-light: #f5c842;
+    --gold-glow: 0 0 30px rgba(200, 154, 18, 0.18);
 
-        body {
-            font-family: 'Cairo', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            direction: rtl;
-            overflow-x: hidden;
-            margin: 0;
-            padding: 0;
-            padding-bottom: 80px;
-            transition: background 0.4s ease, color 0.4s ease;
-            touch-action: pan-y;
-        }
+    --emerald-primary: #059669;
+    --emerald-dark: #047857;
+    --emerald-glow: 0 0 30px rgba(5, 150, 105, 0.12);
 
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
-        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+    --success: #059669;
+    --danger: #dc2626;
+    --warning: #d97706;
+    --info: #2563eb;
+    --purple: #7c3aed;
 
-        /* ===== Loading ===== */
-        .loading-indicator {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
-            z-index: 3000;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            backdrop-filter: blur(8px);
-        }
-        .spinner {
-            width: 50px; height: 50px;
-            border: 4px solid rgba(0,212,255,0.2);
-            border-radius: 50%;
-            border-top: 4px solid var(--primary-color);
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.06);
+    --shadow-glow: 0 0 40px rgba(200, 154, 18, 0.08);
 
-        /* ===== Offline Banner ===== */
-        .offline-banner {
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            background: linear-gradient(90deg, var(--warning), #f97316);
-            color: #000;
-            text-align: center;
-            padding: 8px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            z-index: 2000;
-            transform: translateY(-100%);
-            transition: transform 0.3s;
-        }
-        .offline-banner.show { transform: translateY(0); }
+    --radius-card: 20px;
+    --radius-small: 12px;
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-        /* ============================================================
-           الشريط العلوي (Header)
-           ============================================================ */
-        .top-bar {
-            position: sticky;
-            top: 0;
-            display: flex;
-            flex-direction: column;
-            padding: 16px;
-            background: var(--header-bg);
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-            z-index: 100;
-            backdrop-filter: blur(20px);
-            transition: background 0.4s ease;
-        }
-        .header-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
-        .top-title h2 {
-            margin: 0;
-            font-size: 1.3rem;
-            font-weight: 800;
-            background: linear-gradient(90deg, var(--primary-color), #a78bfa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .header-actions {
-            display: flex;
-            gap: 8px;
-        }
-        .icon-btn {
-            width: 40px; height: 40px;
-            border-radius: 12px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-elevated);
-            color: var(--text-muted);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 1rem;
-            position: relative;
-        }
-        .icon-btn:hover {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            border-color: var(--primary-color);
-            transform: translateY(-2px);
-        }
-        .icon-btn:active { transform: scale(0.92); }
-        .icon-btn.has-badge::after {
-            content: '';
-            position: absolute;
-            top: 6px; right: 6px;
-            width: 8px; height: 8px;
-            background: var(--error);
-            border-radius: 50%;
-            box-shadow: 0 0 8px var(--error);
-            animation: pulse-dot 2s infinite;
-        }
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.3); }
-        }
+    --header-bg: rgba(255, 255, 255, 0.94);
+    --nav-bg: rgba(255, 255, 255, 0.96);
+    --sidebar-bg: rgba(255, 255, 255, 0.98);
+    --toast-bg: #ffffff;
 
-        /* ============================================================
-           البحث والفلاتر
-           ============================================================ */
-        .search-wrap {
-            position: relative;
-            margin-bottom: 10px;
-        }
-        .search-input {
-            width: 100%;
-            padding: 12px 44px 12px 16px;
-            border-radius: 14px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-elevated);
-            color: var(--text-color);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.9rem;
-            transition: all 0.3s;
-            outline: none;
-        }
-        .search-input:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px var(--primary-dim);
-        }
-        .search-wrap i {
-            position: absolute;
-            right: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-muted);
-        }
+    color-scheme: light;
 
-        .filter-chips {
-            display: flex;
-            gap: 8px;
-            overflow-x: auto;
-            padding-bottom: 4px;
-            scrollbar-width: none;
-        }
-        .filter-chips::-webkit-scrollbar { display: none; }
-        .filter-chip {
-            padding: 6px 14px;
-            border-radius: 20px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            font-size: 0.75rem;
-            font-family: 'Cairo', sans-serif;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .filter-chip:active { transform: scale(0.95); }
-        .filter-chip.active {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-        .filter-chip:hover:not(.active) {
-            border-color: var(--text-muted);
-            color: var(--text-color);
-        }
+    /* ═══ Aliases متوافقة مع الأنماط القديمة ═══ */
+    --bg-color: var(--bg-primary);
+    --surface-color: var(--bg-glass);
+    --surface-elevated: var(--bg-secondary);
+    --primary-color: var(--gold-primary);
+    --primary-dim: rgba(200, 154, 18, 0.12);
+    --accent-color: var(--gold-primary);
+    --accent-dim: rgba(200, 154, 18, 0.12);
+    --text-color: var(--text-primary);
+    --border-style: solid;
+    --border-width: 1px;
+    --glass-bg: var(--bg-card);
+    --card-hover-bg: var(--bg-glass-light);
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: var(--gold-primary);
+    --modal-border-color: var(--silver-border-color);
+    --modal-border-style: solid;
+    --input-bg: var(--bg-glass);
+    --input-border: var(--silver-border-color);
+    --input-border-style: solid;
+    --data-text-color: var(--text-primary);
+    --data-text-muted: var(--text-secondary);
+    --skeleton-bg: rgba(0, 0, 0, 0.05);
+    --skeleton-shine: rgba(0, 0, 0, 0.08);
+    --fab-shadow: rgba(200, 154, 18, 0.3);
 
-        /* ============================================================
-           بطاقات الإحصائيات
-           ============================================================ */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            padding: 16px;
-        }
-        .stat-card {
-            background: var(--surface-elevated);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 16px;
-            padding: 16px;
-            position: relative;
-            overflow: hidden;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            cursor: pointer;
-            touch-action: manipulation;
-        }
-        .stat-card:active { transform: scale(0.96); }
-        .stat-card:hover {
-            transform: translateY(-4px);
-            border-color: var(--primary-color);
-            box-shadow: var(--shadow-glow);
-        }
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .stat-card:hover::before { opacity: 1; }
-        .stat-icon {
-            width: 40px; height: 40px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.1rem;
-            margin-bottom: 12px;
-        }
-        .stat-icon.blue { background: var(--primary-dim); color: var(--primary-color); }
-        .stat-icon.green { background: rgba(16,185,129,0.15); color: var(--success); }
-        .stat-icon.orange { background: var(--accent-dim); color: var(--accent-color); }
-        .stat-icon.red { background: rgba(239,68,68,0.15); color: var(--error); }
-        .stat-icon.purple { background: rgba(155,89,182,0.15); color: #9b59b6; }
-        .stat-value {
-            font-size: 1.4rem;
-            font-weight: 800;
-            margin-bottom: 4px;
-            color: var(--data-text-color);
-            text-align: center;
-        }
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-align: center;
-        }
+    /* قنوات الإشعارات */
+    --channel-sms: #2563eb;
+    --channel-email: #059669;
+    --channel-push: #d97706;
+    --channel-inapp: #7c3aed;
+    /* الأولويات */
+    --priority-low: #8391a5;
+    --priority-normal: #2563eb;
+    --priority-high: #d97706;
+    --priority-urgent: #dc2626;
+}
 
-        @media (min-width: 768px) {
-            .stats-grid { grid-template-columns: repeat(4, 1fr); }
-        }
+/* ═══ الوضع المظلم المخفّف ═══ */
+[data-theme="dark"] {
+    --bg-primary: #1e232b;
+    --bg-secondary: #262c36;
+    --bg-card: rgba(40, 47, 58, 0.88);
+    --bg-glass: rgba(255, 255, 255, 0.035);
+    --bg-glass-light: rgba(255, 255, 255, 0.075);
+    --text-primary: #d8dee6;
+    --text-secondary: #9aa5b4;
+    --text-muted: #6a7686;
+    --border-color: rgba(200, 205, 212, 0.2);
 
-        /* ============================================================
-           بطاقات الإشعارات
-           ============================================================ */
-        .cards-container {
-            padding: 0 16px 80px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            touch-action: pan-y;
-        }
+    --silver-border-color: rgba(192, 197, 204, 0.35);
+    --silver-border-color-strong: rgba(192, 197, 204, 0.55);
+    --silver-border: 1px solid var(--silver-border-color);
+    --silver-border-strong: 1px solid var(--silver-border-color-strong);
+    --silver-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
-        .notification-card {
-            background: var(--surface-elevated);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 18px;
-            padding: 16px;
-            position: relative;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            cursor: pointer;
-            touch-action: pan-y;
-        }
-        .notification-card:hover {
-            border-color: var(--primary-color);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            background: var(--card-hover-bg);
-        }
-        .notification-card.selected {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px var(--primary-dim), 0 4px 20px rgba(0,212,255,0.1);
-        }
-        .notification-card:active { transform: scale(0.98); }
-        .notification-card.unread {
-            border-color: var(--primary-color);
-            background: var(--primary-dim);
-        }
+    --gold-primary: #f5c842;
+    --gold-dark: #c99f1e;
+    --gold-light: #f7d268;
+    --gold-glow: 0 0 30px rgba(245, 200, 66, 0.15);
 
-        .notification-card .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 8px;
-        }
-        .notification-card .card-title {
-            font-weight: 700;
-            font-size: 0.95rem;
-            color: var(--data-text-color);
-            flex: 1;
-            text-align: center;
-        }
-        .notification-card .card-badges {
-            display: flex;
-            gap: 4px;
-            flex-wrap: wrap;
-        }
-        .notification-card .badge {
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 0.6rem;
-            font-weight: 600;
-            border: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .badge-unread { background: rgba(0,122,204,0.15); color: var(--primary-color); }
-        .badge-read { background: rgba(148,163,184,0.15); color: var(--text-muted); }
-        .badge-priority-low { background: rgba(106,127,148,0.15); color: var(--priority-low); }
-        .badge-priority-normal { background: rgba(33,150,243,0.15); color: var(--priority-normal); }
-        .badge-priority-high { background: rgba(255,152,0,0.15); color: var(--priority-high); }
-        .badge-priority-urgent { background: rgba(239,68,68,0.15); color: var(--priority-urgent); }
-        .badge-channel-sms { background: rgba(33,150,243,0.15); color: var(--channel-sms); }
-        .badge-channel-email { background: rgba(76,175,80,0.15); color: var(--channel-email); }
-        .badge-channel-push { background: rgba(255,152,0,0.15); color: var(--channel-push); }
-        .badge-channel-inapp { background: rgba(156,39,176,0.15); color: var(--channel-inapp); }
-        .badge-status-pending { background: rgba(255,152,0,0.15); color: var(--warning); }
-        .badge-status-queued { background: rgba(33,150,243,0.15); color: var(--primary-color); }
-        .badge-status-sent { background: rgba(16,185,129,0.15); color: var(--success); }
-        .badge-status-failed { background: rgba(239,68,68,0.15); color: var(--error); }
-        .badge-status-cancelled { background: rgba(148,163,184,0.15); color: var(--text-muted); }
-        .badge-status-read { background: rgba(16,185,129,0.15); color: var(--success); }
+    --emerald-primary: #10b981;
+    --emerald-dark: #059669;
+    --emerald-glow: 0 0 30px rgba(16, 185, 129, 0.15);
 
-        .notification-card .card-body {
-            margin: 6px 0 8px;
-        }
-        .notification-card .card-body .message-preview {
-            font-size: 0.85rem;
-            color: var(--data-text-muted);
-            line-height: 1.5;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            text-align: center;
-        }
-        .notification-card .card-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 6px;
-            font-size: 0.7rem;
-            color: var(--text-muted);
-        }
-        .notification-card .card-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 10px;
-        }
-        .notification-card .card-actions .card-btn {
-            flex: 1;
-            padding: 8px;
-            border-radius: 12px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.75rem;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .notification-card .card-actions .card-btn:active { transform: scale(0.95); }
-        .notification-card .card-actions .card-btn:hover {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-        .notification-card .card-actions .card-btn.primary:hover {
-            background: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
-        }
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --info: #3b82f6;
+    --purple: #9b59b6;
 
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: var(--text-muted);
-        }
-        .empty-state i { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
+    --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.4);
+    --shadow-glow: 0 0 40px rgba(245, 200, 66, 0.05);
 
-        /* ============================================================
-           القائمة الجانبية (Sidebar)
-           ============================================================ */
-        .sidebar-toggle {
-            position: fixed;
-            top: 50%;
-            right: 0;
-            transform: translateY(-50%);
-            background: linear-gradient(145deg, #4B0082, #5a1a9a);
-            color: white;
-            width: 35px; height: 35px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50% 0 0 50%;
-            cursor: pointer;
-            z-index: 1001;
-            box-shadow: -3px 0 10px rgba(0,0,0,0.4);
-            transition: all 0.3s;
-            border: 1px solid rgba(255,255,255,0.2);
-            touch-action: manipulation;
-        }
-        .sidebar-toggle:active { transform: translateY(-50%) scale(0.9); }
-        .sidebar-toggle.hidden { opacity: 0; pointer-events: none; }
-        .sidebar {
-            position: fixed;
-            top: 50%;
-            right: -90px;
-            transform: translateY(-50%);
-            width: 70px;
-            background: var(--surface-elevated);
-            z-index: 999;
-            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-            padding: 8px;
-            border-radius: 15px 0 0 15px;
-            overflow-y: auto;
-            box-shadow: -5px 0 20px rgba(0,0,0,0.4);
-            backdrop-filter: blur(10px);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            opacity: 0;
-        }
-        .sidebar.open { right: 0; opacity: 1; }
-        .sidebar-content { display: flex; flex-direction: column; gap: 8px; }
-        .sidebar-btn {
-            position: relative;
-            background: rgba(75, 0, 130, 0.8);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            padding: 8px 4px;
-            border-radius: 10px;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            min-height: 55px;
-            text-align: center;
-            font-size: 0.75rem;
-            font-family: 'Cairo', sans-serif;
-            touch-action: manipulation;
-        }
-        .sidebar-btn:active { transform: scale(0.95); }
-        .sidebar-btn:hover {
-            transform: scale(1.05);
-            background: rgba(75,0,130,0.35);
-            box-shadow: 0 0 15px rgba(0,212,255,0.2);
-        }
-        .sidebar-btn i { font-size: 1.1rem; }
-        .sidebar-btn span { font-size: 0.65rem; }
+    --header-bg: rgba(30, 35, 43, 0.94);
+    --nav-bg: rgba(30, 35, 43, 0.96);
+    --sidebar-bg: rgba(38, 44, 54, 0.98);
+    --toast-bg: #262c36;
 
-        /* ============================================================
-           القائمة السفلية (Bottom Navigation)
-           ============================================================ */
-        .bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-top: var(--border-width) var(--border-style) var(--border-color);
-            display: flex;
-            justify-content: space-around;
-            padding: 8px 0 env(safe-area-inset-bottom, 8px) 0;
-            z-index: 300;
-        }
-        .bottom-nav .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 2px;
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.3s;
-            padding: 4px 8px;
-            position: relative;
-            touch-action: manipulation;
-            flex: 1;
-        }
-        .bottom-nav .nav-item:active { transform: scale(0.9); }
-        .bottom-nav .nav-item i { font-size: 18px; transition: all 0.3s; }
-        .bottom-nav .nav-item span { font-weight: 600; margin-top: 2px; }
-        .bottom-nav .nav-item.active { color: var(--primary-color); }
-        .bottom-nav .nav-item.active i { transform: translateY(-3px); text-shadow: 0 0 20px var(--primary-dim); }
-        .bottom-nav .nav-item.active::after {
-            content: '';
-            position: absolute;
-            top: -1px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 20px;
-            height: 3px;
-            background: var(--primary-color);
-            border-radius: 10px;
-        }
+    color-scheme: dark;
 
-        /* ============================================================
-           مودالات
-           ============================================================ */
-        .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(8px);
-            z-index: 800;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.3s;
-            padding: 20px;
-        }
-        .modal-overlay.show { display: flex; opacity: 1; }
-        .modal {
-            background: var(--surface-elevated);
-            border-radius: 24px;
-            width: 100%;
-            max-width: 500px;
-            max-height: 90vh;
-            overflow-y: auto;
-            padding: 24px 20px;
-            transform: scale(0.9) translateY(20px);
-            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
-            opacity: 0;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-        }
-        .modal-overlay.show .modal {
-            transform: scale(1) translateY(0);
-            opacity: 1;
-        }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 12px;
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .modal-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); text-align: center; flex: 1; }
-        .modal-close {
-            width: 36px; height: 36px;
-            border-radius: 10px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .modal-close:active { transform: scale(0.9); }
-        .modal-close:hover {
-            background: var(--error);
-            color: white;
-            border-color: var(--error);
-        }
-        .modal-body {
-            max-height: 60vh;
-            overflow-y: auto;
-        }
-        .modal-actions {
-            display: flex;
-            gap: 12px;
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .modal-actions .btn-secondary { flex: 1; }
+    --skeleton-bg: rgba(255, 255, 255, 0.05);
+    --skeleton-shine: rgba(255, 255, 255, 0.08);
+    --fab-shadow: rgba(245, 200, 66, 0.3);
 
-        /* ===== مودال الجدول (القائمة السفلية) ===== */
-        .modal-table .modal { max-width: 700px; }
-        .modal-body table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.8rem;
-        }
-        .modal-body table th {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            padding: 10px 12px;
-            text-align: center;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            font-weight: 700;
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .modal-body table td {
-            padding: 8px 12px;
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-            text-align: center;
-            color: var(--data-text-color);
-        }
-        .modal-body table tr:hover { background: var(--card-hover-bg); }
+    --channel-sms: #3b82f6;
+    --channel-email: #10b981;
+    --channel-push: #f59e0b;
+    --channel-inapp: #9b59b6;
+    --priority-low: #94a3b8;
+    --priority-normal: #3b82f6;
+    --priority-high: #f59e0b;
+    --priority-urgent: #ef4444;
+}
 
-        /* ===== عام ===== */
-        .submit-btn {
-            padding: 14px 20px;
-            border-radius: 14px;
-            border: none;
-            background: linear-gradient(135deg, var(--primary-color), #6366f1);
-            color: white;
-            font-family: 'Cairo', sans-serif;
-            font-size: 1rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s;
-            touch-action: manipulation;
-            flex: 2;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        .submit-btn:active { transform: scale(0.97); }
-        .submit-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px var(--primary-dim);
-        }
-        .submit-btn.danger {
-            background: linear-gradient(135deg, var(--error), #dc2626);
-        }
-        .btn-secondary {
-            padding: 14px 20px;
-            border-radius: 14px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            font-family: 'Cairo', sans-serif;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            touch-action: manipulation;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        .btn-secondary:active { transform: scale(0.97); }
-        .btn-secondary:hover {
-            background: var(--border-color);
-            color: var(--text-color);
-        }
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
 
-        /* ============================================================
-           Toast إشعارات
-           ============================================================ */
-        .toast {
-            position: fixed;
-            top: 70px;
-            left: 50%;
-            transform: translateX(-50%) translateY(-20px);
-            background: var(--toast-bg);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 14px;
-            padding: 14px 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 600;
-            opacity: 0;
-            transition: all 0.4s;
-            pointer-events: none;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-        }
-        .toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-        .toast.success { border-color: var(--success); }
-        .toast.error { border-color: var(--error); }
-        .toast.warning { border-color: var(--warning); }
-        .toast-icon {
-            width: 28px; height: 28px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8rem;
-        }
-        .toast.success .toast-icon { background: rgba(16,185,129,0.15); color: var(--success); }
-        .toast.error .toast-icon { background: rgba(239,68,68,0.15); color: var(--error); }
-        .toast.warning .toast-icon { background: var(--accent-dim); color: var(--warning); }
+body {
+    font-family: 'Cairo', 'Inter', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    direction: rtl;
+    overflow-x: hidden;
+    min-height: 100vh;
+    padding: 0 0 90px 0;
+    background-image:
+        radial-gradient(ellipse at 5% 15%, rgba(200, 154, 18, 0.05) 0%, transparent 55%),
+        radial-gradient(ellipse at 95% 85%, rgba(5, 150, 105, 0.035) 0%, transparent 55%);
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.35s ease, color 0.35s ease;
+    touch-action: pan-y;
+}
+[data-theme="dark"] body {
+    background-image:
+        radial-gradient(ellipse at 5% 15%, rgba(245, 200, 66, 0.04) 0%, transparent 55%),
+        radial-gradient(ellipse at 95% 85%, rgba(16, 185, 129, 0.03) 0%, transparent 55%);
+}
 
-        /* ============================================================
-           الرسوم المتحركة
-           ============================================================ */
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-up {
-            animation: fadeUp 0.5s ease forwards;
-        }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--gold-primary); border-radius: 10px; }
 
-        /* ============================================================
-           تحسينات للهواتف
-           ============================================================ */
-        @media (max-width: 768px) {
-            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px; }
-            .stat-card { padding: 12px; }
-            .stat-value { font-size: 1.1rem; }
-            .cards-container { padding: 0 12px 16px; }
-            .bottom-nav .nav-item i { font-size: 15px; }
-            .bottom-nav .nav-item span { font-size: 0.7rem; }
-            .sidebar { width: 60px; }
-            .sidebar-btn { min-height: 45px; font-size: 0.65rem; }
-            .sidebar-btn i { font-size: 0.9rem; }
-            .filter-chip { font-size: 0.65rem; padding: 4px 10px; }
-            .top-title h2 { font-size: 1rem; }
-            .icon-btn { width: 34px; height: 34px; font-size: 0.85rem; }
-            .modal { padding: 16px; max-width: 100%; margin: 10px; }
-            .modal-actions { flex-direction: column; }
-            .modal-actions .submit-btn,
-            .modal-actions .btn-secondary { width: 100%; }
-        }
+/* ============================================================
+   Loading
+   ============================================================ */
+.loading-indicator {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 3000;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+[data-theme="dark"] .loading-indicator { background: rgba(0, 0, 0, 0.85); }
+.loading-indicator.show, .loading-indicator[style*="display: flex"] { display: flex !important; }
+.spinner {
+    width: 56px;
+    height: 56px;
+    border: 4px solid rgba(200, 154, 18, 0.15);
+    border-top: 4px solid var(--gold-primary);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
-        @media (max-width: 480px) {
-            .stats-grid { gap: 6px; padding: 10px; }
-            .stat-card { padding: 10px; }
-            .stat-value { font-size: 0.95rem; }
-            .stat-icon { width: 32px; height: 32px; font-size: 0.85rem; }
-            .bottom-nav .nav-item { padding: 4px 4px; }
-            .bottom-nav .nav-item i { font-size: 13px; }
-            .bottom-nav .nav-item span { font-size: 0.6rem; }
-            .modal { padding: 12px; }
-        }
+/* ============================================================
+   Offline Banner
+   ============================================================ */
+.offline-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: linear-gradient(90deg, var(--warning), var(--gold-primary));
+    color: #ffffff;
+    text-align: center;
+    padding: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    z-index: 2000;
+    transform: translateY(-100%);
+    transition: transform 0.3s;
+    border-bottom: var(--silver-border-strong);
+    box-shadow: var(--silver-shadow);
+}
+.offline-banner.show { transform: translateY(0); }
+
+/* ============================================================
+   الشريط العلوي
+   ============================================================ */
+.top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 120;
+    background: var(--header-bg);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-bottom: var(--silver-border);
+    padding: 14px 22px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+    transition: var(--transition);
+}
+.header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.top-title h2 {
+    font-size: 1.45rem;
+    font-weight: 900;
+    margin: 0;
+    background: linear-gradient(135deg, var(--gold-primary), var(--gold-dark));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.top-title h2 i {
+    -webkit-text-fill-color: initial;
+    color: var(--gold-primary);
+}
+.header-actions { display: flex; gap: 10px; align-items: center; }
+
+.icon-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 1rem;
+    position: relative;
+    box-shadow: var(--silver-shadow);
+}
+.icon-btn:hover {
+    background: var(--bg-glass-light);
+    border-color: var(--gold-primary);
+    color: var(--gold-primary);
+    transform: translateY(-2px);
+    box-shadow: var(--silver-shadow), 0 4px 12px rgba(200, 154, 18, 0.15);
+}
+.icon-btn:active { transform: scale(0.92); }
+.icon-btn.has-badge::after {
+    content: '';
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 8px; height: 8px;
+    background: var(--danger);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--danger);
+    animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.4); }
+}
+
+/* البحث */
+.search-wrap { position: relative; }
+.search-input {
+    width: 100%;
+    padding: 12px 44px 12px 16px;
+    border-radius: 12px;
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-primary);
+    font-family: 'Cairo', 'Inter', sans-serif;
+    font-size: 0.88rem;
+    outline: none;
+    transition: var(--transition);
+    box-shadow: var(--silver-shadow);
+}
+.search-input:focus {
+    border: var(--silver-border-strong);
+    box-shadow: 0 0 0 3px rgba(200, 154, 18, 0.12), var(--silver-shadow);
+}
+.search-wrap i {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    pointer-events: none;
+}
+
+/* شرائح الفلتر */
+.filter-chips {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 0;
+    scrollbar-width: none;
+}
+.filter-chips::-webkit-scrollbar { display: none; }
+.filter-chip {
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-secondary);
+    font-family: 'Cairo', 'Inter', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    touch-action: manipulation;
+    box-shadow: var(--silver-shadow);
+}
+.filter-chip:hover { border-color: var(--gold-primary); color: var(--gold-primary); }
+.filter-chip.active {
+    background: var(--gold-primary);
+    color: #ffffff;
+    border-color: var(--gold-dark);
+    box-shadow: 0 2px 8px rgba(200, 154, 18, 0.35);
+}
+
+/* ============================================================
+   بطاقات الإحصائيات
+   ============================================================ */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    padding: 20px 24px;
+}
+.stat-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    border: var(--silver-border-strong);
+    border-radius: var(--radius-card);
+    padding: 18px 16px;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--silver-shadow), var(--shadow-card);
+}
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--gold-primary), var(--gold-dark));
+    opacity: 0.85;
+}
+.stat-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--gold-primary);
+    box-shadow: var(--silver-shadow), 0 12px 32px rgba(200, 154, 18, 0.15);
+}
+.stat-card:active { transform: scale(0.97); }
+.stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    background: var(--bg-glass-light);
+    color: var(--gold-primary);
+    margin-bottom: 10px;
+    border: var(--silver-border);
+}
+.stat-icon.blue { color: var(--info); background: rgba(37, 99, 235, 0.1); }
+.stat-icon.green { color: var(--emerald-primary); background: rgba(5, 150, 105, 0.1); }
+.stat-icon.orange { color: var(--warning); background: rgba(217, 119, 6, 0.1); }
+.stat-icon.red { color: var(--danger); background: rgba(220, 38, 38, 0.1); }
+.stat-icon.purple { color: var(--purple); background: rgba(124, 58, 237, 0.1); }
+.stat-value {
+    font-size: 1.75rem;
+    font-weight: 900;
+    font-family: 'Inter', 'Arial', sans-serif;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+    color: var(--text-primary);
+    margin: 4px 0 2px;
+    direction: ltr;
+}
+.stat-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 700;
+}
+@media (max-width: 992px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 10px 12px; }
+    .stat-card { padding: 12px 10px; }
+    .stat-value { font-size: 1.15rem; }
+    .stat-icon { width: 38px; height: 38px; font-size: 1rem; }
+}
+
+/* ============================================================
+   عنوان القسم
+   ============================================================ */
+.section-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 24px 12px !important;
+}
+.section-title h3 {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+.count-badge {
+    background: var(--gold-primary) !important;
+    color: #ffffff !important;
+    padding: 3px 12px !important;
+    border-radius: 30px !important;
+    font-size: 0.75rem !important;
+    font-weight: 900 !important;
+    border: var(--silver-border);
+}
+
+/* ============================================================
+   بطاقات الإشعارات
+   ============================================================ */
+.cards-container {
+    padding: 0 24px 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    touch-action: pan-y;
+}
+
+.notification-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    border: var(--silver-border-strong);
+    border-radius: var(--radius-card);
+    padding: 16px 18px;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: var(--silver-shadow), var(--shadow-card);
+    touch-action: pan-y;
+}
+.notification-card::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--gold-primary);
+    opacity: 0.7;
+    transition: var(--transition);
+}
+.notification-card:hover {
+    border-color: var(--gold-primary);
+    box-shadow: var(--silver-shadow), 0 8px 28px rgba(200, 154, 18, 0.12);
+    transform: translateY(-2px);
+}
+.notification-card:hover::before { opacity: 1; width: 6px; }
+.notification-card.selected {
+    border-color: var(--gold-primary);
+    box-shadow: 0 0 0 2px rgba(200, 154, 18, 0.25), var(--silver-shadow), var(--shadow-card);
+}
+.notification-card.selected::before { background: var(--gold-dark); opacity: 1; }
+.notification-card:active { transform: scale(0.98); }
+.notification-card.unread {
+    border-color: var(--gold-primary);
+    background: rgba(200, 154, 18, 0.06);
+}
+.notification-card.unread::before {
+    background: var(--gold-primary);
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(200, 154, 18, 0.4);
+}
+
+.notification-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.notification-card .card-title {
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    flex: 1;
+    text-align: right;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.notification-card .card-badges {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+/* الشارات */
+.notification-card .badge {
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    border: var(--silver-border);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.badge-unread { background: rgba(200, 154, 18, 0.12); color: var(--gold-primary); }
+.badge-read { background: rgba(107, 114, 128, 0.1); color: var(--text-muted); }
+.badge-priority-low { background: rgba(131, 145, 165, 0.12); color: var(--priority-low); }
+.badge-priority-normal { background: rgba(37, 99, 235, 0.12); color: var(--priority-normal); }
+.badge-priority-high { background: rgba(217, 119, 6, 0.12); color: var(--priority-high); }
+.badge-priority-urgent { background: rgba(220, 38, 38, 0.12); color: var(--priority-urgent); }
+.badge-channel-sms { background: rgba(37, 99, 235, 0.12); color: var(--channel-sms); }
+.badge-channel-email { background: rgba(5, 150, 105, 0.12); color: var(--channel-email); }
+.badge-channel-push { background: rgba(217, 119, 6, 0.12); color: var(--channel-push); }
+.badge-channel-inapp { background: rgba(124, 58, 237, 0.12); color: var(--channel-inapp); }
+.badge-status-pending { background: rgba(217, 119, 6, 0.12); color: var(--warning); }
+.badge-status-queued { background: rgba(37, 99, 235, 0.12); color: var(--info); }
+.badge-status-sent { background: rgba(5, 150, 105, 0.12); color: var(--success); }
+.badge-status-failed { background: rgba(220, 38, 38, 0.12); color: var(--danger); }
+.badge-status-cancelled { background: rgba(107, 114, 128, 0.1); color: var(--text-muted); }
+.badge-status-read { background: rgba(5, 150, 105, 0.12); color: var(--success); }
+
+.notification-card .card-body {
+    margin: 8px 0 10px;
+}
+.notification-card .card-body .message-preview {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-align: center;
+    padding: 8px 10px;
+    background: var(--bg-glass);
+    border: var(--silver-border);
+    border-radius: 10px;
+}
+.notification-card .card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+.notification-card .card-footer i { color: var(--gold-primary); }
+
+.notification-card .card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+.notification-card .card-actions .card-btn {
+    flex: 1;
+    min-width: 80px;
+    padding: 9px 8px;
+    border-radius: 10px;
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-secondary);
+    font-family: 'Cairo', 'Inter', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transition: var(--transition);
+    touch-action: manipulation;
+    box-shadow: var(--silver-shadow);
+}
+.notification-card .card-actions .card-btn:active { transform: scale(0.95); }
+.notification-card .card-actions .card-btn:hover {
+    border-color: var(--gold-primary);
+    color: var(--gold-primary);
+    background: var(--bg-glass-light);
+    transform: translateY(-2px);
+}
+.notification-card .card-actions .card-btn.primary {
+    background: var(--gold-primary);
+    color: #ffffff;
+    border-color: var(--gold-dark);
+}
+.notification-card .card-actions .card-btn.primary:hover {
+    background: var(--gold-dark);
+    color: #ffffff;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+}
+.empty-state i {
+    font-size: 3.5rem;
+    margin-bottom: 14px;
+    opacity: 0.4;
+    display: block;
+    color: var(--gold-primary);
+}
+.empty-state p { font-size: 0.9rem; }
+
+@media (max-width: 480px) {
+    .cards-container { padding: 0 12px 20px; }
+    .notification-card .card-actions .card-btn { font-size: 0.7rem; padding: 8px 4px; min-width: 60px; }
+}
+
+/* ============================================================
+   Sidebar
+   ============================================================ */
+.sidebar-toggle {
+    position: fixed;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    background: var(--gold-primary);
+    color: #ffffff;
+    width: 40px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50% 0 0 50%;
+    cursor: pointer;
+    z-index: 1001;
+    box-shadow: -3px 0 15px rgba(200, 154, 18, 0.3);
+    transition: var(--transition);
+    border: var(--silver-border);
+}
+.sidebar-toggle:active { transform: translateY(-50%) scale(0.9); }
+.sidebar-toggle.hidden { opacity: 0; pointer-events: none; }
+.sidebar {
+    position: fixed;
+    top: 50%;
+    right: -140px;
+    transform: translateY(-50%);
+    width: 110px;
+    background: var(--sidebar-bg);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    z-index: 999;
+    transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+    padding: 12px 10px;
+    border-radius: 18px 0 0 18px;
+    overflow-y: auto;
+    box-shadow: -8px 0 30px rgba(0, 0, 0, 0.15);
+    border: var(--silver-border);
+    opacity: 0;
+}
+.sidebar.open { right: 0; opacity: 1; }
+.sidebar-content { display: flex; flex-direction: column; gap: 8px; }
+.sidebar-btn {
+    background: var(--bg-glass);
+    border: var(--silver-border);
+    padding: 12px 6px;
+    border-radius: 12px;
+    color: var(--text-secondary);
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 72px;
+    text-align: center;
+    font-size: 0.85rem;
+    font-family: 'Cairo', 'Inter', sans-serif;
+    touch-action: manipulation;
+    box-shadow: var(--silver-shadow);
+}
+.sidebar-btn:active { transform: scale(0.92); }
+.sidebar-btn:hover {
+    background: var(--bg-glass-light);
+    border-color: var(--gold-primary);
+    color: var(--gold-primary);
+    transform: scale(1.05);
+}
+.sidebar-btn i { font-size: 1.5rem; color: var(--gold-primary); }
+.sidebar-btn span { font-size: 0.68rem; margin-top: 2px; }
+
+/* زر الرجوع داخل السايدبار */
+.sidebar-btn[onclick*="goToDashboard"] {
+    background: rgba(220, 38, 38, 0.1) !important;
+    border-color: var(--danger) !important;
+    color: var(--danger) !important;
+}
+.sidebar-btn[onclick*="goToDashboard"]:hover {
+    background: var(--danger) !important;
+    color: #ffffff !important;
+}
+.sidebar-btn[onclick*="goToDashboard"] i { color: var(--danger) !important; }
+.sidebar-btn[onclick*="goToDashboard"]:hover i { color: #ffffff !important; }
+
+/* ============================================================
+   Bottom Navigation
+   ============================================================ */
+.bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--nav-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: var(--silver-border-strong);
+    display: flex;
+    justify-content: space-around;
+    padding: 8px 0 env(safe-area-inset-bottom, 8px) 0;
+    z-index: 300;
+    overflow-x: auto;
+    scrollbar-width: none;
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.04);
+}
+.bottom-nav::-webkit-scrollbar { display: none; }
+.bottom-nav .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-family: 'Cairo', 'Inter', sans-serif;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: var(--transition);
+    padding: 6px 10px;
+    position: relative;
+    touch-action: manipulation;
+    flex: 1;
+    min-width: 90px;
+}
+.bottom-nav .nav-item:active { transform: scale(0.9); }
+.bottom-nav .nav-item i {
+    font-size: 20px;
+    transition: var(--transition);
+}
+.bottom-nav .nav-item span { font-weight: 700; margin-top: 2px; }
+.bottom-nav .nav-item.active { color: var(--gold-primary); }
+.bottom-nav .nav-item.active i {
+    transform: translateY(-3px);
+    text-shadow: 0 0 20px rgba(200, 154, 18, 0.3);
+}
+.bottom-nav .nav-item.active::after {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 3px;
+    background: var(--gold-primary);
+    border-radius: 10px;
+}
+
+/* ============================================================
+   Modals
+   ============================================================ */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    z-index: 950;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+    overflow-y: auto;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+[data-theme="dark"] .modal-overlay { background: rgba(0, 0, 0, 0.82); }
+.modal-overlay.show { display: flex; opacity: 1; }
+.modal {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-card);
+    width: 100%;
+    max-width: 620px;
+    margin: 0;
+    padding: 26px 28px;
+    border: var(--silver-border-strong);
+    box-shadow: var(--silver-shadow), var(--shadow-card);
+    max-height: 92vh;
+    overflow-y: auto;
+    transform: scale(0.95);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-overlay.show .modal { transform: scale(1); }
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: var(--silver-border);
+    padding-bottom: 14px;
+}
+.modal-title {
+    font-size: 1.15rem;
+    font-weight: 900;
+    color: var(--gold-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-align: center;
+    flex: 1;
+}
+.modal-close {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    font-size: 1.05rem;
+    box-shadow: var(--silver-shadow);
+}
+.modal-close:hover {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+}
+.modal-close:active { transform: scale(0.9); }
+.modal-body {
+    max-height: 65vh;
+    overflow-y: auto;
+}
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: var(--silver-border);
+}
+.modal-actions .submit-btn,
+.modal-actions .btn-secondary { flex: 1; }
+
+/* مودال الجدول */
+.modal-table .modal { max-width: 760px; }
+.modal-body table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 6px;
+    font-size: 0.8rem;
+}
+.modal-body table th {
+    background: var(--bg-glass-light);
+    color: var(--gold-primary);
+    padding: 12px;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    font-weight: 800;
+    border: var(--silver-border);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    border-radius: 10px 10px 0 0;
+}
+.modal-body table td {
+    padding: 12px;
+    border: var(--silver-border);
+    text-align: center;
+    color: var(--text-secondary);
+    background: var(--bg-glass);
+    vertical-align: middle;
+    transition: var(--transition);
+}
+.modal-body table tr:hover td {
+    background: var(--bg-glass-light);
+    color: var(--text-primary);
+}
+
+/* ============================================================
+   أزرار
+   ============================================================ */
+.submit-btn {
+    padding: 13px 20px;
+    border-radius: var(--radius-small);
+    border: var(--silver-border);
+    background: var(--gold-primary);
+    color: #ffffff;
+    font-family: 'Cairo', 'Inter', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: var(--silver-shadow);
+    flex: 2;
+}
+.submit-btn:hover {
+    background: var(--gold-dark);
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: var(--silver-shadow), 0 6px 20px rgba(200, 154, 18, 0.3);
+}
+.submit-btn:active { transform: scale(0.97); }
+.submit-btn.danger {
+    background: var(--danger);
+    border-color: #b91c1c;
+}
+.submit-btn.danger:hover { background: #b91c1c; }
+
+.btn-secondary {
+    padding: 13px 20px;
+    border-radius: var(--radius-small);
+    border: var(--silver-border);
+    background: var(--bg-glass);
+    color: var(--text-secondary);
+    font-family: 'Cairo', 'Inter', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: var(--silver-shadow);
+    flex: 1;
+}
+.btn-secondary:hover {
+    border-color: var(--gold-primary);
+    color: var(--gold-primary);
+    background: var(--bg-glass-light);
+    transform: translateY(-2px);
+}
+.btn-secondary:active { transform: scale(0.97); }
+
+/* ============================================================
+   Toast
+   ============================================================ */
+.toast {
+    position: fixed;
+    top: 85px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: var(--toast-bg);
+    border: var(--silver-border-strong);
+    border-radius: 14px;
+    padding: 12px 22px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 2000;
+    opacity: 0;
+    transition: all 0.4s ease;
+    pointer-events: none;
+    box-shadow: var(--silver-shadow), 0 10px 35px rgba(0, 0, 0, 0.2);
+    min-width: 220px;
+    font-size: 0.85rem;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.success { border-color: var(--emerald-primary); }
+.toast.error { border-color: var(--danger); }
+.toast.warning { border-color: var(--warning); }
+.toast-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    background: rgba(200, 154, 18, 0.12);
+    color: var(--gold-primary);
+    border: var(--silver-border);
+}
+.toast.success .toast-icon { background: rgba(5, 150, 105, 0.12); color: var(--emerald-primary); }
+.toast.error .toast-icon { background: rgba(220, 38, 38, 0.12); color: var(--danger); }
+.toast.warning .toast-icon { background: rgba(217, 119, 6, 0.12); color: var(--warning); }
+
+/* ============================================================
+   Skeleton
+   ============================================================ */
+.skeleton-card {
+    background: var(--bg-card) !important;
+    border: var(--silver-border-strong) !important;
+    border-radius: var(--radius-card) !important;
+    box-shadow: var(--silver-shadow);
+}
+.skeleton-row {
+    background: var(--skeleton-bg) !important;
+    position: relative;
+    overflow: hidden;
+}
+.skeleton-row::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
+    animation: skeleton-shine 1.5s infinite;
+}
+@keyframes skeleton-shine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+/* ============================================================
+   الرسوم المتحركة
+   ============================================================ */
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: fadeUp 0.5s ease forwards; }
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 768px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 12px; }
+    .stat-card { padding: 12px; }
+    .stat-value { font-size: 1.2rem; }
+    .cards-container { padding: 0 12px 16px; }
+    .bottom-nav .nav-item i { font-size: 16px; }
+    .bottom-nav .nav-item span { font-size: 0.7rem; }
+    .sidebar { width: 100px; padding: 10px 8px; }
+    .sidebar-btn { min-height: 62px; font-size: 0.78rem; }
+    .sidebar-btn i { font-size: 1.3rem; }
+    .filter-chip { font-size: 0.7rem; padding: 6px 12px; }
+    .top-title h2 { font-size: 1.1rem; }
+    .icon-btn { width: 38px; height: 38px; font-size: 0.9rem; }
+    .modal { padding: 20px 16px; max-width: 100%; margin: 10px; }
+    .modal-actions { flex-direction: column; }
+    .modal-actions .submit-btn,
+    .modal-actions .btn-secondary { width: 100%; }
+    .top-bar { padding: 12px 14px 10px; }
+    .section-title { padding: 0 16px 12px !important; }
+}
+
+@media (max-width: 480px) {
+    .stats-grid { gap: 8px; padding: 10px; }
+    .stat-card { padding: 10px; }
+    .stat-value { font-size: 1rem; }
+    .stat-icon { width: 34px; height: 34px; font-size: 0.9rem; }
+    .bottom-nav .nav-item { padding: 4px 4px; min-width: 70px; }
+    .bottom-nav .nav-item i { font-size: 15px; }
+    .bottom-nav .nav-item span { font-size: 0.62rem; }
+    .modal { padding: 16px 12px; }
+    .notification-card { padding: 14px; }
+    .notification-card .card-actions .card-btn { font-size: 0.68rem; padding: 8px 4px; }
+}
+
+/* ============================================================
+   تحسينات للطباعة
+   ============================================================ */
+@media print {
+    .top-bar, .bottom-nav, .sidebar, .sidebar-toggle, .loading-indicator,
+    .modal-close, .icon-btn, .filter-chips { display: none !important; }
+    .modal-overlay.show { position: static; background: transparent; }
+    .modal { padding: 0; box-shadow: none; border: none; }
+}
     </style>
 </head>
 <body>
@@ -887,8 +1179,8 @@
                 <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
                     <i class="fas fa-moon" id="themeIcon"></i>
                 </button>
-                <button class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي" style="background:var(--primary-dim);color:var(--primary-color);">
-                    <i class="fas fa-robot"></i>
+                <button class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي">
+                    <i class="fas fa-robot" style="color:var(--gold-primary)"></i>
                 </button>
             </div>
         </div>
@@ -898,13 +1190,13 @@
         </div>
         <div class="filter-chips">
             <button class="filter-chip active" data-filter="all" onclick="setFilter('all', this)">الكل</button>
-            <button class="filter-chip" data-filter="unread" onclick="setFilter('unread', this)">📬 غير مقروء</button>
-            <button class="filter-chip" data-filter="read" onclick="setFilter('read', this)">📖 مقروء</button>
-            <button class="filter-chip" data-filter="urgent" onclick="setFilter('urgent', this)">🚨 عاجل</button>
-            <button class="filter-chip" data-filter="high" onclick="setFilter('high', this)">🔴 عالي</button>
-            <button class="filter-chip" data-filter="in_app" onclick="setFilter('in_app', this)">📱 In-App</button>
-            <button class="filter-chip" data-filter="sms" onclick="setFilter('sms', this)">💬 SMS</button>
-            <button class="filter-chip" data-filter="push" onclick="setFilter('push', this)">🔔 Push</button>
+            <button class="filter-chip" data-filter="unread" onclick="setFilter('unread', this)"><i class="fas fa-envelope"></i> غير مقروء</button>
+            <button class="filter-chip" data-filter="read" onclick="setFilter('read', this)"><i class="fas fa-book-open"></i> مقروء</button>
+            <button class="filter-chip" data-filter="urgent" onclick="setFilter('urgent', this)"><i class="fas fa-exclamation-triangle"></i> عاجل</button>
+            <button class="filter-chip" data-filter="high" onclick="setFilter('high', this)"><i class="fas fa-circle"></i> عالي</button>
+            <button class="filter-chip" data-filter="in_app" onclick="setFilter('in_app', this)"><i class="fas fa-mobile-screen"></i> In-App</button>
+            <button class="filter-chip" data-filter="sms" onclick="setFilter('sms', this)"><i class="fas fa-comment-sms"></i> SMS</button>
+            <button class="filter-chip" data-filter="push" onclick="setFilter('push', this)"><i class="fas fa-bell"></i> Push</button>
         </div>
     </header>
 
@@ -937,9 +1229,9 @@
     <!-- ============================================================
     عنوان القسم
     ============================================================ -->
-    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;padding:0 16px;margin-bottom:12px;">
-        <h3>📋 قائمة الإشعارات</h3>
-        <span class="count-badge" id="notificationCount" style="background:var(--primary-dim);color:var(--primary-color);padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:700;">0</span>
+    <div class="section-title">
+        <h3><i class="fas fa-list-ul" style="color:var(--gold-primary)"></i> قائمة الإشعارات</h3>
+        <span class="count-badge" id="notificationCount">0</span>
     </div>
 
     <!-- ============================================================
@@ -973,7 +1265,7 @@
                 <i class="fas fa-file-export"></i> <span>تصدير</span>
             </button>
             <!-- زر الرجوع (جديد) -->
-            <button class="sidebar-btn" onclick="goToDashboard()" style="background:rgba(239,68,68,0.8);border-color:var(--error);">
+            <button class="sidebar-btn" onclick="goToDashboard()">
                 <i class="fas fa-arrow-left"></i> <span>رجوع</span>
             </button>
         </div>
@@ -1268,7 +1560,7 @@
             let skeleton = '';
             for (let i = 0; i < 4; i++) {
                 skeleton += `
-                    <div class="skeleton-card" style="background:var(--surface-elevated);border-radius:18px;padding:16px;border:var(--border-width) var(--border-style) var(--border-color);position:relative;overflow:hidden;">
+                    <div class="skeleton-card" style="background:var(--bg-card);border-radius:var(--radius-card);padding:16px;border:var(--silver-border-strong);position:relative;overflow:hidden;box-shadow:var(--silver-shadow);">
                         <div style="display:flex;align-items:center;margin-bottom:12px;">
                             <div style="width:48px;height:48px;border-radius:14px;background:var(--skeleton-bg);flex-shrink:0;margin-left:12px;"></div>
                             <div style="flex:1;">
@@ -1279,8 +1571,8 @@
                         <div class="skeleton-row" style="height:12px;background:var(--skeleton-bg);border-radius:6px;margin-bottom:8px;"></div>
                         <div class="skeleton-row" style="height:12px;background:var(--skeleton-bg);border-radius:6px;margin-bottom:8px;"></div>
                         <div style="display:flex;gap:10px;margin-top:12px;">
-                            <div class="skeleton-row" style="flex:1;height:40px;background:var(--skeleton-bg);border-radius:6px;"></div>
-                            <div class="skeleton-row" style="flex:1;height:40px;background:var(--skeleton-bg);border-radius:6px;"></div>
+                            <div class="skeleton-row" style="flex:1;height:40px;background:var(--skeleton-bg);border-radius:10px;"></div>
+                            <div class="skeleton-row" style="flex:1;height:40px;background:var(--skeleton-bg);border-radius:10px;"></div>
                         </div>
                     </div>
                 `;
@@ -1414,7 +1706,7 @@
                 return `
                     <div class="notification-card animate-fade-up ${unreadClass}" style="animation-delay:${idx*0.04}s" data-id="${id}" onclick="selectCard(this, ${id})">
                         <div class="card-header">
-                            <div class="card-title"><i class="fas ${icon}" style="color:${priority === 'urgent' ? 'var(--error)' : 'var(--primary-color)'};margin-left:6px;"></i> ${escapeHtml(title)}</div>
+                            <div class="card-title"><i class="fas ${icon}" style="color:${priority === 'urgent' ? 'var(--danger)' : 'var(--gold-primary)'};margin-left:6px;"></i> ${escapeHtml(title)}</div>
                             <div class="card-badges">
                                 ${!isRead ? `<span class="badge badge-unread">جديد</span>` : `<span class="badge badge-read">مقروء</span>`}
                                 <span class="badge badge-priority-${priorityClass}">${priorityLabel}</span>
@@ -1524,9 +1816,9 @@
                 return;
             }
             container.innerHTML = alerts.slice(0, 3).map((a, i) => `
-                <div class="alert-item ${a.type}" style="animation-delay:${i*0.1}s;padding:10px 16px;background:var(--surface-elevated);border-radius:12px;margin-bottom:8px;border:2px dashed ${a.type === 'danger' ? 'var(--error)' : 'var(--warning)'};display:flex;align-items:center;gap:10px;">
-                    <div class="alert-icon" style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;${a.type === 'danger' ? 'background:rgba(239,68,68,0.15);color:var(--error);' : 'background:rgba(245,158,11,0.15);color:var(--warning);'}"><i class="fas ${a.icon}"></i></div>
-                    <div class="alert-content" style="flex:1;"><div class="alert-title" style="font-size:0.85rem;font-weight:700;color:var(--data-text-color);">${a.title}</div><div class="alert-desc" style="font-size:0.75rem;color:var(--text-muted);">${a.desc}</div></div>
+                <div class="alert-item ${a.type}" style="animation-delay:${i*0.1}s;padding:10px 16px;background:var(--bg-card);border-radius:12px;margin-bottom:8px;border:var(--silver-border-strong);display:flex;align-items:center;gap:10px;box-shadow:var(--silver-shadow);">
+                    <div class="alert-icon" style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;${a.type === 'danger' ? 'background:rgba(220,38,38,0.12);color:var(--danger);border:var(--silver-border);' : 'background:rgba(217,119,6,0.12);color:var(--warning);border:var(--silver-border);'}"><i class="fas ${a.icon}"></i></div>
+                    <div class="alert-content" style="flex:1;"><div class="alert-title" style="font-size:0.85rem;font-weight:700;color:var(--text-primary);">${a.title}</div><div class="alert-desc" style="font-size:0.75rem;color:var(--text-muted);">${a.desc}</div></div>
                     <div class="alert-time" style="font-size:0.7rem;color:var(--text-muted);">${a.time}</div>
                 </div>
             `).join('');
@@ -1580,102 +1872,102 @@
 
             let html = `
                 <div style="text-align:center;padding:8px 0;">
-                    <div style="font-size:2rem;margin-bottom:8px;color:${priority === 'urgent' ? 'var(--error)' : 'var(--primary-color)'};">
+                    <div style="font-size:2rem;margin-bottom:8px;color:${priority === 'urgent' ? 'var(--danger)' : 'var(--gold-primary)'};">
                         <i class="fas ${icon}"></i>
                     </div>
                     <div style="display:grid;gap:10px;text-align:right;">
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">العنوان:</span>
-                            <span style="color:var(--data-text-color);">${escapeHtml(notification.title || '---')}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);gap:10px;">
+                            <span style="font-weight:700;color:var(--text-muted);">العنوان:</span>
+                            <span style="color:var(--text-primary);font-weight:700;">${escapeHtml(notification.title || '---')}</span>
                         </div>
                         ${notification.title_ar ? `
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">العنوان (عربي):</span>
-                            <span style="color:var(--data-text-color);">${escapeHtml(notification.title_ar)}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);gap:10px;">
+                            <span style="font-weight:700;color:var(--text-muted);">العنوان (عربي):</span>
+                            <span style="color:var(--text-primary);">${escapeHtml(notification.title_ar)}</span>
                         </div>
                         ` : ''}
-                        <div style="padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">الرسالة:</span>
-                            <div style="background:var(--surface-color);padding:10px;border-radius:8px;margin-top:4px;color:var(--data-text-color);border:var(--border-width) var(--border-style) var(--border-color);">
+                        <div style="padding:8px 0;border-bottom:var(--silver-border);">
+                            <span style="font-weight:700;color:var(--text-muted);display:block;margin-bottom:6px;">الرسالة:</span>
+                            <div style="background:var(--bg-glass);padding:12px;border-radius:10px;margin-top:4px;color:var(--text-primary);border:var(--silver-border);line-height:1.7;font-size:.82rem;">
                                 ${escapeHtml(notification.message || '---')}
                             </div>
                         </div>
                         ${notification.message_ar ? `
-                        <div style="padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">الرسالة (عربي):</span>
-                            <div style="background:var(--surface-color);padding:10px;border-radius:8px;margin-top:4px;color:var(--data-text-color);border:var(--border-width) var(--border-style) var(--border-color);">
+                        <div style="padding:8px 0;border-bottom:var(--silver-border);">
+                            <span style="font-weight:700;color:var(--text-muted);display:block;margin-bottom:6px;">الرسالة (عربي):</span>
+                            <div style="background:var(--bg-glass);padding:12px;border-radius:10px;margin-top:4px;color:var(--text-primary);border:var(--silver-border);line-height:1.7;font-size:.82rem;">
                                 ${escapeHtml(notification.message_ar)}
                             </div>
                         </div>
                         ` : ''}
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">النوع:</span>
-                            <span style="color:var(--data-text-color);">${escapeHtml(type)}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);gap:10px;">
+                            <span style="font-weight:700;color:var(--text-muted);">النوع:</span>
+                            <span style="color:var(--text-primary);">${escapeHtml(type)}</span>
                         </div>
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">الأولوية:</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);align-items:center;gap:10px;">
+                            <span style="font-weight:700;color:var(--text-muted);">الأولوية:</span>
                             <span class="badge badge-priority-${priorityClass}" style="font-size:0.8rem;padding:4px 12px;">${priorityLabel}</span>
                         </div>
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">القناة:</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);align-items:center;gap:10px;">
+                            <span style="font-weight:700;color:var(--text-muted);">القناة:</span>
                             <span class="badge badge-channel-${getChannelClass(channel)}" style="font-size:0.8rem;padding:4px 12px;">${channelLabel}</span>
                         </div>
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">الحالة:</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);align-items:center;gap:10px;">
+                            <span style="font-weight:700;color:var(--text-muted);">الحالة:</span>
                             <span class="badge badge-status-${statusClass}" style="font-size:0.8rem;padding:4px 12px;">${statusLabel}</span>
                         </div>
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">الحالة:</span>
-                            <span style="color:var(--data-text-color);">${isRead ? '✅ مقروء' : '📬 غير مقروء'}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);gap:10px;">
+                            <span style="font-weight:700;color:var(--text-muted);">الحالة:</span>
+                            <span style="color:var(--text-primary);">${isRead ? '✅ مقروء' : '📬 غير مقروء'}</span>
                         </div>
                         ${notification.sent_at ? `
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">تاريخ الإرسال:</span>
-                            <span style="color:var(--data-text-color);">${formatDate(notification.sent_at)}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);gap:10px;">
+                            <span style="font-weight:700;color:var(--text-muted);">تاريخ الإرسال:</span>
+                            <span style="color:var(--text-primary);">${formatDate(notification.sent_at)}</span>
                         </div>
                         ` : ''}
                         ${notification.read_at ? `
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">تاريخ القراءة:</span>
-                            <span style="color:var(--data-text-color);">${formatDate(notification.read_at)}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);gap:10px;">
+                            <span style="font-weight:700;color:var(--text-muted);">تاريخ القراءة:</span>
+                            <span style="color:var(--text-primary);">${formatDate(notification.read_at)}</span>
                         </div>
                         ` : ''}
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">تاريخ الإنشاء:</span>
-                            <span style="color:var(--data-text-color);">${formatDate(notification.created_at)}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);gap:10px;">
+                            <span style="font-weight:700;color:var(--text-muted);">تاريخ الإنشاء:</span>
+                            <span style="color:var(--text-primary);">${formatDate(notification.created_at)}</span>
                         </div>
                         ${notification.expires_at ? `
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">ينتهي في:</span>
-                            <span style="color:${expired ? 'var(--error)' : 'var(--data-text-color)'};">${formatDate(notification.expires_at)} ${expired ? '⚠️ منتهي' : ''}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);gap:10px;">
+                            <span style="font-weight:700;color:var(--text-muted);">ينتهي في:</span>
+                            <span style="color:${expired ? 'var(--danger)' : 'var(--text-primary)'};">${formatDate(notification.expires_at)} ${expired ? '⚠️ منتهي' : ''}</span>
                         </div>
                         ` : ''}
                         ${notification.reference_type ? `
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">المرجع:</span>
-                            <span style="color:var(--data-text-color);">${escapeHtml(notification.reference_type)} #${notification.reference_id || ''}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);gap:10px;">
+                            <span style="font-weight:700;color:var(--text-muted);">المرجع:</span>
+                            <span style="color:var(--text-primary);">${escapeHtml(notification.reference_type)} #${notification.reference_id || ''}</span>
                         </div>
                         ` : ''}
                         ${notification.template_id ? `
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">القالب:</span>
-                            <span style="color:var(--data-text-color);">#${notification.template_id}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);gap:10px;">
+                            <span style="font-weight:700;color:var(--text-muted);">القالب:</span>
+                            <span style="color:var(--text-primary);">#${notification.template_id}</span>
                         </div>
                         ` : ''}
                         ${notification.action_url ? `
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">الإجراء:</span>
-                            <span style="color:var(--data-text-color);">
-                                <button class="card-btn" onclick="event.stopPropagation(); executeAction('${escapeHtml(notification.action_url)}')" style="display:inline-flex;padding:4px 12px;font-size:0.8rem;">
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:var(--silver-border);gap:10px;align-items:center;">
+                            <span style="font-weight:700;color:var(--text-muted);">الإجراء:</span>
+                            <span style="color:var(--text-primary);">
+                                <button class="card-btn" onclick="event.stopPropagation(); executeAction('${escapeHtml(notification.action_url)}')" style="display:inline-flex;padding:6px 14px;font-size:0.8rem;border:var(--silver-border);background:var(--bg-glass);border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700;color:var(--text-secondary);box-shadow:var(--silver-shadow);">
                                     <i class="fas fa-external-link-alt"></i> ${escapeHtml(notification.action_text || 'فتح')}
                                 </button>
                             </span>
                         </div>
                         ` : ''}
                         ${notification.error_message ? `
-                        <div style="padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
-                            <span style="font-weight:600;color:var(--text-muted);">خطأ:</span>
-                            <div style="background:rgba(239,68,68,0.1);padding:8px;border-radius:8px;margin-top:4px;color:var(--error);border:1px solid var(--error);">
+                        <div style="padding:8px 0;border-bottom:var(--silver-border);">
+                            <span style="font-weight:700;color:var(--text-muted);">خطأ:</span>
+                            <div style="background:rgba(220,38,38,0.1);padding:10px;border-radius:10px;margin-top:4px;color:var(--danger);border:var(--silver-border);">
                                 ${escapeHtml(notification.error_message)}
                             </div>
                         </div>
@@ -1752,9 +2044,7 @@
                 confirmButtonColor: '#10b981',
                 cancelButtonColor: '#64748b',
                 confirmButtonText: 'نعم، تعليم الكل كمقروء',
-                cancelButtonText: 'إلغاء',
-                background: '#1a2236',
-                color: '#f1f5f9'
+                cancelButtonText: 'إلغاء'
             });
             if (!confirmed.isConfirmed) return;
 
@@ -1880,20 +2170,20 @@
                     html = `
                         <div style="text-align:center;padding:8px 0;">
                             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-                                <div class="stat-card" style="padding:12px;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;">
+                                <div class="stat-card" style="padding:14px;border:var(--silver-border-strong);border-radius:var(--radius-small);background:var(--bg-card);box-shadow:var(--silver-shadow);">
                                     <div class="stat-value" style="font-size:1.2rem;">${total}</div>
                                     <div class="stat-label">إجمالي الإشعارات</div>
                                 </div>
-                                <div class="stat-card" style="padding:12px;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;">
-                                    <div class="stat-value" style="font-size:1.2rem;color:var(--error);">${unreadCount}</div>
+                                <div class="stat-card" style="padding:14px;border:var(--silver-border-strong);border-radius:var(--radius-small);background:var(--bg-card);box-shadow:var(--silver-shadow);">
+                                    <div class="stat-value" style="font-size:1.2rem;color:var(--danger);">${unreadCount}</div>
                                     <div class="stat-label">غير مقروءة</div>
                                 </div>
-                                <div class="stat-card" style="padding:12px;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;">
+                                <div class="stat-card" style="padding:14px;border:var(--silver-border-strong);border-radius:var(--radius-small);background:var(--bg-card);box-shadow:var(--silver-shadow);">
                                     <div class="stat-value" style="font-size:1.2rem;color:var(--success);">${readCount}</div>
                                     <div class="stat-label">مقروءة</div>
                                 </div>
-                                <div class="stat-card" style="padding:12px;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;">
-                                    <div class="stat-value" style="font-size:1.2rem;color:var(--error);">${urgentCount}</div>
+                                <div class="stat-card" style="padding:14px;border:var(--silver-border-strong);border-radius:var(--radius-small);background:var(--bg-card);box-shadow:var(--silver-shadow);">
+                                    <div class="stat-value" style="font-size:1.2rem;color:var(--danger);">${urgentCount}</div>
                                     <div class="stat-label">عاجلة</div>
                                 </div>
                             </div>
@@ -1946,9 +2236,9 @@
                 const status = getStatusLabel(n.status);
                 table += `<tr>
                     <td>${escapeHtml((n.title || n.title_ar || '---').substring(0, 30))}${(n.title || '').length > 30 ? '...' : ''}</td>
-                    <td><span class="badge badge-priority-${getPriorityClass(n.priority)}" style="font-size:0.7rem;padding:2px 8px;">${priority}</span></td>
-                    <td><span class="badge badge-channel-${getChannelClass(n.channel)}" style="font-size:0.7rem;padding:2px 8px;">${channel}</span></td>
-                    <td><span class="badge badge-status-${getStatusClass(n.status)}" style="font-size:0.7rem;padding:2px 8px;">${status}</span> ${isRead ? '📖' : '📬'}</td>
+                    <td><span class="badge badge-priority-${getPriorityClass(n.priority)}" style="font-size:0.7rem;padding:3px 10px;">${priority}</span></td>
+                    <td><span class="badge badge-channel-${getChannelClass(n.channel)}" style="font-size:0.7rem;padding:3px 10px;">${channel}</span></td>
+                    <td><span class="badge badge-status-${getStatusClass(n.status)}" style="font-size:0.7rem;padding:3px 10px;">${status}</span> ${isRead ? '📖' : '📬'}</td>
                     <td>${formatDate(n.created_at)}</td>
                 </tr>`;
             });
@@ -2028,7 +2318,7 @@
                 let y = margin;
 
                 doc.setFontSize(18);
-                doc.setTextColor(0, 122, 204);
+                doc.setTextColor(200, 154, 18);
                 doc.text('صندوق الإشعارات', pageWidth / 2, y, { align: 'center' });
                 y += 8;
 
@@ -2123,14 +2413,12 @@
                         <p>🚨 عاجلة غير مقروءة: ${urgent}</p>
                         <p>❌ فاشلة: ${failed}</p>
                         <p>⏳ منتهية الصلاحية: ${expired}</p>
-                        <hr style="border:var(--border-width) var(--border-style) var(--border-color);margin:12px 0;">
+                        <hr style="border:none;border-top:1px solid var(--silver-border-color);margin:12px 0;">
                         <p style="font-weight:bold;">💡 التوصية: ${suggestion}</p>
                     </div>
                 `,
                 icon: 'info',
-                confirmButtonText: 'حسناً',
-                background: '#1a2236',
-                color: '#f1f5f9'
+                confirmButtonText: 'حسناً'
             });
             hapticFeedback('light');
         }

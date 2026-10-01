@@ -9604,6 +9604,24 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         // MODULE-012 Bridges
         @JavascriptInterface
+        fun getNotificationTemplateVariableSources(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val obj = JSONObject(jsonData.ifBlank { "{}" })
+                dataResponse(
+                    db.getNotificationTemplateVariableSources(
+                        obj.optString("table_search", null).takeIf { !it.isNullOrBlank() },
+                        obj.optString("column_search", null).takeIf { !it.isNullOrBlank() },
+                        obj.optString("table_name", null).takeIf { !it.isNullOrBlank() }
+                    )
+                )
+            } catch (e: Exception) {
+                DebugLogger.logException("NotificationTemplateVariables", e)
+                errorResponse(e.message ?: "فشل تحميل متغيرات قوالب الإشعارات")
+            }
+        }
+
+        @JavascriptInterface
         fun getNotificationTemplatesPage(jsonData: String): String {
             return try {
                 val obj = JSONObject(jsonData)

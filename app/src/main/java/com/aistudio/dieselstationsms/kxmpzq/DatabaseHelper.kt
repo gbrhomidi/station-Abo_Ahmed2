@@ -7723,6 +7723,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
 	}
 
+    /**
+     * يعيد الملف الكامل للمحطة المرتبطة بجلسة المستخدم الحالي.
+     *
+     * يُستخدم من شاشات WebView التي تحتاج:
+     * - اسم المحطة (station_name_ar / station_name)
+     * - هاتف المحطة للتواصل (phone / phone2) — لعرضها في تذكيرات الديون وبطاقات السداد
+     * - البريد والعنوان للفواتير الرسمية والإشعارات
+     * - العملة الافتراضية والموقع الجغرافي
+     *
+     * المصدر: جدول stations (SQLite فقط، لا بيانات بديلة).
+     */
     fun getCurrentStationProfile(currentUserId: Long): JSONObject? {
         require(currentUserId > 0L) { "معرف المستخدم الحالي غير صالح" }
         dbLock.lock()
@@ -7734,24 +7745,62 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getLong(0) else 0L
             }
             require(stationId > 0L) { "لا توجد محطة مرتبطة بالمستخدم الحالي" }
-
             readableDatabase.rawQuery(
                 """
-                SELECT id, station_code, station_name, station_name_ar, station_photo, layout_plan
-                FROM stations
-                WHERE id = ? AND is_deleted = 0
-                LIMIT 1
-                """.trimIndent(),
+                 SELECT id, station_code, station_name, station_name_ar, station_photo, layout_plan, phone, phone2, email, emergency_phone, country, city, district, street, building, postal_code, latitude, longitude, gps_location, company_id, branch_id, default_currency_id, station_type, status, status_reason, operating_hours, opening_time, closing_time, is_24_hours, license_number, tax_number, commercial_register FROM stations WHERE id = ? AND is_deleted = 0 LIMIT 1
+                 """.trimIndent(),
                 arrayOf(stationId.toString())
             ).use { cursor ->
                 if (!cursor.moveToFirst()) return@use null
                 JSONObject().apply {
+                    // ═══ الهوية ═══
                     put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")))
                     put("station_code", cursor.getString(cursor.getColumnIndexOrThrow("station_code")))
                     put("station_name", cursor.getString(cursor.getColumnIndexOrThrow("station_name")))
                     put("station_name_ar", cursor.getString(cursor.getColumnIndexOrThrow("station_name_ar")))
                     put("station_photo", cursor.getString(cursor.getColumnIndexOrThrow("station_photo")))
                     put("layout_plan", cursor.getString(cursor.getColumnIndexOrThrow("layout_plan")))
+                    // ═══ التواصل (جديد — يحتاجه عرض بطاقة الدفع في التذكيرات) ═══
+                    put("phone", cursor.getString(cursor.getColumnIndexOrThrow("phone")))
+                    put("phone2", cursor.getString(cursor.getColumnIndexOrThrow("phone2")))
+                    put("email", cursor.getString(cursor.getColumnIndexOrThrow("email")))
+                    put("emergency_phone", cursor.getString(cursor.getColumnIndexOrThrow("emergency_phone")))
+                    // ═══ العنوان ═══
+                    put("country", cursor.getString(cursor.getColumnIndexOrThrow("country")))
+                    put("city", cursor.getString(cursor.getColumnIndexOrThrow("city")))
+                    put("district", cursor.getString(cursor.getColumnIndexOrThrow("district")))
+                    put("street", cursor.getString(cursor.getColumnIndexOrThrow("street")))
+                    put("building", cursor.getString(cursor.getColumnIndexOrThrow("building")))
+                    put("postal_code", cursor.getString(cursor.getColumnIndexOrThrow("postal_code")))
+                    put("address", buildString {
+                        val parts = listOfNotNull(
+                            cursor.getString(cursor.getColumnIndexOrThrow("street"))?.takeIf { it.isNotBlank() },
+                            cursor.getString(cursor.getColumnIndexOrThrow("district"))?.takeIf { it.isNotBlank() },
+                            cursor.getString(cursor.getColumnIndexOrThrow("city"))?.takeIf { it.isNotBlank() },
+                            cursor.getString(cursor.getColumnIndexOrThrow("country"))?.takeIf { it.isNotBlank() }
+                        )
+                        append(parts.joinToString(" - "))
+                    })
+                    // ═══ الموقع الجغرافي ═══
+                    put("latitude", cursor.getDouble(cursor.getColumnIndexOrThrow("latitude")))
+                    put("longitude", cursor.getDouble(cursor.getColumnIndexOrThrow("longitude")))
+                    put("gps_location", cursor.getString(cursor.getColumnIndexOrThrow("gps_location")))
+                    // ═══ الروابط الهيكلية ═══
+                    put("company_id", cursor.getLong(cursor.getColumnIndexOrThrow("company_id")))
+                    put("branch_id", cursor.getLong(cursor.getColumnIndexOrThrow("branch_id")))
+                    put("default_currency_id", cursor.getLong(cursor.getColumnIndexOrThrow("default_currency_id")))
+                    // ═══ التشغيل ═══
+                    put("station_type", cursor.getString(cursor.getColumnIndexOrThrow("station_type")))
+                    put("status", cursor.getString(cursor.getColumnIndexOrThrow("status")))
+                    put("status_reason", cursor.getString(cursor.getColumnIndexOrThrow("status_reason")))
+                    put("operating_hours", cursor.getString(cursor.getColumnIndexOrThrow("operating_hours")))
+                    put("opening_time", cursor.getString(cursor.getColumnIndexOrThrow("opening_time")))
+                    put("closing_time", cursor.getString(cursor.getColumnIndexOrThrow("closing_time")))
+                    put("is_24_hours", cursor.getInt(cursor.getColumnIndexOrThrow("is_24_hours")))
+                    // ═══ الامتثال ═══
+                    put("license_number", cursor.getString(cursor.getColumnIndexOrThrow("license_number")))
+                    put("tax_number", cursor.getString(cursor.getColumnIndexOrThrow("tax_number")))
+                    put("commercial_register", cursor.getString(cursor.getColumnIndexOrThrow("commercial_register")))
                 }
             }
         } finally {
@@ -21234,32 +21283,21 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال التنبيهات والتقارير الإضافية
     // ========================================================================
 
+    /**
+     * يعيد الفواتير الآجلة المتأخرة مع حقول كاملة للتصنيف الدقيق وعرضها في شاشة تذكيرات الديون.
+     * يعيد نفس أسماء الحقول التي يعيدها getCustomerDebts لتوحيد منطق الواجهة.
+     */
     fun getOverduePayments(): JSONArray {
         dbLock.lock()
         return try {
-            val arr = JSONArray()
-            val db = readableDatabase
-            db.rawQuery(
-                """SELECT s.*, p.commercial_name as customer_name, ${primaryPartyContactSql("p", "phone")} AS customer_phone
-                   FROM sales_transactions s
-                   LEFT JOIN parties p ON s.customer_party_id = p.id
-                   WHERE s.remaining_amount > 0 AND date(s.due_date) < date('now') AND s.is_deleted=0
-                   ORDER BY s.due_date""",
+            readableDatabase.rawQuery(
+                """
+                 SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.station_id, s.liters, s.quantity, s.product_id, s.fuel_type_id, s.order_type, s.net_amount, s.gross_amount, s.paid_amount, s.remaining_amount, s.due_date, s.payment_status, s.payment_method, s.is_credit, s.invoice_number, s.created_at, p.commercial_name AS customer_name, p.commercial_name_ar AS customer_name_ar, p.legal_name AS customer_legal_name, ${primaryPartyContactSql("p", "phone")} AS customer_phone, f.fuel_code, f.fuel_name, f.fuel_name_ar, pr.product_name, pr.product_name_ar, pr.product_code FROM sales_transactions s LEFT JOIN parties p ON s.customer_party_id = p.id LEFT JOIN fuel_types f ON s.fuel_type_id = f.id AND f.is_deleted = 0 LEFT JOIN products pr ON s.product_id = pr.id AND pr.is_deleted = 0 WHERE s.remaining_amount > 0 AND date(s.due_date) < date('now') AND s.is_deleted = 0 ORDER BY s.due_date ASC, s.id ASC
+                 """.trimIndent(),
                 null
             ).use { cursor ->
-                while (cursor.moveToNext()) {
-                    arr.put(JSONObject().apply {
-                        put("sale_id", cursor.getInt(cursor.getColumnIndexOrThrow("id")))
-                        put("customer_party_id", cursor.getInt(cursor.getColumnIndexOrThrow("customer_party_id")))
-                        put("customer_name", cursor.getString(cursor.getColumnIndexOrThrow("customer_name")))
-                        put("customer_phone", cursor.getString(cursor.getColumnIndexOrThrow("customer_phone")))
-                        put("remaining_amount", cursor.getDouble(cursor.getColumnIndexOrThrow("remaining_amount")))
-                        put("due_date", cursor.getString(cursor.getColumnIndexOrThrow("due_date")))
-                        put("invoice_number", cursor.getString(cursor.getColumnIndexOrThrow("invoice_number")))
-                    })
-                }
+                cursorToJsonArray(cursor)
             }
-            arr
         } finally {
             dbLock.unlock()
         }
@@ -23839,44 +23877,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال ديون العملاء
     // ========================================================================
 
-    fun getCustomerDebts(partyId: Int? = null, stationScopeId: Int? = null): JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            if (stationScopeId != null && partyId != null) requirePartyInStation(db, partyId.toLong(), stationScopeId)
-            if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
-            val args = mutableListOf<String>()
-            val stationClause = if (stationScopeId != null) {
-                args += stationScopeId.toString()
-                args += stationScopeId.toString()
-                " AND s.station_id = ? AND p.station_id = ? AND p.is_deleted = 0"
-            } else ""
-            val sql = if (partyId != null) {
-                args.add(0, partyId.toString())
-                """SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.liters,
-                          s.net_amount, s.paid_amount, s.remaining_amount, s.due_date,
-                          s.payment_status, s.invoice_number, s.created_at,
-                          p.commercial_name as customer_name, ${primaryPartyContactSql("p", "phone")} AS customer_phone
-                   FROM sales_transactions s
-                   LEFT JOIN parties p ON s.customer_party_id = p.id
-                   WHERE s.customer_party_id = ? AND s.remaining_amount > 0 AND s.is_deleted = 0$stationClause
-                   ORDER BY s.due_date ASC"""
-            } else {
-                """SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.liters,
-                          s.net_amount, s.paid_amount, s.remaining_amount, s.due_date,
-                          s.payment_status, s.invoice_number, s.created_at,
-                          p.commercial_name as customer_name, ${primaryPartyContactSql("p", "phone")} AS customer_phone
-                   FROM sales_transactions s
-                   LEFT JOIN parties p ON s.customer_party_id = p.id
-                   WHERE s.remaining_amount > 0 AND s.is_deleted = 0$stationClause
-                   ORDER BY s.due_date ASC"""
-            }
-            db.rawQuery(sql, args.takeIf { it.isNotEmpty() }?.toTypedArray()).use { cursor -> cursorToJsonArray(cursor) }
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
+    /**
+     * يعيد ديون العملاء من sales_transactions مع جميع الحقول اللازمة لشاشة تذكيرات الديون.
+     *
+     * الحقول المُضافة بعد التحديث:
+     * - s.fuel_type_id / f.fuel_code / f.fuel_name / f.fuel_name_ar — التصنيف الدقيق للوقود
+     * - s.product_id / pr.product_name / pr.product_name_ar — التصنيف الدقيق للمنتجات
+     * - s.quantity — كمية المنتج (لتمييز المنتجات عن الوقود)
+     * - s.station_id — نطاق المحطة (مطلوب لعرض بطاقة الدفع)
+     * - s.payment_method — طريقة الدفع الأصلية (cash / credit / bank_transfer ...)
+     * - s.is_credit — لتحديد إن كان البيع آجل
+     * - s.order_type — fuel / product / sale / order / delivery
+     *
+     * ملاحظة: جسر getCustomerDebts في MainActivity يستدعي هذه الدالة دون تغيير.
+     */
     fun getCustomerDebts(fromDate: String?, toDate: String?, stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
@@ -23897,15 +23911,46 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 args += stationScopeId.toString()
                 args += stationScopeId.toString()
             }
-            val sql = """SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.liters,
-                              s.net_amount, s.paid_amount, s.remaining_amount, s.due_date,
-                              s.payment_status, s.invoice_number, s.created_at,
-                              p.commercial_name as customer_name, ${primaryPartyContactSql("p", "phone")} AS customer_phone
-                       FROM sales_transactions s
-                       LEFT JOIN parties p ON s.customer_party_id = p.id
-                       WHERE ${predicates.joinToString(" AND ")}
-                       ORDER BY s.due_date ASC, s.id ASC"""
-            db.rawQuery(sql, args.toTypedArray()).use { cursor -> cursorToJsonArray(cursor) }
+            val sql = """
+                 SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.station_id, s.liters, s.quantity, s.product_id, s.fuel_type_id, s.order_type, s.net_amount, s.gross_amount, s.paid_amount, s.remaining_amount, s.due_date, s.payment_status, s.payment_method, s.is_credit, s.invoice_number, s.created_at, p.commercial_name AS customer_name, p.commercial_name_ar AS customer_name_ar, p.legal_name AS customer_legal_name, ${primaryPartyContactSql("p", "phone")} AS customer_phone, f.fuel_code, f.fuel_name, f.fuel_name_ar, pr.product_name, pr.product_name_ar, pr.product_code FROM sales_transactions s LEFT JOIN parties p ON s.customer_party_id = p.id LEFT JOIN fuel_types f ON s.fuel_type_id = f.id AND f.is_deleted = 0 LEFT JOIN products pr ON s.product_id = pr.id AND pr.is_deleted = 0 WHERE ${predicates.joinToString(" AND ")} ORDER BY s.due_date ASC, s.id ASC
+                 """.trimIndent()
+            db.rawQuery(sql, args.toTypedArray()).use { cursor ->
+                cursorToJsonArray(cursor)
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+    /**
+     * نسخة محميّة بـ party_id (اختياري) — تُستخدم عندما تريد عرض ديون عميل واحد فقط.
+     * نفس الحقول المُوسَّعة لدعم التصنيف الدقيق وبطاقة الدفع.
+     */
+    fun getCustomerDebtsForParty(partyId: Int, stationScopeId: Int? = null): JSONArray {
+        require(partyId > 0) { "معرف العميل غير صالح" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            if (stationScopeId != null) {
+                require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+                requirePartyInStation(db, partyId.toLong(), stationScopeId)
+            }
+            val predicates = mutableListOf(
+                "s.customer_party_id = ?",
+                "s.remaining_amount > 0",
+                "s.is_deleted = 0"
+            )
+            val args = mutableListOf(partyId.toString())
+            if (stationScopeId != null) {
+                predicates += "s.station_id = ? AND p.station_id = ? AND p.is_deleted = 0"
+                args += stationScopeId.toString()
+                args += stationScopeId.toString()
+            }
+            val sql = """
+                 SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.station_id, s.liters, s.quantity, s.product_id, s.fuel_type_id, s.order_type, s.net_amount, s.gross_amount, s.paid_amount, s.remaining_amount, s.due_date, s.payment_status, s.payment_method, s.is_credit, s.invoice_number, s.created_at, p.commercial_name AS customer_name, p.commercial_name_ar AS customer_name_ar, ${primaryPartyContactSql("p", "phone")} AS customer_phone, f.fuel_code, f.fuel_name, f.fuel_name_ar, pr.product_name, pr.product_name_ar, pr.product_code FROM sales_transactions s LEFT JOIN parties p ON s.customer_party_id = p.id LEFT JOIN fuel_types f ON s.fuel_type_id = f.id AND f.is_deleted = 0 LEFT JOIN products pr ON s.product_id = pr.id AND pr.is_deleted = 0 WHERE ${predicates.joinToString(" AND ")} ORDER BY s.due_date ASC, s.id ASC
+                 """.trimIndent()
+            db.rawQuery(sql, args.toTypedArray()).use { cursor ->
+                cursorToJsonArray(cursor)
+            }
         } finally {
             dbLock.unlock()
         }
@@ -27131,6 +27176,95 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     // MODULE-012: Notification & SMS Typed Methods
+
+    /**
+     * مصادر المتغيرات الديناميكية لقوالب الإشعارات.
+     * يعيد الجداول والأعمدة الفعلية من SQLite مع عينة قيم اختيارية،
+     * ويمنع تمرير أسماء جداول/أعمدة غير صالحة إلى SQL.
+     */
+    fun getNotificationTemplateVariableSources(
+        tableSearch: String? = null,
+        columnSearch: String? = null,
+        tableName: String? = null
+    ): JSONArray {
+        val result = JSONArray()
+        dbLock.lock()
+        try {
+            val db = readableDatabase
+            val normalizedTableSearch = tableSearch?.trim()?.lowercase(Locale.ROOT).orEmpty()
+            val normalizedColumnSearch = columnSearch?.trim()?.lowercase(Locale.ROOT).orEmpty()
+            val tables = mutableListOf<String>()
+
+            db.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+                null
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(0)
+                    if (name in browserHiddenTables) continue
+                    if (!tableName.isNullOrBlank() && name != tableName.trim()) continue
+                    if (normalizedTableSearch.isNotEmpty() && !name.lowercase(Locale.ROOT).contains(normalizedTableSearch)) continue
+                    tables += name
+                }
+            }
+
+            for (table in tables) {
+                val columns = JSONArray()
+                if (tableName.isNullOrBlank()) {
+                    result.put(JSONObject().apply {
+                        put("table_name", table)
+                        put("table_label", browserArabicTables[table] ?: table)
+                        put("columns", columns)
+                    })
+                    continue
+                }
+                val safeTable = browserSafeIdentifier(table)
+                db.rawQuery("PRAGMA table_info($safeTable)", null).use { cursor ->
+                    val nameIdx = cursor.getColumnIndexOrThrow("name")
+                    val typeIdx = cursor.getColumnIndexOrThrow("type")
+                    val pkIdx = cursor.getColumnIndexOrThrow("pk")
+                    while (cursor.moveToNext()) {
+                        val column = cursor.getString(nameIdx)
+                        if (normalizedColumnSearch.isNotEmpty() && !column.lowercase(Locale.ROOT).contains(normalizedColumnSearch)) continue
+
+                        val sampleValues = JSONArray()
+                        try {
+                            db.rawQuery(
+                                "SELECT DISTINCT ${browserSafeIdentifier(column)} FROM $safeTable " +
+                                    "WHERE ${browserSafeIdentifier(column)} IS NOT NULL AND TRIM(CAST(${browserSafeIdentifier(column)} AS TEXT)) <> '' " +
+                                    "LIMIT 5",
+                                null
+                            ).use { sampleCursor ->
+                                while (sampleCursor.moveToNext() && sampleValues.length() < 5) {
+                                    sampleValues.put(sampleCursor.getString(0))
+                                }
+                            }
+                        } catch (_: Exception) { }
+
+                        columns.put(JSONObject().apply {
+                            put("name", column)
+                            put("label", browserLabelForColumn(column))
+                            put("type", cursor.getString(typeIdx) ?: "")
+                            put("is_pk", cursor.getInt(pkIdx) > 0)
+                            put("token", "{$table.$column}")
+                            put("sample_values", sampleValues)
+                        })
+                    }
+                }
+
+                if (columns.length() > 0) {
+                    result.put(JSONObject().apply {
+                        put("table_name", table)
+                        put("table_label", browserArabicTables[table] ?: table)
+                        put("columns", columns)
+                    })
+                }
+            }
+        } finally {
+            dbLock.unlock()
+        }
+        return result
+    }
 
     fun getNotificationTemplatesPage(channel: String? = null, isActive: String? = null, search: String? = null): JSONArray {
         val arr = JSONArray()
