@@ -1999,7 +1999,7 @@ body {
      مودال إرسال تذكير
      ============================================================ -->
 <div class="modal-overlay" id="reminderModal" onclick="closeModal(event)">
-    <div class="modal-content" onclick="event.stopPropagation()">
+    <div id="reminderForm" class="modal-content" onclick="event.stopPropagation()">
         <div class="modal-header">
             <h3 class="modal-title"><i class="fas fa-paper-plane"></i> إرسال تذكير</h3>
             <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
@@ -2089,7 +2089,7 @@ body {
      مودال تسجيل دفعة
      ============================================================ -->
 <div class="modal-overlay" id="paymentModal" onclick="closeModal(event)">
-    <div class="modal-content" onclick="event.stopPropagation()">
+    <div id="paymentForm" class="modal-content" onclick="event.stopPropagation()">
         <div class="modal-header">
             <h3 class="modal-title"><i class="fas fa-money-bill-wave"></i> تسجيل دفعة</h3>
             <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
