@@ -1463,7 +1463,7 @@
         'use strict';
         const CFG = {"title":"التنبؤات والتحليلات","icon":"fa-chart-area","module":"reports","listMethod":"getPredictionRecords","listArgs":["{}"],"fields":[{"label":"prediction type","key":"prediction_type","type":"text","required":true,"placeholder":""},{"label":"entity type","key":"entity_type","type":"text","required":false,"placeholder":""},{"label":"entity id","key":"entity_id","type":"number","required":false,"placeholder":""},{"label":"prediction date","key":"prediction_date","type":"date","required":true,"placeholder":""},{"label":"predicted value","key":"predicted_value","type":"number","required":false,"placeholder":""},{"label":"confidence interval low","key":"confidence_interval_low","type":"text","required":false,"placeholder":""},{"label":"confidence interval high","key":"confidence_interval_high","type":"text","required":false,"placeholder":""},{"label":"actual value","key":"actual_value","type":"number","required":false,"placeholder":""},{"label":"model version","key":"model_version","type":"number","required":false,"placeholder":""}],"valueFields":["predicted_value","actual_value"],"titleFields":["prediction_type","entity_type","entity_id"],"subtitleFields":["prediction_type","entity_type","entity_id","prediction_date","predicted_value","confidence_interval_low","confidence_interval_high","actual_value"],"createMethod":"savePredictionRecord","updateMethod":"updatePredictionRecord","deleteMethod":"deletePredictionRecord","note":"","mode":"list","objectMode":false,"updateAction":null,"reportKind":"operational:Prediction","aiMethod":null,"reports":["الكل","قيد التنبؤ","مُحقَّقة","دقة عالية","دقة منخفضة"],"resolveMethod":null,"operationKey":"predictions"};
         const bridge = window.AndroidInterface;
-        const state = { rows: [], filtered: [], editing: null, filter: 'all', loadedAt: null };
+        const state = { rows: [], filtered: [], editing: null, filter: '0', loadedAt: null };
         const $ = (id) => document.getElementById(id);
         const esc = (value) => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const today = () => new Date().toISOString().slice(0,10);
@@ -1510,7 +1510,9 @@
         }
         function applyFilter() {
             const q=($('searchInput').value||'').trim().toLowerCase();
-            state.filtered=state.rows.filter(row=>{ const text=JSON.stringify(row||{}).toLowerCase(); return !q || text.includes(q); });
+            const filter=String(state.filter||'0');
+            const matchesFilter=row=>{ if(filter==='0')return true; const status=String(field(row,['status','state','prediction_status'])||'').toLowerCase(); const confidence=Number(field(row,['confidence','confidence_score','confidence_level'])||0); if(filter==='1')return ['pending','forecast','predicted','قيد التنبؤ','قيد التنفيذ'].includes(status)||!status; if(filter==='2')return ['actual','realized','completed','verified','محققة','متحققة'].includes(status)||row.actual_value!==undefined&&row.actual_value!==null; if(filter==='3')return confidence>=0.8||String(field(row,['confidence_level'])||'').toLowerCase()==='high'; if(filter==='4')return confidence>0&&confidence<0.5||String(field(row,['confidence_level'])||'').toLowerCase()==='low'; return true;};
+            state.filtered=state.rows.filter(row=>{ const text=JSON.stringify(row||{}).toLowerCase(); return matchesFilter(row)&&(!q || text.includes(q)); });
             renderCards();
         }
         function renderStats() {
