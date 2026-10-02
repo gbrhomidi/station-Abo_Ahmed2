@@ -9872,6 +9872,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         fromDate.takeIf{it.isNotEmpty()}?.let{where += "date(x.sale_date)>=date(?)";args+=it}
         toDate.takeIf{it.isNotEmpty()}?.let{where += "date(x.sale_date)<=date(?)";args+=it}
         data.optString("payment_method").trim().takeIf{it.isNotEmpty()}?.let{where += "x.payment_method=?";args+=it}
+        data.optString("status").trim().takeIf{it.isNotEmpty()}?.let { status ->
+            require(status in setOf("completed", "cancelled", "refunded", "pending", "draft", "posted")) {
+                "حالة البيع غير صالحة"
+            }
+            where += "x.sale_status=?"
+            args += status
+        }
         data.optLong("customer_id",0L).takeIf{it>0}?.let{where += "x.customer_party_id=?";args+=it.toString()}
         data.optLong("product_id",0L).takeIf{it>0}?.let{where += "x.item_id=? AND x.sale_kind='product'";args+=it.toString()}
         data.optLong("shift_id",0L).takeIf{it>0}?.let{where += "x.shift_id=?";args+=it.toString()}
