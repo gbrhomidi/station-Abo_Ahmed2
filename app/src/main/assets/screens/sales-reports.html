@@ -2142,6 +2142,8 @@
                 const params = {
                     from_date: from,
                     to_date: to,
+                    // Keep report parameters explicit; SQLite performs the actual filtering.
+                    report_type: reportType,
                     product_id: product || null,
                     customer_id: customer || null,
                     payment_method: paymentMethod || null,
