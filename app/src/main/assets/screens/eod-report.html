@@ -1541,7 +1541,7 @@
             "bottomIcons":["fa-list-check","fa-cash-register","fa-money-bill-transfer","fa-receipt","fa-scale-unbalanced"]
         };
         const bridge = window.AndroidInterface;
-        const state = { rows: [], filtered: [], editing: null, filter: 'all', loadedAt: null };
+        const state = { rows: [], filtered: [], editing: null, filter: 'all', filterKey: 'all', loadedAt: null };
         const $ = (id) => document.getElementById(id);
         const esc = (value) => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const today = () => new Date().toISOString().slice(0,10);
@@ -1589,6 +1589,7 @@
                 document.querySelectorAll('#filterChips .filter-chip').forEach(x=>x.classList.remove('active'));
                 btn.classList.add('active');
                 state.filter=btn.dataset.filter;
+                state.filterKey=btn.dataset.filter==='0'?'all':String(topLabels[Number(btn.dataset.filter)]||'').toLowerCase();
                 applyFilter();
             }));
 
@@ -1600,13 +1601,16 @@
                 document.querySelectorAll('#bottomNav .nav-item').forEach(x=>x.classList.remove('active'));
                 btn.classList.add('active');
                 state.filter=btn.dataset.bottomFilter;
+                state.filterKey=Number(btn.dataset.bottomFilter)===0?'all':String(bottomLabels[Number(btn.dataset.bottomFilter)]||'').toLowerCase();
                 applyFilter();
             }));
         }
 
         function applyFilter() {
             const q=($('searchInput').value||'').trim().toLowerCase();
-            state.filtered=state.rows.filter(row=>{ const text=JSON.stringify(row||{}).toLowerCase(); return !q || text.includes(q); });
+            const key=state.filterKey||'all';
+            const matchesSection=row=>{ if(key==='all'||key==='ملخص اليوم')return true; const name=String(row&&row.key||'').toLowerCase(); const groups={ 'المبيعات':['sales','cash_sales','credit_sales','bank_sales','card_sales','deferred_sales','cash_sales_actual','total_liters','transaction_count'], 'المدفوعات':['payment','payments','total_payments'], 'المصروفات':['expense','expenses','total_expenses'], 'الفروقات':['difference','variance','discrepancy'] }; const terms=groups[key]||[key]; return terms.some(term=>name.includes(term)); };
+            state.filtered=state.rows.filter(row=>{ const text=JSON.stringify(row||{}).toLowerCase(); return matchesSection(row)&&(!q || text.includes(q)); });
             renderCards();
         }
 
