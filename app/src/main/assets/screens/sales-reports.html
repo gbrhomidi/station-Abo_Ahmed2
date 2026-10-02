@@ -2178,7 +2178,8 @@
                     salesPagination.totalPages = salesPagination.totalCount > 0
                         ? Math.ceil(salesPagination.totalCount / salesPagination.pageSize) : 0;
                     window.__salesReportData = sales;
-                    renderSalesTable(sales);
+                    const reportRows = buildReportRows(sales, reportType);
+                    renderSalesTable(reportRows);
                     updateStats(sales);
                     updateCharts(sales);
                     updateSummary(sales);
@@ -2197,6 +2198,72 @@
                 console.error(e);
             } finally {
                 showLoading(false);
+            }
+        }
+
+        // ============================================================
+        // تحويل سجلات SQLite الحقيقية إلى شكل التقرير المطلوب.
+        // لا يتم إنشاء أي بيانات اصطناعية؛ التجميع يتم على الصفوف التي
+        // أعادها generateSalesTransactionReport من SQLite.
+        // ============================================================
+        function buildReportRows(sales, reportType) {
+            const rows = Array.isArray(sales) ? sales : [];
+            if (reportType === 'detailed' || rows.length === 0) return rows;
+
+            const money = (row) => Number(row.total_amount ?? row.amount ?? 0);
+            const qty = (row) => Number(row.quantity ?? 0);
+            const groupBy = (keyFn) => {
+                const groups = new Map();
+                rows.forEach(row => {
+                    const key = String(keyFn(row) ?? '').trim() || 'غير محدد';
+                    if (!groups.has(key)) {
+                        groups.set(key, {
+                            invoice_number: '—',
+                            sale_date: row.sale_date || row.date || '—',
+                            customer_name: '',
+                            product_name: '',
+                            quantity: 0,
+                            unit_price: 0,
+                            total_amount: 0,
+                            payment_method: '',
+                            status: 'completed'
+                        });
+                    }
+                    const g = groups.get(key);
+                    g.quantity += qty(row);
+                    g.total_amount += money(row);
+                    if (!g.customer_name && row.customer_name) g.customer_name = row.customer_name;
+                    if (!g.product_name && (row.item_name || row.product_name)) g.product_name = row.item_name || row.product_name;
+                });
+                return Array.from(groups.values());
+            };
+
+            switch (reportType) {
+                case 'summary': {
+                    const total = rows.reduce((sum, row) => sum + money(row), 0);
+                    const quantity = rows.reduce((sum, row) => sum + qty(row), 0);
+                    return [{
+                        invoice_number: 'ملخص التقرير',
+                        sale_date: document.getElementById('filterDateFrom').value + ' → ' + document.getElementById('filterDateTo').value,
+                        customer_name: 'جميع العملاء',
+                        product_name: 'جميع المبيعات',
+                        quantity,
+                        unit_price: 0,
+                        total_amount: total,
+                        payment_method: 'متعدد',
+                        status: 'completed'
+                    }];
+                }
+                case 'by_product':
+                    return groupBy(row => row.item_id || row.item_name || row.product_name);
+                case 'by_customer':
+                    return groupBy(row => row.customer_party_id || row.customer_name);
+                case 'by_payment':
+                    return groupBy(row => row.payment_method);
+                case 'daily':
+                    return groupBy(row => (row.sale_date || row.date || '').slice(0, 10));
+                default:
+                    return rows;
             }
         }
 
