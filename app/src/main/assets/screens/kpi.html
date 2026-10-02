@@ -1344,7 +1344,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
 
     </style>
      <script src="file:///android_asset/assets-local/js/xlsx.full.min.js"></script>
-    <meta name="reports-bridge-methods" content="getDashboardStats">
+    <meta name="reports-bridge-methods" content="getKPIDashboard,getKPIDetails">
     <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 </head>
  </head>
@@ -2026,8 +2026,9 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
                     status: status || null
                 };
                 const result = await apiCall('getKPIDashboard', params);
-                if (result.success && result.data) {
-                    kpiData = result.data;
+                if (result.success && Array.isArray(result.data)) {
+                    const returnedRows = result.data;
+                    kpiData = status ? returnedRows.filter(item => String(item.status || 'on_track').toLowerCase() === status.toLowerCase()) : returnedRows;
                     RuntimeState.setKpiData(kpiData);
                     renderTable(kpiData);
                     updateKPIs(kpiData);
