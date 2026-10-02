@@ -1872,7 +1872,7 @@
             } catch (e) {
                 currentReportPayload = {}; inventoryData = [];
                 renderTable([], type); resetKPIs(); updateCharts([], {}); updateFooter([], {});
-                showToast(e.error || '❌ فشل توليد التقرير ولم تُستخدم بيانات بديلة', 'error');
+                showToast('❌ فشل توليد التقرير من SQLite: ' + (e && (e.error || e.message) ? (e.error || e.message) : 'خطأ غير معروف'), 'error');
             } finally { showLoading(false); }
         }
 
