@@ -2728,11 +2728,15 @@
         // ============================================================
         function resetFilters() {
             salesPagination.page = 1;
-            document.getElementById('filterDateFrom').value = '';
-            document.getElementById('filterDateTo').value = '';
+            const today = new Date();
+            const monthAgo = new Date();
+            monthAgo.setDate(monthAgo.getDate() - 30);
+            document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
+            document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
             document.getElementById('filterProduct').value = '';
             document.getElementById('filterCustomer').value = '';
             document.getElementById('filterPaymentMethod').value = '';
+            document.getElementById('filterSaleType').value = 'all';
             document.getElementById('filterReportType').value = 'summary';
             document.getElementById('filterStatus').value = '';
             document.getElementById('filterShift').value = '';
