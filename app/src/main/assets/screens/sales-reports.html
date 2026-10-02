@@ -2156,6 +2156,20 @@
                 };
                 const result = await apiCall('generateSalesReport', params);
                 if (result.success) {
+                    // A successful SQLite query with zero rows is a valid empty result,
+                    // not a fabricated report. Keep the UI state synchronized with it.
+                    if (result.data && typeof result.data === 'object' &&
+                        Number(result.data.total_count ?? 0) === 0 &&
+                        Array.isArray(result.data.rows) && result.data.rows.length === 0) {
+                        window.__salesReportData = [];
+                        salesPagination.totalCount = 0;
+                        salesPagination.totalPages = 0;
+                        renderSalesTable([]);
+                        updateStats([]);
+                        updateSummary([]);
+                        showToast('⚠️ لا توجد بيانات مبيعات مطابقة للفلاتر المحددة', 'warning');
+                        return;
+                    }
                     // The sales bridge returns the report JSONObject directly
                     // ({success, rows, total_count, ...}); normalize that contract
                     // as well as legacy {success, data:{rows:[...]}} responses.
