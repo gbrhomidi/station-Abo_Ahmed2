@@ -9863,7 +9863,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val offset = data.optInt("offset", 0).coerceAtLeast(0)
         val kind = data.optString("sale_type", data.optString("type", "all")).trim().lowercase()
         require(kind in setOf("all","fuel","product")) { "نوع المبيعات غير صالح" }
-        val where = mutableListOf("x.station_id=?", "x.is_deleted=0", "x.sale_status NOT IN ('cancelled')")
+        val where = mutableListOf("x.station_id=?", "x.is_deleted=0")
         val args = mutableListOf(stationScopeId.toString())
         if (kind == "fuel") where += "x.sale_kind='fuel'"
         if (kind == "product") where += "x.sale_kind='product'"
