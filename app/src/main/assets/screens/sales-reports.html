@@ -1753,7 +1753,7 @@
                     case 'getInvoiceDetails': raw = AndroidInterface.retrieveInvoice(String(p.invoice_number || '')); break;
                     case 'getProducts': raw = AndroidInterface.getProducts(); break;
                     case 'getCustomers': raw = AndroidInterface.getCustomers(); break;
-                    case 'getShifts': return Promise.resolve({ success: false, data: [], message: 'فلتر الورديات غير متاح في عقد SQLite الحالي' });
+                    case 'getShifts': raw = AndroidInterface.getShifts(); break;
                     default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
                 }
                 return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
@@ -2141,8 +2141,8 @@
             showLoading(true);
             try {
                 const params = {
-                    start_date: from,
-                    end_date: to,
+                    from_date: from,
+                    to_date: to,
                     product_id: product || null,
                     customer_id: customer || null,
                     payment_method: paymentMethod || null,
