@@ -2029,6 +2029,9 @@
                 const params = {
                     from_date: from,
                     to_date: to,
+                    report_type: reportType,
+                    fuel_type_id: fuelType ? Number(fuelType) : null,
+                    tank_id: tank ? Number(tank) : null
                 };
                 const result = reportType === 'readings'
                     ? await apiCall('generateMeterReadingReport', params)
@@ -2058,7 +2061,8 @@
                     resetKPIs();
                 }
             } catch (e) {
-                showToast('❌ فشل توليد التقرير', 'error');
+                const message = e && (e.error || e.message) ? (e.error || e.message) : 'خطأ غير معروف';
+                showToast('❌ فشل توليد التقرير من SQLite: ' + message, 'error');
             } finally {
                 showLoading(false);
             }
