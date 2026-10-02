@@ -2132,6 +2132,7 @@
             const saleType = document.getElementById('filterSaleType').value;
             const status = document.getElementById('filterStatus').value;
             const shift = document.getElementById('filterShift').value;
+            salesPagination.page = 1;
 
             if (!from || !to) {
                 showToast('❌ الرجاء اختيار نطاق التاريخ', 'error');
