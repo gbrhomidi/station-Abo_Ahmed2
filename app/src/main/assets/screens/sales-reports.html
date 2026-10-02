@@ -2232,6 +2232,10 @@
                     const g = groups.get(key);
                     g.quantity += qty(row);
                     g.total_amount += money(row);
+                    if (reportType === 'by_payment') g.payment_method = key;
+                    if (reportType === 'by_product') g.product_name = row.item_name || row.product_name || key;
+                    if (reportType === 'by_customer') g.customer_name = row.customer_name || key;
+                    if (reportType === 'daily') g.sale_date = key;
                     if (!g.customer_name && row.customer_name) g.customer_name = row.customer_name;
                     if (!g.product_name && (row.item_name || row.product_name)) g.product_name = row.item_name || row.product_name;
                 });
