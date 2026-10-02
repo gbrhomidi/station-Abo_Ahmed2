@@ -1893,7 +1893,7 @@
         window.addEventListener('online',()=>toast('عاد اتصال الجسر المحتمل؛ اضغط تحديث للتحقق'));
         window.addEventListener('offline',()=>$('offlineBanner').classList.add('show'));
 
-        Object.assign(window, {goHome, openReport, exportData, reloadData, openForm, saveForm, openModal, closeModal, startAsync, loadDbInfo, askAI});
+        Object.assign(window, {goHome, openReport, generateReport, exportData, reloadData, openForm, saveForm, openModal, closeModal, startAsync, loadDbInfo, askAI});
 
         applyTheme();
         renderFilters();
