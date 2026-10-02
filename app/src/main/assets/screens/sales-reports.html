@@ -2154,12 +2154,18 @@
                     offset: (salesPagination.page - 1) * salesPagination.pageSize
                 };
                 const result = await apiCall('generateSalesReport', params);
-                if (result.success && result.data) {
-                    const payload = result.data && !Array.isArray(result.data) && Array.isArray(result.data.rows)
+                if (result.success) {
+                    // The sales bridge returns the report JSONObject directly
+                    // ({success, rows, total_count, ...}); normalize that contract
+                    // as well as legacy {success, data:{rows:[...]}} responses.
+                    const payload = result.data && !Array.isArray(result.data) && typeof result.data === 'object'
                         ? result.data : result;
                     const salesRaw = Array.isArray(payload.rows) ? payload.rows
                         : Array.isArray(result.data) ? result.data
                         : Array.isArray(payload.data) ? payload.data : [];
+                    if (salesRaw.length === 0 && Number(payload.total_count || 0) > 0) {
+                        throw new Error('SQLite أعاد عدد سجلات موجباً دون صفوف التقرير');
+                    }
                     const sales = salesRaw.map(s => ({
                         ...s,
                         sale_category: s.sale_kind,
