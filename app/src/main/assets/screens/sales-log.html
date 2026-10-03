@@ -15,7 +15,6 @@
            إطار فضي رفيع (1px) على جميع البطاقات والحقول
            ============================================================ */
         :root {
-            /* ═══ الوضع الفاتح (افتراضي) ═══ */
             --bg-primary: #f0f2f5;
             --bg-secondary: #ffffff;
             --bg-card: rgba(255, 255, 255, 0.96);
@@ -26,7 +25,6 @@
             --text-muted: #8391a5;
             --border-color: #d8dde4;
 
-            /* إطار فضي رفيع موحّد */
             --silver-border-color: #c4cad2;
             --silver-border-color-strong: #a8b0bb;
             --silver-border: 1px solid var(--silver-border-color);
@@ -68,7 +66,6 @@
             color-scheme: light;
         }
 
-        /* ═══ الوضع المظلم المخفّف ═══ */
         [data-theme="dark"] {
             --bg-primary: #1e232b;
             --bg-secondary: #262c36;
@@ -148,7 +145,6 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--gold-primary); border-radius: 10px; }
 
-        /* ===== Pull-to-Refresh ===== */
         .pull-indicator {
             position: fixed;
             top: -60px;
@@ -363,7 +359,7 @@
         }
 
         /* ============================================================
-           بطاقات الإحصائيات — توسيط كامل
+           بطاقات الإحصائيات
            ============================================================ */
         .stats-grid {
             display: grid;
@@ -938,7 +934,7 @@
             text-align: center;
             letter-spacing: 0.2px;
         }
-        .form-input {
+        .form-input, .form-select {
             width: 100%;
             padding: 11px 14px;
             border-radius: var(--radius-small);
@@ -953,11 +949,45 @@
             box-shadow: var(--silver-shadow);
             font-weight: 600;
         }
-        .form-input:focus {
+        .form-input:focus, .form-select:focus {
             border: var(--silver-border-strong);
             box-shadow: 0 0 0 3px rgba(200, 154, 18, 0.1), var(--silver-shadow);
         }
         .form-input::placeholder { color: var(--text-muted); text-align: center; }
+
+        /* === سطر واحد لحقلي التاريخ (من/إلى) دائمًا === */
+        .report-date-row {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 10px !important;
+            width: 100% !important;
+            margin-bottom: 14px;
+        }
+        .report-date-row .form-group {
+            margin-bottom: 0 !important;
+            grid-column: auto !important;
+            min-width: 0 !important;
+        }
+        @media (max-width: 380px) {
+            .report-date-row { gap: 6px !important; }
+            .report-date-row .form-input { font-size: 0.75rem; padding: 9px 6px; }
+        }
+
+        /* === فلترة التقرير === */
+        .report-filter-row {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 10px !important;
+            width: 100% !important;
+            margin-bottom: 14px;
+        }
+        .report-filter-row .form-group {
+            margin-bottom: 0 !important;
+            min-width: 0 !important;
+        }
+        @media (max-width: 380px) {
+            .report-filter-row { grid-template-columns: 1fr !important; gap: 8px !important; }
+        }
 
         .submit-btn {
             width: 100%;
@@ -986,46 +1016,61 @@
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(200, 154, 18, 0.3);
         }
+        .submit-btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            transform: none !important;
+        }
 
+        /* ==== نتيجة التقرير: عرض كامل بدون حشوة جانبية ==== */
         .report-result {
             margin-top: 16px;
-            max-height: 320px;
+            max-height: 60vh;
             overflow-y: auto;
+            overflow-x: hidden;
             text-align: center;
             border: var(--silver-border-strong);
             border-radius: var(--radius-small);
             background: var(--bg-card);
-            padding: 8px;
+            padding: 0;
+            width: 100%;
         }
+        .report-result .empty-state { padding: 40px 16px; }
+
         .report-result table {
             width: 100%;
             border-collapse: separate;
-            border-spacing: 0 6px;
-            font-size: 0.8rem;
+            border-spacing: 0 4px;
+            font-size: 0.78rem;
             text-align: center;
+            table-layout: fixed;
         }
         .report-result table th {
             background: var(--bg-glass-light);
             color: var(--gold-primary);
-            padding: 12px 10px;
+            padding: 10px 6px;
             text-align: center;
             position: sticky;
             top: 0;
             z-index: 10;
             font-weight: 800;
             border: var(--silver-border);
-            font-size: 0.72rem;
-            border-radius: 10px 10px 0 0;
+            font-size: 0.68rem;
+            border-radius: 8px 8px 0 0;
+            word-wrap: break-word;
         }
         .report-result table td {
-            padding: 10px;
+            padding: 9px 6px;
             border: var(--silver-border);
             text-align: center;
             color: var(--text-secondary);
             background: var(--bg-glass);
-            border-radius: 10px;
-            font-size: 0.78rem;
+            border-radius: 8px;
+            font-size: 0.72rem;
             font-weight: 600;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            word-break: break-word;
         }
         .report-result table tr:hover td {
             background: var(--bg-glass-light);
@@ -1034,12 +1079,12 @@
 
         .report-summary {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-            margin-bottom: 12px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin: 8px;
         }
         .report-box {
-            padding: 12px;
+            padding: 10px 6px;
             text-align: center;
             border-radius: var(--radius-small);
             border: var(--silver-border-strong);
@@ -1048,7 +1093,7 @@
         }
         .report-box strong {
             display: block;
-            font-size: 0.95rem;
+            font-size: 0.88rem;
             font-weight: 900;
             color: var(--gold-primary);
             direction: ltr;
@@ -1056,11 +1101,26 @@
         }
         .report-box span {
             display: block;
-            margin-top: 4px;
+            margin-top: 3px;
             color: var(--text-muted);
-            font-size: 0.68rem;
+            font-size: 0.62rem;
             font-weight: 700;
         }
+        @media (max-width: 480px) {
+            .report-summary { grid-template-columns: repeat(2, 1fr); }
+            .report-result table { font-size: 0.68rem; }
+            .report-result table th { font-size: 0.62rem; padding: 8px 4px; }
+            .report-result table td { font-size: 0.66rem; padding: 7px 4px; }
+        }
+
+        /* ==== شريط أدوات التقرير ==== */
+        .report-actions-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .report-actions-row .submit-btn { margin-top: 0; }
 
         /* ============================================================
            مودال التفاصيل
@@ -1328,12 +1388,10 @@
             .icon-btn { width: 38px; height: 38px; font-size: 0.9rem; }
             .modal { padding: 16px; }
             .details-content { padding: 16px 14px 80px; }
-            .report-summary { grid-template-columns: repeat(2, 1fr); }
             .alerts-container { padding: 0 12px 10px; }
             .section-header { padding: 0 12px 10px; }
             .cards-container { padding: 0 12px 20px; }
             .top-bar { padding: 12px 14px 10px; }
-            .sale-card .card-body { grid-template-columns: repeat(3, 1fr); }
         }
         @media (max-width: 480px) {
             .form-grid { grid-template-columns: 1fr; }
@@ -1364,6 +1422,38 @@
             }
         }
     </style>
+
+<style id="sales-log-final-overrides">
+/* === FINAL SALES LOG FIXES === */
+#reportModal .modal-body { padding-left:0 !important; padding-right:0 !important; }
+#reportModal .modal-header { margin-left:0 !important; margin-right:0 !important; }
+#reportModal .report-date-row {
+  display:grid !important; grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
+  gap:10px !important; width:100% !important; box-sizing:border-box !important;
+  direction:rtl !important;
+}
+#reportModal .report-date-row .form-group { min-width:0 !important; width:auto !important; }
+#reportModal .report-date-row .form-input { width:100% !important; box-sizing:border-box !important; min-width:0 !important; }
+#reportModal .report-filter-row {
+  display:grid !important; grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
+  gap:10px !important; width:100% !important; box-sizing:border-box !important;
+}
+#reportModal .report-filter-row .form-group { min-width:0 !important; }
+#reportModal #reportResult { width:100% !important; max-width:none !important; margin:0 !important; padding:0 !important; box-sizing:border-box !important; overflow-x:auto !important; }
+#reportModal #reportResult table { width:100% !important; min-width:760px; margin:0 !important; border-collapse:collapse !important; }
+#reportModal #reportResult .report-summary { width:100% !important; box-sizing:border-box !important; margin:0 !important; }
+#reportModal #reportResult > * { max-width:none !important; }
+@media (max-width:480px){
+  #reportModal .report-date-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important; gap:6px !important; }
+  #reportModal .report-date-row .form-input { font-size:.72rem !important; padding:9px 5px !important; }
+  #reportModal .report-filter-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important; gap:6px !important; }
+}
+@media (max-width:320px){
+  #reportModal .report-date-row .form-label, #reportModal .report-filter-row .form-label { font-size:.68rem !important; }
+  #reportModal .report-date-row .form-input, #reportModal .report-filter-row .form-select { font-size:.66rem !important; }
+}
+</style>
+
 </head>
 <body>
 
@@ -1464,7 +1554,7 @@
     <div class="sidebar" id="sidebar">
         <div class="sidebar-content">
             <button class="sidebar-btn" onclick="handleSidebarAction('export')">
-                <i class="fas fa-file-export"></i> <span>تصدير</span>
+                <i class="fas fa-file-csv"></i> <span>تصدير CSV</span>
             </button>
             <button class="sidebar-btn" onclick="handleSidebarAction('pdf')">
                 <i class="fas fa-file-pdf"></i> <span>PDF</span>
@@ -1485,11 +1575,11 @@
     <nav class="bottom-nav">
         <button class="nav-item active" onclick="switchTab('analytics', this)">
             <i class="fas fa-chart-simple"></i>
-            <span>تحليل</span>
+            <span>تحــليــل</span>
         </button>
         <button class="nav-item" onclick="switchTab('reports', this)">
             <i class="fas fa-file-alt"></i>
-            <span>تقارير</span>
+            <span>تقــاريــر</span>
         </button>
     </nav>
 
@@ -1503,7 +1593,9 @@
                 </button>
             </div>
             <div class="modal-body">
-                <div class="form-grid">
+
+                <!-- صف التاريخين في سطر واحد إلزامياً -->
+                <div class="report-date-row">
                     <div class="form-group">
                         <label class="form-label">من تاريخ</label>
                         <input type="date" class="form-input" id="reportFrom" inputmode="numeric">
@@ -1513,14 +1605,37 @@
                         <input type="date" class="form-input" id="reportTo" inputmode="numeric">
                     </div>
                 </div>
-                <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;justify-content:center;">
-                    <button class="submit-btn" onclick="generateReport()" style="flex:1;min-width:100px;">
+
+                <!-- صف فلترة التقرير -->
+                <div class="report-filter-row">
+                    <div class="form-group">
+                        <label class="form-label">فلترة حسب</label>
+                        <select class="form-select" id="reportFilterType" onchange="onReportFilterTypeChange()">
+                            <option value="">— بدون فلترة —</option>
+                            <option value="customer">حسب العميل</option>
+                            <option value="product">حسب المنتج</option>
+                            <option value="fuel">حسب الوقود</option>
+                            <option value="payment">حسب طريقة الدفع</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">القيمة</label>
+                        <select class="form-select" id="reportFilterValue" disabled>
+                            <option value="">— اختر نوع الفلترة أولاً —</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- أزرار التقرير -->
+                <div class="report-actions-row">
+                    <button class="submit-btn" onclick="generateReport()" id="btnGenerateReport">
                         <i class="fas fa-cog"></i> توليد التقرير
                     </button>
-                    <button class="submit-btn" onclick="exportReport()" style="flex:1;min-width:100px;">
-                        <i class="fas fa-file-export"></i> تصدير CSV
+                    <button class="submit-btn" onclick="exportReportCsv()" id="btnExportCsv">
+                        <i class="fas fa-file-csv"></i> تصدير CSV
                     </button>
                 </div>
+
                 <div class="report-result" id="reportResult">
                     <div class="empty-state">
                         <i class="fas fa-file-alt"></i>
@@ -1598,6 +1713,131 @@
         }
 
         // ============================================================
+        // 1.1 طبقة التكيّف مع عقد الجسر الفعلي
+        //     الجسر يعيد: { rows:[...], count, total_count, ..., success:true }
+        //     بدون غلاف "data" لـ JSONObject.
+        // ============================================================
+        function unwrapBridgeResponse(res) {
+            if (!res) return { success: false, rows: [], meta: {} };
+
+            // الشكل الفعلي من MainActivity.dataResponse(JSONObject)
+            if (Array.isArray(res.rows)) {
+                return {
+                    success: res.success !== false,
+                    rows: res.rows,
+                    meta: {
+                        count: res.count ?? res.rows.length,
+                        total_count: res.total_count ?? res.rows.length,
+                        page: res.page ?? 1,
+                        page_size: res.page_size ?? res.rows.length,
+                        total_pages: res.total_pages ?? 1,
+                        has_next: !!res.has_next,
+                        has_previous: !!res.has_previous,
+                        source: res.source ?? ''
+                    }
+                };
+            }
+
+            // احتياط: غلاف { success, data:{rows} }
+            if (res.data && Array.isArray(res.data.rows)) {
+                return {
+                    success: res.success !== false,
+                    rows: res.data.rows,
+                    meta: {
+                        count: res.data.count ?? res.data.rows.length,
+                        total_count: res.data.total_count ?? res.data.rows.length,
+                        page: res.data.page ?? 1,
+                        page_size: res.data.page_size ?? res.data.rows.length,
+                        total_pages: res.data.total_pages ?? 1,
+                        has_next: !!res.data.has_next,
+                        has_previous: !!res.data.has_previous,
+                        source: res.data.source ?? ''
+                    }
+                };
+            }
+
+            // مصفوفة مباشرة
+            if (Array.isArray(res)) {
+                return {
+                    success: true,
+                    rows: res,
+                    meta: { count: res.length, total_count: res.length }
+                };
+            }
+
+            return { success: false, rows: [], meta: {} };
+        }
+
+        // ============================================================
+        // 1.2 مُطبّع السجل الواحد
+        //     يملأ الحقول المشتقة التي تتوقعها الواجهة من الأعمدة الفعلية
+        //     التي يعيدها DatabaseHelper.getSalesLedgerPage.
+        // ============================================================
+        function normalizeSaleRow(raw) {
+            if (!raw || typeof raw !== 'object') return null;
+
+            const saleKind = raw.sale_kind || (raw.fuel_sale_id ? 'fuel' : 'product');
+            const quantity = parseFloat(raw.quantity ?? 0) || 0;
+            const amount   = parseFloat(raw.amount ?? 0) || 0;
+            const saleDateRaw = raw.sale_date ?? raw.created_at ?? '';
+            const saleStatus = raw.sale_status ?? raw.status ?? 'completed';
+            const paymentMethod = raw.payment_method ?? 'cash';
+
+            const isCreditSale = (paymentMethod === 'credit');
+            const paymentStatus = raw.payment_status
+                ?? (isCreditSale ? 'pending' : 'paid');
+
+            return {
+                // المعرّفات
+                id:             raw.id ?? raw.sale_id,
+                sale_id:        raw.sale_id ?? raw.id,
+                sale_code:      raw.sale_code || '',
+                invoice_number: raw.invoice_number || '',
+                fuel_sale_id:   raw.fuel_sale_id ?? null,
+                sale_item_id:   raw.sale_item_id ?? null,
+
+                // التصنيف
+                sale_kind:      saleKind,
+                item_id:        raw.item_id ?? null,
+                item_name:      raw.item_name || '',
+                item_name_ar:   raw.item_name_ar || '',
+
+                // العميل
+                customer_name:  raw.customer_name || '—',
+                customer_phone: raw.customer_phone || '',
+                customer_party_id: raw.customer_party_id ?? null,
+
+                // الأرقام الموحدة
+                quantity:       quantity,
+                liters:         saleKind === 'fuel' ? quantity : 0,
+                amount:         amount,
+                net_amount:     amount,
+                gross_amount:   amount,
+
+                // الدفع
+                payment_method: paymentMethod,
+                payment_status: paymentStatus,
+                is_credit:      raw.is_credit ?? (isCreditSale ? 1 : 0),
+
+                // التواريخ
+                sale_date:      saleDateRaw,
+                created_at:     saleDateRaw,
+
+                // الحالة
+                status:         saleStatus,
+                sale_status:    saleStatus,
+
+                // نطاق
+                station_id:     raw.station_id ?? 0,
+                shift_id:       raw.shift_id ?? 0,
+
+                // مرتجع/تالف
+                returned_quantity: parseFloat(raw.returned_quantity ?? 0) || 0,
+                damaged_quantity:  parseFloat(raw.damaged_quantity ?? 0) || 0
+            };
+        }
+
+        // ============================================================
         // 2. دوال مساعدة
         // ============================================================
         let isOnline = navigator.onLine;
@@ -1605,8 +1845,12 @@
         function updateOnlineStatus() {
             isOnline = navigator.onLine;
             const banner = document.getElementById('offlineBanner');
-            if (!isOnline) { banner.classList.add('show');
-                showToast('⚠️ لا يوجد اتصال — البيانات من SQLite المحلي', 'warning'); } else banner.classList.remove('show');
+            if (!isOnline) {
+                banner.classList.add('show');
+                showToast('⚠️ لا يوجد اتصال — البيانات من SQLite المحلي', 'warning');
+            } else {
+                banner.classList.remove('show');
+            }
         }
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
@@ -1627,11 +1871,12 @@
             const iconEl = toast.querySelector('.toast-icon i');
             toast.className = 'toast ' + type;
             msgEl.textContent = message;
-            if (type === 'success') { iconEl.className = 'fas fa-check';
-                hapticFeedback('success'); } else if (type === 'error') { iconEl.className = 'fas fa-times';
-                hapticFeedback('error'); } else if (type === 'warning') { iconEl.className = 'fas fa-exclamation-triangle';
-                hapticFeedback('light'); } else { iconEl.className = 'fas fa-info-circle';
-                hapticFeedback('light'); }
+
+            if (type === 'success') { iconEl.className = 'fas fa-check'; hapticFeedback('success'); }
+            else if (type === 'error') { iconEl.className = 'fas fa-times'; hapticFeedback('error'); }
+            else if (type === 'warning') { iconEl.className = 'fas fa-exclamation-triangle'; hapticFeedback('light'); }
+            else { iconEl.className = 'fas fa-info-circle'; hapticFeedback('light'); }
+
             toast.classList.add('show');
             clearTimeout(toast._timer);
             toast._timer = setTimeout(() => toast.classList.remove('show'), 3500);
@@ -1671,9 +1916,16 @@
         }
 
         function getPaymentMethodLabel(method) {
-            const map = { 'cash': 'نقدي', 'credit_card': 'بطاقة ائتمان', 'bank_transfer': 'تحويل بنكي', 'credit': 'آجل',
-                'cheque': 'شيك' };
-            return map[method] || method;
+            const map = {
+                'cash': 'نقدي',
+                'credit_card': 'بطاقة ائتمان',
+                'bank_transfer': 'تحويل بنكي',
+                'credit': 'آجل',
+                'cheque': 'شيك',
+                'mobile_money': 'محفظة إلكترونية',
+                'loyalty_points': 'نقاط ولاء'
+            };
+            return map[method] || method || '—';
         }
 
         // ============================================================
@@ -1706,9 +1958,7 @@
             ));
         }
 
-        let pullStartY = 0,
-            pullOffset = 0,
-            isPulling = false;
+        let pullStartY = 0, pullOffset = 0, isPulling = false;
         document.addEventListener('touchstart', function(e) {
             if (isInteractiveTouchTarget(e.target)) {
                 isPulling = false;
@@ -1716,8 +1966,10 @@
                 return;
             }
             const scrollTop = window.scrollY || document.documentElement.scrollTop;
-            if (scrollTop <= 0) { pullStartY = e.touches[0].clientY;
-                isPulling = true; }
+            if (scrollTop <= 0) {
+                pullStartY = e.touches[0].clientY;
+                isPulling = true;
+            }
         }, { passive: true });
         document.addEventListener('touchmove', function(e) {
             if (isInteractiveTouchTarget(e.target)) {
@@ -1749,9 +2001,11 @@
                 indicator.querySelector('span').textContent = 'جاري التحديث...';
                 setTimeout(() => {
                     loadSales();
-                    setTimeout(() => { indicator.style.top = '-60px';
+                    setTimeout(() => {
+                        indicator.style.top = '-60px';
                         isPulling = false;
-                        pullOffset = 0; }, 500);
+                        pullOffset = 0;
+                    }, 500);
                 }, 300);
             } else {
                 document.getElementById('pullIndicator').style.top = '-60px';
@@ -1767,8 +2021,10 @@
         let allCustomers = [];
         let allFuelTypes = [];
         let allPumps = [];
+        let allProducts = [];      // للفلترة حسب المنتج في التقرير
         let currentFilter = 'all';
         let isInitialLoad = true;
+        let lastPageMeta = { count: 0, total_count: 0, page: 1, total_pages: 1 };
 
         function renderSkeleton() {
             const container = document.getElementById('cardsContainer');
@@ -1797,30 +2053,52 @@
             if (isInitialLoad) renderSkeleton();
             showLoading(true);
             try {
-                const salesParams = {
-                    limit: 500,
-                    offset: 0,
-                    ...params
-                };
+                const salesParams = { limit: 500, offset: 0, ...params };
+
                 const [salesRes, customersRes, fuelRes, pumpsRes] = await Promise.all([
                     apiCall('getSalesTransactions', salesParams),
                     apiCall('getParties', { type: 'customer' }),
                     apiCall('getFuelTypes', {}),
                     apiCall('getPumps', {})
                 ]);
-                if (!salesRes.success) throw new Error(salesRes.message || 'فشل جلب سجل المبيعات');
-                const salesData = salesRes.data;
-                allSales = Array.isArray(salesData)
-                    ? salesData
-                    : (salesData && Array.isArray(salesData.rows) ? salesData.rows : []);
-                allCustomers = customersRes.success && Array.isArray(customersRes.data) ? customersRes.data : [];
-                allFuelTypes = fuelRes.success && Array.isArray(fuelRes.data) ? fuelRes.data : [];
-                allPumps = pumpsRes.success && Array.isArray(pumpsRes.data) ? pumpsRes.data : [];
+
+                const unwrapped = unwrapBridgeResponse(salesRes);
+                if (!unwrapped.success) {
+                    throw new Error(salesRes?.message || salesRes?.error || 'فشل جلب سجل المبيعات');
+                }
+
+                allSales = unwrapped.rows.map(normalizeSaleRow).filter(Boolean);
+                lastPageMeta = unwrapped.meta;
+
+                // استقبال بقية الجسور بأي شكل من الأشكال المدعومة
+                allCustomers = Array.isArray(customersRes) ? customersRes
+                            : (customersRes?.data && Array.isArray(customersRes.data) ? customersRes.data : []);
+                allFuelTypes = Array.isArray(fuelRes) ? fuelRes
+                            : (fuelRes?.data && Array.isArray(fuelRes.data) ? fuelRes.data : []);
+                allPumps = Array.isArray(pumpsRes) ? pumpsRes
+                            : (pumpsRes?.data && Array.isArray(pumpsRes.data) ? pumpsRes.data : []);
+
+                // استخراج المنتجات الفريدة من سجلات المبيعات للاستخدام في الفلترة
+                const productsMap = new Map();
+                allSales.forEach(s => {
+                    if (s.sale_kind === 'product' && s.item_id && s.item_name) {
+                        if (!productsMap.has(s.item_id)) {
+                            productsMap.set(s.item_id, {
+                                item_id: s.item_id,
+                                item_name: s.item_name,
+                                item_name_ar: s.item_name_ar
+                            });
+                        }
+                    }
+                });
+                allProducts = Array.from(productsMap.values());
+
             } catch (e) {
                 allSales = [];
                 allCustomers = [];
                 allFuelTypes = [];
                 allPumps = [];
+                allProducts = [];
                 showToast(e.message || 'فشل تحميل سجل المبيعات من SQLite', 'error');
             }
             populateDropdowns();
@@ -1832,11 +2110,11 @@
         }
 
         function populateDropdowns() {
-            // لا حاجة لتعبئة قوائم مخصصة في هذه الشاشة (لأنها عرض فقط)
+            // لا حاجة لتعبئة قوائم في هذه الشاشة (عرض فقط)
         }
 
         // ============================================================
-        // 6. عرض بطاقات المبيعات (بدون أزرار تعديل/حذف)
+        // 6. عرض بطاقات المبيعات
         // ============================================================
         function renderSalesCards() {
             const container = document.getElementById('cardsContainer');
@@ -1845,16 +2123,22 @@
             const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
             if (searchQuery) {
                 filtered = filtered.filter(s => {
-                    const code = (s.sale_code || '').toLowerCase();
-                    const invoice = (s.invoice_number || '').toLowerCase();
+                    const code     = (s.sale_code || '').toLowerCase();
+                    const invoice  = (s.invoice_number || '').toLowerCase();
                     const customer = (s.customer_name || '').toLowerCase();
-                    const phone = (s.customer_phone || '').toLowerCase();
-                    return code.includes(searchQuery) || invoice.includes(searchQuery) ||
-                        customer.includes(searchQuery) || phone.includes(searchQuery);
+                    const phone    = (s.customer_phone || '').toLowerCase();
+                    return code.includes(searchQuery)
+                        || invoice.includes(searchQuery)
+                        || customer.includes(searchQuery)
+                        || phone.includes(searchQuery);
                 });
             }
 
-            filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            filtered.sort((a, b) => {
+                const da = a.created_at ? new Date(a.created_at).getTime() : 0;
+                const db = b.created_at ? new Date(b.created_at).getTime() : 0;
+                return db - da;
+            });
 
             document.getElementById('saleCount').textContent = filtered.length;
 
@@ -1869,20 +2153,23 @@
             }
 
             container.innerHTML = filtered.map((s, idx) => {
-                const id = s.id || s.sale_id;
-                const code = s.sale_code || '---';
+                const id           = s.id || s.sale_id;
+                const code         = s.sale_code || '---';
                 const customerName = s.customer_name || '—';
-                const liters = s.sale_kind === 'fuel' ? parseFloat(s.quantity || 0) : 0;
-                const productQty = s.sale_kind === 'product' ? parseFloat(s.quantity || 0) : 0;
-                const netAmount = parseFloat(s.amount ?? s.net_amount ?? 0);
-                const paymentStatus = s.payment_status || 'paid';
-                const statusLabel = getStatusLabel(paymentStatus);
-                const statusClass = getStatusClass(paymentStatus);
-                const createdAt = s.created_at ? new Date(s.created_at).toLocaleDateString('en-GB') : '---';
-                const methodLabel = getPaymentMethodLabel(s.payment_method || 'cash');
+                const liters       = s.liters;
+                const productQty   = s.sale_kind === 'product' ? s.quantity : 0;
+                const netAmount    = s.net_amount;
+                const paymentStatus = s.payment_status;
+                const statusLabel  = getStatusLabel(paymentStatus);
+                const statusClass  = getStatusClass(paymentStatus);
+                const createdAt    = s.created_at
+                    ? new Date(s.created_at).toLocaleDateString('en-GB')
+                    : '---';
+                const methodLabel  = getPaymentMethodLabel(s.payment_method || 'cash');
 
                 return `
-                    <div class="sale-card animate-fade-up" style="animation-delay:${idx*0.04}s" data-id="${id}" onclick="selectCard(this, ${id})">
+                    <div class="sale-card animate-fade-up" style="animation-delay:${idx*0.04}s"
+                         data-id="${id}" onclick="selectCard(this, ${id})">
                         <div class="card-header">
                             <span class="sale-code"><i class="fas fa-hashtag"></i> ${escapeHtml(code)}</span>
                             <span class="status-badge ${statusClass}">${statusLabel}</span>
@@ -1898,7 +2185,9 @@
                             </div>
                             <div class="field-group">
                                 <span class="field-label">${liters > 0 ? 'اللترات' : 'الكمية'}</span>
-                                <span class="field-value">${liters > 0 ? formatNumber(liters) + ' L' : (productQty > 0 ? formatNumber(productQty) : '---')}</span>
+                                <span class="field-value">${liters > 0
+                                    ? formatNumber(liters) + ' L'
+                                    : (productQty > 0 ? formatNumber(productQty) : '---')}</span>
                             </div>
                         </div>
                         <div class="card-footer">
@@ -1925,17 +2214,23 @@
         // 7. الإحصائيات
         // ============================================================
         function updateStats() {
-            const totalAmount = allSales.reduce((sum, s) => sum + parseFloat(s.amount ?? s.net_amount ?? 0), 0);
-            const totalLiters = allSales.reduce((sum, s) => sum + (s.sale_kind === 'fuel' ? parseFloat(s.quantity || 0) : 0), 0);
+            const totalAmount = allSales.reduce(
+                (sum, s) => sum + (parseFloat(s.net_amount ?? s.amount ?? 0) || 0), 0
+            );
+            const totalLiters = allSales.reduce(
+                (sum, s) => sum + (s.sale_kind === 'fuel' ? (parseFloat(s.liters) || 0) : 0), 0
+            );
             const avg = allSales.length > 0 ? totalAmount / allSales.length : 0;
 
             document.getElementById('statTotal').textContent = formatCurrency(totalAmount);
             document.getElementById('statLiters').textContent = formatNumber(totalLiters);
-            document.getElementById('statAvg').textContent = formatCurrency(avg);
+            document.getElementById('statAvg').textContent   = formatCurrency(avg);
             document.getElementById('statCount').textContent = allSales.length;
 
-            ['trendTotal', 'trendLiters', 'trendAvg', 'trendCount'].forEach(id => { const el = document.getElementById(id);
-                if (el) el.textContent = '—'; });
+            ['trendTotal','trendLiters','trendAvg','trendCount'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = '—';
+            });
         }
 
         function showStatDetail(type) {
@@ -1943,7 +2238,7 @@
         }
 
         // ============================================================
-        // 8. البحث والفلاتر (مع ربط فعلي بقاعدة البيانات)
+        // 8. البحث والفلاتر
         // ============================================================
         function handleSearch(query) { renderSalesCards(); }
 
@@ -1956,46 +2251,29 @@
         }
 
         async function reloadForFilter(){
-
             const params = {};
-
             const today = new Date();
 
-            if(currentFilter === 'today'){
-
+            if (currentFilter === 'today') {
                 params.from_date = dateOnly(today);
-                params.to_date = dateOnly(today);
-
-            }else if(currentFilter === 'week'){
-
+                params.to_date   = dateOnly(today);
+            } else if (currentFilter === 'week') {
                 const d = new Date(today);
                 d.setDate(d.getDate() - 6);
-
                 params.from_date = dateOnly(d);
-                params.to_date = dateOnly(today);
-
-            }else if(currentFilter === 'month'){
-
+                params.to_date   = dateOnly(today);
+            } else if (currentFilter === 'month') {
                 const d = new Date(today);
                 d.setMonth(d.getMonth() - 1);
-
                 params.from_date = dateOnly(d);
-                params.to_date = dateOnly(today);
-
-            }else if(currentFilter === 'fuel'){
-
+                params.to_date   = dateOnly(today);
+            } else if (currentFilter === 'fuel') {
                 params.sale_type = 'fuel';
-
-            }else if(currentFilter === 'products'){
-
+            } else if (currentFilter === 'products') {
                 params.sale_type = 'product';
-
-            }else if(currentFilter === 'credit'){
-
+            } else if (currentFilter === 'credit') {
                 params.payment_method = 'credit';
-
-            }else if(currentFilter === 'cash'){
-
+            } else if (currentFilter === 'cash') {
                 params.payment_method = 'cash';
             }
 
@@ -2003,23 +2281,15 @@
         }
 
         function setFilter(filter, btn){
-
             currentFilter = filter;
 
-            document
-                .querySelectorAll('.filter-chip')
+            document.querySelectorAll('.filter-chip')
                 .forEach(c => c.classList.remove('active'));
 
-            if(btn){
-                btn.classList.add('active');
-            }
+            if (btn) btn.classList.add('active');
 
             reloadForFilter().catch(e =>
-                showToast(
-                    e.message ||
-                    'فشل تطبيق الفلتر من SQLite',
-                    'error'
-                )
+                showToast(e.message || 'فشل تطبيق الفلتر من SQLite', 'error')
             );
 
             hapticFeedback('light');
@@ -2047,13 +2317,21 @@
         function openReportModal() {
             document.getElementById('reportModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            // تعيين التواريخ الافتراضية
+
             const today = new Date().toISOString().split('T')[0];
             const monthAgo = new Date();
             monthAgo.setMonth(monthAgo.getMonth() - 1);
             const monthAgoStr = monthAgo.toISOString().split('T')[0];
+
             document.getElementById('reportFrom').value = monthAgoStr;
             document.getElementById('reportTo').value = today;
+
+            // إعادة تعيين فلتر التقرير
+            document.getElementById('reportFilterType').value = '';
+            const filterValue = document.getElementById('reportFilterValue');
+            filterValue.innerHTML = '<option value="">— اختر نوع الفلترة أولاً —</option>';
+            filterValue.disabled = true;
+
             document.getElementById('reportResult').innerHTML =
                 `<div class="empty-state"><i class="fas fa-file-alt"></i><p>حدد الفترة ثم اضغط توليد التقرير</p></div>`;
         }
@@ -2065,61 +2343,182 @@
             document.body.style.overflow = '';
         }
 
+        // ============================================================
+        // 10.1 فلترة التقرير
+        // ============================================================
+        function onReportFilterTypeChange() {
+            const type = document.getElementById('reportFilterType').value;
+            const filterValue = document.getElementById('reportFilterValue');
+
+            if (!type) {
+                filterValue.innerHTML = '<option value="">— اختر نوع الفلترة أولاً —</option>';
+                filterValue.disabled = true;
+                return;
+            }
+
+            filterValue.disabled = false;
+            filterValue.innerHTML = '<option value="">— جارٍ التحميل... —</option>';
+
+            const options = [];
+
+            if (type === 'customer') {
+                const seen = new Set();
+                allSales.forEach(s => {
+                    const name = s.customer_name;
+                    const pid  = s.customer_party_id;
+                    if (name && name !== '—' && pid && !seen.has(pid)) {
+                        seen.add(pid);
+                        options.push({ value: String(pid), label: name });
+                    }
+                });
+                // إذا كانت القائمة فارغة من المبيعات، نستعمل قائمة العملاء الكاملة
+                if (options.length === 0 && Array.isArray(allCustomers)) {
+                    allCustomers.forEach(c => {
+                        const pid = c.party_id ?? c.id;
+                        const name = c.commercial_name_ar || c.commercial_name || c.legal_name || '';
+                        if (pid && name) options.push({ value: String(pid), label: name });
+                    });
+                }
+            } else if (type === 'product') {
+                const seen = new Set();
+                allSales.forEach(s => {
+                    if (s.sale_kind === 'product' && s.item_id) {
+                        const key = String(s.item_id);
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            const label = s.item_name_ar || s.item_name || ('منتج #' + s.item_id);
+                            options.push({ value: key, label });
+                        }
+                    }
+                });
+            } else if (type === 'fuel') {
+                // نستعمل أنواع الوقود من الجسر إن وُجدت، وإلا من المبيعات
+                if (Array.isArray(allFuelTypes) && allFuelTypes.length > 0) {
+                    allFuelTypes.forEach(f => {
+                        const id = f.fuel_type_id ?? f.id;
+                        const label = f.fuel_name_ar || f.fuel_name || ('وقود #' + id);
+                        if (id) options.push({ value: String(id), label });
+                    });
+                } else {
+                    const seen = new Set();
+                    allSales.forEach(s => {
+                        if (s.sale_kind === 'fuel' && s.item_id) {
+                            const key = String(s.item_id);
+                            if (!seen.has(key)) {
+                                seen.add(key);
+                                options.push({
+                                    value: key,
+                                    label: s.item_name_ar || s.item_name || ('وقود #' + s.item_id)
+                                });
+                            }
+                        }
+                    });
+                }
+            } else if (type === 'payment') {
+                const methods = [
+                    { value: 'cash',          label: 'نقدي' },
+                    { value: 'credit',        label: 'آجل' },
+                    { value: 'bank_transfer', label: 'تحويل بنكي' },
+                    { value: 'credit_card',   label: 'بطاقة ائتمان' },
+                    { value: 'cheque',        label: 'شيك' },
+                    { value: 'mobile_money',  label: 'محفظة إلكترونية' },
+                    { value: 'loyalty_points',label: 'نقاط ولاء' }
+                ];
+                methods.forEach(m => options.push(m));
+            }
+
+            if (options.length === 0) {
+                filterValue.innerHTML = '<option value="">— لا توجد قيم متاحة —</option>';
+                filterValue.disabled = true;
+                return;
+            }
+
+            filterValue.innerHTML = '<option value="">— اختر قيمة —</option>' +
+                options.map(o => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join('');
+        }
+
+        // ============================================================
+        // 10.2 توليد التقرير
+        // ============================================================
+        let lastReportData = null;   // للاستخدام في تصدير CSV
+
+        function passesReportFilter(sale) {
+            const type  = document.getElementById('reportFilterType').value;
+            const value = document.getElementById('reportFilterValue').value;
+            if (!type || !value) return true;
+
+            if (type === 'customer') {
+                return String(sale.customer_party_id || '') === String(value);
+            } else if (type === 'product') {
+                return sale.sale_kind === 'product'
+                    && String(sale.item_id || '') === String(value);
+            } else if (type === 'fuel') {
+                return sale.sale_kind === 'fuel'
+                    && String(sale.item_id || '') === String(value);
+            } else if (type === 'payment') {
+                return String(sale.payment_method || '') === String(value);
+            }
+            return true;
+        }
+
         async function generateReport() {
             const from = document.getElementById('reportFrom').value;
-            const to = document.getElementById('reportTo').value;
+            const to   = document.getElementById('reportTo').value;
 
             if (!from || !to) { showToast('❌ الرجاء تحديد الفترة', 'error'); return; }
-            if (from > to) { showToast('❌ تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية', 'error'); return; }
+            if (from > to)    { showToast('❌ تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية', 'error'); return; }
+
+            const generateBtn = document.getElementById('btnGenerateReport');
+            generateBtn.disabled = true;
 
             showLoading(true);
             try {
-                const reportRes =
-                    await apiCall(
-                        'generateSalesTransactionReport',
-                        {
-                            from_date: from,
-                            to_date: to,
-                            limit: 1000,
-                            offset: 0
-                        }
-                    );
+                const reportRes = await apiCall('generateSalesTransactionReport', {
+                    from_date: from,
+                    to_date: to,
+                    limit: 5000,
+                    offset: 0
+                });
 
-                if(!reportRes.success){
-                    throw new Error(
-                        reportRes.message ||
-                        'فشل جلب التقرير من SQLite'
-                    );
+                const unwrapped = unwrapBridgeResponse(reportRes);
+                if (!unwrapped.success) {
+                    throw new Error(reportRes?.message || reportRes?.error || 'فشل جلب التقرير من SQLite');
                 }
 
-                const reportData =
-                    reportRes.data || reportRes;
-
-                const filtered =
-                    Array.isArray(reportData.rows)
-                        ? reportData.rows
-                        : (
-                            Array.isArray(reportData)
-                                ? reportData
-                                : []
-                        );
+                let filtered = unwrapped.rows.map(normalizeSaleRow).filter(Boolean);
+                filtered = filtered.filter(passesReportFilter);
 
                 if (filtered.length === 0) {
                     document.getElementById('reportResult').innerHTML =
-                        `<div class="empty-state"><i class="fas fa-file-alt"></i><p>لا توجد مبيعات في الفترة المحددة</p></div>`;
+                        `<div class="empty-state"><i class="fas fa-file-alt"></i><p>لا توجد مبيعات في الفترة المحددة${hasActiveReportFilter() ? ' بعد تطبيق الفلترة' : ''}</p></div>`;
                     showToast('لا توجد بيانات للتقرير', 'warning');
-                    showLoading(false);
+                    lastReportData = null;
                     return;
                 }
 
-                const total = filtered.reduce((sum, s) => sum + parseFloat(s.net_amount || 0), 0);
-                const liters = filtered.reduce((sum, s) => sum + parseFloat(s.liters || 0), 0);
-                const avg = total / filtered.length;
-                const paid = filtered.filter(s => s.payment_status === 'paid').length;
-                const pending = filtered.filter(s => s.payment_status === 'pending' || s.payment_status === 'partial')
-                .length;
+                // تخزين للاستخدام في تصدير CSV
+                lastReportData = {
+                    rows: filtered,
+                    from: from,
+                    to: to,
+                    filterType: document.getElementById('reportFilterType').value || '',
+                    filterValue: document.getElementById('reportFilterValue').value || ''
+                };
+
+                const total  = filtered.reduce((sum, s) => sum + s.net_amount, 0);
+                const liters = filtered.reduce((sum, s) => sum + s.liters, 0);
+                const avg    = total / filtered.length;
+                const paid    = filtered.filter(s => s.payment_status === 'paid').length;
+                const pending = filtered.filter(s =>
+                    s.payment_status === 'pending' || s.payment_status === 'partial'
+                ).length;
+
+                const filterLabel = buildFilterLabel();
 
                 let html = `
+                    ${filterLabel ? `<div style="margin:8px;padding:8px 12px;border-radius:10px;background:var(--bg-glass);border:var(--silver-border);font-size:0.75rem;font-weight:700;color:var(--text-secondary);">
+                        <i class="fas fa-filter" style="color:var(--gold-primary);"></i> ${filterLabel}
+                    </div>` : ''}
                     <div class="report-summary">
                         <div class="report-box"><strong>${filtered.length}</strong><span>عدد المعاملات</span></div>
                         <div class="report-box"><strong>${formatCurrency(total)}</strong><span>إجمالي المبيعات</span></div>
@@ -2129,59 +2528,211 @@
                         <div class="report-box"><strong>${pending}</strong><span>معلق/جزئي</span></div>
                     </div>
                     <table>
-                        <thead><tr><th>الكود</th><th>العميل</th><th>المبلغ</th><th>اللترات</th><th>طريقة الدفع</th><th>الحالة</th><th>التاريخ</th></tr></thead>
+                        <thead><tr>
+                            <th style="width:14%;">الكود</th>
+                            <th style="width:16%;">العميل</th>
+                            <th style="width:12%;">المبلغ</th>
+                            <th style="width:10%;">اللترات</th>
+                            <th style="width:14%;">طريقة الدفع</th>
+                            <th style="width:12%;">الحالة</th>
+                            <th style="width:12%;">التاريخ</th>
+                        </tr></thead>
                         <tbody>
-                            ${filtered.slice(0, 100).map(s => `
+                            ${filtered.map(s => `
                                 <tr>
                                     <td>${escapeHtml(s.sale_code || '---')}</td>
                                     <td>${escapeHtml(s.customer_name || 'عميل عام')}</td>
-                                    <td>${formatCurrency(s.net_amount || 0)}</td>
-                                    <td>${formatNumber(s.liters || 0)}</td>
+                                    <td>${formatCurrency(s.net_amount)}</td>
+                                    <td>${formatNumber(s.liters)}</td>
                                     <td>${getPaymentMethodLabel(s.payment_method || 'cash')}</td>
                                     <td>${getStatusLabel(s.payment_status || 'paid')}</td>
-                                    <td>${s.created_at ? new Date(s.created_at).toLocaleDateString('en-GB') : '---'}</td>
+                                    <td>${s.created_at
+                                        ? new Date(s.created_at).toLocaleDateString('en-GB')
+                                        : '---'}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
                     </table>
-                    ${filtered.length > 100 ? `<p style="color:var(--text-muted);font-size:0.7rem;padding:8px;">يعرض أول 100 سجل</p>` : ''}
                 `;
                 document.getElementById('reportResult').innerHTML = html;
                 showToast('✅ تم توليد التقرير بنجاح', 'success');
             } catch (e) {
                 showToast('❌ ' + (e.message || 'فشل توليد التقرير'), 'error');
+                lastReportData = null;
             } finally {
+                generateBtn.disabled = false;
                 showLoading(false);
             }
         }
 
-        function exportReport() {
-            const from = document.getElementById('reportFrom')?.value || '';
-            const to = document.getElementById('reportTo')?.value || '';
-            if (!from || !to) { showToast('❌ الرجاء تحديد الفترة قبل التصدير', 'error'); return; }
-            if (from > to) { showToast('❌ تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية', 'error'); return; }
-            if (!window.AndroidInterface || typeof window.AndroidInterface.exportOperationalCsv !== 'function') {
-                showToast('عقد تصدير CSV غير متاح في Android Bridge', 'error');
+        function hasActiveReportFilter() {
+            const type  = document.getElementById('reportFilterType').value;
+            const value = document.getElementById('reportFilterValue').value;
+            return !!(type && value);
+        }
+
+        function buildFilterLabel() {
+            const type  = document.getElementById('reportFilterType').value;
+            const value = document.getElementById('reportFilterValue').value;
+            if (!type || !value) return '';
+
+            const select = document.getElementById('reportFilterValue');
+            const label = select.options[select.selectedIndex]?.text || value;
+
+            const typeLabels = {
+                'customer': 'حسب العميل',
+                'product':  'حسب المنتج',
+                'fuel':     'حسب الوقود',
+                'payment':  'حسب طريقة الدفع'
+            };
+
+            return (typeLabels[type] || type) + ': ' + label;
+        }
+
+        // ============================================================
+        // 10.3 تصدير CSV — فعلي وحقيقي
+        // ============================================================
+        function csvEscape(value) {
+            if (value === null || value === undefined) return '';
+            const str = String(value);
+            // تصحيح إلزامي: تضاعف علامات التنصيص الداخلية، ويحيط الحقل بعلامتي تنصيص
+            return '"' + str.replace(/"/g, '""') + '"';
+        }
+
+        function buildReportCsv(rows, from, to, filterLabel) {
+            const BOM = '\uFEFF';  // لضمان فتح Excel بترميز UTF-8 دون مشاكل
+            const headers = [
+                'كود البيع',
+                'رقم الفاتورة',
+                'التاريخ',
+                'العميل',
+                'النوع',
+                'اسم الصنف',
+                'الكمية',
+                'اللترات',
+                'المبلغ الصافي',
+                'طريقة الدفع',
+                'حالة الدفع',
+                'المرتجع',
+                'التالف'
+            ];
+            const lines = [];
+            lines.push(headers.map(csvEscape).join(','));
+
+            rows.forEach(s => {
+                const typeLabel = s.sale_kind === 'fuel' ? 'وقود' : 'منتج';
+                const dateStr = s.created_at
+                    ? new Date(s.created_at).toLocaleString('en-GB')
+                    : '';
+                lines.push([
+                    s.sale_code || '',
+                    s.invoice_number || '',
+                    dateStr,
+                    s.customer_name || 'عميل عام',
+                    typeLabel,
+                    s.item_name_ar || s.item_name || '',
+                    s.quantity ?? 0,
+                    s.liters ?? 0,
+                    s.net_amount ?? 0,
+                    getPaymentMethodLabel(s.payment_method || 'cash'),
+                    getStatusLabel(s.payment_status || 'paid'),
+                    s.returned_quantity ?? 0,
+                    s.damaged_quantity ?? 0
+                ].map(csvEscape).join(','));
+            });
+
+            // سطر تعليق سفلي بالمعلومات الوصفية
+            lines.push('');
+            lines.push(csvEscape('الفترة:') + ',' + csvEscape(from + ' → ' + to));
+            if (filterLabel) lines.push(csvEscape('الفلترة:') + ',' + csvEscape(filterLabel));
+            lines.push(csvEscape('عدد السجلات:') + ',' + csvEscape(String(rows.length)));
+            lines.push(csvEscape('تاريخ الإنشاء:') + ',' + csvEscape(new Date().toLocaleString('en-GB')));
+
+            return BOM + lines.join('\r\n');
+        }
+
+        function downloadCsvViaBlob(csvContent, fileName) {
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', fileName);
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+        }
+
+        function exportReportCsv() {
+            // 1. لا يُسمح بالتصدير قبل توليد تقرير فعلي
+            if (!lastReportData || !Array.isArray(lastReportData.rows) || lastReportData.rows.length === 0) {
+                showToast('❌ لا توجد بيانات للتصدير؛ قم بتوليد التقرير أولاً', 'error');
                 return;
             }
+
+            const { rows, from, to } = lastReportData;
+            const filterLabel = buildFilterLabel();
+            const csvContent = buildReportCsv(rows, from, to, filterLabel);
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const fileName = `sales-report_${from}_${to}_${stamp}.csv`;
+
+            // 2. محاولة تصدير عبر AndroidInterface (يضمن ظهور الملف في مجلد التطبيق + إمكانية المشاركة)
+            if (window.AndroidInterface && typeof AndroidInterface.exportOperationalCsv === 'function') {
+                try {
+                    const result = AndroidInterface.exportOperationalCsv(
+                        'sales_transactions',
+                        JSON.stringify({
+                            from_date: from,
+                            to_date: to,
+                            filter_type: lastReportData.filterType || '',
+                            filter_value: lastReportData.filterValue || ''
+                        })
+                    );
+                    const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+
+                    if (parsed && parsed.success === true && parsed.status === 'processing') {
+                        showToast('⏳ جارٍ إنشاء ملف CSV فعلياً...', 'info');
+                        return;
+                    }
+                    if (parsed && parsed.success === false) {
+                        // إذا فشل الجسر، نرجع إلى التنزيل عبر المتصفح
+                        console.warn('Android CSV export failed:', parsed.error);
+                    }
+                } catch (e) {
+                    console.warn('AndroidInterface.exportOperationalCsv threw:', e);
+                }
+            }
+
+            // 3. تنزيل المتصفح (يعمل داخل WebView عبر Blob)
             try {
-                const result = window.AndroidInterface.exportOperationalCsv(
-                    'sales_transactions',
-                    JSON.stringify({ from_date: from, to_date: to })
-                );
-                const parsed = typeof result === 'string' ? JSON.parse(result) : result;
-                if (parsed && parsed.success === false) throw new Error(parsed.error || 'فشل بدء التصدير');
-                showToast('⏳ جارٍ إنشاء ملف CSV فعلياً عبر Android', 'success');
+                downloadCsvViaBlob(csvContent, fileName);
+                showToast('✅ تم تنزيل ملف CSV بنجاح', 'success');
             } catch (e) {
-                showToast(e.message || 'فشل بدء تصدير CSV', 'error');
+                console.error('Blob download failed:', e);
+                showToast('❌ فشل تصدير CSV: ' + e.message, 'error');
             }
         }
 
+        // مستقبِل نتيجة التصدير من Android
         window.onOperationalExportResult = function(result) {
             try {
                 const value = typeof result === 'string' ? JSON.parse(result) : result;
-                if (value && value.success) showToast('✅ تم إنشاء ملف CSV: ' + (value.path || ''), 'success');
-                else showToast((value && value.error) || 'فشل إنشاء ملف CSV', 'error');
+                if (value && value.success) {
+                    showToast('✅ تم إنشاء ملف CSV: ' + (value.path || ''), 'success');
+                } else {
+                    // فشل جسر — نرجع للتنزيل عبر المتصفح
+                    if (lastReportData) {
+                        const { rows, from, to } = lastReportData;
+                        const filterLabel = buildFilterLabel();
+                        const csvContent = buildReportCsv(rows, from, to, filterLabel);
+                        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+                        downloadCsvViaBlob(csvContent, `sales-report_${from}_${to}_${stamp}.csv`);
+                        showToast('تم تنزيل CSV عبر المتصفح بدلاً من الجسر', 'success');
+                    } else {
+                        showToast((value && value.error) || 'فشل إنشاء ملف CSV', 'error');
+                    }
+                }
             } catch (e) {
                 showToast('تعذر قراءة نتيجة تصدير CSV', 'error');
             }
@@ -2194,26 +2745,31 @@
 
         function generateAlerts() {
             const alerts = [];
-            const pending = allSales.filter(s => s.payment_status === 'pending' || s.payment_status === 'partial');
+
+            const pending = allSales.filter(s =>
+                s.payment_status === 'pending' || s.payment_status === 'partial'
+            );
             if (pending.length > 0) {
                 alerts.push({
-                    type: 'warning',
-                    icon: 'fa-clock',
+                    type: 'warning', icon: 'fa-clock',
                     title: '⏳ مبيعات غير مدفوعة',
                     desc: pending.length + ' عملية بيع معلقة/جزئية',
                     time: 'الآن'
                 });
             }
-            const highValue = allSales.filter(s => parseFloat(s.net_amount || 0) > 10000);
+
+            const highValue = allSales.filter(s =>
+                (parseFloat(s.net_amount ?? s.amount ?? 0) || 0) > 10000
+            );
             if (highValue.length > 0) {
                 alerts.push({
-                    type: 'info',
-                    icon: 'fa-crown',
+                    type: 'info', icon: 'fa-crown',
                     title: '👑 مبيعات مرتفعة القيمة',
                     desc: highValue.length + ' عملية بيع > 10,000',
                     time: 'الآن'
                 });
             }
+
             currentAlerts = alerts;
             renderAlerts(alerts);
         }
@@ -2244,26 +2800,29 @@
         // 12. AI Advisor
         // ============================================================
         function openAIAdvisor() {
-            const modal = document.getElementById('aiModal');
+            const modal   = document.getElementById('aiModal');
             const content = document.getElementById('aiContent');
             modal.classList.add('show');
             document.body.style.overflow = 'hidden';
 
-            const totalAmount = allSales.reduce((sum, s) => sum + parseFloat(s.net_amount || 0), 0);
-            const totalLiters = allSales.reduce((sum, s) => sum + parseFloat(s.liters || 0), 0);
+            const totalAmount = allSales.reduce(
+                (sum, s) => sum + (parseFloat(s.net_amount ?? s.amount ?? 0) || 0), 0
+            );
+            const totalLiters = allSales.reduce(
+                (sum, s) => sum + (s.sale_kind === 'fuel' ? (parseFloat(s.liters) || 0) : 0), 0
+            );
             const count = allSales.length;
-            const avg = count > 0 ? totalAmount / count : 0;
+            const avg   = count > 0 ? totalAmount / count : 0;
 
-            let topCustomer = '---',
-                topAmount = 0;
+            let topCustomer = '---', topAmount = 0;
             const custMap = {};
             allSales.forEach(s => {
                 const name = s.customer_name || 'عميل عام';
-                custMap[name] = (custMap[name] || 0) + parseFloat(s.net_amount || 0);
+                const amt  = parseFloat(s.net_amount ?? s.amount ?? 0) || 0;
+                custMap[name] = (custMap[name] || 0) + amt;
             });
             for (const [name, amt] of Object.entries(custMap)) {
-                if (amt > topAmount) { topAmount = amt;
-                    topCustomer = name; }
+                if (amt > topAmount) { topAmount = amt; topCustomer = name; }
             }
 
             const html = `
@@ -2314,21 +2873,23 @@
         // 13. عرض تفاصيل البيع
         // ============================================================
         function viewSale(id) {
-            const sale = allSales.find(s => Number(s.id || s.sale_id) === Number(id));
+            const sale = allSales.find(s =>
+                Number(s.id || s.sale_id) === Number(id)
+            );
             if (!sale) { showToast('❌ البيع غير موجود', 'error'); return; }
 
-            const content = document.getElementById('detailsContent');
+            const content      = document.getElementById('detailsContent');
             const customerName = sale.customer_name || '—';
-            const statusLabel = getStatusLabel(sale.payment_status || 'paid');
-            const statusClass = getStatusClass(sale.payment_status || 'paid');
-            const methodLabel = getPaymentMethodLabel(sale.payment_method || 'cash');
+            const statusLabel  = getStatusLabel(sale.payment_status || 'paid');
+            const statusClass  = getStatusClass(sale.payment_status || 'paid');
+            const methodLabel  = getPaymentMethodLabel(sale.payment_method || 'cash');
 
             const items = [{
-                type: sale.fuel_type_id ? 'وقود' : 'منتج',
-                name: sale.fuel_name || 'منتج',
-                qty: sale.liters || sale.quantity || 0,
-                price: sale.price_per_liter || sale.unit_price || 0,
-                total: parseFloat(sale.net_amount || 0)
+                type:  sale.sale_kind === 'fuel' ? 'وقود' : 'منتج',
+                name:  sale.item_name_ar || sale.item_name || 'صنف',
+                qty:   sale.quantity,
+                price: sale.quantity > 0 ? sale.net_amount / sale.quantity : 0,
+                total: sale.net_amount
             }];
 
             content.innerHTML = `
@@ -2350,7 +2911,7 @@
                     <div class="details-row"><span class="details-label">كود البيع</span><span class="details-value code-red">${escapeHtml(sale.sale_code || '---')}</span></div>
                     <div class="details-row"><span class="details-label">رقم الفاتورة</span><span class="details-value">${escapeHtml(sale.invoice_number || '---')}</span></div>
                     <div class="details-row"><span class="details-label">التاريخ</span><span class="details-value">${sale.created_at ? new Date(sale.created_at).toLocaleString('en-GB') : '---'}</span></div>
-                    <div class="details-row"><span class="details-label">نوع البيع</span><span class="details-value">${escapeHtml(sale.sale_type || '---')}</span></div>
+                    <div class="details-row"><span class="details-label">نوع البيع</span><span class="details-value">${sale.sale_kind === 'fuel' ? 'وقود' : 'منتج'}</span></div>
                     <div class="details-row"><span class="details-label">طريقة الدفع</span><span class="details-value">${methodLabel}</span></div>
                 </div>
 
@@ -2360,7 +2921,13 @@
                         <thead><tr><th>النوع</th><th>الاسم</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
                         <tbody>
                             ${items.map(item => `
-                                <tr><td>${item.type}</td><td>${escapeHtml(item.name)}</td><td>${formatNumber(item.qty)}</td><td>${formatCurrency(item.price)}</td><td>${formatCurrency(item.total)}</td></tr>
+                                <tr>
+                                    <td>${item.type}</td>
+                                    <td>${escapeHtml(item.name)}</td>
+                                    <td>${formatNumber(item.qty)}</td>
+                                    <td>${formatCurrency(item.price)}</td>
+                                    <td>${formatCurrency(item.total)}</td>
+                                </tr>
                             `).join('')}
                         </tbody>
                     </table>
@@ -2368,21 +2935,21 @@
 
                 <div class="details-section">
                     <div class="details-section-title"><i class="fas fa-calculator"></i> الإجماليات</div>
-                    <div class="details-row"><span class="details-label">المجموع الفرعي</span><span class="details-value">${formatCurrency(sale.subtotal || 0)}</span></div>
-                    <div class="details-row"><span class="details-label">الخصم</span><span class="details-value" style="color:var(--warning);">${formatCurrency(sale.discount_amount || 0)}</span></div>
-                    <div class="details-row"><span class="details-label">الضريبة</span><span class="details-value">${formatCurrency(sale.tax_amount || 0)}</span></div>
-                    <div class="details-row"><span class="details-label" style="font-weight:800;font-size:0.9rem;">الصافي</span><span class="details-value" style="font-weight:900;font-size:0.95rem;color:var(--gold-primary);">${formatCurrency(sale.net_amount || 0)}</span></div>
-                    <div class="details-row"><span class="details-label">المدفوع</span><span class="details-value" style="color:var(--emerald-primary);">${formatCurrency(sale.paid_amount || 0)}</span></div>
-                    <div class="details-row"><span class="details-label">المتبقي</span><span class="details-value" style="color:${parseFloat(sale.remaining_amount || 0) > 0 ? 'var(--danger)' : 'var(--text-muted)'};">${formatCurrency(sale.remaining_amount || 0)}</span></div>
-                    ${sale.due_date ? `<div class="details-row"><span class="details-label">تاريخ الاستحقاق</span><span class="details-value">${new Date(sale.due_date).toLocaleDateString('en-GB')}</span></div>` : ''}
+                    <div class="details-row">
+                        <span class="details-label" style="font-weight:800;font-size:0.9rem;">الصافي</span>
+                        <span class="details-value" style="font-weight:900;font-size:0.95rem;color:var(--gold-primary);">${formatCurrency(sale.net_amount)}</span>
+                    </div>
+                    ${sale.returned_quantity > 0 ? `
+                        <div class="details-row">
+                            <span class="details-label">المرتجع</span>
+                            <span class="details-value" style="color:var(--warning);">${formatNumber(sale.returned_quantity)}</span>
+                        </div>` : ''}
+                    ${sale.damaged_quantity > 0 ? `
+                        <div class="details-row">
+                            <span class="details-label">التالف</span>
+                            <span class="details-value" style="color:var(--danger);">${formatNumber(sale.damaged_quantity)}</span>
+                        </div>` : ''}
                 </div>
-
-                ${sale.remarks || sale.notes ? `
-                <div class="details-section">
-                    <div class="details-section-title"><i class="fas fa-sticky-note"></i> ملاحظات</div>
-                    <p style="font-size:0.8rem;color:var(--text-secondary);line-height:1.8;text-align:center;">${escapeHtml(sale.remarks || sale.notes)}</p>
-                </div>
-                ` : ''}
 
                 <div style="height:30px;"></div>
             `;
@@ -2398,7 +2965,7 @@
         }
 
         // ============================================================
-        // 14. القائمة الجانبية
+        // 14. القائمة الجانبية — معالجة جميع الأزرار بدقة
         // ============================================================
         function handleSidebarAction(action) {
             const sidebar = document.getElementById('sidebar');
@@ -2407,35 +2974,93 @@
 
             switch (action) {
                 case 'export':
-                    exportReport();
+                    // تصدير CSV: يستخدم نفس منطق زر التصدير في التقرير
+                    // لكن عند عدم وجود تقرير جاهز، يُنشئ تقريراً سريعاً من البيانات الحالية
+                    handleSidebarExportCsv();
                     break;
+
                 case 'pdf':
-                    showToast('⚠️ PDF غير متاح في هذه الشاشة؛ استخدم الطباعة', 'warning');
+                    // PDF غير مدعوم مباشرة؛ نوجه المستخدم للطباعة كبديل فعلي
+                    showToast('ℹ️ لإنشاء PDF: استخدم "طباعة" ثم اختر "حفظ كـ PDF"', 'info');
+                    setTimeout(() => {
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'إنشاء PDF',
+                            text: 'لا يدعم WebView توليد PDF مباشر. سنفتح نافذة الطباعة، ومنها اختر "Save as PDF".',
+                            confirmButtonText: 'متابعة',
+                            cancelButtonText: 'إلغاء',
+                            showCancelButton: true
+                        }).then((result) => {
+                            if (result.isConfirmed) printSalesReport();
+                        });
+                    }, 300);
                     break;
+
                 case 'print':
                     printSalesReport();
                     break;
+
                 case 'refresh':
-                    loadSales();
-                    showToast('🔄 تم التحديث', 'success');
+                    loadSales()
+                        .then(() => showToast('🔄 تم التحديث بنجاح', 'success'))
+                        .catch((e) => showToast('❌ فشل التحديث: ' + (e.message || ''), 'error'));
                     break;
+
                 case 'home':
-                    window.location.href = '../main.html';
+                    window.location.href = 'file:///android_asset/main.html';
                     break;
+
                 default:
                     showToast('❌ إجراء غير معروف', 'error');
             }
         }
 
-        function printSalesReport() {
-            if (!window.AndroidInterface || typeof window.AndroidInterface.printCurrentPage !== 'function') {
-                showToast('عقد الطباعة غير متاح في Android Bridge', 'error');
+        function handleSidebarExportCsv() {
+            // أولوية: إن وُجد تقرير مولّد، صدّره
+            if (lastReportData && Array.isArray(lastReportData.rows) && lastReportData.rows.length > 0) {
+                exportReportCsv();
                 return;
             }
+
+            // وإلا: أنشئ CSV من البيانات الحالية (كل السجلات المحمّلة)
+            if (!Array.isArray(allSales) || allSales.length === 0) {
+                showToast('❌ لا توجد بيانات للتصدير', 'error');
+                return;
+            }
+
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const fileName = `sales-log_${stamp}.csv`;
+            const csvContent = buildReportCsv(allSales, '—', '—', 'كل السجلات الحالية');
+
             try {
-                window.AndroidInterface.printCurrentPage();
+                downloadCsvViaBlob(csvContent, fileName);
+                showToast('✅ تم تنزيل CSV من سجل المبيعات الحالي', 'success');
             } catch (e) {
-                showToast(e.message || 'فشل بدء الطباعة', 'error');
+                console.error('CSV export failed:', e);
+                showToast('❌ فشل تصدير CSV: ' + e.message, 'error');
+            }
+        }
+
+        function printSalesReport() {
+            // نطبع التقرير الحالي إن وُجد، وإلا نطبع الواجهة
+            try {
+                // عند وجود تقرير مولّد، نفتح المودال ونطبع منه
+                const reportModal = document.getElementById('reportModal');
+                const isReportOpen = reportModal.classList.contains('show');
+
+                if (!isReportOpen && lastReportData && lastReportData.rows.length > 0) {
+                    // افتح المودال ليُطبع التقرير بدلاً من الواجهة
+                    openReportModal();
+                }
+
+                // إخفاء عناصر الواجهة أثناء الطباعة (يتم عبر media print CSS)
+                setTimeout(() => {
+                    window.print();
+                }, 350);
+
+                showToast('🖨️ تم فتح نافذة الطباعة', 'info');
+            } catch (e) {
+                showToast('❌ فشل بدء الطباعة: ' + e.message, 'error');
             }
         }
 
@@ -2476,7 +3101,7 @@
                 if (e.target === this) closeModal(e, 'reportModal');
             });
 
-            // تعيين القائمة السفلية النشطة
+            // القائمة السفلية النشطة افتراضياً
             document.querySelectorAll('.bottom-nav .nav-item').forEach((item, index) => {
                 item.classList.toggle('active', index === 0);
             });
@@ -2490,5 +3115,6 @@
     </script>
 
     <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
+\n<script id="sales-log-final-fix">\n(function(){\n  'use strict';\n\n  // ------------------------------------------------------------\n  // Helpers aligned with DatabaseHelper.getSalesLedgerPage()\n  // ------------------------------------------------------------\n  function finalReportParams(from, to){\n    const type=(document.getElementById('reportFilterType')?.value||'').trim();\n    const value=(document.getElementById('reportFilterValue')?.value||'').trim();\n    const p={from_date:from,to_date:to,limit:500,offset:0};\n    if(type==='customer' && value) p.customer_id=Number(value);\n    else if(type==='product' && value){ p.product_id=Number(value); p.sale_type='product'; }\n    else if(type==='fuel' && value){ p.product_id=Number(value); p.sale_type='fuel'; }\n    else if(type==='payment' && value) p.payment_method=value;\n    return p;\n  }\n\n  function reportFilterActive(){\n    const t=document.getElementById('reportFilterType')?.value||'';\n    const v=document.getElementById('reportFilterValue')?.value||'';\n    return !!(t&&v);\n  }\n\n  // ------------------------------------------------------------\n  // Load ALL report pages because DatabaseHelper caps each page at 500.\n  // ------------------------------------------------------------\n  async function loadCompleteReportRows(from,to){\n    const base=finalReportParams(from,to);\n    const pageSize=500;\n    const rows=[];\n    let offset=0;\n    let expectedTotal=null;\n    const maxPages=1000;\n\n    for(let page=0; page<maxPages; page++){\n      const params=Object.assign({},base,{limit:pageSize,offset});\n      const res=await apiCall('generateSalesTransactionReport',params);\n      const unwrapped=unwrapBridgeResponse(res);\n      if(!unwrapped || !unwrapped.success){\n        throw new Error(res?.message || res?.error || 'فشل جلب بيانات التقرير من SQLite');\n      }\n      const pageRows=Array.isArray(unwrapped.rows) ? unwrapped.rows : [];\n      if(expectedTotal===null && unwrapped.meta) {\n        expectedTotal=Number(unwrapped.meta.total ?? unwrapped.meta.total_count ?? unwrapped.meta.count);\n        if(!Number.isFinite(expectedTotal)) expectedTotal=null;\n      }\n      rows.push(...pageRows.map(normalizeSaleRow).filter(Boolean));\n      offset += pageRows.length;\n      if(pageRows.length===0) break;\n      if(expectedTotal!==null && rows.length>=expectedTotal) break;\n      if(pageRows.length<pageSize) break;\n    }\n    return rows;\n  }\n\n  // ------------------------------------------------------------\n  // Filter lists: customer list comes from getParties; products/fuel\n  // come from SQLite-backed sales/fuel data already loaded by the screen.\n  // ------------------------------------------------------------\n  window.onReportFilterTypeChange = async function(){\n    const type=document.getElementById('reportFilterType');\n    const value=document.getElementById('reportFilterValue');\n    if(!type || !value) return;\n    const selected=type.value;\n    value.disabled=true;\n    value.innerHTML='<option value="">— جارٍ تحميل القيم... —</option>';\n    if(!selected){ value.innerHTML='<option value="">— اختر نوع الفلترة أولاً —</option>'; return; }\n\n    try{\n      const options=[]; const seen=new Set();\n      if(selected==='customer'){\n        let customers=Array.isArray(allCustomers)?allCustomers:[];\n        if(customers.length===0){\n          const r=await apiCall('getParties',{type:'customer'});\n          customers=Array.isArray(r)?r:(Array.isArray(r?.data)?r.data:[]);\n        }\n        customers.forEach(c=>{\n          const id=c.party_id ?? c.id;\n          const name=c.commercial_name_ar || c.commercial_name || c.legal_name || c.name || '';\n          if(id && name && !seen.has(String(id))){ seen.add(String(id)); options.push({value:String(id),label:String(name)}); }\n        });\n      }else if(selected==='product'){\n        (Array.isArray(allProducts)?allProducts:[]).forEach(x=>{\n          const id=x.item_id ?? x.product_id ?? x.id;\n          const name=x.item_name_ar || x.item_name || x.product_name_ar || x.product_name || '';\n          if(id && name && !seen.has(String(id))){ seen.add(String(id)); options.push({value:String(id),label:String(name)}); }\n        });\n      }else if(selected==='fuel'){\n        (Array.isArray(allFuelTypes)?allFuelTypes:[]).forEach(x=>{\n          const id=x.fuel_type_id ?? x.id;\n          const name=x.fuel_name_ar || x.fuel_name || x.name || '';\n          if(id && name && !seen.has(String(id))){ seen.add(String(id)); options.push({value:String(id),label:String(name)}); }\n        });\n      }else if(selected==='payment'){\n        [\n          ['cash','نقدي'],['credit','آجل'],['bank_transfer','تحويل بنكي'],\n          ['credit_card','بطاقة ائتمان'],['cheque','شيك'],\n          ['mobile_money','محفظة إلكترونية'],['loyalty_points','نقاط ولاء']\n        ].forEach(([v,l])=>options.push({value:v,label:l}));\n      }\n      value.innerHTML='<option value="">— اختر قيمة —</option>'+options.map(o=>'<option value="'+escapeHtml(o.value)+'">'+escapeHtml(o.label)+'</option>').join('');\n      value.disabled=options.length===0;\n      if(!options.length) value.innerHTML='<option value="">— لا توجد قيم متاحة —</option>';\n    }catch(e){\n      value.innerHTML='<option value="">— تعذر تحميل القيم —</option>';\n      value.disabled=true;\n      showToast('❌ تعذر تحميل قيم الفلترة: '+(e.message||''),'error');\n    }\n  };\n\n  // ------------------------------------------------------------\n  // Complete report generation. Filtering is passed to SQLite, not only\n  // applied visually in JavaScript.\n  // ------------------------------------------------------------\n  window.generateReport = async function(){\n    const from=document.getElementById('reportFrom')?.value||'';\n    const to=document.getElementById('reportTo')?.value||'';\n    if(!from||!to){ showToast('❌ الرجاء تحديد الفترة','error'); return; }\n    if(from>to){ showToast('❌ تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية','error'); return; }\n\n    const btn=document.getElementById('btnGenerateReport');\n    if(btn) btn.disabled=true;\n    showLoading(true);\n    try{\n      const rows=await loadCompleteReportRows(from,to);\n      if(!rows.length){\n        lastReportData=null;\n        document.getElementById('reportResult').innerHTML='<div class="empty-state"><i class="fas fa-file-alt"></i><p>لا توجد مبيعات في الفترة المحددة'+(reportFilterActive()?' بعد تطبيق الفلترة':'')+'</p></div>';\n        showToast('لا توجد بيانات للتقرير','warning');\n        return;\n      }\n\n      const filterType=document.getElementById('reportFilterType')?.value||'';\n      const filterValue=document.getElementById('reportFilterValue')?.value||'';\n      lastReportData={rows,from,to,filterType,filterValue};\n\n      const total=rows.reduce((sum,s)=>sum+(Number(s.net_amount ?? s.amount ?? 0)||0),0);\n      const liters=rows.reduce((sum,s)=>sum+(s.sale_kind==='fuel'?(Number(s.liters ?? s.quantity ?? 0)||0):0),0);\n      const avg=rows.length?total/rows.length:0;\n      const paid=rows.filter(s=>String(s.payment_status||'').toLowerCase()==='paid').length;\n      const pending=rows.filter(s=>['pending','partial'].includes(String(s.payment_status||'').toLowerCase())).length;\n      const filterLabel=typeof buildFilterLabel==='function'?buildFilterLabel():'';\n\n      document.getElementById('reportResult').innerHTML=`\n        ${filterLabel?`<div style="margin:8px 0;padding:8px 12px;border-radius:10px;background:var(--bg-glass);border:var(--silver-border);font-size:.75rem;font-weight:700;color:var(--text-secondary);"><i class="fas fa-filter" style="color:var(--gold-primary);"></i> ${escapeHtml(filterLabel)}</div>`:''}\n        <div class="report-summary">\n          <div class="report-box"><strong>${rows.length}</strong><span>عدد المعاملات</span></div>\n          <div class="report-box"><strong>${formatCurrency(total)}</strong><span>إجمالي المبيعات</span></div>\n          <div class="report-box"><strong>${formatNumber(liters)}</strong><span>إجمالي اللترات</span></div>\n          <div class="report-box"><strong>${formatCurrency(avg)}</strong><span>متوسط الفاتورة</span></div>\n          <div class="report-box"><strong>${paid}</strong><span>مدفوع</span></div>\n          <div class="report-box"><strong>${pending}</strong><span>معلق/جزئي</span></div>\n        </div>\n        <table>\n          <thead><tr><th>الكود</th><th>العميل</th><th>المبلغ</th><th>اللترات</th><th>طريقة الدفع</th><th>الحالة</th><th>التاريخ</th></tr></thead>\n          <tbody>${rows.map(s=>`<tr>\n            <td>${escapeHtml(s.sale_code||'---')}</td>\n            <td>${escapeHtml(s.customer_name||'عميل عام')}</td>\n            <td>${formatCurrency(s.net_amount ?? s.amount ?? 0)}</td>\n            <td>${formatNumber(s.liters ?? (s.sale_kind==='fuel'?s.quantity:0) ?? 0)}</td>\n            <td>${getPaymentMethodLabel(s.payment_method||'cash')}</td>\n            <td>${getStatusLabel(s.payment_status||((s.payment_method||'cash')==='credit'?'pending':'paid'))}</td>\n            <td>${s.created_at?new Date(s.created_at).toLocaleDateString('en-GB'):'---'}</td>\n          </tr>`).join('')}</tbody>\n        </table>`;\n      showToast('✅ تم توليد التقرير من SQLite بنجاح','success');\n    }catch(e){\n      lastReportData=null;\n      showToast('❌ '+(e.message||'فشل توليد التقرير'),'error');\n    }finally{\n      if(btn) btn.disabled=false;\n      showLoading(false);\n    }\n  };\n\n  // ------------------------------------------------------------\n  // Real Android CSV export: send the exact filters understood by\n  // DatabaseHelper.exportOperationalCsv(). The Kotlin files remain untouched.\n  // ------------------------------------------------------------\n  window.exportReportCsv = function(){\n    if(!lastReportData || !Array.isArray(lastReportData.rows) || !lastReportData.rows.length){\n      showToast('❌ لا توجد بيانات للتصدير؛ قم بتوليد التقرير أولاً','error'); return;\n    }\n    const {from,to,filterType,filterValue}=lastReportData;\n    const params={from_date:from,to_date:to};\n    if(filterType==='customer'&&filterValue) params.customer_id=Number(filterValue);\n    else if(filterType==='product'&&filterValue){ params.product_id=Number(filterValue); params.item_kind='product'; }\n    else if(filterType==='fuel'&&filterValue){ params.fuel_type_id=Number(filterValue); params.item_kind='fuel'; }\n    else if(filterType==='payment'&&filterValue) params.payment_method=filterValue;\n\n    const stamp=new Date().toISOString().replace(/[:.]/g,'-');\n    const fileName=`sales-report_${from}_${to}_${stamp}.csv`;\n\n    if(window.AndroidInterface && typeof AndroidInterface.exportOperationalCsv==='function'){\n      try{\n        const immediate=AndroidInterface.exportOperationalCsv('sales_transactions',JSON.stringify(params));\n        const parsed=typeof immediate==='string'?JSON.parse(immediate):immediate;\n        if(parsed && parsed.success){\n          showToast('⏳ جارٍ إنشاء ملف CSV الحقيقي من قاعدة البيانات...','info');\n          return;\n        }\n      }catch(e){\n        console.error('Android CSV export error',e);\n      }\n    }\n\n    // Fallback only when the Android bridge is unavailable.\n    try{\n      const label=typeof buildFilterLabel==='function'?buildFilterLabel():'';\n      downloadCsvViaBlob(buildReportCsv(lastReportData.rows,from,to,label),fileName);\n      showToast('✅ تم تصدير CSV','success');\n    }catch(e){ showToast('❌ فشل تصدير CSV: '+(e.message||''),'error'); }\n  };\n\n  // Handle asynchronous result emitted by MainActivity.exportOperationalCsv.\n  window.onOperationalExportResult=function(result){\n    try{\n      const r=typeof result==='string'?JSON.parse(result):result;\n      if(r?.success){\n        showToast('✅ تم إنشاء ملف CSV فعلياً'+(r.path?'':'') ,'success');\n      }else{\n        showToast('❌ فشل إنشاء CSV: '+(r?.error||'خطأ غير معروف'),'error');\n      }\n    }catch(e){ showToast('❌ تعذر قراءة نتيجة تصدير CSV','error'); }\n  };\n\n  // Sidebar: keep every action functional and deterministic.\n  window.handleSidebarAction=function(action){\n    const sidebar=document.getElementById('sidebar');\n    if(sidebar) sidebar.classList.remove('open');\n    const toggle=document.getElementById('sidebarToggle');\n    if(toggle) toggle.classList.remove('hidden');\n    switch(action){\n      case 'export': return handleSidebarExportCsv();\n      case 'pdf':\n        if(typeof printSalesReport==='function') return Swal.fire({icon:'info',title:'إنشاء PDF',text:'سيتم فتح الطباعة. اختر «حفظ كـ PDF» من نافذة الطباعة.',confirmButtonText:'متابعة',cancelButtonText:'إلغاء',showCancelButton:true}).then(r=>{if(r.isConfirmed) printSalesReport();});\n        return;\n      case 'print': return typeof printSalesReport==='function'?printSalesReport():showToast('❌ وظيفة الطباعة غير متاحة','error');\n      case 'refresh': return loadSales().then(()=>showToast('🔄 تم تحديث سجل المبيعات','success')).catch(e=>showToast('❌ فشل التحديث: '+(e.message||''),'error'));\n      case 'home': window.location.href='file:///android_asset/main.html'; return;\n      default: showToast('❌ إجراء غير معروف','error');\n    }\n  };\n\n  // Rebuild the sidebar export so it also uses the real Android exporter.\n  window.handleSidebarExportCsv=function(){\n    if(lastReportData?.rows?.length) return exportReportCsv();\n    if(!Array.isArray(allSales)||!allSales.length){ showToast('❌ لا توجد بيانات للتصدير','error'); return; }\n    if(window.AndroidInterface && typeof AndroidInterface.exportOperationalCsv==='function'){\n      try{\n        const immediate=AndroidInterface.exportOperationalCsv('sales_transactions',JSON.stringify({}));\n        const parsed=typeof immediate==='string'?JSON.parse(immediate):immediate;\n        if(parsed?.success){ showToast('⏳ جارٍ إنشاء ملف CSV الحقيقي...','info'); return; }\n      }catch(e){ console.error(e); }\n    }\n    try{\n      const stamp=new Date().toISOString().replace(/[:.]/g,'-');\n      downloadCsvViaBlob(buildReportCsv(allSales,'—','—','كل السجلات الحالية'),`sales-log_${stamp}.csv`);\n      showToast('✅ تم تصدير السجلات الحالية','success');\n    }catch(e){ showToast('❌ فشل تصدير CSV: '+(e.message||''),'error'); }\n  };\n\n  // Force the two date fields to remain side-by-side after every modal open.\n  const forceDateLayout=()=>{\n    const row=document.querySelector('#reportModal .report-date-row');\n    if(row){ row.style.setProperty('display','grid','important'); row.style.setProperty('grid-template-columns','minmax(0,1fr) minmax(0,1fr)','important'); }\n  };\n  document.addEventListener('DOMContentLoaded',forceDateLayout);\n  const oldOpen=window.openReportModal;\n  window.openReportModal=function(){ const r=oldOpen?oldOpen.apply(this,arguments):null; forceDateLayout(); return r; };\n})();\n</script>\n
 </body>
 </html>
