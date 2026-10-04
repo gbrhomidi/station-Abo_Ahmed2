@@ -3,14 +3,14 @@ const path = require('path');
 
 const reports = {
   'main.html': ['getDashboardStats'],
-  'screens/sales-reports.html': ['generateSalesTransactionReport', 'retrieveInvoice', 'getShifts'],
-  'screens/eod-report.html': ['getEodReport', 'getBalanceSheet'],
+  'screens/sales-reports.html': ['generateSalesTransactionReport', 'retrieveInvoice', 'getShifts', 'getProducts', 'getCustomers'],
+  'screens/eod-report.html': ['getEodReport', 'getBalanceSheet', 'generateSalesTransactionReport', 'getDatabaseInfo', 'getBackupHistoryRecords'],
   'screens/inventory-reports.html': ['generateInventoryReport', 'getWarehouses', 'getCategories', 'getInventoryProductDetails'],
-  'screens/customer-reports.html': ['generateCRMReport', 'getCustomers'],
-  'screens/fuel-reports.html': ['getFuelReport', 'getFuelReportPage', 'getTanks', 'getPumps', 'generateMeterReadingReport'],
-  'screens/kpi.html': ['getDashboardStats'],
-  'screens/forecasts.html': ['getPredictionRecords'],
-  'screens/accounting-reports.html': ['getProfitReport', 'getBalanceSheet', 'getLedgerStats']
+  'screens/customer-reports.html': ['generateCRMReport', 'getCustomers', 'getPartyTypes', 'getCustomerDebts', 'getPartyCrmBundle', 'getPartyCrmBundleAsync', 'updatePartyCreditLimit'],
+  'screens/fuel-reports.html': ['getFuelReportPage', 'getFuelReport', 'getTanks', 'getPumps', 'getFuelTypes', 'getFuelTransactionDetails', 'getMeterReadingRecords', 'generateMeterReadingReport'],
+  'screens/kpi.html': ['getKPIDashboard', 'getKPIDetails'],
+  'screens/forecasts.html': ['getPredictionRecords', 'deletePredictionRecord'],
+  'screens/accounting-reports.html': ['getBalanceSheet', 'getChartTrialBalance', 'getLedgerEntries', 'getProfitReport', 'getJournalEntries', 'getKPIDashboard', 'getEodReport', 'getOverdueReport', 'saveBalanceSheet']
 };
 
 const kotlin = fs.readFileSync('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt', 'utf8');

@@ -24,8 +24,8 @@ need(db, /customers_trend_data/, 'trends: structured customer result missing');
 need(db, /put\("percentage_change", JSONObject\.NULL\)/, 'trends: zero-baseline null handling missing');
 need(main, /stats\.sales_trend_data/, 'main: structured sales trend is not consumed');
 need(main, /stats\.products_trend_data/, 'main: structured product trend is not consumed');
-need(kpi, /getDashboardStats\(JSON\.stringify\(trendParams \|\| \{\}\)\)/, 'kpi: report period is not passed to dashboard trends');
-need(kpi, /dashResult && dashResult\.data \? dashResult\.data : dashResult/, 'kpi: dashboard envelope is not decoded');
+need(kpi, /start_date: from/, 'kpi: report period is not passed to KPI dashboard');
+need(kpi, /const dashResult = await apiCall\('getKPIDashboard', params\)/, 'kpi: dashboard result is not captured');
 forbid(main, /Number\.isFinite\(Number\(trendData\.percentage_change\)\).*return \{ text: '[^']*0%/, 'main: static trend fallback detected');
 
 // Operational pagination and filters must share the same predicate construction for rows and COUNT.
