@@ -41,7 +41,7 @@
 
 /* Reject operational deep-links that carry only a database ID. */
 (function (global) {
-    const idKeys = ['movement_id', 'sale_id', 'fuel_sales_id', 'refill_id', 'entry_id', 'stocktake_id'];
+    const idKeys = ['movement_id', 'sale_id', 'fuel_sales_id', 'refill_id', 'entry_id', 'stocktake_id', 'payment_id', 'receipt_id', 'expense_id', 'employee_payment_id', 'bank_account_id', 'cash_movement_id', 'cash_deposit_id'];
     const q = new URLSearchParams((global.location && global.location.search) || '');
     const hasId = idKeys.some(function (key) { return Number(q.get(key) || 0) > 0; });
     if (!hasId) return;

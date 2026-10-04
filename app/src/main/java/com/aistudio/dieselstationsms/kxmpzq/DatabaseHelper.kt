@@ -45,7 +45,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 39
+        const val VERSION = 40
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -207,6 +207,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureManagementIdentitySchema(db)
             ensureFuelCommerceSchema(db)
             ensureFuelStocktakeSchema(db)
+            ensureFinanceIntegritySchema(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
         } finally {
@@ -249,6 +250,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     32 -> migrateV32ToV33(db)
                     33 -> ensureFuelCommerceSchema(db)
                     38 -> ensureFuelStocktakeSchema(db)
+                    39 -> ensureFinanceIntegritySchema(db)
                     34 -> migrateV34ToV35(db)
                     35 -> migrateV35ToV36(db)
                     36 -> migrateV36ToV37(db)
@@ -265,6 +267,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureLegacyAssetsSchema(db)
             ensureVehicleArchiveSchema(db)
             ensureVehicleTripLifecycleSchema(db)
+            ensureFinanceIntegritySchema(db)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -3807,12 +3810,52 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """)
     }
 
+    private fun ensureFinanceIntegritySchema(db: SQLiteDatabase) {
+        ensureColumn(db, "payments", "station_id", "INTEGER")
+        ensureColumn(db, "payments", "journal_entry_id", "INTEGER")
+        ensureColumn(db, "receipts", "station_id", "INTEGER")
+        ensureColumn(db, "receipts", "journal_entry_id", "INTEGER")
+        ensureColumn(db, "employee_payments", "journal_entry_id", "INTEGER")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_payments_station_created ON payments(station_id, created_at, id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_receipts_station_created ON receipts(station_id, created_at, id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_expenses_station_created ON expenses(station_id, created_at, id)")
+        db.rawQuery("SELECT id FROM payments WHERE station_id IS NULL AND is_deleted = 0", null).use { c ->
+            while (c.moveToNext()) {
+                val id = c.getLong(0)
+                val stations = linkedSetOf<Int>()
+                db.rawQuery("""SELECT station_id FROM sales_transactions WHERE id=(SELECT sale_id FROM payments WHERE id=?) AND station_id IS NOT NULL
+                    UNION SELECT station_id FROM cash_boxes WHERE id=(SELECT cash_box_id FROM payments WHERE id=?) AND station_id IS NOT NULL
+                    UNION SELECT station_id FROM bank_accounts WHERE id=(SELECT bank_account_id FROM payments WHERE id=?) AND station_id IS NOT NULL
+                    UNION SELECT station_id FROM parties WHERE id=COALESCE((SELECT customer_party_id FROM payments WHERE id=?),(SELECT supplier_party_id FROM payments WHERE id=?)) AND station_id IS NOT NULL
+                    UNION SELECT station_id FROM users WHERE id=(SELECT created_by FROM payments WHERE id=?) AND station_id IS NOT NULL""", arrayOf(id.toString(),id.toString(),id.toString(),id.toString(),id.toString(),id.toString())).use { sc ->
+                    while (sc.moveToNext()) stations += sc.getInt(0)
+                }
+                if (stations.size == 1) db.update("payments", ContentValues().apply { put("station_id", stations.first()) }, "id=?", arrayOf(id.toString()))
+            }
+        }
+        db.rawQuery("SELECT id FROM receipts WHERE station_id IS NULL AND is_deleted = 0", null).use { c ->
+            while (c.moveToNext()) {
+                val id = c.getLong(0)
+                val stations = linkedSetOf<Int>()
+                db.rawQuery("""SELECT station_id FROM cash_boxes WHERE id=(SELECT cash_box_id FROM receipts WHERE id=?) AND station_id IS NOT NULL
+                    UNION SELECT station_id FROM parties WHERE id=(SELECT customer_party_id FROM receipts WHERE id=?) AND station_id IS NOT NULL
+                    UNION SELECT station_id FROM payments WHERE id=(SELECT payment_id FROM receipts WHERE id=?) AND station_id IS NOT NULL
+                    UNION SELECT station_id FROM users WHERE id=(SELECT received_by FROM receipts WHERE id=?) AND station_id IS NOT NULL""", arrayOf(id.toString(),id.toString(),id.toString(),id.toString())).use { sc ->
+                    while (sc.moveToNext()) stations += sc.getInt(0)
+                }
+                if (stations.size == 1) db.update("receipts", ContentValues().apply { put("station_id", stations.first()) }, "id=?", arrayOf(id.toString()))
+            }
+        }
+    }
+
     private fun createFinanceTables(db: SQLiteDatabase) {
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS payments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 uuid TEXT UNIQUE NOT NULL,
                 payment_code VARCHAR(30) UNIQUE NOT NULL,
+                station_id INTEGER,
+                journal_entry_id INTEGER,
                 sale_id INTEGER,
                 customer_party_id INTEGER,
                 supplier_party_id INTEGER,
@@ -3876,6 +3919,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 uuid TEXT UNIQUE NOT NULL,
                 receipt_number VARCHAR(30) UNIQUE NOT NULL,
+                station_id INTEGER,
+                journal_entry_id INTEGER,
                 customer_party_id INTEGER,
                 payment_id INTEGER,
                 receipt_type VARCHAR(20) NOT NULL CHECK(receipt_type IN ('cash', 'cheque', 'bank', 'mixed')),
@@ -5975,6 +6020,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 employee_id INTEGER,
                 station_id INTEGER,
                 payroll_id INTEGER,
+                journal_entry_id INTEGER,
                 amount REAL DEFAULT 0,
                 type TEXT CHECK(type IN ('salary', 'advance', 'penalty', 'bonus', 'other', 'deduction', 'allowance')),
                 description TEXT,
@@ -13879,6 +13925,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return module010Page(rows,total,limit,offset)
     }
 
+    private fun findSalaryExpenseAccount(db: SQLiteDatabase): Long {
+        return db.rawQuery("SELECT id FROM accounts WHERE account_type='expense' AND is_active=1 AND is_deleted=0 AND (account_category LIKE '%salary%' OR account_category LIKE '%payroll%' OR account_name LIKE '%salary%' OR account_name_ar LIKE '%رواتب%' OR account_name_ar LIKE '%أجور%') ORDER BY id LIMIT 1",null).use{c->if(c.moveToFirst())c.getLong(0)else db.rawQuery("SELECT id FROM accounts WHERE account_type='expense' AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1",null).use{c->require(c.moveToFirst()){ "لا يوجد حساب مصروفات للرواتب" };c.getLong(0)}}
+    }
+
     fun addEmployeePaymentTyped(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
         require(stationScopeId > 0 && actorId > 0L) { "نطاق المحطة والمستخدم مطلوبان" }
         val employeeId=data.optLong("employee_id",0L); val amount=data.optDouble("amount",Double.NaN); val cashBoxId=data.optLong("cash_box_id",0L); val bankId=data.optLong("bank_account_id",0L); val payrollId=data.optLong("payroll_id",0L)
@@ -13893,12 +13943,28 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if(cashBoxId>0){val bal=db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND status='active' AND is_deleted=0",arrayOf(cashBoxId.toString(),stationScopeId.toString())).use{if(it.moveToFirst())it.getDouble(0)else throw IllegalArgumentException("الصندوق غير متاح")};require(bal>=amount){"رصيد الصندوق غير كافٍ"};db.update("cash_boxes",ContentValues().apply{put("current_balance",bal-amount)},"id=?",arrayOf(cashBoxId.toString()));db.insertOrThrow("cash_movements",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("cash_box_id",cashBoxId);put("movement_type","out");put("amount",amount);put("balance_before",bal);put("balance_after",bal-amount);put("description","دفع موظف");put("created_by",actorId);put("created_at",getCurrentDateTime())})}
             if(bankId>0){val bal=db.rawQuery("SELECT current_balance FROM bank_accounts WHERE id=? AND station_id=? AND status='active' AND is_deleted=0",arrayOf(bankId.toString(),stationScopeId.toString())).use{if(it.moveToFirst())it.getDouble(0)else throw IllegalArgumentException("الحساب البنكي غير متاح")};require(bal>=amount){"رصيد الحساب البنكي غير كافٍ"};db.update("bank_accounts",ContentValues().apply{put("current_balance",bal-amount)},"id=?",arrayOf(bankId.toString()))}
             val id=db.insertOrThrow("employee_payments",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("employee_id",employeeId);put("station_id",stationScopeId);if(payrollId>0)put("payroll_id",payrollId);put("amount",amount);put("type",data.optString("type","salary"));put("description",data.optString("description",""));put("payment_method",if(cashBoxId>0)"cash" else "bank_transfer");if(cashBoxId>0)put("cash_box_id",cashBoxId);if(bankId>0)put("bank_account_id",bankId);put("status","completed");put("reference",data.optString("reference",""));put("notes",data.optString("notes",""));put("operator",actorId.toString());put("created_at",getCurrentDateTime());put("date",getCurrentDateTime());put("is_deleted",0)})
+            val debitAccount=findSalaryExpenseAccount(db); val creditAccount=findSettlementAccount(db,cashBoxId,bankId)
+            val journalId=postFinanceJournal(db,stationScopeId,actorId,"payroll","employee_payment",id,data.optString("reference","EMP-PAY-$id"),"قيد دفعة موظف #$id",debitAccount,creditAccount,amount)
+            db.update("employee_payments",ContentValues().apply{put("journal_entry_id",journalId)},"id=?",arrayOf(id.toString()))
             if(payrollId>0){
                 val updated=db.compileStatement("UPDATE payroll_items SET paid_amount=paid_amount+?, payment_status=CASE WHEN paid_amount+? >= net_salary THEN 'paid' ELSE 'pending' END, paid_at=? WHERE payroll_id=? AND employee_id=? AND paid_amount+? <= net_salary+0.000001").apply{bindDouble(1,amount);bindDouble(2,amount);bindString(3,getCurrentDateTime());bindLong(4,payrollId);bindLong(5,employeeId);bindDouble(6,amount)}.executeUpdateDelete()
                 require(updated==1){"تعذر تحديث حالة راتب الموظف"}
             }
             db.setTransactionSuccessful();id
         }finally{db.endTransaction()}}finally{dbLock.unlock()}}
+
+    fun reverseEmployeePaymentRecord(id: Long, stationScopeId: Int, actorId: Long, reason: String): Int {
+        require(id>0&&stationScopeId>0&&actorId>0){"بيانات دفعة الموظف غير صالحة"};val db=writableDatabase;db.beginTransaction()
+        try{
+            val row=db.rawQuery("SELECT amount,cash_box_id,bank_account_id,journal_entry_id,status FROM employee_payments WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "دفعة الموظف غير موجودة" };JSONObject().apply{put("amount",c.getDouble(0));put("cash_box_id",c.getLong(1));put("bank_account_id",c.getLong(2));put("journal_entry_id",c.getLong(3));put("status",c.getString(4))}}
+            require(row.optString("status")=="completed"){"لا يمكن عكس دفعة موظف غير مكتملة"};val amount=row.optDouble("amount");val cash=row.optLong("cash_box_id");val bank=row.optLong("bank_account_id")
+            if(cash>0){val before=db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(cash.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "الصندوق غير موجود" };c.getDouble(0)};val after=before+amount;db.update("cash_boxes",ContentValues().apply{put("current_balance",after)},"id=? AND station_id=? AND is_deleted=0",arrayOf(cash.toString(),stationScopeId.toString()));db.insertOrThrow("cash_movements",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("cash_box_id",cash);put("movement_type","in");put("amount",amount);put("balance_before",before);put("balance_after",after);put("description","عكس دفعة موظف #$id: ${reason.trim()}");put("reference_type","employee_payment_reversal");put("reference_id",id);put("created_by",actorId);put("created_at",getCurrentDateTime())})}
+            if(bank>0){val before=db.rawQuery("SELECT current_balance FROM bank_accounts WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(bank.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "الحساب البنكي غير موجود" };c.getDouble(0)};val after=before+amount;db.update("bank_accounts",ContentValues().apply{put("current_balance",after)},"id=? AND station_id=? AND is_deleted=0",arrayOf(bank.toString(),stationScopeId.toString()));insertBankLedgerEntry(db,bank,"employee_payment_reversal",id,id.toString(),amount,0.0,"عكس دفعة موظف",actorId)}
+            val journal=row.optLong("journal_entry_id");if(journal>0)reverseJournalEntryWithinTransaction(db,journal,reason.ifBlank{"عكس دفعة الموظف"},actorId,stationScopeId)
+            val changed=db.update("employee_payments",ContentValues().apply{put("status","reversed");put("notes",reason.trim());put("updated_by",actorId);put("updated_at",getCurrentDateTime())},"id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString()))
+            db.setTransactionSuccessful();changed
+        }finally{db.endTransaction()}
+    }
 
     fun getEmployeePaymentsPage(data: JSONObject, stationScopeId: Int): JSONObject {
         require(stationScopeId>0){"معرف المحطة مطلوب"};val limit=data.optInt("limit",50).coerceIn(1,100);val offset=data.optInt("offset",0).coerceAtLeast(0);val where=mutableListOf("e.station_id=?","ep.is_deleted=0");val args=mutableListOf(stationScopeId.toString())
@@ -15661,7 +15727,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        COALESCE(SUM(jei.debit),0) AS debit_total,
                        COALESCE(SUM(jei.credit),0) AS credit_total,
                        COUNT(DISTINCT je.id) AS entry_count,
-                       COALESCE(SUM(CASE WHEN je.status='posted' AND ABS(je.total_debit-je.total_credit)>0.01 THEN 1 ELSE 0 END),0) AS unbalanced_entries
+                       COUNT(DISTINCT CASE WHEN je.status='posted' AND ABS(je.total_debit-je.total_credit)>0.01 THEN je.id END) AS unbalanced_entries
                 FROM journal_entries je
                 JOIN journal_entry_items jei ON jei.journal_entry_id=je.id
                 JOIN accounts a ON a.id=jei.account_id
@@ -15986,13 +16052,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    AND je.entry_date <= ?
                    AND je.status = 'posted'
                    AND je.is_deleted = 0
+                   AND je.station_id = ?
                 WHERE a.is_active = 1
                   AND a.is_deleted = 0
                   AND a.account_type IN ('asset', 'liability', 'equity', 'revenue', 'expense')
                 ORDER BY a.account_type, a.level, a.account_code, jei.id
             """.trimIndent()
 
-            db.rawQuery(accountSql, arrayOf(reportDate)).use { cursor ->
+            db.rawQuery(accountSql, arrayOf(reportDate, stationId.toString())).use { cursor ->
                 val idIndex = cursor.getColumnIndexOrThrow("id")
                 val codeIndex = cursor.getColumnIndexOrThrow("account_code")
                 val nameIndex = cursor.getColumnIndexOrThrow("account_name")
@@ -16023,17 +16090,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     }
 
                     if (!accumulator.openingInitialized) {
-                        val openingRate = resolveExchangeRate(
-                            db = db,
-                            sourceCurrencyId = defaultCurrencyId,
-                            targetCurrencyId = currencyId,
-                            effectiveDate = reportDate,
-                            transactionRate = null,
-                            defaultCurrencyId = defaultCurrencyId
-                        ) ?: throw SQLiteException(
-                            "لا يوجد سعر تحويل افتتاحي من $defaultCurrencyId إلى $currencyId بتاريخ $reportDate"
-                        )
-                        accumulator.openingBalance = cursor.getDouble(openingIndex) * openingRate
+                        // accounts.opening_balance is not station-scoped. Including it here would
+                        // contaminate a station-specific balance sheet with another station's opening state.
+                        // Station opening balances must therefore arrive as station-scoped posted journal entries.
+                        accumulator.openingBalance = 0.0
                         accumulator.openingInitialized = true
                     }
 
@@ -16125,6 +16185,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("net_income", netIncome)
                 put("difference", difference)
                 put("is_balanced", kotlin.math.abs(difference) <= 0.01)
+                put("global_opening_balance_excluded", true)
+                put("opening_balance_scope", "station_scoped_posted_journal_entries_only")
             }
         } finally {
             dbLock.unlock()
@@ -17627,23 +17689,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
             "payments" -> OperationalTableSpec(
                 table = "payments",
-                columns = listOf("payment_code", "sale_id", "customer_party_id", "supplier_party_id", "payment_type", "payment_method", "amount", "currency_id", "exchange_rate", "amount_in_default", "is_partial", "total_invoice_amount", "remaining_after", "cheque_number", "cheque_date", "cheque_bank", "cheque_branch", "cheque_status", "bank_account_id", "transfer_reference", "transfer_date", "card_last_four", "card_type", "auth_code", "terminal_id", "mobile_provider", "mobile_number", "transaction_id", "cash_box_id", "status", "is_refund", "original_payment_id", "refund_reason", "operator", "notes"),
+                columns = listOf("payment_code", "station_id", "journal_entry_id", "sale_id", "customer_party_id", "supplier_party_id", "payment_type", "payment_method", "amount", "currency_id", "exchange_rate", "amount_in_default", "is_partial", "total_invoice_amount", "remaining_after", "cheque_number", "cheque_date", "cheque_bank", "cheque_branch", "cheque_status", "bank_account_id", "transfer_reference", "transfer_date", "card_last_four", "card_type", "auth_code", "terminal_id", "mobile_provider", "mobile_number", "transaction_id", "cash_box_id", "status", "is_refund", "original_payment_id", "refund_reason", "operator", "notes"),
                 required = listOf("payment_type", "payment_method", "amount"),
                 searchColumns = listOf("payment_code", "payment_method", "status", "operator", "notes"),
                 softDeleted = true,
                 hasUpdatedAt = true,
                 hasStatus = true,
-                numericColumns = listOf("sale_id", "customer_party_id", "supplier_party_id", "amount", "currency_id", "bank_account_id", "cash_box_id")
+                numericColumns = listOf("station_id", "journal_entry_id", "sale_id", "customer_party_id", "supplier_party_id", "amount", "currency_id", "bank_account_id", "cash_box_id")
             )
             "receipts" -> OperationalTableSpec(
                 table = "receipts",
-                columns = listOf("receipt_number", "customer_party_id", "payment_id", "receipt_type", "received_from", "received_from_ar", "received_by", "accountant_id", "amount", "currency_id", "amount_in_words", "amount_in_words_ar", "purpose", "purpose_ar", "reference_document", "cash_amount", "cheque_amount", "bank_amount", "other_amount", "cash_box_id", "status", "void_reason", "voided_by", "voided_at", "print_count", "remarks", "extra_data"),
+                columns = listOf("receipt_number", "station_id", "journal_entry_id", "customer_party_id", "payment_id", "receipt_type", "received_from", "received_from_ar", "received_by", "accountant_id", "amount", "currency_id", "amount_in_words", "amount_in_words_ar", "purpose", "purpose_ar", "reference_document", "cash_amount", "cheque_amount", "bank_amount", "other_amount", "cash_box_id", "status", "void_reason", "voided_by", "voided_at", "print_count", "remarks", "extra_data"),
                 required = listOf("receipt_number", "receipt_type", "received_from", "received_by", "amount"),
                 searchColumns = listOf("receipt_number", "received_from", "purpose", "status"),
                 softDeleted = true,
                 hasUpdatedAt = true,
                 hasStatus = true,
-                numericColumns = listOf("customer_party_id", "payment_id", "received_by", "accountant_id", "amount", "cash_amount", "cheque_amount", "bank_amount", "other_amount", "cash_box_id")
+                numericColumns = listOf("station_id", "journal_entry_id", "customer_party_id", "payment_id", "received_by", "accountant_id", "amount", "cash_amount", "cheque_amount", "bank_amount", "other_amount", "cash_box_id")
             )
             "cash_boxes" -> OperationalTableSpec(
                 table = "cash_boxes",
@@ -20426,7 +20488,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(stationScopeId > 0) { "معرف المحطة مطلوب" }
         val limit = data.optInt("limit", 50).coerceIn(1, 100)
         val offset = data.optInt("offset", 0).coerceAtLeast(0)
-        val where = mutableListOf("s.station_id = ?", "p.is_deleted = 0")
+        val where = mutableListOf("p.station_id = ?", "p.is_deleted = 0")
         val args = mutableListOf(stationScopeId.toString())
         data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(p.payment_code LIKE ? OR COALESCE(cp.commercial_name,'') LIKE ? OR COALESCE(sp.commercial_name,'') LIKE ?)"; repeat(3) { args += like } }
         data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "p.status = ?"; args += it }
@@ -20446,7 +20508,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(stationScopeId > 0) { "معرف المحطة مطلوب" }
         val limit = data.optInt("limit", 50).coerceIn(1, 100)
         val offset = data.optInt("offset", 0).coerceAtLeast(0)
-        val where = mutableListOf("p.station_id = ?", "r.is_deleted = 0")
+        val where = mutableListOf("r.station_id = ?", "r.is_deleted = 0")
         val args = mutableListOf(stationScopeId.toString())
         data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(r.receipt_number LIKE ? OR r.received_from LIKE ? OR COALESCE(p.commercial_name,'') LIKE ?)"; repeat(3) { args += like } }
         data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "r.status = ?"; args += it }
@@ -20543,6 +20605,240 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
 
+    private fun findSettlementAccount(db: SQLiteDatabase, cashBoxId: Long, bankAccountId: Long): Long {
+        require((cashBoxId > 0L) xor (bankAccountId > 0L)) { "يجب تحديد وسيلة تسوية مالية واحدة فقط" }
+        val sql = if (cashBoxId > 0L) {
+            "SELECT id FROM accounts WHERE cash_box_id=? AND account_type='asset' AND is_cash_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1"
+        } else {
+            "SELECT id FROM accounts WHERE bank_account_id=? AND account_type='asset' AND is_bank_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1"
+        }
+        val arg = if (cashBoxId > 0L) cashBoxId else bankAccountId
+        return db.rawQuery(sql, arrayOf(arg.toString())).use { c ->
+            require(c.moveToFirst()) { "لا يوجد حساب محاسبي مرتبط بوسيلة التسوية المحددة" }
+            c.getLong(0)
+        }
+    }
+
+    private fun findPartyAccount(db: SQLiteDatabase, partyKind: String): Long {
+        val condition = when (partyKind) {
+            "receivable" -> "account_type='asset' AND (account_category LIKE '%receiv%' OR account_name LIKE '%customer%' OR account_name_ar LIKE '%عملاء%' OR account_name_ar LIKE '%ذمم%')"
+            "payable" -> "account_type='liability' AND (account_category LIKE '%pay%' OR account_name LIKE '%supplier%' OR account_name_ar LIKE '%مورد%' OR account_name_ar LIKE '%دائن%')"
+            else -> throw IllegalArgumentException("نوع حساب الطرف غير معروف")
+        }
+        return db.rawQuery("SELECT id FROM accounts WHERE $condition AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1", null).use { c ->
+            require(c.moveToFirst()) { "لا يوجد حساب ${if (partyKind == "receivable") "ذمم العملاء" else "ذمم الموردين"} فعال" }
+            c.getLong(0)
+        }
+    }
+
+    private fun findExpenseAccount(db: SQLiteDatabase, categoryId: Long): Long {
+        return db.rawQuery("SELECT COALESCE(default_account_id,0) FROM expense_categories WHERE id=? AND is_deleted=0", arrayOf(categoryId.toString())).use { c ->
+            require(c.moveToFirst()) { "فئة المصروف غير موجودة" }
+            c.getLong(0)
+        }.takeIf { it > 0L } ?: db.rawQuery("SELECT id FROM accounts WHERE account_type='expense' AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1", null).use { c ->
+            require(c.moveToFirst()) { "لا يوجد حساب مصروفات فعال" }
+            c.getLong(0)
+        }
+    }
+
+    private fun postFinanceJournal(
+        db: SQLiteDatabase,
+        stationId: Int,
+        actorId: Long,
+        entryType: String,
+        referenceType: String,
+        referenceId: Long,
+        referenceCode: String,
+        description: String,
+        debitAccountId: Long,
+        creditAccountId: Long,
+        amount: Double
+    ): Long {
+        require(amount > 0.0 && amount.isFinite()) { "قيمة القيد المالي غير صالحة" }
+        require(debitAccountId > 0 && creditAccountId > 0 && debitAccountId != creditAccountId) { "حسابات القيد المالي غير صالحة" }
+        val entryId = db.insertOrThrow("journal_entries", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("entry_number", journalEntryNumber(db, stationId))
+            put("entry_date", getDateOnlyFormat().format(Date()))
+            put("entry_type", entryType)
+            put("reference_type", referenceType)
+            put("reference_id", referenceId)
+            put("reference_code", referenceCode)
+            put("description", description)
+            put("description_ar", description)
+            put("total_debit", amount)
+            put("total_credit", amount)
+            put("is_balanced", 1)
+            put("status", "posted")
+            put("posted_at", getCurrentDateTime())
+            if (actorId > 0) put("posted_by", actorId)
+            put("station_id", stationId)
+            put("created_at", getCurrentDateTime())
+            put("updated_at", getCurrentDateTime())
+            if (actorId > 0) { put("created_by", actorId); put("updated_by", actorId) }
+            put("is_deleted", 0)
+        })
+        db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("journal_entry_id", entryId); put("line_number", 1)
+            put("account_id", debitAccountId); put("debit", amount); put("credit", 0.0); put("description", description)
+        })
+        db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("journal_entry_id", entryId); put("line_number", 2)
+            put("account_id", creditAccountId); put("debit", 0.0); put("credit", amount); put("description", description)
+        })
+        return entryId
+    }
+
+    private fun reverseJournalEntryWithinTransaction(db: SQLiteDatabase, id: Long, reason: String, userId: Long, stationScopeId: Int): Long {
+        val original = journalEntryRow(db, id, stationScopeId) ?: throw IllegalArgumentException("القيد المرتبط غير موجود")
+        require(original.optString("status") == "posted") { "القيد المرتبط ليس مرحلاً" }
+        require(original.optLong("reversed_entry_id", 0L) <= 0L) { "تم عكس القيد المرتبط مسبقاً" }
+        val items = journalItemsForEntry(db, id)
+        require(items.length() > 0) { "لا توجد بنود للقيد المرتبط" }
+        val reverseId = db.insertOrThrow("journal_entries", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("entry_number", journalEntryNumber(db, stationScopeId) + "-R"); put("entry_date", getDateOnlyFormat().format(Date()))
+            put("entry_type", original.optString("entry_type", "general")); put("reference_type", "reversal"); put("reference_id", id); put("reference_code", original.optString("entry_number"))
+            put("description", "عكس: " + original.optString("description")); put("description_ar", "عكس: " + original.optString("description_ar", original.optString("description")))
+            put("total_debit", original.optDouble("total_credit",0.0)); put("total_credit", original.optDouble("total_debit",0.0)); put("is_balanced",1); put("status","posted"); put("posted_at",getCurrentDateTime()); put("posted_by",userId); put("reversed_entry_id",id); put("reversal_reason",reason.trim()); put("fiscal_year",Calendar.getInstance().get(Calendar.YEAR)); put("fiscal_period",Calendar.getInstance().get(Calendar.MONTH)+1); put("station_id",stationScopeId); put("created_at",getCurrentDateTime()); put("updated_at",getCurrentDateTime()); put("created_by",userId); put("updated_by",userId); put("is_deleted",0)
+        })
+        for (i in 0 until items.length()) {
+            val item=items.getJSONObject(i); db.insertOrThrow("journal_entry_items",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("journal_entry_id",reverseId);put("line_number",i+1);put("account_id",item.optLong("account_id"));put("debit",item.optDouble("credit",0.0));put("credit",item.optDouble("debit",0.0));if(item.optLong("currency_id",0)>0)put("currency_id",item.optLong("currency_id"));put("exchange_rate",item.optDouble("exchange_rate",1.0));put("description","عكس: "+item.optString("description",""));put("description_ar","عكس: "+item.optString("description_ar",""))})
+        }
+        db.update("journal_entries",ContentValues().apply{put("status","reversed");put("reversed_entry_id",reverseId);put("reversal_reason",reason.trim());put("updated_at",getCurrentDateTime());put("updated_by",userId)},"id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString()))
+        writeJournalAudit(db,userId,"reverse",id,original,journalEntryRow(db,id,stationScopeId))
+        return reverseId
+    }
+
+    private fun insertBankLedgerEntry(db: SQLiteDatabase, bankAccountId: Long, transactionType: String, transactionId: Long, reference: String, debit: Double, credit: Double, description: String, actorId: Long) {
+        val balance = db.rawQuery("SELECT current_balance FROM bank_accounts WHERE id=?", arrayOf(bankAccountId.toString())).use { c -> require(c.moveToFirst()) { "الحساب البنكي غير موجود" }; c.getDouble(0) }
+        db.insertOrThrow("bank_ledger", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("bank_account_id", bankAccountId); put("transaction_date", getCurrentDateTime())
+            put("transaction_type", transactionType); put("transaction_id", transactionId); put("reference_number", reference)
+            put("debit", debit); put("credit", credit); put("balance", balance); put("description", description); put("created_by", actorId)
+        })
+    }
+
+    fun updatePaymentRecord(id: Long, data: JSONObject, stationScopeId: Int, actorId: Long): Int {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val row = db.rawQuery("SELECT status, amount, payment_method, payment_type, cash_box_id, bank_account_id FROM payments WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(), stationScopeId.toString())).use { c ->
+                if (!c.moveToFirst()) null else JSONObject().apply { put("status", c.getString(0)); put("amount", c.getDouble(1)); put("payment_method", c.getString(2)); put("payment_type", c.getString(3)); put("cash_box_id", c.getLong(4)); put("bank_account_id", c.getLong(5)) }
+            } ?: throw IllegalArgumentException("الدفعة غير موجودة ضمن المحطة الحالية")
+            require(row.optString("status") == "pending") { "لا يمكن تعديل دفعة مكتملة؛ استخدم مسار العكس المالي" }
+            val values = ContentValues().apply { put("notes", data.optString("notes", "")); put("remarks", data.optString("remarks", "")); put("operator", data.optString("operator", "")); put("updated_at", getCurrentDateTime()); put("updated_by", actorId) }
+            val rows = db.update("payments", values, "id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(), stationScopeId.toString()))
+            db.setTransactionSuccessful(); return rows
+        } finally { db.endTransaction() }
+    }
+
+    fun reversePaymentRecord(id: Long, reason: String, stationScopeId: Int, actorId: Long): Int {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val row = db.rawQuery("SELECT amount,status,cash_box_id,bank_account_id,journal_entry_id,payment_code FROM payments WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(), stationScopeId.toString())).use { c ->
+                if (!c.moveToFirst()) null else LongArray(0).let { JSONObject().apply { put("amount",c.getDouble(0)); put("status",c.getString(1)); put("cash_box_id",c.getLong(2)); put("bank_account_id",c.getLong(3)); put("journal_entry_id",c.getLong(4)); put("payment_code",c.getString(5)) } }
+            } ?: throw IllegalArgumentException("الدفعة غير موجودة ضمن المحطة الحالية")
+            require(row.optString("status") == "completed") { "لا يمكن عكس دفعة إلا إذا كانت مكتملة" }
+            val amount = row.optDouble("amount")
+            val cashBoxId = row.optLong("cash_box_id")
+            val bankAccountId = row.optLong("bank_account_id")
+            if (cashBoxId > 0) {
+                val before = db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(cashBoxId.toString(),stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "الصندوق غير موجود" }; c.getDouble(0) }
+                val after = before + amount
+                require(db.update("cash_boxes", ContentValues().apply { put("current_balance",after) }, "id=? AND station_id=? AND is_deleted=0", arrayOf(cashBoxId.toString(),stationScopeId.toString())) == 1) { "فشل استعادة رصيد الصندوق" }
+                db.insertOrThrow("cash_movements", null, ContentValues().apply { put("uuid",UUID.randomUUID().toString()); put("cash_box_id",cashBoxId); put("movement_type","in"); put("amount",amount); put("balance_before",before); put("balance_after",after); put("description", "عكس دفعة ${row.optString("payment_code")}: ${reason.trim()}"); put("reference_type","payment_reversal"); put("reference_id",id); put("created_by",actorId); put("created_at",getCurrentDateTime()) })
+            } else {
+                val before = db.rawQuery("SELECT current_balance FROM bank_accounts WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(bankAccountId.toString(),stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "الحساب البنكي غير موجود" }; c.getDouble(0) }
+                val after = before + amount
+                require(db.update("bank_accounts", ContentValues().apply { put("current_balance",after) }, "id=? AND station_id=? AND is_deleted=0", arrayOf(bankAccountId.toString(),stationScopeId.toString())) == 1) { "فشل استعادة رصيد الحساب البنكي" }
+                insertBankLedgerEntry(db,bankAccountId,"payment_reversal",id,row.optString("payment_code"),amount,0.0,"عكس دفعة",actorId)
+            }
+            val journalId = row.optLong("journal_entry_id")
+            if (journalId > 0) reverseJournalEntryWithinTransaction(db, journalId, reason.ifBlank { "عكس الدفعة" }, actorId, stationScopeId)
+            val rows = db.update("payments", ContentValues().apply { put("status","refunded"); put("is_refund",1); put("refund_reason",reason.trim()); put("updated_at",getCurrentDateTime()); put("updated_by",actorId) }, "id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(),stationScopeId.toString()))
+            db.setTransactionSuccessful(); return rows
+        } finally { db.endTransaction() }
+    }
+
+    fun updateReceiptRecord(id: Long, data: JSONObject, stationScopeId: Int, actorId: Long): Int {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val db = writableDatabase; db.beginTransaction()
+        try {
+            val status = db.rawQuery("SELECT status FROM receipts WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(),stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "الإيصال غير موجود ضمن المحطة الحالية" }; c.getString(0) }
+            require(status == "active") { "لا يمكن تعديل إيصال غير نشط" }
+            val rows = db.update("receipts", ContentValues().apply { put("purpose",data.optString("purpose", "")); put("purpose_ar",data.optString("purpose_ar", "")); put("received_from",data.optString("received_from", "")); put("remarks",data.optString("remarks", "")); put("updated_at",getCurrentDateTime()); put("updated_by",actorId) }, "id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(),stationScopeId.toString()))
+            db.setTransactionSuccessful(); return rows
+        } finally { db.endTransaction() }
+    }
+
+    fun voidReceiptRecord(id: Long, reason: String, stationScopeId: Int, actorId: Long): Int {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val db = writableDatabase; db.beginTransaction()
+        try {
+            val row = db.rawQuery("SELECT amount,cash_box_id,journal_entry_id,receipt_number,status FROM receipts WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(),stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "الإيصال غير موجود" }; JSONObject().apply { put("amount",c.getDouble(0)); put("cash_box_id",c.getLong(1)); put("journal_entry_id",c.getLong(2)); put("receipt_number",c.getString(3)); put("status",c.getString(4)) } }
+            require(row.optString("status") == "active") { "الإيصال غير نشط" }
+            val cashBoxId=row.optLong("cash_box_id"); val amount=row.optDouble("amount")
+            val before=db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(cashBoxId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "الصندوق غير موجود" };c.getDouble(0)}
+            val after=before-amount; require(after>=0){"لا يمكن أن يصبح رصيد الصندوق سالباً"}
+            require(db.update("cash_boxes",ContentValues().apply{put("current_balance",after)},"id=? AND station_id=? AND is_deleted=0",arrayOf(cashBoxId.toString(),stationScopeId.toString()))==1){"فشل عكس رصيد الصندوق"}
+            db.insertOrThrow("cash_movements",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("cash_box_id",cashBoxId);put("movement_type","out");put("amount",amount);put("balance_before",before);put("balance_after",after);put("description","إلغاء إيصال ${row.optString("receipt_number")}: ${reason.trim()}");put("reference_type","receipt_void");put("reference_id",id);put("created_by",actorId);put("created_at",getCurrentDateTime())})
+            val journalId=row.optLong("journal_entry_id"); if(journalId>0) reverseJournalEntryWithinTransaction(db,journalId,reason.ifBlank{"إلغاء الإيصال"},actorId,stationScopeId)
+            val rows=db.update("receipts",ContentValues().apply{put("status","void");put("void_reason",reason.trim());put("voided_by",actorId);put("voided_at",getCurrentDateTime());put("updated_at",getCurrentDateTime());put("updated_by",actorId)},"id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString()))
+            db.setTransactionSuccessful();return rows
+        } finally { db.endTransaction() }
+    }
+
+    fun updateExpenseRecord(id: Long, data: JSONObject, stationScopeId: Int, actorId: Long): Int {
+        require(stationScopeId > 0){"معرف المحطة مطلوب"}; val db=writableDatabase; db.beginTransaction()
+        try {
+            val status=db.rawQuery("SELECT status FROM expenses WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "المصروف غير موجود" };c.getString(0)}
+            require(status in setOf("draft","pending")){"لا يمكن تعديل مصروف مدفوع؛ استخدم مسار العكس المالي"}
+            val rows=db.update("expenses",ContentValues().apply{put("payee_name",data.optString("payee_name",""));put("description",data.optString("description",""));put("description_ar",data.optString("description_ar",""));put("invoice_number",data.optString("invoice_number",""));put("remarks",data.optString("remarks",""));put("updated_at",getCurrentDateTime());put("updated_by",actorId)},"id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString()))
+            db.setTransactionSuccessful();return rows
+        } finally { db.endTransaction() }
+    }
+
+    fun reverseExpenseRecord(id: Long, reason: String, stationScopeId: Int, actorId: Long): Int {
+        require(stationScopeId > 0){"معرف المحطة مطلوب"}; val db=writableDatabase; db.beginTransaction()
+        try {
+            val row=db.rawQuery("SELECT total_amount,cash_box_id,journal_entry_id,expense_code,status FROM expenses WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "المصروف غير موجود" };JSONObject().apply{put("amount",c.getDouble(0));put("cash_box_id",c.getLong(1));put("journal_entry_id",c.getLong(2));put("expense_code",c.getString(3));put("status",c.getString(4))}}
+            require(row.optString("status") in setOf("paid","approved")){"لا يمكن عكس المصروف قبل تسجيله كمصروف مدفوع أو معتمد"}
+            val amount=row.optDouble("amount");val cashBoxId=row.optLong("cash_box_id")
+            require(cashBoxId>0){"لا يمكن عكس مصروف قديم بلا صندوق مرتبط؛ يمنع النظام تعديل الأثر المالي دون مصدر مثبت"}
+            val before=db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(cashBoxId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "الصندوق غير موجود" };c.getDouble(0)}
+            val after=before+amount; require(db.update("cash_boxes",ContentValues().apply{put("current_balance",after)},"id=? AND station_id=? AND is_deleted=0",arrayOf(cashBoxId.toString(),stationScopeId.toString()))==1){"فشل استعادة رصيد الصندوق"}
+            db.insertOrThrow("cash_movements",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("cash_box_id",cashBoxId);put("movement_type","in");put("amount",amount);put("balance_before",before);put("balance_after",after);put("description","عكس مصروف ${row.optString("expense_code")}: ${reason.trim()}");put("reference_type","expense_reversal");put("reference_id",id);put("created_by",actorId);put("created_at",getCurrentDateTime())})
+            val journalId=row.optLong("journal_entry_id");if(journalId>0)reverseJournalEntryWithinTransaction(db,journalId,reason.ifBlank{"عكس المصروف"},actorId,stationScopeId)
+            val rows=db.update("expenses",ContentValues().apply{put("status","reversed");put("payment_status","reversed");put("updated_at",getCurrentDateTime());put("updated_by",actorId);put("remarks",(reason.trim()+" "+row.optString("expense_code")).trim())},"id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString()))
+            db.setTransactionSuccessful();return rows
+        } finally { db.endTransaction() }
+    }
+
+    fun getFinanceIntegritySnapshot(stationScopeId: Int, fromDate: String?, toDate: String?): JSONObject {
+        require(stationScopeId>0){"معرف المحطة مطلوب"}; val from=fromDate?.trim().orEmpty(); val to=toDate?.trim().orEmpty(); if(from.isNotBlank()&&to.isNotBlank())require(from<=to){"نطاق التاريخ غير صالح"}
+        dbLock.lock(); try {
+            val db=readableDatabase; val dateClause=StringBuilder(); if(from.isNotBlank()){dateClause.append(" AND date(created_at)>=date(?)")};if(to.isNotBlank()){dateClause.append(" AND date(created_at)<=date(?)")}
+            fun scopedArgs(status:String?=null):MutableList<String>{ val args=mutableListOf(stationScopeId.toString()); if(status!=null)args+=status; if(from.isNotBlank())args+=from; if(to.isNotBlank())args+=to; return args }
+            fun sum(table:String,col:String,status:String?=null):Double{val st=status?.let{" AND status = ?"}.orEmpty();return db.rawQuery("SELECT COALESCE(SUM($col),0) FROM $table WHERE station_id=? AND is_deleted=0$st$dateClause",scopedArgs(status).toTypedArray()).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0}}
+            fun count(table:String,status:String?=null):Long{val st=status?.let{" AND status = ?"}.orEmpty();return db.rawQuery("SELECT COUNT(*) FROM $table WHERE station_id=? AND is_deleted=0$st$dateClause",scopedArgs(status).toTypedArray()).use{c->if(c.moveToFirst())c.getLong(0)else 0L}}
+            val paymentCompleted=sum("payments","amount","completed"); val receiptActive=sum("receipts","amount","active"); val expensePaid=sum("expenses","total_amount","paid")
+            val missingPaymentJournals=db.rawQuery("SELECT COUNT(*) FROM payments WHERE station_id=? AND is_deleted=0 AND status='completed' AND COALESCE(journal_entry_id,0)=0",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
+            val missingReceiptJournals=db.rawQuery("SELECT COUNT(*) FROM receipts WHERE station_id=? AND is_deleted=0 AND status='active' AND COALESCE(journal_entry_id,0)=0",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
+            val missingExpenseJournals=db.rawQuery("SELECT COUNT(*) FROM expenses WHERE station_id=? AND is_deleted=0 AND status='paid' AND COALESCE(journal_entry_id,0)=0",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
+            val missingEmployeePaymentJournals=db.rawQuery("SELECT COUNT(*) FROM employee_payments WHERE station_id=? AND is_deleted=0 AND status='completed' AND COALESCE(journal_entry_id,0)=0",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
+            fun journalReferenceTotal(reference:String):Double{ val args=mutableListOf(stationScopeId.toString(),reference);if(from.isNotBlank())args+=from;if(to.isNotBlank())args+=to;return db.rawQuery("SELECT COALESCE(SUM(total_debit),0) FROM journal_entries WHERE station_id=? AND reference_type=? AND status='posted' AND is_deleted=0" + if(from.isNotBlank())" AND date(entry_date)>=date(?)" else "" + if(to.isNotBlank())" AND date(entry_date)<=date(?)" else "",args.toTypedArray()).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0} }
+            val paymentJournalTotal=journalReferenceTotal("payment"); val receiptJournalTotal=journalReferenceTotal("receipt"); val expenseJournalTotal=journalReferenceTotal("expense")
+            val journalDebit=db.rawQuery("SELECT COALESCE(SUM(total_debit),0) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0" + if(from.isNotBlank())" AND date(entry_date)>=date(?)" else "" + if(to.isNotBlank())" AND date(entry_date)<=date(?)" else "", (listOf(stationScopeId.toString()) + listOfNotNull(from.takeIf{it.isNotBlank()},to.takeIf{it.isNotBlank()})).toTypedArray()).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0}
+            val journalCredit=db.rawQuery("SELECT COALESCE(SUM(total_credit),0) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0" + if(from.isNotBlank())" AND date(entry_date)>=date(?)" else "" + if(to.isNotBlank())" AND date(entry_date)<=date(?)" else "", (listOf(stationScopeId.toString()) + listOfNotNull(from.takeIf{it.isNotBlank()},to.takeIf{it.isNotBlank()})).toTypedArray()).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0}
+            val unbalanced=db.rawQuery("SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0 AND ABS(total_debit-total_credit)>0.000001",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
+            val orphanPayments=db.rawQuery("SELECT COUNT(*) FROM payments WHERE station_id IS NULL AND is_deleted=0",null).use{c->if(c.moveToFirst())c.getLong(0)else 0L}; val orphanReceipts=db.rawQuery("SELECT COUNT(*) FROM receipts WHERE station_id IS NULL AND is_deleted=0",null).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
+            JSONObject().apply{put("station_id",stationScopeId);put("from_date",if(from.isBlank())JSONObject.NULL else from);put("to_date",if(to.isBlank())JSONObject.NULL else to);put("payments_completed",paymentCompleted);put("receipts_active",receiptActive);put("expenses_paid",expensePaid);put("payment_journal_total",paymentJournalTotal);put("receipt_journal_total",receiptJournalTotal);put("expense_journal_total",expenseJournalTotal);put("payment_reconciliation_delta",paymentCompleted-paymentJournalTotal);put("receipt_reconciliation_delta",receiptActive-receiptJournalTotal);put("expense_reconciliation_delta",expensePaid-expenseJournalTotal);put("missing_payment_journals",missingPaymentJournals);put("missing_receipt_journals",missingReceiptJournals);put("missing_expense_journals",missingExpenseJournals);put("missing_employee_payment_journals",missingEmployeePaymentJournals);put("journal_debit",journalDebit);put("journal_credit",journalCredit);put("journal_difference",journalDebit-journalCredit);put("unbalanced_posted_entries",unbalanced);put("orphan_payments",orphanPayments);put("orphan_receipts",orphanReceipts);put("is_reconciled",kotlin.math.abs(journalDebit-journalCredit)<=0.01 && kotlin.math.abs(paymentCompleted-paymentJournalTotal)<=0.01 && kotlin.math.abs(receiptActive-receiptJournalTotal)<=0.01 && kotlin.math.abs(expensePaid-expenseJournalTotal)<=0.01 && unbalanced==0L && missingPaymentJournals==0L && missingReceiptJournals==0L && missingExpenseJournals==0L && missingEmployeePaymentJournals==0L && orphanPayments==0L && orphanReceipts==0L);put("verified_at",getCurrentDateTime())}
+        } finally{dbLock.unlock()}
+    }
+
     fun addPayment(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
         require(stationScopeId > 0) { "معرف المحطة مطلوب للمدفوعات" }
         val amount = data.optDouble("amount", Double.NaN)
@@ -20551,7 +20847,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val cashBoxId = data.optLong("cash_box_id", 0L)
         val bankAccountId = data.optLong("bank_account_id", 0L)
         require(amount.isFinite() && amount > 0.0) { "قيمة الدفع غير صالحة" }
-        require(cashBoxId > 0 || bankAccountId > 0) { "يجب تحديد صندوق أو حساب بنكي" }
+        require((cashBoxId > 0) xor (bankAccountId > 0)) { "يجب تحديد وسيلة تسوية واحدة فقط: صندوق أو حساب بنكي" }
         dbLock.lock()
         return try {
             val db = writableDatabase
@@ -20572,6 +20868,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("balance_before", cb)
                         put("balance_after", cb - amount)
                         put("description", "سداد مدفوعات")
+                        put("reference_type", "payment")
+                        put("reference_id", 0L)
                         put("created_by", actorId)
                         put("created_at", getCurrentDateTime())
                     }
@@ -20587,6 +20885,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val cv = ContentValues().apply {
                     put("uuid", UUID.randomUUID().toString())
                     put("payment_code", paymentCode)
+                    put("station_id", stationScopeId)
                     put("amount", amount)
                     if (customerId > 0) put("customer_party_id", customerId)
                     if (supplierId > 0) put("supplier_party_id", supplierId)
@@ -20600,6 +20899,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("created_at", getCurrentDateTime())
                 }
                 val id = db.insertOrThrow("payments", null, cv)
+                if (cashBoxId > 0) {
+                    db.rawQuery("SELECT id FROM cash_movements WHERE cash_box_id=? AND reference_type='payment' AND reference_id=0 ORDER BY id DESC LIMIT 1", arrayOf(cashBoxId.toString())).use { c -> if(c.moveToFirst()) db.update("cash_movements", ContentValues().apply { put("reference_id", id) }, "id=?", arrayOf(c.getLong(0).toString())) }
+                }
+                if (bankAccountId > 0) insertBankLedgerEntry(db, bankAccountId, "payment", id, paymentCode, 0.0, amount, "سداد مدفوعات", actorId)
+                val debitAccount = if (customerId > 0L || data.optLong("sale_id",0L)>0L) findSettlementAccount(db,cashBoxId,bankAccountId) else findPartyAccount(db,"payable")
+                val creditAccount = if (customerId > 0L || data.optLong("sale_id",0L)>0L) findPartyAccount(db,"receivable") else findSettlementAccount(db,cashBoxId,bankAccountId)
+                val journalId = postFinanceJournal(db,stationScopeId,actorId,"general","payment",id,paymentCode,"قيد دفعة $paymentCode",debitAccount,creditAccount,amount)
+                db.update("payments",ContentValues().apply{put("journal_entry_id",journalId)},"id=?",arrayOf(id.toString()))
                 db.setTransactionSuccessful()
                 id
             } finally { db.endTransaction() }
@@ -20630,6 +20937,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("balance_before", cb)
                     put("balance_after", cb + amount)
                     put("description", "مقبوضات إيصال")
+                    put("reference_type", "receipt")
+                    put("reference_id", 0L)
                     put("created_by", actorId)
                     put("created_at", getCurrentDateTime())
                 }
@@ -20638,6 +20947,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val cv = ContentValues().apply {
                     put("uuid", UUID.randomUUID().toString())
                     put("receipt_number", receiptNum)
+                    put("station_id", stationScopeId)
                     put("amount", amount)
                     if (customerId > 0) put("customer_party_id", customerId)
                     put("receipt_type", data.optString("receipt_type", "cash"))
@@ -20650,6 +20960,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("created_at", getCurrentDateTime())
                 }
                 val id = db.insertOrThrow("receipts", null, cv)
+                db.rawQuery("SELECT id FROM cash_movements WHERE cash_box_id=? AND reference_type='receipt' AND reference_id=0 ORDER BY id DESC LIMIT 1", arrayOf(cashBoxId.toString())).use { c -> if(c.moveToFirst()) db.update("cash_movements", ContentValues().apply { put("reference_id", id) }, "id=?", arrayOf(c.getLong(0).toString())) }
+                val debitAccount = findSettlementAccount(db,cashBoxId,0L)
+                val creditAccount = if(customerId>0L) findPartyAccount(db,"receivable") else findFinancialAccount(db,"revenue")
+                val journalId = postFinanceJournal(db,stationScopeId,actorId,"general","receipt",id,receiptNum,"قيد إيصال $receiptNum",debitAccount,creditAccount,amount)
+                db.update("receipts",ContentValues().apply{put("journal_entry_id",journalId)},"id=?",arrayOf(id.toString()))
                 db.setTransactionSuccessful()
                 id
             } finally { db.endTransaction() }
@@ -20681,6 +20996,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("balance_before", cb)
                     put("balance_after", cb - amount)
                     put("description", "دفع مصروف")
+                    put("reference_type", "expense")
+                    put("reference_id", 0L)
                     put("created_by", actorId)
                     put("created_at", getCurrentDateTime())
                 }
@@ -20703,10 +21020,40 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("created_at", getCurrentDateTime())
                 }
                 val id = db.insertOrThrow("expenses", null, cv)
+                db.rawQuery("SELECT id FROM cash_movements WHERE cash_box_id=? AND reference_type='expense' AND reference_id=0 ORDER BY id DESC LIMIT 1", arrayOf(cashBoxId.toString())).use { c -> if(c.moveToFirst()) db.update("cash_movements", ContentValues().apply { put("reference_id", id) }, "id=?", arrayOf(c.getLong(0).toString())) }
+                val debitAccount=findExpenseAccount(db,categoryId); val creditAccount=findSettlementAccount(db,cashBoxId,0L)
+                val journalId=postFinanceJournal(db,stationScopeId,actorId,"general","expense",id,expCode,"قيد مصروف $expCode",debitAccount,creditAccount,amount)
+                db.update("expenses",ContentValues().apply{put("journal_entry_id",journalId)},"id=?",arrayOf(id.toString()))
                 db.setTransactionSuccessful()
                 id
             } finally { db.endTransaction() }
         } finally { dbLock.unlock() }
+    }
+
+    fun updateCashBoxRecord(id: Long, data: JSONObject, stationScopeId: Int, actorId: Long): Int {
+        require(id>0 && stationScopeId>0 && actorId>0){"بيانات الصندوق غير صالحة"}; val db=writableDatabase
+        val values=ContentValues().apply{put("box_name",data.optString("box_name",data.optString("box_name_ar","")));put("box_name_ar",data.optString("box_name_ar",data.optString("box_name","")));put("maximum_balance",data.optDouble("maximum_balance",0.0));put("responsible_user_id",data.optLong("responsible_user_id",0L));put("status",data.optString("status","active"));put("remarks",data.optString("remarks",""));put("updated_by",actorId);put("updated_at",getCurrentDateTime())}
+        return db.update("cash_boxes",values,"id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString()))
+    }
+
+    fun deleteCashBoxRecord(id: Long, stationScopeId: Int, actorId: Long): Int {
+        require(id>0 && stationScopeId>0 && actorId>0){"بيانات الصندوق غير صالحة"}; val db=writableDatabase
+        db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "الصندوق غير موجود" };require(kotlin.math.abs(c.getDouble(0))<=0.000001){"لا يمكن حذف صندوق له رصيد قائم"}}
+        db.rawQuery("SELECT 1 FROM cash_movements WHERE cash_box_id=? AND is_deleted=0 LIMIT 1",arrayOf(id.toString())).use{c->require(!c.moveToFirst()){ "لا يمكن حذف صندوق له حركات مالية؛ استخدم إيقاف الصندوق بدلاً من حذفه"}}
+        return db.update("cash_boxes",ContentValues().apply{put("is_deleted",1);put("status","closed");put("updated_by",actorId);put("updated_at",getCurrentDateTime())},"id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString()))
+    }
+
+    fun reverseCashMovementRecord(id: Long, stationScopeId: Int, actorId: Long, reason: String): Int {
+        require(id>0 && stationScopeId>0 && actorId>0){"بيانات الحركة النقدية غير صالحة"}; val db=writableDatabase; db.beginTransaction()
+        try {
+            val row=db.rawQuery("SELECT cm.cash_box_id,cm.movement_type,cm.amount,cm.balance_before,cm.balance_after,cb.current_balance FROM cash_movements cm JOIN cash_boxes cb ON cb.id=cm.cash_box_id WHERE cm.id=? AND cb.station_id=? AND cm.is_deleted=0",arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "الحركة النقدية غير موجودة ضمن المحطة" };JSONObject().apply{put("cash_box_id",c.getLong(0));put("movement_type",c.getString(1));put("amount",c.getDouble(2));put("balance_before",c.getDouble(3));put("balance_after",c.getDouble(4));put("current_balance",c.getDouble(5))}}
+            val delta=when(row.optString("movement_type")){"in"->-row.optDouble("amount");"out"->row.optDouble("amount");"adjustment"->row.optDouble("balance_before")-row.optDouble("balance_after");else->throw IllegalArgumentException("نوع الحركة النقدية غير مدعوم للعكس")}
+            val current=row.optDouble("current_balance");val after=current+delta;require(after>=0){"لا يمكن أن يصبح رصيد الصندوق سالباً عند العكس"}
+            db.update("cash_boxes",ContentValues().apply{put("current_balance",after);put("updated_at",getCurrentDateTime());put("updated_by",actorId)},"id=? AND station_id=? AND is_deleted=0",arrayOf(row.optLong("cash_box_id").toString(),stationScopeId.toString()))
+            db.insertOrThrow("cash_movements",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("cash_box_id",row.optLong("cash_box_id"));put("movement_type",if(delta>=0)"in" else "out");put("amount",kotlin.math.abs(delta));put("balance_before",current);put("balance_after",after);put("description","عكس حركة نقدية #$id: ${reason.trim()}");put("reference_type","cash_movement_reversal");put("reference_id",id);put("created_by",actorId);put("created_at",getCurrentDateTime())})
+            db.update("cash_movements",ContentValues().apply{put("is_deleted",1);put("deleted_at",getCurrentDateTime())},"id=? AND is_deleted=0",arrayOf(id.toString()))
+            db.setTransactionSuccessful();return 1
+        } finally{db.endTransaction()}
     }
 
     fun addCashDeposit(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
@@ -24843,7 +25190,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getBankAccounts(): JSONArray {
+    fun getBankAccounts(stationScopeId: Int): JSONArray {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب للحسابات البنكية" }
         dbLock.lock()
         return try {
             val db = readableDatabase
@@ -24858,20 +25206,21 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    FROM bank_accounts a
                    LEFT JOIN banks b ON b.id = a.bank_id AND b.is_deleted = 0
                    LEFT JOIN currencies c ON c.id = a.currency_id AND c.is_deleted = 0
-                   WHERE a.is_deleted = 0
+                   WHERE a.is_deleted = 0 AND a.station_id = ?
                    ORDER BY COALESCE(a.account_name_ar, a.account_name) COLLATE NOCASE""",
-                null
+                arrayOf(stationScopeId.toString())
             ).use { cursorToJsonArray(it) }
         } finally {
             dbLock.unlock()
         }
     }
 
-    fun getBankLedger(startDate: String?, endDate: String?): JSONArray {
+    fun getBankLedger(startDate: String?, endDate: String?, stationScopeId: Int): JSONArray {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب لدفتر البنك" }
         dbLock.lock()
         return try {
-            val selection = StringBuilder("l.bank_account_id = a.id")
-            val args = mutableListOf<String>()
+            val selection = StringBuilder("l.bank_account_id = a.id AND a.station_id = ?")
+            val args = mutableListOf(stationScopeId.toString())
             if (!startDate.isNullOrBlank()) {
                 selection.append(" AND date(l.transaction_date) >= date(?)")
                 args.add(startDate)
@@ -26408,7 +26757,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 SELECT ji.id, ji.journal_entry_id, ji.line_number, ji.account_id, ji.debit, ji.credit, ji.description, ji.description_ar, ji.currency_id, ji.exchange_rate,
                        je.entry_date, je.entry_number, je.description AS entry_description, je.reference_code,
                        a.account_code, COALESCE(a.account_name_ar, a.account_name, '') AS account_name,
-                       a.account_type, COALESCE(a.current_balance, 0) AS opening_balance, c.currency_code
+                       a.account_type, COALESCE(a.opening_balance, 0) AS opening_balance, c.currency_code
                 FROM journal_entry_items ji
                 INNER JOIN journal_entries je ON je.id = ji.journal_entry_id
                 LEFT JOIN accounts a ON a.id = ji.account_id
@@ -26417,11 +26766,28 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 ORDER BY date(je.entry_date), je.id, ji.line_number
                 """.trimIndent(), args.toTypedArray()
             ).use { cursorToJsonArray(it) }
+            val startDate = params.optString("start_date", "").trim()
+            val openingByAccount = mutableMapOf<Long, Double>()
+            val openingArgs = mutableListOf<String>()
+            val openingSql = if (startDate.isNotBlank()) {
+                openingArgs += stationScopeId.toString(); openingArgs += startDate
+                """SELECT a.id, COALESCE(a.opening_balance,0) + COALESCE(SUM(CASE WHEN je.id IS NOT NULL THEN ji.debit-ji.credit ELSE 0 END),0)
+                   FROM accounts a LEFT JOIN journal_entry_items ji ON ji.account_id=a.id
+                   LEFT JOIN journal_entries je ON je.id=ji.journal_entry_id AND je.station_id=? AND je.status='posted' AND je.is_deleted=0 AND date(je.entry_date)<date(?)
+                   WHERE a.is_deleted=0 GROUP BY a.id"""
+            } else {
+                "SELECT id, COALESCE(opening_balance,0) FROM accounts WHERE is_deleted=0"
+            }
+            db.rawQuery(openingSql, openingArgs.toTypedArray()).use { c -> while(c.moveToNext()) openingByAccount[c.getLong(0)] = c.getDouble(1) }
+            var currentAccount = -1L
             var balance = 0.0
             for (i in 0 until rows.length()) {
                 val row = rows.optJSONObject(i) ?: continue
+                val accountIdForRow = row.optLong("account_id",0L)
+                if (accountIdForRow != currentAccount) { currentAccount = accountIdForRow; balance = openingByAccount[accountIdForRow] ?: row.optDouble("opening_balance",0.0) }
                 balance += row.optDouble("debit", 0.0) - row.optDouble("credit", 0.0)
                 row.put("balance", balance)
+                row.put("opening_balance", openingByAccount[accountIdForRow] ?: row.optDouble("opening_balance",0.0))
                 row.put("description", row.optString("description", row.optString("entry_description", "")))
             }
             rows
@@ -26809,38 +27175,65 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // ========================================================================
     fun getChartTrialBalance(fromDate: String?, toDate: String?, stationScopeId: Int): JSONArray {
         require(stationScopeId > 0) { "نطاق المحطة غير صالح" }
+        val from = fromDate?.trim().orEmpty()
+        val to = toDate?.trim().orEmpty()
+        if (from.isNotEmpty() && to.isNotEmpty()) require(from <= to) { "نطاق التاريخ غير صالح" }
         dbLock.lock()
         return try {
-            val conditions = StringBuilder(" AND je.station_id = ?")
-            val args = mutableListOf(stationScopeId.toString())
-            if (!fromDate.isNullOrBlank()) {
-                conditions.append(" AND je.entry_date >= ?")
-                args.add(fromDate)
+            val db = readableDatabase
+            val periodArgs = mutableListOf<String>()
+            val priorExpr = if (from.isNotEmpty()) {
+                periodArgs += from
+                "COALESCE(SUM(CASE WHEN date(je.entry_date) < date(?) THEN COALESCE(jei.debit,0) - COALESCE(jei.credit,0) ELSE 0 END),0)"
+            } else {
+                "0"
             }
-            if (!toDate.isNullOrBlank()) {
-                conditions.append(" AND je.entry_date <= ?")
-                args.add(toDate)
+            val periodDebitExpr = if (from.isNotEmpty()) {
+                periodArgs += from
+                if (to.isNotEmpty()) {
+                    periodArgs += to
+                    "COALESCE(SUM(CASE WHEN date(je.entry_date) >= date(?) AND date(je.entry_date) <= date(?) THEN COALESCE(jei.debit,0) ELSE 0 END),0)"
+                } else {
+                    "COALESCE(SUM(CASE WHEN date(je.entry_date) >= date(?) THEN COALESCE(jei.debit,0) ELSE 0 END),0)"
+                }
+            } else if (to.isNotEmpty()) {
+                periodArgs += to
+                "COALESCE(SUM(CASE WHEN date(je.entry_date) <= date(?) THEN COALESCE(jei.debit,0) ELSE 0 END),0)"
+            } else {
+                "COALESCE(SUM(COALESCE(jei.debit,0)),0)"
+            }
+            val periodCreditExpr = if (from.isNotEmpty()) {
+                periodArgs += from
+                if (to.isNotEmpty()) {
+                    periodArgs += to
+                    "COALESCE(SUM(CASE WHEN date(je.entry_date) >= date(?) AND date(je.entry_date) <= date(?) THEN COALESCE(jei.credit,0) ELSE 0 END),0)"
+                } else {
+                    "COALESCE(SUM(CASE WHEN date(je.entry_date) >= date(?) THEN COALESCE(jei.credit,0) ELSE 0 END),0)"
+                }
+            } else if (to.isNotEmpty()) {
+                periodArgs += to
+                "COALESCE(SUM(CASE WHEN date(je.entry_date) <= date(?) THEN COALESCE(jei.credit,0) ELSE 0 END),0)"
+            } else {
+                "COALESCE(SUM(COALESCE(jei.credit,0)),0)"
             }
             val sql = """
                 SELECT a.id, a.account_code, a.account_name, a.account_name_ar,
                        a.account_type, a.level, a.normal_balance,
-                       COALESCE(a.opening_balance, 0) AS opening_balance,
-                       COALESCE(SUM(jei.debit), 0) AS total_debit,
-                       COALESCE(SUM(jei.credit), 0) AS total_credit,
-                       COALESCE(a.current_balance, 0) AS current_balance,
+                       COALESCE(a.opening_balance,0) + $priorExpr AS opening_balance,
+                       $periodDebitExpr AS total_debit,
+                       $periodCreditExpr AS total_credit,
                        a.is_active
                 FROM accounts a
                 LEFT JOIN journal_entry_items jei ON jei.account_id = a.id
                 LEFT JOIN journal_entries je ON je.id = jei.journal_entry_id
-                    AND je.status = 'posted' AND je.is_deleted = 0 $conditions
-                WHERE a.is_deleted = 0
+                    AND je.status='posted' AND je.is_deleted=0 AND je.station_id=?
+                WHERE a.is_deleted=0
                 GROUP BY a.id
                 ORDER BY a.account_code COLLATE NOCASE, a.id
             """.trimIndent()
-            readableDatabase.rawQuery(sql, args.toTypedArray()).use { cursorToJsonArray(it) }
-        } finally {
-            dbLock.unlock()
-        }
+            val args = periodArgs.toMutableList().apply { add(stationScopeId.toString()) }
+            db.rawQuery(sql, args.toTypedArray()).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
     }
 
     // ========================================================================
@@ -28200,7 +28593,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun updateEmployeePayment(id: Long, data: JSONObject, stationScopeId: Int, actorId: Long): Int {
         require(id > 0 && stationScopeId > 0 && actorId > 0)
         dbLock.lock()
-        return try { writableDatabase.update("employee_payments", ContentValues().apply { put("amount", data.optDouble("amount", 0.0)); put("type", data.optString("type", "salary")); put("description", data.optString("description")); put("date", data.optString("date", getCurrentDate())); put("operator", data.optString("operator", actorId.toString())); put("status", data.optString("status", "pending")); put("notes", data.optString("notes")); put("period_from", data.optString("period_from")); put("period_to", data.optString("period_to")); put("updated_at", getCurrentDateTime()); put("updated_by", actorId) }, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString())) } finally { dbLock.unlock() }
+        return try {
+            val status=writableDatabase.rawQuery("SELECT status FROM employee_payments WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "دفعة الموظف غير موجودة" };c.getString(0)}
+            require(status != "completed"){ "لا يمكن تعديل دفعة موظف مكتملة؛ استخدم العكس المالي" }
+            writableDatabase.update("employee_payments", ContentValues().apply { put("type", data.optString("type", "salary")); put("description", data.optString("description")); put("date", data.optString("date", getCurrentDate())); put("operator", data.optString("operator", actorId.toString())); put("status", data.optString("status", "pending")); put("notes", data.optString("notes")); put("period_from", data.optString("period_from")); put("period_to", data.optString("period_to")); put("updated_at", getCurrentDateTime()); put("updated_by", actorId) }, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString()))
+        } finally { dbLock.unlock() }
     }
 
     fun softDeleteEmployeePayment(id: Long, stationScopeId: Int, actorId: Long): Int {
@@ -29523,6 +29920,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             "tank_refills" -> resolveTraceOrigin("SELECT id, refill_code, station_id, COALESCE(unloading_end,unloading_start,created_at,''), refill_code FROM tank_refills WHERE id=? AND station_id=? AND COALESCE(deleted_at,'')=''", c, "fuel-supplies.html", "fuel_refill")
             "journal_entries" -> resolveTraceOrigin("SELECT id, entry_number, station_id, COALESCE(entry_date,created_at,''), entry_number FROM journal_entries WHERE id=? AND station_id=? AND is_deleted=0", c, "journal-entries.html", "journal_entry")
             "journal_entry_items" -> resolveTraceOrigin("SELECT je.id, je.entry_number, je.station_id, COALESCE(je.entry_date,je.created_at,''), je.entry_number FROM journal_entry_items ji JOIN journal_entries je ON je.id=ji.journal_entry_id WHERE ji.id=? AND je.station_id=? AND je.is_deleted=0", c, "journal-entries.html", "journal_entry")
+            "payments" -> resolveTraceOrigin("SELECT id, payment_code, station_id, COALESCE(created_at,''), 'payment' FROM payments WHERE id=? AND station_id=? AND is_deleted=0", c, "payments.html", "payment")
+            "receipts" -> resolveTraceOrigin("SELECT id, receipt_number, station_id, COALESCE(created_at,''), 'receipt' FROM receipts WHERE id=? AND station_id=? AND is_deleted=0", c, "receipts.html", "receipt")
+            "expenses" -> resolveTraceOrigin("SELECT id, expense_code, station_id, COALESCE(created_at,''), 'expense' FROM expenses WHERE id=? AND station_id=? AND is_deleted=0", c, "expenses.html", "expense")
+            "employee_payments" -> resolveTraceOrigin("SELECT id, CAST(id AS TEXT), station_id, COALESCE(date,created_at,''), 'employee_payment' FROM employee_payments WHERE id=? AND station_id=? AND is_deleted=0", c, "employee-payments.html", "employee_payment")
+            "cash_movements" -> resolveTraceOrigin("SELECT cm.id, CAST(cm.id AS TEXT), cb.station_id, COALESCE(cm.created_at,''), 'cash_movement' FROM cash_movements cm JOIN cash_boxes cb ON cb.id=cm.cash_box_id WHERE cm.id=? AND cb.station_id=? AND cm.is_deleted=0", c, "cash-movements.html", "cash_movement")
+            "cash_deposits" -> resolveTraceOrigin("SELECT id, deposit_code, station_id, COALESCE(created_at,''), 'cash_deposit' FROM cash_deposits WHERE id=? AND station_id=? AND is_deleted=0", c, "cash-deposits.html", "cash_deposit")
+            "bank_accounts" -> resolveTraceOrigin("SELECT id, account_code, station_id, COALESCE(created_at,''), 'bank_account' FROM bank_accounts WHERE id=? AND station_id=? AND is_deleted=0", c, "banks-accounts.html", "bank_account")
             "stocktakes" -> resolveTraceOrigin("SELECT s.id, CAST(s.id AS TEXT), w.station_id, COALESCE(s.end_date,s.start_date,s.created_at,''), CAST(s.id AS TEXT) FROM stocktakes s JOIN warehouses w ON w.id=s.warehouse_id WHERE s.id=? AND w.station_id=? AND s.archived=0", c, "stocktake.html", "stocktake")
             "stocktake_details" -> resolveTraceOrigin("SELECT s.id, CAST(s.id AS TEXT), w.station_id, COALESCE(s.end_date,s.start_date,s.created_at,''), CAST(s.id AS TEXT) FROM stocktake_details d JOIN stocktakes s ON s.id=d.stocktake_id JOIN warehouses w ON w.id=s.warehouse_id WHERE d.id=? AND w.station_id=? AND d.archived=0 AND s.archived=0", c, "stocktake.html", "stocktake")
             else -> throw IllegalArgumentException("source_table غير مدعوم: ${c.sourceTable}")
