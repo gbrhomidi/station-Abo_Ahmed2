@@ -845,7 +845,7 @@
     }
   </style>
  </head>
- <body>
+ <script>(function(){const q=new URLSearchParams(location.search);const id=Number(q.get('movement_id')||0);if(!id)return;const required=['source_table','source_id','reference_code','station_id','document_type'];if(required.some(k=>!q.get(k))||!(q.get('date_scope')||'')){q.delete('movement_id');history.replaceState(null,'',location.pathname+(q.toString()?'?'+q.toString():''));window.__sourceTraceContractRejected=true;}})();</script><body>
   <!-- مؤشر التحميل -->
   <div class="loading-indicator" id="loadingIndicator">
    <div class="spinner">
@@ -2569,9 +2569,7 @@ function printMovement() {
         <div class="info-grid">${content}</div>
         <p style="text-align:center;margin-top:20px;color:#888;">تم الطباعة من نظام Station Enterprise V5</p>
         <script>window.onload=function(){window.print();}<\/script>
-        
-<script>document.addEventListener('DOMContentLoaded',function(){const id=Number(new URLSearchParams(location.search).get('movement_id')||0);if(id&&typeof viewMovement==='function')setTimeout(()=>viewMovement(id),200);});</script>
-</body></html>
+        </body></html>
     `);
     win.document.close();
 }
@@ -2863,7 +2861,5 @@ document.addEventListener('DOMContentLoaded', function() {
 });
   </script>
      <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
-
-<script>document.addEventListener('DOMContentLoaded',function(){const id=Number(new URLSearchParams(location.search).get('movement_id')||0);if(id&&typeof viewMovement==='function')setTimeout(()=>viewMovement(id),200);});</script>
 </body>
 </html>

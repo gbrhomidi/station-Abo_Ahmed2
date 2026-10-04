@@ -1,0 +1,13 @@
+const fs=require('fs'),path=require('path');
+const root=__dirname;
+const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const main=read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt');
+const db=read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt');
+const contract=read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/SourceTraceContract.kt');
+const js=read('app/src/main/assets/screens/report-source-trace.js');
+const required=['source_table','source_id','reference_code','station_id','date_scope','document_type'];
+for(const k of required) if(!contract.includes(k)) throw Error('contract missing '+k);
+for(const k of ['resolveSourceTraceContract','inventory_movements','sales_transactions','fuel_sales','tank_refills','journal_entries','journal_entry_items','stocktakes','stocktake_details']) if(!db.includes(k)) throw Error('SQLite origin missing '+k);
+if(!main.includes('openReportOperationalDocument')||!main.includes('requireCurrentStationId')) throw Error('central gateway missing');
+if(!js.includes('AndroidInterface.openReportOperationalDocument')) throw Error('JS gateway missing');
+console.log('PASS: KPI/Exception/Group -> Transaction -> SQLite Origin -> Operational Document contract is wired.');

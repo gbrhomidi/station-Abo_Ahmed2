@@ -1371,7 +1371,7 @@
 
     </style>
 </head>
-<body>
+<script>(function(){const q=new URLSearchParams(location.search);const id=Number(q.get('sale_id')||0);if(!id)return;const required=['source_table','source_id','reference_code','station_id','document_type'];if(required.some(k=>!q.get(k))||!(q.get('date_scope')||'')){q.delete('sale_id');history.replaceState(null,'',location.pathname+(q.toString()?'?'+q.toString():''));window.__sourceTraceContractRejected=true;}})();</script><body>
     <div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> Android Bridge غير متاح؛ لن تُحفظ أو تُعرض بيانات تجارية بديلة</div>
     <div class="loading-indicator" id="loadingIndicator"><div class="spinner"></div></div>
     <header class="top-bar">
@@ -1784,7 +1784,5 @@
     <div style="margin-top:15px"><button class="modal-btn modal-btn-cancel" onclick="closeModal(null,'fuelAdjustmentModal')">إلغاء</button><button id="fuelAdjustmentSave" class="modal-btn modal-btn-primary" onclick="saveFuelAdjustment()">تأكيد العملية</button></div>
   </div>
 </div>
-
-<script>document.addEventListener('DOMContentLoaded',function(){const id=Number(new URLSearchParams(location.search).get('sale_id')||0);if(id&&typeof openDetails==='function')setTimeout(()=>openDetails(id),500);});</script>
 </body>
 </html>

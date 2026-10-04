@@ -5279,21 +5279,40 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         // Audit & System Logs
         // ============================================================
 
+        /** Central gateway: no operational report document may be opened by a bare ID. */
         @JavascriptInterface
         fun openReportOperationalDocument(jsonData: String = "{}"): String {
-            val activity=getActivity() ?: return errorResponse("النشاط غير متاح")
-            val helper=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val request=JSONObject(jsonData.ifBlank { "{}" })
-                val station=requireCurrentStationId(helper, activity.currentUserId)
-                val verified=helper.resolveReportOperationalOrigin(request, station)
-                val params=JSONObject().apply {
-                    put("source_table",verified.getString("source_table"));put("source_id",verified.getLong("source_id"));put("reference_code",verified.optString("reference_code"));put("station_id",station)
-                    request.optString("from_date").takeIf{it.isNotBlank()}?.let{put("from_date",it)};request.optString("to_date").takeIf{it.isNotBlank()}?.let{put("to_date",it)}
-                    when(verified.getString("source_table")){"inventory_movements"->put("movement_id",verified.getLong("source_id"));"sales_transactions","fuel_sales"->put("sale_id",verified.getLong("source_id"));"tank_refills"->put("refill_id",verified.getLong("source_id"));"journal_entries","journal_entry_items"->put("entry_id",verified.getLong("source_id"));"stocktakes","stocktake_details"->put("stocktake_id",verified.getLong("source_id"))}
-                }
-                dataResponseObject(JSONObject().apply { put("success",true);put("verified",true);put("screen",verified.getString("screen"));put("params",params);put("source_table",verified.getString("source_table"));put("source_id",verified.getLong("source_id"));put("reference_code",verified.optString("reference_code")) }).toString()
-            } catch(e:Exception){ DebugLogger.logException("OpenReportOperationalDocument",e); errorResponse(e.message ?: "تعذر التحقق من المستند التشغيلي") }
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+                val request = JSONObject(jsonData.ifBlank { "{}" })
+                val station = requireCurrentStationId(db, activity.currentUserId)
+                val verified = db.resolveSourceTraceContract(request, station)
+                dataResponseObject(verified).apply {
+                    put("success", true)
+                    put("contract_version", SourceTraceContract.VERSION)
+                    put("screen", verified.getString("operational_screen"))
+                    put("params", JSONObject().apply {
+                        put("source_table", verified.getString("source_table"))
+                        put("source_id", verified.getLong("source_id"))
+                        put("reference_code", verified.getString("reference_code"))
+                        put("station_id", station)
+                        put("document_type", verified.getString("document_type"))
+                        put("date_scope", verified.getJSONObject("date_scope"))
+                        when (verified.getString("source_table")) {
+                            "inventory_movements" -> put("movement_id", verified.getLong("source_id"))
+                            "sales_transactions" -> put("sale_id", verified.getLong("source_id"))
+                            "fuel_sales" -> put("fuel_sales_id", verified.getLong("source_id"))
+                            "tank_refills" -> put("refill_id", verified.getLong("source_id"))
+                            "journal_entries", "journal_entry_items" -> put("entry_id", verified.getLong("source_id"))
+                            "stocktakes", "stocktake_details" -> put("stocktake_id", verified.getLong("source_id"))
+                        }
+                    })
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("SourceTraceContract", e)
+                errorResponse(e.message ?: "تعذر اعتماد المصدر التشغيلي")
+            }
         }
 
         @JavascriptInterface
