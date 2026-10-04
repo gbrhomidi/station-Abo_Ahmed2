@@ -6,7 +6,7 @@ ROOT = Path(__file__).parent / 'app/src/main/assets/screens'
 CASES = {
     'messages.html': ['messageList', 'statsDashboard', 'searchInput', 'getSmsMessagesPage', 'getSmsOperationalHealth', 'getSmsConversationTrace', 'getSmsWeeklyAnalytics'],
     'message-log.html': ['contentArea', 'statsContainer', 'tabsContainer', 'getSmsLogs'],
-    'debt-reminders.html': ['cardsContainer', 'paymentForm', 'reminderForm', 'getCustomerDebts', 'addNotification', 'makePayment'],
+    'debt-reminders.html': ['cardsContainer', 'paymentModal', 'reminderModal', 'getCustomerDebts', 'addNotification', 'makePayment'],
     'whitelist.html': ['cardsContainer', 'whitelistForm', 'getWhitelist', 'addWhitelist', 'updateWhitelist', 'removeWhitelist'],
     'SmsCoreDiagnostics.html': ['smsList', 'rawData', 'getDatabaseInfo', 'getTableCounts', 'getRecentActivity'],
     'notification-templates.html': ['cardsContainer', 'templateForm', 'getNotificationTemplates', 'updateNotificationTemplate', 'deleteNotificationTemplate'],
