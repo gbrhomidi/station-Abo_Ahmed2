@@ -13955,7 +13955,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun reverseEmployeePaymentRecord(id: Long, stationScopeId: Int, actorId: Long, reason: String): Int {
         require(id>0&&stationScopeId>0&&actorId>0){"بيانات دفعة الموظف غير صالحة"};val db=writableDatabase;db.beginTransaction()
-        try{
+        return try {
             val row=db.rawQuery("SELECT amount,cash_box_id,bank_account_id,journal_entry_id,status FROM employee_payments WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "دفعة الموظف غير موجودة" };JSONObject().apply{put("amount",c.getDouble(0));put("cash_box_id",c.getLong(1));put("bank_account_id",c.getLong(2));put("journal_entry_id",c.getLong(3));put("status",c.getString(4))}}
             require(row.optString("status")=="completed"){"لا يمكن عكس دفعة موظف غير مكتملة"};val amount=row.optDouble("amount");val cash=row.optLong("cash_box_id");val bank=row.optLong("bank_account_id")
             if(cash>0){val before=db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(cash.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "الصندوق غير موجود" };c.getDouble(0)};val after=before+amount;db.update("cash_boxes",ContentValues().apply{put("current_balance",after)},"id=? AND station_id=? AND is_deleted=0",arrayOf(cash.toString(),stationScopeId.toString()));db.insertOrThrow("cash_movements",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("cash_box_id",cash);put("movement_type","in");put("amount",amount);put("balance_before",before);put("balance_after",after);put("description","عكس دفعة موظف #$id: ${reason.trim()}");put("reference_type","employee_payment_reversal");put("reference_id",id);put("created_by",actorId);put("created_at",getCurrentDateTime())})}
@@ -20819,7 +20819,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getFinanceIntegritySnapshot(stationScopeId: Int, fromDate: String?, toDate: String?): JSONObject {
         require(stationScopeId>0){"معرف المحطة مطلوب"}; val from=fromDate?.trim().orEmpty(); val to=toDate?.trim().orEmpty(); if(from.isNotBlank()&&to.isNotBlank())require(from<=to){"نطاق التاريخ غير صالح"}
-        dbLock.lock(); try {
+        dbLock.lock(); return try {
             val db=readableDatabase; val dateClause=StringBuilder(); if(from.isNotBlank()){dateClause.append(" AND date(created_at)>=date(?)")};if(to.isNotBlank()){dateClause.append(" AND date(created_at)<=date(?)")}
             fun scopedArgs(status:String?=null):MutableList<String>{ val args=mutableListOf(stationScopeId.toString()); if(status!=null)args+=status; if(from.isNotBlank())args+=from; if(to.isNotBlank())args+=to; return args }
             fun sum(table:String,col:String,status:String?=null):Double{val st=status?.let{" AND status = ?"}.orEmpty();return db.rawQuery("SELECT COALESCE(SUM($col),0) FROM $table WHERE station_id=? AND is_deleted=0$st$dateClause",scopedArgs(status).toTypedArray()).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0}}
@@ -29947,7 +29947,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    private fun resolveTraceOrigin(sql: String, contract: SourceTraceContract.Contract, screen: String, type: String): Any {
+    private fun resolveTraceOrigin(sql: String, contract: SourceTraceContract.Contract, screen: String, type: String): TraceOrigin {
         readableDatabase.rawQuery(sql, arrayOf(contract.sourceId.toString(), contract.stationId.toString())).use { cursor ->
             require(cursor.moveToFirst()) { "المصدر الأصلي غير موجود أو خارج نطاق المحطة" }
             return TraceOrigin(cursor.getLong(0), cursor.getString(1).orEmpty(), cursor.getInt(2), cursor.getString(3).orEmpty(), screen, type)

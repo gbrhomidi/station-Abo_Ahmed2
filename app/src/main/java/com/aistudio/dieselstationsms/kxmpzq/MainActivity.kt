@@ -82,6 +82,8 @@ import java.io.ByteArrayOutputStream
  */
 class MainActivity : AppCompatActivity() {
 
+    private fun currentDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
     companion object {
         private const val TAG = "MainActivity"
         private const val PERMISSION_REQUEST_CODE = 1001
@@ -2033,7 +2035,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         )
 
         val stats = db.getDashboardStats(stationId, params)
-        val evidenceFrom = params.optString("from_date", "").trim().ifBlank { getCurrentDate() }
+        val evidenceFrom = params.optString("from_date", "").trim().ifBlank { currentDate() }
         val evidenceTo = params.optString("to_date", "").trim().ifBlank { evidenceFrom }
         val evidence = db.getReportEvidence(JSONObject().apply {
             put("report_type", "dashboard")
@@ -5861,8 +5863,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val report = db.getEodReport(stationId)
                 report.put("evidence", db.getReportEvidence(JSONObject().apply {
                     put("report_type", "eod")
-                    put("from_date", getCurrentDate())
-                    put("to_date", getCurrentDate())
+                    put("from_date", currentDate())
+                    put("to_date", currentDate())
                 }, stationId))
                 dataResponse(report)
             } catch (e: Exception) {
@@ -5893,7 +5895,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
-                val from = fromDate?.trim().orEmpty().ifBlank { getCurrentDate() }
+                val from = fromDate?.trim().orEmpty().ifBlank { currentDate() }
                 val to = toDate?.trim().orEmpty().ifBlank { from }
                 dataResponse(db.getProfitReport(from, to, stationId))
             } catch (e: Exception) {
