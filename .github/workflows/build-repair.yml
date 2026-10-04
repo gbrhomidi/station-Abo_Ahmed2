@@ -29,10 +29,9 @@ jobs:
           if employee_start < 0:
               raise SystemExit('Expected reverseEmployeePaymentRecord anchor not found')
           employee_end = text.find('\n    fun ', employee_start + len(employee_anchor))
-          if employee_end < 0:
-              employee_end = len(text)
+          employee_end = len(text) if employee_end < 0 else employee_end
           employee_block = text[employee_start:employee_end]
-          employee_block_new, employee_count = re.subn(r'db\.beginTransaction\(\)\s*try\s*\{\s*val row=', 'db.beginTransaction()\n        return try{\n            val row=', employee_block, count=1)
+          employee_block_new, employee_count = re.subn(r'(db\.beginTransaction\(\)[\s\S]{0,200}?)\btry\s*\{', r'\1return try {', employee_block, count=1)
           if employee_count != 1:
               raise SystemExit('Expected reverseEmployeePaymentRecord transaction/return anchor not found')
           text = text[:employee_start] + employee_block_new + text[employee_end:]
@@ -42,11 +41,11 @@ jobs:
           if finance_start < 0:
               raise SystemExit('Expected getFinanceIntegritySnapshot anchor not found')
           finance_end = text.find('\n    fun ', finance_start + len(finance_anchor))
-          if finance_end < 0:
-              finance_end = len(text)
+          finance_end = len(text) if finance_end < 0 else finance_end
           finance_block = text[finance_start:finance_end]
-          finance_block_new, finance_count = re.subn(r'dbLock\.lock\(\)\s*try\s*\{', 'dbLock.lock()\n        return try {', finance_block, count=1)
+          finance_block_new, finance_count = re.subn(r'(dbLock\.lock\(\)[\s\S]{0,300}?)\btry\s*\{', r'\1return try {', finance_block, count=1)
           if finance_count != 1:
+              print(finance_block[:1200])
               raise SystemExit('Expected getFinanceIntegritySnapshot lock/return anchor not found')
           text = text[:finance_start] + finance_block_new + text[finance_end:]
 
@@ -68,10 +67,6 @@ jobs:
           main.write_text(text, encoding='utf-8')
           PY
           git diff --check
-          grep -q 'return try{' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
-          grep -q 'return try {' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
-          grep -q 'resolveTraceOrigin(sql: String, contract: SourceTraceContract.Contract, screen: String, type: String): TraceOrigin' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
-          grep -q 'private fun currentDate(): String' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
       - name: Commit source repairs and remove temporary workflow
         shell: bash
         run: |
