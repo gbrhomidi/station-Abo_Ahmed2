@@ -13,11 +13,8 @@
   <style>
     /* ================================================================
        نظام الألوان الموحّد — بنفسجي / ذهبي
-       مستوحى من customer-reports.html
-       وضع فاتح افتراضي + وضع مظلم مخفف
        ================================================================ */
     :root {
-      /* ═══ الوضع الفاتح (افتراضي) ═══ */
       --bg-primary: #f5f3ff;
       --bg-secondary: #ede9fe;
       --bg-card: rgba(255, 255, 255, 0.9);
@@ -38,7 +35,6 @@
       --violet-dark: #7c4dff;
       --violet-glow: 0 0 20px rgba(168, 130, 255, 0.15);
 
-      /* aliases لتفادي كسر الأنماط المضمّنة التي تشير إلى teal */
       --teal-primary: #a882ff;
       --teal-dark: #7c4dff;
       --teal-glow: 0 0 20px rgba(168, 130, 255, 0.15);
@@ -65,7 +61,6 @@
       color-scheme: light;
     }
 
-    /* ═══ الوضع المظلم المخفّف ═══ */
     [data-theme="dark"] {
       --bg-primary: #0b0719;
       --bg-secondary: #14102b;
@@ -113,12 +108,9 @@
     /* ================================================================
        الأنماط الأساسية
        ================================================================ */
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body { min-height: 100vh; }
 
     body {
       font-family: 'Cairo', 'Inter', sans-serif;
@@ -126,10 +118,8 @@
       color: var(--text-primary);
       direction: rtl;
       overflow-x: hidden;
-      min-height: 100vh;
       padding: 0;
       padding-bottom: 80px;
-      margin: 0;
       background-image:
         radial-gradient(ellipse at 10% 20%, rgba(168, 130, 255, 0.06) 0%, transparent 50%),
         radial-gradient(ellipse at 90% 80%, rgba(245, 200, 66, 0.04) 0%, transparent 50%);
@@ -137,24 +127,14 @@
       transition: background 0.35s ease, color 0.35s ease;
     }
 
-    [data-theme="dark"] body {
-      background-image:
-        radial-gradient(ellipse at 10% 20%, rgba(168, 130, 255, 0.06) 0%, transparent 50%),
-        radial-gradient(ellipse at 90% 80%, rgba(245, 200, 66, 0.04) 0%, transparent 50%);
-    }
-
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--violet-primary); border-radius: 10px; }
 
-    /* ================================================================
-       Pull-to-Refresh
-       ================================================================ */
     .pull-indicator {
       position: fixed;
       top: -60px;
-      left: 0;
-      right: 0;
+      left: 0; right: 0;
       height: 60px;
       display: flex;
       align-items: center;
@@ -167,48 +147,34 @@
       border-bottom: 1px solid var(--border-color);
       pointer-events: none;
       backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
     }
     .pull-indicator.active { top: 0; }
-    .pull-indicator i { margin-left: 8px; transition: transform 0.3s; }
+    .pull-indicator i { margin-left: 8px; }
     .pull-indicator.loading i { animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-    /* ================================================================
-       Loading
-       ================================================================ */
     .loading-indicator {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0, 0, 0, 0.75);
       z-index: 3000;
       display: none;
       justify-content: center;
       align-items: center;
       backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
     }
-    [data-theme="dark"] .loading-indicator { background: rgba(0, 0, 0, 0.85); }
+    .loading-indicator.show { display: flex; }
     .spinner {
-      width: 56px;
-      height: 56px;
+      width: 56px; height: 56px;
       border: 5px solid rgba(168, 130, 255, 0.15);
       border-radius: 50%;
       border-top: 5px solid var(--violet-primary);
       animation: spin 0.9s linear infinite;
     }
 
-    /* ================================================================
-       Offline Banner
-       ================================================================ */
     .offline-banner {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       background: linear-gradient(90deg, var(--warning), #f97316);
       color: #000;
       text-align: center;
@@ -221,9 +187,6 @@
     }
     .offline-banner.show { transform: translateY(0); }
 
-    /* ================================================================
-       Source Banner
-       ================================================================ */
     .report-source-banner { display: none; }
 
     /* ================================================================
@@ -235,18 +198,14 @@
       z-index: 100;
       background: var(--header-bg);
       backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
       border-bottom: 1px solid var(--border-color);
       padding: 14px 22px 12px;
       display: flex;
       flex-direction: column;
       gap: 12px;
       box-shadow: 0 4px 30px rgba(0, 0, 0, 0.12);
-      transition: var(--transition);
     }
-    [data-theme="dark"] .top-bar {
-      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
-    }
+    [data-theme="dark"] .top-bar { box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4); }
     .header-top {
       display: flex;
       justify-content: space-between;
@@ -282,14 +241,9 @@
       margin-top: 2px;
       text-align: center;
     }
-    .header-actions {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
+    .header-actions { display: flex; gap: 10px; align-items: center; }
     .icon-btn {
-      width: 42px;
-      height: 42px;
+      width: 42px; height: 42px;
       border-radius: 14px;
       border: 1px solid var(--border-color);
       background: var(--bg-glass);
@@ -299,7 +253,7 @@
       justify-content: center;
       cursor: pointer;
       transition: var(--transition);
-      font-size: 1rem;
+      font-size: 1.1rem;
       position: relative;
     }
     .icon-btn:hover {
@@ -313,10 +267,8 @@
     .icon-btn.has-badge::after {
       content: '';
       position: absolute;
-      top: 6px;
-      right: 6px;
-      width: 8px;
-      height: 8px;
+      top: 6px; right: 6px;
+      width: 8px; height: 8px;
       background: var(--gold-primary);
       border-radius: 50%;
       box-shadow: 0 0 15px var(--gold-primary);
@@ -325,18 +277,6 @@
     @keyframes pulse-dot {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.5; transform: scale(1.4); }
-    }
-    .ai-badge {
-      background: linear-gradient(135deg, var(--violet-primary), var(--violet-dark));
-      color: #fff;
-      font-size: 0.55rem;
-      font-weight: 700;
-      padding: 2px 12px;
-      border-radius: 30px;
-      margin-right: 8px;
-      vertical-align: middle;
-      box-shadow: 0 0 20px rgba(168, 130, 255, 0.3);
-      -webkit-text-fill-color: white;
     }
 
     /* ================================================================
@@ -365,10 +305,7 @@
       border-color: var(--violet-primary);
       box-shadow: 0 0 25px var(--border-glow);
     }
-    .filter-group i {
-      color: var(--text-muted);
-      font-size: 0.85rem;
-    }
+    .filter-group i { color: var(--text-muted); font-size: 0.85rem; }
     .filter-group input,
     .filter-group select {
       background: transparent;
@@ -381,25 +318,11 @@
       width: 100%;
       text-align: center;
     }
-    .filter-group input[type="date"] {
-      direction: ltr;
-      font-family: 'Inter', 'Arial', sans-serif;
-      text-align: center;
-    }
-    .filter-group select option {
-      background: var(--bg-secondary);
-      color: var(--text-primary);
-    }
-    .filter-group input::placeholder {
-      color: var(--text-muted);
-      text-align: center;
-    }
-    .filter-actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-right: auto;
-    }
+    .filter-group input[type="date"] { direction: ltr; font-family: 'Inter', 'Arial', sans-serif; }
+    .filter-group select option { background: var(--bg-secondary); color: var(--text-primary); }
+    .filter-group input::placeholder { color: var(--text-muted); text-align: center; }
+
+    .filter-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-right: auto; }
     .btn-filter {
       padding: 9px 20px;
       border-radius: var(--radius-small);
@@ -435,11 +358,11 @@
     .btn-filter.primary i { color: #fff; }
 
     /* ================================================================
-       صف البحث (report-search-row)
+       صف البحث
        ================================================================ */
     .report-search-row {
       position: relative;
-      padding: 0 22px 14px;
+      padding: 14px 22px;
       display: flex;
       align-items: center;
     }
@@ -470,24 +393,60 @@
       border-color: var(--violet-primary);
       box-shadow: 0 0 0 3px var(--violet-glow);
     }
-    .report-search-row .form-input::placeholder {
-      color: var(--text-muted);
-      text-align: center;
-    }
     .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
     }
 
     /* ================================================================
-       بطاقات الإحصائيات — توسيط كامل
+       Quick Filter Presets
+       ================================================================ */
+    .quick-presets {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 0 22px 14px;
+      scrollbar-width: none;
+    }
+    .quick-presets::-webkit-scrollbar { display: none; }
+    .preset-chip {
+      padding: 7px 16px;
+      border-radius: 30px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-glass);
+      color: var(--text-secondary);
+      font-family: 'Cairo', 'Inter', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      touch-action: manipulation;
+    }
+    .preset-chip:active { transform: scale(0.95); }
+    .preset-chip:hover:not(.active) {
+      border-color: var(--violet-primary);
+      color: var(--violet-primary);
+      background: var(--bg-glass-light);
+    }
+    .preset-chip.active {
+      background: linear-gradient(135deg, var(--violet-primary), var(--violet-dark));
+      color: #fff;
+      border-color: var(--violet-primary);
+      box-shadow: 0 4px 20px rgba(168, 130, 255, 0.25);
+    }
+    .preset-chip.danger { border-color: rgba(239, 68, 68, 0.3); }
+    .preset-chip.danger.active { background: linear-gradient(135deg, var(--danger), #b91c1c); }
+    .preset-chip.warning { border-color: rgba(245, 158, 11, 0.3); }
+    .preset-chip.warning.active { background: linear-gradient(135deg, var(--warning), #b45309); }
+    .preset-chip.success { border-color: rgba(16, 185, 129, 0.3); }
+    .preset-chip.success.active { background: linear-gradient(135deg, var(--success), #047857); }
+
+    /* ================================================================
+       بطاقات الإحصائيات
        ================================================================ */
     .kpi-grid {
       display: grid;
@@ -498,7 +457,6 @@
     .kpi-card {
       background: var(--bg-card);
       backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       border: 1px solid var(--border-color);
       border-radius: var(--radius-card);
       padding: 18px 16px;
@@ -516,9 +474,7 @@
     .kpi-card::before {
       content: '';
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       height: 3px;
       background: linear-gradient(90deg, var(--violet-primary), var(--gold-primary));
       opacity: 0.7;
@@ -528,18 +484,17 @@
       border-color: var(--violet-primary);
       box-shadow: var(--shadow-glow), 0 20px 50px rgba(168, 130, 255, 0.15);
     }
+    .kpi-card:active { transform: scale(0.97); }
     .kpi-card .kpi-top {
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
       gap: 6px;
       margin-bottom: 8px;
       width: 100%;
     }
     .kpi-card .kpi-icon {
-      width: 48px;
-      height: 48px;
+      width: 48px; height: 48px;
       border-radius: 16px;
       display: flex;
       align-items: center;
@@ -552,6 +507,7 @@
     .kpi-card .kpi-icon.gold { color: var(--gold-primary); background: rgba(245, 200, 66, 0.12); }
     .kpi-card .kpi-icon.green { color: var(--success); background: rgba(16, 185, 129, 0.12); }
     .kpi-card .kpi-icon.red { color: var(--danger); background: rgba(239, 68, 68, 0.12); }
+    .kpi-card .kpi-icon.info { color: var(--info); background: rgba(59, 130, 246, 0.12); }
     .kpi-card .kpi-trend {
       font-size: 0.65rem;
       font-weight: 700;
@@ -564,6 +520,7 @@
     }
     .kpi-card .kpi-trend.up { background: rgba(16, 185, 129, 0.15); color: var(--success); }
     .kpi-card .kpi-trend.down { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+    .kpi-card .kpi-trend.neutral { background: var(--bg-glass-light); color: var(--text-muted); }
     .kpi-card .kpi-value {
       font-size: 1.8rem;
       font-weight: 900;
@@ -583,9 +540,7 @@
       font-weight: 700;
     }
 
-    @media (max-width: 992px) {
-      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-    }
+    @media (max-width: 992px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 480px) {
       .kpi-grid { grid-template-columns: repeat(2, 1fr); padding: 12px; gap: 10px; }
       .kpi-card { padding: 12px 10px; }
@@ -594,11 +549,67 @@
     }
 
     /* ================================================================
+       Health Score Banner
+       ================================================================ */
+    .health-banner {
+      margin: 0 22px 16px;
+      padding: 16px 20px;
+      border-radius: var(--radius-card);
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: var(--shadow-card);
+      position: relative;
+      overflow: hidden;
+    }
+    .health-banner::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 6px;
+      height: 100%;
+      background: var(--success);
+    }
+    .health-banner.warn::before { background: var(--warning); }
+    .health-banner.bad::before { background: var(--danger); }
+    .health-score-circle {
+      width: 68px; height: 68px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      font-weight: 900;
+      color: #fff;
+      background: linear-gradient(135deg, var(--success), #047857);
+      flex-shrink: 0;
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+    }
+    .health-banner.warn .health-score-circle { background: linear-gradient(135deg, var(--warning), #b45309); box-shadow: 0 6px 20px rgba(245, 158, 11, 0.3); }
+    .health-banner.bad .health-score-circle { background: linear-gradient(135deg, var(--danger), #b91c1c); box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3); }
+    .health-info { flex: 1; }
+    .health-info h4 {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .health-info p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+    @media (max-width: 480px) {
+      .health-banner { margin: 0 12px 12px; padding: 14px; }
+      .health-score-circle { width: 56px; height: 56px; font-size: 1.1rem; }
+    }
+
+    /* ================================================================
        التنبيهات
        ================================================================ */
-    .alerts-container {
-      padding: 0 22px 16px;
-    }
+    .alerts-container { padding: 0 22px 16px; }
     .alert-item {
       display: flex;
       align-items: center;
@@ -613,16 +624,12 @@
       transition: var(--transition);
       box-shadow: var(--shadow-card);
     }
-    .alert-item:hover {
-      transform: translateX(-6px);
-      border-color: var(--violet-primary);
-    }
+    .alert-item:hover { transform: translateX(-6px); border-color: var(--violet-primary); }
     .alert-item.danger { border-right: 4px solid var(--danger); }
     .alert-item.warning { border-right: 4px solid var(--warning); }
     .alert-item.info { border-right: 4px solid var(--violet-primary); }
     .alert-icon {
-      width: 36px;
-      height: 36px;
+      width: 36px; height: 36px;
       border-radius: 10px;
       display: flex;
       align-items: center;
@@ -634,8 +641,8 @@
     .alert-item.warning .alert-icon { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
     .alert-item.info .alert-icon { background: rgba(168, 130, 255, 0.15); color: var(--violet-primary); }
     .alert-content { flex: 1; }
-    .alert-title { font-size: 0.9rem; font-weight: 800; text-align: center; }
-    .alert-desc { font-size: 0.75rem; color: var(--text-muted); text-align: center; }
+    .alert-title { font-size: 0.9rem; font-weight: 800; }
+    .alert-desc { font-size: 0.75rem; color: var(--text-muted); }
     .alert-time { font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; }
     @keyframes slideIn {
       from { opacity: 0; transform: translateX(30px); }
@@ -654,7 +661,6 @@
     .chart-card {
       background: var(--bg-card);
       backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       border: 1px solid var(--border-color);
       border-radius: var(--radius-card);
       padding: 18px 16px 14px;
@@ -665,9 +671,7 @@
     .chart-card::before {
       content: '';
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       height: 3px;
       background: linear-gradient(90deg, var(--violet-primary), var(--gold-primary));
       opacity: 0.7;
@@ -688,10 +692,7 @@
       align-items: center;
       gap: 6px;
     }
-    .chart-card .chart-title i {
-      color: var(--violet-primary);
-      margin-left: 6px;
-    }
+    .chart-card .chart-title i { color: var(--violet-primary); margin-left: 6px; }
     .chart-card .chart-badge {
       font-size: 0.6rem;
       color: var(--text-muted);
@@ -701,14 +702,8 @@
       border: 1px solid var(--border-color);
       font-weight: 700;
     }
-    .chart-card .chart-container {
-      height: 210px;
-      position: relative;
-    }
-    .chart-card .chart-container canvas {
-      width: 100% !important;
-      height: 100% !important;
-    }
+    .chart-card .chart-container { height: 210px; position: relative; }
+    .chart-card .chart-container canvas { width: 100% !important; height: 100% !important; }
 
     @media (max-width: 768px) {
       .charts-grid { grid-template-columns: 1fr; padding: 0 16px 16px; gap: 14px; }
@@ -718,13 +713,10 @@
     /* ================================================================
        جدول المخزون
        ================================================================ */
-    .table-section {
-      padding: 0 22px 24px;
-    }
+    .table-section { padding: 0 22px 24px; }
     .table-wrapper {
       background: var(--bg-card);
       backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       border: 1px solid var(--border-color);
       border-radius: var(--radius-card);
       overflow: hidden;
@@ -734,9 +726,7 @@
     .table-wrapper::before {
       content: '';
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       height: 3px;
       background: linear-gradient(90deg, var(--violet-primary), var(--gold-primary));
       opacity: 0.7;
@@ -753,7 +743,7 @@
       border-collapse: separate;
       border-spacing: 0 6px;
       font-size: 0.82rem;
-      min-width: 900px;
+      min-width: 1050px;
     }
     .data-table th {
       padding: 12px 14px;
@@ -762,7 +752,6 @@
       color: var(--violet-primary);
       font-weight: 800;
       font-size: 0.72rem;
-      text-transform: uppercase;
       letter-spacing: 0.5px;
       border: 1px solid var(--border-color);
       position: sticky;
@@ -783,9 +772,6 @@
       font-weight: 600;
       vertical-align: middle;
     }
-    .data-table tr {
-      transition: var(--transition);
-    }
     .data-table tr:hover td {
       background: var(--bg-glass-light);
       color: var(--text-primary);
@@ -801,11 +787,7 @@
       display: inline-block;
       font-size: 0.75rem;
     }
-    .data-table .amount {
-      font-weight: 800;
-      font-family: 'Inter', 'Arial', sans-serif;
-      direction: ltr;
-    }
+    .data-table .amount { font-weight: 800; font-family: 'Inter', 'Arial', sans-serif; direction: ltr; }
     .data-table .amount.debit { color: var(--success); }
     .data-table .amount.credit { color: var(--danger); }
     .data-table .status-badge {
@@ -820,6 +802,32 @@
     .status-badge.low { background: rgba(245, 158, 11, 0.12); color: var(--warning); border-color: rgba(245, 158, 11, 0.3); }
     .status-badge.critical { background: rgba(239, 68, 68, 0.12); color: var(--danger); border-color: rgba(239, 68, 68, 0.3); }
     .status-badge.inactive { background: rgba(148, 163, 184, 0.12); color: var(--text-muted); border-color: rgba(148, 163, 184, 0.3); }
+
+    /* ABC class badges */
+    .abc-badge {
+      padding: 3px 10px;
+      border-radius: 8px;
+      font-size: 0.7rem;
+      font-weight: 800;
+      display: inline-block;
+      min-width: 30px;
+      text-align: center;
+    }
+    .abc-badge.A { background: linear-gradient(135deg, #10b981, #047857); color: #fff; }
+    .abc-badge.B { background: linear-gradient(135deg, #f59e0b, #b45309); color: #fff; }
+    .abc-badge.C { background: linear-gradient(135deg, #94a3b8, #475569); color: #fff; }
+
+    /* Turnover badge */
+    .turnover-badge {
+      font-family: 'Inter', 'Arial', sans-serif;
+      font-weight: 700;
+      font-size: 0.78rem;
+      direction: ltr;
+    }
+    .turnover-badge.fast { color: var(--success); }
+    .turnover-badge.medium { color: var(--warning); }
+    .turnover-badge.slow { color: var(--danger); }
+
     .data-table .btn-view {
       background: none;
       border: none;
@@ -891,8 +899,7 @@
       transform: translateY(-50%);
       background: linear-gradient(145deg, var(--violet-primary), var(--violet-dark));
       color: #fff;
-      width: 44px;
-      height: 44px;
+      width: 44px; height: 44px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -900,11 +907,17 @@
       cursor: pointer;
       z-index: 1001;
       box-shadow: -3px 0 25px rgba(168, 130, 255, 0.3);
-      transition: var(--transition);
+      transition: opacity 0.25s ease, transform 0.3s ease, width 0.3s ease;
       border: 1px solid rgba(255, 255, 255, 0.15);
+      touch-action: manipulation;
+      font-size: 1rem;
     }
     .sidebar-toggle:active { transform: translateY(-50%) scale(0.9); }
-    .sidebar-toggle.hidden { opacity: 0; pointer-events: none; }
+    .sidebar-toggle.hidden {
+      opacity: 0;
+      transform: translateY(-50%) translateX(80px);
+      pointer-events: none;
+    }
     .sidebar-toggle:hover { width: 48px; }
     .sidebar {
       position: fixed;
@@ -914,7 +927,6 @@
       width: 120px;
       background: var(--sidebar-bg);
       backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
       z-index: 999;
       transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
       padding: 14px 12px;
@@ -963,12 +975,9 @@
        ================================================================ */
     .bottom-nav {
       position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
+      bottom: 0; left: 0; right: 0;
       background: var(--nav-bg);
       backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
       border-top: 1px solid var(--border-color);
       display: flex;
       justify-content: space-around;
@@ -1003,10 +1012,7 @@
     .bottom-nav .nav-item i { font-size: 22px; transition: var(--transition); }
     .bottom-nav .nav-item span { font-weight: 700; margin-top: 2px; font-size: 0.72rem; }
     .bottom-nav .nav-item.active { color: var(--violet-primary); }
-    .bottom-nav .nav-item.active i {
-      transform: translateY(-3px);
-      text-shadow: 0 0 25px rgba(168, 130, 255, 0.3);
-    }
+    .bottom-nav .nav-item.active i { transform: translateY(-3px); text-shadow: 0 0 25px rgba(168, 130, 255, 0.3); }
     .bottom-nav .nav-item.active::after {
       content: '';
       position: absolute;
@@ -1020,17 +1026,13 @@
     }
 
     /* ================================================================
-       مودال تفاصيل المنتج
+       مودال التفاصيل
        ================================================================ */
     .details-overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0, 0, 0, 0.82);
       backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
       z-index: 850;
       display: none;
       opacity: 0;
@@ -1068,8 +1070,7 @@
       flex: 1;
     }
     .details-close {
-      width: 40px;
-      height: 40px;
+      width: 40px; height: 40px;
       border-radius: 12px;
       border: 1px solid var(--border-color);
       background: var(--bg-glass);
@@ -1086,8 +1087,7 @@
     .details-close:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
     .details-profile { text-align: center; margin-bottom: 28px; }
     .details-avatar {
-      width: 80px;
-      height: 80px;
+      width: 80px; height: 80px;
       border-radius: 24px;
       background: linear-gradient(135deg, var(--violet-primary), var(--gold-primary));
       display: flex;
@@ -1118,6 +1118,37 @@
     .details-status.low { background: rgba(245, 158, 11, 0.12); color: var(--warning); border-color: rgba(245, 158, 11, 0.3); }
     .details-status.critical { background: rgba(239, 68, 68, 0.12); color: var(--danger); border-color: rgba(239, 68, 68, 0.3); }
     .details-status.inactive { background: rgba(148, 163, 184, 0.12); color: var(--text-muted); border-color: rgba(148, 163, 184, 0.3); }
+
+    .details-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .detail-tile {
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--bg-glass);
+      border: 1px solid var(--border-color);
+      text-align: center;
+    }
+    .detail-tile span {
+      display: block;
+      color: var(--text-muted);
+      font-size: 0.68rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .detail-tile strong {
+      display: block;
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      font-weight: 800;
+      word-break: break-word;
+      font-family: 'Inter', 'Arial', sans-serif;
+      direction: ltr;
+    }
+
     .details-section {
       background: var(--bg-glass);
       border-radius: var(--radius-small);
@@ -1156,44 +1187,14 @@
       font-family: 'Inter', 'Arial', sans-serif;
     }
 
-    .details-items-table {
-      width: 100%;
-      border-collapse: separate;
-      border-spacing: 0 6px;
-      font-size: 0.8rem;
-    }
-    .details-items-table th {
-      padding: 10px 12px;
-      text-align: center;
-      background: var(--bg-glass-light);
-      color: var(--violet-primary);
-      font-weight: 800;
-      border: 1px solid var(--border-color);
-      font-size: 0.7rem;
-      border-radius: 10px 10px 0 0;
-    }
-    .details-items-table td {
-      padding: 10px 12px;
-      text-align: center;
-      border: 1px solid var(--border-color);
-      color: var(--text-secondary);
-      background: var(--bg-glass);
-      border-radius: 10px;
-      font-weight: 600;
-    }
-
     /* ================================================================
-       مودال AI Advisor
+       مودال AI Advisor + Reorder
        ================================================================ */
-    .ai-modal .modal-overlay {
+    .modal-overlay-ai {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0, 0, 0, 0.75);
       backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
       z-index: 800;
       display: none;
       align-items: flex-end;
@@ -1201,13 +1202,12 @@
       opacity: 0;
       transition: opacity 0.3s;
     }
-    [data-theme="dark"] .ai-modal .modal-overlay { background: rgba(0, 0, 0, 0.85); }
-    .ai-modal .modal-overlay.show { display: flex; opacity: 1; }
-    .ai-modal .modal {
+    .modal-overlay-ai.show { display: flex; opacity: 1; }
+    .modal-ai {
       background: var(--bg-secondary);
       border-radius: 28px 28px 0 0;
       width: 100%;
-      max-height: 82vh;
+      max-height: 85vh;
       overflow-y: auto;
       padding: 28px 24px;
       transform: translateY(100%);
@@ -1216,8 +1216,8 @@
       border-bottom: none;
       text-align: center;
     }
-    .ai-modal .modal-overlay.show .modal { transform: translateY(0); }
-    .ai-modal .modal-header {
+    .modal-overlay-ai.show .modal-ai { transform: translateY(0); }
+    .modal-ai .modal-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -1225,15 +1225,14 @@
       text-align: center;
       gap: 10px;
     }
-    .ai-modal .modal-title {
+    .modal-ai .modal-title {
       font-size: 1.15rem;
       font-weight: 900;
       color: var(--violet-primary);
       flex: 1;
     }
-    .ai-modal .modal-close {
-      width: 40px;
-      height: 40px;
+    .modal-ai .modal-close {
+      width: 40px; height: 40px;
       border-radius: 12px;
       border: 1px solid var(--border-color);
       background: var(--bg-glass);
@@ -1246,9 +1245,10 @@
       transition: var(--transition);
       font-size: 1rem;
     }
-    .ai-modal .modal-close:active { transform: scale(0.9); }
-    .ai-modal .modal-close:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
-    .ai-insight-card {
+    .modal-ai .modal-close:active { transform: scale(0.9); }
+    .modal-ai .modal-close:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+    .insight-card {
       background: var(--bg-glass);
       border-radius: var(--radius-small);
       padding: 16px 18px;
@@ -1258,17 +1258,64 @@
       text-align: center;
       box-shadow: var(--shadow-card);
     }
-    .ai-insight-card .insight-title {
+    .insight-card.danger { border-right-color: var(--danger); }
+    .insight-card.warning { border-right-color: var(--warning); }
+    .insight-card.success { border-right-color: var(--success); }
+    .insight-card .insight-title {
       font-weight: 800;
       font-size: 0.95rem;
       color: var(--text-primary);
-      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 6px;
     }
-    .ai-insight-card .insight-desc {
+    .insight-card .insight-desc {
       font-size: 0.8rem;
       color: var(--text-muted);
-      margin-top: 6px;
+      line-height: 1.7;
+    }
+
+    /* ================================================================
+       ABC Summary
+       ================================================================ */
+    .abc-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .abc-summary .abc-box {
+      padding: 14px 10px;
+      border-radius: 14px;
       text-align: center;
+      border: 1px solid var(--border-color);
+      background: var(--bg-glass);
+    }
+    .abc-summary .abc-box.A { border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08); }
+    .abc-summary .abc-box.B { border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.08); }
+    .abc-summary .abc-box.C { border-color: rgba(148, 163, 184, 0.4); background: rgba(148, 163, 184, 0.08); }
+    .abc-summary .abc-box .abc-letter {
+      font-size: 1.6rem;
+      font-weight: 900;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .abc-summary .abc-box.A .abc-letter { color: var(--success); }
+    .abc-summary .abc-box.B .abc-letter { color: var(--warning); }
+    .abc-summary .abc-box.C .abc-letter { color: var(--text-muted); }
+    .abc-summary .abc-box .abc-meta {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+    .abc-summary .abc-box .abc-value {
+      font-size: 0.85rem;
+      color: var(--text-primary);
+      font-weight: 800;
+      margin-top: 3px;
+      font-family: 'Inter', 'Arial', sans-serif;
     }
 
     /* ================================================================
@@ -1294,9 +1341,7 @@
       min-width: 220px;
       font-size: 0.85rem;
       font-weight: 700;
-      font-family: 'Cairo', 'Inter', sans-serif;
       color: var(--text-primary);
-      text-align: center;
     }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
     .toast.success { border-color: var(--success); }
@@ -1304,8 +1349,7 @@
     .toast.warning { border-color: var(--warning); }
     .toast.info { border-color: var(--violet-primary); }
     .toast-icon {
-      width: 30px;
-      height: 30px;
+      width: 30px; height: 30px;
       border-radius: 10px;
       display: flex;
       align-items: center;
@@ -1319,18 +1363,30 @@
     .toast.info .toast-icon { background: rgba(168, 130, 255, 0.15); color: var(--violet-primary); }
 
     /* ================================================================
-       FAB (preserve inline styles but add hover)
+       FAB
        ================================================================ */
     .fab {
-      transition: var(--transition) !important;
+      position: fixed;
+      bottom: 90px;
+      left: 24px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--violet-primary), var(--violet-dark));
+      border: none;
+      color: #fff;
+      font-size: 1.5rem;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(168, 130, 255, 0.3);
+      transition: var(--transition);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: manipulation;
     }
-    .fab:hover {
-      transform: translateY(-4px) scale(1.05) !important;
-      box-shadow: 0 12px 45px rgba(168, 130, 255, 0.45) !important;
-    }
-    .fab:active {
-      transform: scale(0.9) !important;
-    }
+    .fab:hover { transform: translateY(-4px) scale(1.05); box-shadow: 0 12px 45px rgba(168, 130, 255, 0.45); }
+    .fab:active { transform: scale(0.9); }
 
     /* ================================================================
        تحسينات الهواتف
@@ -1345,7 +1401,7 @@
       .kpi-grid { padding: 12px 16px; gap: 12px; }
       .charts-grid { padding: 0 16px 16px; gap: 14px; }
       .table-section { padding: 0 16px 16px; }
-      .data-table { font-size: 0.7rem; min-width: 800px; }
+      .data-table { font-size: 0.7rem; min-width: 950px; }
       .data-table th, .data-table td { padding: 8px 10px; }
       .table-footer { font-size: 0.75rem; flex-direction: column; align-items: center; padding: 12px 16px; }
       .sidebar { width: 100px; padding: 10px 8px; }
@@ -1354,8 +1410,10 @@
       .bottom-nav .nav-item { font-size: 0.65rem; }
       .bottom-nav .nav-item i { font-size: 18px; }
       .alerts-container { padding: 0 16px 16px; }
-      .report-search-row { padding: 0 16px 12px; }
+      .report-search-row { padding: 12px 16px; }
       .report-search-row > i { right: 32px; }
+      .quick-presets { padding: 0 16px 12px; }
+      .health-banner { margin: 0 16px 12px; }
       .details-content { padding: 16px; }
       .details-avatar { width: 64px; height: 64px; font-size: 1.5rem; }
     }
@@ -1368,23 +1426,22 @@
       .bottom-nav .nav-item { padding: 4px 4px; min-width: 60px; }
       .bottom-nav .nav-item i { font-size: 16px; }
       .bottom-nav .nav-item span { font-size: 0.62rem; }
-      .data-table { min-width: 640px; font-size: 0.65rem; }
+      .data-table { min-width: 800px; font-size: 0.65rem; }
       .data-table th, .data-table td { padding: 6px 8px; }
       .sidebar { width: 90px; }
       .sidebar-btn { min-height: 62px; font-size: 0.7rem; }
       .sidebar-btn i { font-size: 1.25rem; }
       .top-bar { padding: 12px 14px 10px; }
+      .abc-summary { grid-template-columns: 1fr; }
+      .details-grid-2 { grid-template-columns: 1fr; }
     }
 
-    /* ================================================================
-       الطباعة
-       ================================================================ */
     @media print {
       .top-bar, .bottom-nav, .sidebar-toggle, .sidebar, .fab,
-      .offline-banner, .report-search-row, .filter-actions,
+      .offline-banner, .report-search-row, .filter-actions, .quick-presets,
       .icon-btn, .alerts-container, .pull-indicator { display: none !important; }
       body { background: #fff; color: #111; padding: 0; }
-      .kpi-card, .chart-card, .table-wrapper, .alert-item {
+      .kpi-card, .chart-card, .table-wrapper, .alert-item, .health-banner {
         box-shadow: none;
         color: #111;
         border: 1px solid #aaa;
@@ -1393,890 +1450,2061 @@
     }
   </style>
   <meta name="reports-bridge-methods" content="generateInventoryReport,getWarehouses,getCategories,getInventoryProductDetails">
-  <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 </head>
-</head>
-    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
+<body>
 
   <!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
-   <i class="fas fa-arrow-down"></i>
-   <span>اسحب للتحديث</span>
+    <i class="fas fa-arrow-down"></i>
+    <span>اسحب للتحديث</span>
   </div>
+
   <!-- Offline Banner -->
   <div class="offline-banner" id="offlineBanner">
-   <i class="fas fa-wifi-slash"></i>
-   أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
+    <i class="fas fa-wifi-slash"></i> لا يوجد اتصال بجسر Android؛ لن تُعرض بيانات بديلة
   </div>
+
   <!-- Loading -->
   <div class="loading-indicator" id="loadingIndicator">
-   <div class="spinner"></div>
+    <div class="spinner"></div>
   </div>
+
   <!-- ================================================================
-    الشريط العلوي
-    ================================================================ -->
+       الشريط العلوي
+       ================================================================ -->
   <header class="top-bar">
-   <div class="header-top">
-    <div class="top-title">
-     <h2>
-      <i class="fas fa-cubes"></i>
-      تقارير المخزون
-      <span class="ai-badge">AI</span>
-     </h2>
-     <span class="subtitle">تحليل شامل لمستويات وحركات المخزون</span>
-    </div>
-    <div class="header-actions">
-     <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
-      <i class="fas fa-bell"></i>
-     </button>
-     <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
-      <i class="fas fa-moon" id="themeIcon"></i>
-     </button>
-     <button class="icon-btn" onclick="openAIAdvisor()" style="border-color:rgba(168,130,255,0.3);" title="المستشار الذكي">
-      <i class="fas fa-robot" style="color:var(--violet-primary);"></i>
-     </button>
-    </div>
-   </div>
-   <!-- الفلاتر -->
-   <div class="filter-bar">
-    <div class="filter-group">
-     <i class="fas fa-calendar-alt"></i>
-     <input id="filterDateFrom" placeholder="من" type="date">
-    </div>
-    <div class="filter-group">
-     <i class="fas fa-calendar-alt"></i>
-     <input id="filterDateTo" placeholder="إلى" type="date">
-    </div>
-    <div class="filter-group">
-     <i class="fas fa-warehouse"></i>
-     <select id="filterWarehouse">
-      <option value="">جميع المستودعات</option>
-     </select>
-    </div>
-    <div class="filter-group">
-     <i class="fas fa-tags"></i>
-     <select id="filterCategory">
-      <option value="">جميع الفئات</option>
-     </select>
-    </div>
-    <div class="filter-group">
-     <i class="fas fa-chart-simple"></i>
-     <select id="filterReportType">
-      <option value="summary">ملخص</option>
-      <option value="detailed">مفصل</option>
-      <option value="by_product">حسب المنتج</option>
-      <option value="movement">الحركات</option>
-      <option value="valuation">تقييم المخزون</option>
-     </select>
-    </div>
-    <div class="filter-group" style="flex:0.6; min-width:90px;">
-     <i class="fas fa-filter"></i>
-     <select id="filterStatus">
-      <option value="">الكل</option>
-      <option value="active">نشط</option>
-      <option value="low">منخفض</option>
-      <option value="critical">حرج</option>
-      <option value="inactive">غير نشط</option>
-     </select>
-    </div>
-    <div class="filter-actions">
-     <button class="btn-filter primary" onclick="generateReport()">
-      <i class="fas fa-cog"></i>
-      توليد
-     </button>
-     <button class="btn-filter" onclick="resetFilters()">
-      <i class="fas fa-undo"></i>
-     </button>
-     <button class="btn-filter" onclick="exportCSV()">
-      <i class="fas fa-file-csv"></i>
-     </button>
-    </div>
-   </div>
-  </header>
-  <div class="report-search-row" role="search">
-   <label class="sr-only" for="inventorySearch">البحث في المخزون</label>
-   <i class="fas fa-search" aria-hidden="true"></i>
-   <input id="inventorySearch" class="form-input" type="search" placeholder="ابحث بالكود أو اسم المنتج أو الفئة أو المستودع" oninput="applyInventorySearch(this.value)">
-  </div>
-  <!-- ================================================================
-    بطاقات الإحصائيات
-    ================================================================ -->
-  <div class="kpi-grid">
-   <div class="kpi-card">
-    <div class="kpi-top">
-     <div class="kpi-icon">
-      <i class="fas fa-boxes-stacked"></i>
-     </div>
-     <div class="kpi-trend up">
-      <i class="fas fa-arrow-up"></i>
-      <span id="trendTotal">0%</span>
-     </div>
-    </div>
-    <div class="kpi-value" id="kpiTotalItems">0</div>
-    <div class="kpi-label">📦 إجمالي الأصناف</div>
-   </div>
-   <div class="kpi-card">
-    <div class="kpi-top">
-     <div class="kpi-icon gold">
-      <i class="fas fa-money-bill-wave"></i>
-     </div>
-     <div class="kpi-trend up">
-      <i class="fas fa-arrow-up"></i>
-      <span id="trendValue">0%</span>
-     </div>
-    </div>
-    <div class="kpi-value" id="kpiTotalValue">0.00</div>
-    <div class="kpi-label">💰 القيمة الإجمالية</div>
-   </div>
-   <div class="kpi-card">
-    <div class="kpi-top">
-     <div class="kpi-icon green">
-      <i class="fas fa-arrow-trend-up"></i>
-     </div>
-     <div class="kpi-trend up">
-      <i class="fas fa-arrow-up"></i>
-      <span id="trendTurnover">0%</span>
-     </div>
-    </div>
-    <div class="kpi-value" id="kpiTurnover">0.0</div>
-    <div class="kpi-label">🔄 معدل الدوران</div>
-   </div>
-   <div class="kpi-card">
-    <div class="kpi-top">
-     <div class="kpi-icon red">
-      <i class="fas fa-exclamation-triangle"></i>
-     </div>
-     <div class="kpi-trend down">
-      <i class="fas fa-arrow-down"></i>
-      <span id="trendLow">0%</span>
-     </div>
-    </div>
-    <div class="kpi-value" id="kpiLowStock">0</div>
-    <div class="kpi-label">⚠️ أصناف منخفضة</div>
-   </div>
-  </div>
-  <!-- ================================================================
-    التنبيهات
-    ================================================================ -->
-  <div class="alerts-container" id="alertsContainer"></div>
-  <!-- ================================================================
-    الرسوم البيانية
-    ================================================================ -->
-  <div class="charts-grid">
-   <div class="chart-card">
-    <div class="chart-header">
-     <span class="chart-title">
-      <i class="fas fa-chart-area"></i>
-      حركة المخزون
-     </span>
-     <span class="chart-badge">آخر 7 أيام</span>
-    </div>
-    <div class="chart-container">
-     <canvas id="movementChart"></canvas>
-    </div>
-   </div>
-   <div class="chart-card">
-    <div class="chart-header">
-     <span class="chart-title">
-      <i class="fas fa-chart-pie"></i>
-      توزيع القيمة حسب الفئة
-     </span>
-     <span class="chart-badge">حسب الفئة</span>
-    </div>
-    <div class="chart-container">
-     <canvas id="categoryChart"></canvas>
-    </div>
-   </div>
-  </div>
-  <!-- ================================================================
-    جدول المخزون
-    ================================================================ -->
-  <div class="table-section">
-   <div class="table-wrapper">
-    <div class="table-scroll">
-     <table class="data-table" id="inventoryTable">
-      <thead>
-       <tr>
-        <th>#</th>
-        <th>كود المنتج</th>
-        <th>المنتج</th>
-        <th>الفئة</th>
-        <th>المستودع</th>
-        <th>الكمية</th>
-        <th>سعر الشراء</th>
-        <th>سعر البيع</th>
-        <th>القيمة</th>
-        <th>الحالة</th>
-        <th>إجراء</th>
-       </tr>
-      </thead>
-      <tbody id="inventoryTableBody">
-       <tr>
-        <td colspan="11">
-         <div class="empty-state">
+    <div class="header-top">
+      <div class="top-title">
+        <h2>
           <i class="fas fa-cubes"></i>
-          اختر الفترة واضغط "توليد" لعرض التقرير
-         </div>
-        </td>
-       </tr>
-      </tbody>
-     </table>
-    </div>
-    <div class="table-footer">
-     <span class="total-item">
-      <span class="label">إجمالي القيمة:</span>
-      <span class="value" id="footerTotal">0.00</span>
-     </span>
-     <span class="total-item">
-      <span class="label">إجمالي الأصناف:</span>
-      <span class="value" id="footerItems">0</span>
-     </span>
-     <span class="total-item">
-      <span class="label">متوسط السعر:</span>
-      <span class="value" id="footerAvg">0.00</span>
-     </span>
-    </div>
-   </div>
-  </div>
-  <!-- ================================================================
-    الزر العائم (PDF)
-    ================================================================ -->
-  <button class="fab" onclick="exportPDF()" style="position:fixed; bottom:90px; left:24px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg, var(--violet-primary), var(--violet-dark)); border:none; color:#fff; font-size:1.5rem; cursor:pointer; box-shadow:0 4px 20px rgba(168,130,255,0.3); transition:var(--transition); z-index:200; display:flex; align-items:center; justify-content:center; touch-action:manipulation;">
-   <i class="fas fa-file-pdf"></i>
-  </button>
-  <!-- ================================================================
-    القائمة الجانبية
-    ================================================================ -->
-  <div class="sidebar-toggle" id="sidebarToggle">
-   <i class="fas fa-bars"></i>
-  </div>
-  <div class="sidebar" id="sidebar">
-   <div class="sidebar-content">
-    <button class="sidebar-btn" onclick="handleAction('refresh')">
-     <i class="fas fa-sync-alt"></i>
-     <span>تحديث</span>
-    </button>
-    <button class="sidebar-btn" onclick="handleAction('csv')">
-     <i class="fas fa-file-csv"></i>
-     <span>CSV</span>
-    </button>
-    <button class="sidebar-btn" onclick="handleAction('pdf')">
-     <i class="fas fa-file-pdf"></i>
-     <span>PDF</span>
-    </button>
-    <button class="sidebar-btn" onclick="handleAction('print')">
-     <i class="fas fa-print"></i>
-     <span>طباعة</span>
-    </button>
-    <button class="sidebar-btn" onclick="handleAction('ai')" style="border-color:rgba(168,130,255,0.3);">
-     <i class="fas fa-robot" style="color:var(--violet-primary);"></i>
-     <span>AI</span>
-    </button>
-    <button class="sidebar-btn" onclick="handleAction('home')">
-     <i class="fas fa-home"></i>
-     <span>رجوع</span>
-    </button>
-   </div>
-  </div>
-  <!-- ================================================================
-    القائمة السفلية
-    ================================================================ -->
-  <nav class="bottom-nav">
-   <button class="nav-item" onclick="switchTab('summary')">
-    <i class="fas fa-chart-pie"></i>
-    <span>ملخص</span>
-   </button>
-   <button class="nav-item active" onclick="switchTab('inventory')">
-    <i class="fas fa-list"></i>
-    <span>المخزون</span>
-   </button>
-   <button class="nav-item" onclick="switchTab('categories')">
-    <i class="fas fa-tags"></i>
-    <span>حسب الفئة</span>
-   </button>
-   <button class="nav-item" onclick="switchTab('movements')">
-    <i class="fas fa-exchange-alt"></i>
-    <span>الحركات</span>
-   </button>
-   <button class="nav-item" onclick="switchTab('valuation')">
-    <i class="fas fa-chart-bar"></i>
-    <span>التقييم</span>
-   </button>
-  </nav>
-  <!-- ================================================================
-    مودال تفاصيل المنتج
-    ================================================================ -->
-  <div class="details-overlay" id="detailsOverlay" onclick="closeDetails()">
-   <div class="details-content" id="detailsContent" onclick="event.stopPropagation()">
-    <!-- يتم تعبئتها عبر JS -->
-   </div>
-  </div>
-  <!-- ================================================================
-    مودال AI Advisor
-    ================================================================ -->
-  <div class="ai-modal">
-   <div class="modal-overlay" id="aiModal" onclick="closeAIModal()">
-    <div class="modal" onclick="event.stopPropagation()">
-     <div class="modal-header">
-      <h3 class="modal-title">🤖 المستشار الذكي - المخزون</h3>
-      <button class="modal-close" onclick="closeAIModal()">
-       <i class="fas fa-times"></i>
-      </button>
-     </div>
-     <div id="aiContent">
-      <div style="text-align:center;color:var(--text-muted);padding:30px;">
-       <i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:12px;color:var(--violet-primary);"></i>
-       <p>جاري تحليل بيانات المخزون...</p>
+          تقارير المخزون
+        </h2>
+        <span class="subtitle">تحليل شامل لمستويات وحركات المخزون</span>
       </div>
-     </div>
+      <div class="header-actions">
+        <button class="icon-btn has-badge" onclick="openReorderAlerts()" title="تنبيهات إعادة الطلب">
+          <i class="fas fa-bell"></i>
+        </button>
+        <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
+          <i class="fas fa-moon" id="themeIcon"></i>
+        </button>
+        <button class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي">
+          <i class="fas fa-robot" style="color:var(--violet-primary);"></i>
+        </button>
+      </div>
     </div>
-   </div>
-  </div>
+
+    <div class="filter-bar">
+      <div class="filter-group">
+        <i class="fas fa-calendar-alt"></i>
+        <input id="filterDateFrom" placeholder="من" type="date">
+      </div>
+      <div class="filter-group">
+        <i class="fas fa-calendar-alt"></i>
+        <input id="filterDateTo" placeholder="إلى" type="date">
+      </div>
+      <div class="filter-group">
+        <i class="fas fa-warehouse"></i>
+        <select id="filterWarehouse">
+          <option value="">جميع المستودعات</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <i class="fas fa-tags"></i>
+        <select id="filterCategory">
+          <option value="">جميع الفئات</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <i class="fas fa-chart-simple"></i>
+        <select id="filterReportType">
+          <option value="summary">ملخص</option>
+          <option value="detailed">مفصل</option>
+          <option value="by_product">حسب المنتج</option>
+          <option value="movement">الحركات</option>
+          <option value="valuation">تقييم المخزون</option>
+        </select>
+      </div>
+      <div class="filter-group" style="flex:0.6; min-width:90px;">
+        <i class="fas fa-filter"></i>
+        <select id="filterStatus">
+          <option value="">الكل</option>
+          <option value="active">نشط</option>
+          <option value="low">منخفض</option>
+          <option value="critical">حرج</option>
+          <option value="inactive">غير نشط</option>
+        </select>
+      </div>
+      <div class="filter-actions">
+        <button class="btn-filter primary" onclick="generateReport()">
+          <i class="fas fa-cog"></i> توليد
+        </button>
+        <button class="btn-filter" onclick="resetFilters()">
+          <i class="fas fa-undo"></i>
+        </button>
+        <button class="btn-filter" onclick="exportCSV()">
+          <i class="fas fa-file-csv"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
   <!-- ================================================================
-    Toast
-    ================================================================ -->
+       البحث
+       ================================================================ -->
+  <div class="report-search-row" role="search">
+    <label class="sr-only" for="inventorySearch">البحث في المخزون</label>
+    <i class="fas fa-search" aria-hidden="true"></i>
+    <input id="inventorySearch" class="form-input" type="search"
+           placeholder="ابحث بالكود أو اسم المنتج أو الفئة أو المستودع"
+           oninput="applyInventorySearch(this.value)">
+  </div>
+
+  <!-- ================================================================
+       مرشحات سريعة (Quick Presets)
+       ================================================================ -->
+  <div class="quick-presets" id="quickPresets" aria-label="مرشحات سريعة"></div>
+
+  <!-- ================================================================
+       بطاقات الإحصائيات
+       ================================================================ -->
+  <div class="kpi-grid">
+    <div class="kpi-card" onclick="applyPreset('all')">
+      <div class="kpi-top">
+        <div class="kpi-icon">
+          <i class="fas fa-boxes-stacked"></i>
+        </div>
+        <div class="kpi-trend neutral">
+          <i class="fas fa-minus"></i>
+          <span>إجمالي</span>
+        </div>
+      </div>
+      <div class="kpi-value" id="kpiTotalItems">0</div>
+      <div class="kpi-label">📦 إجمالي الأصناف</div>
+    </div>
+
+    <div class="kpi-card" onclick="applyPreset('all')">
+      <div class="kpi-top">
+        <div class="kpi-icon gold">
+          <i class="fas fa-money-bill-wave"></i>
+        </div>
+        <div class="kpi-trend neutral">
+          <i class="fas fa-coins"></i>
+          <span>القيمة</span>
+        </div>
+      </div>
+      <div class="kpi-value" id="kpiTotalValue">0.00</div>
+      <div class="kpi-label">💰 القيمة الإجمالية</div>
+    </div>
+
+    <div class="kpi-card" onclick="applyPreset('dead')">
+      <div class="kpi-top">
+        <div class="kpi-icon info">
+          <i class="fas fa-hourglass-half"></i>
+        </div>
+        <div class="kpi-trend neutral">
+          <i class="fas fa-clock"></i>
+          <span>راكد</span>
+        </div>
+      </div>
+      <div class="kpi-value" id="kpiDeadStock">0</div>
+      <div class="kpi-label">💤 أصناف راكدة</div>
+    </div>
+
+    <div class="kpi-card" onclick="applyPreset('critical')">
+      <div class="kpi-top">
+        <div class="kpi-icon red">
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="kpi-trend down">
+          <i class="fas fa-arrow-down"></i>
+          <span>حرج</span>
+        </div>
+      </div>
+      <div class="kpi-value" id="kpiLowStock">0</div>
+      <div class="kpi-label">⚠️ أصناف منخفضة/حرجة</div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       شريط صحة المخزون
+       ================================================================ -->
+  <div class="health-banner" id="healthBanner">
+    <div class="health-score-circle" id="healthScore">—</div>
+    <div class="health-info">
+      <h4 id="healthTitle">مؤشر صحة المخزون</h4>
+      <p id="healthDesc">سيتم حساب مؤشر الصحة بعد توليد التقرير</p>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       التنبيهات
+       ================================================================ -->
+  <div class="alerts-container" id="alertsContainer"></div>
+
+  <!-- ================================================================
+       الرسوم البيانية
+       ================================================================ -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">
+          <i class="fas fa-chart-area"></i>
+          حركة المخزون
+        </span>
+        <span class="chart-badge">آخر 7 أيام</span>
+      </div>
+      <div class="chart-container">
+        <canvas id="movementChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">
+          <i class="fas fa-chart-pie"></i>
+          توزيع القيمة حسب الفئة
+        </span>
+        <span class="chart-badge">حسب الفئة</span>
+      </div>
+      <div class="chart-container">
+        <canvas id="categoryChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       جدول المخزون
+       ================================================================ -->
+  <div class="table-section">
+    <div class="table-wrapper">
+      <div class="table-scroll">
+        <table class="data-table" id="inventoryTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>كود</th>
+              <th>المنتج</th>
+              <th>الفئة</th>
+              <th>المستودع</th>
+              <th>الكمية</th>
+              <th>سعر الشراء</th>
+              <th>سعر البيع</th>
+              <th>القيمة</th>
+              <th>ABC</th>
+              <th>الدوران</th>
+              <th>الحالة</th>
+              <th>إجراء</th>
+            </tr>
+          </thead>
+          <tbody id="inventoryTableBody">
+            <tr>
+              <td colspan="13">
+                <div class="empty-state">
+                  <i class="fas fa-cubes"></i>
+                  اختر الفترة واضغط "توليد" لعرض التقرير
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span class="total-item">
+          <span class="label">إجمالي القيمة:</span>
+          <span class="value" id="footerTotal">0.00</span>
+        </span>
+        <span class="total-item">
+          <span class="label">إجمالي الأصناف:</span>
+          <span class="value" id="footerItems">0</span>
+        </span>
+        <span class="total-item">
+          <span class="label">متوسط السعر:</span>
+          <span class="value" id="footerAvg">0.00</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       FAB - PDF
+       ================================================================ -->
+  <button class="fab" onclick="exportPDF()" title="تصدير PDF">
+    <i class="fas fa-file-pdf"></i>
+  </button>
+
+  <!-- ================================================================
+       القائمة الجانبية
+       ================================================================ -->
+  <div class="sidebar-toggle" id="sidebarToggle" aria-label="فتح القائمة">
+    <i class="fas fa-bars"></i>
+  </div>
+  <aside class="sidebar" id="sidebar" role="navigation">
+    <div class="sidebar-content">
+      <button class="sidebar-btn" data-action="refresh">
+        <i class="fas fa-sync-alt"></i>
+        <span>تحديث</span>
+      </button>
+      <button class="sidebar-btn" data-action="csv">
+        <i class="fas fa-file-csv"></i>
+        <span>CSV</span>
+      </button>
+      <button class="sidebar-btn" data-action="pdf">
+        <i class="fas fa-file-pdf"></i>
+        <span>PDF</span>
+      </button>
+      <button class="sidebar-btn" data-action="print">
+        <i class="fas fa-print"></i>
+        <span>طباعة</span>
+      </button>
+      <button class="sidebar-btn" data-action="ai">
+        <i class="fas fa-robot" style="color:var(--violet-primary);"></i>
+        <span>AI</span>
+      </button>
+      <button class="sidebar-btn" data-action="home">
+        <i class="fas fa-home"></i>
+        <span>رجوع</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ================================================================
+       القائمة السفلية
+       ================================================================ -->
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="nav-item active" data-tab="summary">
+      <i class="fas fa-chart-pie"></i>
+      <span>ملخص</span>
+    </button>
+    <button class="nav-item" data-tab="inventory">
+      <i class="fas fa-list"></i>
+      <span>المخزون</span>
+    </button>
+    <button class="nav-item" data-tab="abc">
+      <i class="fas fa-layer-group"></i>
+      <span>ABC</span>
+    </button>
+    <button class="nav-item" data-tab="movements">
+      <i class="fas fa-exchange-alt"></i>
+      <span>الحركات</span>
+    </button>
+    <button class="nav-item" data-tab="reorder">
+      <i class="fas fa-cart-plus"></i>
+      <span>إعادة الطلب</span>
+    </button>
+  </nav>
+
+  <!-- ================================================================
+       مودال التفاصيل
+       ================================================================ -->
+  <div class="details-overlay" id="detailsOverlay" onclick="closeDetails(event)">
+    <div class="details-content" id="detailsContent" onclick="event.stopPropagation()"></div>
+  </div>
+
+  <!-- ================================================================
+       مودال AI Advisor
+       ================================================================ -->
+  <div class="modal-overlay-ai" id="aiModal" onclick="closeAIModal(event)">
+    <div class="modal-ai" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fas fa-robot"></i> المستشار الذكي</h3>
+        <button class="modal-close" onclick="closeAIModal(null)">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div id="aiContent"></div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       مودال تنبيهات إعادة الطلب
+       ================================================================ -->
+  <div class="modal-overlay-ai" id="reorderModal" onclick="closeReorderAlerts(event)">
+    <div class="modal-ai" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fas fa-cart-plus"></i> قائمة إعادة الطلب</h3>
+        <button class="modal-close" onclick="closeReorderAlerts(null)">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div id="reorderContent"></div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       Toast
+       ================================================================ -->
   <div class="toast" id="toast">
-   <div class="toast-icon">
-    <i class="fas fa-check"></i>
-   </div>
-   <span id="toastMessage">تمت العملية بنجاح</span>
+    <div class="toast-icon"><i class="fas fa-check"></i></div>
+    <span id="toastMessage">تمت العملية بنجاح</span>
   </div>
+
   <!-- ================================================================
-    JavaScript
-    ================================================================ -->
+       JavaScript
+       ================================================================ -->
   <script>
-   // ================================================================
-        // 1. دالة apiCall الموحدة
-        // ================================================================
-        function invokeTypedBridge(method, args = []) {
-            return new Promise((resolve, reject) => {
-                if (!window.AndroidInterface || typeof window.AndroidInterface[method] !== 'function') { reject({ success: false, error: `عقد الجسر ${method} غير متاح في إصدار التطبيق الحالي` }); return; }
-                try {
-                    const raw = window.AndroidInterface[method](...args);
-                    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                    if (!parsed || parsed.success !== true) { reject(parsed || { success: false, error: 'استجابة غير صالحة من الجسر' }); return; }
-                    resolve(parsed);
-                } catch (error) { reject({ success: false, error: error.message || 'فشل استدعاء الجسر' }); }
-            });
+  (() => {
+    'use strict';
+
+    // ================================================================
+    // 1. طبقة تكيّف مع عقد الجسر
+    // ================================================================
+    function parseBridge(raw) {
+      if (raw === null || raw === undefined) {
+        throw new Error('لم يرجع الجسر أي نتيجة');
+      }
+      const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (value && value.success === false) {
+        throw new Error(value.error || value.message || 'فشلت العملية على مستوى الجسر');
+      }
+      return value;
+    }
+
+    /**
+     * يوحّد استجابة تقرير المخزون.
+     * الشكل الفعلي من DatabaseHelper.getInventoryReport:
+     *   { rows:[...], stats:{...}, categories:[...], movement_series:[...], success:true }
+     */
+    function extractInventoryReport(res) {
+      const empty = {
+        success: false,
+        rows: [],
+        stats: {},
+        categories: [],
+        movement_series: [],
+        total_count: 0
+      };
+      if (!res) return empty;
+
+      // الشكل الفعلي: rows في الجذر
+      if (Array.isArray(res.rows)) {
+        return {
+          success: res.success !== false,
+          rows: res.rows,
+          stats: res.stats || {},
+          categories: res.categories || [],
+          movement_series: res.movement_series || [],
+          total_count: res.total_count ?? res.rows.length
+        };
+      }
+
+      // احتياط: { success, data:{ rows, ... } }
+      if (res.data && Array.isArray(res.data.rows)) {
+        return {
+          success: res.success !== false,
+          rows: res.data.rows,
+          stats: res.data.stats || {},
+          categories: res.data.categories || [],
+          movement_series: res.data.movement_series || [],
+          total_count: res.data.total_count ?? res.data.rows.length
+        };
+      }
+
+      // مصفوفة مباشرة
+      if (Array.isArray(res)) {
+        return {
+          success: true,
+          rows: res,
+          stats: {},
+          categories: [],
+          movement_series: [],
+          total_count: res.length
+        };
+      }
+
+      // { success, data: [...] }
+      if (res.data && Array.isArray(res.data)) {
+        return {
+          success: res.success !== false,
+          rows: res.data,
+          stats: {},
+          categories: [],
+          movement_series: [],
+          total_count: res.data.length
+        };
+      }
+
+      return empty;
+    }
+
+    /**
+     * استخراج مصفوفة من استجابات الجسر بأي غلاف.
+     * getWarehouses/getCategories يعيدان { success:true, data:[...] }
+     */
+    function extractArray(res) {
+      if (!res) return [];
+      if (Array.isArray(res)) return res;
+      if (Array.isArray(res.data)) return res.data;
+      if (Array.isArray(res.rows)) return res.rows;
+      return [];
+    }
+
+    /**
+     * استخراج كائن من استجابات الجسر.
+     * getInventoryProductDetails يعيد JSONObject مع success داخل الكائن نفسه.
+     */
+    function extractObject(res) {
+      if (!res) return null;
+      if (res.data && typeof res.data === 'object' && !Array.isArray(res.data)) return res.data;
+      if (typeof res === 'object' && !Array.isArray(res)) return res;
+      return null;
+    }
+
+    // ================================================================
+    // 2. جسر Android
+    // ================================================================
+    function bridgeCall(method, args = []) {
+      const bridge = window.AndroidInterface;
+      if (!bridge || typeof bridge[method] !== 'function') {
+        return Promise.reject(new Error('العقد ' + method + ' غير متاح في Android Bridge'));
+      }
+      try {
+        const raw = bridge[method](...args);
+        return Promise.resolve(parseBridge(raw));
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    }
+
+    function apiCall(action, params = {}) {
+      const p = params || {};
+      switch (action) {
+        case 'generateInventoryReport':
+          return bridgeCall('generateInventoryReport', [JSON.stringify(p)]);
+        case 'getWarehouses':
+          return bridgeCall('getWarehouses', [JSON.stringify(p)]);
+        case 'getCategories':
+          return bridgeCall('getCategories');
+        case 'getProductDetails':
+          return bridgeCall('getInventoryProductDetails', [Number(p.product_id)]);
+        default:
+          return Promise.reject(new Error('الإجراء غير مدعوم: ' + action));
+      }
+    }
+
+    // ================================================================
+    // 3. حالة الصفحة
+    // ================================================================
+    const state = {
+      allRows: [],
+      filteredRows: [],
+      stats: {},
+      categories: [],
+      movementSeries: [],
+      reportType: 'summary',
+      activePreset: 'all',
+      searchQuery: '',
+      loadedAt: null,
+      healthScore: 0,
+      deadStock: [],
+      abcAnalysis: { A: [], B: [], C: [] },
+      topMovers: [],
+      slowMovers: [],
+      reorderList: []
+    };
+
+    let movementChart = null;
+    let categoryChart = null;
+
+    // ================================================================
+    // 4. أدوات مساعدة
+    // ================================================================
+    const $ = (id) => document.getElementById(id);
+
+    const escapeHtml = (value) => {
+      if (value === null || value === undefined) return '';
+      const div = document.createElement('div');
+      div.textContent = String(value);
+      return div.innerHTML;
+    };
+
+    function showLoading(show) {
+      const el = $('loadingIndicator');
+      if (el) el.style.display = show ? 'flex' : 'none';
+    }
+
+    function haptic(type) {
+      try {
+        if (navigator.vibrate) {
+          if (type === 'success') navigator.vibrate(15);
+          else if (type === 'error') navigator.vibrate([20, 30, 20]);
+          else navigator.vibrate(8);
         }
+      } catch (_) {}
+    }
 
-        function apiCall(action, params = {}) {
-            const p = params || {};
-            switch (action) {
-                case 'generateInventoryReport': return invokeTypedBridge('generateInventoryReport', [JSON.stringify(p)]);
-                case 'getWarehouses': return invokeTypedBridge('getWarehouses', [JSON.stringify(p)]);
-                case 'getCategories': return invokeTypedBridge('getCategories');
-                case 'getProductDetails': return invokeTypedBridge('getInventoryProductDetails', [Number(p.product_id)]);
-                default: return Promise.reject({ success: false, error: `الإجراء غير مدعوم: ${action}` });
-            }
-        }
+    function showToast(message, type = 'info') {
+      const toast = $('toast');
+      const msgEl = $('toastMessage');
+      const iconEl = toast.querySelector('.toast-icon i');
+      toast.className = 'toast ' + type;
+      msgEl.textContent = message;
+      const iconMap = {
+        success: 'fas fa-check',
+        error: 'fas fa-times',
+        warning: 'fas fa-exclamation-triangle',
+        info: 'fas fa-info-circle'
+      };
+      iconEl.className = iconMap[type] || iconMap.info;
+      if (type === 'success') haptic('success');
+      else if (type === 'error') haptic('error');
+      else haptic('light');
+      toast.classList.add('show');
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => toast.classList.remove('show'), 3200);
+    }
 
-        // ================================================================
-        // 3. دوال مساعدة
-        // ================================================================
-        function showToast(message, type) {
-            const toast = document.getElementById('toast');
-            const msgEl = document.getElementById('toastMessage');
-            const iconEl = toast.querySelector('.toast-icon i');
-            toast.className = 'toast ' + type;
-            msgEl.textContent = message;
-            if (type === 'success') { iconEl.className = 'fas fa-check'; } else if (type === 'error') { iconEl.className =
-                    'fas fa-times'; } else if (type === 'warning') { iconEl.className = 'fas fa-exclamation-triangle'; }
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 3500);
-        }
+    function formatCurrency(num) {
+      if (num === null || num === undefined) return '0.00';
+      return Number(num).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
 
-        function showLoading(show) {
-            document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
-        }
+    function formatNumber(num) {
+      if (num === null || num === undefined) return '0';
+      const n = Number(num);
+      if (!Number.isFinite(n)) return '0';
+      if (Math.abs(n) >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+      if (Math.abs(n) >= 1000) return (n / 1000).toFixed(1) + 'K';
+      return n.toLocaleString('en');
+    }
 
-        function formatCurrency(num) {
-            if (num === null || num === undefined) return '0.00';
-            return parseFloat(num).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        }
+    function getStatusLabel(status) {
+      const map = { active: 'نشط', low: 'منخفض', critical: 'حرج', inactive: 'غير نشط' };
+      return map[status] || status || '—';
+    }
 
-        function formatNumber(num) {
-            if (num === null || num === undefined) return '0';
-            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-            else if (num >= 1000) return (num / 1000).toFixed(0) + 'K';
-            return num.toLocaleString('en');
-        }
+    function getStatusClass(status) {
+      const map = { active: 'active', low: 'low', critical: 'critical', inactive: 'inactive' };
+      return map[status] || 'inactive';
+    }
 
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+    function dateOnly(d) {
+      return `${d.getFullYear()}-${
+        String(d.getMonth() + 1).padStart(2, '0')
+      }-${
+        String(d.getDate()).padStart(2, '0')
+      }`;
+    }
 
-        function getStatusLabel(status) {
-            const map = { 'active': 'نشط', 'low': 'منخفض', 'critical': 'حرج', 'inactive': 'غير نشط' };
-            return map[status] || status;
-        }
+    // ================================================================
+    // 5. تحليل ABC (Pareto)
+    // ================================================================
+    function computeABCAnalysis(rows) {
+      const analysis = { A: [], B: [], C: [] };
+      if (!rows.length) return analysis;
 
-        function getStatusClass(status) {
-            const map = { 'active': 'active', 'low': 'low', 'critical': 'critical', 'inactive': 'inactive' };
-            return map[status] || 'inactive';
-        }
+      // القيمة = الكمية × سعر الشراء
+      const enriched = rows.map(item => ({
+        row: item,
+        value: Number(item.quantity || 0) * Number(item.purchase_price || 0)
+      }));
 
-        // ================================================================
-        // 4. تبديل الوضع (ليلي/نهاري)
-        // ================================================================
-        function toggleTheme() {
-            const current = document.documentElement.getAttribute('data-theme');
-            const isDark = current === 'dark';
-            const newTheme = isDark ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('inventory_reports_theme', newTheme);
-            const icon = document.getElementById('themeIcon');
-            icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-        }
+      const totalValue = enriched.reduce((s, e) => s + e.value, 0);
+      if (totalValue <= 0) return analysis;
 
-        function loadSavedTheme() {
-            const saved = localStorage.getItem('inventory_reports_theme') || 'light';
-            document.documentElement.setAttribute('data-theme', saved);
-            const icon = document.getElementById('themeIcon');
-            icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-        }
+      // ترتيب تنازلي حسب القيمة
+      enriched.sort((a, b) => b.value - a.value);
 
-        // ================================================================
-        // 5. توليد التقرير
-        // ================================================================
-        let inventoryData = [];
-        let currentInventoryReportType = 'summary';
-        let currentReportPayload = {};
-        let currentAlerts = [];
-        let aiInsights = [];
-        let movementChart = null,
-            categoryChart = null;async function generateReport() {
-            const from = document.getElementById('filterDateFrom').value;
-            const to = document.getElementById('filterDateTo').value;
-            const warehouse = document.getElementById('filterWarehouse').value;
-            const category = document.getElementById('filterCategory').value;
-            const type = document.getElementById('filterReportType').value;
-            const status = document.getElementById('filterStatus').value;
-            if (from && to && from > to) { showToast('❌ تاريخ البداية يجب أن يسبق تاريخ النهاية', 'error'); return; }
-            showLoading(true);
-            try {
-                currentInventoryReportType = type;
-                const result = await apiCall('generateInventoryReport', { start_date: from, end_date: to, warehouse_id: warehouse || null, category_id: category || null, report_type: type, status: status || null });
-                currentReportPayload = result.data || {};
-                inventoryData = currentReportPayload.rows || [];
-                renderTable(inventoryData, type);
-                updateKPIs(inventoryData, currentReportPayload.stats || {});
-                updateCharts(inventoryData, currentReportPayload);
-                updateFooter(inventoryData, currentReportPayload.stats || {});
-                generateAlerts(inventoryData);
-                generateAIInsights(inventoryData, currentReportPayload.stats || {});
-                showToast(inventoryData.length ? '✅ تم توليد التقرير من SQLite' : '⚠️ لا توجد بيانات مطابقة', inventoryData.length ? 'success' : 'warning');
-            } catch (e) {
-                currentReportPayload = {}; inventoryData = [];
-                renderTable([], type); resetKPIs(); updateCharts([], {}); updateFooter([], {});
-                showToast('❌ فشل توليد التقرير من SQLite: ' + (e && (e.error || e.message) ? (e.error || e.message) : 'خطأ غير معروف'), 'error');
-            } finally { showLoading(false); }
-        }
+      let cumulative = 0;
+      enriched.forEach(item => {
+        cumulative += item.value;
+        const pct = cumulative / totalValue;
+        item.row._abcClass = pct <= 0.80 ? 'A' : pct <= 0.95 ? 'B' : 'C';
+        item.row._abcShare = item.value / totalValue;
+        analysis[item.row._abcClass].push(item.row);
+      });
 
-        function applyInventorySearch(query) {
-            const q = String(query || '').trim().toLocaleLowerCase('ar');
-            const rows = q ? inventoryData.filter(item => [item.product_code, item.product_name_ar, item.product_name, item.category_name, item.warehouse_name].some(value => String(value || '').toLocaleLowerCase('ar').includes(q))) : inventoryData;
-            renderTable(rows, currentInventoryReportType);
-        }
+      return analysis;
+    }
 
-        // ================================================================
-        // 6. عرض الجدول
-        // ================================================================
-        function renderTable(data, reportType = 'summary') {
-            const tbody = document.getElementById('inventoryTableBody');
-            const thead = document.querySelector('#inventoryTable thead tr');
-            thead.innerHTML = reportType === 'movement' ? '<th>#</th><th>التاريخ</th><th>النوع</th><th>كود المنتج</th><th>المنتج</th><th>الفئة</th><th>المستودع</th><th>الكمية</th><th>القيمة</th><th>الحالة</th><th>المنفذ</th>' : '<th>#</th><th>كود المنتج</th><th>المنتج</th><th>الفئة</th><th>المستودع</th><th>الكمية</th><th>سعر الشراء</th><th>سعر البيع</th><th>القيمة</th><th>الحالة</th><th>إجراء</th>';
-            if (!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i>لا توجد بيانات مطابقة</div></td></tr>'; return; }
-            tbody.innerHTML = data.map((item, idx) => {
-                if (reportType === 'movement') return `<tr><td>${idx + 1}</td><td>${escapeHtml(item.movement_date || '---')}</td><td>${escapeHtml(item.movement_type || '---')}</td><td class="product-code">${escapeHtml(item.product_code || '---')}</td><td>${escapeHtml(item.product_name_ar || item.product_name || '---')}</td><td>${escapeHtml(item.category_name || '---')}</td><td>${escapeHtml(item.warehouse_name || '---')}</td><td>${Number(item.quantity || 0).toLocaleString('en')}</td><td>${formatCurrency(item.total_value || 0)}</td><td>${escapeHtml(item.status || '---')}</td><td>${escapeHtml(item.performed_by_name || '---')}</td></tr>`;
-                const status = item.status || 'active';
-                const value = Number(item.quantity || 0) * Number(item.purchase_price || 0);
-                return `<tr><td>${idx + 1}</td><td class="product-code">${escapeHtml(item.product_code || '---')}</td><td>${escapeHtml(item.product_name_ar || item.product_name || '---')}</td><td>${escapeHtml(item.category_name || '---')}</td><td>${escapeHtml(item.warehouse_name || 'جميع المستودعات')}</td><td>${Number(item.quantity || 0).toLocaleString('en')}</td><td>${formatCurrency(item.purchase_price)}</td><td>${formatCurrency(item.sale_price)}</td><td class="amount debit">${formatCurrency(value)}</td><td><span class="status-badge ${getStatusClass(status)}">${getStatusLabel(status)}</span></td><td><button class="btn-view" onclick="viewProduct(${Number(item.product_id || item.id || 0)})" title="تفاصيل"><i class="fas fa-eye"></i></button></td></tr>`;
-            }).join('');
-        }
+    // ================================================================
+    // 6. تحليل المخزون الراكد
+    // ================================================================
+    function computeDeadStock(rows) {
+      const today = new Date();
+      const threshold = 90 * 24 * 60 * 60 * 1000; // 90 يوم
+      return rows.filter(item => {
+        const lastDate = item.last_count_date;
+        const qty = Number(item.quantity || 0);
+        if (qty <= 0) return false; // ليس مخزوناً راكداً إن كان صفراً
+        if (!lastDate) return true; // لم يُعد يوماً = راكد
+        const ts = new Date(lastDate).getTime();
+        if (!Number.isFinite(ts)) return true;
+        return (today.getTime() - ts) > threshold;
+      });
+    }
 
-        // ================================================================
-        // 7. تحديث بطاقات الإحصائيات
-        // ================================================================
-        function updateKPIs(data, stats = {}) {
-            const totalItems = Number(stats.total_items ?? data.length);
-            const totalValue = Number(stats.total_value ?? data.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.purchase_price || 0), 0));
-            const lowStock = Number(stats.low_stock ?? data.filter(item => item.status === 'low' || item.status === 'critical').length);
-            const turnover = totalItems ? Number(stats.total_quantity ?? 0) / totalItems : 0;
-            document.getElementById('kpiTotalItems').textContent = totalItems.toLocaleString('en');
-            document.getElementById('kpiTotalValue').textContent = formatCurrency(totalValue);
-            document.getElementById('kpiTurnover').textContent = turnover.toFixed(1);
-            document.getElementById('kpiLowStock').textContent = lowStock.toLocaleString('en');
-            ['trendTotal', 'trendValue', 'trendTurnover', 'trendLow'].forEach(id => document.getElementById(id).textContent = '—');
-        }
+    // ================================================================
+    // 7. معدل الدوران (Turnover Rate — تقريب)
+    // ================================================================
+    function computeTurnover(item, stats) {
+      const qty = Number(item.quantity || 0);
+      const totalQty = Number(stats.total_quantity || 0);
+      const items = Number(stats.total_items || 0);
+      const avgInventory = items > 0 ? totalQty / items : 0;
+      if (avgInventory <= 0) return 0;
+      // تقريب: الاستهلاك ~ المبيعات عبر الحد الأدنى
+      const reorder = Number(item.reorder_quantity || 0);
+      const base = reorder > 0 ? reorder : avgInventory;
+      return qty > 0 ? (base / qty) : 0;
+    }
 
-        function resetKPIs() {
-            document.getElementById('kpiTotalItems').textContent = '0';
-            document.getElementById('kpiTotalValue').textContent = '0.00';
-            document.getElementById('kpiTurnover').textContent = '0.0';
-            document.getElementById('kpiLowStock').textContent = '0';
-        }
+    function classifyTurnover(rate) {
+      if (rate <= 0) return { cls: 'slow', label: 'راكد' };
+      if (rate >= 3) return { cls: 'fast', label: 'سريع' };
+      if (rate >= 1) return { cls: 'medium', label: 'متوسط' };
+      return { cls: 'slow', label: 'بطيء' };
+    }
 
-        // ================================================================
-        // 8. تحديث ملخص الجدول
-        // ================================================================
-        function updateFooter(data, stats = {}) {
-            const totalValue = Number(stats.total_value ?? data.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.purchase_price || 0), 0));
-            const totalItems = Number(stats.total_items ?? data.length);
-            document.getElementById('footerTotal').textContent = formatCurrency(totalValue);
-            document.getElementById('footerItems').textContent = totalItems.toLocaleString('en');
-            document.getElementById('footerAvg').textContent = formatCurrency(totalItems ? totalValue / totalItems : 0);
-        }
+    // ================================================================
+    // 8. مؤشر صحة المخزون
+    // ================================================================
+    function computeHealthScore(rows, deadStock) {
+      if (!rows.length) return 0;
+      const critical = rows.filter(r => r.status === 'critical').length;
+      const low = rows.filter(r => r.status === 'low').length;
+      const dead = deadStock.length;
+      const total = rows.length;
+      const score = 100 - ((critical * 50 + low * 25 + dead * 15) / total);
+      return Math.max(0, Math.min(100, Math.round(score)));
+    }
 
-        // ================================================================
-        // 9. الرسوم البيانية
-        // ================================================================
-        function updateCharts(data, payload = {}) {
-            const series = payload.movement_series || [];
-            const ctx1 = document.getElementById('movementChart').getContext('2d');
-            if (movementChart) movementChart.destroy();
-            movementChart = new Chart(ctx1, { type: 'line', data: { labels: series.map(x => x.day || ''), datasets: [{ label: 'عدد الحركات', data: series.map(x => Number(x.movement_count || 0)), borderColor: '#a882ff', backgroundColor: 'rgba(168,130,255,0.12)', tension: 0.3, fill: true, borderWidth: 2.5, pointBackgroundColor: '#a882ff', pointBorderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(168,130,255,0.08)' } }, x: { grid: { display: false } } } } });
-            const categories = payload.categories || [];
-            const ctx2 = document.getElementById('categoryChart').getContext('2d');
-            if (categoryChart) categoryChart.destroy();
-            categoryChart = new Chart(ctx2, { type: 'doughnut', data: { labels: categories.map(x => x.category_name || 'أخرى'), datasets: [{ data: categories.map(x => Number(x.total_value || 0)), backgroundColor: ['#a882ff', '#f5c842', '#10b981', '#7c4dff', '#f59e0b', '#ef4444'], borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'left', labels: { font: { family: 'Cairo' }, boxWidth: 12, padding: 10 } } } } });
-        }
+    // ================================================================
+    // 9. توليد التقرير
+    // ================================================================
+    async function generateReport() {
+      const from = $('filterDateFrom').value;
+      const to = $('filterDateTo').value;
+      const warehouse = $('filterWarehouse').value;
+      const category = $('filterCategory').value;
+      const type = $('filterReportType').value;
+      const status = $('filterStatus').value;
 
-        // ================================================================
-        // 10. التنبيهات
-        // ================================================================
-        function generateAlerts(data) {
-            currentAlerts = [];
-            const lowItems = data.filter(item => item.status === 'low' || item.status === 'critical');
-            if (lowItems.length) currentAlerts.push({ type: 'warning', icon: 'fa-exclamation-triangle', title: 'أصناف منخفضة المخزون', desc: `${lowItems.length} صنف تحت الحد الأدنى`, time: 'الآن' });
-            renderAlerts(currentAlerts);
-        }
+      if (from && to && from > to) {
+        showToast('تاريخ البداية يجب أن يسبق تاريخ النهاية', 'error');
+        return;
+      }
 
-        function renderAlerts(alerts) {
-            const container = document.getElementById('alertsContainer');
-            if (!container) return;
-            if (!alerts || alerts.length === 0) { container.innerHTML = ''; return; }
-            container.innerHTML = alerts.slice(0, 3).map((a, i) => `
-                <div class="alert-item ${a.type}" style="animation-delay:${i*0.1}s">
-                    <div class="alert-icon"><i class="fas ${a.icon}"></i></div>
-                    <div class="alert-content">
-                        <div class="alert-title">${a.title}</div>
-                        <div class="alert-desc">${a.desc}</div>
-                    </div>
-                    <div class="alert-time">${a.time}</div>
-                </div>
-            `).join('');
-        }
-
-        function showNotifications() {
-            const alerts = currentAlerts;
-            if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
-            showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
-        }
-
-        // ================================================================
-        // 11. AI Advisor
-        // ================================================================
-        function generateAIInsights(data, stats = {}) {
-            aiInsights = [];
-            if (!data.length) return;
-            aiInsights.push({ title: 'نظرة عامة', desc: `${Number(stats.total_items ?? data.length).toLocaleString('en')} صنف - قيمة إجمالية ${formatCurrency(stats.total_value ?? 0)}` });
-            const lowItems = data.filter(item => item.status === 'low' || item.status === 'critical');
-            if (lowItems.length) aiInsights.push({ title: 'تنبيه المخزون', desc: `${lowItems.length} صنف يحتاج إلى مراجعة أو إعادة طلب` });
-            const maxItem = data.reduce((best, item) => Number(item.quantity || 0) * Number(item.purchase_price || 0) > Number(best?.quantity || 0) * Number(best?.purchase_price || 0) ? item : best, null);
-            if (maxItem) aiInsights.push({ title: 'أعلى قيمة صنف', desc: `${maxItem.product_name_ar || maxItem.product_name || 'منتج'} - ${formatCurrency(Number(maxItem.quantity || 0) * Number(maxItem.purchase_price || 0))}` });
-        }
-
-        function openAIAdvisor() {
-            document.getElementById('aiModal').classList.add('show');
-            document.body.style.overflow = 'hidden';
-            const insights = aiInsights;
-            const container = document.getElementById('aiContent');
-            if (!insights || insights.length === 0) {
-                container.innerHTML =
-                    `<div style="text-align:center;color:var(--text-muted);padding:30px;"><i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:12px;color:var(--violet-primary);"></i><p>لا توجد بيانات كافية للتحليل</p></div>`;
-                return;
-            }
-            container.innerHTML = insights.map(i => `
-                <div class="ai-insight-card">
-                    <div class="insight-title">${i.title}</div>
-                    <div class="insight-desc">${i.desc}</div>
-                </div>
-            `).join('');
-        }
-
-        function closeAIModal() {
-            document.getElementById('aiModal').classList.remove('show');
-            document.body.style.overflow = '';
-        }
-
-        // ================================================================
-        // 12. تفاصيل المنتج
-        // ================================================================
-        async function viewProduct(productId) {
-            if (!productId) { showToast('❌ لا توجد تفاصيل', 'warning'); return; }
-            showLoading(true);
-            try {
-                const result = await apiCall('getProductDetails', { product_id: productId });
-                if (result.success && result.data) {
-                    const p = result.data;
-                    const content = document.getElementById('detailsContent');
-                    content.innerHTML = `
-                        <div class="details-header">
-                            <h3 class="details-title">📦 ${escapeHtml(p.product_name || 'منتج')}</h3>
-                            <button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button>
-                        </div>
-                        <div class="details-profile">
-                            <div class="details-avatar">${(p.product_name || 'م').substring(0,2)}</div>
-                            <div class="details-name">${escapeHtml(p.product_name || '---')}</div>
-                            <span class="details-status ${getStatusClass(p.status)}">${getStatusLabel(p.status)}</span>
-                        </div>
-                        <div class="details-section">
-                            <div class="details-section-title"><i class="fas fa-info-circle"></i> المعلومات</div>
-                            <div class="details-row"><span class="details-label">كود المنتج</span><span class="details-value">${escapeHtml(p.product_code || '---')}</span></div>
-                            <div class="details-row"><span class="details-label">الفئة</span><span class="details-value">${escapeHtml(p.category_name || '---')}</span></div>
-                            <div class="details-row"><span class="details-label">المستودع</span><span class="details-value">${escapeHtml(p.warehouse_name || '---')}</span></div>
-                        </div>
-                        <div class="details-section">
-                            <div class="details-section-title"><i class="fas fa-money-bill-wave"></i> المالية</div>
-                            <div class="details-row"><span class="details-label">الكمية</span><span class="details-value">${parseFloat(p.quantity || 0).toLocaleString('en')}</span></div>
-                            <div class="details-row"><span class="details-label">سعر الشراء</span><span class="details-value">${formatCurrency(p.purchase_price || 0)}</span></div>
-                            <div class="details-row"><span class="details-label">سعر البيع</span><span class="details-value">${formatCurrency(p.sale_price || p.unit_price || 0)}</span></div>
-                            <div class="details-row"><span class="details-label">القيمة</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(parseFloat(p.quantity || 0) * parseFloat(p.purchase_price || 0))}</span></div>
-                        </div>
-                        <div style="height:40px;"></div>
-                    `;
-                    document.getElementById('detailsOverlay').classList.add('show');
-                    document.body.style.overflow = 'hidden';
-                } else {
-                    showToast(result.message || '❌ فشل في جلب التفاصيل', 'error');
-                }
-            } catch (e) { showToast('❌ حدث خطأ', 'error'); } finally { showLoading(false); }
-        }
-
-        function closeDetails() {
-            document.getElementById('detailsOverlay').classList.remove('show');
-            document.body.style.overflow = '';
-        }
-
-        // ================================================================
-        // 13. تصدير CSV و PDF
-        // ================================================================
-        function exportCSV() {
-            const rows = document.querySelectorAll('#inventoryTableBody tr');
-            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
-                showToast('❌ لا توجد بيانات للتصدير', 'error');
-                return;
-            }
-            let csv = 'كود المنتج,المنتج,الفئة,المستودع,الكمية,سعر الشراء,سعر البيع,القيمة,الحالة\n';
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 10 && !row.classList.contains('empty-state')) {
-                    csv += [
-                        cells[1]?.textContent?.trim() || '',
-                        cells[2]?.textContent?.trim() || '',
-                        cells[3]?.textContent?.trim() || '',
-                        cells[4]?.textContent?.trim() || '',
-                        cells[5]?.textContent?.trim() || '',
-                        cells[6]?.textContent?.trim() || '',
-                        cells[7]?.textContent?.trim() || '',
-                        cells[8]?.textContent?.trim() || '',
-                        cells[9]?.textContent?.trim() || ''
-                    ].join(',') + '\n';
-                }
-            });
-            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const from = document.getElementById('filterDateFrom').value || 'start';
-            const to = document.getElementById('filterDateTo').value || 'end';
-            link.download = `تقرير_المخزون_${from}_${to}.csv`;
-            link.href = URL.createObjectURL(blob);
-            link.click();
-            showToast('✅ تم تصدير CSV', 'success');
-        }
-
-        function exportPDF() {
-            const rows = document.querySelectorAll('#inventoryTableBody tr');
-            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
-                showToast('❌ لا توجد بيانات', 'error');
-                return;
-            }
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('p', 'pt', 'a4');
-            doc.setFontSize(18);
-            doc.setTextColor(168, 130, 255);
-            doc.text('📦 تقرير المخزون', 40, 50);
-            doc.setFontSize(10);
-            doc.setTextColor(122, 109, 160);
-            const from = document.getElementById('filterDateFrom').value || 'البداية';
-            const to = document.getElementById('filterDateTo').value || 'النهاية';
-            doc.text('الفترة: ' + from + ' إلى ' + to, 40, 75);
-
-            const tableData = [];
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 10 && !row.classList.contains('empty-state')) {
-                    tableData.push([
-                        cells[1]?.textContent?.trim() || '',
-                        cells[2]?.textContent?.trim() || '',
-                        cells[3]?.textContent?.trim() || '',
-                        cells[4]?.textContent?.trim() || '',
-                        cells[5]?.textContent?.trim() || '',
-                        cells[7]?.textContent?.trim() || '',
-                        cells[8]?.textContent?.trim() || '',
-                        cells[9]?.textContent?.trim() || ''
-                    ]);
-                }
-            });
-            if (tableData.length === 0) { showToast('❌ لا توجد بيانات', 'error'); return; }
-            const headers = ['كود المنتج', 'المنتج', 'الفئة', 'المستودع', 'الكمية', 'سعر البيع', 'القيمة', 'الحالة'];
-            if (typeof doc.autoTable === 'function') {
-                doc.autoTable({ head: [headers], body: tableData, startY: 100, styles: { fontSize: 8 }, headStyles: { fillColor: [168, 130, 255], textColor: [255, 255, 255] }, margin: { left: 30, right: 30 } });
-            } else {
-                let y = 105; doc.setFontSize(8);
-                tableData.forEach(row => { doc.text(row.join(' | ').slice(0, 130), 30, y); y += 14; if (y > 780) { doc.addPage(); y = 40; } });
-            }
-            doc.save(`تقرير_المخزون_${from}_${to}.pdf`);
-            showToast('✅ تم تصدير PDF', 'success');
-        }
-
-        // ================================================================
-        // 14. إعادة تعيين الفلاتر
-        // ================================================================
-        function resetFilters() {
-            document.getElementById('filterDateFrom').value = '';
-            document.getElementById('filterDateTo').value = '';
-            document.getElementById('filterWarehouse').value = '';
-            document.getElementById('filterCategory').value = '';
-            document.getElementById('filterReportType').value = 'summary';
-            document.getElementById('filterStatus').value = '';
-            showToast('🔄 تم إعادة تعيين الفلاتر', 'success');
-            generateReport();
-        }
-
-        // ================================================================
-        // 15. تبديل التبويبات
-        // ================================================================
-        function switchTab(tab) {
-            document.querySelectorAll('.bottom-nav .nav-item').forEach(t => t.classList.remove('active'));
-            const target = document.querySelector(`.bottom-nav .nav-item[onclick*="${tab}"]`);
-            if (target) target.classList.add('active');
-            const map = { 'summary': 'summary', 'inventory': 'detailed', 'categories': 'by_category',
-                'movements': 'movement', 'valuation': 'valuation' };
-            document.getElementById('filterReportType').value = map[tab] || 'detailed';
-            generateReport();
-        }
-
-        // ================================================================
-        // 16. القائمة الجانبية
-        // ================================================================
-        function handleAction(action) {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.remove('open');
-            document.getElementById('sidebarToggle').classList.remove('hidden');
-            switch (action) {
-                case 'refresh':
-                    generateReport();
-                    showToast('🔄 تم التحديث', 'success');
-                    break;
-                case 'csv':
-                    exportCSV();
-                    break;
-                case 'pdf':
-                    exportPDF();
-                    break;
-                case 'print':
-                    window.print();
-                    break;
-                case 'ai':
-                    openAIAdvisor();
-                    break;
-                case 'home':
-                    window.location.href = '../main.html';
-                    break;
-                default:
-                    showToast('❌ إجراء غير معروف', 'error');
-            }
-        }
-
-        // ================================================================
-        // 17. إعداد القائمة الجانبية
-        // ================================================================
-        function setupSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const toggle = document.getElementById('sidebarToggle');
-            toggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                sidebar.classList.toggle('open');
-                toggle.classList.toggle('hidden');
-            });
-            document.addEventListener('click', (e) => {
-                if (!sidebar.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
-                    sidebar.classList.remove('open');
-                    toggle.classList.remove('hidden');
-                }
-            });
-        }
-
-        // ================================================================
-        // 18. تحميل القوائم المنسدلة
-        // ================================================================
-        async function loadDropdowns() {
-            try {
-                const [warehousesRes, categoriesRes] = await Promise.all([
-                    apiCall('getWarehouses', {}),
-                    apiCall('getCategories', {})
-                ]);
-                const wSel = document.getElementById('filterWarehouse');
-                if (warehousesRes.success && warehousesRes.data) {
-                    wSel.innerHTML = '<option value="">جميع المستودعات</option>';
-                    warehousesRes.data.forEach(w => {
-                        const opt = document.createElement('option');
-                        opt.value = w.id || w.warehouse_id;
-                        opt.textContent = w.warehouse_name || w.name || 'مستودع';
-                        wSel.appendChild(opt);
-                    });
-                }
-                const cSel = document.getElementById('filterCategory');
-                if (categoriesRes.success && categoriesRes.data) {
-                    cSel.innerHTML = '<option value="">جميع الفئات</option>';
-                    categoriesRes.data.forEach(c => {
-                        const opt = document.createElement('option');
-                        opt.value = c.id || c.category_id;
-                        opt.textContent = c.category_name || c.name || 'فئة';
-                        cSel.appendChild(opt);
-                    });
-                }
-            } catch (e) { console.error('Error loading dropdowns:', e); }
-        }
-
-        // ================================================================
-        // 19. التهيئة النهائية
-        // ================================================================
-        document.addEventListener('DOMContentLoaded', function() {
-            loadSavedTheme();
-            setupSidebar();
-            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
-            const today = new Date();
-            const monthAgo = new Date();
-            monthAgo.setDate(monthAgo.getDate() - 30);
-            document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
-            document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
-
-            loadDropdowns();
-            setTimeout(generateReport, 500);
-
-            document.getElementById('aiModal').addEventListener('click', function(e) {
-                if (e.target === this) closeAIModal();
-            });
-            document.getElementById('detailsOverlay').addEventListener('click', function(e) {
-                if (e.target === this) closeDetails();
-            });
+      showLoading(true);
+      try {
+        const res = await apiCall('generateInventoryReport', {
+          start_date: from,
+          end_date: to,
+          from_date: from,
+          to_date: to,
+          warehouse_id: warehouse || null,
+          category_id: category || null,
+          report_type: type,
+          status: status || null
         });
+
+        const extracted = extractInventoryReport(res);
+
+        if (!extracted.success) {
+          throw new Error('فشل استخراج بيانات التقرير');
+        }
+
+        state.reportType = type;
+        state.allRows = extracted.rows;
+        state.stats = extracted.stats || {};
+        state.categories = extracted.categories || [];
+        state.movementSeries = extracted.movement_series || [];
+        state.loadedAt = new Date();
+
+        // تحليلات متقدمة
+        state.abcAnalysis = computeABCAnalysis(state.allRows);
+        state.deadStock = computeDeadStock(state.allRows);
+        state.healthScore = computeHealthScore(state.allRows, state.deadStock);
+        state.reorderList = state.allRows.filter(r =>
+          r.status === 'low' || r.status === 'critical'
+        );
+
+        // أعلى/أبطأ حركة
+        const sortedByValue = [...state.allRows].sort((a, b) =>
+          Number(b.quantity || 0) * Number(b.purchase_price || 0) -
+          Number(a.quantity || 0) * Number(a.purchase_price || 0)
+        );
+        state.topMovers = sortedByValue.slice(0, 5);
+        state.slowMovers = sortedByValue.slice(-5).reverse();
+
+        applyPresetAndRender();
+
+        $('offlineBanner').classList.remove('show');
+        showToast(
+          state.allRows.length
+            ? `تم توليد التقرير (${state.allRows.length} صنف)`
+            : 'لا توجد بيانات مطابقة',
+          state.allRows.length ? 'success' : 'warning'
+        );
+      } catch (err) {
+        state.allRows = [];
+        state.filteredRows = [];
+        state.stats = {};
+        state.categories = [];
+        state.movementSeries = [];
+        state.deadStock = [];
+        state.reorderList = [];
+        state.healthScore = 0;
+        state.abcAnalysis = { A: [], B: [], C: [] };
+        state.topMovers = [];
+        state.slowMovers = [];
+        resetKPIs();
+        renderTable([]);
+        updateCharts([], {});
+        updateFooter([], {});
+        updateHealthBanner(0);
+        $('offlineBanner').classList.add('show');
+        showToast(err.message || 'فشل توليد التقرير', 'error');
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // ================================================================
+    // 10. المرشحات السريعة
+    // ================================================================
+    const PRESETS = [
+      { id: 'all', label: 'الكل', icon: 'fa-th-large', cls: '' },
+      { id: 'critical', label: 'حرج', icon: 'fa-exclamation-circle', cls: 'danger' },
+      { id: 'low', label: 'منخفض', icon: 'fa-arrow-down', cls: 'warning' },
+      { id: 'dead', label: 'راكد', icon: 'fa-hourglass-half', cls: 'warning' },
+      { id: 'A', label: 'فئة A', icon: 'fa-star', cls: 'success' },
+      { id: 'B', label: 'فئة B', icon: 'fa-star-half-alt', cls: '' },
+      { id: 'C', label: 'فئة C', icon: 'fa-circle', cls: '' },
+      { id: 'fast', label: 'سريع الحركة', icon: 'fa-bolt', cls: 'success' },
+      { id: 'slow', label: 'بطيء الحركة', icon: 'fa-snail', cls: '' }
+    ];
+
+    function renderQuickPresets() {
+      const container = $('quickPresets');
+      container.innerHTML = PRESETS.map(p => `
+        <button type="button" class="preset-chip ${p.cls} ${p.id === state.activePreset ? 'active' : ''}"
+                data-preset="${p.id}">
+          <i class="fas ${p.icon}"></i>
+          ${escapeHtml(p.label)}
+        </button>
+      `).join('');
+
+      container.querySelectorAll('[data-preset]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          applyPreset(btn.dataset.preset);
+        });
+      });
+    }
+
+    function applyPreset(presetId) {
+      state.activePreset = presetId;
+      renderQuickPresets();
+      applyPresetAndRender();
+      haptic('light');
+    }
+
+    function filterByPreset(rows, presetId) {
+      switch (presetId) {
+        case 'critical':
+          return rows.filter(r => r.status === 'critical');
+        case 'low':
+          return rows.filter(r => r.status === 'low');
+        case 'dead':
+          return state.deadStock;
+        case 'A':
+          return state.abcAnalysis.A || [];
+        case 'B':
+          return state.abcAnalysis.B || [];
+        case 'C':
+          return state.abcAnalysis.C || [];
+        case 'fast':
+          return rows.filter(r => classifyTurnover(computeTurnover(r, state.stats)).cls === 'fast');
+        case 'slow':
+          return rows.filter(r => classifyTurnover(computeTurnover(r, state.stats)).cls === 'slow');
+        case 'all':
+        default:
+          return rows;
+      }
+    }
+
+    function applyPresetAndRender() {
+      let filtered = filterByPreset(state.allRows, state.activePreset);
+
+      const q = (state.searchQuery || '').trim().toLowerCase();
+      if (q) {
+        filtered = filtered.filter(item => {
+          const haystack = [
+            item.product_code,
+            item.product_name_ar,
+            item.product_name,
+            item.category_name,
+            item.warehouse_name
+          ].map(v => String(v || '').toLowerCase()).join(' ');
+          return haystack.includes(q);
+        });
+      }
+
+      state.filteredRows = filtered;
+
+      renderTable(filtered);
+      updateKPIs();
+      updateCharts(state.allRows, { categories: state.categories, movement_series: state.movementSeries });
+      updateFooter(filtered, state.stats);
+      updateHealthBanner(state.healthScore);
+      generateAlerts();
+    }
+
+    // ================================================================
+    // 11. عرض الجدول
+    // ================================================================
+    function renderTable(rows) {
+      const tbody = $('inventoryTableBody');
+
+      if (!rows || rows.length === 0) {
+        tbody.innerHTML = `
+          <tr><td colspan="13">
+            <div class="empty-state">
+              <i class="fas fa-inbox"></i>
+              لا توجد بيانات مطابقة
+            </div>
+          </td></tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = rows.map((item, idx) => {
+        const status = item.status || 'active';
+        const qty = Number(item.quantity || 0);
+        const purchasePrice = Number(item.purchase_price || 0);
+        const salePrice = Number(item.sale_price || 0);
+        const value = qty * purchasePrice;
+        const abcClass = item._abcClass || 'C';
+        const turnoverRate = computeTurnover(item, state.stats);
+        const turnoverInfo = classifyTurnover(turnoverRate);
+
+        return `
+          <tr>
+            <td>${idx + 1}</td>
+            <td class="product-code">${escapeHtml(item.product_code || '---')}</td>
+            <td>${escapeHtml(item.product_name_ar || item.product_name || '---')}</td>
+            <td>${escapeHtml(item.category_name || '---')}</td>
+            <td>${escapeHtml(item.warehouse_name || 'جميع المستودعات')}</td>
+            <td>${formatNumber(qty)}</td>
+            <td>${formatCurrency(purchasePrice)}</td>
+            <td>${formatCurrency(salePrice)}</td>
+            <td class="amount debit">${formatCurrency(value)}</td>
+            <td><span class="abc-badge ${abcClass}">${abcClass}</span></td>
+            <td><span class="turnover-badge ${turnoverInfo.cls}">${turnoverInfo.label}</span></td>
+            <td><span class="status-badge ${getStatusClass(status)}">${getStatusLabel(status)}</span></td>
+            <td>
+              <button class="btn-view" onclick="viewProduct(${Number(item.product_id || item.id || 0)})" title="تفاصيل">
+                <i class="fas fa-eye"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ================================================================
+    // 12. KPIs
+    // ================================================================
+    function updateKPIs() {
+      const totalItems = Number(state.stats.total_items ?? state.allRows.length);
+      const totalValue = Number(state.stats.total_value ?? 0);
+      const deadStockCount = state.deadStock.length;
+      const lowAndCritical = state.allRows.filter(r =>
+        r.status === 'low' || r.status === 'critical'
+      ).length;
+
+      $('kpiTotalItems').textContent = formatNumber(totalItems);
+      $('kpiTotalValue').textContent = formatCurrency(totalValue);
+      $('kpiDeadStock').textContent = formatNumber(deadStockCount);
+      $('kpiLowStock').textContent = formatNumber(lowAndCritical);
+    }
+
+    function resetKPIs() {
+      $('kpiTotalItems').textContent = '0';
+      $('kpiTotalValue').textContent = '0.00';
+      $('kpiDeadStock').textContent = '0';
+      $('kpiLowStock').textContent = '0';
+    }
+
+    function updateFooter(rows, stats) {
+      const totalValue = Number(stats.total_value ?? rows.reduce((s, r) =>
+        s + Number(r.quantity || 0) * Number(r.purchase_price || 0), 0));
+      const totalItems = Number(stats.total_items ?? rows.length);
+      $('footerTotal').textContent = formatCurrency(totalValue);
+      $('footerItems').textContent = formatNumber(totalItems);
+      $('footerAvg').textContent = formatCurrency(totalItems ? totalValue / totalItems : 0);
+    }
+
+    function updateHealthBanner(score) {
+      const banner = $('healthBanner');
+      banner.classList.remove('warn', 'bad');
+      $('healthScore').textContent = score || '—';
+
+      let title, desc;
+      if (score >= 80) {
+        title = 'مخزون صحي ومتوازن';
+        desc = `مؤشر الصحة ${score}% — جميع الأصناف الرئيسية بمستويات آمنة.`;
+      } else if (score >= 50) {
+        title = 'مخزون يحتاج متابعة';
+        desc = `مؤشر الصحة ${score}% — توجد أصناف منخفضة أو راكدة تحتاج مراجعة.`;
+      } else if (score > 0) {
+        banner.classList.add('bad');
+        title = 'مخزون حرج — يتطلب تدخل';
+        desc = `مؤشر الصحة ${score}% — يوصى بإعادة الطلب وتصفية الراكد فوراً.`;
+      } else {
+        title = 'لا توجد بيانات كافية';
+        desc = 'سيتم حساب مؤشر الصحة بعد توليد التقرير.';
+      }
+      $('healthTitle').textContent = title;
+      $('healthDesc').textContent = desc;
+    }
+
+    // ================================================================
+    // 13. الرسوم البيانية
+    // ================================================================
+    function updateCharts(rows, payload) {
+      if (typeof Chart === 'undefined') return;
+
+      // رسم الحركة
+      const series = payload.movement_series || [];
+      const ctx1 = $('movementChart').getContext('2d');
+      if (movementChart) movementChart.destroy();
+      movementChart = new Chart(ctx1, {
+        type: 'line',
+        data: {
+          labels: series.map(x => x.day || '').map(d => d.substring(5)),
+          datasets: [{
+            label: 'عدد الحركات',
+            data: series.map(x => Number(x.movement_count || 0)),
+            borderColor: '#a882ff',
+            backgroundColor: 'rgba(168,130,255,0.12)',
+            tension: 0.3,
+            fill: true,
+            borderWidth: 2.5,
+            pointBackgroundColor: '#a882ff',
+            pointBorderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(168,130,255,0.08)' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+
+      // رسم توزيع الفئات
+      const categories = payload.categories || [];
+      const ctx2 = $('categoryChart').getContext('2d');
+      if (categoryChart) categoryChart.destroy();
+      categoryChart = new Chart(ctx2, {
+        type: 'doughnut',
+        data: {
+          labels: categories.map(x => x.category_name || 'أخرى'),
+          datasets: [{
+            data: categories.map(x => Number(x.total_value || 0)),
+            backgroundColor: ['#a882ff', '#f5c842', '#10b981', '#7c4dff', '#f59e0b', '#ef4444'],
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '65%',
+          plugins: {
+            legend: {
+              position: 'left',
+              labels: { font: { family: 'Cairo' }, boxWidth: 12, padding: 10 }
+            }
+          }
+        }
+      });
+    }
+
+    // ================================================================
+    // 14. التنبيهات
+    // ================================================================
+    function generateAlerts() {
+      const alerts = [];
+      const critical = state.allRows.filter(r => r.status === 'critical');
+      const low = state.allRows.filter(r => r.status === 'low');
+      const dead = state.deadStock;
+
+      if (critical.length) {
+        alerts.push({
+          type: 'danger',
+          icon: 'fa-exclamation-circle',
+          title: 'أصناف حرجة',
+          desc: `${critical.length} صنف وصل إلى مستوى صفر أو أقل من الحد الأدنى`,
+          time: 'الآن'
+        });
+      }
+      if (low.length) {
+        alerts.push({
+          type: 'warning',
+          icon: 'fa-arrow-down',
+          title: 'أصناف منخفضة',
+          desc: `${low.length} صنف تحت مستوى إعادة الطلب`,
+          time: 'الآن'
+        });
+      }
+      if (dead.length) {
+        alerts.push({
+          type: 'warning',
+          icon: 'fa-hourglass-half',
+          title: 'مخزون راكد',
+          desc: `${dead.length} صنف بدون حركة لأكثر من 90 يوماً`,
+          time: 'الآن'
+        });
+      }
+      renderAlerts(alerts);
+    }
+
+    function renderAlerts(alerts) {
+      const container = $('alertsContainer');
+      if (!alerts || alerts.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      container.innerHTML = alerts.slice(0, 3).map((a, i) => `
+        <div class="alert-item ${a.type}" style="animation-delay:${i * 0.1}s">
+          <div class="alert-icon"><i class="fas ${a.icon}"></i></div>
+          <div class="alert-content">
+            <div class="alert-title">${escapeHtml(a.title)}</div>
+            <div class="alert-desc">${escapeHtml(a.desc)}</div>
+          </div>
+          <div class="alert-time">${escapeHtml(a.time)}</div>
+        </div>
+      `).join('');
+    }
+
+    // ================================================================
+    // 15. مودال تفاصيل المنتج (مُحسّن)
+    // ================================================================
+    async function viewProduct(productId) {
+      if (!productId) {
+        showToast('لا توجد تفاصيل', 'warning');
+        return;
+      }
+
+      // نبحث في الذاكرة أولاً
+      const cached = state.allRows.find(r => Number(r.product_id || r.id) === Number(productId));
+      showLoading(true);
+      try {
+        const res = await apiCall('getProductDetails', { product_id: productId });
+        const p = extractObject(res) || cached;
+        if (!p) {
+          throw new Error('لا توجد تفاصيل متاحة');
+        }
+
+        renderDetailsModal(p);
+      } catch (err) {
+        if (cached) {
+          renderDetailsModal(cached);
+        } else {
+          showToast(err.message || 'فشل جلب التفاصيل', 'error');
+        }
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    function renderDetailsModal(p) {
+      const content = $('detailsContent');
+      const qty = Number(p.quantity || 0);
+      const purchasePrice = Number(p.purchase_price || 0);
+      const salePrice = Number(p.sale_price || p.unit_price || 0);
+      const value = qty * purchasePrice;
+      const profit = salePrice - purchasePrice;
+      const profitPct = purchasePrice > 0 ? (profit / purchasePrice) * 100 : 0;
+      const turnover = computeTurnover(p, state.stats);
+      const turnoverInfo = classifyTurnover(turnover);
+      const status = p.status || 'active';
+      const abcClass = p._abcClass || 'C';
+
+      // تقدير نقطة إعادة الطلب
+      const minStock = Number(p.minimum_stock || 0);
+      const reorderQty = Number(p.reorder_quantity || 0);
+      const reorderPoint = minStock + Math.max(1, Math.ceil(reorderQty * 0.5));
+
+      content.innerHTML = `
+        <div class="details-header">
+          <h3 class="details-title">📦 ${escapeHtml(p.product_name_ar || p.product_name || 'منتج')}</h3>
+          <button class="details-close" onclick="closeDetails(null)">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+
+        <div class="details-profile">
+          <div class="details-avatar">${escapeHtml((p.product_name_ar || p.product_name || 'م').substring(0, 2))}</div>
+          <div class="details-name">${escapeHtml(p.product_name_ar || p.product_name || '---')}</div>
+          <span class="details-status ${getStatusClass(status)}">${getStatusLabel(status)}</span>
+        </div>
+
+        <div class="details-section">
+          <div class="details-section-title">
+            <i class="fas fa-info-circle"></i> المعلومات الأساسية
+          </div>
+          <div class="details-grid-2">
+            <div class="detail-tile">
+              <span>كود المنتج</span>
+              <strong>${escapeHtml(p.product_code || '---')}</strong>
+            </div>
+            <div class="detail-tile">
+              <span>الفئة</span>
+              <strong>${escapeHtml(p.category_name || '---')}</strong>
+            </div>
+            <div class="detail-tile">
+              <span>المستودع</span>
+              <strong>${escapeHtml(p.warehouse_name || '---')}</strong>
+            </div>
+            <div class="detail-tile">
+              <span>تصنيف ABC</span>
+              <strong><span class="abc-badge ${abcClass}">${abcClass}</span></strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="details-section">
+          <div class="details-section-title">
+            <i class="fas fa-money-bill-wave"></i> الأرقام المالية
+          </div>
+          <div class="details-row">
+            <span class="details-label">الكمية المتاحة</span>
+            <span class="details-value">${formatNumber(qty)}</span>
+          </div>
+          <div class="details-row">
+            <span class="details-label">سعر الشراء</span>
+            <span class="details-value">${formatCurrency(purchasePrice)}</span>
+          </div>
+          <div class="details-row">
+            <span class="details-label">سعر البيع</span>
+            <span class="details-value">${formatCurrency(salePrice)}</span>
+          </div>
+          <div class="details-row">
+            <span class="details-label">هامش الربح للوحدة</span>
+            <span class="details-value" style="color:${profit >= 0 ? 'var(--success)' : 'var(--danger)'};">
+              ${formatCurrency(profit)} (${profitPct.toFixed(1)}%)
+            </span>
+          </div>
+          <div class="details-row">
+            <span class="details-label">القيمة الإجمالية للمخزون</span>
+            <span class="details-value" style="color:var(--gold-primary);">${formatCurrency(value)}</span>
+          </div>
+        </div>
+
+        <div class="details-section">
+          <div class="details-section-title">
+            <i class="fas fa-warehouse"></i> إدارة المخزون
+          </div>
+          <div class="details-row">
+            <span class="details-label">الحد الأدنى للمخزون</span>
+            <span class="details-value">${formatNumber(minStock)}</span>
+          </div>
+          <div class="details-row">
+            <span class="details-label">الحد الأقصى للمخزون</span>
+            <span class="details-value">${formatNumber(p.maximum_stock || 0)}</span>
+          </div>
+          <div class="details-row">
+            <span class="details-label">كمية إعادة الطلب الموصى بها</span>
+            <span class="details-value" style="color:var(--violet-primary);">
+              ${formatNumber(Math.max(reorderQty, Math.max(0, reorderPoint - qty)))}
+            </span>
+          </div>
+          <div class="details-row">
+            <span class="details-label">نقطة إعادة الطلب</span>
+            <span class="details-value">${formatNumber(reorderPoint)}</span>
+          </div>
+          <div class="details-row">
+            <span class="details-label">تصنيف الحركة</span>
+            <span class="details-value">
+              <span class="turnover-badge ${turnoverInfo.cls}">${turnoverInfo.label}</span>
+            </span>
+          </div>
+          ${p.last_count_date ? `
+            <div class="details-row">
+              <span class="details-label">آخر جرد للمخزون</span>
+              <span class="details-value">${escapeHtml(String(p.last_count_date).substring(0, 10))}</span>
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="details-section" style="background:rgba(168,130,255,0.06);">
+          <div class="details-section-title">
+            <i class="fas fa-lightbulb"></i> توصية
+          </div>
+          <p style="font-size:0.85rem;color:var(--text-secondary);line-height:1.9;text-align:center;">
+            ${buildRecommendation(p, qty, reorderPoint, status)}
+          </p>
+        </div>
+
+        <div style="height:40px;"></div>
+      `;
+
+      $('detailsOverlay').classList.add('show');
+      document.body.style.overflow = 'hidden';
+      haptic('light');
+    }
+
+    function buildRecommendation(p, qty, reorderPoint, status) {
+      if (status === 'critical' || qty <= 0) {
+        return `🚨 <strong>تدخل فوري مطلوب</strong>: الصنف وصل إلى مستوى حرج. ينبغي إصدار طلب شراء فوري بكمية لا تقل عن <strong>${formatNumber(reorderPoint)}</strong> وحدة.`;
+      }
+      if (status === 'low' || qty <= reorderPoint) {
+        return `⚠️ <strong>يُنصح بإعادة الطلب</strong>: الكمية الحالية (${formatNumber(qty)}) أقل من أو تساوي نقطة إعادة الطلب (${formatNumber(reorderPoint)}).`;
+      }
+      if (state.deadStock.find(d => Number(d.product_id || d.id) === Number(p.product_id || p.id))) {
+        return `💤 <strong>مخزون راكد</strong>: لم يتحرك الصنف منذ أكثر من 90 يوماً. يُنصح بمراجعة السعر أو تنشيط عرض ترويجي.`;
+      }
+      return `✅ <strong>الوضع جيد</strong>: مستوى المخزون ضمن النطاق الآمن ولا يحتاج أي إجراء عاجل.`;
+    }
+
+    function closeDetails(event) {
+      if (event && event.target !== event.currentTarget) return;
+      $('detailsOverlay').classList.remove('show');
+      document.body.style.overflow = '';
+    }
+
+    // ================================================================
+    // 16. المودالات
+    // ================================================================
+    function openModal(id) {
+      const el = $(id);
+      if (el) el.classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal(event, id) {
+      if (event && event.target !== event.currentTarget) return;
+      const el = $(id);
+      if (el) el.classList.remove('show');
+      document.body.style.overflow = '';
+    }
+
+    // ================================================================
+    // 17. AI Advisor (مُحسّن)
+    // ================================================================
+    function openAIAdvisor() {
+      const container = $('aiContent');
+      const insights = buildAIInsights();
+
+      if (!insights.length) {
+        container.innerHTML = `
+          <div style="text-align:center;color:var(--text-muted);padding:30px;">
+            <i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:12px;color:var(--violet-primary);"></i>
+            <p>لا توجد بيانات كافية للتحليل</p>
+            <p style="font-size:0.75rem;">قم بتوليد التقرير أولاً للحصول على توصيات ذكية</p>
+          </div>
+        `;
+        openModal('aiModal');
+        return;
+      }
+
+      container.innerHTML = insights.map(i => `
+        <div class="insight-card ${i.severity || ''}">
+          <div class="insight-title">
+            <i class="fas ${i.icon}"></i>
+            ${escapeHtml(i.title)}
+          </div>
+          <div class="insight-desc">${i.desc}</div>
+        </div>
+      `).join('');
+
+      openModal('aiModal');
+      haptic('light');
+    }
+
+    function buildAIInsights() {
+      const insights = [];
+      if (!state.allRows.length) return insights;
+
+      const total = state.allRows.length;
+      const critical = state.allRows.filter(r => r.status === 'critical').length;
+      const low = state.allRows.filter(r => r.status === 'low').length;
+      const dead = state.deadStock.length;
+      const score = state.healthScore;
+
+      // 1. النظرة العامة
+      insights.push({
+        icon: 'fa-chart-pie',
+        title: 'نظرة عامة على المخزون',
+        desc: `يحتوي المخزون على <strong>${formatNumber(total)}</strong> صنف بقيمة إجمالية <strong>${formatCurrency(state.stats.total_value || 0)}</strong>. مؤشر الصحة العام: <strong>${score}%</strong>.`
+      });
+
+      // 2. الأصناف الحرجة
+      if (critical > 0) {
+        insights.push({
+          icon: 'fa-exclamation-circle',
+          title: '🚨 تدخل عاجل مطلوب',
+          desc: `يوجد <strong>${critical}</strong> صنف في حالة حرجة (كمية صفرية أو أقل من الحد الأدنى). يُوصى بإصدار طلبات شراء فورية.`,
+          severity: 'danger'
+        });
+      }
+
+      // 3. الأصناف المنخفضة
+      if (low > 0) {
+        insights.push({
+          icon: 'fa-arrow-down',
+          title: '⚠️ أصناف تحتاج إعادة طلب',
+          desc: `<strong>${low}</strong> صنف تحت نقطة إعادة الطلب. راجع قائمة "إعادة الطلب" لاتخاذ القرار.`,
+          severity: 'warning'
+        });
+      }
+
+      // 4. المخزون الراكد
+      if (dead > 0) {
+        const deadValue = state.deadStock.reduce((s, r) => s + Number(r.quantity || 0) * Number(r.purchase_price || 0), 0);
+        insights.push({
+          icon: 'fa-hourglass-half',
+          title: '💤 مخزون راكد',
+          desc: `<strong>${dead}</strong> صنف بقيمة <strong>${formatCurrency(deadValue)}</strong> بدون حركة منذ 90+ يوماً. فكر في تخفيض الأسعار أو تنشيط المبيعات.`,
+          severity: 'warning'
+        });
+      }
+
+      // 5. تصنيف ABC
+      const aCount = state.abcAnalysis.A.length;
+      const bCount = state.abcAnalysis.B.length;
+      const cCount = state.abcAnalysis.C.length;
+      insights.push({
+        icon: 'fa-layer-group',
+        title: 'تحليل ABC (قاعدة باريتو)',
+        desc: `فئة A: <strong>${aCount}</strong> صنف (80% من القيمة) | فئة B: <strong>${bCount}</strong> صنف | فئة C: <strong>${cCount}</strong> صنف. ركّز الجرد الدوري على فئة A.`
+      });
+
+      // 6. أعلى قيمة
+      if (state.topMovers.length > 0) {
+        const top = state.topMovers[0];
+        insights.push({
+          icon: 'fa-crown',
+          title: '👑 أعلى صنف قيمة',
+          desc: `<strong>${escapeHtml(top.product_name_ar || top.product_name || '---')}</strong> بقيمة <strong>${formatCurrency(Number(top.quantity || 0) * Number(top.purchase_price || 0))}</strong>. تابع مستواه بانتظام.`
+        });
+      }
+
+      // 7. التوصية النهائية
+      if (score >= 80) {
+        insights.push({
+          icon: 'fa-check-circle',
+          title: '✅ توصية',
+          desc: 'المخزون في حالة صحية جيدة. حافظ على سياسة إعادة الطلب الحالية وراقب فئة A دورياً.',
+          severity: 'success'
+        });
+      } else if (score >= 50) {
+        insights.push({
+          icon: 'fa-balance-scale',
+          title: '⚖️ توصية',
+          desc: 'المخزون يحتاج انتباهاً. جدول جرد دوري أسبوعي وابدأ بتنفيذ طلبات إعادة الطلب للأصناف المنخفضة.'
+        });
+      } else {
+        insights.push({
+          icon: 'fa-tools',
+          title: '🛠️ توصية عاجلة',
+          desc: 'المخزون في حالة حرجة. أوقف أي طلبات غير أساسية، نفذ إعادة طلب فورية للأصناف الحرجة، وابدأ بتصفية الراكد.',
+          severity: 'danger'
+        });
+      }
+
+      return insights;
+    }
+
+    function closeAIModal(event) {
+      if (event && event.target !== event.currentTarget) return;
+      $('aiModal').classList.remove('show');
+      document.body.style.overflow = '';
+    }
+
+    // ================================================================
+    // 18. مودال تنبيهات إعادة الطلب
+    // ================================================================
+    function openReorderAlerts() {
+      const container = $('reorderContent');
+      const list = state.reorderList || [];
+
+      if (!list.length) {
+        container.innerHTML = `
+          <div style="text-align:center;color:var(--text-muted);padding:30px;">
+            <i class="fas fa-check-circle" style="font-size:3rem;display:block;margin-bottom:12px;color:var(--success);"></i>
+            <p>لا توجد أصناف تحتاج إعادة طلب حالياً</p>
+          </div>
+        `;
+        openModal('reorderModal');
+        return;
+      }
+
+      const rows = list.map(item => {
+        const qty = Number(item.quantity || 0);
+        const minStock = Number(item.minimum_stock || 0);
+        const reorderQty = Number(item.reorder_quantity || 0);
+        const suggested = Math.max(reorderQty, minStock - qty, 1);
+        const severity = item.status === 'critical' ? 'danger' : 'warning';
+        return `
+          <div class="insight-card ${severity}" style="text-align:right;">
+            <div class="insight-title" style="justify-content:flex-start;">
+              <i class="fas ${severity === 'danger' ? 'fa-exclamation-circle' : 'fa-arrow-down'}"></i>
+              ${escapeHtml(item.product_name_ar || item.product_name || '---')}
+            </div>
+            <div class="insight-desc" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+              <span>الكمية: <strong style="color:var(--danger);">${formatNumber(qty)}</strong></span>
+              <span>الحد الأدنى: ${formatNumber(minStock)}</span>
+              <span>المقترح: <strong style="color:var(--violet-primary);">${formatNumber(suggested)}</strong></span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <div style="text-align:center;margin-bottom:14px;">
+          <p style="color:var(--text-muted);font-size:0.8rem;">
+            الأصناف التالية تحتاج إعادة طلب حسب سياسة الحد الأدنى:
+          </p>
+        </div>
+        ${rows}
+      `;
+      openModal('reorderModal');
+      haptic('light');
+    }
+
+    function closeReorderAlerts(event) {
+      if (event && event.target !== event.currentTarget) return;
+      $('reorderModal').classList.remove('show');
+      document.body.style.overflow = '';
+    }
+
+    // ================================================================
+    // 19. تصدير CSV
+    // ================================================================
+    function csvEscape(value) {
+      if (value === null || value === undefined) return '';
+      return '"' + String(value).replace(/"/g, '""') + '"';
+    }
+
+    function exportCSV() {
+      if (!state.filteredRows.length) {
+        showToast('لا توجد بيانات للتصدير', 'error');
+        return;
+      }
+
+      const headers = [
+        '#', 'كود المنتج', 'المنتج', 'الفئة', 'المستودع',
+        'الكمية', 'سعر الشراء', 'سعر البيع', 'القيمة',
+        'تصنيف ABC', 'تصنيف الحركة', 'الحالة'
+      ];
+
+      const lines = [];
+      lines.push(headers.map(csvEscape).join(','));
+
+      state.filteredRows.forEach((item, idx) => {
+        const qty = Number(item.quantity || 0);
+        const purchasePrice = Number(item.purchase_price || 0);
+        const salePrice = Number(item.sale_price || 0);
+        const value = qty * purchasePrice;
+        const turnoverInfo = classifyTurnover(computeTurnover(item, state.stats));
+        lines.push([
+          idx + 1,
+          item.product_code || '',
+          item.product_name_ar || item.product_name || '',
+          item.category_name || '',
+          item.warehouse_name || '',
+          qty,
+          purchasePrice,
+          salePrice,
+          value,
+          item._abcClass || 'C',
+          turnoverInfo.label,
+          getStatusLabel(item.status || 'active')
+        ].map(csvEscape).join(','));
+      });
+
+      lines.push('');
+      lines.push(csvEscape('إجمالي الأصناف:') + ',' + csvEscape(String(state.filteredRows.length)));
+      lines.push(csvEscape('إجمالي القيمة:') + ',' + csvEscape(formatCurrency(state.stats.total_value || 0)));
+      lines.push(csvEscape('تاريخ الإنشاء:') + ',' + csvEscape(new Date().toLocaleString('en-GB')));
+
+      const csv = '\uFEFF' + lines.join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const from = $('filterDateFrom').value || 'start';
+      const to = $('filterDateTo').value || 'end';
+      link.href = url;
+      link.download = `inventory-report_${from}_${to}.csv`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      showToast('تم تصدير ملف CSV', 'success');
+      haptic('success');
+    }
+
+    // ================================================================
+    // 20. تصدير PDF
+    // ================================================================
+    function exportPDF() {
+      if (!state.filteredRows.length) {
+        showToast('لا توجد بيانات للتصدير', 'error');
+        return;
+      }
+
+      const jspdfGlobal = window.jspdf || {};
+      const jsPDFCtor = jspdfGlobal.jsPDF || window.jsPDF;
+      if (typeof jsPDFCtor !== 'function') {
+        showToast('مكتبة PDF غير محمّلة', 'error');
+        return;
+      }
+
+      try {
+        const doc = new jsPDFCtor('p', 'pt', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const marginLeft = 30;
+        const tableWidth = 520;
+
+        doc.setFontSize(16);
+        doc.setTextColor(124, 77, 255);
+        doc.text('Inventory Report', pageWidth / 2, 40, { align: 'center' });
+
+        doc.setFontSize(9);
+        doc.setTextColor(90, 90, 90);
+        const from = $('filterDateFrom').value || '-';
+        const to = $('filterDateTo').value || '-';
+        doc.text(`Period: ${from}  ->  ${to}`, pageWidth / 2, 58, { align: 'center' });
+        doc.text(`Records: ${state.filteredRows.length}    Health: ${state.healthScore}%`, pageWidth / 2, 72, { align: 'center' });
+
+        const headers = ['#', 'Code', 'Product', 'Category', 'Qty', 'Buy', 'Sell', 'Value', 'ABC', 'Status'];
+        const colWidths = [22, 65, 100, 60, 35, 48, 48, 60, 30, 52];
+        let cursorY = 100;
+        const lineHeight = 15;
+
+        function drawHeader() {
+          doc.setFontSize(8);
+          doc.setTextColor(255, 255, 255);
+          doc.setFillColor(124, 77, 255);
+          doc.rect(marginLeft, cursorY - 11, tableWidth, lineHeight, 'F');
+          let cx = marginLeft + 4;
+          headers.forEach((h, i) => {
+            doc.text(h, cx, cursorY);
+            cx += colWidths[i];
+          });
+          cursorY += lineHeight;
+          doc.setTextColor(40, 40, 40);
+        }
+
+        drawHeader();
+
+        state.filteredRows.forEach((item, idx) => {
+          if (cursorY > pageHeight - 40) {
+            doc.addPage();
+            cursorY = 40;
+            drawHeader();
+          }
+          const qty = Number(item.quantity || 0);
+          const purchasePrice = Number(item.purchase_price || 0);
+          const value = qty * purchasePrice;
+          const row = [
+            idx + 1,
+            String(item.product_code || '').substring(0, 12),
+            String(item.product_name_ar || item.product_name || '').substring(0, 20),
+            String(item.category_name || '').substring(0, 12),
+            qty,
+            formatCurrency(purchasePrice),
+            formatCurrency(item.sale_price || 0),
+            formatCurrency(value),
+            item._abcClass || 'C',
+            getStatusLabel(item.status || 'active')
+          ];
+          if (idx % 2 === 1) {
+            doc.setFillColor(245, 245, 250);
+            doc.rect(marginLeft, cursorY - 11, tableWidth, lineHeight, 'F');
+          }
+          doc.setFontSize(7);
+          let cx = marginLeft + 4;
+          row.forEach((cell, i) => {
+            doc.text(String(cell ?? '').substring(0, 22), cx, cursorY);
+            cx += colWidths[i];
+          });
+          cursorY += lineHeight;
+        });
+
+        const totalValue = Number(state.stats.total_value || 0);
+        if (cursorY > pageHeight - 40) {
+          doc.addPage();
+          cursorY = 40;
+        }
+        doc.setFontSize(9);
+        doc.setTextColor(124, 77, 255);
+        doc.text(
+          `Total Value: ${formatCurrency(totalValue)}    Items: ${state.filteredRows.length}    Health Score: ${state.healthScore}%`,
+          pageWidth / 2, cursorY + 20, { align: 'center' }
+        );
+
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        doc.save(`inventory-report_${from}_${to}_${stamp}.pdf`);
+        showToast('تم تصدير ملف PDF', 'success');
+        haptic('success');
+      } catch (err) {
+        console.error('exportPDF error:', err);
+        showToast('فشل تصدير PDF: ' + err.message, 'error');
+      }
+    }
+
+    // ================================================================
+    // 21. إعادة تعيين الفلاتر
+    // ================================================================
+    function resetFilters() {
+      const today = new Date();
+      const monthAgo = new Date();
+      monthAgo.setDate(monthAgo.getDate() - 30);
+
+      $('filterDateFrom').value = dateOnly(monthAgo);
+      $('filterDateTo').value = dateOnly(today);
+      $('filterWarehouse').value = '';
+      $('filterCategory').value = '';
+      $('filterReportType').value = 'summary';
+      $('filterStatus').value = '';
+      $('inventorySearch').value = '';
+      state.searchQuery = '';
+      state.activePreset = 'all';
+      renderQuickPresets();
+      showToast('تم إعادة تعيين الفلاتر', 'success');
+      generateReport();
+    }
+
+    // ================================================================
+    // 22. البحث
+    // ================================================================
+    function applyInventorySearch(value) {
+      state.searchQuery = value || '';
+      applyPresetAndRender();
+    }
+
+    // ================================================================
+    // 23. القائمة السفلية
+    // ================================================================
+    function setupBottomNav() {
+      const container = $('bottomNav');
+      container.querySelectorAll('.nav-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+          container.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
+          btn.classList.add('active');
+          handleBottomTab(btn.dataset.tab);
+        });
+      });
+    }
+
+    function handleBottomTab(tab) {
+      switch (tab) {
+        case 'summary':
+          state.activePreset = 'all';
+          $('filterReportType').value = 'summary';
+          renderQuickPresets();
+          generateReport();
+          break;
+        case 'inventory':
+          state.activePreset = 'all';
+          $('filterReportType').value = 'detailed';
+          renderQuickPresets();
+          generateReport();
+          break;
+        case 'abc':
+          openAIAnalysisABC();
+          break;
+        case 'movements':
+          $('filterReportType').value = 'movement';
+          generateReport();
+          break;
+        case 'reorder':
+          openReorderAlerts();
+          break;
+        default:
+          break;
+      }
+      haptic('light');
+    }
+
+    function openAIAnalysisABC() {
+      const aVal = state.abcAnalysis.A.reduce((s, r) => s + Number(r.quantity || 0) * Number(r.purchase_price || 0), 0);
+      const bVal = state.abcAnalysis.B.reduce((s, r) => s + Number(r.quantity || 0) * Number(r.purchase_price || 0), 0);
+      const cVal = state.abcAnalysis.C.reduce((s, r) => s + Number(r.quantity || 0) * Number(r.purchase_price || 0), 0);
+      const totalVal = aVal + bVal + cVal;
+
+      $('aiContent').innerHTML = `
+        <div class="abc-summary">
+          <div class="abc-box A">
+            <span class="abc-letter">A</span>
+            <div class="abc-meta">${state.abcAnalysis.A.length} صنف</div>
+            <div class="abc-value">${formatCurrency(aVal)}</div>
+          </div>
+          <div class="abc-box B">
+            <span class="abc-letter">B</span>
+            <div class="abc-meta">${state.abcAnalysis.B.length} صنف</div>
+            <div class="abc-value">${formatCurrency(bVal)}</div>
+          </div>
+          <div class="abc-box C">
+            <span class="abc-letter">C</span>
+            <div class="abc-meta">${state.abcAnalysis.C.length} صنف</div>
+            <div class="abc-value">${formatCurrency(cVal)}</div>
+          </div>
+        </div>
+
+        <div class="insight-card">
+          <div class="insight-title"><i class="fas fa-info-circle"></i> ما هو تحليل ABC؟</div>
+          <div class="insight-desc">
+            تصنيف يوزع الأصناف حسب أهميتها المالية:
+            <br><strong>فئة A</strong>: 80% من القيمة (تحتاج إدارة مشددة وجرداً أسبوعياً)
+            <br><strong>فئة B</strong>: 15% التالية (إدارة عادية)
+            <br><strong>فئة C</strong>: 5% الأخيرة (إدارة مبسطة وجرداً ربع سنوي)
+          </div>
+        </div>
+
+        <div class="insight-card success">
+          <div class="insight-title"><i class="fas fa-lightbulb"></i> التوصية</div>
+          <div class="insight-desc">
+            ركّز الموارد والجرد الدوري على <strong>فئة A</strong> (${state.abcAnalysis.A.length} صنف) فهي المسؤولة عن ${totalVal > 0 ? ((aVal / totalVal) * 100).toFixed(1) : '0'}% من قيمة مخزونك.
+          </div>
+        </div>
+      `;
+      openModal('aiModal');
+    }
+
+    // ================================================================
+    // 24. القائمة الجانبية — إصلاح كامل
+    // ================================================================
+    function setupSidebar() {
+      const sidebar = $('sidebar');
+      const toggle = $('sidebarToggle');
+
+      const openSidebar = () => {
+        sidebar.classList.add('open');
+        toggle.classList.add('hidden');
+        haptic('light');
+      };
+      const closeSidebar = () => {
+        sidebar.classList.remove('open');
+        toggle.classList.remove('hidden');
+      };
+
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (sidebar.classList.contains('open')) {
+          closeSidebar();
+        } else {
+          openSidebar();
+        }
+      });
+
+      // إغلاق عند النقر خارج القائمة
+      document.addEventListener('click', (e) => {
+        if (!sidebar.classList.contains('open')) return;
+        if (sidebar.contains(e.target)) return;
+        if (toggle.contains(e.target)) return;
+        closeSidebar();
+      });
+
+      // معالجة أزرار القائمة مع الإغلاق التلقائي
+      sidebar.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const action = btn.dataset.action;
+          closeSidebar();
+          handleSidebarAction(action);
+        });
+      });
+    }
+
+    function handleSidebarAction(action) {
+      switch (action) {
+        case 'refresh':
+          generateReport();
+          break;
+        case 'csv':
+          exportCSV();
+          break;
+        case 'pdf':
+          exportPDF();
+          break;
+        case 'print':
+          window.print();
+          break;
+        case 'ai':
+          openAIAdvisor();
+          break;
+        case 'home':
+          window.location.href = 'file:///android_asset/main.html';
+          break;
+        default:
+          showToast('إجراء غير معروف', 'error');
+      }
+    }
+
+    // ================================================================
+    // 25. الوضع (Theme)
+    // ================================================================
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('inventory_reports_theme', next);
+      $('themeIcon').className = next === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+      haptic('light');
+    }
+
+    function loadSavedTheme() {
+      const saved = localStorage.getItem('inventory_reports_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', saved);
+      $('themeIcon').className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    }
+
+    // ================================================================
+    // 26. تحميل القوائم المنسدلة
+    // ================================================================
+    async function loadDropdowns() {
+      try {
+        const [warehousesRes, categoriesRes] = await Promise.all([
+          apiCall('getWarehouses', {}).catch(() => null),
+          apiCall('getCategories', {}).catch(() => null)
+        ]);
+
+        const warehouses = extractArray(warehousesRes);
+        const wSel = $('filterWarehouse');
+        wSel.innerHTML = '<option value="">جميع المستودعات</option>';
+        warehouses.forEach(w => {
+          const id = w.id || w.warehouse_id;
+          if (!id) return;
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = w.warehouse_name || w.name || 'مستودع';
+          wSel.appendChild(opt);
+        });
+
+        const categories = extractArray(categoriesRes);
+        const cSel = $('filterCategory');
+        cSel.innerHTML = '<option value="">جميع الفئات</option>';
+        categories.forEach(c => {
+          const id = c.id || c.category_id;
+          if (!id) return;
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = c.category_name || c.category_name_ar || c.name || 'فئة';
+          cSel.appendChild(opt);
+        });
+      } catch (err) {
+        console.error('loadDropdowns error:', err);
+      }
+    }
+
+    // ================================================================
+    // 27. Pull-to-Refresh
+    // ================================================================
+    function setupPullToRefresh() {
+      let startY = 0, offset = 0, pulling = false;
+      const indicator = $('pullIndicator');
+      const isInteractive = (target) => Boolean(target && target.closest &&
+        target.closest('input, textarea, select, button, a, [contenteditable="true"], .modal-overlay-ai, [role="dialog"]'));
+
+      document.addEventListener('touchstart', (e) => {
+        if (isInteractive(e.target)) { pulling = false; offset = 0; return; }
+        if ((window.scrollY || document.documentElement.scrollTop) <= 0) {
+          startY = e.touches[0].clientY;
+          pulling = true;
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchmove', (e) => {
+        if (isInteractive(e.target)) { pulling = false; offset = 0; return; }
+        if (!pulling) return;
+        const diff = e.touches[0].clientY - startY;
+        if (diff > 20) {
+          offset = Math.min(diff, 80);
+          indicator.style.top = (offset - 60) + 'px';
+          indicator.querySelector('span').textContent = offset > 60 ? 'حرر للتحديث' : 'اسحب للتحديث';
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      document.addEventListener('touchend', () => {
+        if (pulling && offset > 60) {
+          indicator.querySelector('i').className = 'fas fa-spinner fa-spin';
+          indicator.querySelector('span').textContent = 'جاري التحديث...';
+          generateReport().finally(() => {
+            setTimeout(() => {
+              indicator.style.top = '-60px';
+              indicator.querySelector('i').className = 'fas fa-arrow-down';
+              pulling = false;
+              offset = 0;
+            }, 400);
+          });
+        } else {
+          indicator.style.top = '-60px';
+          pulling = false;
+          offset = 0;
+        }
+      }, { passive: true });
+    }
+
+    // ================================================================
+    // 28. التهيئة النهائية
+    // ================================================================
+    function init() {
+      loadSavedTheme();
+      setupSidebar();
+      setupBottomNav();
+      setupPullToRefresh();
+
+      const today = new Date();
+      const monthAgo = new Date();
+      monthAgo.setDate(monthAgo.getDate() - 30);
+      $('filterDateFrom').value = dateOnly(monthAgo);
+      $('filterDateTo').value = dateOnly(today);
+
+      $('themeToggle').addEventListener('click', toggleTheme);
+
+      // مستمعو الفلاتر
+      ['filterDateFrom', 'filterDateTo', 'filterWarehouse', 'filterCategory', 'filterReportType', 'filterStatus'].forEach(id => {
+        const el = $(id);
+        if (el) el.addEventListener('change', () => generateReport());
+      });
+
+      renderQuickPresets();
+
+      // ESC لإغلاق المودالات
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          document.querySelectorAll('.modal-overlay-ai, .details-overlay').forEach(x => x.classList.remove('show'));
+          document.body.style.overflow = '';
+        }
+      });
+
+      // تحميل القوائم ثم توليد التقرير
+      loadDropdowns().finally(() => {
+        generateReport();
+      });
+    }
+
+    // تصدير الواجهات العامة
+    window.generateReport = generateReport;
+    window.resetFilters = resetFilters;
+    window.exportCSV = exportCSV;
+    window.exportPDF = exportPDF;
+    window.applyInventorySearch = applyInventorySearch;
+    window.applyPreset = applyPreset;
+    window.viewProduct = viewProduct;
+    window.closeDetails = closeDetails;
+    window.openAIAdvisor = openAIAdvisor;
+    window.closeAIModal = closeAIModal;
+    window.openReorderAlerts = openReorderAlerts;
+    window.closeReorderAlerts = closeReorderAlerts;
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();
   </script>
+
   <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
 </body>
 </html>

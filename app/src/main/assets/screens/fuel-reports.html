@@ -13,11 +13,8 @@
   <style>
     /* ===================================================================
        نظام الألوان الموحّد — بنفسجي / ذهبي
-       مستوحى من customer-reports.html
-       وضع فاتح افتراضي + وضع مظلم مخفف
        =================================================================== */
     :root {
-      /* ═══ الوضع الفاتح (افتراضي) ═══ */
       --bg-primary: #f5f3ff;
       --bg-secondary: #ede9fe;
       --bg-card: rgba(255, 255, 255, 0.9);
@@ -38,7 +35,6 @@
       --violet-dark: #7c4dff;
       --violet-glow: 0 0 30px rgba(168, 130, 255, 0.15);
 
-      /* aliases لتفادي كسر الأنماط التي تشير إلى emerald */
       --emerald-primary: #a882ff;
       --emerald-dark: #7c4dff;
       --emerald-glow: 0 0 30px rgba(168, 130, 255, 0.15);
@@ -65,7 +61,6 @@
       color-scheme: light;
     }
 
-    /* ═══ الوضع المظلم المخفّف ═══ */
     [data-theme="dark"] {
       --bg-primary: #0b0719;
       --bg-secondary: #14102b;
@@ -110,9 +105,6 @@
       color-scheme: dark;
     }
 
-    /* ===================================================================
-       الأنماط الأساسية — منع تجاوز حدود الشاشة
-       =================================================================== */
     * {
       margin: 0;
       padding: 0;
@@ -120,9 +112,10 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    html {
+    html, body {
       max-width: 100%;
       overflow-x: hidden;
+      min-height: 100vh;
     }
 
     body {
@@ -130,10 +123,6 @@
       background: var(--bg-primary);
       color: var(--text-primary);
       direction: rtl;
-      overflow-x: hidden;
-      width: 100%;
-      max-width: 100vw;
-      min-height: 100vh;
       padding: 0 0 90px 0;
       background-image:
         radial-gradient(ellipse at 5% 15%, rgba(168, 130, 255, 0.06) 0%, transparent 55%),
@@ -142,24 +131,15 @@
       transition: background 0.35s ease, color 0.35s ease;
     }
 
-    [data-theme="dark"] body {
-      background-image:
-        radial-gradient(ellipse at 5% 15%, rgba(168, 130, 255, 0.06) 0%, transparent 55%),
-        radial-gradient(ellipse at 95% 85%, rgba(245, 200, 66, 0.04) 0%, transparent 55%);
-    }
-
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--violet-primary); border-radius: 10px; }
 
-    /* ===================================================================
-       Pull-to-Refresh
-       =================================================================== */
+    /* ===== Pull-to-Refresh ===== */
     .pull-indicator {
       position: fixed;
       top: -60px;
-      left: 0;
-      right: 0;
+      left: 0; right: 0;
       height: 60px;
       display: flex;
       align-items: center;
@@ -172,48 +152,36 @@
       border-bottom: 1px solid var(--border-color);
       pointer-events: none;
       backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
     }
     .pull-indicator.active { top: 0; }
-    .pull-indicator i { margin-left: 8px; transition: transform 0.3s; }
+    .pull-indicator i { margin-left: 8px; }
     .pull-indicator.loading i { animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-    /* ===================================================================
-       Loading
-       =================================================================== */
+    /* ===== Loading ===== */
     .loading-indicator {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      inset: 0;
       background: rgba(0, 0, 0, 0.75);
       z-index: 3000;
       display: none;
       justify-content: center;
       align-items: center;
       backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
     }
-    [data-theme="dark"] .loading-indicator { background: rgba(0, 0, 0, 0.85); }
+    .loading-indicator.show { display: flex; }
     .spinner {
-      width: 56px;
-      height: 56px;
+      width: 56px; height: 56px;
       border: 5px solid rgba(168, 130, 255, 0.15);
       border-radius: 50%;
       border-top: 5px solid var(--violet-primary);
       animation: spin 0.9s linear infinite;
     }
 
-    /* ===================================================================
-       Offline Banner
-       =================================================================== */
+    /* ===== Offline Banner ===== */
     .offline-banner {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       background: linear-gradient(90deg, var(--warning), #f97316);
       color: #000;
       text-align: center;
@@ -226,41 +194,27 @@
     }
     .offline-banner.show { transform: translateY(0); }
 
-    /* ===================================================================
-       Report Source Banner
-       =================================================================== */
-    .report-source-banner { display: none; }
-
-    /* ===================================================================
-       الشريط العلوي
-       =================================================================== */
+    /* ===== Top Bar ===== */
     .top-bar {
       position: sticky;
       top: 0;
       z-index: 120;
       background: var(--header-bg);
       backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
       border-bottom: 1px solid var(--border-color);
       padding: 14px 22px 12px;
       display: flex;
       flex-direction: column;
       gap: 12px;
       box-shadow: 0 4px 30px rgba(0, 0, 0, 0.12);
-      transition: var(--transition);
-      width: 100%;
-      max-width: 100vw;
     }
-    [data-theme="dark"] .top-bar {
-      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
-    }
+    [data-theme="dark"] .top-bar { box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4); }
     .header-top {
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
       gap: 12px;
-      width: 100%;
     }
     .top-title { flex: 1; min-width: 140px; text-align: center; }
     .top-title h2 {
@@ -270,7 +224,6 @@
       background: linear-gradient(135deg, var(--violet-primary), var(--gold-primary));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      letter-spacing: -0.5px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -287,31 +240,12 @@
       color: var(--text-muted);
       -webkit-text-fill-color: var(--text-muted);
       display: block;
-      font-weight: 400;
       margin-top: 2px;
       text-align: center;
     }
-    .ai-badge {
-      background: linear-gradient(135deg, var(--violet-primary), var(--violet-dark));
-      color: #fff;
-      font-size: 0.55rem;
-      font-weight: 700;
-      padding: 2px 12px;
-      border-radius: 30px;
-      margin-right: 8px;
-      vertical-align: middle;
-      box-shadow: 0 0 20px rgba(168, 130, 255, 0.3);
-      -webkit-text-fill-color: white;
-    }
-    .header-actions {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-shrink: 0;
-    }
+    .header-actions { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
     .icon-btn {
-      width: 42px;
-      height: 42px;
+      width: 42px; height: 42px;
       border-radius: 14px;
       border: 1px solid var(--border-color);
       background: var(--bg-glass);
@@ -321,7 +255,7 @@
       justify-content: center;
       cursor: pointer;
       transition: var(--transition);
-      font-size: 1rem;
+      font-size: 1.1rem;
       position: relative;
       flex-shrink: 0;
     }
@@ -336,10 +270,8 @@
     .icon-btn.has-badge::after {
       content: '';
       position: absolute;
-      top: 6px;
-      right: 6px;
-      width: 8px;
-      height: 8px;
+      top: 6px; right: 6px;
+      width: 8px; height: 8px;
       background: var(--gold-primary);
       border-radius: 50%;
       box-shadow: 0 0 15px var(--gold-primary);
@@ -350,17 +282,13 @@
       50% { opacity: 0.5; transform: scale(1.4); }
     }
 
-    /* ===================================================================
-       شريط الفلاتر — منع التجاوز
-       =================================================================== */
+    /* ===== Filters ===== */
     .filter-bar {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       align-items: center;
-      padding: 2px 0;
       width: 100%;
-      max-width: 100%;
     }
     .filter-group {
       display: flex;
@@ -373,7 +301,6 @@
       transition: var(--transition);
       flex: 1 0 130px;
       min-width: 0;
-      max-width: 100%;
       overflow: hidden;
     }
     .filter-group:focus-within {
@@ -398,25 +325,14 @@
       min-width: 0;
       text-align: center;
     }
-    .filter-group input[type="date"] {
-      direction: ltr;
-      font-family: 'Inter', 'Arial', sans-serif;
-      text-align: center;
-    }
-    .filter-group select option {
-      background: var(--bg-secondary);
-      color: var(--text-primary);
-    }
-    .filter-group input::placeholder {
-      color: var(--text-muted);
-      text-align: center;
-    }
+    .filter-group input[type="date"] { direction: ltr; font-family: 'Inter', 'Arial', sans-serif; }
+    .filter-group select option { background: var(--bg-secondary); color: var(--text-primary); }
+    .filter-group input::placeholder { color: var(--text-muted); text-align: center; }
     .filter-actions {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
       margin-right: auto;
-      max-width: 100%;
     }
     .btn-filter {
       padding: 9px 20px;
@@ -453,16 +369,49 @@
     }
     .btn-filter.primary i { color: #fff; }
 
-    /* ===================================================================
-       صف البحث
-       =================================================================== */
+    /* ===== Quick Presets ===== */
+    .quick-presets {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 0 22px 12px;
+      scrollbar-width: none;
+    }
+    .quick-presets::-webkit-scrollbar { display: none; }
+    .preset-chip {
+      padding: 7px 16px;
+      border-radius: 30px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-glass);
+      color: var(--text-secondary);
+      font-family: 'Cairo', 'Inter', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .preset-chip:active { transform: scale(0.95); }
+    .preset-chip:hover:not(.active) {
+      border-color: var(--violet-primary);
+      color: var(--violet-primary);
+    }
+    .preset-chip.active {
+      background: linear-gradient(135deg, var(--violet-primary), var(--violet-dark));
+      color: #fff;
+      border-color: var(--violet-primary);
+      box-shadow: 0 4px 20px rgba(168, 130, 255, 0.25);
+    }
+
+    /* ===== Search ===== */
     .report-search-row {
       position: relative;
       padding: 0 22px 14px;
       display: flex;
       align-items: center;
-      width: 100%;
-      max-width: 100%;
     }
     .report-search-row > i {
       position: absolute;
@@ -476,7 +425,6 @@
     }
     .report-search-row .form-input {
       width: 100%;
-      max-width: 100%;
       padding: 12px 44px 12px 16px;
       border-radius: var(--radius-small);
       border: 1px solid var(--border-color);
@@ -492,41 +440,29 @@
       border-color: var(--violet-primary);
       box-shadow: 0 0 0 3px var(--violet-glow);
     }
-    .report-search-row .form-input::placeholder {
-      color: var(--text-muted);
-      text-align: center;
-    }
     .sr-only {
       position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
       overflow: hidden;
       clip: rect(0, 0, 0, 0);
       white-space: nowrap;
       border: 0;
     }
 
-    /* ===================================================================
-       بطاقات الإحصائيات — توسيط كامل + عرض كامل
-       =================================================================== */
+    /* ===== KPIs ===== */
     .kpi-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 18px;
-      padding: 20px 24px;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
+      gap: 16px;
+      padding: 18px 22px;
     }
     .kpi-card {
       background: var(--bg-card);
       backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       border: 1px solid var(--border-color);
       border-radius: var(--radius-card);
-      padding: 20px 18px;
+      padding: 18px 16px;
       transition: var(--transition);
       position: relative;
       overflow: hidden;
@@ -536,14 +472,12 @@
       align-items: center;
       justify-content: center;
       box-shadow: var(--shadow-card);
-      min-width: 0;
+      cursor: pointer;
     }
     .kpi-card::before {
       content: '';
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       height: 3px;
       background: linear-gradient(90deg, var(--violet-primary), var(--gold-primary));
       opacity: 0.7;
@@ -553,9 +487,9 @@
       border-color: var(--violet-primary);
       box-shadow: var(--shadow-glow), 0 20px 50px rgba(168, 130, 255, 0.15);
     }
+    .kpi-card:active { transform: scale(0.97); }
     .kpi-card .kpi-icon {
-      width: 48px;
-      height: 48px;
+      width: 48px; height: 48px;
       border-radius: 16px;
       display: flex;
       align-items: center;
@@ -568,8 +502,9 @@
     .kpi-card .kpi-icon.gold { color: var(--gold-primary); background: rgba(245, 200, 66, 0.12); }
     .kpi-card .kpi-icon.green { color: var(--success); background: rgba(16, 185, 129, 0.12); }
     .kpi-card .kpi-icon.red { color: var(--danger); background: rgba(239, 68, 68, 0.12); }
+    .kpi-card .kpi-icon.info { color: var(--info); background: rgba(59, 130, 246, 0.12); }
     .kpi-card .kpi-value {
-      font-size: 2rem;
+      font-size: 1.9rem;
       font-weight: 900;
       font-family: 'Inter', 'Arial', sans-serif;
       letter-spacing: -0.5px;
@@ -579,46 +514,93 @@
       direction: ltr;
       text-align: center;
       word-break: break-word;
-      max-width: 100%;
     }
     .kpi-card .kpi-label {
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: var(--text-muted);
       font-weight: 700;
       text-align: center;
     }
     .kpi-card .kpi-trend {
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       font-weight: 700;
       padding: 3px 12px;
       border-radius: 30px;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 4px;
       margin-top: 6px;
+      background: var(--bg-glass-light);
+      color: var(--text-muted);
     }
     .kpi-card .kpi-trend.up { background: rgba(16, 185, 129, 0.15); color: var(--success); }
     .kpi-card .kpi-trend.down { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+    .kpi-card .kpi-trend.warn { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
 
-    @media (max-width: 992px) {
-      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-    }
+    @media (max-width: 992px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 480px) {
       .kpi-grid { grid-template-columns: repeat(2, 1fr); padding: 12px 14px; gap: 10px; }
       .kpi-card { padding: 14px 10px; }
-      .kpi-card .kpi-value { font-size: 1.35rem; }
-      .kpi-card .kpi-icon { width: 40px; height: 40px; font-size: 1.05rem; }
+      .kpi-card .kpi-value { font-size: 1.25rem; }
+      .kpi-card .kpi-icon { width: 38px; height: 38px; font-size: 1rem; }
     }
 
-    /* ===================================================================
-       التنبيهات
-       =================================================================== */
-    .alerts-container {
-      padding: 0 24px 18px;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
+    /* ===== Variance Banner ===== */
+    .variance-banner {
+      margin: 0 22px 14px;
+      padding: 16px 20px;
+      border-radius: var(--radius-card);
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: var(--shadow-card);
+      position: relative;
+      overflow: hidden;
     }
+    .variance-banner::before {
+      content: '';
+      position: absolute;
+      top: 0; right: 0;
+      width: 6px;
+      height: 100%;
+      background: var(--success);
+    }
+    .variance-banner.warn::before { background: var(--warning); }
+    .variance-banner.bad::before { background: var(--danger); }
+    .variance-icon {
+      width: 56px; height: 56px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      color: #fff;
+      background: linear-gradient(135deg, var(--success), #047857);
+      flex-shrink: 0;
+    }
+    .variance-banner.warn .variance-icon { background: linear-gradient(135deg, var(--warning), #b45309); }
+    .variance-banner.bad .variance-icon { background: linear-gradient(135deg, var(--danger), #b91c1c); }
+    .variance-info { flex: 1; min-width: 0; }
+    .variance-info h4 {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .variance-info p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+    @media (max-width: 480px) {
+      .variance-banner { margin: 0 12px 12px; padding: 14px; }
+      .variance-icon { width: 46px; height: 46px; font-size: 1.2rem; }
+    }
+
+    /* ===== Alerts ===== */
+    .alerts-container { padding: 0 22px 16px; }
     .alert-item {
       display: flex;
       align-items: center;
@@ -632,19 +614,13 @@
       cursor: pointer;
       transition: var(--transition);
       box-shadow: var(--shadow-card);
-      max-width: 100%;
-      box-sizing: border-box;
     }
-    .alert-item:hover {
-      transform: translateX(-6px);
-      border-color: var(--violet-primary);
-    }
+    .alert-item:hover { transform: translateX(-6px); border-color: var(--violet-primary); }
     .alert-item.danger { border-right: 4px solid var(--danger); }
     .alert-item.warning { border-right: 4px solid var(--warning); }
     .alert-item.info { border-right: 4px solid var(--violet-primary); }
     .alert-icon {
-      width: 36px;
-      height: 36px;
+      width: 36px; height: 36px;
       border-radius: 10px;
       display: flex;
       align-items: center;
@@ -656,30 +632,24 @@
     .alert-item.warning .alert-icon { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
     .alert-item.info .alert-icon { background: rgba(168, 130, 255, 0.15); color: var(--violet-primary); }
     .alert-content { flex: 1; min-width: 0; }
-    .alert-title { font-size: 0.9rem; font-weight: 800; text-align: center; }
-    .alert-desc { font-size: 0.75rem; color: var(--text-muted); text-align: center; word-break: break-word; }
+    .alert-title { font-size: 0.9rem; font-weight: 800; }
+    .alert-desc { font-size: 0.75rem; color: var(--text-muted); word-break: break-word; }
     .alert-time { font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; }
     @keyframes slideIn {
       from { opacity: 0; transform: translateX(30px); }
       to { opacity: 1; transform: translateX(0); }
     }
 
-    /* ===================================================================
-       الرسوم البيانية — عرض كامل
-       =================================================================== */
+    /* ===== Charts ===== */
     .charts-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      padding: 0 24px 20px;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
+      gap: 18px;
+      padding: 0 22px 18px;
     }
     .chart-card {
       background: var(--bg-card);
       backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       border: 1px solid var(--border-color);
       border-radius: var(--radius-card);
       padding: 18px 16px 14px;
@@ -691,9 +661,7 @@
     .chart-card::before {
       content: '';
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       height: 3px;
       background: linear-gradient(90deg, var(--violet-primary), var(--gold-primary));
       opacity: 0.7;
@@ -714,10 +682,7 @@
       align-items: center;
       gap: 6px;
     }
-    .chart-card .chart-title i {
-      color: var(--violet-primary);
-      margin-left: 8px;
-    }
+    .chart-card .chart-title i { color: var(--violet-primary); margin-left: 6px; }
     .chart-card .chart-badge {
       font-size: 0.6rem;
       color: var(--text-muted);
@@ -727,49 +692,31 @@
       border: 1px solid var(--border-color);
       font-weight: 700;
     }
-    .chart-card .chart-container {
-      height: 210px;
-      position: relative;
-      width: 100%;
-      max-width: 100%;
-    }
-    .chart-card .chart-container canvas {
-      width: 100% !important;
-      height: 100% !important;
-      max-width: 100% !important;
-    }
+    .chart-card .chart-container { height: 220px; position: relative; }
+    .chart-card .chart-container canvas { width: 100% !important; height: 100% !important; }
+
     @media (max-width: 768px) {
-      .charts-grid { grid-template-columns: 1fr; padding: 0 16px 16px; gap: 14px; }
-      .chart-card .chart-container { height: 170px; }
+      .charts-grid { grid-template-columns: 1fr; padding: 0 14px 14px; gap: 14px; }
+      .chart-card .chart-container { height: 180px; }
     }
 
-    /* ===================================================================
-       جدول معاملات الوقود — منع التجاوز + عرض كامل
-       =================================================================== */
+    /* ===== Table ===== */
     .table-section {
-      padding: 0 24px 24px;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
+      padding: 0 22px 24px;
     }
     .table-wrapper {
       background: var(--bg-card);
       backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       border: 1px solid var(--border-color);
       border-radius: var(--radius-card);
       overflow: hidden;
       box-shadow: var(--shadow-card);
       position: relative;
-      width: 100%;
-      max-width: 100%;
     }
     .table-wrapper::before {
       content: '';
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       height: 3px;
       background: linear-gradient(90deg, var(--violet-primary), var(--gold-primary));
       opacity: 0.7;
@@ -780,9 +727,6 @@
       max-height: 460px;
       overflow-y: auto;
       padding: 10px;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
       -webkit-overflow-scrolling: touch;
     }
     .data-table {
@@ -790,7 +734,7 @@
       border-collapse: separate;
       border-spacing: 0 6px;
       font-size: 0.82rem;
-      min-width: 900px;
+      min-width: 1050px;
     }
     .data-table th {
       padding: 12px 14px;
@@ -799,7 +743,6 @@
       color: var(--violet-primary);
       font-weight: 800;
       font-size: 0.72rem;
-      text-transform: uppercase;
       letter-spacing: 0.5px;
       border: 1px solid var(--border-color);
       position: sticky;
@@ -820,7 +763,6 @@
       font-weight: 600;
       vertical-align: middle;
     }
-    .data-table tr { transition: var(--transition); }
     .data-table tr:hover td {
       background: var(--bg-glass-light);
       color: var(--text-primary);
@@ -840,11 +782,7 @@
       color: var(--danger);
       background: rgba(239, 68, 68, 0.08);
     }
-    .data-table .amount {
-      font-weight: 800;
-      font-family: 'Inter', 'Arial', sans-serif;
-      direction: ltr;
-    }
+    .data-table .amount { font-weight: 800; font-family: 'Inter', 'Arial', sans-serif; direction: ltr; }
     .data-table .amount.debit { color: var(--success); }
     .data-table .amount.credit { color: var(--danger); }
     .data-table .status-badge {
@@ -860,6 +798,19 @@
     .status-badge.inactive { background: rgba(148, 163, 184, 0.12); color: var(--text-muted); border-color: rgba(148, 163, 184, 0.3); }
     .status-badge.warning { background: rgba(245, 158, 11, 0.12); color: var(--warning); border-color: rgba(245, 158, 11, 0.3); }
     .status-badge.danger { background: rgba(239, 68, 68, 0.12); color: var(--danger); border-color: rgba(239, 68, 68, 0.3); }
+
+    /* Movement type badges */
+    .movement-badge {
+      padding: 3px 10px;
+      border-radius: 8px;
+      font-size: 0.68rem;
+      font-weight: 800;
+      display: inline-block;
+    }
+    .movement-badge.in { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+    .movement-badge.out { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+    .movement-badge.refill { background: rgba(168, 130, 255, 0.15); color: var(--violet-primary); }
+
     .data-table .btn-view {
       background: none;
       border: none;
@@ -871,7 +822,6 @@
       border-radius: 8px;
     }
     .data-table .btn-view:hover {
-      color: var(--violet-primary);
       background: var(--bg-glass-light);
       transform: scale(1.15);
     }
@@ -888,9 +838,6 @@
       color: var(--violet-primary);
     }
 
-    /* ===================================================================
-       فوتر الجدول — عرض كامل + توسيط
-       =================================================================== */
     .table-footer {
       display: flex;
       justify-content: space-around;
@@ -900,9 +847,6 @@
       flex-wrap: wrap;
       gap: 14px;
       font-size: 0.85rem;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
     }
     .table-footer .total-item {
       display: flex;
@@ -924,9 +868,7 @@
       direction: ltr;
     }
 
-    /* ===================================================================
-       شريط الترقيم
-       =================================================================== */
+    /* ===== Pagination ===== */
     .pagination-bar {
       display: flex;
       justify-content: center;
@@ -937,12 +879,8 @@
       color: var(--text-secondary);
       font-weight: 700;
       flex-wrap: wrap;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
     }
-    .pagination-bar .btn,
-    .pagination-bar .btn-secondary {
+    .pagination-bar .btn {
       padding: 8px 18px;
       border-radius: var(--radius-small);
       border: 1px solid var(--border-color);
@@ -954,18 +892,13 @@
       cursor: pointer;
       transition: var(--transition);
     }
-    .pagination-bar .btn:hover:not(:disabled),
-    .pagination-bar .btn-secondary:hover:not(:disabled) {
+    .pagination-bar .btn:hover:not(:disabled) {
       border-color: var(--violet-primary);
       color: var(--violet-primary);
-      background: var(--bg-glass-light);
     }
-    .pagination-bar .btn:disabled,
-    .pagination-bar .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .pagination-bar .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* ===================================================================
-       القائمة الجانبية (Sidebar)
-       =================================================================== */
+    /* ===== Sidebar ===== */
     .sidebar-toggle {
       position: fixed;
       top: 50%;
@@ -982,11 +915,17 @@
       cursor: pointer;
       z-index: 1001;
       box-shadow: -3px 0 25px rgba(168, 130, 255, 0.3);
-      transition: var(--transition);
+      transition: opacity 0.25s ease, transform 0.35s ease, width 0.3s ease;
       border: 1px solid rgba(255, 255, 255, 0.15);
+      touch-action: manipulation;
+      font-size: 1rem;
     }
     .sidebar-toggle:active { transform: translateY(-50%) scale(0.9); }
-    .sidebar-toggle.hidden { opacity: 0; pointer-events: none; }
+    .sidebar-toggle.hidden {
+      opacity: 0;
+      transform: translateY(-50%) translateX(80px);
+      pointer-events: none;
+    }
     .sidebar-toggle:hover { width: 48px; }
     .sidebar {
       position: fixed;
@@ -996,7 +935,6 @@
       width: 120px;
       background: var(--sidebar-bg);
       backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
       z-index: 999;
       transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
       padding: 14px 12px;
@@ -1008,11 +946,7 @@
       opacity: 0;
     }
     .sidebar.open { right: 0; opacity: 1; }
-    .sidebar-content {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
+    .sidebar-content { display: flex; flex-direction: column; gap: 10px; }
     .sidebar-btn {
       background: var(--bg-glass);
       border: 1px solid var(--border-color);
@@ -1041,32 +975,17 @@
       transform: scale(1.05);
       box-shadow: 0 4px 20px rgba(168, 130, 255, 0.2);
     }
-    .sidebar-btn i {
-      font-size: 1.6rem;
-    }
-    .sidebar-btn span {
-      font-size: 0.7rem;
-      margin-top: 2px;
-      font-weight: 800;
-    }
-    .sidebar-btn.ai-btn {
-      border-color: rgba(168, 130, 255, 0.3);
-    }
-    .sidebar-btn.ai-btn i {
-      color: var(--violet-primary);
-    }
+    .sidebar-btn i { font-size: 1.6rem; }
+    .sidebar-btn span { font-size: 0.7rem; margin-top: 2px; font-weight: 800; }
+    .sidebar-btn.ai-btn { border-color: rgba(168, 130, 255, 0.3); }
+    .sidebar-btn.ai-btn i { color: var(--violet-primary); }
 
-    /* ===================================================================
-       القائمة السفلية
-       =================================================================== */
+    /* ===== Bottom Nav ===== */
     .bottom-nav {
       position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
+      bottom: 0; left: 0; right: 0;
       background: var(--nav-bg);
       backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
       border-top: 1px solid var(--border-color);
       display: flex;
       justify-content: space-around;
@@ -1075,8 +994,6 @@
       overflow-x: auto;
       scrollbar-width: none;
       box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.1);
-      width: 100%;
-      max-width: 100vw;
     }
     .bottom-nav::-webkit-scrollbar { display: none; }
     .bottom-nav .nav-item {
@@ -1088,7 +1005,7 @@
       border: none;
       color: var(--text-muted);
       font-family: 'Cairo', 'Inter', sans-serif;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 700;
       cursor: pointer;
       transition: var(--transition);
@@ -1100,18 +1017,9 @@
       text-align: center;
     }
     .bottom-nav .nav-item:active { transform: scale(0.9); }
-    .bottom-nav .nav-item i {
-      font-size: 22px;
-      transition: var(--transition);
-    }
-    .bottom-nav .nav-item span {
-      font-weight: 700;
-      margin-top: 2px;
-      font-size: 0.7rem;
-    }
-    .bottom-nav .nav-item.active {
-      color: var(--violet-primary);
-    }
+    .bottom-nav .nav-item i { font-size: 22px; transition: var(--transition); }
+    .bottom-nav .nav-item span { font-weight: 700; margin-top: 2px; font-size: 0.7rem; }
+    .bottom-nav .nav-item.active { color: var(--violet-primary); }
     .bottom-nav .nav-item.active i {
       transform: translateY(-3px);
       text-shadow: 0 0 25px rgba(168, 130, 255, 0.3);
@@ -1128,27 +1036,18 @@
       border-radius: 10px;
     }
 
-    /* ===================================================================
-       مودال تفاصيل المعاملة — منع التجاوز
-       =================================================================== */
+    /* ===== Details Modal ===== */
     .details-overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      inset: 0;
       background: rgba(0, 0, 0, 0.82);
       backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
       z-index: 850;
       display: none;
       opacity: 0;
       transition: opacity 0.3s;
       overflow-y: auto;
-      overflow-x: hidden;
       text-align: center;
-      width: 100%;
-      max-width: 100vw;
     }
     [data-theme="dark"] .details-overlay { background: rgba(0, 0, 0, 0.88); }
     .details-overlay.show { display: block; opacity: 1; }
@@ -1158,11 +1057,6 @@
       padding: 24px 28px 100px;
       border: 1px solid var(--border-color);
       border-top: none;
-      text-align: center;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
-      overflow-x: hidden;
     }
     .details-header {
       display: flex;
@@ -1174,11 +1068,7 @@
       background: var(--bg-secondary);
       padding: 12px 0;
       z-index: 10;
-      text-align: center;
       gap: 10px;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
     }
     .details-title {
       font-size: 1.2rem;
@@ -1189,8 +1079,7 @@
       word-break: break-word;
     }
     .details-close {
-      width: 40px;
-      height: 40px;
+      width: 40px; height: 40px;
       border-radius: 12px;
       border: 1px solid var(--border-color);
       background: var(--bg-glass);
@@ -1200,16 +1089,14 @@
       align-items: center;
       justify-content: center;
       touch-action: manipulation;
-      transition: var(--transition);
       font-size: 1rem;
       flex-shrink: 0;
     }
     .details-close:active { transform: scale(0.9); }
     .details-close:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
-    .details-profile { text-align: center; margin-bottom: 28px; }
+    .details-profile { text-align: center; margin-bottom: 24px; }
     .details-avatar {
-      width: 80px;
-      height: 80px;
+      width: 80px; height: 80px;
       border-radius: 24px;
       background: linear-gradient(135deg, var(--violet-primary), var(--gold-primary));
       display: flex;
@@ -1222,10 +1109,9 @@
       box-shadow: 0 8px 30px rgba(168, 130, 255, 0.25);
     }
     .details-name {
-      font-size: 1.3rem;
+      font-size: 1.25rem;
       font-weight: 800;
       margin-bottom: 8px;
-      color: var(--text-primary);
       text-align: center;
       word-break: break-word;
     }
@@ -1244,119 +1130,87 @@
     .details-section {
       background: var(--bg-glass);
       border-radius: var(--radius-small);
-      padding: 18px 20px;
-      margin-bottom: 18px;
+      padding: 16px 18px;
+      margin-bottom: 16px;
       border: 1px solid var(--border-color);
       text-align: center;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
-      overflow: hidden;
     }
     .details-section-title {
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       font-weight: 800;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
       color: var(--violet-primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
-      text-align: center;
+      gap: 8px;
     }
     .details-row {
       display: flex;
       justify-content: space-between;
       padding: 10px 0;
       border-bottom: 1px solid var(--border-color);
-      text-align: center;
       gap: 10px;
       align-items: center;
       flex-wrap: wrap;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
     }
     .details-row:last-child { border-bottom: none; }
-    .details-label {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      font-weight: 700;
-      text-align: center;
-    }
+    .details-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; }
     .details-value {
       font-size: 0.85rem;
       font-weight: 800;
       color: var(--text-primary);
       font-family: 'Inter', 'Arial', sans-serif;
       direction: ltr;
-      text-align: center;
       word-break: break-word;
-      max-width: 100%;
     }
-    .details-value.code { color: var(--gold-primary); font-family: 'Inter', 'Arial', sans-serif; }
+    .details-value.code { color: var(--gold-primary); }
     .details-value.red { color: var(--danger); }
 
-    /* ===================================================================
-       مودال AI Advisor — منع التجاوز
-       =================================================================== */
-    .ai-modal .modal-overlay {
+    /* ===== AI Modal ===== */
+    .ai-modal-overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      inset: 0;
       background: rgba(0, 0, 0, 0.75);
       backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
       z-index: 800;
       display: none;
       align-items: flex-end;
       justify-content: center;
       opacity: 0;
       transition: opacity 0.3s;
-      width: 100%;
-      max-width: 100vw;
     }
-    [data-theme="dark"] .ai-modal .modal-overlay { background: rgba(0, 0, 0, 0.85); }
-    .ai-modal .modal-overlay.show { display: flex; opacity: 1; }
-    .ai-modal .modal {
+    [data-theme="dark"] .ai-modal-overlay { background: rgba(0, 0, 0, 0.85); }
+    .ai-modal-overlay.show { display: flex; opacity: 1; }
+    .ai-modal {
       background: var(--bg-secondary);
       border-radius: 28px 28px 0 0;
       width: 100%;
-      max-width: 100%;
-      max-height: 82vh;
+      max-height: 85vh;
       overflow-y: auto;
-      overflow-x: hidden;
       padding: 28px 24px;
       transform: translateY(100%);
       transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
       border: 1px solid var(--border-color);
       border-bottom: none;
-      box-sizing: border-box;
+      text-align: center;
     }
-    .ai-modal .modal-overlay.show .modal { transform: translateY(0); }
+    .ai-modal-overlay.show .ai-modal { transform: translateY(0); }
     .ai-modal .modal-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 22px;
       gap: 10px;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
     }
     .ai-modal .modal-title {
       font-size: 1.15rem;
       font-weight: 900;
       color: var(--violet-primary);
       flex: 1;
-      min-width: 0;
-      word-break: break-word;
     }
     .ai-modal .modal-close {
-      width: 40px;
-      height: 40px;
+      width: 40px; height: 40px;
       border-radius: 12px;
       border: 1px solid var(--border-color);
       background: var(--bg-glass);
@@ -1365,14 +1219,11 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      touch-action: manipulation;
-      transition: var(--transition);
       font-size: 1rem;
       flex-shrink: 0;
     }
-    .ai-modal .modal-close:active { transform: scale(0.9); }
     .ai-modal .modal-close:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
-    .ai-insight-card {
+    .insight-card {
       background: var(--bg-glass);
       border-radius: var(--radius-small);
       padding: 16px 18px;
@@ -1381,58 +1232,26 @@
       border-right: 4px solid var(--violet-primary);
       text-align: center;
       box-shadow: var(--shadow-card);
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
-      overflow: hidden;
     }
-    .ai-insight-card .insight-title {
+    .insight-card.danger { border-right-color: var(--danger); }
+    .insight-card.warning { border-right-color: var(--warning); }
+    .insight-card.success { border-right-color: var(--success); }
+    .insight-card .insight-title {
       font-weight: 800;
       font-size: 0.95rem;
-      color: var(--text-primary);
-      text-align: center;
-      word-break: break-word;
-    }
-    .ai-insight-card .insight-desc {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      margin-top: 4px;
-      text-align: center;
-      word-break: break-word;
-    }
-
-    /* ===================================================================
-       FAB
-       =================================================================== */
-    .fab {
-      position: fixed;
-      bottom: 100px;
-      left: 28px;
-      width: 58px;
-      height: 58px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--violet-primary), var(--violet-dark));
-      border: none;
-      color: #fff;
-      font-size: 1.6rem;
-      cursor: pointer;
-      box-shadow: 0 8px 30px rgba(168, 130, 255, 0.35);
-      transition: var(--transition);
-      z-index: 200;
       display: flex;
       align-items: center;
       justify-content: center;
-      touch-action: manipulation;
+      gap: 8px;
+      margin-bottom: 6px;
     }
-    .fab:active { transform: scale(0.9); }
-    .fab:hover {
-      transform: translateY(-4px) scale(1.02);
-      box-shadow: 0 12px 45px rgba(168, 130, 255, 0.45);
+    .insight-card .insight-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.7;
     }
 
-    /* ===================================================================
-       Toast
-       =================================================================== */
+    /* ===== Toast ===== */
     .toast {
       position: fixed;
       top: 85px;
@@ -1454,10 +1273,7 @@
       max-width: calc(100vw - 32px);
       font-size: 0.85rem;
       font-weight: 700;
-      font-family: 'Cairo', 'Inter', sans-serif;
       color: var(--text-primary);
-      text-align: center;
-      box-sizing: border-box;
     }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
     .toast.success { border-color: var(--success); }
@@ -1465,8 +1281,7 @@
     .toast.warning { border-color: var(--warning); }
     .toast.info { border-color: var(--violet-primary); }
     .toast-icon {
-      width: 30px;
-      height: 30px;
+      width: 30px; height: 30px;
       border-radius: 10px;
       display: flex;
       align-items: center;
@@ -1479,9 +1294,29 @@
     .toast.warning .toast-icon { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
     .toast.info .toast-icon { background: rgba(168, 130, 255, 0.15); color: var(--violet-primary); }
 
-    /* ===================================================================
-       تحسينات الهواتف — منع التجاوز
-       =================================================================== */
+    /* ===== FAB ===== */
+    .fab {
+      position: fixed;
+      bottom: 100px;
+      left: 28px;
+      width: 58px; height: 58px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--violet-primary), var(--violet-dark));
+      border: none;
+      color: #fff;
+      font-size: 1.6rem;
+      cursor: pointer;
+      box-shadow: 0 8px 30px rgba(168, 130, 255, 0.35);
+      transition: var(--transition);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .fab:active { transform: scale(0.9); }
+    .fab:hover { transform: translateY(-4px) scale(1.02); }
+
+    /* ===== Mobile ===== */
     @media (max-width: 768px) {
       .top-bar { padding: 10px 14px; }
       .top-title h2 { font-size: 1.1rem; }
@@ -1491,9 +1326,9 @@
       .btn-filter { padding: 6px 14px; font-size: 0.7rem; }
       .filter-actions { width: 100%; margin-right: 0; justify-content: center; }
       .kpi-grid { padding: 12px 14px; gap: 12px; }
-      .charts-grid { padding: 0 14px 14px; gap: 14px; }
+      .charts-grid { padding: 0 14px 14px; }
       .table-section { padding: 0 14px 14px; }
-      .data-table { font-size: 0.7rem; min-width: 800px; }
+      .data-table { font-size: 0.7rem; min-width: 950px; }
       .data-table th, .data-table td { padding: 8px 10px; }
       .table-footer { font-size: 0.75rem; padding: 12px 14px; }
       .sidebar { width: 100px; }
@@ -1507,35 +1342,33 @@
       .alerts-container { padding: 0 14px 14px; }
       .report-search-row { padding: 0 14px 12px; }
       .report-search-row > i { right: 26px; }
+      .quick-presets { padding: 0 14px 12px; }
+      .variance-banner { margin: 0 14px 12px; }
     }
     @media (max-width: 480px) {
       .kpi-grid { grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 12px; }
       .kpi-card { padding: 14px 10px; }
       .kpi-card .kpi-value { font-size: 1.25rem; }
-      .filter-group { flex: 1 0 100%; min-width: 0; }
+      .filter-group { flex: 1 0 100%; }
       .filter-actions .btn-filter { font-size: 0.65rem; padding: 6px 12px; }
       .bottom-nav .nav-item { padding: 4px 4px; min-width: 55px; }
       .bottom-nav .nav-item i { font-size: 16px; }
       .bottom-nav .nav-item span { font-size: 0.6rem; }
-      .data-table { min-width: 720px; font-size: 0.68rem; }
+      .data-table { min-width: 850px; font-size: 0.68rem; }
       .data-table th, .data-table td { padding: 6px 8px; }
       .sidebar { width: 90px; padding: 10px 8px; }
       .sidebar-btn { min-height: 62px; font-size: 0.7rem; }
       .sidebar-btn i { font-size: 1.25rem; }
       .top-bar { padding: 12px 12px 10px; }
       .details-content { padding: 14px 12px 80px; }
-      .details-section { padding: 14px 12px; }
     }
 
-    /* ===================================================================
-       الطباعة
-       =================================================================== */
     @media print {
       .top-bar, .bottom-nav, .sidebar-toggle, .sidebar, .fab,
-      .offline-banner, .report-search-row, .filter-actions,
+      .offline-banner, .report-search-row, .filter-actions, .quick-presets,
       .icon-btn, .alerts-container, .pull-indicator, .pagination-bar { display: none !important; }
       body { background: #fff; color: #111; padding: 0; }
-      .kpi-card, .chart-card, .table-wrapper, .alert-item {
+      .kpi-card, .chart-card, .table-wrapper, .alert-item, .variance-banner {
         box-shadow: none;
         color: #111;
         border: 1px solid #aaa;
@@ -1543,1167 +1376,2108 @@
       }
     }
   </style>
-  <meta name="reports-bridge-methods" content="getFuelReport,getFuelReportPage,getTanks,getPumps,generateMeterReadingReport">
-  <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
+  <meta name="reports-bridge-methods" content="getFuelReportPage,getFuelReport,getTanks,getPumps,getFuelTypes">
 </head>
 <body>
-    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
 
   <!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
-   <i class="fas fa-arrow-down"></i>
-   <span>اسحب للتحديث</span>
+    <i class="fas fa-arrow-down"></i>
+    <span>اسحب للتحديث</span>
   </div>
+
   <!-- Offline Banner -->
   <div class="offline-banner" id="offlineBanner">
-   <i class="fas fa-wifi-slash"></i>
-   أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
+    <i class="fas fa-wifi-slash"></i> لا يوجد اتصال بجسر Android؛ لن تُعرض بيانات بديلة
   </div>
+
   <!-- Loading -->
   <div class="loading-indicator" id="loadingIndicator">
-   <div class="spinner"></div>
+    <div class="spinner"></div>
   </div>
-  <!-- ===================================================================
-    الشريط العلوي
-    =================================================================== -->
+
+  <!-- ===== Top Bar ===== -->
   <header class="top-bar">
-   <div class="header-top">
-    <div class="top-title">
-     <h2>
-      <i class="fas fa-gas-pump"></i>
-      تقارير الوقود
-      <span class="ai-badge">AI</span>
-     </h2>
-     <span class="subtitle">تحليل شامل لمبيعات ومراقبة الوقود</span>
-    </div>
-    <div class="header-actions">
-     <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
-      <i class="fas fa-bell"></i>
-     </button>
-     <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
-      <i class="fas fa-moon" id="themeIcon"></i>
-     </button>
-     <button class="icon-btn" onclick="openAIAdvisor()" style="border-color:rgba(168,130,255,0.3);" title="المستشار الذكي">
-      <i class="fas fa-robot" style="color:var(--violet-primary);"></i>
-     </button>
-    </div>
-   </div>
-   <!-- الفلاتر -->
-   <div class="filter-bar">
-    <div class="filter-group">
-     <i class="fas fa-calendar-alt"></i>
-     <input id="filterDateFrom" placeholder="من" type="date">
-    </div>
-    <div class="filter-group">
-     <i class="fas fa-calendar-alt"></i>
-     <input id="filterDateTo" placeholder="إلى" type="date">
-    </div>
-    <div class="filter-group">
-     <i class="fas fa-oil-can"></i>
-     <select id="filterFuelType">
-      <option value="">جميع أنواع الوقود</option>
-     </select>
-    </div>
-    <div class="filter-group">
-     <i class="fas fa-tank"></i>
-     <select id="filterTank">
-      <option value="">جميع الخزانات</option>
-     </select>
-    </div>
-    <div class="filter-group">
-     <i class="fas fa-filter"></i>
-     <select id="filterReportType">
-      <option value="summary">ملخص</option>
-      <option value="sales">المبيعات</option>
-      <option value="refills">التزود</option>
-      <option value="readings">القراءات</option>
-      <option value="tanks">الخزانات</option>
-     </select>
-    </div>
-    <div class="filter-actions">
-     <button class="btn-filter primary" onclick="generateReport()">
-      <i class="fas fa-cog"></i>
-      توليد
-     </button>
-     <button class="btn-filter" onclick="resetFilters()">
-      <i class="fas fa-undo"></i>
-     </button>
-     <button class="btn-filter" onclick="exportCSV()">
-      <i class="fas fa-file-csv"></i>
-     </button>
-    </div>
-   </div>
-  </header>
-  <div class="report-search-row" role="search">
-   <label class="sr-only" for="fuelSearch">البحث في تقرير الوقود</label>
-   <i class="fas fa-search" aria-hidden="true"></i>
-   <input id="fuelSearch" class="form-input" type="search" placeholder="ابحث بكود المعاملة أو الوقود أو المضخة أو المصدر" oninput="applyFuelSearch(this.value)">
-  </div>
-  <!-- ===================================================================
-    بطاقات الإحصائيات
-    =================================================================== -->
-  <div class="kpi-grid">
-   <div class="kpi-card">
-    <div class="kpi-icon">
-     <i class="fas fa-gas-pump"></i>
-    </div>
-    <div class="kpi-value" id="kpiTotalLiters">0.0</div>
-    <div class="kpi-label">⛽ إجمالي اللترات</div>
-    <div class="kpi-trend up" id="trendLiters"><i class="fas fa-arrow-up"></i> 0.0%</div>
-   </div>
-   <div class="kpi-card">
-    <div class="kpi-icon gold">
-     <i class="fas fa-money-bill-wave"></i>
-    </div>
-    <div class="kpi-value" id="kpiTotalAmount">0.00</div>
-    <div class="kpi-label">💰 إجمالي المبيعات</div>
-    <div class="kpi-trend up" id="trendAmount"><i class="fas fa-arrow-up"></i> 0.0%</div>
-   </div>
-   <div class="kpi-card">
-    <div class="kpi-icon green">
-     <i class="fas fa-tag"></i>
-    </div>
-    <div class="kpi-value" id="kpiAvgPrice">0.00</div>
-    <div class="kpi-label">🏷️ متوسط السعر</div>
-    <div class="kpi-trend up" id="trendPrice"><i class="fas fa-arrow-up"></i> 0.0%</div>
-   </div>
-   <div class="kpi-card">
-    <div class="kpi-icon red">
-     <i class="fas fa-receipt"></i>
-    </div>
-    <div class="kpi-value" id="kpiTransactions">0</div>
-    <div class="kpi-label">📋 عدد المعاملات</div>
-    <div class="kpi-trend up" id="trendTx"><i class="fas fa-arrow-up"></i> 0.0%</div>
-   </div>
-  </div>
-  <!-- ===================================================================
-    التنبيهات
-    =================================================================== -->
-  <div class="alerts-container" id="alertsContainer"></div>
-  <!-- ===================================================================
-    الرسوم البيانية
-    =================================================================== -->
-  <div class="charts-grid">
-   <div class="chart-card">
-    <div class="chart-header">
-     <span class="chart-title">
-      <i class="fas fa-chart-area"></i>
-      اتجاه المبيعات
-     </span>
-     <span class="chart-badge">آخر 7 أيام</span>
-    </div>
-    <div class="chart-container">
-     <canvas id="salesTrendChart"></canvas>
-    </div>
-   </div>
-   <div class="chart-card">
-    <div class="chart-header">
-     <span class="chart-title">
-      <i class="fas fa-chart-pie"></i>
-      توزيع الوقود
-     </span>
-     <span class="chart-badge">حسب النوع</span>
-    </div>
-    <div class="chart-container">
-     <canvas id="fuelTypeChart"></canvas>
-    </div>
-   </div>
-  </div>
-  <!-- ===================================================================
-    جدول معاملات الوقود
-    =================================================================== -->
-  <div class="table-section">
-   <div class="table-wrapper">
-    <div class="table-scroll">
-     <table class="data-table" id="fuelTable">
-      <thead>
-       <tr>
-        <th>#</th>
-        <th>كود المعاملة</th>
-        <th>التاريخ</th>
-        <th>نوع الوقود</th>
-        <th>الكمية (لتر)</th>
-        <th>سعر الوحدة</th>
-        <th>الإجمالي</th>
-        <th>نوع العملية</th>
-        <th>المصدر</th>
-        <th>الحالة</th>
-        <th>إجراء</th>
-       </tr>
-      </thead>
-      <tbody id="fuelTableBody">
-       <tr>
-        <td colspan="11">
-         <div class="empty-state">
+    <div class="header-top">
+      <div class="top-title">
+        <h2>
           <i class="fas fa-gas-pump"></i>
-          اختر الفترة واضغط "توليد" لعرض التقرير
-         </div>
-        </td>
-       </tr>
-      </tbody>
-     </table>
-    </div>
-    <div class="table-footer">
-     <span class="total-item">
-      <span class="label">إجمالي اللترات:</span>
-      <span class="value" id="footerLiters">0.0</span>
-     </span>
-     <span class="total-item">
-      <span class="label">إجمالي المبيعات:</span>
-      <span class="value" id="footerAmount">0.00</span>
-     </span>
-     <span class="total-item">
-      <span class="label">متوسط السعر:</span>
-      <span class="value" id="footerAvgPrice">0.00</span>
-     </span>
-    </div>
-   </div>
-   <div id="fuelPagination" class="pagination-bar" role="navigation" aria-label="ترقيم تقرير الوقود"></div>
-  </div>
-  <!-- ===================================================================
-    الزر العائم (PDF)
-    =================================================================== -->
-  <button class="fab" onclick="exportPDF()">
-   <i class="fas fa-file-pdf"></i>
-  </button>
-  <!-- ===================================================================
-    القائمة الجانبية
-    =================================================================== -->
-  <div class="sidebar-toggle" id="sidebarToggle">
-   <i class="fas fa-chevron-left"></i>
-  </div>
-  <div class="sidebar" id="sidebar">
-   <div class="sidebar-content">
-    <button class="sidebar-btn" onclick="handleAction('refresh')">
-     <i class="fas fa-sync-alt"></i>
-     <span>تحديث</span>
-    </button>
-    <button class="sidebar-btn" onclick="handleAction('csv')">
-     <i class="fas fa-file-csv"></i>
-     <span>CSV</span>
-    </button>
-    <button class="sidebar-btn" onclick="handleAction('pdf')">
-     <i class="fas fa-file-pdf"></i>
-     <span>PDF</span>
-    </button>
-    <button class="sidebar-btn" onclick="handleAction('print')">
-     <i class="fas fa-print"></i>
-     <span>طباعة</span>
-    </button>
-    <button class="sidebar-btn ai-btn" onclick="handleAction('ai')">
-     <i class="fas fa-robot"></i>
-     <span>AI</span>
-    </button>
-    <button class="sidebar-btn" onclick="handleAction('home')">
-     <i class="fas fa-home"></i>
-     <span>رجوع</span>
-    </button>
-   </div>
-  </div>
-  <!-- ===================================================================
-    القائمة السفلية
-    =================================================================== -->
-  <nav class="bottom-nav">
-   <button class="nav-item" onclick="switchTab('summary')">
-    <i class="fas fa-chart-pie"></i>
-    <span>ملخص</span>
-   </button>
-   <button class="nav-item active" onclick="switchTab('sales')">
-    <i class="fas fa-shopping-cart"></i>
-    <span>المبيعات</span>
-   </button>
-   <button class="nav-item" onclick="switchTab('refills')">
-    <i class="fas fa-truck"></i>
-    <span>التزود</span>
-   </button>
-   <button class="nav-item" onclick="switchTab('readings')">
-    <i class="fas fa-gauge-high"></i>
-    <span>القراءات</span>
-   </button>
-   <button class="nav-item" onclick="switchTab('tanks')">
-    <i class="fas fa-tank"></i>
-    <span>الخزانات</span>
-   </button>
-  </nav>
-  <!-- ===================================================================
-    مودال تفاصيل المعاملة
-    =================================================================== -->
-  <div class="details-overlay" id="detailsOverlay" onclick="closeDetails()">
-   <div class="details-content" id="detailsContent" onclick="event.stopPropagation()">
-    <!-- يتم تعبئتها عبر JS -->
-   </div>
-  </div>
-  <!-- ===================================================================
-    مودال AI Advisor
-    =================================================================== -->
-  <div class="ai-modal">
-   <div class="modal-overlay" id="aiModal" onclick="closeAIModal()">
-    <div class="modal" onclick="event.stopPropagation()">
-     <div class="modal-header">
-      <h3 class="modal-title">🤖 المستشار الذكي – الوقود</h3>
-      <button class="modal-close" onclick="closeAIModal()">
-       <i class="fas fa-times"></i>
-      </button>
-     </div>
-     <div id="aiContent">
-      <div style="text-align:center;color:var(--text-muted);padding:30px;">
-       <i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:12px;color:var(--violet-primary);"></i>
-       <p>جاري تحليل بيانات الوقود...</p>
+          تقارير الوقود
+        </h2>
+        <span class="subtitle">تحليل شامل لمبيعات ومراقبة الوقود</span>
       </div>
-     </div>
+      <div class="header-actions">
+        <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
+          <i class="fas fa-bell"></i>
+        </button>
+        <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
+          <i class="fas fa-moon" id="themeIcon"></i>
+        </button>
+        <button class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي">
+          <i class="fas fa-robot" style="color:var(--violet-primary);"></i>
+        </button>
+      </div>
     </div>
-   </div>
+
+    <div class="filter-bar">
+      <div class="filter-group">
+        <i class="fas fa-calendar-alt"></i>
+        <input id="filterDateFrom" placeholder="من" type="date">
+      </div>
+      <div class="filter-group">
+        <i class="fas fa-calendar-alt"></i>
+        <input id="filterDateTo" placeholder="إلى" type="date">
+      </div>
+      <div class="filter-group">
+        <i class="fas fa-oil-can"></i>
+        <select id="filterFuelType">
+          <option value="">جميع أنواع الوقود</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <i class="fas fa-gas-pump"></i>
+        <select id="filterTank">
+          <option value="">جميع الخزانات</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <i class="fas fa-filter"></i>
+        <select id="filterReportType">
+          <option value="summary">ملخص شامل</option>
+          <option value="sales">المبيعات</option>
+          <option value="refills">التزود</option>
+          <option value="movement">الحركات</option>
+        </select>
+      </div>
+      <div class="filter-actions">
+        <button class="btn-filter primary" onclick="generateReport()">
+          <i class="fas fa-cog"></i> توليد
+        </button>
+        <button class="btn-filter" onclick="resetFilters()">
+          <i class="fas fa-undo"></i>
+        </button>
+        <button class="btn-filter" onclick="exportCSV()">
+          <i class="fas fa-file-csv"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== Search ===== -->
+  <div class="report-search-row" role="search">
+    <label class="sr-only" for="fuelSearch">البحث في تقرير الوقود</label>
+    <i class="fas fa-search" aria-hidden="true"></i>
+    <input id="fuelSearch" class="form-input" type="search"
+           placeholder="ابحث بكود المعاملة أو الوقود أو المصدر..."
+           oninput="applyFuelSearch(this.value)">
   </div>
-  <!-- ===================================================================
-    Toast
-    =================================================================== -->
+
+  <!-- ===== Quick Presets ===== -->
+  <div class="quick-presets" id="quickPresets"></div>
+
+  <!-- ===== KPIs ===== -->
+  <div class="kpi-grid">
+    <div class="kpi-card" onclick="applyPreset('all')">
+      <div class="kpi-icon">
+        <i class="fas fa-gas-pump"></i>
+      </div>
+      <div class="kpi-value" id="kpiTotalLiters">0.0</div>
+      <div class="kpi-label">⛽ إجمالي اللترات</div>
+      <div class="kpi-trend" id="trendLiters">—</div>
+    </div>
+    <div class="kpi-card" onclick="applyPreset('sales')">
+      <div class="kpi-icon gold">
+        <i class="fas fa-money-bill-wave"></i>
+      </div>
+      <div class="kpi-value" id="kpiTotalAmount">0.00</div>
+      <div class="kpi-label">💰 إجمالي المبيعات</div>
+      <div class="kpi-trend" id="trendAmount">—</div>
+    </div>
+    <div class="kpi-card" onclick="applyPreset('refills')">
+      <div class="kpi-icon green">
+        <i class="fas fa-truck"></i>
+      </div>
+      <div class="kpi-value" id="kpiRefills">0</div>
+      <div class="kpi-label">🚚 عمليات التزود</div>
+      <div class="kpi-trend" id="trendRefills">—</div>
+    </div>
+    <div class="kpi-card" onclick="applyPreset('sale_count')">
+      <div class="kpi-icon info">
+        <i class="fas fa-receipt"></i>
+      </div>
+      <div class="kpi-value" id="kpiTransactions">0</div>
+      <div class="kpi-label">📋 عدد المبيعات</div>
+      <div class="kpi-trend" id="trendTx">—</div>
+    </div>
+  </div>
+
+  <!-- ===== Variance Banner (Wet Stock Reconciliation) ===== -->
+  <div class="variance-banner" id="varianceBanner">
+    <div class="variance-icon" id="varianceIcon">
+      <i class="fas fa-scale-balanced"></i>
+    </div>
+    <div class="variance-info">
+      <h4 id="varianceTitle">مصالحة المخزون الرطب (Wet Stock)</h4>
+      <p id="varianceDesc">سيتم احتساب الفارق بعد توليد التقرير</p>
+    </div>
+  </div>
+
+  <!-- ===== Alerts ===== -->
+  <div class="alerts-container" id="alertsContainer"></div>
+
+  <!-- ===== Charts ===== -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">
+          <i class="fas fa-chart-area"></i>
+          اتجاه المبيعات اليومية
+        </span>
+        <span class="chart-badge">آخر 7 أيام</span>
+      </div>
+      <div class="chart-container">
+        <canvas id="salesTrendChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">
+          <i class="fas fa-chart-pie"></i>
+          توزيع أنواع الوقود
+        </span>
+        <span class="chart-badge">حسب اللترات</span>
+      </div>
+      <div class="chart-container">
+        <canvas id="fuelTypeChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">
+          <i class="fas fa-clock"></i>
+          ساعات الذروة
+        </span>
+        <span class="chart-badge">تحليل زمني</span>
+      </div>
+      <div class="chart-container">
+        <canvas id="peakHoursChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">
+          <i class="fas fa-exchange-alt"></i>
+          مقارنة المبيعات والتزود
+        </span>
+        <span class="chart-badge">يومي</span>
+      </div>
+      <div class="chart-container">
+        <canvas id="inOutChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Table ===== -->
+  <div class="table-section">
+    <div class="table-wrapper">
+      <div class="table-scroll">
+        <table class="data-table" id="fuelTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>كود المعاملة</th>
+              <th>التاريخ</th>
+              <th>الوقت</th>
+              <th>نوع الوقود</th>
+              <th>الكمية (لتر)</th>
+              <th>سعر الوحدة</th>
+              <th>الإجمالي</th>
+              <th>النوع</th>
+              <th>المصدر</th>
+              <th>الحالة</th>
+              <th>إجراء</th>
+            </tr>
+          </thead>
+          <tbody id="fuelTableBody">
+            <tr>
+              <td colspan="12">
+                <div class="empty-state">
+                  <i class="fas fa-gas-pump"></i>
+                  اختر الفترة واضغط "توليد" لعرض التقرير
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span class="total-item">
+          <span class="label">إجمالي اللترات:</span>
+          <span class="value" id="footerLiters">0.0</span>
+        </span>
+        <span class="total-item">
+          <span class="label">إجمالي المبيعات:</span>
+          <span class="value" id="footerAmount">0.00</span>
+        </span>
+        <span class="total-item">
+          <span class="label">متوسط السعر:</span>
+          <span class="value" id="footerAvgPrice">0.00</span>
+        </span>
+      </div>
+    </div>
+    <div id="fuelPagination" class="pagination-bar" role="navigation" aria-label="ترقيم تقرير الوقود"></div>
+  </div>
+
+  <!-- ===== FAB ===== -->
+  <button class="fab" onclick="exportPDF()" title="تصدير PDF">
+    <i class="fas fa-file-pdf"></i>
+  </button>
+
+  <!-- ===== Sidebar ===== -->
+  <button class="sidebar-toggle" id="sidebarToggle" aria-label="فتح القائمة">
+    <i class="fas fa-bars"></i>
+  </button>
+  <aside class="sidebar" id="sidebar" role="navigation">
+    <div class="sidebar-content">
+      <button class="sidebar-btn" data-action="refresh">
+        <i class="fas fa-sync-alt"></i><span>تحديث</span>
+      </button>
+      <button class="sidebar-btn" data-action="csv">
+        <i class="fas fa-file-csv"></i><span>CSV</span>
+      </button>
+      <button class="sidebar-btn" data-action="pdf">
+        <i class="fas fa-file-pdf"></i><span>PDF</span>
+      </button>
+      <button class="sidebar-btn" data-action="print">
+        <i class="fas fa-print"></i><span>طباعة</span>
+      </button>
+      <button class="sidebar-btn ai-btn" data-action="ai">
+        <i class="fas fa-robot"></i><span>AI</span>
+      </button>
+      <button class="sidebar-btn" data-action="home">
+        <i class="fas fa-home"></i><span>رجوع</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===== Bottom Nav ===== -->
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="nav-item active" data-tab="summary">
+      <i class="fas fa-chart-pie"></i><span>ملخص</span>
+    </button>
+    <button class="nav-item" data-tab="sales">
+      <i class="fas fa-shopping-cart"></i><span>المبيعات</span>
+    </button>
+    <button class="nav-item" data-tab="refills">
+      <i class="fas fa-truck"></i><span>التزود</span>
+    </button>
+    <button class="nav-item" data-tab="variance">
+      <i class="fas fa-scale-balanced"></i><span>المصالحة</span>
+    </button>
+    <button class="nav-item" data-tab="peaks">
+      <i class="fas fa-clock"></i><span>الذروة</span>
+    </button>
+  </nav>
+
+  <!-- ===== Details Modal ===== -->
+  <div class="details-overlay" id="detailsOverlay" onclick="closeDetails(event)">
+    <div class="details-content" id="detailsContent" onclick="event.stopPropagation()"></div>
+  </div>
+
+  <!-- ===== AI Modal ===== -->
+  <div class="ai-modal-overlay" id="aiModal" onclick="closeAIModal(event)">
+    <div class="ai-modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fas fa-robot"></i> المستشار الذكي – الوقود</h3>
+        <button class="modal-close" onclick="closeAIModal(null)">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div id="aiContent"></div>
+    </div>
+  </div>
+
+  <!-- ===== Wet Stock Modal ===== -->
+  <div class="ai-modal-overlay" id="wetStockModal" onclick="closeWetStockModal(event)">
+    <div class="ai-modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fas fa-scale-balanced"></i> مصالحة المخزون الرطب</h3>
+        <button class="modal-close" onclick="closeWetStockModal(null)">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div id="wetStockContent"></div>
+    </div>
+  </div>
+
+  <!-- ===== Toast ===== -->
   <div class="toast" id="toast">
-   <div class="toast-icon">
-    <i class="fas fa-check"></i>
-   </div>
-   <span id="toastMessage">تمت العملية بنجاح</span>
+    <div class="toast-icon"><i class="fas fa-check"></i></div>
+    <span id="toastMessage">تمت العملية بنجاح</span>
   </div>
+
   <!-- ===================================================================
-    JavaScript
-    =================================================================== -->
+       JavaScript
+       =================================================================== -->
   <script>
-   // ===================================================================
-        // 1. apiCall الموحدة
-        // ===================================================================
-        function apiCall(action, params) {
-            return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        let result;
-                        const p = params || {};
-                        const jsonParams = JSON.stringify(p);
-                        
-                        if (action === 'getOverduePayments') result = window.AndroidInterface.getOverduePayments();
-                        else if (action === 'getCustomerDebts') result = window.AndroidInterface.getCustomerDebts(p.from_date || '', p.to_date || '');
-                        else if (action === 'getParties') result = window.AndroidInterface.getParties(p.type || '');
-                        else if (action === 'getNotifications') result = window.AndroidInterface.getNotifications();
-                        else if (action === 'addNotification') result = window.AndroidInterface.addNotification(jsonParams);
-                        else if (action === 'addSmsMessage') result = window.AndroidInterface.addSmsMessage(jsonParams);
-                        else if (action === 'getSmsLogs') result = window.AndroidInterface.getSmsLogs();
-                        else if (action === 'getExpirySoonProducts') result = window.AndroidInterface.getExpirySoonProducts(p.days || 30);
-                        else if (action === 'extendProductExpiry') result = window.AndroidInterface.extendProductExpiry(p.id, p.new_date);
-                        else if (action === 'markProductExpired') result = window.AndroidInterface.markProductExpired(p.id);
-                        else if (action === 'getFuelReport') result = window.AndroidInterface.getFuelReport(jsonParams);
-                        else if (action === 'getFuelReportPage') result = window.AndroidInterface.getFuelReportPage(jsonParams);
-                        else if (action === 'generateMeterReadingReport') result = window.AndroidInterface.generateMeterReadingReport(jsonParams);
-                        else if (action === 'getFuelInventoryReconciliation') result = window.AndroidInterface.getFuelInventoryReconciliation(jsonParams);
-                        else if (action === 'getFuelTransactionDetails') result = window.AndroidInterface.getFuelTransactionDetails(p.id, p.type);
-                        else if (action === 'getSetting') result = window.AndroidInterface.getSetting(p.key);
-                        else if (action === 'setSetting') result = window.AndroidInterface.setSetting(p.key, p.value);
-                        else if (action === 'getProducts') result = window.AndroidInterface.getProducts();
-                        else if (action === 'getFuelTypes') result = window.AndroidInterface.getFuelTypes();
-                        else if (action === 'getTanks') result = window.AndroidInterface.getTanks();
-                        else if (action === 'getCategories') result = window.AndroidInterface.getCategories();
-                        else {
-                            reject({ success: false, error: 'Unknown action: ' + action });
-                            return;
-                        }
-                        
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
-                }
-            });
+  (() => {
+    'use strict';
+
+    // ================================================================
+    // 1. طبقة التكيّف مع عقد الجسر
+    // ================================================================
+    function parseBridge(raw) {
+      if (raw === null || raw === undefined) {
+        throw new Error('لم يرجع الجسر أي نتيجة');
+      }
+      const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (value && value.success === false) {
+        throw new Error(value.error || value.message || 'فشلت العملية على مستوى الجسر');
+      }
+      return value;
+    }
+
+    /**
+     * يوحّد استجابة getFuelReportPage/getFuelReport:
+     * الشكل الفعلي: { rows:[...], count, total_count, page, page_size, ..., success }
+     */
+    function extractFuelReport(res) {
+      const empty = { success: false, rows: [], total_count: 0, count: 0 };
+      if (!res) return empty;
+
+      if (Array.isArray(res.rows)) {
+        return {
+          success: res.success !== false,
+          rows: res.rows,
+          count: res.count ?? res.rows.length,
+          total_count: res.total_count ?? res.rows.length
+        };
+      }
+      if (res.data && Array.isArray(res.data.rows)) {
+        return {
+          success: res.success !== false,
+          rows: res.data.rows,
+          count: res.data.count ?? res.data.rows.length,
+          total_count: res.data.total_count ?? res.data.rows.length
+        };
+      }
+      if (Array.isArray(res)) {
+        return { success: true, rows: res, count: res.length, total_count: res.length };
+      }
+      if (res.data && Array.isArray(res.data)) {
+        return { success: res.success !== false, rows: res.data, count: res.data.length, total_count: res.data.length };
+      }
+      return empty;
+    }
+
+    function extractArray(res) {
+      if (!res) return [];
+      if (Array.isArray(res)) return res;
+      if (Array.isArray(res.data)) return res.data;
+      if (Array.isArray(res.rows)) return res.rows;
+      return [];
+    }
+
+    function extractObject(res) {
+      if (!res) return null;
+      if (res.data && typeof res.data === 'object' && !Array.isArray(res.data)) return res.data;
+      if (typeof res === 'object' && !Array.isArray(res)) return res;
+      return null;
+    }
+
+    /**
+     * يوحّد صف الوقود (سواء كان من UNION type='sale' أو type='refill').
+     * يعيد كائناً قياسياً يعتمد عليه الجدول والرسوم البيانية.
+     */
+    function normalizeFuelRow(raw) {
+      if (!raw || typeof raw !== 'object') return null;
+      const isRefill = raw.type === 'refill';
+      const isSale = raw.type === 'sale';
+
+      const qty = parseFloat(raw.quantity ?? 0) || 0;
+      const amount = parseFloat(raw.amount ?? 0) || 0;
+      const price = qty > 0 ? amount / qty : 0;
+      const dateRaw = raw.date ?? raw.created_at ?? raw.sale_date ?? raw.arrival_date ?? '';
+
+      return {
+        // المعرّفات
+        id: raw.id ?? null,
+        type: isRefill ? 'refill' : isSale ? 'sale' : 'other',
+        code: raw.code || (isRefill ? 'REF-' + (raw.id || '') : 'SALE-' + (raw.id || '')),
+
+        // التواريخ
+        date: dateRaw,
+        sale_date: raw.sale_date ?? dateRaw,
+        arrival_date: raw.arrival_date ?? dateRaw,
+
+        // الوقود
+        fuel_type_id: raw.fuel_type_id ?? null,
+        fuel_name: raw.fuel_name || 'غير محدد',
+
+        // الأطراف
+        party_name: raw.party_name || '',
+        tank_name: raw.tank_name || '',
+        tank_id: raw.tank_id ?? null,
+
+        // الأرقام
+        quantity: qty,
+        liters: isSale ? qty : 0,
+        delivered_quantity: isRefill ? qty : 0,
+        unit_price: price,
+        price_per_liter: price,
+        amount: amount,
+        total_amount: amount,
+        net_amount: amount,
+
+        // المرتجع/التالف
+        returned_liters: parseFloat(raw.returned_liters ?? 0) || 0,
+        damaged_liters: parseFloat(raw.damaged_liters ?? 0) || 0,
+
+        // الحالة
+        status: raw.status || 'completed',
+
+        // الخام
+        _raw: raw
+      };
+    }
+
+    // ================================================================
+    // 2. جسر Android
+    // ================================================================
+    function bridgeCall(method, args = []) {
+      const bridge = window.AndroidInterface;
+      if (!bridge || typeof bridge[method] !== 'function') {
+        return Promise.reject(new Error('العقد ' + method + ' غير متاح في Android Bridge'));
+      }
+      try {
+        const raw = bridge[method](...args);
+        return Promise.resolve(parseBridge(raw));
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    }
+
+    function apiCall(action, params = {}) {
+      const p = params || {};
+      switch (action) {
+        case 'getFuelReport':
+          return bridgeCall('getFuelReport', [JSON.stringify(p)]);
+        case 'getFuelReportPage':
+          return bridgeCall('getFuelReportPage', [JSON.stringify(p)]);
+        case 'getFuelTypes':
+          return bridgeCall('getFuelTypes');
+        case 'getTanks':
+          return bridgeCall('getTanks');
+        case 'getFuelTransactionDetails':
+          return bridgeCall('getFuelTransactionDetails', [Number(p.id), String(p.type || '')]);
+        default:
+          return Promise.reject(new Error('الإجراء غير مدعوم: ' + action));
+      }
+    }
+
+    // ================================================================
+    // 3. حالة الصفحة
+    // ================================================================
+    const state = {
+      allRows: [],          // كل الصفوف الموحّدة (sale + refill)
+      filteredRows: [],
+      activePreset: 'all',
+      searchQuery: '',
+      reportType: 'summary',
+      loadedAt: null,
+      stats: {},
+      // تحليلات
+      fuelTypes: {},         // { name: { liters, amount, count } }
+      dailySeries: [],       // [{ day, in, out, count }]
+      peakHours: {},         // { hour: liters }
+      wetStock: {            // مصالحة المخزون الرطب
+        totalDelivered: 0,
+        totalSold: 0,
+        variance: 0,
+        variancePct: 0,
+        status: 'unknown'
+      },
+      alerts: [],
+      insights: []
+    };
+
+    const pagination = { page: 1, pageSize: 25, totalCount: 0, totalPages: 0 };
+
+    let salesTrendChart = null;
+    let fuelTypeChart = null;
+    let peakHoursChart = null;
+    let inOutChart = null;
+
+    // ================================================================
+    // 4. أدوات مساعدة
+    // ================================================================
+    const $ = (id) => document.getElementById(id);
+
+    const escapeHtml = (value) => {
+      if (value === null || value === undefined) return '';
+      const div = document.createElement('div');
+      div.textContent = String(value);
+      return div.innerHTML;
+    };
+
+    function showLoading(show) {
+      const el = $('loadingIndicator');
+      if (el) el.style.display = show ? 'flex' : 'none';
+    }
+
+    function haptic(type) {
+      try {
+        if (navigator.vibrate) {
+          if (type === 'success') navigator.vibrate(15);
+          else if (type === 'error') navigator.vibrate([20, 30, 20]);
+          else navigator.vibrate(8);
         }
-        
-        // ===================================================================
-        // ===================================================================
-        // 2. حالة التشغيل دون تخزين تجاري محلي
-        // ===================================================================
-        // البيانات التجارية لا تُخزّن في localStorage؛ المصدر الوحيد هو SQLite عبر الجسر.
-        const RuntimeState = {
-            values: Object.create(null),
-            set: function(key, value) { this.values[key] = value; },
-            get: function(key, def) { return Object.prototype.hasOwnProperty.call(this.values, key) ? this.values[key] : def; },
-            remove: function(key) { delete this.values[key]; }
+      } catch (_) {}
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = $('toast');
+      const msgEl = $('toastMessage');
+      const iconEl = toast.querySelector('.toast-icon i');
+      toast.className = 'toast ' + type;
+      msgEl.textContent = message;
+      const iconMap = {
+        success: 'fas fa-check',
+        error: 'fas fa-times',
+        warning: 'fas fa-exclamation-triangle',
+        info: 'fas fa-info-circle'
+      };
+      iconEl.className = iconMap[type] || iconMap.info;
+      if (type === 'success') haptic('success');
+      else if (type === 'error') haptic('error');
+      else haptic('light');
+      toast.classList.add('show');
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => toast.classList.remove('show'), 3200);
+    }
+
+    function formatCurrency(num) {
+      if (num === null || num === undefined) return '0.00';
+      const n = Number(num);
+      if (!Number.isFinite(n)) return '0.00';
+      return n.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatNumber(num) {
+      if (num === null || num === undefined) return '0';
+      const n = Number(num);
+      if (!Number.isFinite(n)) return '0';
+      if (Math.abs(n) >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+      if (Math.abs(n) >= 1000) return (n / 1000).toFixed(1) + 'K';
+      return n.toLocaleString('en');
+    }
+
+    function formatLiters(num) {
+      if (num === null || num === undefined) return '0.0';
+      const n = Number(num);
+      if (!Number.isFinite(n)) return '0.0';
+      return n.toLocaleString('en', { maximumFractionDigits: 2 });
+    }
+
+    function getStatusLabel(status) {
+      const map = {
+        completed: 'مكتمل',
+        active: 'نشط',
+        pending: 'قيد الانتظار',
+        rejected: 'مرفوض',
+        cancelled: 'ملغي',
+        draft: 'مسودة',
+        verified: 'موثّق',
+        approved: 'معتمد'
+      };
+      return map[status] || status || '—';
+    }
+
+    function getStatusClass(status) {
+      const map = {
+        completed: 'active',
+        active: 'active',
+        verified: 'active',
+        approved: 'active',
+        pending: 'warning',
+        draft: 'warning',
+        rejected: 'danger',
+        cancelled: 'inactive'
+      };
+      return map[status] || 'inactive';
+    }
+
+    function dateOnly(d) {
+      return `${d.getFullYear()}-${
+        String(d.getMonth() + 1).padStart(2, '0')
+      }-${
+        String(d.getDate()).padStart(2, '0')
+      }`;
+    }
+
+    function extractHourFromDate(dateStr) {
+      if (!dateStr) return null;
+      const s = String(dateStr);
+      // محاولة استخراج الساعة من صيغ مختلفة
+      const match = s.match(/[T\s](\d{1,2}):/);
+      if (match) return parseInt(match[1], 10);
+      // محاولة parse عبر Date
+      const ts = new Date(s).getTime();
+      if (Number.isFinite(ts)) {
+        const d = new Date(ts);
+        return d.getHours();
+      }
+      return null;
+    }
+
+    // ================================================================
+    // 5. تحليلات متقدمة
+    // ================================================================
+    function computeFuelTypeAnalysis(rows) {
+      const map = {};
+      rows.forEach(r => {
+        if (r.type !== 'sale') return;
+        const name = r.fuel_name || 'غير محدد';
+        if (!map[name]) map[name] = { liters: 0, amount: 0, count: 0 };
+        map[name].liters += r.quantity;
+        map[name].amount += r.amount;
+        map[name].count += 1;
+      });
+      return map;
+    }
+
+    function computeDailySeries(rows) {
+      const map = {};
+      rows.forEach(r => {
+        const day = (r.date || '').substring(0, 10);
+        if (!day) return;
+        if (!map[day]) map[day] = { day, in: 0, out: 0, count: 0, amount: 0 };
+        if (r.type === 'refill') map[day].in += r.quantity;
+        if (r.type === 'sale') map[day].out += r.quantity;
+        map[day].count += 1;
+        map[day].amount += r.amount;
+      });
+      return Object.values(map).sort((a, b) => a.day.localeCompare(b.day));
+    }
+
+    function computePeakHours(rows) {
+      const map = {};
+      rows.forEach(r => {
+        if (r.type !== 'sale') return;
+        const hour = extractHourFromDate(r.date);
+        if (hour === null || hour < 0 || hour > 23) return;
+        map[hour] = (map[hour] || 0) + r.quantity;
+      });
+      return map;
+    }
+
+    function computeWetStock(rows) {
+      let totalDelivered = 0;
+      let totalSold = 0;
+      rows.forEach(r => {
+        if (r.type === 'refill') totalDelivered += r.quantity;
+        if (r.type === 'sale') totalSold += r.quantity;
+      });
+      const netAvailable = totalDelivered - totalSold;
+      const variance = netAvailable;
+      const variancePct = totalDelivered > 0 ? (variance / totalDelivered) * 100 : 0;
+      let status = 'unknown';
+      if (totalDelivered > 0) {
+        if (Math.abs(variancePct) <= 1) status = 'healthy';
+        else if (Math.abs(variancePct) <= 3) status = 'warn';
+        else status = 'critical';
+      }
+      return { totalDelivered, totalSold, variance, variancePct, status };
+    }
+
+    // ================================================================
+    // 6. توليد التقرير
+    // ================================================================
+    async function generateReport() {
+      const from = $('filterDateFrom').value;
+      const to = $('filterDateTo').value;
+      const fuelType = $('filterFuelType').value;
+      const tank = $('filterTank').value;
+      const reportType = $('filterReportType').value;
+
+      if (from && to && from > to) {
+        showToast('تاريخ البداية يجب أن يسبق تاريخ النهاية', 'error');
+        return;
+      }
+
+      state.reportType = reportType;
+      showLoading(true);
+
+      try {
+        const params = {
+          from_date: from,
+          to_date: to,
+          start_date: from,
+          end_date: to,
+          fuel_type_id: fuelType || null,
+          tank_id: tank || null,
+          report_type: reportType,
+          limit: pagination.pageSize,
+          offset: (pagination.page - 1) * pagination.pageSize
         };
 
-        // ===================================================================
-        // 3. دوال مساعدة
-        // ===================================================================
-        function showToast(msg, type) {
-            const toast = document.getElementById('toast');
-            const msgEl = document.getElementById('toastMessage');
-            const iconEl = toast.querySelector('.toast-icon i');
-            toast.className = 'toast ' + type;
-            msgEl.textContent = msg;
-            if (type === 'success') iconEl.className = 'fas fa-check';
-            else if (type === 'error') iconEl.className = 'fas fa-times';
-            else if (type === 'warning') iconEl.className = 'fas fa-exclamation-triangle';
-            toast.classList.add('show');
-            clearTimeout(toast._timer);
-            toast._timer = setTimeout(() => toast.classList.remove('show'), 3500);
+        const res = await apiCall('getFuelReportPage', params);
+        const extracted = extractFuelReport(res);
+
+        if (!extracted.success) {
+          throw new Error('فشل استخراج بيانات الوقود');
         }
 
-        function showLoading(show) {
-            document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
+        // تطبيع الصفوف
+        let rows = extracted.rows.map(normalizeFuelRow).filter(Boolean);
+
+        // فلترة إضافية حسب النوع في الواجهة
+        if (reportType === 'sales') {
+          rows = rows.filter(r => r.type === 'sale');
+        } else if (reportType === 'refills') {
+          rows = rows.filter(r => r.type === 'refill');
         }
 
-        function formatCurrency(n) {
-            if (n === null || n === undefined || isNaN(n)) return '0.00';
-            return parseFloat(n).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        state.allRows = rows;
+        state.stats = extracted;
+        state.loadedAt = new Date();
+        pagination.totalCount = extracted.total_count;
+        pagination.totalPages = pagination.totalCount > 0
+          ? Math.ceil(pagination.totalCount / pagination.pageSize) : 0;
+
+        // تحليلات
+        state.fuelTypes = computeFuelTypeAnalysis(rows);
+        state.dailySeries = computeDailySeries(rows);
+        state.peakHours = computePeakHours(rows);
+        state.wetStock = computeWetStock(rows);
+
+        applyPresetAndRender();
+
+        $('offlineBanner').classList.remove('show');
+
+        if (rows.length === 0) {
+          showToast('لا توجد بيانات مطابقة للفترة المحددة', 'warning');
+        } else {
+          showToast(`تم توليد التقرير (${rows.length} سجل)`, 'success');
         }
+      } catch (err) {
+        console.error('generateReport error:', err);
+        state.allRows = [];
+        state.filteredRows = [];
+        state.fuelTypes = {};
+        state.dailySeries = [];
+        state.peakHours = {};
+        state.wetStock = { totalDelivered: 0, totalSold: 0, variance: 0, variancePct: 0, status: 'unknown' };
+        resetKPIs();
+        renderTable([]);
+        updateCharts();
+        updateFooter([]);
+        updateVarianceBanner();
+        $('offlineBanner').classList.add('show');
+        showToast(err.message || 'فشل توليد التقرير', 'error');
+      } finally {
+        showLoading(false);
+      }
+    }
 
-        function formatNumber(n) {
-            if (n === null || n === undefined || isNaN(n)) return '0';
-            if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-            if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
-            return n.toLocaleString('en');
-        }
+    // ================================================================
+    // 7. Quick Presets
+    // ================================================================
+    const PRESETS = [
+      { id: 'all', label: 'الكل', icon: 'fa-th-large' },
+      { id: 'sales', label: 'المبيعات', icon: 'fa-shopping-cart' },
+      { id: 'refills', label: 'التزود', icon: 'fa-truck' },
+      { id: 'sale_count', label: 'أعلى كمية', icon: 'fa-fire' },
+      { id: 'big_amount', label: 'أعلى مبلغ', icon: 'fa-crown' },
+      { id: 'fuel_diesel', label: 'ديزل', icon: 'fa-gas-pump' }
+    ];
 
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+    function renderQuickPresets() {
+      const container = $('quickPresets');
+      container.innerHTML = PRESETS.map(p => `
+        <button type="button" class="preset-chip ${p.id === state.activePreset ? 'active' : ''}"
+                data-preset="${p.id}">
+          <i class="fas ${p.icon}"></i>
+          ${escapeHtml(p.label)}
+        </button>
+      `).join('');
 
-        function getStatusLabel(st) {
-            const map = { 'active': 'نشط', 'completed': 'مكتمل', 'pending': 'قيد الانتظار', 'rejected': 'مرفوض',
-                'cancelled': 'ملغي' };
-            return map[st] || st;
-        }
-
-        function getStatusClass(st) {
-            const map = { 'active': 'active', 'completed': 'active', 'pending': 'warning', 'rejected': 'danger',
-                'cancelled': 'inactive' };
-            return map[st] || 'inactive';
-        }
-
-        // ===================================================================
-        // 4. تبديل الوضع (فاتح افتراضي)
-        // ===================================================================
-        function toggleTheme() {
-            const current = document.documentElement.getAttribute('data-theme');
-            const isDark = current === 'dark';
-            const newTheme = isDark ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('fuel_reports_theme', newTheme);
-            const icon = document.getElementById('themeIcon');
-            icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-        }
-
-        function loadSavedTheme() {
-            const saved = localStorage.getItem('fuel_reports_theme') || 'light';
-            document.documentElement.setAttribute('data-theme', saved);
-            const icon = document.getElementById('themeIcon');
-            icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-        }
-
-        // ===================================================================
-        // 5. توليد التقرير
-        // ===================================================================
-        let fuelData = [];
-        let currentFuelReportType = 'summary';
-        let salesTrendChart = null,
-            fuelTypeChart = null;
-
-        async function generateReport() {
-            const from = document.getElementById('filterDateFrom').value;
-            const to = document.getElementById('filterDateTo').value;
-            const fuelType = document.getElementById('filterFuelType').value;
-            const tank = document.getElementById('filterTank').value;
-            const reportType = document.getElementById('filterReportType').value;
-
-            if (!from || !to) {
-                showToast('❌ الرجاء اختيار نطاق التاريخ', 'error');
-                return;
-            }
-
-            showLoading(true);
-            try {
-                currentFuelReportType = reportType;
-                const params = {
-                    from_date: from,
-                    to_date: to,
-                    report_type: reportType,
-                    fuel_type_id: fuelType ? Number(fuelType) : null,
-                    tank_id: tank ? Number(tank) : null
-                };
-                const result = reportType === 'readings'
-                    ? await apiCall('generateMeterReadingReport', params)
-                    : reportType === 'tanks'
-                        ? await apiCall('getFuelInventoryReconciliation', { date: to })
-                        : await apiCall('getFuelReportPage', { ...params, limit: fuelPagination.pageSize, offset: (fuelPagination.page - 1) * fuelPagination.pageSize });
-                if (result.success && result.data) {
-                    const payload = result.data && !Array.isArray(result.data) && Array.isArray(result.data.rows) ? result.data : result;
-                    const rows = Array.isArray(payload.rows) ? payload.rows : (Array.isArray(result.data) ? result.data : []);
-                    fuelPagination.totalCount = Number(payload.total_count ?? rows.length);
-                    fuelPagination.totalPages = fuelPagination.totalCount > 0 ? Math.ceil(fuelPagination.totalCount / fuelPagination.pageSize) : 0;
-                    fuelData = normalizeFuelRows(rows, reportType);
-                    if (fuelType && reportType !== 'tanks') fuelData = fuelData.filter(r => String(r.fuel_type_id || '') === String(fuelType));
-                    if (tank && reportType !== 'tanks') fuelData = fuelData.filter(r => String(r.tank_id || '') === String(tank));
-                    
-                    renderTable(fuelData, reportType);
-                    updateKPIs(fuelData);
-                    updateCharts(fuelData);
-                    updateFooter(fuelData);
-                    generateAlerts(fuelData);
-                    generateAIInsights(fuelData);
-                    showToast('✅ تم توليد التقرير بنجاح', 'success');
-                } else {
-                    showToast(result.message || '❌ لا توجد بيانات', 'warning');
-                    document.getElementById('fuelTableBody').innerHTML =
-                        '<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i> لا توجد بيانات مطابقة</div></td></tr>';
-                    resetKPIs();
-                }
-            } catch (e) {
-                const message = e && (e.error || e.message) ? (e.error || e.message) : 'خطأ غير معروف';
-                showToast('❌ فشل توليد التقرير من SQLite: ' + message, 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        function applyFuelSearch(query) {
-            const q = String(query || '').trim().toLocaleLowerCase('ar');
-            const rows = q ? fuelData.filter(item => [item.code, item.sale_code, item.refill_code, item.reading_code, item.fuel_name, item.pump_name, item.supplier_name, item.source].some(value => String(value || '').toLocaleLowerCase('ar').includes(q))) : fuelData;
-            renderTable(rows, currentFuelReportType);
-        }
-
-        // ===================================================================
-        // 6. عرض الجدول
-        // ===================================================================
-        function normalizeFuelRows(data, reportType) {
-            const rows = Array.isArray(data) ? data : [];
-            if (reportType === 'readings') return rows.map(item => ({ ...item, type: 'reading', reading_code: item.reading_code || item.code, reading_date: item.reading_date || item.date }));
-            if (reportType === 'tanks') return rows.map(item => ({ ...item, id: item.tank_id || item.id, type: 'tank', code: `TANK-${item.tank_id || item.id || ''}`, difference: Number(item.difference || 0), quantity: Number(item.measured_level || item.closing_level || 0), fuel_name: item.fuel_name || '---', status: Math.abs(Number(item.difference || 0)) > 5 ? 'rejected' : 'completed' }));
-            return rows.filter(item => reportType === 'summary' || (reportType === 'sales' && item.type === 'sale') || (reportType === 'refills' && item.type === 'refill')).map(item => item.type === 'sale' ? ({ ...item, sale_code: item.code, sale_date: item.date, liters: item.quantity, net_amount: item.amount, transaction_id: item.id, transaction_type: 'sale' }) : ({ ...item, refill_code: item.code, arrival_date: item.date, delivered_quantity: item.quantity, total_amount: item.amount, transaction_id: item.id, transaction_type: 'refill' }));
-        }
-
-        function renderTable(data, reportType) {
-            const tbody = document.getElementById('fuelTableBody');
-            if (!data || data.length === 0) {
-                tbody.innerHTML =
-                    '<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i> لا توجد بيانات للعرض</div></td></tr>';
-                renderFuelPagination();
-                return;
-            }
-            // دمج البيانات من مصادر مختلفة (مبيعات، تزود، قراءات) حسب نوع التقرير
-            let rows = [];
-            if ((reportType === 'sales' || reportType === 'summary') && data.some(item => item.type === 'sale')) {
-                data.filter(item => item.type === 'sale').forEach((item, idx) => {
-                    rows.push({
-                        id: item.id,
-                        transactionId: item.transaction_id || item.id,
-                        transactionType: item.transaction_type || 'sale',
-                        code: item.sale_code || 'SALE-' + item.id,
-                        date: item.sale_date || item.created_at,
-                        fuel: item.fuel_name || '---',
-                        quantity: parseFloat(item.liters || item.quantity || 0),
-                        price: parseFloat(item.price_per_liter || 0),
-                        total: parseFloat(item.net_amount || item.total_amount || 0),
-                        type: 'بيع',
-                        source: item.pump_name || 'مضخة',
-                        status: item.status || 'completed'
-                    });
-                });
-            }
-            if ((reportType === 'refills' || reportType === 'summary') && data.some(item => item.type === 'refill')) {
-                data.filter(item => item.type === 'refill').forEach((item, idx) => {
-                    if (item.refill_code) {
-                        rows.push({
-                            id: item.id,
-                            transactionId: item.transaction_id || item.id,
-                            transactionType: item.transaction_type || 'refill',
-                            code: item.refill_code || 'REF-' + item.id,
-                            date: item.arrival_date || item.created_at,
-                            fuel: item.fuel_name || '---',
-                            quantity: parseFloat(item.delivered_quantity || 0),
-                            price: parseFloat(item.unit_price || 0),
-                            total: parseFloat(item.total_amount || 0),
-                            type: 'تزود',
-                            source: item.supplier_name || 'مورد',
-                            status: item.status || 'completed'
-                        });
-                    }
-                });
-            }
-            if (reportType === 'readings' || reportType === 'summary') {
-                data.forEach((item, idx) => {
-                    if (item.reading_code) {
-                        rows.push({
-                            id: idx + 200,
-                            code: item.reading_code || 'RDG-' + item.id,
-                            date: item.reading_date || item.created_at,
-                            fuel: item.fuel_name || '---',
-                            quantity: parseFloat(item.sold_liters || 0),
-                            price: 0,
-                            total: 0,
-                            type: 'قراءة',
-                            source: item.pump_name || 'عداد',
-                            status: item.status || 'draft'
-                        });
-                    }
-                });
-            }
-            // ترتيب حسب التاريخ
-            rows.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-            tbody.innerHTML = rows.map((row, idx) => {
-                const statusLabel = getStatusLabel(row.status);
-                const statusClass = getStatusClass(row.status);
-                return `
-                    <tr>
-                        <td>${idx + 1}</td>
-                        <td><span class="code-field red">${escapeHtml(row.code)}</span></td>
-                        <td>${row.date ? new Date(row.date).toLocaleDateString('en-GB') : '---'}</td>
-                        <td>${escapeHtml(row.fuel)}</td>
-                        <td class="amount">${formatNumber(row.quantity)}</td>
-                        <td class="amount">${formatCurrency(row.price)}</td>
-                        <td class="amount ${row.total >= 0 ? 'debit' : 'credit'}">${formatCurrency(row.total)}</td>
-                        <td>${row.type}</td>
-                        <td>${escapeHtml(row.source)}</td>
-                        <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
-                        <td>
-                            <button class="btn-view" onclick="viewTransaction(${row.transactionId || row.id}, '${row.transactionType || (row.type === 'تزود' ? 'refill' : 'sale')}')" title="تفاصيل">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-            renderFuelPagination();
-        }
-
-        const fuelPagination = { page: 1, pageSize: 25, totalCount: 0, totalPages: 0 };
-        function renderFuelPagination() {
-            const target = document.getElementById('fuelPagination');
-            if (!target || fuelPagination.totalPages <= 1) { if (target) target.innerHTML = ''; return; }
-            target.innerHTML = `<button class="btn btn-secondary" type="button" ${fuelPagination.page === 1 ? 'disabled' : ''} onclick="goToFuelPage(${Math.max(1, fuelPagination.page - 1)})">السابق</button><span>صفحة ${fuelPagination.page} من ${fuelPagination.totalPages} · ${fuelPagination.totalCount} سجل</span><button class="btn btn-secondary" type="button" ${fuelPagination.page === fuelPagination.totalPages ? 'disabled' : ''} onclick="goToFuelPage(${Math.min(fuelPagination.totalPages, fuelPagination.page + 1)})">التالي</button>`;
-        }
-        function goToFuelPage(page) {
-            fuelPagination.page = Math.max(1, Math.min(Number(page) || 1, fuelPagination.totalPages || 1));
-            generateReport();
-        }
-
-        // ===================================================================
-        // 7. تحديث بطاقات الإحصائيات
-        // ===================================================================
-        function updateKPIs(data) {
-            let totalLiters = 0,
-                totalAmount = 0,
-                count = 0;
-            data.forEach(item => {
-                const liters = parseFloat(item.liters || item.quantity || item.delivered_quantity || 0);
-                const amount = parseFloat(item.net_amount || item.total_amount || 0);
-                totalLiters += liters;
-                totalAmount += amount;
-                if (liters > 0) count++;
-            });
-            const avgPrice = totalLiters > 0 ? totalAmount / totalLiters : 0;
-
-            document.getElementById('kpiTotalLiters').textContent = formatNumber(totalLiters);
-            document.getElementById('kpiTotalAmount').textContent = formatCurrency(totalAmount);
-            document.getElementById('kpiAvgPrice').textContent = formatCurrency(avgPrice);
-            document.getElementById('kpiTransactions').textContent = count;
-
-            // محاكاة الاتجاهات
-            document.getElementById('trendLiters').textContent = '—';
-            document.getElementById('trendAmount').textContent = '—';
-            document.getElementById('trendPrice').textContent = '—';
-            document.getElementById('trendTx').textContent = '—';
-        }
-
-        function resetKPIs() {
-            document.getElementById('kpiTotalLiters').textContent = '0.0';
-            document.getElementById('kpiTotalAmount').textContent = '0.00';
-            document.getElementById('kpiAvgPrice').textContent = '0.00';
-            document.getElementById('kpiTransactions').textContent = '0';
-        }
-
-        // ===================================================================
-        // 8. فوتر الجدول
-        // ===================================================================
-        function updateFooter(data) {
-            let totalLiters = 0,
-                totalAmount = 0,
-                count = 0;
-            data.forEach(item => {
-                const liters = parseFloat(item.liters || item.quantity || item.delivered_quantity || 0);
-                const amount = parseFloat(item.net_amount || item.total_amount || 0);
-                totalLiters += liters;
-                totalAmount += amount;
-                if (liters > 0) count++;
-            });
-            const avgPrice = totalLiters > 0 ? totalAmount / totalLiters : 0;
-            document.getElementById('footerLiters').textContent = formatNumber(totalLiters);
-            document.getElementById('footerAmount').textContent = formatCurrency(totalAmount);
-            document.getElementById('footerAvgPrice').textContent = formatCurrency(avgPrice);
-        }
-
-        // ===================================================================
-        // 9. الرسوم البيانية
-        // ===================================================================
-        function updateCharts(data) {
-            // اتجاه المبيعات (آخر 7 أيام)
-            const dailyLiters = {};
-            data.forEach(item => { const day = item.date || item.created_at || 'غير محدد'; dailyLiters[String(day).slice(0, 10)] = (dailyLiters[String(day).slice(0, 10)] || 0) + parseFloat(item.liters || item.quantity || item.delivered_quantity || 0); });
-            const days = Object.keys(dailyLiters).sort().slice(-7);
-            const salesData = days.map(day => dailyLiters[day]);
-
-            const ctx1 = document.getElementById('salesTrendChart').getContext('2d');
-            if (salesTrendChart) salesTrendChart.destroy();
-            salesTrendChart = new Chart(ctx1, {
-                type: 'line',
-                data: {
-                    labels: days,
-                    datasets: [{
-                        label: 'المبيعات (لتر)',
-                        data: salesData,
-                        borderColor: '#a882ff',
-                        backgroundColor: 'rgba(168,130,255,0.12)',
-                        tension: 0.3,
-                        fill: true,
-                        borderWidth: 2.5,
-                        pointBackgroundColor: '#a882ff',
-                        pointBorderColor: '#fff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { beginAtZero: true, grid: { color: 'rgba(168,130,255,0.08)' } },
-                        x: { grid: { display: false } }
-                    }
-                }
-            });
-
-            // توزيع أنواع الوقود
-            const fuelMap = {};
-            data.forEach(item => {
-                const name = item.fuel_name || 'أخرى';
-                const qty = parseFloat(item.liters || item.quantity || item.delivered_quantity || 0);
-                fuelMap[name] = (fuelMap[name] || 0) + qty;
-            });
-            const labels = Object.keys(fuelMap);
-            const values = Object.values(fuelMap);
-            const colors = ['#a882ff', '#f5c842', '#ef4444', '#3b82f6', '#8b5cf6', '#f59e0b'];
-
-            const ctx2 = document.getElementById('fuelTypeChart').getContext('2d');
-            if (fuelTypeChart) fuelTypeChart.destroy();
-            fuelTypeChart = new Chart(ctx2, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{ data: values, backgroundColor: colors.slice(0, values.length), borderColor: 'transparent',
-                        borderWidth: 0 }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'left', labels: { font: { family: 'Cairo' }, boxWidth: 12, padding: 10,
-                                color: '#b4a7e6' } }
-                    },
-                    cutout: '65%'
-                }
-            });
-        }
-
-        // ===================================================================
-        // 10. التنبيهات
-        // ===================================================================
-        function generateAlerts(data) {
-            const alerts = [];
-            // تنبيه انخفاض المخزون - محاكاة
-            const lowTanks = data.filter(item => item.current_quantity && item.capacity_liters && (item.current_quantity /
-                item.capacity_liters < 0.2));
-            if (lowTanks.length > 0) {
-                alerts.push({ type: 'danger', icon: 'fa-exclamation-triangle', title: '⚠️ خزانات منخفضة',
-                    desc: lowTanks.length + ' خزان أقل من 20%', time: 'الآن' });
-            }
-            // ارتفاع المبيعات
-            const totalSales = data.reduce((s, item) => s + parseFloat(item.net_amount || item.total_amount || 0), 0);
-            if (totalSales > 1000000) {
-                alerts.push({ type: 'warning', icon: 'fa-flag', title: '📈 مبيعات مرتفعة',
-                    desc: 'إجمالي المبيعات: ' + formatCurrency(totalSales), time: 'الآن' });
-            }
-            // قراءات غير متطابقة
-            const mismatches = data.filter(item => item.difference && Math.abs(item.difference) > 5);
-            if (mismatches.length > 0) {
-                alerts.push({ type: 'info', icon: 'fa-gauge-high', title: '📊 قراءات غير متطابقة',
-                    desc: mismatches.length + ' قراءة بها فرق > 5 لتر', time: 'الآن' });
-            }
-            RuntimeState.set('fuel_notifications', alerts);
-            renderAlerts(alerts);
-        }
-
-        function renderAlerts(alerts) {
-            const container = document.getElementById('alertsContainer');
-            if (!container) return;
-            if (!alerts || alerts.length === 0) { container.innerHTML = ''; return; }
-            container.innerHTML = alerts.slice(0, 3).map((a, i) => `
-                <div class="alert-item ${a.type}" style="animation-delay:${i*0.1}s">
-                    <div class="alert-icon"><i class="fas ${a.icon}"></i></div>
-                    <div class="alert-content">
-                        <div class="alert-title">${a.title}</div>
-                        <div class="alert-desc">${a.desc}</div>
-                    </div>
-                    <div class="alert-time">${a.time}</div>
-                </div>
-            `).join('');
-        }
-
-        function showNotifications() {
-            const alerts = RuntimeState.get('fuel_notifications', []);
-            if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
-            showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
-        }
-
-        // ===================================================================
-        // 11. AI Advisor
-        // ===================================================================
-        function generateAIInsights(data) {
-            if (!data || data.length === 0) return;
-            const insights = [];
-            const totalLiters = data.reduce((s, item) => s + parseFloat(item.liters || item.quantity || item
-                .delivered_quantity || 0), 0);
-            const totalAmount = data.reduce((s, item) => s + parseFloat(item.net_amount || item.total_amount || 0), 0);
-            const avgPrice = totalLiters > 0 ? totalAmount / totalLiters : 0;
-            insights.push({ title: '📊 نظرة عامة', desc: 'إجمالي اللترات: ' + formatNumber(totalLiters) + ' - القيمة: ' +
-                    formatCurrency(totalAmount) + ' - متوسط السعر: ' + formatCurrency(avgPrice) });
-            // أعلى نوع مبيع
-            const fuelMap = {};
-            data.forEach(item => {
-                const name = item.fuel_name || 'أخرى';
-                const qty = parseFloat(item.liters || item.quantity || item.delivered_quantity || 0);
-                fuelMap[name] = (fuelMap[name] || 0) + qty;
-            });
-            let maxFuel = '',
-                maxQty = 0;
-            Object.entries(fuelMap).forEach(([k, v]) => { if (v > maxQty) { maxQty = v;
-                    maxFuel = k; } });
-            if (maxFuel) {
-                insights.push({ title: '⛽ الأكثر مبيعاً', desc: maxFuel + ' - ' + formatNumber(maxQty) + ' لتر' });
-            }
-            RuntimeState.set('fuel_insights', insights);
-        }
-
-        function openAIAdvisor() {
-            document.getElementById('aiModal').classList.add('show');
-            document.body.style.overflow = 'hidden';
-            const insights = RuntimeState.get('fuel_insights', []);
-            const container = document.getElementById('aiContent');
-            if (!insights || insights.length === 0) {
-                container.innerHTML =
-                    `<div style="text-align:center;color:var(--text-muted);padding:30px;"><i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:12px;color:var(--violet-primary);"></i><p>لا توجد بيانات كافية للتحليل</p></div>`;
-                return;
-            }
-            container.innerHTML = insights.map(i => `
-                <div class="ai-insight-card">
-                    <div class="insight-title">${i.title}</div>
-                    <div class="insight-desc">${i.desc}</div>
-                </div>
-            `).join('');
-        }
-
-        function closeAIModal() {
-            document.getElementById('aiModal').classList.remove('show');
-            document.body.style.overflow = '';
-        }
-
-        // ===================================================================
-        // 12. تفاصيل المعاملة
-        // ===================================================================
-        async function viewTransaction(id, type) {
-            if (!id || !['sale', 'refill'].includes(type)) { showToast('❌ لا توجد تفاصيل صحيحة للمعاملة', 'warning'); return; }
-            showLoading(true);
-            try {
-                const result = await apiCall('getFuelTransactionDetails', { id: Number(id), type });
-                if (result.success && result.data) {
-                    const t = result.data;
-                    const transactionCode = t.code || t.sale_code || t.refill_code || `${type}-${id}`;
-                    const transactionDate = t.date || t.created_at || t.sale_date || '---';
-                    const transactionQuantity = t.quantity || t.liters || t.delivered_quantity || 0;
-                    const transactionPrice = t.price || t.price_per_liter || 0;
-                    const transactionTotal = t.total || t.net_amount || t.total_amount || t.amount || 0;
-                    const content = document.getElementById('detailsContent');
-                    const statusLabel = getStatusLabel(t.status);
-                    const statusClass = getStatusClass(t.status);
-                    content.innerHTML = `
-                        <div class="details-header">
-                            <h3 class="details-title">⛽ ${escapeHtml(transactionCode)}</h3>
-                            <button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button>
-                        </div>
-                        <div class="details-profile">
-                            <div class="details-avatar">${(t.fuel_name || 'و').substring(0,2)}</div>
-                            <div class="details-name">${escapeHtml(t.fuel_name || 'وقود')}</div>
-                            <span class="details-status ${statusClass}">${statusLabel}</span>
-                        </div>
-                        <div class="details-section">
-                            <div class="details-section-title"><i class="fas fa-info-circle"></i> المعلومات</div>
-                            <div class="details-row"><span class="details-label">كود المعاملة</span><span class="details-value code red">${escapeHtml(transactionCode)}</span></div>
-                            <div class="details-row"><span class="details-label">التاريخ</span><span class="details-value">${transactionDate}</span></div>
-                            <div class="details-row"><span class="details-label">نوع الوقود</span><span class="details-value">${escapeHtml(t.fuel_name || '---')}</span></div>
-                            <div class="details-row"><span class="details-label">نوع العملية</span><span class="details-value">${t.type || '---'}</span></div>
-                        </div>
-                        <div class="details-section">
-                            <div class="details-section-title"><i class="fas fa-money-bill-wave"></i> البيانات المالية</div>
-                            <div class="details-row"><span class="details-label">الكمية (لتر)</span><span class="details-value">${formatNumber(transactionQuantity)}</span></div>
-                            <div class="details-row"><span class="details-label">سعر الوحدة</span><span class="details-value">${formatCurrency(transactionPrice)}</span></div>
-                            <div class="details-row"><span class="details-label">الإجمالي</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(transactionTotal)}</span></div>
-                        </div>
-                        <div style="height:30px;"></div>
-                    `;
-                    document.getElementById('detailsOverlay').classList.add('show');
-                    document.body.style.overflow = 'hidden';
-                } else {
-                    showToast(result.message || '❌ فشل في جلب التفاصيل', 'error');
-                }
-            } catch (e) { showToast('❌ حدث خطأ', 'error'); } finally { showLoading(false); }
-        }
-
-        function closeDetails() {
-            document.getElementById('detailsOverlay').classList.remove('show');
-            document.body.style.overflow = '';
-        }
-
-        // ===================================================================
-        // 13. تصدير CSV و PDF
-        // ===================================================================
-        function exportCSV() {
-            const rows = document.querySelectorAll('#fuelTableBody tr');
-            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
-                showToast('❌ لا توجد بيانات للتصدير', 'error');
-                return;
-            }
-            let csv = 'كود المعاملة,التاريخ,نوع الوقود,الكمية,سعر الوحدة,الإجمالي,نوع العملية,المصدر,الحالة\n';
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 10 && !row.classList.contains('empty-state')) {
-                    csv += [
-                        cells[1]?.textContent?.trim() || '',
-                        cells[2]?.textContent?.trim() || '',
-                        cells[3]?.textContent?.trim() || '',
-                        cells[4]?.textContent?.trim() || '',
-                        cells[5]?.textContent?.trim() || '',
-                        cells[6]?.textContent?.trim() || '',
-                        cells[7]?.textContent?.trim() || '',
-                        cells[8]?.textContent?.trim() || '',
-                        cells[9]?.textContent?.trim() || ''
-                    ].join(',') + '\n';
-                }
-            });
-            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const from = document.getElementById('filterDateFrom').value || 'start';
-            const to = document.getElementById('filterDateTo').value || 'end';
-            link.download = `تقرير_الوقود_${from}_${to}.csv`;
-            link.href = URL.createObjectURL(blob);
-            link.click();
-            showToast('✅ تم تصدير CSV', 'success');
-        }
-
-        function exportPDF() {
-            const rows = document.querySelectorAll('#fuelTableBody tr');
-            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
-                showToast('❌ لا توجد بيانات', 'error');
-                return;
-            }
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('p', 'pt', 'a4');
-            doc.setFontSize(18);
-            doc.setTextColor(168, 130, 255);
-            doc.text('⛽ تقرير الوقود', 40, 50);
-            doc.setFontSize(10);
-            doc.setTextColor(180, 167, 230);
-            const from = document.getElementById('filterDateFrom').value || 'البداية';
-            const to = document.getElementById('filterDateTo').value || 'النهاية';
-            doc.text('الفترة: ' + from + ' إلى ' + to, 40, 75);
-
-            const tableData = [];
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 10 && !row.classList.contains('empty-state')) {
-                    tableData.push([
-                        cells[1]?.textContent?.trim() || '',
-                        cells[2]?.textContent?.trim() || '',
-                        cells[3]?.textContent?.trim() || '',
-                        cells[4]?.textContent?.trim() || '',
-                        cells[5]?.textContent?.trim() || '',
-                        cells[6]?.textContent?.trim() || '',
-                        cells[7]?.textContent?.trim() || '',
-                        cells[8]?.textContent?.trim() || '',
-                        cells[9]?.textContent?.trim() || ''
-                    ]);
-                }
-            });
-            if (tableData.length === 0) { showToast('❌ لا توجد بيانات', 'error'); return; }
-            const headers = ['كود', 'التاريخ', 'نوع الوقود', 'الكمية', 'سعر الوحدة', 'الإجمالي', 'نوع العملية', 'المصدر', 'الحالة'];
-            if (typeof doc.autoTable === 'function') {
-                doc.autoTable({
-                    head: [headers],
-                    body: tableData,
-                    startY: 100,
-                    styles: { fontSize: 7, font: 'helvetica', textColor: [40, 40, 40] },
-                    headStyles: { fillColor: [168, 130, 255], textColor: [255, 255, 255], fontSize: 8 },
-                    alternateRowStyles: { fillColor: [245, 245, 245] },
-                    margin: { left: 25, right: 25 },
-                    tableWidth: 'auto'
-                });
-            } else {
-                let y = 105;
-                doc.setFontSize(7);
-                tableData.forEach(row => {
-                    doc.text(row.join(' | ').slice(0, 160), 25, y);
-                    y += 12;
-                    if (y > 780) { doc.addPage(); y = 40; }
-                });
-            }
-            doc.save(`تقرير_الوقود_${from}_${to}.pdf`);
-            showToast('✅ تم تصدير PDF', 'success');
-        }
-
-        // ===================================================================
-        // 14. إعادة تعيين الفلاتر
-        // ===================================================================
-        function resetFilters() {
-            const today = new Date();
-            const monthAgo = new Date();
-            monthAgo.setDate(monthAgo.getDate() - 30);
-            document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
-            document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
-            document.getElementById('filterFuelType').value = '';
-            document.getElementById('filterTank').value = '';
-            document.getElementById('filterReportType').value = 'summary';
-            showToast('🔄 تم إعادة تعيين الفلاتر', 'success');
-            generateReport();
-        }
-
-        // ===================================================================
-        // 15. تبديل التبويبات
-        // ===================================================================
-        function switchTab(tab) {
-            document.querySelectorAll('.bottom-nav .nav-item').forEach(t => t.classList.remove('active'));
-            const target = document.querySelector(`.bottom-nav .nav-item[onclick*="${tab}"]`);
-            if (target) target.classList.add('active');
-            const map = { 'summary': 'summary', 'sales': 'sales', 'refills': 'refills', 'readings': 'readings',
-                'tanks': 'tanks' };
-            document.getElementById('filterReportType').value = map[tab] || 'summary';
-            generateReport();
-        }
-
-        // ===================================================================
-        // 16. القائمة الجانبية
-        // ===================================================================
-        function handleAction(action) {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.remove('open');
-            document.getElementById('sidebarToggle').classList.remove('hidden');
-            switch (action) {
-                case 'refresh':
-                    generateReport();
-                    showToast('🔄 تم التحديث', 'success');
-                    break;
-                case 'csv':
-                    exportCSV();
-                    break;
-                case 'pdf':
-                    exportPDF();
-                    break;
-                case 'print':
-                    window.print();
-                    break;
-                case 'ai':
-                    openAIAdvisor();
-                    break;
-                case 'home':
-                    window.location.href = '../main.html';
-                    break;
-                default:
-                    showToast('❌ إجراء غير معروف', 'error');
-            }
-        }
-
-        function setupSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const toggle = document.getElementById('sidebarToggle');
-            toggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                sidebar.classList.toggle('open');
-                toggle.classList.toggle('hidden');
-            });
-            document.addEventListener('click', (e) => {
-                if (!sidebar.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
-                    sidebar.classList.remove('open');
-                    toggle.classList.remove('hidden');
-                }
-            });
-        }
-
-        // ===================================================================
-        // 17. تحميل القوائم المنسدلة
-        // ===================================================================
-        async function loadDropdowns() {
-            try {
-                const [fuelRes, tankRes] = await Promise.all([
-                    apiCall('getFuelTypes', {}),
-                    apiCall('getTanks')
-                ]);
-                const fuelSel = document.getElementById('filterFuelType');
-                if (fuelRes.success && fuelRes.data) {
-                    fuelSel.innerHTML = '<option value="">جميع أنواع الوقود</option>';
-                    fuelRes.data.forEach(f => {
-                        const opt = document.createElement('option');
-                        opt.value = f.fuel_type_id || f.id;
-                        opt.textContent = f.fuel_name || f.fuel_name_ar || 'نوع';
-                        fuelSel.appendChild(opt);
-                    });
-                }
-                const tankSel = document.getElementById('filterTank');
-                if (tankRes.success && tankRes.data) {
-                    tankSel.innerHTML = '<option value="">جميع الخزانات</option>';
-                    tankRes.data.forEach(t => {
-                        const opt = document.createElement('option');
-                        opt.value = t.tank_id || t.id;
-                        opt.textContent = t.tank_name || t.tank_code || 'خزان';
-                        tankSel.appendChild(opt);
-                    });
-                }
-            } catch (e) { console.error('Error loading dropdowns:', e); }
-        }
-
-        // ===================================================================
-        // 18. التهيئة النهائية
-        // ===================================================================
-        document.addEventListener('DOMContentLoaded', function() {
-            loadSavedTheme();
-            setupSidebar();
-            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
-
-            const today = new Date();
-            const monthAgo = new Date();
-            monthAgo.setDate(monthAgo.getDate() - 30);
-            document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
-            document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
-
-            loadDropdowns();
-            setTimeout(generateReport, 600);
-
-            document.getElementById('aiModal').addEventListener('click', function(e) {
-                if (e.target === this) closeAIModal();
-            });
-            document.getElementById('detailsOverlay').addEventListener('click', function(e) {
-                if (e.target === this) closeDetails();
-            });
+      container.querySelectorAll('[data-preset]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          applyPreset(btn.dataset.preset);
         });
+      });
+    }
+
+    function applyPreset(presetId) {
+      state.activePreset = presetId;
+      renderQuickPresets();
+      applyPresetAndRender();
+      haptic('light');
+    }
+
+    function filterByPreset(rows, presetId) {
+      switch (presetId) {
+        case 'sales':
+          return rows.filter(r => r.type === 'sale');
+        case 'refills':
+          return rows.filter(r => r.type === 'refill');
+        case 'sale_count':
+          return [...rows].sort((a, b) => b.quantity - a.quantity);
+        case 'big_amount':
+          return [...rows].sort((a, b) => b.amount - a.amount);
+        case 'fuel_diesel':
+          return rows.filter(r => (r.fuel_name || '').includes('ديزل') || (r.fuel_name || '').toLowerCase().includes('diesel'));
+        case 'all':
+        default:
+          return rows;
+      }
+    }
+
+    function applyPresetAndRender() {
+      let filtered = filterByPreset(state.allRows, state.activePreset);
+
+      const q = (state.searchQuery || '').trim().toLowerCase();
+      if (q) {
+        filtered = filtered.filter(r => {
+          const haystack = [
+            r.code,
+            r.fuel_name,
+            r.party_name,
+            r.tank_name,
+            r.status
+          ].map(v => String(v || '').toLowerCase()).join(' ');
+          return haystack.includes(q);
+        });
+      }
+
+      state.filteredRows = filtered;
+
+      renderTable(filtered);
+      updateKPIs();
+      updateCharts();
+      updateFooter(filtered);
+      updateVarianceBanner();
+      generateAlerts();
+      generateAIInsights();
+    }
+
+    // ================================================================
+    // 8. عرض الجدول
+    // ================================================================
+    function renderTable(rows) {
+      const tbody = $('fuelTableBody');
+      if (!rows || rows.length === 0) {
+        tbody.innerHTML = `
+          <tr><td colspan="12">
+            <div class="empty-state">
+              <i class="fas fa-inbox"></i>
+              لا توجد بيانات للعرض
+            </div>
+          </td></tr>
+        `;
+        renderPagination();
+        return;
+      }
+
+      tbody.innerHTML = rows.map((r, idx) => {
+        const statusLabel = getStatusLabel(r.status);
+        const statusClass = getStatusClass(r.status);
+        const typeBadge = r.type === 'sale'
+          ? '<span class="movement-badge out">بيع</span>'
+          : r.type === 'refill'
+            ? '<span class="movement-badge refill">تزود</span>'
+            : '<span class="movement-badge in">أخرى</span>';
+        const dateOnly = r.date ? r.date.substring(0, 10) : '---';
+        const hour = extractHourFromDate(r.date);
+        const timeStr = hour !== null ? String(hour).padStart(2, '0') + ':00' : '---';
+
+        return `
+          <tr>
+            <td>${idx + 1}</td>
+            <td><span class="code-field ${r.type === 'refill' ? 'red' : ''}">${escapeHtml(r.code)}</span></td>
+            <td>${escapeHtml(dateOnly)}</td>
+            <td>${escapeHtml(timeStr)}</td>
+            <td>${escapeHtml(r.fuel_name)}</td>
+            <td class="amount">${formatLiters(r.quantity)}</td>
+            <td class="amount">${formatCurrency(r.unit_price)}</td>
+            <td class="amount ${r.type === 'refill' ? 'credit' : 'debit'}">${formatCurrency(r.amount)}</td>
+            <td>${typeBadge}</td>
+            <td>${escapeHtml(r.party_name || r.tank_name || '—')}</td>
+            <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+            <td>
+              <button class="btn-view" onclick="viewTransaction(${r.id}, '${r.type}')" title="تفاصيل">
+                <i class="fas fa-eye"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      renderPagination();
+    }
+
+    function renderPagination() {
+      const target = $('fuelPagination');
+      if (!target) return;
+      if (pagination.totalPages <= 1) {
+        target.innerHTML = '';
+        return;
+      }
+      const prev = Math.max(1, pagination.page - 1);
+      const next = Math.min(pagination.totalPages, pagination.page + 1);
+      target.innerHTML = `
+        <button class="btn" type="button" ${pagination.page === 1 ? 'disabled' : ''}
+                onclick="goToPage(${prev})">السابق</button>
+        <span>صفحة ${pagination.page} من ${pagination.totalPages} · ${pagination.totalCount} سجل</span>
+        <button class="btn" type="button" ${pagination.page === pagination.totalPages ? 'disabled' : ''}
+                onclick="goToPage(${next})">التالي</button>
+      `;
+    }
+
+    function goToPage(page) {
+      pagination.page = Math.max(1, Math.min(Number(page) || 1, pagination.totalPages || 1));
+      generateReport();
+    }
+
+    // ================================================================
+    // 9. KPIs
+    // ================================================================
+    function updateKPIs() {
+      const salesRows = state.allRows.filter(r => r.type === 'sale');
+      const refillRows = state.allRows.filter(r => r.type === 'refill');
+
+      const totalLiters = salesRows.reduce((s, r) => s + r.quantity, 0);
+      const totalAmount = salesRows.reduce((s, r) => s + r.amount, 0);
+      const refillCount = refillRows.length;
+      const txCount = salesRows.length;
+
+      $('kpiTotalLiters').textContent = formatLiters(totalLiters);
+      $('kpiTotalAmount').textContent = formatCurrency(totalAmount);
+      $('kpiRefills').textContent = formatNumber(refillCount);
+      $('kpiTransactions').textContent = formatNumber(txCount);
+
+      // اتجاهات بسيطة (بدون مقارنة زمنية حقيقية)
+      $('trendLiters').textContent = totalLiters > 0 ? 'لا مقارنة' : '—';
+      $('trendAmount').textContent = totalAmount > 0 ? 'لا مقارنة' : '—';
+      $('trendRefills').textContent = refillCount > 0 ? 'نشط' : '—';
+      $('trendTx').textContent = txCount > 0 ? 'نشط' : '—';
+    }
+
+    function resetKPIs() {
+      $('kpiTotalLiters').textContent = '0.0';
+      $('kpiTotalAmount').textContent = '0.00';
+      $('kpiRefills').textContent = '0';
+      $('kpiTransactions').textContent = '0';
+      ['trendLiters', 'trendAmount', 'trendRefills', 'trendTx'].forEach(id => {
+        const el = $(id);
+        if (el) el.textContent = '—';
+      });
+    }
+
+    function updateFooter(rows) {
+      const salesRows = rows.filter(r => r.type === 'sale');
+      const totalLiters = salesRows.reduce((s, r) => s + r.quantity, 0);
+      const totalAmount = salesRows.reduce((s, r) => s + r.amount, 0);
+      const avgPrice = totalLiters > 0 ? totalAmount / totalLiters : 0;
+
+      $('footerLiters').textContent = formatLiters(totalLiters);
+      $('footerAmount').textContent = formatCurrency(totalAmount);
+      $('footerAvgPrice').textContent = formatCurrency(avgPrice);
+    }
+
+    // ================================================================
+    // 10. Variance Banner (Wet Stock)
+    // ================================================================
+    function updateVarianceBanner() {
+      const banner = $('varianceBanner');
+      banner.classList.remove('warn', 'bad');
+
+      const ws = state.wetStock;
+      let title, desc;
+
+      if (ws.status === 'unknown') {
+        title = 'مصالحة المخزون الرطب (Wet Stock)';
+        desc = 'سيتم احتساب الفارق بعد توليد التقرير';
+      } else if (ws.status === 'healthy') {
+        title = 'المخزون متوازن';
+        desc = `الفرق ${formatLiters(Math.abs(ws.variance))} لتر (${ws.variancePct.toFixed(2)}%) ضمن الحد الطبيعي — لا توجد تسريبات أو فقدان.`;
+      } else if (ws.status === 'warn') {
+        banner.classList.add('warn');
+        title = 'فرق يحتاج مراجعة';
+        desc = `الفرق ${formatLiters(Math.abs(ws.variance))} لتر (${ws.variancePct.toFixed(2)}%) — يُنصح بمراجعة العدادات والخزانات.`;
+      } else if (ws.status === 'critical') {
+        banner.classList.add('bad');
+        title = 'فارق كبير — تدخل مطلوب';
+        desc = `الفرق ${formatLiters(Math.abs(ws.variance))} لتر (${ws.variancePct.toFixed(2)}%) — تحقق فوراً من التسريبات أو سرقات الوقود.`;
+      }
+
+      $('varianceTitle').textContent = title;
+      $('varianceDesc').textContent = desc;
+    }
+
+    // ================================================================
+    // 11. الرسوم البيانية (4 رسوم)
+    // ================================================================
+    function updateCharts() {
+      if (typeof Chart === 'undefined') return;
+
+      // 1. اتجاه المبيعات (line)
+      const dailyOut = state.dailySeries.slice(-7);
+      const ctx1 = $('salesTrendChart').getContext('2d');
+      if (salesTrendChart) salesTrendChart.destroy();
+      salesTrendChart = new Chart(ctx1, {
+        type: 'line',
+        data: {
+          labels: dailyOut.map(d => d.day.substring(5)),
+          datasets: [{
+            label: 'المبيعات (لتر)',
+            data: dailyOut.map(d => d.out),
+            borderColor: '#a882ff',
+            backgroundColor: 'rgba(168,130,255,0.12)',
+            tension: 0.3,
+            fill: true,
+            borderWidth: 2.5,
+            pointBackgroundColor: '#a882ff',
+            pointBorderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(168,130,255,0.08)' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+
+      // 2. توزيع أنواع الوقود (doughnut)
+      const fuelNames = Object.keys(state.fuelTypes);
+      const fuelValues = fuelNames.map(n => state.fuelTypes[n].liters);
+      const ctx2 = $('fuelTypeChart').getContext('2d');
+      if (fuelTypeChart) fuelTypeChart.destroy();
+      fuelTypeChart = new Chart(ctx2, {
+        type: 'doughnut',
+        data: {
+          labels: fuelNames,
+          datasets: [{
+            data: fuelValues,
+            backgroundColor: ['#a882ff', '#f5c842', '#10b981', '#ef4444', '#3b82f6', '#8b5cf6'],
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '65%',
+          plugins: {
+            legend: {
+              position: 'left',
+              labels: { font: { family: 'Cairo' }, boxWidth: 12, padding: 10 }
+            }
+          }
+        }
+      });
+
+      // 3. ساعات الذروة (bar)
+      const hourKeys = Object.keys(state.peakHours).map(Number).sort((a, b) => a - b);
+      const allHours = [];
+      for (let h = 0; h < 24; h++) allHours.push(h);
+      const peakLabels = allHours.map(h => String(h).padStart(2, '0'));
+      const peakValues = allHours.map(h => state.peakHours[h] || 0);
+      const ctx3 = $('peakHoursChart').getContext('2d');
+      if (peakHoursChart) peakHoursChart.destroy();
+      peakHoursChart = new Chart(ctx3, {
+        type: 'bar',
+        data: {
+          labels: peakLabels,
+          datasets: [{
+            label: 'اللترات',
+            data: peakValues,
+            backgroundColor: peakValues.map(v => v === Math.max(...peakValues) && v > 0
+              ? '#f5c842' : 'rgba(168,130,255,0.55)'),
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(168,130,255,0.08)' } },
+            x: { grid: { display: false }, ticks: { font: { size: 9 } } }
+          }
+        }
+      });
+
+      // 4. مقارنة المبيعات والتزود (bar مزدوج)
+      const dailyInOut = state.dailySeries.slice(-7);
+      const ctx4 = $('inOutChart').getContext('2d');
+      if (inOutChart) inOutChart.destroy();
+      inOutChart = new Chart(ctx4, {
+        type: 'bar',
+        data: {
+          labels: dailyInOut.map(d => d.day.substring(5)),
+          datasets: [
+            {
+              label: 'تزود',
+              data: dailyInOut.map(d => d.in),
+              backgroundColor: 'rgba(16,185,129,0.7)',
+              borderRadius: 4
+            },
+            {
+              label: 'مبيعات',
+              data: dailyInOut.map(d => d.out),
+              backgroundColor: 'rgba(168,130,255,0.7)',
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: { font: { family: 'Cairo' }, boxWidth: 12, padding: 8 }
+            }
+          },
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(168,130,255,0.08)' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    }
+
+    // ================================================================
+    // 12. التنبيهات
+    // ================================================================
+    function generateAlerts() {
+      const alerts = [];
+
+      // 1. فارق wet stock
+      if (state.wetStock.status === 'critical') {
+        alerts.push({
+          type: 'danger',
+          icon: 'fa-scale-unbalanced',
+          title: 'فارق كبير في المخزون',
+          desc: `الفرق ${formatLiters(Math.abs(state.wetStock.variance))} لتر (${state.wetStock.variancePct.toFixed(2)}%)`,
+          time: 'الآن'
+        });
+      } else if (state.wetStock.status === 'warn') {
+        alerts.push({
+          type: 'warning',
+          icon: 'fa-scale-balanced',
+          title: 'فرق يستدعي مراجعة',
+          desc: `الفرق ${formatLiters(Math.abs(state.wetStock.variance))} لتر (${state.wetStock.variancePct.toFixed(2)}%)`,
+          time: 'الآن'
+        });
+      }
+
+      // 2. أعلى يوم مبيعات
+      if (state.dailySeries.length > 0) {
+        const top = state.dailySeries.reduce((a, b) => a.out > b.out ? a : b);
+        if (top.out > 0) {
+          alerts.push({
+            type: 'info',
+            icon: 'fa-crown',
+            title: 'أعلى يوم مبيعات',
+            desc: `${top.day} — ${formatLiters(top.out)} لتر`,
+            time: 'آخر 7 أيام'
+          });
+        }
+      }
+
+      // 3. عمليات تزود مؤكدة
+      const refillCount = state.allRows.filter(r => r.type === 'refill').length;
+      if (refillCount > 0) {
+        alerts.push({
+          type: 'info',
+          icon: 'fa-truck',
+          title: 'عمليات تزود',
+          desc: `${refillCount} عملية تزود مسجلة في الفترة`,
+          time: 'الفترة'
+        });
+      }
+
+      state.alerts = alerts;
+      renderAlerts(alerts);
+    }
+
+    function renderAlerts(alerts) {
+      const container = $('alertsContainer');
+      if (!alerts || alerts.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      container.innerHTML = alerts.slice(0, 3).map((a, i) => `
+        <div class="alert-item ${a.type}" style="animation-delay:${i * 0.1}s">
+          <div class="alert-icon"><i class="fas ${a.icon}"></i></div>
+          <div class="alert-content">
+            <div class="alert-title">${escapeHtml(a.title)}</div>
+            <div class="alert-desc">${escapeHtml(a.desc)}</div>
+          </div>
+          <div class="alert-time">${escapeHtml(a.time)}</div>
+        </div>
+      `).join('');
+    }
+
+    function showNotifications() {
+      if (!state.alerts || state.alerts.length === 0) {
+        showToast('لا توجد تنبيهات جديدة', 'info');
+        return;
+      }
+      showToast(`لديك ${state.alerts.length} تنبيهات`, 'success');
+    }
+
+    // ================================================================
+    // 13. AI Insights
+    // ================================================================
+    function generateAIInsights() {
+      const insights = [];
+      if (!state.allRows.length) {
+        state.insights = [];
+        return;
+      }
+
+      const ws = state.wetStock;
+      const fuelNames = Object.keys(state.fuelTypes);
+      const txCount = state.allRows.filter(r => r.type === 'sale').length;
+      const totalLiters = state.allRows.filter(r => r.type === 'sale').reduce((s, r) => s + r.quantity, 0);
+      const totalAmount = state.allRows.filter(r => r.type === 'sale').reduce((s, r) => s + r.amount, 0);
+
+      // 1. نظرة عامة
+      insights.push({
+        icon: 'fa-chart-pie',
+        title: 'نظرة عامة',
+        desc: `${formatNumber(txCount)} عملية بيع بإجمالي <strong>${formatLiters(totalLiters)}</strong> لتر بقيمة <strong>${formatCurrency(totalAmount)}</strong> ر.ي.`
+      });
+
+      // 2. أعلى نوع وقود
+      if (fuelNames.length > 0) {
+        let topName = '', topLiters = 0;
+        fuelNames.forEach(n => {
+          if (state.fuelTypes[n].liters > topLiters) {
+            topLiters = state.fuelTypes[n].liters;
+            topName = n;
+          }
+        });
+        if (topName) {
+          insights.push({
+            icon: 'fa-star',
+            title: 'الأكثر مبيعاً',
+            desc: `<strong>${escapeHtml(topName)}</strong> بإجمالي ${formatLiters(topLiters)} لتر.`
+          });
+        }
+      }
+
+      // 3. ساعة الذروة
+      const peakHoursEntries = Object.entries(state.peakHours);
+      if (peakHoursEntries.length > 0) {
+        const [peakHour, peakLiters] = peakHoursEntries.reduce((a, b) =>
+          a[1] > b[1] ? a : b);
+        insights.push({
+          icon: 'fa-clock',
+          title: 'ساعة الذروة',
+          desc: `الساعة <strong>${String(peakHour).padStart(2, '0')}:00</strong> شهدت أعلى مبيعات بـ ${formatLiters(peakLiters)} لتر.`
+        });
+      }
+
+      // 4. مصالحة المخزون
+      if (ws.status === 'healthy') {
+        insights.push({
+          icon: 'fa-check-circle',
+          title: 'المخزون متوازن',
+          desc: `الفرق بين التسليم والمبيعات ضمن الحد الطبيعي (${ws.variancePct.toFixed(2)}%).`,
+          severity: 'success'
+        });
+      } else if (ws.status === 'warn') {
+        insights.push({
+          icon: 'fa-exclamation-triangle',
+          title: 'فرق يستدعي المراجعة',
+          desc: `هناك فارق ${formatLiters(Math.abs(ws.variance))} لتر بين التسليم والمبيعات. تحقق من العدادات.`,
+          severity: 'warning'
+        });
+      } else if (ws.status === 'critical') {
+        insights.push({
+          icon: 'fa-triangle-exclamation',
+          title: 'تدخل عاجل',
+          desc: `فارق كبير (${ws.variancePct.toFixed(2)}%) قد يدل على تسرب أو سرقة وقود.`,
+          severity: 'danger'
+        });
+      }
+
+      // 5. توصية نهائية
+      if (ws.status === 'critical' || ws.status === 'warn') {
+        insights.push({
+          icon: 'fa-tools',
+          title: 'التوصية',
+          desc: 'قارن قراءات العدادات مع سجلات المبيعات، وتحقق من سلامة الخزانات والمضخات. راجع سجلات المرتجعات والتالف.'
+        });
+      } else {
+        insights.push({
+          icon: 'fa-thumbs-up',
+          title: 'التوصية',
+          desc: 'الأداء التشغيلي مستقر. استمر في المراقبة اليومية وطبّق الجرد الأسبوعي.'
+        });
+      }
+
+      state.insights = insights;
+    }
+
+    function openAIAdvisor() {
+      const container = $('aiContent');
+      if (!state.insights || state.insights.length === 0) {
+        container.innerHTML = `
+          <div style="text-align:center;color:var(--text-muted);padding:30px;">
+            <i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:12px;color:var(--violet-primary);"></i>
+            <p>لا توجد بيانات كافية للتحليل</p>
+            <p style="font-size:0.75rem;">قم بتوليد التقرير أولاً</p>
+          </div>
+        `;
+        openModal('aiModal');
+        return;
+      }
+
+      container.innerHTML = state.insights.map(i => `
+        <div class="insight-card ${i.severity || ''}">
+          <div class="insight-title">
+            <i class="fas ${i.icon}"></i>
+            ${escapeHtml(i.title)}
+          </div>
+          <div class="insight-desc">${i.desc}</div>
+        </div>
+      `).join('');
+
+      openModal('aiModal');
+      haptic('light');
+    }
+
+    function closeAIModal(event) {
+      if (event && event.target !== event.currentTarget) return;
+      $('aiModal').classList.remove('show');
+      document.body.style.overflow = '';
+    }
+
+    // ================================================================
+    // 14. Wet Stock Modal (تفاصيل المصالحة)
+    // ================================================================
+    function openWetStockModal() {
+      const container = $('wetStockContent');
+      const ws = state.wetStock;
+
+      if (ws.status === 'unknown') {
+        container.innerHTML = `
+          <div style="text-align:center;color:var(--text-muted);padding:30px;">
+            <i class="fas fa-scale-balanced" style="font-size:3rem;display:block;margin-bottom:12px;color:var(--violet-primary);"></i>
+            <p>قم بتوليد التقرير أولاً لرؤية المصالحة</p>
+          </div>
+        `;
+        openModal('wetStockModal');
+        return;
+      }
+
+      const severity = ws.status === 'healthy' ? 'success'
+        : ws.status === 'warn' ? 'warning' : 'danger';
+
+      container.innerHTML = `
+        <div class="insight-card ${severity}">
+          <div class="insight-title">
+            <i class="fas fa-scale-balanced"></i>
+            حالة المصالحة
+          </div>
+          <div class="insight-desc">
+            ${ws.status === 'healthy' ? '✅ المخزون متوازن — الفرق ضمن الحد الطبيعي'
+              : ws.status === 'warn' ? '⚠️ فرق يستدعي المراجعة'
+              : '🚨 فارق كبير — تدخل عاجل مطلوب'}
+          </div>
+        </div>
+
+        <div class="details-section">
+          <div class="details-section-title"><i class="fas fa-arrow-down"></i> التسليمات</div>
+          <div class="details-row">
+            <span class="details-label">إجمالي اللترات المسلّمة</span>
+            <span class="details-value">${formatLiters(ws.totalDelivered)}</span>
+          </div>
+        </div>
+
+        <div class="details-section">
+          <div class="details-section-title"><i class="fas fa-arrow-up"></i> المبيعات</div>
+          <div class="details-row">
+            <span class="details-label">إجمالي اللترات المباعة</span>
+            <span class="details-value">${formatLiters(ws.totalSold)}</span>
+          </div>
+        </div>
+
+        <div class="details-section" style="background:rgba(168,130,255,0.06);">
+          <div class="details-section-title"><i class="fas fa-calculator"></i> الفارق الصافي</div>
+          <div class="details-row">
+            <span class="details-label">الفارق</span>
+            <span class="details-value ${ws.variance >= 0 ? '' : 'red'}">
+              ${ws.variance >= 0 ? '+' : ''}${formatLiters(ws.variance)} لتر
+            </span>
+          </div>
+          <div class="details-row">
+            <span class="details-label">النسبة</span>
+            <span class="details-value">${ws.variancePct.toFixed(2)}%</span>
+          </div>
+        </div>
+      `;
+
+      openModal('wetStockModal');
+      haptic('light');
+    }
+
+    function closeWetStockModal(event) {
+      if (event && event.target !== event.currentTarget) return;
+      $('wetStockModal').classList.remove('show');
+      document.body.style.overflow = '';
+    }
+
+    // ================================================================
+    // 15. تفاصيل المعاملة
+    // ================================================================
+    async function viewTransaction(id, type) {
+      if (!id || !['sale', 'refill'].includes(type)) {
+        showToast('لا توجد تفاصيل صحيحة للمعاملة', 'warning');
+        return;
+      }
+      showLoading(true);
+      try {
+        const res = await apiCall('getFuelTransactionDetails', { id, type });
+        const details = extractObject(res);
+        if (!details) throw new Error('لا توجد تفاصيل متاحة');
+        renderTransactionDetails(details, id, type);
+      } catch (err) {
+        console.error('viewTransaction error:', err);
+        // نبني التفاصيل من الذاكرة
+        const local = state.allRows.find(r => Number(r.id) === Number(id) && r.type === type);
+        if (local) renderTransactionDetails(local, id, type);
+        else showToast(err.message || 'فشل جلب التفاصيل', 'error');
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    function renderTransactionDetails(t, id, type) {
+      const content = $('detailsContent');
+      const code = t.code || t.sale_code || t.refill_code || t.invoice_number || `${type === 'sale' ? 'SALE' : 'REF'}-${id}`;
+      const fuelName = t.fuel_name || t.fuel_name_ar || 'غير محدد';
+      const qty = parseFloat(t.quantity || t.liters || t.delivered_quantity || 0);
+      const price = parseFloat(t.price_per_liter || t.unit_price || 0);
+      const amount = parseFloat(t.net_amount || t.total_amount || t.amount || 0);
+      const date = t.created_at || t.sale_date || t.arrival_date || '';
+      const status = t.status || 'completed';
+      const statusLabel = getStatusLabel(status);
+      const statusClass = getStatusClass(status);
+
+      content.innerHTML = `
+        <div class="details-header">
+          <h3 class="details-title">🧾 ${escapeHtml(code)}</h3>
+          <button class="details-close" onclick="closeDetails(null)">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+
+        <div class="details-profile">
+          <div class="details-avatar">${escapeHtml(fuelName.substring(0, 2))}</div>
+          <div class="details-name">${escapeHtml(fuelName)}</div>
+          <span class="details-status ${statusClass}">${statusLabel}</span>
+        </div>
+
+        <div class="details-section">
+          <div class="details-section-title"><i class="fas fa-info-circle"></i> المعلومات</div>
+          <div class="details-row"><span class="details-label">كود المعاملة</span><span class="details-value code">${escapeHtml(code)}</span></div>
+          <div class="details-row"><span class="details-label">التاريخ</span><span class="details-value">${escapeHtml(String(date).substring(0, 19))}</span></div>
+          <div class="details-row"><span class="details-label">نوع الوقود</span><span class="details-value">${escapeHtml(fuelName)}</span></div>
+          <div class="details-row"><span class="details-label">نوع العملية</span><span class="details-value">${type === 'sale' ? 'بيع' : 'تزود'}</span></div>
+        </div>
+
+        <div class="details-section">
+          <div class="details-section-title"><i class="fas fa-money-bill-wave"></i> الأرقام</div>
+          <div class="details-row"><span class="details-label">الكمية</span><span class="details-value">${formatLiters(qty)} لتر</span></div>
+          <div class="details-row"><span class="details-label">سعر الوحدة</span><span class="details-value">${formatCurrency(price)}</span></div>
+          <div class="details-row"><span class="details-label">الإجمالي</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(amount)}</span></div>
+        </div>
+
+        ${t.tank_name || t.party_name ? `
+        <div class="details-section">
+          <div class="details-section-title"><i class="fas fa-users"></i> المصدر/الجهة</div>
+          ${t.tank_name ? `<div class="details-row"><span class="details-label">الخزان</span><span class="details-value">${escapeHtml(t.tank_name)}</span></div>` : ''}
+          ${t.party_name ? `<div class="details-row"><span class="details-label">الطرف</span><span class="details-value">${escapeHtml(t.party_name)}</span></div>` : ''}
+        </div>
+        ` : ''}
+
+        <div style="height:30px;"></div>
+      `;
+
+      $('detailsOverlay').classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeDetails(event) {
+      if (event && event.target !== event.currentTarget) return;
+      $('detailsOverlay').classList.remove('show');
+      document.body.style.overflow = '';
+    }
+
+    // ================================================================
+    // 16. البحث والفلترة
+    // ================================================================
+    function applyFuelSearch(value) {
+      state.searchQuery = value || '';
+      applyPresetAndRender();
+    }
+
+    // ================================================================
+    // 17. CSV/PDF
+    // ================================================================
+    function csvEscape(v) {
+      if (v === null || v === undefined) return '';
+      return '"' + String(v).replace(/"/g, '""') + '"';
+    }
+
+    function exportCSV() {
+      if (!state.filteredRows.length) {
+        showToast('لا توجد بيانات للتصدير', 'error');
+        return;
+      }
+
+      const headers = ['#', 'كود المعاملة', 'التاريخ', 'الوقت', 'نوع الوقود', 'الكمية (لتر)', 'سعر الوحدة', 'الإجمالي', 'النوع', 'المصدر', 'الحالة'];
+      const lines = [headers.map(csvEscape).join(',')];
+
+      state.filteredRows.forEach((r, idx) => {
+        const hour = extractHourFromDate(r.date);
+        const timeStr = hour !== null ? String(hour).padStart(2, '0') + ':00' : '';
+        lines.push([
+          idx + 1,
+          r.code,
+          (r.date || '').substring(0, 10),
+          timeStr,
+          r.fuel_name,
+          r.quantity,
+          r.unit_price,
+          r.amount,
+          r.type === 'sale' ? 'بيع' : 'تزود',
+          r.party_name || r.tank_name || '',
+          getStatusLabel(r.status)
+        ].map(csvEscape).join(','));
+      });
+
+      lines.push('');
+      lines.push(csvEscape('عدد السجلات:') + ',' + csvEscape(String(state.filteredRows.length)));
+      lines.push(csvEscape('تاريخ الإنشاء:') + ',' + csvEscape(new Date().toLocaleString('en-GB')));
+
+      const csv = '\uFEFF' + lines.join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const from = $('filterDateFrom').value || 'start';
+      const to = $('filterDateTo').value || 'end';
+      link.href = url;
+      link.download = `fuel-report_${from}_${to}.csv`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      showToast('تم تصدير CSV', 'success');
+      haptic('success');
+    }
+
+    function exportPDF() {
+      if (!state.filteredRows.length) {
+        showToast('لا توجد بيانات للتصدير', 'error');
+        return;
+      }
+      const jspdfGlobal = window.jspdf || {};
+      const jsPDFCtor = jspdfGlobal.jsPDF || window.jsPDF;
+      if (typeof jsPDFCtor !== 'function') {
+        showToast('مكتبة PDF غير محمّلة', 'error');
+        return;
+      }
+
+      try {
+        const doc = new jsPDFCtor('p', 'pt', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const marginLeft = 30;
+        const tableWidth = 520;
+
+        doc.setFontSize(16);
+        doc.setTextColor(124, 77, 255);
+        doc.text('Fuel Report', pageWidth / 2, 40, { align: 'center' });
+
+        doc.setFontSize(9);
+        doc.setTextColor(90, 90, 90);
+        const from = $('filterDateFrom').value || '-';
+        const to = $('filterDateTo').value || '-';
+        doc.text(`Period: ${from}  ->  ${to}`, pageWidth / 2, 58, { align: 'center' });
+        doc.text(`Records: ${state.filteredRows.length}`, pageWidth / 2, 72, { align: 'center' });
+
+        const headers = ['#', 'Code', 'Date', 'Fuel', 'Qty', 'Price', 'Total', 'Type', 'Source', 'Status'];
+        const colWidths = [22, 70, 55, 70, 45, 45, 55, 40, 65, 53];
+        let cursorY = 100;
+        const lineHeight = 15;
+
+        function drawHeader() {
+          doc.setFontSize(8);
+          doc.setTextColor(255, 255, 255);
+          doc.setFillColor(124, 77, 255);
+          doc.rect(marginLeft, cursorY - 11, tableWidth, lineHeight, 'F');
+          let cx = marginLeft + 4;
+          headers.forEach((h, i) => {
+            doc.text(h, cx, cursorY);
+            cx += colWidths[i];
+          });
+          cursorY += lineHeight;
+          doc.setTextColor(40, 40, 40);
+        }
+
+        drawHeader();
+
+        state.filteredRows.forEach((r, idx) => {
+          if (cursorY > pageHeight - 40) {
+            doc.addPage();
+            cursorY = 40;
+            drawHeader();
+          }
+          const row = [
+            idx + 1,
+            String(r.code || '').substring(0, 15),
+            (r.date || '').substring(0, 10),
+            String(r.fuel_name || '').substring(0, 15),
+            formatLiters(r.quantity),
+            formatCurrency(r.unit_price),
+            formatCurrency(r.amount),
+            r.type === 'sale' ? 'Sale' : 'Refill',
+            String(r.party_name || r.tank_name || '').substring(0, 15),
+            getStatusLabel(r.status)
+          ];
+          if (idx % 2 === 1) {
+            doc.setFillColor(245, 245, 250);
+            doc.rect(marginLeft, cursorY - 11, tableWidth, lineHeight, 'F');
+          }
+          doc.setFontSize(7);
+          let cx = marginLeft + 4;
+          row.forEach((cell, i) => {
+            doc.text(String(cell ?? '').substring(0, 22), cx, cursorY);
+            cx += colWidths[i];
+          });
+          cursorY += lineHeight;
+        });
+
+        const totalLiters = state.filteredRows.filter(r => r.type === 'sale').reduce((s, r) => s + r.quantity, 0);
+        const totalAmount = state.filteredRows.filter(r => r.type === 'sale').reduce((s, r) => s + r.amount, 0);
+
+        if (cursorY > pageHeight - 40) {
+          doc.addPage();
+          cursorY = 40;
+        }
+        doc.setFontSize(9);
+        doc.setTextColor(124, 77, 255);
+        doc.text(
+          `Total Liters: ${formatLiters(totalLiters)}    Total Amount: ${formatCurrency(totalAmount)}    Records: ${state.filteredRows.length}`,
+          pageWidth / 2, cursorY + 20, { align: 'center' }
+        );
+
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        doc.save(`fuel-report_${from}_${to}_${stamp}.pdf`);
+        showToast('تم تصدير PDF', 'success');
+        haptic('success');
+      } catch (err) {
+        console.error('exportPDF error:', err);
+        showToast('فشل تصدير PDF: ' + err.message, 'error');
+      }
+    }
+
+    // ================================================================
+    // 18. إعادة تعيين الفلاتر
+    // ================================================================
+    function resetFilters() {
+      const today = new Date();
+      const monthAgo = new Date();
+      monthAgo.setDate(monthAgo.getDate() - 30);
+
+      $('filterDateFrom').value = dateOnly(monthAgo);
+      $('filterDateTo').value = dateOnly(today);
+      $('filterFuelType').value = '';
+      $('filterTank').value = '';
+      $('filterReportType').value = 'summary';
+      $('fuelSearch').value = '';
+      state.searchQuery = '';
+      state.activePreset = 'all';
+      pagination.page = 1;
+      renderQuickPresets();
+      showToast('تم إعادة تعيين الفلاتر', 'success');
+      generateReport();
+    }
+
+    // ================================================================
+    // 19. Bottom Nav (5 مهام مختلفة)
+    // ================================================================
+    function setupBottomNav() {
+      const container = $('bottomNav');
+      container.querySelectorAll('.nav-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+          container.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
+          btn.classList.add('active');
+          handleBottomTab(btn.dataset.tab);
+        });
+      });
+    }
+
+    function handleBottomTab(tab) {
+      switch (tab) {
+        case 'summary':
+          $('filterReportType').value = 'summary';
+          pagination.page = 1;
+          generateReport();
+          break;
+        case 'sales':
+          $('filterReportType').value = 'sales';
+          pagination.page = 1;
+          generateReport();
+          break;
+        case 'refills':
+          $('filterReportType').value = 'refills';
+          pagination.page = 1;
+          generateReport();
+          break;
+        case 'variance':
+          openWetStockModal();
+          break;
+        case 'peaks':
+          openPeakHoursModal();
+          break;
+        default:
+          break;
+      }
+      haptic('light');
+    }
+
+    // ================================================================
+    // 20. Peak Hours Modal
+    // ================================================================
+    function openPeakHoursModal() {
+      const container = $('aiContent');
+      const hours = Object.entries(state.peakHours)
+        .map(([h, l]) => ({ hour: Number(h), liters: l }))
+        .sort((a, b) => a.hour - b.hour);
+
+      if (hours.length === 0) {
+        container.innerHTML = `
+          <div style="text-align:center;color:var(--text-muted);padding:30px;">
+            <i class="fas fa-clock" style="font-size:3rem;display:block;margin-bottom:12px;color:var(--violet-primary);"></i>
+            <p>لا توجد بيانات كافية لتحليل ساعات الذروة</p>
+          </div>
+        `;
+        $('aiModal').classList.add('show');
+        document.body.style.overflow = 'hidden';
+        return;
+      }
+
+      const maxLiters = Math.max(...hours.map(h => h.liters));
+      const peak = hours.reduce((a, b) => a.liters > b.liters ? a : b);
+
+      container.innerHTML = `
+        <div class="insight-card success">
+          <div class="insight-title"><i class="fas fa-fire"></i> ساعة الذروة</div>
+          <div class="insight-desc">
+            الساعة <strong>${String(peak.hour).padStart(2, '0')}:00</strong> سجلت أعلى مبيعات
+            بـ <strong>${formatLiters(peak.liters)} لتر</strong>.
+          </div>
+        </div>
+
+        <div class="details-section">
+          <div class="details-section-title"><i class="fas fa-chart-bar"></i> توزيع المبيعات على الساعات</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            ${hours.map(h => `
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="min-width:55px;font-family:'Inter','Arial',sans-serif;font-weight:700;font-size:0.8rem;direction:ltr;">
+                  ${String(h.hour).padStart(2, '0')}:00
+                </span>
+                <div style="flex:1;height:14px;background:var(--bg-glass);border-radius:10px;overflow:hidden;">
+                  <div style="height:100%;width:${maxLiters > 0 ? (h.liters / maxLiters * 100) : 0}%;
+                              background:linear-gradient(90deg,var(--violet-primary),var(--gold-primary));
+                              border-radius:10px;"></div>
+                </div>
+                <span style="min-width:70px;font-family:'Inter','Arial',sans-serif;font-weight:800;font-size:0.78rem;direction:ltr;text-align:left;">
+                  ${formatLiters(h.liters)}
+                </span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+
+      $('aiModal').classList.add('show');
+      document.body.style.overflow = 'hidden';
+      haptic('light');
+    }
+
+    // ================================================================
+    // 21. المودالات
+    // ================================================================
+    function openModal(id) {
+      const el = $(id);
+      if (el) el.classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+
+    // ================================================================
+    // 22. القائمة الجانبية — إصلاح كامل
+    // ================================================================
+    function setupSidebar() {
+      const sidebar = $('sidebar');
+      const toggle = $('sidebarToggle');
+
+      const openSidebar = () => {
+        sidebar.classList.add('open');
+        toggle.classList.add('hidden');
+        haptic('light');
+      };
+      const closeSidebar = () => {
+        sidebar.classList.remove('open');
+        toggle.classList.remove('hidden');
+      };
+
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (sidebar.classList.contains('open')) closeSidebar();
+        else openSidebar();
+      });
+
+      // إغلاق عند النقر خارج القائمة
+      document.addEventListener('click', (e) => {
+        if (!sidebar.classList.contains('open')) return;
+        if (sidebar.contains(e.target)) return;
+        if (toggle.contains(e.target)) return;
+        closeSidebar();
+      });
+
+      // معالجة أزرار القائمة
+      sidebar.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const action = btn.dataset.action;
+          closeSidebar();
+          handleSidebarAction(action);
+        });
+      });
+    }
+
+    function handleSidebarAction(action) {
+      switch (action) {
+        case 'refresh':
+          generateReport();
+          break;
+        case 'csv':
+          exportCSV();
+          break;
+        case 'pdf':
+          exportPDF();
+          break;
+        case 'print':
+          window.print();
+          break;
+        case 'ai':
+          openAIAdvisor();
+          break;
+        case 'home':
+          window.location.href = 'file:///android_asset/main.html';
+          break;
+        default:
+          showToast('إجراء غير معروف', 'error');
+      }
+    }
+
+    // ================================================================
+    // 23. الوضع (Theme)
+    // ================================================================
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('fuel_reports_theme', next);
+      $('themeIcon').className = next === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+      haptic('light');
+    }
+
+    function loadSavedTheme() {
+      const saved = localStorage.getItem('fuel_reports_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', saved);
+      $('themeIcon').className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    }
+
+    // ================================================================
+    // 24. تحميل القوائم المنسدلة
+    // ================================================================
+    async function loadDropdowns() {
+      try {
+        const [fuelRes, tankRes] = await Promise.all([
+          apiCall('getFuelTypes').catch(() => null),
+          apiCall('getTanks').catch(() => null)
+        ]);
+
+        const fuelTypes = extractArray(fuelRes);
+        const fuelSel = $('filterFuelType');
+        fuelSel.innerHTML = '<option value="">جميع أنواع الوقود</option>';
+        fuelTypes.forEach(f => {
+          const id = f.fuel_type_id || f.id;
+          if (!id) return;
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = f.fuel_name_ar || f.fuel_name || 'وقود';
+          fuelSel.appendChild(opt);
+        });
+
+        const tanks = extractArray(tankRes);
+        const tankSel = $('filterTank');
+        tankSel.innerHTML = '<option value="">جميع الخزانات</option>';
+        tanks.forEach(t => {
+          const id = t.tank_id || t.id;
+          if (!id) return;
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = t.tank_name || t.tank_code || 'خزان';
+          tankSel.appendChild(opt);
+        });
+      } catch (err) {
+        console.error('loadDropdowns error:', err);
+      }
+    }
+
+    // ================================================================
+    // 25. Pull-to-Refresh
+    // ================================================================
+    function setupPullToRefresh() {
+      let startY = 0, offset = 0, pulling = false;
+      const indicator = $('pullIndicator');
+      const isInteractive = (t) => Boolean(t && t.closest &&
+        t.closest('input, textarea, select, button, a, [contenteditable="true"], .ai-modal-overlay, .details-overlay, [role="dialog"]'));
+
+      document.addEventListener('touchstart', (e) => {
+        if (isInteractive(e.target)) { pulling = false; offset = 0; return; }
+        if ((window.scrollY || document.documentElement.scrollTop) <= 0) {
+          startY = e.touches[0].clientY;
+          pulling = true;
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchmove', (e) => {
+        if (isInteractive(e.target)) { pulling = false; offset = 0; return; }
+        if (!pulling) return;
+        const diff = e.touches[0].clientY - startY;
+        if (diff > 20) {
+          offset = Math.min(diff, 80);
+          indicator.style.top = (offset - 60) + 'px';
+          indicator.querySelector('span').textContent = offset > 60 ? 'حرر للتحديث' : 'اسحب للتحديث';
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      document.addEventListener('touchend', () => {
+        if (pulling && offset > 60) {
+          indicator.querySelector('i').className = 'fas fa-spinner fa-spin';
+          indicator.querySelector('span').textContent = 'جاري التحديث...';
+          generateReport().finally(() => {
+            setTimeout(() => {
+              indicator.style.top = '-60px';
+              indicator.querySelector('i').className = 'fas fa-arrow-down';
+              pulling = false;
+              offset = 0;
+            }, 400);
+          });
+        } else {
+          indicator.style.top = '-60px';
+          pulling = false;
+          offset = 0;
+        }
+      }, { passive: true });
+    }
+
+    // ================================================================
+    // 26. Online/Offline
+    // ================================================================
+    function setupOnlineStatus() {
+      const update = () => {
+        const banner = $('offlineBanner');
+        if (!navigator.onLine) banner.classList.add('show');
+        else banner.classList.remove('show');
+      };
+      window.addEventListener('online', update);
+      window.addEventListener('offline', update);
+      update();
+    }
+
+    // ================================================================
+    // 27. التهيئة النهائية
+    // ================================================================
+    function init() {
+      loadSavedTheme();
+      setupSidebar();
+      setupBottomNav();
+      setupPullToRefresh();
+      setupOnlineStatus();
+      renderQuickPresets();
+
+      const today = new Date();
+      const monthAgo = new Date();
+      monthAgo.setDate(monthAgo.getDate() - 30);
+      $('filterDateFrom').value = dateOnly(monthAgo);
+      $('filterDateTo').value = dateOnly(today);
+
+      $('themeToggle').addEventListener('click', toggleTheme);
+
+      // ربط الفلاتر بالتحميل التلقائي
+      ['filterDateFrom', 'filterDateTo', 'filterFuelType', 'filterTank', 'filterReportType'].forEach(id => {
+        const el = $(id);
+        if (el) el.addEventListener('change', () => {
+          pagination.page = 1;
+          generateReport();
+        });
+      });
+
+      // ESC لإغلاق كل المودالات
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          document.querySelectorAll('.ai-modal-overlay, .details-overlay').forEach(x => x.classList.remove('show'));
+          document.body.style.overflow = '';
+        }
+      });
+
+      loadDropdowns().finally(() => {
+        generateReport();
+      });
+    }
+
+    // تصدير الواجهات العامة
+    window.generateReport = generateReport;
+    window.resetFilters = resetFilters;
+    window.exportCSV = exportCSV;
+    window.exportPDF = exportPDF;
+    window.applyFuelSearch = applyFuelSearch;
+    window.applyPreset = applyPreset;
+    window.viewTransaction = viewTransaction;
+    window.closeDetails = closeDetails;
+    window.openAIAdvisor = openAIAdvisor;
+    window.closeAIModal = closeAIModal;
+    window.openWetStockModal = openWetStockModal;
+    window.closeWetStockModal = closeWetStockModal;
+    window.goToPage = goToPage;
+    window.showNotifications = showNotifications;
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();
   </script>
+
   <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
 </body>
 </html>
