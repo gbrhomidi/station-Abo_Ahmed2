@@ -1664,7 +1664,7 @@
         }
     </style>
     <meta name="reports-bridge-methods" content="generateSalesTransactionReport,retrieveInvoice,getShifts">
-<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script></head>
+<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script></head>
 <body>
     <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
 
@@ -3078,51 +3078,60 @@
         return '"' + String(v).replace(/"/g, '""') + '"';
     }
 
-    function exportCSV() {
-        if (!state.filteredRows || !state.filteredRows.length) {
-            showToast('لا توجد بيانات للتصدير؛ قم بتوليد التقرير أولاً', 'error');
-            return;
-        }
-        var headers = ['#','رقم الفاتورة','كود البيع','التاريخ','العميل','المنتج','النوع','الكمية','سعر الوحدة','الإجمالي','طريقة الدفع','الحالة','مرتجع','تالف'];
-        var lines = [headers.map(csvEscape).join(',')];
-
-        state.filteredRows.forEach(function (s, i) {
-            lines.push([
-                i + 1,
-                s.invoice_number || '',
-                s.sale_code || '',
-                s.sale_date || '',
-                s.customer_name || '',
-                s.product_name || '',
-                s.sale_kind === 'fuel' ? 'وقود' : 'منتج',
-                num(s.quantity),
-                num(s.unit_price),
-                num(s.total_amount),
-                getPaymentLabel(s.payment_method),
-                getStatusLabel(s.status),
-                num(s.returned_quantity),
-                num(s.damaged_quantity)
-            ].map(csvEscape).join(','));
-        });
-
+    async function loadAllSalesRowsForExport() {
         var meta = state.reportMeta || {};
-        lines.push('');
-        lines.push(csvEscape('الفترة') + ',' + csvEscape((meta.from || '') + ' → ' + (meta.to || '')));
-        lines.push(csvEscape('عدد السجلات') + ',' + csvEscape(String(state.filteredRows.length)));
-        lines.push(csvEscape('تاريخ الإنشاء') + ',' + csvEscape(new Date().toLocaleString('en-GB')));
+        var params = {
+            from_date: meta.from || '',
+            to_date: meta.to || '',
+            start_date: meta.from || '',
+            end_date: meta.to || '',
+            limit: 0,
+            offset: 0,
+            report_type: meta.reportType || 'detailed'
+        };
+        if (meta.method) params.payment_method = meta.method;
+        if (meta.saleType && meta.saleType !== 'all') params.sale_type = meta.saleType;
+        var p = $('filterProduct') ? $('filterProduct').value : '';
+        var c = $('filterCustomer') ? $('filterCustomer').value : '';
+        if (p) params.product_id = p;
+        if (c) params.customer_id = c;
+        var result = await invoke('generateSalesTransactionReport', [JSON.stringify(params)]);
+        var unwrapped = unwrap(result);
+        return (unwrapped.rows || []).map(normalizeRow).filter(Boolean);
+    }
 
-        var csv = '\uFEFF' + lines.join('\r\n');
-        var stamp = new Date().toISOString().replace(/[:.]/g, '-');
-        var fileName = 'sales-report_' + (meta.from || 'start') + '_' + (meta.to || 'end') + '_' + stamp + '.csv';
-
+    async function exportCSV() {
         try {
+            var rows = await loadAllSalesRowsForExport();
+            if (!rows.length) {
+                showToast('لا توجد بيانات للتصدير؛ قم بتوليد التقرير أولاً', 'error');
+                return;
+            }
+            var headers = ['#','رقم الفاتورة','كود البيع','التاريخ','العميل','المنتج','النوع','الكمية','سعر الوحدة','الإجمالي','طريقة الدفع','الحالة','مرتجع','تالف'];
+            var lines = [headers.map(csvEscape).join(',')];
+            rows.forEach(function (s, i) {
+                lines.push([
+                    i + 1, s.invoice_number || '', s.sale_code || '', s.sale_date || '', s.customer_name || '', s.product_name || '',
+                    s.sale_kind === 'fuel' ? 'وقود' : 'منتج', num(s.quantity), num(s.unit_price), num(s.total_amount),
+                    getPaymentLabel(s.payment_method), getStatusLabel(s.status), num(s.returned_quantity), num(s.damaged_quantity)
+                ].map(csvEscape).join(','));
+            });
+            var meta = state.reportMeta || {};
+            lines.push('');
+            lines.push(csvEscape('الفترة') + ',' + csvEscape((meta.from || '') + ' → ' + (meta.to || '')));
+            lines.push(csvEscape('عدد السجلات') + ',' + csvEscape(String(rows.length)));
+            lines.push(csvEscape('تاريخ الإنشاء') + ',' + csvEscape(new Date().toLocaleString('en-GB')));
+            var evidence = window.ReportEvidenceRuntime && window.ReportEvidenceRuntime.get('sales', meta.from || '', meta.to || '', { payment_method: meta.method || '', sale_type: meta.saleType || '' });
+            if (evidence && window.ReportEvidenceRuntime) lines = lines.concat(window.ReportEvidenceRuntime.csvLines(evidence));
+            var csv = '\uFEFF' + lines.join('\r\n');
+            var stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            var fileName = 'sales-report_' + (meta.from || 'start') + '_' + (meta.to || 'end') + '_' + stamp + '.csv';
             var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             var url = URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url; a.download = fileName; a.style.display = 'none';
+            var a = document.createElement('a'); a.href = url; a.download = fileName; a.style.display = 'none';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
-            showToast('تم تصدير ' + state.filteredRows.length + ' سجل إلى CSV');
+            showToast('تم تصدير ' + rows.length + ' سجل إلى CSV');
         } catch (e) {
             console.error('exportCSV error:', e);
             showToast('فشل تصدير CSV: ' + e.message, 'error');
@@ -3132,13 +3141,16 @@
     /* ============================================================
        18. JSON / PDF / PNG / Share / Print
        ============================================================ */
-    function exportJSON() {
-        if (!state.filteredRows || !state.filteredRows.length) { showToast('لا توجد بيانات للتصدير', 'error'); return; }
+    async function exportJSON() {
+        var rows = await loadAllSalesRowsForExport();
+        if (!rows.length) { showToast('لا توجد بيانات للتصدير', 'error'); return; }
+        var evidence = window.ReportEvidenceRuntime && window.ReportEvidenceRuntime.get('sales', (state.reportMeta || {}).from || '', (state.reportMeta || {}).to || '', { payment_method: (state.reportMeta || {}).method || '', sale_type: (state.reportMeta || {}).saleType || '' });
         var content = JSON.stringify({
             meta: state.reportMeta,
+            evidence: evidence,
             exported_at: new Date().toISOString(),
-            count: state.filteredRows.length,
-            rows: state.filteredRows
+            count: rows.length,
+            rows: rows
         }, null, 2);
         var stamp = new Date().toISOString().replace(/[:.]/g, '-');
         downloadBlob(content, 'sales-report_' + stamp + '.json', 'application/json;charset=utf-8');

@@ -878,7 +878,7 @@ select.form-input option{background:var(--bg-secondary);color:var(--text-primary
   }
 }
 </style>
-<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script></head>
+<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script></head>
 <body>
 
 <div class="offline-banner" id="offlineBanner">
@@ -2025,6 +2025,8 @@ function exportData(rows) {
             return '"' + String(v).replace(/"/g, '""') + '"';
         }).join(','));
     });
+    var evidence = window.ReportEvidenceRuntime && window.ReportEvidenceRuntime.get('accounting', state.period.from || '', state.period.to || '');
+    if (evidence && window.ReportEvidenceRuntime) lines = lines.concat(window.ReportEvidenceRuntime.csvLines(evidence));
     var csv = '\ufeff' + lines.join('\n');
     var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     var url = URL.createObjectURL(blob);

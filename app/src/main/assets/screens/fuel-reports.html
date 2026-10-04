@@ -1377,7 +1377,7 @@
     }
   </style>
   <meta name="reports-bridge-methods" content="getFuelReportPage,getFuelReport,getTanks,getPumps,getFuelTypes">
-<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script></head>
+<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script></head>
 <body>
 
   <!-- Pull-to-Refresh -->
@@ -2971,6 +2971,8 @@
       lines.push(csvEscape('عدد السجلات:') + ',' + csvEscape(String(state.filteredRows.length)));
       lines.push(csvEscape('تاريخ الإنشاء:') + ',' + csvEscape(new Date().toLocaleString('en-GB')));
 
+      const evidence = window.ReportEvidenceRuntime && window.ReportEvidenceRuntime.get('fuel', $('filterDateFrom').value || '', $('filterDateTo').value || '');
+      if (evidence && window.ReportEvidenceRuntime) lines.push(...window.ReportEvidenceRuntime.csvLines(evidence));
       const csv = '\uFEFF' + lines.join('\r\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);

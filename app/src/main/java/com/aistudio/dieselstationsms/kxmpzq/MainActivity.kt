@@ -2033,6 +2033,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         )
 
         val stats = db.getDashboardStats(stationId, params)
+        val evidenceFrom = params.optString("from_date", "").trim().ifBlank { getCurrentDate() }
+        val evidenceTo = params.optString("to_date", "").trim().ifBlank { evidenceFrom }
+        val evidence = db.getReportEvidence(JSONObject().apply {
+            put("report_type", "dashboard")
+            put("from_date", evidenceFrom)
+            put("to_date", evidenceTo)
+        }, stationId)
+        stats.put("evidence", evidence)
 
         JSONObject().apply {
             put("success", true)
@@ -5849,8 +5857,29 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val report = db.getEodReport(requireCurrentStationId(db, activity.currentUserId))
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val report = db.getEodReport(stationId)
+                report.put("evidence", db.getReportEvidence(JSONObject().apply {
+                    put("report_type", "eod")
+                    put("from_date", getCurrentDate())
+                    put("to_date", getCurrentDate())
+                }, stationId))
                 dataResponse(report)
+            } catch (e: Exception) {
+                DebugLogger.logException("Reports", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getReportEvidence(jsonData: String = "{}"): String {
+            DebugLogger.info("WebAppInterface", "getReportEvidence called")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val request = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (_: Exception) { JSONObject() }
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                dataResponse(db.getReportEvidence(request, stationId))
             } catch (e: Exception) {
                 DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
@@ -5863,12 +5892,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val report = db.getEodReport(requireCurrentStationId(db, activity.currentUserId), fromDate, toDate)
-                val profit = report.optDouble("total_sales", 0.0) - report.optDouble("total_payments", 0.0)
-                report.put("profit", profit)
-                report.put("revenue", report.optDouble("total_sales", 0.0))
-                report.put("cost", report.optDouble("total_payments", 0.0))
-                dataResponse(report)
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val from = fromDate?.trim().orEmpty().ifBlank { getCurrentDate() }
+                val to = toDate?.trim().orEmpty().ifBlank { from }
+                dataResponse(db.getProfitReport(from, to, stationId))
             } catch (e: Exception) {
                 DebugLogger.logException("Reports", e)
                 errorResponse(e.message)

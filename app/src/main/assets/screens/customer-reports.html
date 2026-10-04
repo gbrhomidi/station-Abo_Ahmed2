@@ -1170,7 +1170,7 @@
   </style>
      <meta name="reports-bridge-methods" content="generateCRMReport,getCustomers">
     <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
-<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script></head>
+<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script></head>
  </head>
     <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
 
@@ -2569,11 +2569,14 @@
                 return;
             }
             const headers = ['كود العميل', 'الاسم', 'الهاتف', 'النوع', 'الحد الائتماني', 'الرصيد الحالي', 'إجمالي الديون', 'إجمالي المبيعات', 'عدد الفواتير', 'متوسط الفاتورة', 'آخر عملية شراء', 'نقاط الولاء', 'المخاطرة', 'الحالة'];
-            const csv = [headers, ...rows].map(row => row.map(csvEscape).join(',')).join('\n') + '\n';
+            let csvLines = [headers, ...rows].map(row => row.map(csvEscape).join(','));
+            const from = document.getElementById('filterDateFrom').value || '';
+            const to = document.getElementById('filterDateTo').value || '';
+            const evidence = window.ReportEvidenceRuntime && window.ReportEvidenceRuntime.get('customer', from, to);
+            if (evidence && window.ReportEvidenceRuntime) csvLines = csvLines.concat(window.ReportEvidenceRuntime.csvLines(evidence));
+            const csv = csvLines.join('\n') + '\n';
             const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
-            const from = document.getElementById('filterDateFrom').value || 'start';
-            const to = document.getElementById('filterDateTo').value || 'end';
             link.download = `تقرير_العملاء_${from}_${to}.csv`;
             link.href = URL.createObjectURL(blob);
             document.body.appendChild(link);
@@ -2588,7 +2591,9 @@
                 showToast('❌ لا توجد بيانات فعلية للتصدير', 'error');
                 return;
             }
+            const evidence = window.ReportEvidenceRuntime && window.ReportEvidenceRuntime.get('customer', document.getElementById('filterDateFrom').value || '', document.getElementById('filterDateTo').value || '');
             const payload = {
+                evidence: evidence,
                 generated_at: new Date().toISOString(),
                 period: {
                     start_date: document.getElementById('filterDateFrom').value || null,

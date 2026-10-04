@@ -15509,6 +15509,181 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+
+    /**
+     * Evidence & Reconciliation Integrity:
+     * يعيد مجموعة المصدر نفسها التي تعتمد عليها أرقام التقرير، مع أدلة قابلة
+     * لإعادة المطابقة. لا يخزن النتائج ولا يستبدل SQLite بمصدر مؤقت.
+     */
+    fun getReportEvidence(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب للتحقق من مصدر التقرير" }
+        val reportType = data.optString("report_type", "sales").trim().lowercase(Locale.ROOT)
+        val from = data.optString("from_date", data.optString("start_date", "")).trim()
+        val to = data.optString("to_date", data.optString("end_date", "")).trim()
+        require(from.isNotBlank() && to.isNotBlank()) { "نطاق التاريخ مطلوب للتحقق من مصدر التقرير" }
+        require(parseDateOnlyStrict(from) != null && parseDateOnlyStrict(to) != null && from <= to) {
+            "نطاق التاريخ غير صالح للتحقق من التقرير"
+        }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val evidence = JSONObject().apply {
+                put("contract_version", 1)
+                put("report_type", reportType)
+                put("station_id", stationScopeId)
+                put("date_scope", JSONObject().put("from", from).put("to", to))
+            }
+            when (reportType) {
+                "sales", "eod", "dashboard" -> {
+                    val conditions = mutableListOf("s.station_id=?", "s.is_deleted=0", "date(s.created_at) BETWEEN date(?) AND date(?)")
+                    val args = mutableListOf(stationScopeId.toString(), from, to)
+                    data.optString("payment_method", "").trim().takeIf { it.isNotEmpty() }?.let { conditions += "s.payment_method=?"; args += it }
+                    data.optString("sale_type", "").trim().takeIf { it.isNotEmpty() && it != "all" }?.let { conditions += "s.sale_type=?"; args += it }
+                    data.optLong("customer_id", 0L).takeIf { it > 0 }?.let { conditions += "s.customer_party_id=?"; args += it.toString() }
+                    val productId = data.optLong("product_id", 0L)
+                    if (productId > 0) {
+                        conditions += "(s.product_id=? OR EXISTS (SELECT 1 FROM sale_items si WHERE si.sale_id=s.id AND si.product_id=?))"
+                        args += productId.toString(); args += productId.toString()
+                    }
+                    val where = conditions.joinToString(" AND ")
+                    val summarySql = """
+                        SELECT COUNT(*),
+                               COALESCE(SUM(s.net_amount),0),
+                               COALESCE(SUM(CASE WHEN s.payment_method='cash' THEN s.net_amount ELSE 0 END),0),
+                               COALESCE(SUM(CASE WHEN s.is_credit=1 THEN s.net_amount ELSE 0 END),0),
+                               COALESCE(SUM(s.paid_amount),0),
+                               COALESCE(SUM(s.remaining_amount),0),
+                               COALESCE(SUM(CASE WHEN s.status='completed' THEN s.net_amount ELSE 0 END),0),
+                               COALESCE(SUM(CASE WHEN s.status='refunded' THEN s.net_amount ELSE 0 END),0)
+                        FROM sales_transactions s WHERE $where
+                    """.trimIndent()
+                    db.rawQuery(summarySql, args.toTypedArray()).use { c ->
+                        if (c.moveToFirst()) {
+                            evidence.put("source_table", "sales_transactions")
+                            evidence.put("source_row_count", c.getLong(0))
+                            evidence.put("source_total_net", c.getDouble(1))
+                            evidence.put("source_cash_total", c.getDouble(2))
+                            evidence.put("source_credit_total", c.getDouble(3))
+                            evidence.put("source_paid_total", c.getDouble(4))
+                            evidence.put("source_remaining_total", c.getDouble(5))
+                            evidence.put("completed_total", c.getDouble(6))
+                            evidence.put("refunded_status_total", c.getDouble(7))
+                        }
+                    }
+                    db.rawQuery("SELECT COALESCE(SUM(ABS(s.net_amount-s.paid_amount-s.remaining_amount)),0), COALESCE(SUM(CASE WHEN s.status='refunded' AND ABS(s.net_amount)>0.01 THEN 1 ELSE 0 END),0) FROM sales_transactions s WHERE $where", args.toTypedArray()).use { c -> if(c.moveToFirst()) {
+                        evidence.put("payment_reconciliation_delta", c.getDouble(0))
+                        evidence.put("invalid_refunded_rows", c.getLong(1))
+                    }}
+
+                    val adjustmentSql = """
+                        SELECT
+                          COALESCE((SELECT SUM(a.amount) FROM sale_item_adjustments a JOIN sales_transactions sx ON sx.id=a.sale_id
+                                   WHERE a.station_id=? AND a.status='posted' AND sx.is_deleted=0 AND date(sx.created_at) BETWEEN date(?) AND date(?)),0)
+                          + COALESCE((SELECT SUM(a.amount) FROM fuel_sale_adjustments a JOIN sales_transactions sx ON sx.id=a.sale_id
+                                   WHERE a.station_id=? AND a.status='posted' AND sx.is_deleted=0 AND date(sx.created_at) BETWEEN date(?) AND date(?)),0),
+                          COALESCE((SELECT COUNT(*) FROM sale_item_adjustments a JOIN sales_transactions sx ON sx.id=a.sale_id
+                                   WHERE a.station_id=? AND a.status='posted' AND sx.is_deleted=0 AND date(sx.created_at) BETWEEN date(?) AND date(?)),0)
+                          + COALESCE((SELECT COUNT(*) FROM fuel_sale_adjustments a JOIN sales_transactions sx ON sx.id=a.sale_id
+                                   WHERE a.station_id=? AND a.status='posted' AND sx.is_deleted=0 AND date(sx.created_at) BETWEEN date(?) AND date(?)),0)
+                    """.trimIndent()
+                    val adjArgs = arrayOf(stationScopeId.toString(),from,to,stationScopeId.toString(),from,to,stationScopeId.toString(),from,to,stationScopeId.toString(),from,to)
+                    db.rawQuery(adjustmentSql, adjArgs).use { c -> if(c.moveToFirst()) { evidence.put("posted_adjustment_total",c.getDouble(0)); evidence.put("posted_adjustment_count",c.getLong(1)) } }
+                    evidence.put("reconciliation_rule", "sales_transactions.net_amount is the authoritative effective sale value; posted return/damage adjustments must explain the reduction from the original value and are never subtracted twice")
+                }
+                "accounting" -> {
+                    val args = arrayOf(stationScopeId.toString(), from, to)
+                    db.rawQuery("""
+                        SELECT COUNT(*), COALESCE(SUM(total_debit),0), COALESCE(SUM(total_credit),0),
+                               COALESCE(SUM(CASE WHEN status='posted' THEN total_debit ELSE 0 END),0),
+                               COALESCE(SUM(CASE WHEN status='posted' THEN total_credit ELSE 0 END),0),
+                               SUM(CASE WHEN status='posted' AND ABS(total_debit-total_credit)>0.01 THEN 1 ELSE 0 END)
+                        FROM journal_entries
+                        WHERE station_id=? AND date(entry_date) BETWEEN date(?) AND date(?) AND is_deleted=0
+                    """.trimIndent(), args).use { c -> if(c.moveToFirst()) {
+                        evidence.put("source_table", "journal_entries")
+                        evidence.put("source_row_count", c.getLong(0)); evidence.put("source_total_debit", c.getDouble(1)); evidence.put("source_total_credit", c.getDouble(2))
+                        evidence.put("posted_debit", c.getDouble(3)); evidence.put("posted_credit", c.getDouble(4)); evidence.put("unbalanced_posted_entries", c.getLong(5))
+                    }}
+                    db.rawQuery("SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND status='reversed' AND is_deleted=0 AND date(entry_date) BETWEEN date(?) AND date(?)", args).use { c -> if(c.moveToFirst()) evidence.put("reversed_entry_count",c.getLong(0)) }
+                    db.rawQuery("SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND status='reversed' AND is_deleted=0 AND date(entry_date) BETWEEN date(?) AND date(?) AND (reversed_entry_id IS NULL OR reversed_entry_id<=0)", args).use { c -> if(c.moveToFirst()) evidence.put("reversed_without_origin",c.getLong(0)) }
+                    evidence.put("reconciliation_rule", "posted journal entries must balance at entry level; reversed/cancelled entries are not treated as current posted revenue or expense")
+                }
+                "fuel" -> {
+                    val args = arrayOf(stationScopeId.toString(), from, to, stationScopeId.toString(), from, to)
+                    db.rawQuery("""
+                        SELECT COUNT(*), COALESCE(SUM(quantity),0), COALESCE(SUM(total_amount),0)
+                        FROM fuel_sales fs JOIN sales_transactions s ON s.id=fs.sale_id
+                        WHERE s.station_id=? AND s.is_deleted=0 AND fs.is_deleted=0 AND date(COALESCE(fs.sale_date,fs.created_at)) BETWEEN date(?) AND date(?)
+                        """.trimIndent(), args.sliceArray(0..2)).use { c -> if(c.moveToFirst()) { evidence.put("source_table","fuel_sales+sales_transactions"); evidence.put("source_row_count",c.getLong(0)); evidence.put("source_liters",c.getDouble(1)); evidence.put("source_total",c.getDouble(2)) } }
+                    db.rawQuery("SELECT COUNT(*), COALESCE(SUM(quantity),0), COALESCE(SUM(amount),0) FROM fuel_sale_adjustments WHERE station_id=? AND status='posted' AND date(created_at) BETWEEN date(?) AND date(?)", arrayOf(stationScopeId.toString(),from,to)).use { c -> if(c.moveToFirst()) { evidence.put("posted_adjustment_count",c.getLong(0)); evidence.put("posted_return_damage_liters",c.getDouble(1)); evidence.put("posted_return_damage_amount",c.getDouble(2)) } }
+                    evidence.put("reconciliation_rule", "fuel report rows originate from fuel_sales joined to station-scoped sales_transactions; posted fuel adjustments explain returned/damaged quantity and amount")
+                }
+                "customer" -> {
+                    val args = arrayOf(stationScopeId.toString(), from, to)
+                    db.rawQuery("""
+                        SELECT COUNT(DISTINCT s.customer_party_id), COALESCE(SUM(s.net_amount),0), COUNT(*)
+                        FROM sales_transactions s
+                        WHERE s.station_id=? AND s.is_deleted=0 AND s.customer_party_id IS NOT NULL AND s.customer_party_id>0
+                          AND date(s.created_at) BETWEEN date(?) AND date(?)
+                    """.trimIndent(), args).use { c -> if(c.moveToFirst()) {
+                        evidence.put("source_table","sales_transactions+parties"); evidence.put("distinct_customer_count",c.getLong(0)); evidence.put("source_total_sales",c.getDouble(1)); evidence.put("source_transaction_count",c.getLong(2))
+                    }}
+                    evidence.put("reconciliation_rule", "customer report aggregates are derived from station-scoped sales_transactions in the same date range; customer identity is resolved through customer_party_id")
+                }
+                "inventory" -> {
+                    val args = arrayOf(stationScopeId.toString(), from, to)
+                    db.rawQuery("SELECT COUNT(*), COALESCE(SUM(quantity_change),0), COALESCE(SUM(total_cost),0) FROM inventory_movements WHERE station_id=? AND is_deleted=0 AND date(created_at) BETWEEN date(?) AND date(?)", args).use { c -> if(c.moveToFirst()) { evidence.put("source_table","inventory_movements"); evidence.put("source_row_count",c.getLong(0)); evidence.put("source_quantity_change",c.getDouble(1)); evidence.put("source_total_cost",c.getDouble(2)) } }
+                    evidence.put("reconciliation_rule", "inventory movement totals use the same station and date predicate as the operational movement source rows; cancelled/deleted rows are excluded")
+                }
+                else -> throw IllegalArgumentException("نوع تقرير الأدلة غير مدعوم: $reportType")
+            }
+            val canonical = evidence.toString().replace("\\/", "/")
+            val digest = MessageDigest.getInstance("SHA-256").digest(canonical.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+            evidence.put("evidence_hash", digest)
+            evidence.put("verified_at", getCurrentDateTime())
+            evidence
+        } finally { dbLock.unlock() }
+    }
+
+
+    /** Profit & Loss is derived from posted accounting entries, not from payment collections. */
+    fun getProfitReport(fromDate: String, toDate: String, stationId: Int): JSONObject {
+        require(stationId > 0) { "معرف المحطة مطلوب لتقرير الأرباح" }
+        require(parseDateOnlyStrict(fromDate) != null && parseDateOnlyStrict(toDate) != null && fromDate <= toDate) {
+            "نطاق التاريخ غير صالح لتقرير الأرباح"
+        }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery("""
+                SELECT COALESCE(SUM(CASE WHEN a.account_type='revenue' THEN jei.credit-jei.debit ELSE 0 END),0) AS revenue,
+                       COALESCE(SUM(CASE WHEN a.account_type='expense' THEN jei.debit-jei.credit ELSE 0 END),0) AS expense,
+                       COALESCE(SUM(jei.debit),0) AS debit_total,
+                       COALESCE(SUM(jei.credit),0) AS credit_total,
+                       COUNT(DISTINCT je.id) AS entry_count,
+                       COALESCE(SUM(CASE WHEN je.status='posted' AND ABS(je.total_debit-je.total_credit)>0.01 THEN 1 ELSE 0 END),0) AS unbalanced_entries
+                FROM journal_entries je
+                JOIN journal_entry_items jei ON jei.journal_entry_id=je.id
+                JOIN accounts a ON a.id=jei.account_id
+                WHERE je.station_id=? AND je.status='posted' AND je.is_deleted=0
+                  AND date(je.entry_date) BETWEEN date(?) AND date(?)
+                  AND a.is_deleted=0
+            """.trimIndent(), arrayOf(stationId.toString(), fromDate, toDate)).use { c ->
+                val result = JSONObject()
+                if (c.moveToFirst()) {
+                    val revenue=c.getDouble(0); val expense=c.getDouble(1)
+                    result.put("from_date",fromDate).put("to_date",toDate).put("station_id",stationId)
+                    result.put("revenue",revenue).put("cost",expense).put("expense",expense).put("profit",revenue-expense)
+                    result.put("debit_total",c.getDouble(2)).put("credit_total",c.getDouble(3))
+                    result.put("entry_count",c.getLong(4)).put("unbalanced_entries",c.getLong(5))
+                    result.put("source_table","journal_entries+journal_entry_items+accounts")
+                    result.put("source_rule","posted journal entries only; revenue and expense are classified from accounts.account_type; payments are collections and are not costs")
+                }
+                result
+            }
+        } finally { dbLock.unlock() }
+    }
+
     fun getEodReport(stationId: Int = 1, fromDate: String? = null, toDate: String? = null): JSONObject {
         dbLock.lock()
         return try {
@@ -15526,11 +15701,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     COALESCE(SUM(CASE WHEN s.is_credit = 0 THEN s.net_amount ELSE 0 END),0) as cash_sales_actual,
                     COALESCE(SUM(s.liters),0) as total_liters,
                     COUNT(*) as transaction_count,
-                    COALESCE(SUM(p.amount),0) as total_payments
+                    COALESCE((SELECT SUM(p.amount) FROM payments p JOIN sales_transactions sp ON sp.id=p.sale_id
+                              WHERE sp.station_id=? AND date(sp.created_at) BETWEEN date(?) AND date(?)
+                                AND sp.is_deleted=0 AND p.status='completed' AND p.is_deleted=0),0) as total_payments
                    FROM sales_transactions s
-                   LEFT JOIN payments p ON s.id = p.sale_id AND p.status = 'completed' AND p.is_deleted = 0
                    WHERE s.station_id = ? AND date(s.created_at) BETWEEN ? AND ? AND s.is_deleted = 0""",
-                arrayOf(stationId.toString(), from, to)
+                arrayOf(stationId.toString(), from, to, stationId.toString(), from, to)
             ).use { cursor ->
                 val result = JSONObject()
                 if (cursor.moveToFirst()) {
