@@ -1,0 +1,21 @@
+const fs = require('fs');
+const path = require('path');
+const root = __dirname;
+const db = fs.readFileSync(path.join(root,'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt'),'utf8');
+const bridge = fs.readFileSync(path.join(root,'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt'),'utf8');
+const screen = fs.readFileSync(path.join(root,'app/src/main/assets/screens/reports-drilldown.html'),'utf8');
+const sales = fs.readFileSync(path.join(root,'app/src/main/assets/screens/sales-reports.html'),'utf8');
+function assert(c,m){if(!c) throw new Error(m)}
+assert(/fun getReportDrilldown\(data: JSONObject, stationScopeId: Int\)/.test(db),'Database drilldown method missing');
+assert(/@JavascriptInterface\s+fun getReportDrilldown\(jsonData: String = "\{\}"\)/.test(bridge),'Bridge drilldown method missing');
+assert(screen.includes('getReportDrilldown'),'Drilldown screen does not call bridge');
+assert(screen.includes("sessionStorage"),'Filter handoff does not use session state');
+assert(screen.includes("level='groups'") || screen.includes('level=\'groups\''),'Group level missing');
+assert(screen.includes("state.level==='transactions'"),'Transaction level missing');
+assert(screen.includes('renderDocument'),'Document level missing');
+assert(/ORDER BY datetime\(x\.sale_date\)/.test(db),'Transaction ordering missing');
+const method = db.slice(db.indexOf('fun getReportDrilldown'), db.indexOf('fun getSalesTransactions', db.indexOf('fun getReportDrilldown')));
+assert(!/LIMIT\s+\d+/i.test(method),'Drilldown introduces a fixed LIMIT');
+for (const key of ['from_date','to_date','payment_method','customer_id','product_id','shift_id','search']) assert(method.includes(key),`Shared filter ${key} missing from drilldown`);
+assert(/openReportDrilldown/.test(sales),'Sales KPI/report screen is not wired to drilldown');
+console.log('Reports drill-down regression PASS.');

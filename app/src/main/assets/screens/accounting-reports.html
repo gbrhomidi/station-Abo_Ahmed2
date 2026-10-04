@@ -878,6 +878,7 @@ select.form-input option{background:var(--bg-secondary);color:var(--text-primary
   }
 }
 </style>
+<script src="file:///android_asset/assets-local/js/report-drilldown.js"></script>
 </head>
 <body>
 
@@ -1342,7 +1343,7 @@ function loadTrialBalance() {
 
 function loadLedgerEntries() {
     if (!hasMethod('getLedgerEntries')) return Promise.resolve(null);
-    var params = { from_date: state.period.from, to_date: state.period.to, return_all: true };
+    var params = { from_date: state.period.from, to_date: state.period.to, limit: 500 };
     return invoke('getLedgerEntries', [JSON.stringify(params)]).then(function (result) {
         state.ledgerEntries = flattenRows(result);
         return result;
@@ -1359,7 +1360,7 @@ function loadProfitReport() {
 
 function loadJournalEntries() {
     if (!hasMethod('getJournalEntries')) return Promise.resolve(null);
-    var params = { from_date: state.period.from, to_date: state.period.to, return_all: true };
+    var params = { from_date: state.period.from, to_date: state.period.to, limit: 100 };
     return invoke('getJournalEntries', [JSON.stringify(params)]).then(function (result) {
         var page = result && (result.data || result);
         state.journalEntries = Array.isArray(page) ? page : (page && Array.isArray(page.entries) ? page.entries : []);
@@ -1842,7 +1843,7 @@ function renderDataTable(rows) {
     });
 
     var header = '<thead><tr>' + keys.map(function (k) { return '<th>' + esc(k) + '</th>'; }).join('') + '</tr></thead>';
-    var body = '<tbody>' + rows.map(function (r) {
+    var body = '<tbody>' + rows.slice(0, 500).map(function (r) {
         return '<tr>' + keys.map(function (k) {
             var v = r[k];
             if (v === null || v === undefined) return '<td>—</td>';
@@ -1873,7 +1874,8 @@ function openDetails(index) {
 
     var body = $('detailsBody');
     if (body) {
-        body.innerHTML =
+        var traceButton = '<div style="margin-bottom:10px"><button type="button" class="btn" onclick="openReportSourceDrilldown(\'accounting\',{level:\'document\',record_id:Number(' + (row.journal_entry_id || row.id || 0) + ')},reportDrilldownFilters())">تتبع القيد الأصلي</button></div>';
+        body.innerHTML = traceButton +
             '<div class="detail-grid">' + entries + '</div>' +
             '<details style="margin-top:14px">' +
                 '<summary style="cursor:pointer;color:var(--violet-primary);font-weight:800;padding:6px"><i class="fas fa-code"></i> JSON الخام</summary>' +
@@ -1920,9 +1922,9 @@ function openReport(specKey) {
 var reportSpecs = {
     balanceSheet: { title: 'الميزانية العمومية', icon: 'fa-scale-balanced', method: 'getBalanceSheet', args: function () { return [state.period.to, 0]; } },
     trialBalance: { title: 'ميزان المراجعة', icon: 'fa-list-check', method: 'getChartTrialBalance', args: function () { return [state.period.from, state.period.to]; } },
-    ledger: { title: 'دفتر الأستاذ', icon: 'fa-book', method: 'getLedgerEntries', args: function () { return [JSON.stringify({ from_date: state.period.from, to_date: state.period.to, return_all: true })]; } },
+    ledger: { title: 'دفتر الأستاذ', icon: 'fa-book', method: 'getLedgerEntries', args: function () { return [JSON.stringify({ from_date: state.period.from, to_date: state.period.to, limit: 1000 })]; } },
     profit: { title: 'الأرباح والخسائر', icon: 'fa-chart-line', method: 'getProfitReport', args: function () { return [state.period.from, state.period.to]; } },
-    journal: { title: 'قيود اليومية', icon: 'fa-book-journal-whills', method: 'getJournalEntries', args: function () { return [JSON.stringify({ from_date: state.period.from, to_date: state.period.to, return_all: true })]; } },
+    journal: { title: 'قيود اليومية', icon: 'fa-book-journal-whills', method: 'getJournalEntries', args: function () { return [JSON.stringify({ from_date: state.period.from, to_date: state.period.to, limit: 500 })]; } },
     kpi: { title: 'مؤشرات الأداء', icon: 'fa-gauge-high', method: 'getKPIDashboard', args: function () { return [JSON.stringify({ start_date: state.period.from, end_date: state.period.to })]; } },
     eod: { title: 'الإقفال اليومي', icon: 'fa-calendar-check', method: 'getEodReport', args: function () { return []; } },
     overdue: { title: 'المدفوعات المتأخرة', icon: 'fa-clock', method: 'getOverdueReport', args: function () { return []; } }
@@ -1986,7 +1988,7 @@ function renderReportRows(rows, container) {
 
     // For balance sheet, do NOT hide side content; show all keys
     var header = '<thead><tr>' + keys.map(function (k) { return '<th>' + esc(k) + '</th>'; }).join('') + '</tr></thead>';
-    var body = '<tbody>' + rows.map(function (r) {
+    var body = '<tbody>' + rows.slice(0, 500).map(function (r) {
         return '<tr>' + keys.map(function (k) {
             var v = r[k];
             if (v === null || v === undefined) return '<td>—</td>';

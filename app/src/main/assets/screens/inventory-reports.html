@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
   <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
   <link href="file:///android_asset/assets-local/css/all.min.css" rel="stylesheet">
-  <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
   <script src="file:///android_asset/assets-local/js/sweetalert2@11"></script>
   <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
   <script src="file:///android_asset/assets-local/js/chart.umd.min.js"></script>
@@ -1451,6 +1450,7 @@
     }
   </style>
   <meta name="reports-bridge-methods" content="generateInventoryReport,getWarehouses,getCategories,getInventoryProductDetails">
+<script src="file:///android_asset/assets-local/js/report-drilldown.js"></script>
 </head>
 <body>
 
@@ -2187,16 +2187,16 @@
 
       showLoading(true);
       try {
-        const filters = ReportsRuntime.validateReportFilters({
+        const res = await apiCall('generateInventoryReport', {
           start_date: from,
           end_date: to,
-          warehouse_id: warehouse,
-          category_id: category,
+          from_date: from,
+          to_date: to,
+          warehouse_id: warehouse || null,
+          category_id: category || null,
           report_type: type,
-          status: status,
-          return_all: true
-        }, { requireDateRange: false });
-        const res = await apiCall('generateInventoryReport', filters);
+          status: status || null
+        });
 
         const extracted = extractInventoryReport(res);
 
@@ -2633,9 +2633,10 @@
       content.innerHTML = `
         <div class="details-header">
           <h3 class="details-title">📦 ${escapeHtml(p.product_name_ar || p.product_name || 'منتج')}</h3>
-          <button class="details-close" onclick="closeDetails(null)">
-            <i class="fas fa-times"></i>
-          </button>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn" type="button" onclick="openReportSourceDrilldown('inventory',{level:'groups',product_id:Number(p.product_id||p.id||0)},reportDrilldownFilters())">تتبع الحركات</button>
+            <button class="details-close" onclick="closeDetails(null)"><i class="fas fa-times"></i></button>
+          </div>
         </div>
 
         <div class="details-profile">

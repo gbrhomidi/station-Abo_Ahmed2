@@ -2569,7 +2569,9 @@ function printMovement() {
         <div class="info-grid">${content}</div>
         <p style="text-align:center;margin-top:20px;color:#888;">تم الطباعة من نظام Station Enterprise V5</p>
         <script>window.onload=function(){window.print();}<\/script>
-        </body></html>
+        
+<script>document.addEventListener('DOMContentLoaded',function(){const id=Number(new URLSearchParams(location.search).get('movement_id')||0);if(id&&typeof viewMovement==='function')setTimeout(()=>viewMovement(id),200);});</script>
+</body></html>
     `);
     win.document.close();
 }
@@ -2861,5 +2863,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
   </script>
      <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
+
+<script>document.addEventListener('DOMContentLoaded',function(){const id=Number(new URLSearchParams(location.search).get('movement_id')||0);if(id&&typeof viewMovement==='function')setTimeout(()=>viewMovement(id),200);});</script>
 </body>
 </html>

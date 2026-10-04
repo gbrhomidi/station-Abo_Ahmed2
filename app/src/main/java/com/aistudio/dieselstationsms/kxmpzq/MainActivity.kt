@@ -5280,6 +5280,23 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         // ============================================================
 
         @JavascriptInterface
+        fun openReportOperationalDocument(jsonData: String = "{}"): String {
+            val activity=getActivity() ?: return errorResponse("النشاط غير متاح")
+            val helper=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val request=JSONObject(jsonData.ifBlank { "{}" })
+                val station=requireCurrentStationId(helper, activity.currentUserId)
+                val verified=helper.resolveReportOperationalOrigin(request, station)
+                val params=JSONObject().apply {
+                    put("source_table",verified.getString("source_table"));put("source_id",verified.getLong("source_id"));put("reference_code",verified.optString("reference_code"));put("station_id",station)
+                    request.optString("from_date").takeIf{it.isNotBlank()}?.let{put("from_date",it)};request.optString("to_date").takeIf{it.isNotBlank()}?.let{put("to_date",it)}
+                    when(verified.getString("source_table")){"inventory_movements"->put("movement_id",verified.getLong("source_id"));"sales_transactions","fuel_sales"->put("sale_id",verified.getLong("source_id"));"tank_refills"->put("refill_id",verified.getLong("source_id"));"journal_entries","journal_entry_items"->put("entry_id",verified.getLong("source_id"));"stocktakes","stocktake_details"->put("stocktake_id",verified.getLong("source_id"))}
+                }
+                dataResponseObject(JSONObject().apply { put("success",true);put("verified",true);put("screen",verified.getString("screen"));put("params",params);put("source_table",verified.getString("source_table"));put("source_id",verified.getLong("source_id"));put("reference_code",verified.optString("reference_code")) }).toString()
+            } catch(e:Exception){ DebugLogger.logException("OpenReportOperationalDocument",e); errorResponse(e.message ?: "تعذر التحقق من المستند التشغيلي") }
+        }
+
+        @JavascriptInterface
         fun getActivityLogs(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getActivityLogs called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
@@ -7743,19 +7760,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val params = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("معاملات التقرير غير صالحة") }
             return try { val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L); reportCacheResponse(db, "journal_report", params, 3600L) { dataResponseObject(db.generateJournalReport(params, stationId)) } }
             catch (e: Exception) { DebugLogger.logException("JournalReport", e); errorResponse(e.message) }
-        }
-
-        @JavascriptInterface
-        fun getReportsReconciliation(jsonData: String = "{}"): String {
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            val params = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("معاملات المطابقة غير صالحة") }
-            return try {
-                val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
-                reportCacheResponse(db, "reports_reconciliation", params, 300L) { dataResponseObject(db.getReportsReconciliation(params, stationId)) }
-            } catch (e: Exception) {
-                DebugLogger.logException("ReportsReconciliation", e)
-                errorResponse(e.message)
-            }
         }
 
         @JavascriptInterface

@@ -1784,5 +1784,7 @@
     <div style="margin-top:15px"><button class="modal-btn modal-btn-cancel" onclick="closeModal(null,'fuelAdjustmentModal')">إلغاء</button><button id="fuelAdjustmentSave" class="modal-btn modal-btn-primary" onclick="saveFuelAdjustment()">تأكيد العملية</button></div>
   </div>
 </div>
+
+<script>document.addEventListener('DOMContentLoaded',function(){const id=Number(new URLSearchParams(location.search).get('sale_id')||0);if(id&&typeof openDetails==='function')setTimeout(()=>openDetails(id),500);});</script>
 </body>
 </html>

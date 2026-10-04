@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
     <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
-    <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
     <script src="file:///android_asset/assets-local/js/sweetalert2@11"></script>
     <script src="file:///android_asset/assets-local/js/chart.umd.min.js"></script>
     <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
@@ -1664,7 +1663,7 @@
             }
         }
     </style>
-    <meta name="reports-bridge-methods" content="generateSalesTransactionReport,retrieveInvoice,getShifts">
+    <meta name="reports-bridge-methods" content="generateSalesTransactionReport,retrieveInvoice,getShifts,getReportDrilldown">
 </head>
 <body>
     <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
@@ -1756,8 +1755,9 @@
     <div class="reports-container">
         <!-- محددات التقرير -->
         <div class="report-filters">
-            <div class="filter-title">
-                <i class="fas fa-sliders-h"></i> خيارات التقرير
+            <div class="filter-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                <span><i class="fas fa-sliders-h"></i> خيارات التقرير</span>
+                <button type="button" class="icon-btn" id="openDrilldownBtn" title="فتح التحليل المتدرج" aria-label="فتح التحليل المتدرج" style="min-width:42px;">🔎</button>
             </div>
 
             <!-- ═══ مدى زمني سريع ═══ -->
@@ -2440,22 +2440,29 @@
         }
 
         // ⚠️ إزالة حقل الحالة تماماً من الإرسال
-        var params = ReportsRuntime.validateReportFilters({
+        var params = {
             from_date: from,
             to_date: to,
-            product_id: $('filterProduct') ? $('filterProduct').value : '',
-            customer_id: $('filterCustomer') ? $('filterCustomer').value : '',
-            payment_method: $('filterPaymentMethod') ? $('filterPaymentMethod').value : '',
-            sale_type: $('filterSaleType') ? $('filterSaleType').value : '',
-            report_type: $('filterReportType') ? $('filterReportType').value : '',
-            return_all: true
-        });
+            start_date: from,
+            end_date: to,
+            limit: state.pagination.pageSize,
+            offset: (state.pagination.page - 1) * state.pagination.pageSize
+        };
 
         var p = $('filterProduct') ? $('filterProduct').value : '';
+        if (p) params.product_id = p;
+
         var c = $('filterCustomer') ? $('filterCustomer').value : '';
+        if (c) params.customer_id = c;
+
         var m = $('filterPaymentMethod') ? $('filterPaymentMethod').value : '';
+        if (m) params.payment_method = m;
+
         var st = $('filterSaleType') ? $('filterSaleType').value : 'all';
+        if (st && st !== 'all') params.sale_type = st;
+
         var rt = $('filterReportType') ? $('filterReportType').value : 'detailed';
+        params.report_type = rt;
 
         // ❌ لا نرسل params.status لأن DatabaseHelper لا يعرفه
 
@@ -3518,8 +3525,33 @@
         generateReport().catch(function(){});
     }
 
+    function currentDrilldownFilters() {
+        var from = $('filterDateFrom') ? $('filterDateFrom').value : '';
+        var to = $('filterDateTo') ? $('filterDateTo').value : '';
+        var params = {
+            from_date: from, to_date: to, start_date: from, end_date: to,
+            sale_type: $('filterSaleType') ? ($('filterSaleType').value || 'all') : 'all',
+            payment_method: $('filterPaymentMethod') ? ($('filterPaymentMethod').value || '') : '',
+            customer_id: $('filterCustomer') ? ($('filterCustomer').value || '') : '',
+            product_id: $('filterProduct') ? ($('filterProduct').value || '') : '',
+            report_type: $('filterReportType') ? ($('filterReportType').value || 'detailed') : 'detailed',
+            search: $('searchInput') ? ($('searchInput').value || '') : ''
+        };
+        Object.keys(params).forEach(function(k){ if (params[k] === '') delete params[k]; });
+        return params;
+    }
+
+    function openReportDrilldown(extra) {
+        var params = currentDrilldownFilters();
+        Object.assign(params, extra || {});
+        sessionStorage.setItem('reportsDrilldownFilters', JSON.stringify(params));
+        window.location.href = 'reports-drilldown.html';
+    }
+
     function showStatDetail(type) {
-        showToast('📊 ' + type, 'info');
+        var extra = { level: 'groups', group_by: type === 'credit_sales' ? 'payment_method' : 'day' };
+        if (type === 'credit_sales') extra.payment_method = 'credit';
+        openReportDrilldown(extra);
     }
 
     /* ============================================================
@@ -3557,6 +3589,8 @@
         // Theme
         var tt = $('themeToggle');
         if (tt) tt.addEventListener('click', toggleTheme);
+        var drillBtn = $('openDrilldownBtn');
+        if (drillBtn) drillBtn.addEventListener('click', function(){ openReportDrilldown({level:'groups', group_by:'day'}); });
         // Home
         var hb = $('homeBtn');
         if (hb) hb.addEventListener('click', function () {

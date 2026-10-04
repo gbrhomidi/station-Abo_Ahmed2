@@ -177,4 +177,6 @@ document.querySelectorAll('.modal').forEach(x=>x.onclick=e=>{if(e.target===x)clo
 Object.assign(window,{reload,newProductSession,openPL,approveP,newFuelSession,openFL,approveF,reloadFuel,closeM,exportCsv,openReports,loadReport,exportReportCsv,printReport,selP,selF});
 reload();
 })();
-</script></body></html>
+</script>
+<script>document.addEventListener('DOMContentLoaded',function(){const id=Number(new URLSearchParams(location.search).get('stocktake_id')||0);if(!id)return;setTimeout(()=>{try{if(typeof selP==='function')selP(id);else if(typeof selF==='function')selF(id);}catch(e){console.error(e)}},500);});</script>
+</body></html>

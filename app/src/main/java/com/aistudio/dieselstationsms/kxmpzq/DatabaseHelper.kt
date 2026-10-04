@@ -7090,7 +7090,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             (10,'SCR-010-UUID','inventory-reports','inventory','تقارير المخزون',1),
             (11,'SCR-011-UUID','journal-entries','accounting','القيود اليومية',1),
             (12,'SCR-012-UUID','kpi','reports','مؤشرات الأداء',1),
-            (25,'SCR-025-UUID','reports-reconciliation','reports','مطابقة وسلامة بيانات التقارير',1),
             (13,'SCR-013-UUID','ledger','accounting','دفتر الأستاذ',1),
             (14,'SCR-014-UUID','party-types','customers','أنواع الأطراف',1),
             (15,'SCR-015-UUID','pos','sales','نقطة البيع',1),
@@ -9860,10 +9859,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getSalesLedgerPage(data: JSONObject, stationScopeId: Int): JSONObject {
         require(stationScopeId > 0) { "معرف المحطة مطلوب" }
-        val returnAll = data.optBoolean("return_all", false)
-        val requestedLimit = data.optInt("limit", 100)
-        val limit = if (returnAll) 0 else requestedLimit.coerceIn(1, 500)
-        val offset = if (returnAll) 0 else data.optInt("offset", 0).coerceAtLeast(0)
+        val limit = data.optInt("limit", 100).coerceIn(1, 500)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
         val kind = data.optString("sale_type", data.optString("type", "all")).trim().lowercase()
         require(kind in setOf("all","fuel","product")) { "نوع المبيعات غير صالح" }
         val where = mutableListOf("x.station_id=?", "x.is_deleted=0", "x.sale_status NOT IN ('cancelled')")
@@ -9909,21 +9906,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """.trimIndent()
         val from="($union) x"
         val total=readableDatabase.rawQuery("SELECT COUNT(*) FROM $from WHERE ${where.joinToString(" AND ")}",args.toTypedArray()).use{if(it.moveToFirst())it.getInt(0)else 0}
-        val baseSql = """SELECT x.*, p.commercial_name AS customer_name
-                              FROM $from LEFT JOIN parties p ON p.id=x.customer_party_id
-                              WHERE ${where.joinToString(" AND ")}
-                              ORDER BY x.sale_date DESC,x.sale_id DESC,COALESCE(x.sale_item_id,x.fuel_sale_id) DESC"""
-        val rows = if (returnAll) {
-            readableDatabase.rawQuery(baseSql, args.toTypedArray()).use { cursorToJsonArray(it) }
-        } else {
-            val pageArgs=(args+limit.toString()+offset.toString()).toTypedArray()
-            readableDatabase.rawQuery("$baseSql LIMIT ? OFFSET ?", pageArgs).use { cursorToJsonArray(it) }
-        }
-        return if (returnAll) JSONObject().apply {
-            put("rows", rows); put("count", rows.length()); put("total_count", total)
-            put("page", 1); put("page_size", total.coerceAtLeast(1)); put("total_pages", if (total == 0) 0 else 1)
-            put("has_next", false); put("has_previous", false); put("source", "sales_transactions+fuel_sales+sale_items")
-        } else module008Page(rows,total,limit,offset)
+        val pageArgs=(args+limit.toString()+offset.toString()).toTypedArray()
+        val rows=readableDatabase.rawQuery("""SELECT x.*, p.commercial_name AS customer_name
+                                              FROM $from LEFT JOIN parties p ON p.id=x.customer_party_id
+                                              WHERE ${where.joinToString(" AND ")}
+                                              ORDER BY x.sale_date DESC,x.sale_id DESC,COALESCE(x.sale_item_id,x.fuel_sale_id) DESC LIMIT ? OFFSET ?""",pageArgs).use{cursorToJsonArray(it)}
+        return module008Page(rows,total,limit,offset)
     }
 
     fun getSalesTransactions(stationId: Int, limit: Int = 200, offset: Int = 0): JSONArray {
@@ -12780,10 +12768,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             val categoryTotals = linkedMapOf<String, Double>()
             val movementSeries = JSONArray()
-            val returnAll = data.optBoolean("return_all", false)
-            val requestedPageSize = data.optInt("limit", 200)
-            val pageSize = if (returnAll) 0 else requestedPageSize.coerceIn(1, 1000)
-            val offset = if (returnAll) 0 else data.optInt("offset", 0).coerceAtLeast(0)
+            val pageSize = data.optInt("limit", 200).coerceIn(1, 1000)
+            val offset = data.optInt("offset", 0).coerceAtLeast(0)
             var totalCount = 0
             var aggregateLoaded = false
             var aggregateTotalQuantity = 0.0
@@ -12822,10 +12808,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     LEFT JOIN users u ON im.performed_by = u.id
                     WHERE ${where.joinToString(" AND ")}
                     ORDER BY datetime(im.created_at) DESC, im.id DESC
+                    LIMIT ? OFFSET ?
                 """.trimIndent()
-                val rowsSql = if (returnAll) sql else "$sql LIMIT ? OFFSET ?"
-                val rowArgs = if (returnAll) args.toTypedArray() else (args + pageSize.toString() + offset.toString()).toTypedArray()
-                db.rawQuery(rowsSql, rowArgs).use { cursor ->
+                val pageArgs = args.toMutableList().apply { add(pageSize.toString()); add(offset.toString()) }
+                db.rawQuery(sql, pageArgs.toTypedArray()).use { cursor ->
                     while (cursor.moveToNext()) rows.put(cursorToJsonObject(cursor))
                 }
                 db.rawQuery(
@@ -12835,7 +12821,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        LEFT JOIN products p ON im.product_id = p.id
                        WHERE im.is_deleted = 0 AND im.station_id = ?
                        GROUP BY date(im.created_at)
-                       ORDER BY day ASC""",
+                       ORDER BY day ASC LIMIT 90""",
                     arrayOf(stationScopeId.toString())
                 ).use { cursor -> while (cursor.moveToNext()) movementSeries.put(cursorToJsonObject(cursor)) }
             } else {
@@ -12873,20 +12859,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     else -> "p.product_name"
                 }
                 val sortDirection = if (data.optString("sort_dir", "asc").equals("desc", ignoreCase = true)) "DESC" else "ASC"
-                categoryTotals.clear()
-                db.rawQuery(
-                    """SELECT COALESCE(c.category_name, 'أخرى') AS category_name,
-                              COALESCE(SUM(COALESCE(il.quantity_on_hand, p.quantity, 0) * COALESCE(il.average_cost, p.purchase_price, 0)), 0) AS total_value
-                       FROM products p
-                       LEFT JOIN product_categories c ON p.category_id = c.id
-                       $levelSource
-                       WHERE ${where.joinToString(" AND ")}
-                       GROUP BY COALESCE(c.category_name, 'أخرى')
-                       ORDER BY total_value DESC""",
-                    args.toTypedArray()
-                ).use { cursor ->
-                    while (cursor.moveToNext()) categoryTotals[cursor.getString(0).orEmpty().ifBlank { "أخرى" }] = cursor.getDouble(1)
-                }
                 val sql = """
                     SELECT p.id AS product_id, p.product_code, p.barcode, p.product_name, p.product_name_ar,
                            p.category_id, c.category_name, w.warehouse_name,
@@ -12902,10 +12874,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     $levelSource
                     WHERE ${where.joinToString(" AND ")}
                     ORDER BY $sortColumn $sortDirection, p.id ASC
+                    LIMIT ? OFFSET ?
                 """.trimIndent()
-                val rowsSql = if (returnAll) sql else "$sql LIMIT ? OFFSET ?"
-                val rowArgs = if (returnAll) args.toTypedArray() else (args + pageSize.toString() + offset.toString()).toTypedArray()
-                db.rawQuery(rowsSql, rowArgs).use { cursor ->
+                val pageArgs = args.toMutableList().apply { add(pageSize.toString()); add(offset.toString()) }
+                db.rawQuery(sql, pageArgs.toTypedArray()).use { cursor ->
                     while (cursor.moveToNext()) {
                         val item = cursorToJsonObject(cursor)
                         val itemStatus = item.optString("status", "active")
@@ -12949,15 +12921,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             val categories = JSONArray()
             categoryTotals.forEach { (name, value) -> categories.put(JSONObject().put("category_name", name).put("total_value", value)) }
-            val page = if (returnAll) 1 else (offset / pageSize) + 1
-            val totalPages = if (totalCount == 0) 0 else if (returnAll) 1 else (totalCount + pageSize - 1) / pageSize
+            val page = (offset / pageSize) + 1
+            val totalPages = if (totalCount == 0) 0 else (totalCount + pageSize - 1) / pageSize
             JSONObject().apply {
                 put("report_type", reportType)
                 put("rows", rows)
                 put("count", rows.length())
                 put("total_count", totalCount)
                 put("page", page)
-                put("page_size", if (returnAll) totalCount.coerceAtLeast(1) else pageSize)
+                put("page_size", pageSize)
                 put("total_pages", totalPages)
                 put("has_next", page < totalPages)
                 put("has_previous", page > 1)
@@ -25965,10 +25937,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = readableDatabase
-            val returnAll = params.optBoolean("return_all", false)
-            val requestedLimit = params.optInt("limit", 20)
-            val limit = if (returnAll) 0 else requestedLimit.coerceIn(1, 100)
-            val offset = if (returnAll) 0 else params.optInt("offset", 0).coerceAtLeast(0)
+            val limit = params.optInt("limit", 20).coerceIn(1, 100)
+            val offset = params.optInt("offset", 0).coerceAtLeast(0)
             val where = StringBuilder("WHERE je.station_id = ? AND je.is_deleted = 0")
             val args = mutableListOf(stationScopeId.toString())
             params.optString("status", "").takeIf { it.isNotBlank() }?.let { where.append(" AND je.status = ?"); args.add(it) }
@@ -25991,8 +25961,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 LEFT JOIN users pu ON pu.id = je.posted_by
                 $where
                 ORDER BY date(je.entry_date) DESC, je.id DESC
-                """.trimIndent() + if (returnAll) "" else " LIMIT ? OFFSET ?",
-                if (returnAll) args.toTypedArray() else (args + listOf(limit.toString(), offset.toString())).toTypedArray()
+                LIMIT ? OFFSET ?
+                """.trimIndent(), (args + listOf(limit.toString(), offset.toString())).toTypedArray()
             ).use { cursorToJsonArray(it) }
             val stats = JSONObject().apply {
                 put("total", count)
@@ -26000,13 +25970,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("draft", db.rawQuery("SELECT COUNT(*) FROM journal_entries WHERE station_id = ? AND is_deleted = 0 AND status = 'draft'", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 })
                 put("total_value", db.rawQuery("SELECT COALESCE(SUM(total_debit), 0) FROM journal_entries WHERE station_id = ? AND is_deleted = 0", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 })
             }
-            JSONObject().apply {
-                put("entries", rows); put("total", count); put("stats", stats)
-                put("page", if (returnAll) 1 else (offset / limit) + 1)
-                put("page_size", if (returnAll) count.coerceAtLeast(1) else limit)
-                put("total_pages", if (count == 0) 0 else if (returnAll) 1 else (count + limit - 1) / limit)
-                put("has_next", false); put("has_previous", false)
-            }
+            JSONObject().apply { put("entries", rows); put("total", count); put("stats", stats) }
         } finally { dbLock.unlock() }
     }
 
@@ -26309,221 +26273,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 } finally { dbLock.unlock() }
             }
             else -> getLedgerEntries(params, stationScopeId)
-        }
-    }
-
-    /**
-     * REPORTS_RECONCILIATION_V1: cross-module integrity checks for the filtered period.
-     * This is a diagnostic/reporting read path only; it never mutates business data.
-     */
-    fun getReportsReconciliation(params: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val from = params.optString("from_date", params.optString("start_date", "")).trim()
-            val to = params.optString("to_date", params.optString("end_date", "")).trim()
-            if (from.isBlank() || to.isBlank()) throw IllegalArgumentException("يجب تحديد تاريخ البداية والنهاية للمطابقة")
-            if (from > to) throw IllegalArgumentException("تاريخ البداية يجب أن يسبق أو يساوي تاريخ النهاية")
-
-            fun args(vararg values: String) = values
-            fun queryOne(sql: String, bind: Array<String>): JSONObject =
-                db.rawQuery(sql, bind).use { cursor ->
-                    if (cursor.moveToFirst()) cursorToJsonObject(cursor) else JSONObject()
-                }
-            fun queryRows(sql: String, bind: Array<String>): JSONArray =
-                db.rawQuery(sql, bind).use { cursorToJsonArray(it) }
-
-            val sales = queryOne(
-                """
-                SELECT COUNT(*) AS sale_count,
-                       COALESCE(SUM(net_amount),0) AS sales_total,
-                       COALESCE(SUM(paid_amount),0) AS paid_total,
-                       COALESCE(SUM(remaining_amount),0) AS recorded_remaining,
-                       COALESCE(SUM(CASE WHEN is_credit = 1 OR payment_method = 'credit' THEN remaining_amount ELSE 0 END),0) AS credit_remaining
-                FROM sales_transactions
-                WHERE station_id = ? AND is_deleted = 0
-                  AND date(created_at) BETWEEN date(?) AND date(?)
-                  AND status NOT IN ('cancelled','refunded')
-                """.trimIndent(), args(stationScopeId.toString(), from, to)
-            )
-
-            val payments = queryOne(
-                """
-                SELECT COUNT(*) AS payment_count,
-                       COALESCE(SUM(CASE WHEN is_refund = 0 THEN amount_in_default ELSE 0 END),0) AS payments_total,
-                       COALESCE(SUM(CASE WHEN is_refund = 1 THEN amount_in_default ELSE 0 END),0) AS refunds_total
-                FROM payments p
-                INNER JOIN sales_transactions s ON s.id = p.sale_id
-                WHERE s.station_id = ? AND p.is_deleted = 0
-                  AND p.status = 'completed'
-                  AND date(p.created_at) BETWEEN date(?) AND date(?)
-                """.trimIndent(), args(stationScopeId.toString(), from, to)
-            )
-
-            val journals = queryOne(
-                """
-                SELECT COUNT(*) AS journal_count,
-                       COALESCE(SUM(total_debit),0) AS debit_total,
-                       COALESCE(SUM(total_credit),0) AS credit_total,
-                       COALESCE(SUM(CASE WHEN ABS(COALESCE(total_debit,0)-COALESCE(total_credit,0)) > 0.01 OR is_balanced = 0 THEN 1 ELSE 0 END),0) AS unbalanced_count
-                FROM journal_entries
-                WHERE station_id = ? AND is_deleted = 0
-                  AND date(entry_date) BETWEEN date(?) AND date(?)
-                  AND status <> 'cancelled'
-                """.trimIndent(), args(stationScopeId.toString(), from, to)
-            )
-
-            val inventory = queryOne(
-                """
-                SELECT COUNT(*) AS movement_count,
-                       COALESCE(SUM(CASE WHEN movement_type IN ('in','return') THEN quantity_change ELSE 0 END),0) AS quantity_in,
-                       COALESCE(SUM(CASE WHEN movement_type IN ('out','damage') THEN ABS(quantity_change) ELSE 0 END),0) AS quantity_out,
-                       COALESCE(SUM(CASE WHEN ABS((COALESCE(quantity_before,0)+COALESCE(quantity_change,0))-COALESCE(quantity_after,0)) > 0.001 THEN 1 ELSE 0 END),0) AS arithmetic_errors
-                FROM inventory_movements
-                WHERE station_id = ? AND is_deleted = 0
-                  AND status NOT IN ('cancelled','reversed')
-                  AND date(created_at) BETWEEN date(?) AND date(?)
-                """.trimIndent(), args(stationScopeId.toString(), from, to)
-            )
-
-            val fuel = queryOne(
-                """
-                SELECT COUNT(*) AS fuel_sale_count,
-                       COALESCE(SUM(fs.quantity),0) AS fuel_liters,
-                       COALESCE(SUM(fs.total_amount),0) AS fuel_sales_total,
-                       COALESCE(SUM(CASE WHEN fs.sale_id IS NULL THEN 1 ELSE 0 END),0) AS unlinked_fuel_sales
-                FROM fuel_sales fs
-                WHERE fs.station_id = ? AND fs.is_deleted = 0
-                  AND COALESCE(fs.status,'completed') NOT IN ('cancelled','refunded')
-                  AND date(COALESCE(fs.sale_date, fs.created_at)) BETWEEN date(?) AND date(?)
-                """.trimIndent(), args(stationScopeId.toString(), from, to)
-            )
-
-            val shifts = queryOne(
-                """
-                SELECT COUNT(*) AS shift_count,
-                       COALESCE(SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END),0) AS open_shift_count,
-                       COALESCE(SUM(CASE WHEN status <> 'open' THEN ABS(COALESCE(total_sales,0) - COALESCE((SELECT SUM(s.net_amount) FROM sales_transactions s WHERE s.shift_id = shifts.id AND s.is_deleted = 0 AND s.status NOT IN ('cancelled','refunded')),0)) ELSE 0 END),0) AS ignored_closed_shift_metric
-                FROM shifts
-                WHERE station_id = ? AND is_deleted = 0
-                  AND date(shift_date) BETWEEN date(?) AND date(?)
-                """.trimIndent(), args(stationScopeId.toString(), from, to)
-            )
-
-            val salePaymentExceptions = queryRows(
-                """
-                SELECT s.id AS sale_id, s.sale_code, s.invoice_number,
-                       s.net_amount AS sale_total, s.paid_amount AS recorded_paid,
-                       COALESCE(SUM(CASE WHEN p.is_refund = 0 THEN COALESCE(p.amount_in_default,p.amount) ELSE 0 END),0) AS linked_paid,
-                       ROUND(s.paid_amount - COALESCE(SUM(CASE WHEN p.is_refund = 0 THEN COALESCE(p.amount_in_default,p.amount) ELSE 0 END),0),2) AS variance,
-                       'SALE_PAYMENT_MISMATCH' AS exception_type
-                FROM sales_transactions s
-                LEFT JOIN payments p ON p.sale_id = s.id AND p.is_deleted = 0 AND p.status = 'completed'
-                WHERE s.station_id = ? AND s.is_deleted = 0
-                  AND s.status NOT IN ('cancelled','refunded')
-                  AND date(s.created_at) BETWEEN date(?) AND date(?)
-                GROUP BY s.id
-                HAVING ABS(variance) > 0.01
-                ORDER BY ABS(variance) DESC, s.id
-                """.trimIndent(), args(stationScopeId.toString(), from, to)
-            )
-
-            val creditExceptions = queryRows(
-                """
-                SELECT id AS sale_id, sale_code, invoice_number, net_amount, remaining_amount,
-                       'CREDIT_SALE_WITHOUT_CUSTOMER' AS exception_type
-                FROM sales_transactions
-                WHERE station_id = ? AND is_deleted = 0
-                  AND status NOT IN ('cancelled','refunded')
-                  AND date(created_at) BETWEEN date(?) AND date(?)
-                  AND (is_credit = 1 OR payment_method = 'credit')
-                  AND COALESCE(customer_party_id,0) = 0
-                ORDER BY id
-                """.trimIndent(), args(stationScopeId.toString(), from, to)
-            )
-
-            val journalExceptions = queryRows(
-                """
-                SELECT id AS journal_id, entry_number, entry_date, total_debit, total_credit,
-                       ROUND(COALESCE(total_debit,0)-COALESCE(total_credit,0),2) AS variance,
-                       'UNBALANCED_JOURNAL' AS exception_type
-                FROM journal_entries
-                WHERE station_id = ? AND is_deleted = 0
-                  AND status <> 'cancelled'
-                  AND date(entry_date) BETWEEN date(?) AND date(?)
-                  AND (ABS(COALESCE(total_debit,0)-COALESCE(total_credit,0)) > 0.01 OR is_balanced = 0)
-                ORDER BY ABS(COALESCE(total_debit,0)-COALESCE(total_credit,0)) DESC, id
-                """.trimIndent(), args(stationScopeId.toString(), from, to)
-            )
-
-            val inventoryExceptions = queryRows(
-                """
-                SELECT id AS movement_id, movement_code, product_id, quantity_before, quantity_change, quantity_after,
-                       ROUND((COALESCE(quantity_before,0)+COALESCE(quantity_change,0))-COALESCE(quantity_after,0),3) AS variance,
-                       'INVENTORY_MOVEMENT_ARITHMETIC_ERROR' AS exception_type
-                FROM inventory_movements
-                WHERE station_id = ? AND is_deleted = 0
-                  AND status NOT IN ('cancelled','reversed')
-                  AND date(created_at) BETWEEN date(?) AND date(?)
-                  AND ABS((COALESCE(quantity_before,0)+COALESCE(quantity_change,0))-COALESCE(quantity_after,0)) > 0.001
-                ORDER BY ABS((COALESCE(quantity_before,0)+COALESCE(quantity_change,0))-COALESCE(quantity_after,0)) DESC, id
-                """.trimIndent(), args(stationScopeId.toString(), from, to)
-            )
-
-            val shiftExceptions = queryRows(
-                """
-                SELECT sh.id AS shift_id, sh.shift_code, sh.shift_date,
-                       sh.total_sales AS recorded_total_sales,
-                       COALESCE(SUM(s.net_amount),0) AS calculated_total_sales,
-                       ROUND(COALESCE(sh.total_sales,0)-COALESCE(SUM(s.net_amount),0),2) AS variance,
-                       'SHIFT_SALES_MISMATCH' AS exception_type
-                FROM shifts sh
-                LEFT JOIN sales_transactions s ON s.shift_id = sh.id AND s.is_deleted = 0 AND s.status NOT IN ('cancelled','refunded')
-                WHERE sh.station_id = ? AND sh.is_deleted = 0
-                  AND date(sh.shift_date) BETWEEN date(?) AND date(?)
-                  AND sh.status <> 'open'
-                GROUP BY sh.id
-                HAVING ABS(variance) > 0.01
-                ORDER BY ABS(variance) DESC, sh.id
-                """.trimIndent(), args(stationScopeId.toString(), from, to)
-            )
-
-            val openShifts = queryRows(
-                """
-                SELECT id AS shift_id, shift_code, shift_date, status, cashier_id, manager_id,
-                       total_sales, opening_cash, closing_cash, cash_variance,
-                       'OPEN_SHIFT' AS exception_type
-                FROM shifts
-                WHERE station_id = ? AND is_deleted = 0 AND status = 'open'
-                  AND date(shift_date) BETWEEN date(?) AND date(?)
-                ORDER BY shift_date DESC, id DESC
-                """.trimIndent(), args(stationScopeId.toString(), from, to)
-            )
-
-            val exceptions = JSONArray()
-            fun append(rows: JSONArray) { for (i in 0 until rows.length()) rows.optJSONObject(i)?.let { exceptions.put(it) } }
-            append(salePaymentExceptions); append(creditExceptions); append(journalExceptions); append(inventoryExceptions); append(shiftExceptions); append(openShifts)
-
-            val salesTotal = sales.optDouble("sales_total", 0.0)
-            val linkedPayments = payments.optDouble("payments_total", 0.0)
-            val recordedPaid = sales.optDouble("paid_total", 0.0)
-            val result = JSONObject()
-                .put("success", true)
-                .put("from_date", from)
-                .put("to_date", to)
-                .put("station_id", stationScopeId)
-                .put("sales", sales)
-                .put("payments", payments)
-                .put("journals", journals)
-                .put("inventory", inventory)
-                .put("fuel", fuel)
-                .put("shifts", shifts)
-                .put("sales_payment_variance", kotlin.math.round((recordedPaid - linkedPayments) * 100.0) / 100.0)
-                .put("exception_count", exceptions.length())
-                .put("exceptions", exceptions)
-            result
-        } finally {
-            dbLock.unlock()
         }
     }
 
@@ -27065,21 +26814,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getFuelReportPage(data: JSONObject, stationScopeId: Int): JSONObject {
         require(stationScopeId > 0) { "معرف المحطة مطلوب لصفحة تقرير الوقود" }
-        val returnAll = data.optBoolean("return_all", false)
-        val requestedLimit = data.optInt("limit", 50)
-        val totalCount = getFuelReportTotalCount(data, stationScopeId)
-        val limit = if (returnAll) totalCount.coerceAtLeast(1) else requestedLimit.coerceIn(1, 1000)
-        val offset = if (returnAll) 0 else data.optInt("offset", 0).coerceAtLeast(0)
-        val query = JSONObject(data.toString()).apply { put("limit", if (returnAll) 0 else limit); put("offset", offset); put("return_all", returnAll) }
+        val limit = data.optInt("limit", 50).coerceIn(1, 1000)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val query = JSONObject(data.toString()).apply { put("limit", limit); put("offset", offset) }
         val rows = getFuelReport(query, stationScopeId)
-        val page = if (returnAll) 1 else (offset / limit) + 1
-        val totalPages = if (totalCount == 0) 0 else if (returnAll) 1 else (totalCount + limit - 1) / limit
+        val totalCount = getFuelReportTotalCount(query, stationScopeId)
+        val page = (offset / limit) + 1
+        val totalPages = if (totalCount == 0) 0 else (totalCount + limit - 1) / limit
         return JSONObject().apply {
             put("rows", rows)
             put("count", rows.length())
             put("total_count", totalCount)
             put("page", page)
-            put("page_size", if (returnAll) totalCount.coerceAtLeast(1) else limit)
+            put("page_size", limit)
             put("total_pages", totalPages)
             put("has_next", page < totalPages)
             put("has_previous", page > 1)
@@ -29572,5 +29319,36 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             db.endTransaction()
         }
     }
+
+    /** Canonical operational-origin resolver used by report drill-down. */
+    fun resolveReportOperationalOrigin(request: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val table = request.optString("source_table").trim().lowercase(Locale.ROOT)
+        val id = request.optLong("source_id", request.optLong("record_id", 0L))
+        require(table.isNotBlank()) { "source_table مطلوب" }
+        require(id > 0L) { "source_id مطلوب" }
+        val from = request.optString("from_date", request.optString("start_date", "")).trim()
+        val to = request.optString("to_date", request.optString("end_date", "")).trim()
+        val datePattern = Regex("\\d{4}-\\d{2}-\\d{2}")
+        if (from.isNotBlank()) require(datePattern.matches(from)) { "صيغة تاريخ البداية غير صالحة" }
+        if (to.isNotBlank()) require(datePattern.matches(to)) { "صيغة تاريخ النهاية غير صالحة" }
+        if (from.isNotBlank() && to.isNotBlank()) require(from <= to) { "نطاق التاريخ غير صالح" }
+        val (sql, args, screen, dateColumn) = when (table) {
+            "inventory_movements" -> Quad("SELECT id,movement_code reference_code,station_id,created_at FROM inventory_movements WHERE id=? AND station_id=? AND is_deleted=0", listOf(id.toString(),stationScopeId.toString()), "inventory-movements.html", "created_at")
+            "sales_transactions", "fuel_sales" -> Quad("SELECT st.id,st.sale_code reference_code,st.station_id,st.created_at FROM sales_transactions st WHERE st.id=? AND st.station_id=? AND st.is_deleted=0", listOf(id.toString(),stationScopeId.toString()), "fuel-sales.html", "created_at")
+            "tank_refills" -> Quad("SELECT id,COALESCE(refill_code,'') reference_code,station_id,created_at FROM tank_refills WHERE id=? AND station_id=? AND is_deleted=0", listOf(id.toString(),stationScopeId.toString()), "fuel-supplies.html", "created_at")
+            "journal_entries", "journal_entry_items" -> Quad("SELECT id,entry_number reference_code,station_id,entry_date FROM journal_entries WHERE id=? AND station_id=? AND is_deleted=0", listOf(id.toString(),stationScopeId.toString()), "journal-entries.html", "entry_date")
+            "stocktakes", "stocktake_details" -> Quad("SELECT s.id,CAST(s.id AS TEXT) reference_code,w.station_id,s.created_at FROM stocktakes s JOIN warehouses w ON w.id=s.warehouse_id WHERE s.id=? AND w.station_id=? AND s.archived=0", listOf(id.toString(),stationScopeId.toString()), "stocktake.html", "created_at")
+            else -> throw IllegalArgumentException("المصدر التشغيلي غير مدعوم: $table")
+        }
+        readableDatabase.rawQuery(sql,args.toTypedArray()).use { c ->
+            require(c.moveToFirst()) { "المستند الأصلي غير موجود ضمن نطاق المحطة" }
+            val actualId=c.getLong(c.getColumnIndexOrThrow("id")); val ref=c.getString(c.getColumnIndexOrThrow("reference_code")) ?: ""; val station=c.getInt(c.getColumnIndexOrThrow("station_id")); val date=c.getString(c.getColumnIndexOrThrow(dateColumn)) ?: ""
+            if(from.isNotBlank()) require(date.take(10) >= from) { "المستند خارج بداية الفترة المحددة" }
+            if(to.isNotBlank()) require(date.take(10) <= to) { "المستند خارج نهاية الفترة المحددة" }
+            return JSONObject().apply { put("verified",true);put("source_table",table);put("source_id",actualId);put("reference_code",ref);put("station_id",station);put("document_date",date);put("screen",screen) }
+        }
+    }
+    private data class Quad(val sql:String,val args:List<String>,val screen:String,val dateColumn:String)
 
 }

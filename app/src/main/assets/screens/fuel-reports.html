@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
   <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
   <link href="file:///android_asset/assets-local/css/all.min.css" rel="stylesheet">
-  <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
   <script src="file:///android_asset/assets-local/js/sweetalert2@11"></script>
   <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
   <script src="file:///android_asset/assets-local/js/chart.umd.min.js"></script>
@@ -1378,6 +1377,7 @@
     }
   </style>
   <meta name="reports-bridge-methods" content="getFuelReportPage,getFuelReport,getTanks,getPumps,getFuelTypes">
+<script src="file:///android_asset/assets-local/js/report-drilldown.js"></script>
 </head>
 <body>
 
@@ -2110,14 +2110,17 @@
       showLoading(true);
 
       try {
-        const params = ReportsRuntime.validateReportFilters({
+        const params = {
           from_date: from,
           to_date: to,
-          fuel_type_id: fuelType,
-          tank_id: tank,
+          start_date: from,
+          end_date: to,
+          fuel_type_id: fuelType || null,
+          tank_id: tank || null,
           report_type: reportType,
-          return_all: true
-        });
+          limit: pagination.pageSize,
+          offset: (pagination.page - 1) * pagination.pageSize
+        };
 
         const res = await apiCall('getFuelReportPage', params);
         const extracted = extractFuelReport(res);
@@ -2871,8 +2874,10 @@
       const status = t.status || 'completed';
       const statusLabel = getStatusLabel(status);
       const statusClass = getStatusClass(status);
+      window.__fuelDrilldown = function(){ openReportSourceDrilldown('fuel',{level:'document',record_id:Number(id),record_type:type},reportDrilldownFilters()); };
 
       content.innerHTML = `
+        <div style="display:flex;justify-content:flex-start;margin-bottom:8px"><button type="button" class="btn" onclick="window.__fuelDrilldown()">تتبع المصدر الأصلي</button></div>
         <div class="details-header">
           <h3 class="details-title">🧾 ${escapeHtml(code)}</h3>
           <button class="details-close" onclick="closeDetails(null)">
