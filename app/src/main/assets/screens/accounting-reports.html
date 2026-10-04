@@ -878,15 +878,11 @@ select.form-input option{background:var(--bg-secondary);color:var(--text-primary
   }
 }
 </style>
-  <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
-  <meta name="reports-bridge-methods" content="getBalanceSheet,getChartTrialBalance,getLedgerEntries,getProfitReport,getJournalEntries,getKPIDashboard,getEodReport,getOverdueReport,saveBalanceSheet">
-<style>.report-source-banner{margin:8px 12px;padding:8px 10px;border-radius:10px;font-size:.78rem;display:flex;gap:8px;align-items:center}.report-source-banner.is-verified{border:1px solid rgba(16,185,129,.35)}.report-source-banner.is-incomplete{border:1px solid rgba(245,158,11,.4)}.report-source-banner.is-unavailable{border:1px solid rgba(239,68,68,.3)}</style>
+    <meta name="reports-bridge-methods" content="getBalanceSheet,getChartTrialBalance,getLedgerEntries,getProfitReport,getJournalEntries,getKPIDashboard,getEodReport,getOverdueReport,saveBalanceSheet">
+<style>.report-source-banner{margin:8px 12px;padding:8px 10px;border-radius:10px;font-size:.78rem;display:flex;gap:8px;align-items:center;border:1px solid rgba(16,185,129,.25)}.report-source-banner.is-incomplete{border-color:rgba(245,158,11,.45)}.report-source-banner.is-unavailable{border-color:rgba(239,68,68,.35)}</style>
 </head>
 <body>
-  <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status" aria-live="polite">
-    <i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span>
-  </div>
-
+    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-database"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
 
 <div class="offline-banner" id="offlineBanner">
   <i class="fas fa-triangle-exclamation"></i>
@@ -1349,7 +1345,7 @@ function loadTrialBalance() {
 
 function loadLedgerEntries() {
     if (!hasMethod('getLedgerEntries')) return Promise.resolve(null);
-    var params = { from_date: state.period.from, to_date: state.period.to, limit: 500 };
+    var params = { from_date: state.period.from, to_date: state.period.to, return_all: true };
     return invoke('getLedgerEntries', [JSON.stringify(params)]).then(function (result) {
         state.ledgerEntries = flattenRows(result);
         return result;
@@ -1366,7 +1362,7 @@ function loadProfitReport() {
 
 function loadJournalEntries() {
     if (!hasMethod('getJournalEntries')) return Promise.resolve(null);
-    var params = { from_date: state.period.from, to_date: state.period.to, limit: 100 };
+    var params = { from_date: state.period.from, to_date: state.period.to, return_all: true };
     return invoke('getJournalEntries', [JSON.stringify(params)]).then(function (result) {
         var page = result && (result.data || result);
         state.journalEntries = Array.isArray(page) ? page : (page && Array.isArray(page.entries) ? page.entries : []);
@@ -1849,7 +1845,7 @@ function renderDataTable(rows) {
     });
 
     var header = '<thead><tr>' + keys.map(function (k) { return '<th>' + esc(k) + '</th>'; }).join('') + '</tr></thead>';
-    var body = '<tbody>' + rows.slice(0, 500).map(function (r) {
+    var body = '<tbody>' + rows.map(function (r) {
         return '<tr>' + keys.map(function (k) {
             var v = r[k];
             if (v === null || v === undefined) return '<td>—</td>';
@@ -1927,9 +1923,9 @@ function openReport(specKey) {
 var reportSpecs = {
     balanceSheet: { title: 'الميزانية العمومية', icon: 'fa-scale-balanced', method: 'getBalanceSheet', args: function () { return [state.period.to, 0]; } },
     trialBalance: { title: 'ميزان المراجعة', icon: 'fa-list-check', method: 'getChartTrialBalance', args: function () { return [state.period.from, state.period.to]; } },
-    ledger: { title: 'دفتر الأستاذ', icon: 'fa-book', method: 'getLedgerEntries', args: function () { return [JSON.stringify({ from_date: state.period.from, to_date: state.period.to, limit: 1000 })]; } },
+    ledger: { title: 'دفتر الأستاذ', icon: 'fa-book', method: 'getLedgerEntries', args: function () { return [JSON.stringify({ from_date: state.period.from, to_date: state.period.to, return_all: true })]; } },
     profit: { title: 'الأرباح والخسائر', icon: 'fa-chart-line', method: 'getProfitReport', args: function () { return [state.period.from, state.period.to]; } },
-    journal: { title: 'قيود اليومية', icon: 'fa-book-journal-whills', method: 'getJournalEntries', args: function () { return [JSON.stringify({ from_date: state.period.from, to_date: state.period.to, limit: 500 })]; } },
+    journal: { title: 'قيود اليومية', icon: 'fa-book-journal-whills', method: 'getJournalEntries', args: function () { return [JSON.stringify({ from_date: state.period.from, to_date: state.period.to, return_all: true })]; } },
     kpi: { title: 'مؤشرات الأداء', icon: 'fa-gauge-high', method: 'getKPIDashboard', args: function () { return [JSON.stringify({ start_date: state.period.from, end_date: state.period.to })]; } },
     eod: { title: 'الإقفال اليومي', icon: 'fa-calendar-check', method: 'getEodReport', args: function () { return []; } },
     overdue: { title: 'المدفوعات المتأخرة', icon: 'fa-clock', method: 'getOverdueReport', args: function () { return []; } }
@@ -1993,7 +1989,7 @@ function renderReportRows(rows, container) {
 
     // For balance sheet, do NOT hide side content; show all keys
     var header = '<thead><tr>' + keys.map(function (k) { return '<th>' + esc(k) + '</th>'; }).join('') + '</tr></thead>';
-    var body = '<tbody>' + rows.slice(0, 500).map(function (r) {
+    var body = '<tbody>' + rows.map(function (r) {
         return '<tr>' + keys.map(function (k) {
             var v = r[k];
             if (v === null || v === undefined) return '<td>—</td>';

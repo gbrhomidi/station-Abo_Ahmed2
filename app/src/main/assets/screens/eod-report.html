@@ -1502,15 +1502,12 @@
             }
         }
     </style>
-  <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
-  <meta name="reports-bridge-methods" content="getEodReport,getBalanceSheet,generateSalesTransactionReport,getDatabaseInfo,getBackupHistoryRecords">
-<style>.report-source-banner{margin:8px 12px;padding:8px 10px;border-radius:10px;font-size:.78rem;display:flex;gap:8px;align-items:center}.report-source-banner.is-verified{border:1px solid rgba(16,185,129,.35)}.report-source-banner.is-incomplete{border:1px solid rgba(245,158,11,.4)}.report-source-banner.is-unavailable{border:1px solid rgba(239,68,68,.3)}</style>
+    <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
+    <meta name="reports-bridge-methods" content="getEodReport,getBalanceSheet,generateSalesTransactionReport,getDatabaseInfo,getBackupHistoryRecords">
+<style>.report-source-banner{margin:8px 12px;padding:8px 10px;border-radius:10px;font-size:.78rem;display:flex;gap:8px;align-items:center;border:1px solid rgba(16,185,129,.25)}.report-source-banner.is-incomplete{border-color:rgba(245,158,11,.45)}.report-source-banner.is-unavailable{border-color:rgba(239,68,68,.35)}</style>
 </head>
 <body>
-  <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status" aria-live="polite">
-    <i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span>
-  </div>
-
+    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-database"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
 
     <!-- Pull-to-Refresh -->
     <div class="pull-indicator" id="pullIndicator">
@@ -2257,8 +2254,7 @@
                     JSON.stringify({
                         from_date: yDate,
                         to_date: yDate,
-                        limit: 1,
-                        offset: 0
+                        return_all: true
                     })
                 ]).then(function (res) {
                     var unwrapped = unwrapRows(res);
@@ -3024,8 +3020,7 @@
                 JSON.stringify({
                     from_date: from,
                     to_date: to,
-                    limit: 5000,
-                    offset: 0
+                    return_all: true
                 })
             ]).then(function (res) {
                 var unwrapped = unwrapRows(res);
@@ -3125,7 +3120,7 @@
                         '<th style="width:13%;">الدفع</th>' +
                     '</tr></thead>' +
                     '<tbody>' +
-                        rows.slice(0, 200).map(function (s) {
+                        rows.map(function (s) {
                             return '' +
                                 '<tr>' +
                                     '<td>' + escapeHtml(s.invoice_number || s.sale_code || '—') + '</td>' +
@@ -3139,9 +3134,7 @@
                         }).join('') +
                     '</tbody>' +
                 '</table>' +
-                (rows.length > 200
-                    ? '<p style="text-align:center;padding:10px;color:var(--text-muted);font-size:0.7rem;">يُعرض أول 200 سجل من أصل ' + rows.length + '</p>'
-                    : '');
+                '';
         }
 
         function getPaymentMethodLabel(method) {

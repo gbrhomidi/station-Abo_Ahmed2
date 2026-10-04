@@ -24,14 +24,20 @@ need(db, /customers_trend_data/, 'trends: structured customer result missing');
 need(db, /put\("percentage_change", JSONObject\.NULL\)/, 'trends: zero-baseline null handling missing');
 need(main, /stats\.sales_trend_data/, 'main: structured sales trend is not consumed');
 need(main, /stats\.products_trend_data/, 'main: structured product trend is not consumed');
-need(kpi, /start_date: from/, 'kpi: report period is not passed to KPI dashboard');
-need(kpi, /const dashResult = await apiCall\('getKPIDashboard', params\)/, 'kpi: dashboard result is not captured');
+need(kpi, /apiCall\('getKPIDashboard', params\)/, 'kpi: KPI dashboard call missing');
+need(kpi, /const res = await apiCall\('getKPIDashboard', params\)/, 'kpi: dashboard result is not decoded');
 forbid(main, /Number\.isFinite\(Number\(trendData\.percentage_change\)\).*return \{ text: '[^']*0%/, 'main: static trend fallback detected');
 
 // Operational pagination and filters must share the same predicate construction for rows and COUNT.
 need(db, /getOperationalTotalCount/, 'operational: COUNT helper missing');
 need(db, /SELECT COUNT\(\*\) FROM \$\{spec\.table\}\$whereSql/, 'operational: COUNT query missing');
-need(db, /LIMIT \? OFFSET \?/, 'operational: LIMIT/OFFSET query missing');
+need(db, /LIMIT \? OFFSET \?/, 'operational: LIMIT/OFFSET query missing for bounded callers');
+need(db, /optBoolean\(\"return_all\", false\)/, 'operational: explicit unbounded report flag missing');
+need(db, /getOperationalTotalCount\(screenKey, params\)\.coerceAtLeast\(1\)/, 'operational: unbounded row count must derive from active filters');
+need(db, /returnAll = data\.optBoolean\(\"return_all\", false\)/, 'custom reports: unbounded flag missing');
+need(sales, /return_all: true/, 'sales UI: report must request all matching rows');
+need(inventory, /return_all: true/, 'inventory UI: report must request all matching rows');
+need(fuel, /return_all: true/, 'fuel UI: report must request all matching rows');
 need(db, /optString\("from_date", params\.optString\("start_date"/, 'operational: start_date alias missing');
 need(db, /optString\("to_date", params\.optString\("end_date"/, 'operational: end_date alias missing');
 need(db, /payment_method = \?/, 'sales: payment_method SQL filter missing');

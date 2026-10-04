@@ -9859,8 +9859,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getSalesLedgerPage(data: JSONObject, stationScopeId: Int): JSONObject {
         require(stationScopeId > 0) { "معرف المحطة مطلوب" }
-        val limit = data.optInt("limit", 100).coerceIn(1, 500)
-        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val returnAll = data.optBoolean("return_all", false)
+        val requestedLimit = data.optInt("limit", 100)
+        val limit = if (returnAll) 0 else requestedLimit.coerceIn(1, 500)
+        val offset = if (returnAll) 0 else data.optInt("offset", 0).coerceAtLeast(0)
         val kind = data.optString("sale_type", data.optString("type", "all")).trim().lowercase()
         require(kind in setOf("all","fuel","product")) { "نوع المبيعات غير صالح" }
         val where = mutableListOf("x.station_id=?", "x.is_deleted=0", "x.sale_status NOT IN ('cancelled')")
@@ -9906,12 +9908,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """.trimIndent()
         val from="($union) x"
         val total=readableDatabase.rawQuery("SELECT COUNT(*) FROM $from WHERE ${where.joinToString(" AND ")}",args.toTypedArray()).use{if(it.moveToFirst())it.getInt(0)else 0}
-        val pageArgs=(args+limit.toString()+offset.toString()).toTypedArray()
-        val rows=readableDatabase.rawQuery("""SELECT x.*, p.commercial_name AS customer_name
-                                              FROM $from LEFT JOIN parties p ON p.id=x.customer_party_id
-                                              WHERE ${where.joinToString(" AND ")}
-                                              ORDER BY x.sale_date DESC,x.sale_id DESC,COALESCE(x.sale_item_id,x.fuel_sale_id) DESC LIMIT ? OFFSET ?""",pageArgs).use{cursorToJsonArray(it)}
-        return module008Page(rows,total,limit,offset)
+        val rowsSql = """SELECT x.*, p.commercial_name AS customer_name
+                              FROM $from LEFT JOIN parties p ON p.id=x.customer_party_id
+                              WHERE ${where.joinToString(" AND ")}
+                              ORDER BY x.sale_date DESC,x.sale_id DESC,COALESCE(x.sale_item_id,x.fuel_sale_id) DESC"""
+        val rows = if (returnAll) {
+            readableDatabase.rawQuery(rowsSql, args.toTypedArray()).use { cursorToJsonArray(it) }
+        } else {
+            val pageArgs=(args+limit.toString()+offset.toString()).toTypedArray()
+            readableDatabase.rawQuery("$rowsSql LIMIT ? OFFSET ?",pageArgs).use{cursorToJsonArray(it)}
+        }
+        return if (returnAll) JSONObject().apply {
+            put("rows", rows); put("count", rows.length()); put("total_count", total); put("page", 1); put("page_size", total.coerceAtLeast(1)); put("total_pages", if (total == 0) 0 else 1); put("has_next", false); put("has_previous", false); put("source", "sales_transactions+fuel_sales+sale_items")
+        } else module008Page(rows,total,limit,offset)
     }
 
     fun getSalesTransactions(stationId: Int, limit: Int = 200, offset: Int = 0): JSONArray {
@@ -12075,14 +12084,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        ORDER BY $sortColumn $sortDirection, im.id DESC LIMIT ? OFFSET ?"""
             val pageArgs = args.toMutableList().apply { add(pageSize.toString()); add(offset.toString()) }
             val rows = db.rawQuery(sql, pageArgs.toTypedArray()).use { cursorToJsonArray(it) }
-            val page = (offset / pageSize) + 1
-            val totalPages = if (totalCount == 0) 0 else (totalCount + pageSize - 1) / pageSize
+            val page = if (returnAll) 1 else (offset / pageSize) + 1
+            val totalPages = if (totalCount == 0) 0 else if (returnAll) 1 else (totalCount + pageSize - 1) / pageSize
             JSONObject().apply {
                 put("rows", rows)
                 put("count", rows.length())
                 put("total_count", totalCount)
                 put("page", page)
-                put("page_size", pageSize)
+                put("page_size", if (returnAll) totalCount.coerceAtLeast(1) else pageSize)
                 put("total_pages", totalPages)
                 put("has_next", page < totalPages)
                 put("has_previous", page > 1)
@@ -12768,8 +12777,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             val categoryTotals = linkedMapOf<String, Double>()
             val movementSeries = JSONArray()
-            val pageSize = data.optInt("limit", 200).coerceIn(1, 1000)
-            val offset = data.optInt("offset", 0).coerceAtLeast(0)
+            val returnAll = data.optBoolean("return_all", false)
+            val requestedPageSize = data.optInt("limit", 200)
+            val pageSize = if (returnAll) 0 else requestedPageSize.coerceIn(1, 1000)
+            val offset = if (returnAll) 0 else data.optInt("offset", 0).coerceAtLeast(0)
             var totalCount = 0
             var aggregateLoaded = false
             var aggregateTotalQuantity = 0.0
@@ -12808,10 +12819,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     LEFT JOIN users u ON im.performed_by = u.id
                     WHERE ${where.joinToString(" AND ")}
                     ORDER BY datetime(im.created_at) DESC, im.id DESC
-                    LIMIT ? OFFSET ?
                 """.trimIndent()
-                val pageArgs = args.toMutableList().apply { add(pageSize.toString()); add(offset.toString()) }
-                db.rawQuery(sql, pageArgs.toTypedArray()).use { cursor ->
+                val movementRowsSql = if (returnAll) sql else "$sql LIMIT ? OFFSET ?"
+                val movementArgs = if (returnAll) args.toTypedArray() else (args + pageSize.toString() + offset.toString()).toTypedArray()
+                db.rawQuery(movementRowsSql, movementArgs).use { cursor ->
                     while (cursor.moveToNext()) rows.put(cursorToJsonObject(cursor))
                 }
                 db.rawQuery(
@@ -12874,10 +12885,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     $levelSource
                     WHERE ${where.joinToString(" AND ")}
                     ORDER BY $sortColumn $sortDirection, p.id ASC
-                    LIMIT ? OFFSET ?
                 """.trimIndent()
-                val pageArgs = args.toMutableList().apply { add(pageSize.toString()); add(offset.toString()) }
-                db.rawQuery(sql, pageArgs.toTypedArray()).use { cursor ->
+                val productRowsSql = if (returnAll) sql else "$sql LIMIT ? OFFSET ?"
+                val productArgs = if (returnAll) args.toTypedArray() else (args + pageSize.toString() + offset.toString()).toTypedArray()
+                db.rawQuery(productRowsSql, productArgs).use { cursor ->
                     while (cursor.moveToNext()) {
                         val item = cursorToJsonObject(cursor)
                         val itemStatus = item.optString("status", "active")
@@ -16555,6 +16566,54 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         // للحفاظ على التوافق القديم مؤقتاً
         stats.put("sales_trend", if (salesTrendObj.isNull("percentage_change")) "غير متاح" else if (salesTrendObj.getDouble("percentage_change") > 0) "+${salesTrendObj.getDouble("percentage_change")}%" else "${salesTrendObj.getDouble("percentage_change")}%")
 
+        // 13-b. تفاصيل الخزانات والورديات المفتوحة — مصدرها SQLite نفسه،
+        // وتُستخدم مباشرة في لوحة التحكم دون بيانات وهمية أو حسابات JavaScript.
+        val tanks = JSONArray()
+        db.rawQuery(
+            """SELECT t.id, COALESCE(t.tank_name_ar,t.tank_name) AS tank_name,
+                      COALESCE(ft.fuel_name_ar,ft.fuel_name) AS fuel_type,
+                      t.current_quantity, t.capacity_liters, t.minimum_level
+               FROM tanks t
+               LEFT JOIN fuel_types ft ON ft.id=t.fuel_type_id
+               WHERE t.station_id=? AND t.is_deleted=0
+               ORDER BY t.tank_name""".trimIndent(),
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                tanks.put(JSONObject().apply {
+                    put("id", cursor.getInt(0))
+                    put("tank_name", cursor.getString(1) ?: "")
+                    put("fuel_type", cursor.getString(2) ?: "")
+                    put("current_quantity", cursor.getDouble(3))
+                    put("capacity", cursor.getDouble(4))
+                    put("minimum_level", cursor.getDouble(5))
+                })
+            }
+        }
+        stats.put("tanks", tanks)
+
+        val openShifts = JSONArray()
+        db.rawQuery(
+            """SELECT s.id, s.shift_code, s.total_sales, s.total_fuel_sales,
+                      COALESCE(e.full_name_ar,e.full_name,'') AS employee_name
+               FROM shifts s
+               LEFT JOIN employees e ON e.id=s.cashier_employee_id
+               WHERE s.station_id=? AND s.status='open' AND s.is_deleted=0
+               ORDER BY s.start_time DESC""".trimIndent(),
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                openShifts.put(JSONObject().apply {
+                    put("id", cursor.getInt(0))
+                    put("shift_code", cursor.getString(1) ?: "")
+                    put("current_sales", cursor.getDouble(2))
+                    put("current_fuel_sales", cursor.getDouble(3))
+                    put("employee_name", cursor.getString(4) ?: "")
+                })
+            }
+        }
+        stats.put("open_shifts", openShifts)
+
         // 14. اتجاه عدد المنتجات: لقطة حالية وسابقة عند نهايتي الفترتين المتكافئتين
         val currentProducts = getActiveProductsCountAtDate(stationId, currentEnd)
         val previousProducts = getActiveProductsCountAtDate(stationId, previousEnd)
@@ -16676,6 +16735,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 stats.put("occupancy_rate_source", "tanks.current_quantity/tanks.capacity_liters")
             }
         }
+
+        // مفاتيح توافق صريحة للواجهات الحالية؛ جميعها مشتقة من النتائج أعلاه.
+        stats.put("sales_today", stats.optDouble("total_sales", stats.optDouble("daily_sales", 0.0)))
+        stats.put("total_customer_debts", stats.optDouble("customer_debts", stats.optDouble("total_due", 0.0)))
+        stats.put("low_stock_count", stats.optInt("low_stock", 0))
+        stats.put("fuel_liters_today", stats.optDouble("total_liters", 0.0))
+        val trend = stats.optJSONObject("sales_trend_data")
+        if (trend != null) stats.put("sales_today_vs_yesterday", if (trend.isNull("percentage_change")) JSONObject.NULL else trend.optDouble("percentage_change"))
 
         return stats
     }
@@ -18826,9 +18893,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val to = params.optString("to_date", params.optString("end_date", "")).trim()
             if (from.isNotBlank()) { where += "date($dateColumn) >= date(?)"; args += from }
             if (to.isNotBlank()) { where += "date($dateColumn) <= date(?)"; args += to }
-            val limit = params.optInt("limit", 200).coerceIn(1, 1000)
-            val offset = params.optInt("offset", 0).coerceAtLeast(0)
             val whereSql = if (where.isEmpty()) "" else " WHERE " + where.joinToString(" AND ")
+            val returnAll = params.optBoolean("return_all", false)
+            val requestedLimit = params.optInt("limit", 200)
+            val limit = if (returnAll) {
+                getOperationalTotalCount(screenKey, params).coerceAtLeast(1)
+            } else {
+                requestedLimit.coerceIn(1, 1000)
+            }
+            val offset = if (returnAll) 0 else params.optInt("offset", 0).coerceAtLeast(0)
             val pageArgs = args.toMutableList().apply { add(limit.toString()); add(offset.toString()) }
             val allowedSortColumns = setOf("id", "created_at", "sale_code", "invoice_number", "net_amount", "quantity", "reading_date", "status", "vehicle_code", "plate_number", "driver_code", "full_name", "trip_date", "expense_date", "amount", "location_time", "distance_km", "current_odometer", "vehicle_id", "driver_id", "fuel_code", "fuel_name", "default_sale_price", "list_code", "list_name", "valid_from", "valid_to", "product_id", "old_price", "new_price", "change_date", "tank_code", "tank_name", "capacity_liters", "minimum_level", "maximum_level", "current_quantity", "pump_code", "pump_number", "meter_current", "nozzle_id", "refill_code", "delivered_quantity", "arrival_date", "fuel_type_id", "tank_id", "test_date", "refill_id", "result", "density", "calibration_code", "entity_type", "entity_id", "calibration_date", "next_calibration_date")
             val requestedSort = params.optString("sort_by", "id").trim()
@@ -18967,14 +19040,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getOperationalReport(screenKey: String, params: JSONObject = JSONObject()): JSONObject {
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
-        val pageSize = params.optInt("limit", 200).coerceIn(1, 1000)
-        val offset = params.optInt("offset", 0).coerceAtLeast(0)
+        val returnAll = params.optBoolean("return_all", false)
+        val filteredTotalCount = getOperationalTotalCount(screenKey, params)
+        val pageSize = if (returnAll) filteredTotalCount.coerceAtLeast(1) else params.optInt("limit", 200).coerceIn(1, 1000)
+        val offset = if (returnAll) 0 else params.optInt("offset", 0).coerceAtLeast(0)
         val pageParams = JSONObject(params.toString()).apply {
             put("limit", pageSize)
             put("offset", offset)
+            put("return_all", returnAll)
         }
         val rows = getOperationalRows(screenKey, pageParams)
-        val totalCount = getOperationalTotalCount(screenKey, params)
+        val totalCount = filteredTotalCount
         val totals = JSONObject()
         spec.numericColumns.forEach { totals.put(it, 0.0) }
 
@@ -18983,6 +19059,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val scanParams = JSONObject(params.toString()).apply {
             put("limit", 1000)
             put("offset", 0)
+            put("return_all", false)
         }
         var scanOffset = 0
         while (scanOffset < totalCount) {
@@ -19338,7 +19415,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("drivers", drivers)
                 put("total_count", totalCount)
                 put("page", (offset / limit) + 1)
-                put("page_size", limit)
+                put("page_size", if (returnAll) totalCount.coerceAtLeast(1) else limit)
                 put("total_pages", totalPages)
                 put("has_next", offset + rows.length() < totalCount)
                 put("has_previous", offset > 0)
@@ -25937,8 +26014,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = readableDatabase
-            val limit = params.optInt("limit", 20).coerceIn(1, 100)
-            val offset = params.optInt("offset", 0).coerceAtLeast(0)
+            val returnAll = params.optBoolean("return_all", false)
+            val requestedLimit = params.optInt("limit", 20)
+            val limit = if (returnAll) 0 else requestedLimit.coerceIn(1, 100)
+            val offset = if (returnAll) 0 else params.optInt("offset", 0).coerceAtLeast(0)
             val where = StringBuilder("WHERE je.station_id = ? AND je.is_deleted = 0")
             val args = mutableListOf(stationScopeId.toString())
             params.optString("status", "").takeIf { it.isNotBlank() }?.let { where.append(" AND je.status = ?"); args.add(it) }
@@ -25961,8 +26040,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 LEFT JOIN users pu ON pu.id = je.posted_by
                 $where
                 ORDER BY date(je.entry_date) DESC, je.id DESC
-                LIMIT ? OFFSET ?
-                """.trimIndent(), (args + listOf(limit.toString(), offset.toString())).toTypedArray()
+                """.trimIndent() + if (returnAll) "" else " LIMIT ? OFFSET ?",
+                if (returnAll) args.toTypedArray() else (args + listOf(limit.toString(), offset.toString())).toTypedArray()
             ).use { cursorToJsonArray(it) }
             val stats = JSONObject().apply {
                 put("total", count)
@@ -25970,7 +26049,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("draft", db.rawQuery("SELECT COUNT(*) FROM journal_entries WHERE station_id = ? AND is_deleted = 0 AND status = 'draft'", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 })
                 put("total_value", db.rawQuery("SELECT COALESCE(SUM(total_debit), 0) FROM journal_entries WHERE station_id = ? AND is_deleted = 0", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 })
             }
-            JSONObject().apply { put("entries", rows); put("total", count); put("stats", stats) }
+            JSONObject().apply { put("entries", rows); put("total", count); put("stats", stats); put("page", if (returnAll) 1 else (offset / limit) + 1); put("page_size", if (returnAll) count.coerceAtLeast(1) else limit); put("total_pages", if (count == 0) 0 else if (returnAll) 1 else (count + limit - 1) / limit); put("has_next", false); put("has_previous", false) }
         } finally { dbLock.unlock() }
     }
 
@@ -26781,8 +26860,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 args += stationId.toString(); args += refillFilter.second
             }
             if (branches.isEmpty()) return JSONArray()
-            val limit = data.optInt("limit", 0).coerceAtLeast(0)
-            val offset = data.optInt("offset", 0).coerceAtLeast(0)
+            val returnAll = data.optBoolean("return_all", false)
+            val limit = if (returnAll) 0 else data.optInt("limit", 0).coerceAtLeast(0)
+            val offset = if (returnAll) 0 else data.optInt("offset", 0).coerceAtLeast(0)
             val sql = branches.joinToString(" UNION ALL ") + " ORDER BY date DESC, id DESC" + if (limit > 0) " LIMIT ? OFFSET ?" else ""
             if (limit > 0) { args += limit.toString(); args += offset.toString() }
             readableDatabase.rawQuery(sql, args.toTypedArray()).use { cursorToJsonArray(it) }
@@ -26814,13 +26894,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getFuelReportPage(data: JSONObject, stationScopeId: Int): JSONObject {
         require(stationScopeId > 0) { "معرف المحطة مطلوب لصفحة تقرير الوقود" }
-        val limit = data.optInt("limit", 50).coerceIn(1, 1000)
-        val offset = data.optInt("offset", 0).coerceAtLeast(0)
-        val query = JSONObject(data.toString()).apply { put("limit", limit); put("offset", offset) }
+        val returnAll = data.optBoolean("return_all", false)
+        val requestedLimit = data.optInt("limit", 50)
+        val totalCount = getFuelReportTotalCount(data, stationScopeId)
+        val limit = if (returnAll) totalCount.coerceAtLeast(1) else requestedLimit.coerceIn(1, 1000)
+        val offset = if (returnAll) 0 else data.optInt("offset", 0).coerceAtLeast(0)
+        val query = JSONObject(data.toString()).apply { put("limit", if (returnAll) 0 else limit); put("offset", offset); put("return_all", returnAll) }
         val rows = getFuelReport(query, stationScopeId)
-        val totalCount = getFuelReportTotalCount(query, stationScopeId)
-        val page = (offset / limit) + 1
-        val totalPages = if (totalCount == 0) 0 else (totalCount + limit - 1) / limit
+        val page = if (returnAll) 1 else (offset / limit) + 1
+        val totalPages = if (totalCount == 0) 0 else if (returnAll) 1 else (totalCount + limit - 1) / limit
         return JSONObject().apply {
             put("rows", rows)
             put("count", rows.length())

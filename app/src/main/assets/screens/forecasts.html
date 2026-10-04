@@ -1273,15 +1273,12 @@
             }
         }
     </style>
-  <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
-  <meta name="reports-bridge-methods" content="getPredictionRecords,deletePredictionRecord">
-<style>.report-source-banner{margin:8px 12px;padding:8px 10px;border-radius:10px;font-size:.78rem;display:flex;gap:8px;align-items:center}.report-source-banner.is-verified{border:1px solid rgba(16,185,129,.35)}.report-source-banner.is-incomplete{border:1px solid rgba(245,158,11,.4)}.report-source-banner.is-unavailable{border:1px solid rgba(239,68,68,.3)}</style>
+    <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
+    <meta name="reports-bridge-methods" content="getPredictionRecords,deletePredictionRecord">
+<style>.report-source-banner{margin:8px 12px;padding:8px 10px;border-radius:10px;font-size:.78rem;display:flex;gap:8px;align-items:center;border:1px solid rgba(16,185,129,.25)}.report-source-banner.is-incomplete{border-color:rgba(245,158,11,.45)}.report-source-banner.is-unavailable{border-color:rgba(239,68,68,.35)}</style>
 </head>
 <body>
-  <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status" aria-live="polite">
-    <i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span>
-  </div>
-
+    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-database"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
     <div class="offline-banner" id="offlineBanner">
         <i class="fas fa-triangle-exclamation"></i>
         Android Bridge غير متاح — تعذّر الوصول إلى قاعدة البيانات
@@ -2382,7 +2379,7 @@
 
             var cols = ['id', 'prediction_type', 'entity_type', 'entity_id', 'prediction_date', 'predicted_value', 'actual_value', 'confidence_interval_low', 'confidence_interval_high', 'model_version'];
             var header = '<thead><tr><th>#</th>' + cols.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '<th>إجراءات</th></tr></thead>';
-            var body = '<tbody>' + state.filtered.slice(0, 200).map(function (r, i) {
+            var body = '<tbody>' + state.filtered.map(function (r, i) {
                 var id = idOf(r) || String(i);
                 return '<tr>' +
                     '<td>' + (i + 1) + '</td>' +
@@ -2506,7 +2503,7 @@
 
         /* ---------- Data Loading ---------- */
         function buildArgs() {
-            var params = { limit: 500 };
+            var params = { return_all: true };
             var s = $('searchInput');
             if (s && s.value.trim()) params.search = s.value.trim();
             return [JSON.stringify(params)];
@@ -2706,14 +2703,14 @@
                 from_date: ($('reportFrom') && $('reportFrom').value) || '',
                 to_date: ($('reportTo') && $('reportTo').value) || '',
                 search: ($('searchInput') && $('searchInput').value) || '',
-                limit: 1000
+                return_all: true
             };
             invoke(method, [JSON.stringify(payload)]).then(function (result) {
                 var rows = rowsFrom(result);
                 var res = $('reportResults');
                 if (res) {
                     res.innerHTML = rows.length
-                        ? '<div class="data-fields">' + rows.slice(0, 100).map(function (row) {
+                        ? '<div class="data-fields">' + rows.map(function (row) {
                             return '<div class="data-field"><span>' + esc(titleOf(row)) + '</span><strong>' + esc(subtitleOf(row) || JSON.stringify(row)) + '</strong></div>';
                         }).join('') + '</div>'
                         : '<div class="empty-state">لا توجد بيانات في النطاق المحدد.</div>';
@@ -2732,7 +2729,7 @@
             var res = $('reportResults');
             if (!res) return;
             res.innerHTML = rows.length
-                ? '<div class="data-fields">' + rows.slice(0, 100).map(function (row) {
+                ? '<div class="data-fields">' + rows.map(function (row) {
                     return '<div class="data-field"><span>' + esc(titleOf(row)) + '</span><strong>' + esc(subtitleOf(row) || JSON.stringify(row)) + '</strong></div>';
                 }).join('') + '</div>'
                 : '<div class="empty-state">لا توجد بيانات.</div>';

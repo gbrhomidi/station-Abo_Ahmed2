@@ -1664,7 +1664,7 @@
         }
     </style>
     <meta name="reports-bridge-methods" content="generateSalesTransactionReport,retrieveInvoice,getShifts,getProducts,getCustomers">
-  <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
+    <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
 </head>
 <body>
     <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
@@ -1704,7 +1704,7 @@
         </div>
         <div class="search-wrap">
             <i class="fas fa-search"></i>
-            <input type="text" class="search-input" id="searchInput" placeholder="ابحث برقم الفاتورة، المنتج، أو العميل..." oninput="handleSalesSearch(this.value)">
+            <input type="text" class="search-input" id="searchInput" placeholder="ابحث برقم الفاتورة، المنتج، أو العميل..." oninput="handleSearch(this.value)">
         </div>
         <div class="filter-chips" id="filterChips">
             <button class="filter-chip active" data-filter="all" type="button">الكل</button>
@@ -2106,18 +2106,12 @@
         rows: [],
         filteredRows: [],
         reportMeta: null,
-        pagination: { page: 1, pageSize: 25, totalCount: 0, totalPages: 0, sortBy: 'date_desc', search: '' },
+        pagination: { page: 1, pageSize: 25, totalCount: 0, totalPages: 0, sortBy: 'date_desc' },
         loadedAt: null,
         charts: { trend: null, payment: null, forecast: null }
     };
 
     const salesPagination = state.pagination;
-
-    function handleSalesSearch(value) {
-        salesPagination.search = String(value || '').trim();
-        salesPagination.page = 1;
-        generateReport();
-    }
 
     function getBridge() {
         return window.AndroidInterface || window.Android || null;
@@ -2453,8 +2447,7 @@
             to_date: to,
             start_date: from,
             end_date: to,
-            limit: salesPagination.pageSize,
-            offset: (salesPagination.page - 1) * salesPagination.pageSize,
+            return_all: true,
             sort_by: salesPagination.sortBy,
             search: salesPagination.search
         };
@@ -2558,7 +2551,7 @@
     }
 
     function handleSearch(term) {
-        state.searchTerm = String(term || '').toLowerCase().trim();
+        salesPagination.search = String(term || '').toLowerCase().trim();
         applyFilters();
     }
 
@@ -2608,7 +2601,7 @@
         });
     }
 
-    function goToSalesPage(page) { salesPagination.page = Math.max(1, Number(page) || 1); return generateReport(); }
+    function goToSalesPage(page) { state.pagination.page = Math.max(1, Math.min(Number(page) || 1, state.pagination.totalPages || 1)); generateReport(); }
 
     function renderPagination() {
         var target = $('salesPagination');

@@ -27,8 +27,7 @@ need(db, /getFuelReportTotalCount/, 'DatabaseHelper: fuel COUNT metadata missing
 need(bridge, /@JavascriptInterface\s+fun getFuelReportPage\(/, 'MainActivity: getFuelReportPage bridge missing');
 need(bridge, /@JavascriptInterface\s+fun getMeterReadingRecords\(/, 'MainActivity: meter-reading list bridge missing');
 need(bridge, /@JavascriptInterface\s+fun generateMeterReadingReport\(/, 'MainActivity: meter-reading report bridge missing');
-need(sales, /limit: salesPagination\.pageSize/, 'sales UI: pageSize request missing');
-need(sales, /offset: \(salesPagination\.page - 1\) \* salesPagination\.pageSize/, 'sales UI: offset request missing');
+need(sales, /return_all: true/, 'sales UI: unbounded filtered query request missing');
 need(sales, /total_count/, 'sales UI: total_count consumption missing');
 need(sales, /goToSalesPage/, 'sales UI: navigation controls missing');
 need(fuel, /generateMeterReadingReport/, 'fuel UI: real readings bridge missing');

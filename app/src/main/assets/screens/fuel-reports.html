@@ -1377,14 +1377,11 @@
     }
   </style>
   <meta name="reports-bridge-methods" content="getFuelReportPage,getFuelReport,getTanks,getPumps,getFuelTypes,getFuelTransactionDetails,getMeterReadingRecords,generateMeterReadingReport">
-  <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
-<style>.report-source-banner{margin:8px 12px;padding:8px 10px;border-radius:10px;font-size:.78rem;display:flex;gap:8px;align-items:center}.report-source-banner.is-verified{border:1px solid rgba(16,185,129,.35)}.report-source-banner.is-incomplete{border:1px solid rgba(245,158,11,.4)}.report-source-banner.is-unavailable{border:1px solid rgba(239,68,68,.3)}</style>
+    <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
+<style>.report-source-banner{margin:8px 12px;padding:8px 10px;border-radius:10px;font-size:.78rem;display:flex;gap:8px;align-items:center;border:1px solid rgba(16,185,129,.25)}.report-source-banner.is-incomplete{border-color:rgba(245,158,11,.45)}.report-source-banner.is-unavailable{border-color:rgba(239,68,68,.35)}</style>
 </head>
 <body>
-  <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status" aria-live="polite">
-    <i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span>
-  </div>
-
+    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-database"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
 
   <!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
@@ -1480,11 +1477,11 @@
 
   <!-- ===== Quick Presets ===== -->
   <div class="report-mode-actions" role="tablist" aria-label="نوع تقرير الوقود">
-    <button type="button" class="btn-filter" role="tab" onclick="switchTab('readings')">قراءات العدادات</button>
-    <button type="button" class="btn-filter" role="tab" onclick="switchTab('transactions')">المعاملات</button>
+    <button type="button" class="btn-filter" role="tab" onclick="loadMeterReadings()">قراءات العدادات</button>
   </div>
-  <div id="meterReadingsPanel" hidden>
-    <div class="table-wrapper"><table><thead><tr><th>reading_code</th><th>التاريخ</th><th>العداد</th><th>القراءة</th><th>نوع الوقود</th></tr></thead><tbody id="meterReadingsBody"></tbody></table></div>
+  <div id="meterReadingsPanel" hidden class="chart-card">
+    <div class="chart-title">قراءات العدادات الفعلية من SQLite</div>
+    <div class="table-scroll"><table><thead><tr><th>reading_code</th><th>reading_date</th><th>meter_id</th><th>reading_value</th></tr></thead><tbody id="meterReadingsBody"><tr><td colspan="4">لم يتم تحميل القراءات بعد</td></tr></tbody></table></div>
   </div>
   <div class="quick-presets" id="quickPresets"></div>
 
@@ -1883,10 +1880,6 @@
           return bridgeCall('getTanks');
         case 'getFuelTransactionDetails':
           return bridgeCall('getFuelTransactionDetails', [Number(p.id), String(p.type || '')]);
-        case 'generateMeterReadingReport':
-          return bridgeCall('generateMeterReadingReport', [JSON.stringify(p)]);
-        case 'getMeterReadingRecords':
-          return bridgeCall('getMeterReadingRecords', [JSON.stringify(p)]);
         default:
           return Promise.reject(new Error('الإجراء غير مدعوم: ' + action));
       }
@@ -2108,46 +2101,7 @@
     }
 
     // ================================================================
-    function goToFuelPage(page) { pagination.page = Math.max(1, Number(page) || 1); return generateReport(); }
-
-    function switchTab(tab) {
-      const panel = document.getElementById('meterReadingsPanel');
-      if (tab === 'readings') {
-        if (panel) panel.hidden = false;
-        return generateMeterReadingReport();
-      }
-      if (panel) panel.hidden = true;
-      return generateReport();
-    }
-
-    async function generateMeterReadingReport() {
-      const from = $('filterDateFrom').value;
-      const to = $('filterDateTo').value;
-      if (from && to && from > to) {
-        showToast('تاريخ البداية يجب أن يسبق النهاية', 'error');
-        return;
-      }
-      showLoading(true);
-      try {
-        const res = await apiCall('generateMeterReadingReport', {
-          from_date: from, to_date: to, start_date: from, end_date: to,
-          limit: 100, offset: 0,
-          fuel_type_id: $('filterFuelType').value || null,
-          tank_id: $('filterTank').value || null,
-          search: String(document.getElementById('fuelSearch').value || '')
-        });
-        const data = res && res.data ? res.data : res;
-        const rows = Array.isArray(data) ? data : (data && Array.isArray(data.rows) ? data.rows : []);
-        const body = $('meterReadingsBody');
-        if (body) body.innerHTML = rows.map(r => '<tr><td>'+escapeHtml(r.reading_code || r.code || '')+'</td><td>'+escapeHtml(r.reading_date || r.date || '')+'</td><td>'+escapeHtml(r.meter_id || r.pump_id || r.meter_name || '')+'</td><td>'+escapeHtml(r.reading_value ?? r.reading ?? '')+'</td><td>'+escapeHtml(r.fuel_name || r.fuel_type || '')+'</td></tr>').join('') || '<tr><td colspan="5">لا توجد قراءات مطابقة</td></tr>';
-        showToast(rows.length ? 'تم تحميل قراءات العدادات' : 'لا توجد قراءات مطابقة', rows.length ? 'success' : 'warning');
-      } catch (e) {
-        showToast(e.message || 'فشل تحميل قراءات العدادات', 'error');
-      } finally { showLoading(false); }
-    }
-
     // 6. توليد التقرير
-    
     // ================================================================
     async function generateReport() {
       const from = $('filterDateFrom').value;
@@ -2173,8 +2127,8 @@
           fuel_type_id: fuelType || null,
           tank_id: tank || null,
           report_type: reportType,
-          limit: pagination.pageSize,
-          offset: (pagination.page - 1) * pagination.pageSize
+          search: String(document.getElementById('fuelSearch').value || ''),
+          return_all: true
         };
 
         const res = await apiCall('getFuelReportPage', params);
@@ -2372,6 +2326,19 @@
 
       renderPagination();
     }
+
+    async function loadMeterReadings() {
+      const panel = document.getElementById('meterReadingsPanel');
+      const body = document.getElementById('meterReadingsBody');
+      if (panel) panel.hidden = false;
+      try {
+        const result = await apiCall('getMeterReadingRecords', { from_date: $('filterDateFrom').value, to_date: $('filterDateTo').value, fuel_type_id: $('filterFuelType').value || null, tank_id: $('filterTank').value || null, return_all: true });
+        const rows = Array.isArray(result) ? result : (result && Array.isArray(result.data) ? result.data : (result && Array.isArray(result.rows) ? result.rows : []));
+        body.innerHTML = rows.length ? rows.map(r => '<tr><td>'+escapeHtml(r.reading_code || r.code || '')+'</td><td>'+escapeHtml(r.reading_date || r.date || '')+'</td><td>'+escapeHtml(String(r.meter_id ?? r.pump_id ?? ''))+'</td><td>'+escapeHtml(String(r.reading_value ?? r.reading ?? ''))+'</td></tr>').join('') : '<tr><td colspan="4">لا توجد قراءات مطابقة</td></tr>';
+      } catch (e) { body.innerHTML = '<tr><td colspan="4">فشل تحميل قراءات العدادات</td></tr>'; showToast(e.message || 'فشل تحميل القراءات', 'error'); }
+    }
+
+    function goToFuelPage(page) { pagination.page = Math.max(1, Math.min(Number(page) || 1, pagination.totalPages || 1)); generateReport(); }
 
     function renderPagination() {
       const target = $('fuelPagination');
