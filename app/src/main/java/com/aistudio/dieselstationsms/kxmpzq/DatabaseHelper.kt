@@ -29912,8 +29912,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     /** Verifies the immutable source identity, station and report period before document opening. */
     fun resolveSourceTraceContract(requestJson: JSONObject, currentStationId: Int): JSONObject {
         val c = SourceTraceContract.requireContract(requestJson, currentStationId)
-        data class Origin(val id: Long, val reference: String, val station: Int, val date: String, val screen: String, val type: String)
-        val origin: Origin = when (c.sourceTable) {
+        val origin: TraceOrigin = when (c.sourceTable) {
             "inventory_movements" -> resolveTraceOrigin("SELECT id, COALESCE(reference_code,movement_code,''), station_id, COALESCE(created_at,''), movement_code FROM inventory_movements WHERE id=? AND station_id=? AND COALESCE(deleted_at,'')=''", c, "inventory-movements.html", "inventory_movement")
             "sales_transactions" -> resolveTraceOrigin("SELECT id, sale_code, station_id, COALESCE(created_at,''), sale_code FROM sales_transactions WHERE id=? AND station_id=? AND is_deleted=0", c, "sales-log.html", "sale")
             "fuel_sales" -> resolveTraceOrigin("SELECT fs.id, st.sale_code, st.station_id, COALESCE(st.created_at,''), st.sale_code FROM fuel_sales fs JOIN sales_transactions st ON st.id=fs.sale_id WHERE fs.id=? AND st.station_id=? AND st.is_deleted=0", c, "fuel-sales.html", "fuel_sale")
