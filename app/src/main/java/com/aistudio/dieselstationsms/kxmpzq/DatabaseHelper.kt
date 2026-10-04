@@ -29321,84 +29321,73 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
 
-    /** Canonical SQLite resolver. Returns only an origin verified for the supplied station/date scope. */
+    /**
+     * Resolves and verifies the complete report source before an operational document can open.
+     * This is deliberately separate from ordinary detail APIs so legacy CRUD calls are unaffected.
+     */
     fun resolveSourceTraceContract(requestJson: JSONObject, currentStationId: Int): JSONObject {
-        require(currentStationId > 0) { "معرف المحطة غير صالح" }
-        val request = SourceTraceContract.parse(requestJson)
-        require(request.stationId == currentStationId) { "المصدر خارج نطاق المحطة الحالية" }
-
-        data class Origin(val id: Long, val reference: String, val station: Int, val date: String, val screen: String, val type: String)
-        val origin: Origin = when (request.sourceTable) {
-            "inventory_movements" -> {
-                val sql = "SELECT id, reference_code, station_id, created_at FROM inventory_movements WHERE id=? AND station_id=? AND is_deleted=0"
-                readableDatabase.rawQuery(sql, arrayOf(request.sourceId.toString(), currentStationId.toString())).use { c ->
-                    require(c.moveToFirst()) { "حركة المخزون الأصلية غير موجودة" }
-                    Origin(c.getLong(0), c.getString(1).orEmpty(), c.getInt(2), c.getString(3).orEmpty(), "inventory-movements.html", "inventory_movement")
-                }
-            }
-            "sales_transactions" -> {
-                val sql = "SELECT id, sale_code, station_id, COALESCE(created_at,'') FROM sales_transactions WHERE id=? AND station_id=? AND is_deleted=0"
-                readableDatabase.rawQuery(sql, arrayOf(request.sourceId.toString(), currentStationId.toString())).use { c ->
-                    require(c.moveToFirst()) { "عملية البيع الأصلية غير موجودة" }
-                    Origin(c.getLong(0), c.getString(1).orEmpty(), c.getInt(2), c.getString(3).orEmpty(), "fuel-sales.html", "sale")
-                }
-            }
-            "fuel_sales" -> {
-                val sql = "SELECT fs.id, COALESCE(st.sale_code,''), st.station_id, COALESCE(fs.sale_date, fs.created_at,'') FROM fuel_sales fs JOIN sales_transactions st ON st.id=fs.sale_id WHERE fs.id=? AND st.station_id=? AND fs.is_deleted=0 AND st.is_deleted=0"
-                readableDatabase.rawQuery(sql, arrayOf(request.sourceId.toString(), currentStationId.toString())).use { c ->
-                    require(c.moveToFirst()) { "سجل بيع الوقود الأصلي غير موجود" }
-                    Origin(c.getLong(0), c.getString(1).orEmpty(), c.getInt(2), c.getString(3).orEmpty(), "fuel-sales.html", "fuel_sale")
-                }
-            }
-            "tank_refills" -> {
-                val sql = "SELECT id, refill_code, station_id, COALESCE(arrival_date,created_at,'') FROM tank_refills WHERE id=? AND station_id=? AND is_deleted=0"
-                readableDatabase.rawQuery(sql, arrayOf(request.sourceId.toString(), currentStationId.toString())).use { c ->
-                    require(c.moveToFirst()) { "توريد الوقود الأصلي غير موجود" }
-                    Origin(c.getLong(0), c.getString(1).orEmpty(), c.getInt(2), c.getString(3).orEmpty(), "fuel-supplies.html", "fuel_refill")
-                }
-            }
-            "journal_entries" -> {
-                val sql = "SELECT id, entry_number, station_id, entry_date FROM journal_entries WHERE id=? AND station_id=? AND is_deleted=0"
-                readableDatabase.rawQuery(sql, arrayOf(request.sourceId.toString(), currentStationId.toString())).use { c ->
-                    require(c.moveToFirst()) { "القيد المحاسبي الأصلي غير موجود" }
-                    Origin(c.getLong(0), c.getString(1).orEmpty(), c.getInt(2), c.getString(3).orEmpty(), "journal-entries.html", "journal_entry")
-                }
-            }
-            "journal_entry_items" -> {
-                val sql = "SELECT je.id, je.entry_number, je.station_id, je.entry_date FROM journal_entry_items ji JOIN journal_entries je ON je.id=ji.journal_entry_id WHERE ji.id=? AND je.station_id=? AND je.is_deleted=0"
-                readableDatabase.rawQuery(sql, arrayOf(request.sourceId.toString(), currentStationId.toString())).use { c ->
-                    require(c.moveToFirst()) { "بند القيد الأصلي غير موجود" }
-                    Origin(c.getLong(0), c.getString(1).orEmpty(), c.getInt(2), c.getString(3).orEmpty(), "journal-entries.html", "journal_entry")
-                }
-            }
-            "stocktakes" -> {
-                val sql = "SELECT s.id, CAST(s.id AS TEXT), w.station_id, COALESCE(s.end_date,s.start_date,s.created_at,'') FROM stocktakes s JOIN warehouses w ON w.id=s.warehouse_id WHERE s.id=? AND w.station_id=? AND s.archived=0"
-                readableDatabase.rawQuery(sql, arrayOf(request.sourceId.toString(), currentStationId.toString())).use { c ->
-                    require(c.moveToFirst()) { "جلسة الجرد الأصلية غير موجودة" }
-                    Origin(c.getLong(0), c.getString(1).orEmpty(), c.getInt(2), c.getString(3).orEmpty(), "stocktake.html", "stocktake")
-                }
-            }
-            "stocktake_details" -> {
-                val sql = "SELECT s.id, CAST(s.id AS TEXT), w.station_id, COALESCE(s.end_date,s.start_date,s.created_at,'') FROM stocktake_details d JOIN stocktakes s ON s.id=d.stocktake_id JOIN warehouses w ON w.id=s.warehouse_id WHERE d.id=? AND w.station_id=? AND d.archived=0 AND s.archived=0"
-                readableDatabase.rawQuery(sql, arrayOf(request.sourceId.toString(), currentStationId.toString())).use { c ->
-                    require(c.moveToFirst()) { "تفصيل الجرد الأصلي غير موجود" }
-                    Origin(c.getLong(0), c.getString(1).orEmpty(), c.getInt(2), c.getString(3).orEmpty(), "stocktake.html", "stocktake")
-                }
-            }
-            else -> throw IllegalArgumentException("source_table غير مدعوم: ${request.sourceTable}")
+        val contract = SourceTraceContract.requireContract(requestJson, currentStationId)
+        val origin = when (contract.sourceTable) {
+            "inventory_movements" -> resolveTraceOrigin(
+                "SELECT id, reference_code, station_id, COALESCE(created_at,'') FROM inventory_movements WHERE id=? AND station_id=? AND is_deleted=0",
+                contract, currentStationId, "inventory-movements.html", "inventory_movement")
+            "sales_transactions" -> resolveTraceOrigin(
+                "SELECT id, sale_code, station_id, COALESCE(created_at,'') FROM sales_transactions WHERE id=? AND station_id=? AND is_deleted=0",
+                contract, currentStationId, "fuel-sales.html", "sale")
+            "fuel_sales" -> resolveTraceOrigin(
+                "SELECT fs.id, COALESCE(st.sale_code,''), st.station_id, COALESCE(fs.sale_date,fs.created_at,'') FROM fuel_sales fs JOIN sales_transactions st ON st.id=fs.sale_id WHERE fs.id=? AND st.station_id=? AND fs.is_deleted=0 AND st.is_deleted=0",
+                contract, currentStationId, "fuel-sales.html", "fuel_sale")
+            "tank_refills" -> resolveTraceOrigin(
+                "SELECT id, refill_code, station_id, COALESCE(arrival_date,created_at,'') FROM tank_refills WHERE id=? AND station_id=? AND is_deleted=0",
+                contract, currentStationId, "fuel-supplies.html", "fuel_refill")
+            "journal_entries" -> resolveTraceOrigin(
+                "SELECT id, entry_number, station_id, COALESCE(entry_date,'') FROM journal_entries WHERE id=? AND station_id=? AND is_deleted=0",
+                contract, currentStationId, "journal-entries.html", "journal_entry")
+            "journal_entry_items" -> resolveTraceOrigin(
+                "SELECT je.id, je.entry_number, je.station_id, COALESCE(je.entry_date,'') FROM journal_entry_items ji JOIN journal_entries je ON je.id=ji.journal_entry_id WHERE ji.id=? AND je.station_id=? AND je.is_deleted=0",
+                contract, currentStationId, "journal-entries.html", "journal_entry")
+            "stocktakes" -> resolveTraceOrigin(
+                "SELECT s.id, CAST(s.id AS TEXT), w.station_id, COALESCE(s.end_date,s.start_date,s.created_at,'') FROM stocktakes s JOIN warehouses w ON w.id=s.warehouse_id WHERE s.id=? AND w.station_id=? AND s.archived=0",
+                contract, currentStationId, "stocktake.html", "stocktake")
+            "stocktake_details" -> resolveTraceOrigin(
+                "SELECT s.id, CAST(s.id AS TEXT), w.station_id, COALESCE(s.end_date,s.start_date,s.created_at,'') FROM stocktake_details d JOIN stocktakes s ON s.id=d.stocktake_id JOIN warehouses w ON w.id=s.warehouse_id WHERE d.id=? AND w.station_id=? AND d.archived=0 AND s.archived=0",
+                contract, currentStationId, "stocktake.html", "stocktake")
+            else -> throw IllegalArgumentException("source_table غير مدعوم: ${contract.sourceTable}")
         }
-        require(origin.station == currentStationId) { "المستند خارج نطاق المحطة الحالية" }
-        if (request.referenceCode != origin.reference) throw IllegalArgumentException("reference_code لا يطابق السجل الأصلي")
+
+        require(origin.station == currentStationId) { "المصدر خارج نطاق المحطة" }
+        require(origin.ref == contract.referenceCode) { "reference_code لا يطابق المصدر الأصلي" }
+        require(origin.type == contract.documentType) { "document_type لا يطابق المصدر الأصلي" }
         val day = origin.date.take(10)
-        if (request.fromDate.isNotBlank()) require(day >= request.fromDate) { "المستند خارج بداية الفترة" }
-        if (request.toDate.isNotBlank()) require(day <= request.toDate) { "المستند خارج نهاية الفترة" }
-        require(request.documentType == origin.type) { "document_type لا يطابق نوع المستند الأصلي" }
+        if (contract.dateScope.from.isNotEmpty()) require(day >= contract.dateScope.from) { "المصدر خارج بداية الفترة" }
+        if (contract.dateScope.to.isNotEmpty()) require(day <= contract.dateScope.to) { "المصدر خارج نهاية الفترة" }
 
         val originJson = JSONObject().apply {
-            put("table", request.sourceTable); put("id", origin.id); put("reference_code", origin.reference)
-            put("station_id", origin.station); put("document_date", origin.date); put("document_type", origin.type)
+            put("source_table", contract.sourceTable)
+            put("source_id", origin.id)
+            put("reference_code", origin.ref)
+            put("station_id", origin.station)
+            put("document_date", origin.date)
+            put("document_type", origin.type)
         }
-        return SourceTraceContract.verifiedJson(request, origin.date, origin.screen, originJson)
+        return SourceTraceContract.verified(contract, origin.date, origin.screen, originJson)
     }
+
+    private fun resolveTraceOrigin(
+        sql: String,
+        contract: SourceTraceContract.Contract,
+        stationId: Int,
+        screen: String,
+        documentType: String
+    ): TraceOrigin {
+        readableDatabase.rawQuery(sql, arrayOf(contract.sourceId.toString(), stationId.toString())).use { cursor ->
+            require(cursor.moveToFirst()) { "المصدر الأصلي غير موجود أو خارج نطاق المحطة" }
+            return TraceOrigin(
+                cursor.getLong(0), cursor.getString(1).orEmpty(), cursor.getInt(2), cursor.getString(3).orEmpty(), screen, documentType
+            )
+        }
+    }
+
+    private data class TraceOrigin(val id: Long, val ref: String, val station: Int, val date: String, val screen: String, val type: String)
 
 }

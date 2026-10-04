@@ -28,7 +28,7 @@ body>*:not(main),.top,.bottom,.tabs,.summary-cards,#products,#fuel,.report-filte
 .report-card{break-inside:avoid;border:1px solid #999!important;color:#000!important}
 .report-meta div,.report-card .variance{background:#fff!important}
 }
-</style></head><script>(function(){const q=new URLSearchParams(location.search);const id=Number(q.get('stocktake_id')||0);if(!id)return;const required=['source_table','source_id','reference_code','station_id','document_type'];if(required.some(k=>!q.get(k))||!(q.get('date_scope')||'')){q.delete('stocktake_id');history.replaceState(null,'',location.pathname+(q.toString()?'?'+q.toString():''));window.__sourceTraceContractRejected=true;}})();</script><body>
+</style><script src="source-trace-contract.js"></script></head><body>
 <header class="top"><div class="topin"><div class="tools"><button class="icon" id="theme" aria-label="الوضع الليلي"><i id="themeI" class="fas fa-moon"></i></button><button class="icon" id="home" aria-label="الرئيسية"><i class="fas fa-home"></i></button></div><h1><i class="fas fa-clipboard-check"></i> الجرد والتسوية</h1><p>جرد فعلي وتسوية موثقة للمنتجات والوقود عبر SQLite</p></div></header>
 <main class="wrap"><nav class="tabs" aria-label="أقسام الجرد">
 <button class="tab active" id="tp">📦 المنتجات</button>

@@ -878,8 +878,7 @@ select.form-input option{background:var(--bg-secondary);color:var(--text-primary
   }
 }
 </style>
-<script src="file:///android_asset/assets-local/js/report-drilldown.js"></script>
-</head>
+<script src="source-trace-contract.js"></script></head>
 <body>
 
 <div class="offline-banner" id="offlineBanner">
@@ -1874,8 +1873,7 @@ function openDetails(index) {
 
     var body = $('detailsBody');
     if (body) {
-        var traceButton = '<div style="margin-bottom:10px"><button type="button" class="btn" onclick="openReportSourceDrilldown(\'accounting\',{level:\'document\',record_id:Number(' + (row.journal_entry_id || row.id || 0) + ')},reportDrilldownFilters())">تتبع القيد الأصلي</button></div>';
-        body.innerHTML = traceButton +
+        body.innerHTML =
             '<div class="detail-grid">' + entries + '</div>' +
             '<details style="margin-top:14px">' +
                 '<summary style="cursor:pointer;color:var(--violet-primary);font-weight:800;padding:6px"><i class="fas fa-code"></i> JSON الخام</summary>' +

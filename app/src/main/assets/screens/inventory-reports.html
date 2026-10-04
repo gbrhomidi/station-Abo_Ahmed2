@@ -1450,8 +1450,7 @@
     }
   </style>
   <meta name="reports-bridge-methods" content="generateInventoryReport,getWarehouses,getCategories,getInventoryProductDetails">
-<script src="file:///android_asset/assets-local/js/report-drilldown.js"></script>
-</head>
+<script src="source-trace-contract.js"></script></head>
 <body>
 
   <!-- Pull-to-Refresh -->
@@ -2633,10 +2632,9 @@
       content.innerHTML = `
         <div class="details-header">
           <h3 class="details-title">📦 ${escapeHtml(p.product_name_ar || p.product_name || 'منتج')}</h3>
-          <div style="display:flex;gap:6px;align-items:center">
-            <button class="btn" type="button" onclick="openReportSourceDrilldown('inventory',{level:'groups',product_id:Number(p.product_id||p.id||0)},reportDrilldownFilters())">تتبع الحركات</button>
-            <button class="details-close" onclick="closeDetails(null)"><i class="fas fa-times"></i></button>
-          </div>
+          <button class="details-close" onclick="closeDetails(null)">
+            <i class="fas fa-times"></i>
+          </button>
         </div>
 
         <div class="details-profile">

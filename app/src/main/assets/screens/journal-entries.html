@@ -1578,8 +1578,8 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
 
     </style>
     <script src="file:///android_asset/assets-local/js/xlsx.full.min.js"></script>
-</head>
-<script>(function(){const q=new URLSearchParams(location.search);const id=Number(q.get('entry_id')||0);if(!id)return;const required=['source_table','source_id','reference_code','station_id','document_type'];if(required.some(k=>!q.get(k))||!(q.get('date_scope')||'')){q.delete('entry_id');history.replaceState(null,'',location.pathname+(q.toString()?'?'+q.toString():''));window.__sourceTraceContractRejected=true;}})();</script><body>
+<script src="source-trace-contract.js"></script></head>
+<body>
 
     <!-- Pull-to-Refresh Indicator -->
     <div class="pull-indicator" id="pullIndicator">

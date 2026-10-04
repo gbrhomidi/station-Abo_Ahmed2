@@ -1377,8 +1377,7 @@
     }
   </style>
   <meta name="reports-bridge-methods" content="getFuelReportPage,getFuelReport,getTanks,getPumps,getFuelTypes">
-<script src="file:///android_asset/assets-local/js/report-drilldown.js"></script>
-</head>
+<script src="source-trace-contract.js"></script></head>
 <body>
 
   <!-- Pull-to-Refresh -->
@@ -2874,10 +2873,8 @@
       const status = t.status || 'completed';
       const statusLabel = getStatusLabel(status);
       const statusClass = getStatusClass(status);
-      window.__fuelDrilldown = function(){ openReportSourceDrilldown('fuel',{level:'document',record_id:Number(id),record_type:type},reportDrilldownFilters()); };
 
       content.innerHTML = `
-        <div style="display:flex;justify-content:flex-start;margin-bottom:8px"><button type="button" class="btn" onclick="window.__fuelDrilldown()">تتبع المصدر الأصلي</button></div>
         <div class="details-header">
           <h3 class="details-title">🧾 ${escapeHtml(code)}</h3>
           <button class="details-close" onclick="closeDetails(null)">

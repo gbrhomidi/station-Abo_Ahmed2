@@ -686,8 +686,8 @@
         }
         @page { size: A4; margin: 0; }
     </style>
-</head>
-<script>(function(){const q=new URLSearchParams(location.search);const id=Number(q.get('refill_id')||0);if(!id)return;const required=['source_table','source_id','reference_code','station_id','document_type'];if(required.some(k=>!q.get(k))||!(q.get('date_scope')||'')){q.delete('refill_id');history.replaceState(null,'',location.pathname+(q.toString()?'?'+q.toString():''));window.__sourceTraceContractRejected=true;}})();</script><body>
+<script src="source-trace-contract.js"></script></head>
+<body>
 
 <div class="pull-indicator" id="pullIndicator"><i class="fas fa-arrow-down"></i><span>اسحب للتحديث</span></div>
 <div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> Android Bridge غير متاح</div>

@@ -1170,7 +1170,7 @@
   </style>
      <meta name="reports-bridge-methods" content="generateCRMReport,getCustomers">
     <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
-</head>
+<script src="source-trace-contract.js"></script></head>
  </head>
     <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
 
@@ -2421,7 +2421,7 @@
                 const status = finiteNumber(c.is_active, 1) === 1 ? 'active' : 'inactive';
                 const balance = finiteNumber(c.current_balance);
                 const totalDue = finiteNumber(c.total_due);
-                const invoiceRows = invoices.map(invoice => `
+                const invoiceRows = invoices.slice(0, 50).map(invoice => `
                     <tr><td>${escapeHtml(invoice.invoice_number || invoice.sale_code || '---')}</td><td>${escapeHtml(String(invoice.created_at || '').slice(0, 10) || '---')}</td><td class="amount">${formatCurrency(invoice.net_amount)}</td><td class="amount">${formatCurrency(invoice.remaining_amount)}</td><td>${escapeHtml(invoice.payment_status || '---')}</td></tr>
                 `).join('');
 	                const name = c.commercial_name || c.commercial_name_ar || 'عميل';
