@@ -20,6 +20,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
           db = Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt')
           text = db.read_text(encoding='utf-8')
 
@@ -27,23 +28,27 @@ jobs:
           employee_start = text.find(employee_anchor)
           if employee_start < 0:
               raise SystemExit('Expected reverseEmployeePaymentRecord anchor not found')
-          employee_window = text[employee_start:employee_start + 1800]
-          employee_old = 'db.beginTransaction()\n        try{\n            val row='
-          if employee_old not in employee_window:
-              raise SystemExit('Expected reverseEmployeePaymentRecord transaction anchor not found')
-          employee_window = employee_window.replace(employee_old, 'db.beginTransaction()\n        return try{\n            val row=', 1)
-          text = text[:employee_start] + employee_window + text[employee_start + 1800:]
+          employee_end = text.find('\n    fun ', employee_start + len(employee_anchor))
+          if employee_end < 0:
+              employee_end = len(text)
+          employee_block = text[employee_start:employee_end]
+          employee_block_new, employee_count = re.subn(r'db\.beginTransaction\(\)\s*try\s*\{\s*val row=', 'db.beginTransaction()\n        return try{\n            val row=', employee_block, count=1)
+          if employee_count != 1:
+              raise SystemExit('Expected reverseEmployeePaymentRecord transaction/return anchor not found')
+          text = text[:employee_start] + employee_block_new + text[employee_end:]
 
           finance_anchor = 'fun getFinanceIntegritySnapshot(stationScopeId: Int, fromDate: String?, toDate: String?): JSONObject {'
           finance_start = text.find(finance_anchor)
           if finance_start < 0:
               raise SystemExit('Expected getFinanceIntegritySnapshot anchor not found')
-          finance_window = text[finance_start:finance_start + 7000]
-          finance_old = 'dbLock.lock()\n        try {'
-          if finance_old not in finance_window:
-              raise SystemExit('Expected getFinanceIntegritySnapshot lock/try anchor not found')
-          finance_window = finance_window.replace(finance_old, 'dbLock.lock()\n        return try {', 1)
-          text = text[:finance_start] + finance_window + text[finance_start + 7000:]
+          finance_end = text.find('\n    fun ', finance_start + len(finance_anchor))
+          if finance_end < 0:
+              finance_end = len(text)
+          finance_block = text[finance_start:finance_end]
+          finance_block_new, finance_count = re.subn(r'dbLock\.lock\(\)\s*try\s*\{', 'dbLock.lock()\n        return try {', finance_block, count=1)
+          if finance_count != 1:
+              raise SystemExit('Expected getFinanceIntegritySnapshot lock/return anchor not found')
+          text = text[:finance_start] + finance_block_new + text[finance_end:]
 
           old = '    private fun resolveTraceOrigin(sql: String, contract: SourceTraceContract.Contract, screen: String, type: String): Any {'
           new = '    private fun resolveTraceOrigin(sql: String, contract: SourceTraceContract.Contract, screen: String, type: String): TraceOrigin {'
@@ -64,7 +69,7 @@ jobs:
           PY
           git diff --check
           grep -q 'return try{' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
-          grep -q 'dbLock.lock()' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
+          grep -q 'return try {' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
           grep -q 'resolveTraceOrigin(sql: String, contract: SourceTraceContract.Contract, screen: String, type: String): TraceOrigin' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
           grep -q 'private fun currentDate(): String' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
       - name: Commit source repairs and remove temporary workflow
