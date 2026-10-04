@@ -1,0 +1,67 @@
+name: One-time build repair
+on:
+  push:
+    branches:
+      - feature/ai-health-sqlite
+    paths:
+      - .github/workflows/one-time-build-repair.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/ai-health-sqlite
+      - name: Apply exact Kotlin build fixes
+        shell: python
+        run: |
+          from pathlib import Path
+          db = Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt')
+          s = db.read_text(encoding='utf-8')
+          replacements = [
+            ('        try{\n            val row=db.rawQuery("SELECT amount,cash_box_id,bank_account_id,journal_entry_id,status FROM employee_payments WHERE id=? AND station_id=? AND is_deleted=0",',
+             '        return try{\n            val row=db.rawQuery("SELECT amount,cash_box_id,bank_account_id,journal_entry_id,status FROM employee_payments WHERE id=? AND station_id=? AND is_deleted=0",'),
+            ('        dbLock.lock(); try {\n            val db=readableDatabase;',
+             '        dbLock.lock(); return try {\n            val db=readableDatabase;'),
+            ('        data class Origin(val id: Long, val reference: String, val station: Int, val date: String, val screen: String, val type: String)\n        val origin: Origin = when (c.sourceTable) {',
+             '        val origin: TraceOrigin = when (c.sourceTable) {'),
+            ('    private fun resolveTraceOrigin(sql: String, contract: SourceTraceContract.Contract, screen: String, type: String): Any {',
+             '    private fun resolveTraceOrigin(sql: String, contract: SourceTraceContract.Contract, screen: String, type: String): TraceOrigin {'),
+          ]
+          for old, new in replacements:
+            if old not in s:
+              raise SystemExit(f'Missing expected source pattern in {db}: {old[:80]!r}')
+            s = s.replace(old, new, 1)
+          db.write_text(s, encoding='utf-8')
+
+          main = Path('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt')
+          m = main.read_text(encoding='utf-8')
+          marker = 'class MainActivity : AppCompatActivity() {\n'
+          if 'private fun currentDate(): String' not in m:
+            if marker not in m:
+              raise SystemExit('MainActivity class marker not found')
+            m = m.replace(marker, marker + '\n    private fun currentDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())\n', 1)
+          main.write_text(m, encoding='utf-8')
+      - name: Verify source changes
+        run: |
+          git diff --check
+          grep -q 'private fun currentDate(): String' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+          grep -q 'val origin: TraceOrigin' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
+          grep -q 'resolveTraceOrigin(sql: String, contract: SourceTraceContract.Contract, screen: String, type: String): TraceOrigin' app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
+      - name: Commit source fixes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt
+          git commit -m 'fix(build): resolve Kotlin compilation failures' || exit 0
+          git push origin HEAD:feature/ai-health-sqlite
+      - name: Remove one-time repair workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/one-time-build-repair.yml
+          git commit -m 'chore(ci): remove one-time build repair workflow'
+          git push origin HEAD:feature/ai-health-sqlite
