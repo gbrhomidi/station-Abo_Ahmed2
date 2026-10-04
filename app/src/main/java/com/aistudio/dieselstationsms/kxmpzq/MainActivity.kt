@@ -5279,15 +5279,27 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         // Audit & System Logs
         // ============================================================
 
-        /** Central report-to-document gateway. Bare IDs are intentionally rejected by the contract. */
+        /** Current station scope exposed read-only to report context persistence. */
+        @JavascriptInterface
+        fun getCurrentStationIdForReports(): Int {
+            return try {
+                val activity = getActivity() ?: return 0
+                val db = getDbHelper() ?: return 0
+                requireCurrentStationId(db, activity.currentUserId)
+            } catch (e: Exception) {
+                DebugLogger.logException("ReportContextStation", e)
+                0
+            }
+        }
+
+        /** Single report-to-operational-document gateway. */
         @JavascriptInterface
         fun openReportOperationalDocument(jsonData: String = "{}"): String {
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
-                val verified = db.resolveSourceTraceContract(JSONObject(jsonData.ifBlank { "{}" }), stationId)
-                dataResponse(verified)
+                db.resolveSourceTraceContract(JSONObject(jsonData.ifBlank { "{}" }), stationId).toString()
             } catch (e: Exception) {
                 DebugLogger.logException("SourceTraceContract", e)
                 errorResponse(e.message ?: "تعذر اعتماد مصدر المستند")

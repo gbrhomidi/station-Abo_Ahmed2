@@ -1502,7 +1502,7 @@
             }
         }
     </style>
-</head>
+<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script></head>
 <body>
 
     <!-- Pull-to-Refresh -->
@@ -2250,7 +2250,8 @@
                     JSON.stringify({
                         from_date: yDate,
                         to_date: yDate,
-                        return_all: true
+                        limit: 0,
+                        offset: 0
                     })
                 ]).then(function (res) {
                     var unwrapped = unwrapRows(res);
@@ -3016,7 +3017,8 @@
                 JSON.stringify({
                     from_date: from,
                     to_date: to,
-                    return_all: true
+                    limit: 0,
+                    offset: 0
                 })
             ]).then(function (res) {
                 var unwrapped = unwrapRows(res);
@@ -3116,7 +3118,7 @@
                         '<th style="width:13%;">الدفع</th>' +
                     '</tr></thead>' +
                     '<tbody>' +
-                        rows.map(function (s) {
+                        rows.slice(0, 200).map(function (s) {
                             return '' +
                                 '<tr>' +
                                     '<td>' + escapeHtml(s.invoice_number || s.sale_code || '—') + '</td>' +

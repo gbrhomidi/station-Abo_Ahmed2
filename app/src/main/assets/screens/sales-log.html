@@ -1454,7 +1454,7 @@
 }
 </style>
 
-</head>
+<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script></head>
 <body>
 
     <!-- Pull-to-Refresh -->
@@ -2053,7 +2053,7 @@
             if (isInitialLoad) renderSkeleton();
             showLoading(true);
             try {
-                const salesParams = { limit: 500, offset: 0, ...params };
+                const salesParams = { limit: 0, offset: 0, ...params };
 
                 const [salesRes, customersRes, fuelRes, pumpsRes] = await Promise.all([
                     apiCall('getSalesTransactions', salesParams),
@@ -2476,7 +2476,7 @@
                 const reportRes = await apiCall('generateSalesTransactionReport', {
                     from_date: from,
                     to_date: to,
-                    limit: 5000,
+                    limit: 0,
                     offset: 0
                 });
 
@@ -3115,6 +3115,262 @@
     </script>
 
     <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
-\n<script id="sales-log-final-fix">\n(function(){\n  'use strict';\n\n  // ------------------------------------------------------------\n  // Helpers aligned with DatabaseHelper.getSalesLedgerPage()\n  // ------------------------------------------------------------\n  function finalReportParams(from, to){\n    const type=(document.getElementById('reportFilterType')?.value||'').trim();\n    const value=(document.getElementById('reportFilterValue')?.value||'').trim();\n    const p={from_date:from,to_date:to,limit:500,offset:0};\n    if(type==='customer' && value) p.customer_id=Number(value);\n    else if(type==='product' && value){ p.product_id=Number(value); p.sale_type='product'; }\n    else if(type==='fuel' && value){ p.product_id=Number(value); p.sale_type='fuel'; }\n    else if(type==='payment' && value) p.payment_method=value;\n    return p;\n  }\n\n  function reportFilterActive(){\n    const t=document.getElementById('reportFilterType')?.value||'';\n    const v=document.getElementById('reportFilterValue')?.value||'';\n    return !!(t&&v);\n  }\n\n  // ------------------------------------------------------------\n  // Load ALL report pages because DatabaseHelper caps each page at 500.\n  // ------------------------------------------------------------\n  async function loadCompleteReportRows(from,to){\n    const base=finalReportParams(from,to);\n    const pageSize=500;\n    const rows=[];\n    let offset=0;\n    let expectedTotal=null;\n    const maxPages=1000;\n\n    for(let page=0; page<maxPages; page++){\n      const params=Object.assign({},base,{limit:pageSize,offset});\n      const res=await apiCall('generateSalesTransactionReport',params);\n      const unwrapped=unwrapBridgeResponse(res);\n      if(!unwrapped || !unwrapped.success){\n        throw new Error(res?.message || res?.error || 'فشل جلب بيانات التقرير من SQLite');\n      }\n      const pageRows=Array.isArray(unwrapped.rows) ? unwrapped.rows : [];\n      if(expectedTotal===null && unwrapped.meta) {\n        expectedTotal=Number(unwrapped.meta.total ?? unwrapped.meta.total_count ?? unwrapped.meta.count);\n        if(!Number.isFinite(expectedTotal)) expectedTotal=null;\n      }\n      rows.push(...pageRows.map(normalizeSaleRow).filter(Boolean));\n      offset += pageRows.length;\n      if(pageRows.length===0) break;\n      if(expectedTotal!==null && rows.length>=expectedTotal) break;\n      if(pageRows.length<pageSize) break;\n    }\n    return rows;\n  }\n\n  // ------------------------------------------------------------\n  // Filter lists: customer list comes from getParties; products/fuel\n  // come from SQLite-backed sales/fuel data already loaded by the screen.\n  // ------------------------------------------------------------\n  window.onReportFilterTypeChange = async function(){\n    const type=document.getElementById('reportFilterType');\n    const value=document.getElementById('reportFilterValue');\n    if(!type || !value) return;\n    const selected=type.value;\n    value.disabled=true;\n    value.innerHTML='<option value="">— جارٍ تحميل القيم... —</option>';\n    if(!selected){ value.innerHTML='<option value="">— اختر نوع الفلترة أولاً —</option>'; return; }\n\n    try{\n      const options=[]; const seen=new Set();\n      if(selected==='customer'){\n        let customers=Array.isArray(allCustomers)?allCustomers:[];\n        if(customers.length===0){\n          const r=await apiCall('getParties',{type:'customer'});\n          customers=Array.isArray(r)?r:(Array.isArray(r?.data)?r.data:[]);\n        }\n        customers.forEach(c=>{\n          const id=c.party_id ?? c.id;\n          const name=c.commercial_name_ar || c.commercial_name || c.legal_name || c.name || '';\n          if(id && name && !seen.has(String(id))){ seen.add(String(id)); options.push({value:String(id),label:String(name)}); }\n        });\n      }else if(selected==='product'){\n        (Array.isArray(allProducts)?allProducts:[]).forEach(x=>{\n          const id=x.item_id ?? x.product_id ?? x.id;\n          const name=x.item_name_ar || x.item_name || x.product_name_ar || x.product_name || '';\n          if(id && name && !seen.has(String(id))){ seen.add(String(id)); options.push({value:String(id),label:String(name)}); }\n        });\n      }else if(selected==='fuel'){\n        (Array.isArray(allFuelTypes)?allFuelTypes:[]).forEach(x=>{\n          const id=x.fuel_type_id ?? x.id;\n          const name=x.fuel_name_ar || x.fuel_name || x.name || '';\n          if(id && name && !seen.has(String(id))){ seen.add(String(id)); options.push({value:String(id),label:String(name)}); }\n        });\n      }else if(selected==='payment'){\n        [\n          ['cash','نقدي'],['credit','آجل'],['bank_transfer','تحويل بنكي'],\n          ['credit_card','بطاقة ائتمان'],['cheque','شيك'],\n          ['mobile_money','محفظة إلكترونية'],['loyalty_points','نقاط ولاء']\n        ].forEach(([v,l])=>options.push({value:v,label:l}));\n      }\n      value.innerHTML='<option value="">— اختر قيمة —</option>'+options.map(o=>'<option value="'+escapeHtml(o.value)+'">'+escapeHtml(o.label)+'</option>').join('');\n      value.disabled=options.length===0;\n      if(!options.length) value.innerHTML='<option value="">— لا توجد قيم متاحة —</option>';\n    }catch(e){\n      value.innerHTML='<option value="">— تعذر تحميل القيم —</option>';\n      value.disabled=true;\n      showToast('❌ تعذر تحميل قيم الفلترة: '+(e.message||''),'error');\n    }\n  };\n\n  // ------------------------------------------------------------\n  // Complete report generation. Filtering is passed to SQLite, not only\n  // applied visually in JavaScript.\n  // ------------------------------------------------------------\n  window.generateReport = async function(){\n    const from=document.getElementById('reportFrom')?.value||'';\n    const to=document.getElementById('reportTo')?.value||'';\n    if(!from||!to){ showToast('❌ الرجاء تحديد الفترة','error'); return; }\n    if(from>to){ showToast('❌ تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية','error'); return; }\n\n    const btn=document.getElementById('btnGenerateReport');\n    if(btn) btn.disabled=true;\n    showLoading(true);\n    try{\n      const rows=await loadCompleteReportRows(from,to);\n      if(!rows.length){\n        lastReportData=null;\n        document.getElementById('reportResult').innerHTML='<div class="empty-state"><i class="fas fa-file-alt"></i><p>لا توجد مبيعات في الفترة المحددة'+(reportFilterActive()?' بعد تطبيق الفلترة':'')+'</p></div>';\n        showToast('لا توجد بيانات للتقرير','warning');\n        return;\n      }\n\n      const filterType=document.getElementById('reportFilterType')?.value||'';\n      const filterValue=document.getElementById('reportFilterValue')?.value||'';\n      lastReportData={rows,from,to,filterType,filterValue};\n\n      const total=rows.reduce((sum,s)=>sum+(Number(s.net_amount ?? s.amount ?? 0)||0),0);\n      const liters=rows.reduce((sum,s)=>sum+(s.sale_kind==='fuel'?(Number(s.liters ?? s.quantity ?? 0)||0):0),0);\n      const avg=rows.length?total/rows.length:0;\n      const paid=rows.filter(s=>String(s.payment_status||'').toLowerCase()==='paid').length;\n      const pending=rows.filter(s=>['pending','partial'].includes(String(s.payment_status||'').toLowerCase())).length;\n      const filterLabel=typeof buildFilterLabel==='function'?buildFilterLabel():'';\n\n      document.getElementById('reportResult').innerHTML=`\n        ${filterLabel?`<div style="margin:8px 0;padding:8px 12px;border-radius:10px;background:var(--bg-glass);border:var(--silver-border);font-size:.75rem;font-weight:700;color:var(--text-secondary);"><i class="fas fa-filter" style="color:var(--gold-primary);"></i> ${escapeHtml(filterLabel)}</div>`:''}\n        <div class="report-summary">\n          <div class="report-box"><strong>${rows.length}</strong><span>عدد المعاملات</span></div>\n          <div class="report-box"><strong>${formatCurrency(total)}</strong><span>إجمالي المبيعات</span></div>\n          <div class="report-box"><strong>${formatNumber(liters)}</strong><span>إجمالي اللترات</span></div>\n          <div class="report-box"><strong>${formatCurrency(avg)}</strong><span>متوسط الفاتورة</span></div>\n          <div class="report-box"><strong>${paid}</strong><span>مدفوع</span></div>\n          <div class="report-box"><strong>${pending}</strong><span>معلق/جزئي</span></div>\n        </div>\n        <table>\n          <thead><tr><th>الكود</th><th>العميل</th><th>المبلغ</th><th>اللترات</th><th>طريقة الدفع</th><th>الحالة</th><th>التاريخ</th></tr></thead>\n          <tbody>${rows.map(s=>`<tr>\n            <td>${escapeHtml(s.sale_code||'---')}</td>\n            <td>${escapeHtml(s.customer_name||'عميل عام')}</td>\n            <td>${formatCurrency(s.net_amount ?? s.amount ?? 0)}</td>\n            <td>${formatNumber(s.liters ?? (s.sale_kind==='fuel'?s.quantity:0) ?? 0)}</td>\n            <td>${getPaymentMethodLabel(s.payment_method||'cash')}</td>\n            <td>${getStatusLabel(s.payment_status||((s.payment_method||'cash')==='credit'?'pending':'paid'))}</td>\n            <td>${s.created_at?new Date(s.created_at).toLocaleDateString('en-GB'):'---'}</td>\n          </tr>`).join('')}</tbody>\n        </table>`;\n      showToast('✅ تم توليد التقرير من SQLite بنجاح','success');\n    }catch(e){\n      lastReportData=null;\n      showToast('❌ '+(e.message||'فشل توليد التقرير'),'error');\n    }finally{\n      if(btn) btn.disabled=false;\n      showLoading(false);\n    }\n  };\n\n  // ------------------------------------------------------------\n  // Real Android CSV export: send the exact filters understood by\n  // DatabaseHelper.exportOperationalCsv(). The Kotlin files remain untouched.\n  // ------------------------------------------------------------\n  window.exportReportCsv = function(){\n    if(!lastReportData || !Array.isArray(lastReportData.rows) || !lastReportData.rows.length){\n      showToast('❌ لا توجد بيانات للتصدير؛ قم بتوليد التقرير أولاً','error'); return;\n    }\n    const {from,to,filterType,filterValue}=lastReportData;\n    const params={from_date:from,to_date:to};\n    if(filterType==='customer'&&filterValue) params.customer_id=Number(filterValue);\n    else if(filterType==='product'&&filterValue){ params.product_id=Number(filterValue); params.item_kind='product'; }\n    else if(filterType==='fuel'&&filterValue){ params.fuel_type_id=Number(filterValue); params.item_kind='fuel'; }\n    else if(filterType==='payment'&&filterValue) params.payment_method=filterValue;\n\n    const stamp=new Date().toISOString().replace(/[:.]/g,'-');\n    const fileName=`sales-report_${from}_${to}_${stamp}.csv`;\n\n    if(window.AndroidInterface && typeof AndroidInterface.exportOperationalCsv==='function'){\n      try{\n        const immediate=AndroidInterface.exportOperationalCsv('sales_transactions',JSON.stringify(params));\n        const parsed=typeof immediate==='string'?JSON.parse(immediate):immediate;\n        if(parsed && parsed.success){\n          showToast('⏳ جارٍ إنشاء ملف CSV الحقيقي من قاعدة البيانات...','info');\n          return;\n        }\n      }catch(e){\n        console.error('Android CSV export error',e);\n      }\n    }\n\n    // Fallback only when the Android bridge is unavailable.\n    try{\n      const label=typeof buildFilterLabel==='function'?buildFilterLabel():'';\n      downloadCsvViaBlob(buildReportCsv(lastReportData.rows,from,to,label),fileName);\n      showToast('✅ تم تصدير CSV','success');\n    }catch(e){ showToast('❌ فشل تصدير CSV: '+(e.message||''),'error'); }\n  };\n\n  // Handle asynchronous result emitted by MainActivity.exportOperationalCsv.\n  window.onOperationalExportResult=function(result){\n    try{\n      const r=typeof result==='string'?JSON.parse(result):result;\n      if(r?.success){\n        showToast('✅ تم إنشاء ملف CSV فعلياً'+(r.path?'':'') ,'success');\n      }else{\n        showToast('❌ فشل إنشاء CSV: '+(r?.error||'خطأ غير معروف'),'error');\n      }\n    }catch(e){ showToast('❌ تعذر قراءة نتيجة تصدير CSV','error'); }\n  };\n\n  // Sidebar: keep every action functional and deterministic.\n  window.handleSidebarAction=function(action){\n    const sidebar=document.getElementById('sidebar');\n    if(sidebar) sidebar.classList.remove('open');\n    const toggle=document.getElementById('sidebarToggle');\n    if(toggle) toggle.classList.remove('hidden');\n    switch(action){\n      case 'export': return handleSidebarExportCsv();\n      case 'pdf':\n        if(typeof printSalesReport==='function') return Swal.fire({icon:'info',title:'إنشاء PDF',text:'سيتم فتح الطباعة. اختر «حفظ كـ PDF» من نافذة الطباعة.',confirmButtonText:'متابعة',cancelButtonText:'إلغاء',showCancelButton:true}).then(r=>{if(r.isConfirmed) printSalesReport();});\n        return;\n      case 'print': return typeof printSalesReport==='function'?printSalesReport():showToast('❌ وظيفة الطباعة غير متاحة','error');\n      case 'refresh': return loadSales().then(()=>showToast('🔄 تم تحديث سجل المبيعات','success')).catch(e=>showToast('❌ فشل التحديث: '+(e.message||''),'error'));\n      case 'home': window.location.href='file:///android_asset/main.html'; return;\n      default: showToast('❌ إجراء غير معروف','error');\n    }\n  };\n\n  // Rebuild the sidebar export so it also uses the real Android exporter.\n  window.handleSidebarExportCsv=function(){\n    if(lastReportData?.rows?.length) return exportReportCsv();\n    if(!Array.isArray(allSales)||!allSales.length){ showToast('❌ لا توجد بيانات للتصدير','error'); return; }\n    if(window.AndroidInterface && typeof AndroidInterface.exportOperationalCsv==='function'){\n      try{\n        const immediate=AndroidInterface.exportOperationalCsv('sales_transactions',JSON.stringify({}));\n        const parsed=typeof immediate==='string'?JSON.parse(immediate):immediate;\n        if(parsed?.success){ showToast('⏳ جارٍ إنشاء ملف CSV الحقيقي...','info'); return; }\n      }catch(e){ console.error(e); }\n    }\n    try{\n      const stamp=new Date().toISOString().replace(/[:.]/g,'-');\n      downloadCsvViaBlob(buildReportCsv(allSales,'—','—','كل السجلات الحالية'),`sales-log_${stamp}.csv`);\n      showToast('✅ تم تصدير السجلات الحالية','success');\n    }catch(e){ showToast('❌ فشل تصدير CSV: '+(e.message||''),'error'); }\n  };\n\n  // Force the two date fields to remain side-by-side after every modal open.\n  const forceDateLayout=()=>{\n    const row=document.querySelector('#reportModal .report-date-row');\n    if(row){ row.style.setProperty('display','grid','important'); row.style.setProperty('grid-template-columns','minmax(0,1fr) minmax(0,1fr)','important'); }\n  };\n  document.addEventListener('DOMContentLoaded',forceDateLayout);\n  const oldOpen=window.openReportModal;\n  window.openReportModal=function(){ const r=oldOpen?oldOpen.apply(this,arguments):null; forceDateLayout(); return r; };\n})();\n</script>\n
+
+<script id="sales-log-final-fix">
+(function(){
+  'use strict';
+
+  // ------------------------------------------------------------
+  // Helpers aligned with DatabaseHelper.getSalesLedgerPage()
+  // ------------------------------------------------------------
+  function finalReportParams(from, to){
+    const type=(document.getElementById('reportFilterType')?.value||'').trim();
+    const value=(document.getElementById('reportFilterValue')?.value||'').trim();
+    const p={from_date:from,to_date:to,limit:0,offset:0};
+    if(type==='customer' && value) p.customer_id=Number(value);
+    else if(type==='product' && value){ p.product_id=Number(value); p.sale_type='product'; }
+    else if(type==='fuel' && value){ p.product_id=Number(value); p.sale_type='fuel'; }
+    else if(type==='payment' && value) p.payment_method=value;
+    return p;
+  }
+
+  function reportFilterActive(){
+    const t=document.getElementById('reportFilterType')?.value||'';
+    const v=document.getElementById('reportFilterValue')?.value||'';
+    return !!(t&&v);
+  }
+
+  // ------------------------------------------------------------
+  // Load ALL report pages because DatabaseHelper caps each page at 500.
+  // ------------------------------------------------------------
+  async function loadCompleteReportRows(from,to){
+    const base=finalReportParams(from,to);
+    const params=Object.assign({},base,{limit:0,offset:0});
+    const res=await apiCall('generateSalesTransactionReport',params);
+    const unwrapped=unwrapBridgeResponse(res);
+    if(!unwrapped || !unwrapped.success) throw new Error(res?.message || res?.error || 'فشل جلب بيانات التقرير من SQLite');
+    const pageRows=Array.isArray(unwrapped.rows) ? unwrapped.rows : [];
+    return pageRows.map(normalizeSaleRow).filter(Boolean);
+    return rows;
+  }
+
+  // ------------------------------------------------------------
+  // Filter lists: customer list comes from getParties; products/fuel
+  // come from SQLite-backed sales/fuel data already loaded by the screen.
+  // ------------------------------------------------------------
+  window.onReportFilterTypeChange = async function(){
+    const type=document.getElementById('reportFilterType');
+    const value=document.getElementById('reportFilterValue');
+    if(!type || !value) return;
+    const selected=type.value;
+    value.disabled=true;
+    value.innerHTML='<option value="">— جارٍ تحميل القيم... —</option>';
+    if(!selected){ value.innerHTML='<option value="">— اختر نوع الفلترة أولاً —</option>'; return; }
+
+    try{
+      const options=[]; const seen=new Set();
+      if(selected==='customer'){
+        let customers=Array.isArray(allCustomers)?allCustomers:[];
+        if(customers.length===0){
+          const r=await apiCall('getParties',{type:'customer'});
+          customers=Array.isArray(r)?r:(Array.isArray(r?.data)?r.data:[]);
+        }
+        customers.forEach(c=>{
+          const id=c.party_id ?? c.id;
+          const name=c.commercial_name_ar || c.commercial_name || c.legal_name || c.name || '';
+          if(id && name && !seen.has(String(id))){ seen.add(String(id)); options.push({value:String(id),label:String(name)}); }
+        });
+      }else if(selected==='product'){
+        (Array.isArray(allProducts)?allProducts:[]).forEach(x=>{
+          const id=x.item_id ?? x.product_id ?? x.id;
+          const name=x.item_name_ar || x.item_name || x.product_name_ar || x.product_name || '';
+          if(id && name && !seen.has(String(id))){ seen.add(String(id)); options.push({value:String(id),label:String(name)}); }
+        });
+      }else if(selected==='fuel'){
+        (Array.isArray(allFuelTypes)?allFuelTypes:[]).forEach(x=>{
+          const id=x.fuel_type_id ?? x.id;
+          const name=x.fuel_name_ar || x.fuel_name || x.name || '';
+          if(id && name && !seen.has(String(id))){ seen.add(String(id)); options.push({value:String(id),label:String(name)}); }
+        });
+      }else if(selected==='payment'){
+        [
+          ['cash','نقدي'],['credit','آجل'],['bank_transfer','تحويل بنكي'],
+          ['credit_card','بطاقة ائتمان'],['cheque','شيك'],
+          ['mobile_money','محفظة إلكترونية'],['loyalty_points','نقاط ولاء']
+        ].forEach(([v,l])=>options.push({value:v,label:l}));
+      }
+      value.innerHTML='<option value="">— اختر قيمة —</option>'+options.map(o=>'<option value="'+escapeHtml(o.value)+'">'+escapeHtml(o.label)+'</option>').join('');
+      value.disabled=options.length===0;
+      if(!options.length) value.innerHTML='<option value="">— لا توجد قيم متاحة —</option>';
+    }catch(e){
+      value.innerHTML='<option value="">— تعذر تحميل القيم —</option>';
+      value.disabled=true;
+      showToast('❌ تعذر تحميل قيم الفلترة: '+(e.message||''),'error');
+    }
+  };
+
+  // ------------------------------------------------------------
+  // Complete report generation. Filtering is passed to SQLite, not only
+  // applied visually in JavaScript.
+  // ------------------------------------------------------------
+  window.generateReport = async function(){
+    const from=document.getElementById('reportFrom')?.value||'';
+    const to=document.getElementById('reportTo')?.value||'';
+    if(!from||!to){ showToast('❌ الرجاء تحديد الفترة','error'); return; }
+    if(from>to){ showToast('❌ تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية','error'); return; }
+
+    const btn=document.getElementById('btnGenerateReport');
+    if(btn) btn.disabled=true;
+    showLoading(true);
+    try{
+      const rows=await loadCompleteReportRows(from,to);
+      if(!rows.length){
+        lastReportData=null;
+        document.getElementById('reportResult').innerHTML='<div class="empty-state"><i class="fas fa-file-alt"></i><p>لا توجد مبيعات في الفترة المحددة'+(reportFilterActive()?' بعد تطبيق الفلترة':'')+'</p></div>';
+        showToast('لا توجد بيانات للتقرير','warning');
+        return;
+      }
+
+      const filterType=document.getElementById('reportFilterType')?.value||'';
+      const filterValue=document.getElementById('reportFilterValue')?.value||'';
+      lastReportData={rows,from,to,filterType,filterValue};
+
+      const total=rows.reduce((sum,s)=>sum+(Number(s.net_amount ?? s.amount ?? 0)||0),0);
+      const liters=rows.reduce((sum,s)=>sum+(s.sale_kind==='fuel'?(Number(s.liters ?? s.quantity ?? 0)||0):0),0);
+      const avg=rows.length?total/rows.length:0;
+      const paid=rows.filter(s=>String(s.payment_status||'').toLowerCase()==='paid').length;
+      const pending=rows.filter(s=>['pending','partial'].includes(String(s.payment_status||'').toLowerCase())).length;
+      const filterLabel=typeof buildFilterLabel==='function'?buildFilterLabel():'';
+
+      document.getElementById('reportResult').innerHTML=`
+        ${filterLabel?`<div style="margin:8px 0;padding:8px 12px;border-radius:10px;background:var(--bg-glass);border:var(--silver-border);font-size:.75rem;font-weight:700;color:var(--text-secondary);"><i class="fas fa-filter" style="color:var(--gold-primary);"></i> ${escapeHtml(filterLabel)}</div>`:''}
+        <div class="report-summary">
+          <div class="report-box"><strong>${rows.length}</strong><span>عدد المعاملات</span></div>
+          <div class="report-box"><strong>${formatCurrency(total)}</strong><span>إجمالي المبيعات</span></div>
+          <div class="report-box"><strong>${formatNumber(liters)}</strong><span>إجمالي اللترات</span></div>
+          <div class="report-box"><strong>${formatCurrency(avg)}</strong><span>متوسط الفاتورة</span></div>
+          <div class="report-box"><strong>${paid}</strong><span>مدفوع</span></div>
+          <div class="report-box"><strong>${pending}</strong><span>معلق/جزئي</span></div>
+        </div>
+        <table>
+          <thead><tr><th>الكود</th><th>العميل</th><th>المبلغ</th><th>اللترات</th><th>طريقة الدفع</th><th>الحالة</th><th>التاريخ</th></tr></thead>
+          <tbody>${rows.map(s=>`<tr>
+            <td>${escapeHtml(s.sale_code||'---')}</td>
+            <td>${escapeHtml(s.customer_name||'عميل عام')}</td>
+            <td>${formatCurrency(s.net_amount ?? s.amount ?? 0)}</td>
+            <td>${formatNumber(s.liters ?? (s.sale_kind==='fuel'?s.quantity:0) ?? 0)}</td>
+            <td>${getPaymentMethodLabel(s.payment_method||'cash')}</td>
+            <td>${getStatusLabel(s.payment_status||((s.payment_method||'cash')==='credit'?'pending':'paid'))}</td>
+            <td>${s.created_at?new Date(s.created_at).toLocaleDateString('en-GB'):'---'}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+      showToast('✅ تم توليد التقرير من SQLite بنجاح','success');
+    }catch(e){
+      lastReportData=null;
+      showToast('❌ '+(e.message||'فشل توليد التقرير'),'error');
+    }finally{
+      if(btn) btn.disabled=false;
+      showLoading(false);
+    }
+  };
+
+  // ------------------------------------------------------------
+  // Real Android CSV export: send the exact filters understood by
+  // DatabaseHelper.exportOperationalCsv(). The Kotlin files remain untouched.
+  // ------------------------------------------------------------
+  window.exportReportCsv = function(){
+    if(!lastReportData || !Array.isArray(lastReportData.rows) || !lastReportData.rows.length){
+      showToast('❌ لا توجد بيانات للتصدير؛ قم بتوليد التقرير أولاً','error'); return;
+    }
+    const {from,to,filterType,filterValue}=lastReportData;
+    const params={from_date:from,to_date:to};
+    if(filterType==='customer'&&filterValue) params.customer_id=Number(filterValue);
+    else if(filterType==='product'&&filterValue){ params.product_id=Number(filterValue); params.item_kind='product'; }
+    else if(filterType==='fuel'&&filterValue){ params.fuel_type_id=Number(filterValue); params.item_kind='fuel'; }
+    else if(filterType==='payment'&&filterValue) params.payment_method=filterValue;
+
+    const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+    const fileName=`sales-report_${from}_${to}_${stamp}.csv`;
+
+    if(window.AndroidInterface && typeof AndroidInterface.exportOperationalCsv==='function'){
+      try{
+        const immediate=AndroidInterface.exportOperationalCsv('sales_transactions',JSON.stringify(params));
+        const parsed=typeof immediate==='string'?JSON.parse(immediate):immediate;
+        if(parsed && parsed.success){
+          showToast('⏳ جارٍ إنشاء ملف CSV الحقيقي من قاعدة البيانات...','info');
+          return;
+        }
+      }catch(e){
+        console.error('Android CSV export error',e);
+      }
+    }
+
+    // Fallback only when the Android bridge is unavailable.
+    try{
+      const label=typeof buildFilterLabel==='function'?buildFilterLabel():'';
+      downloadCsvViaBlob(buildReportCsv(lastReportData.rows,from,to,label),fileName);
+      showToast('✅ تم تصدير CSV','success');
+    }catch(e){ showToast('❌ فشل تصدير CSV: '+(e.message||''),'error'); }
+  };
+
+  // Handle asynchronous result emitted by MainActivity.exportOperationalCsv.
+  window.onOperationalExportResult=function(result){
+    try{
+      const r=typeof result==='string'?JSON.parse(result):result;
+      if(r?.success){
+        showToast('✅ تم إنشاء ملف CSV فعلياً'+(r.path?'':'') ,'success');
+      }else{
+        showToast('❌ فشل إنشاء CSV: '+(r?.error||'خطأ غير معروف'),'error');
+      }
+    }catch(e){ showToast('❌ تعذر قراءة نتيجة تصدير CSV','error'); }
+  };
+
+  // Sidebar: keep every action functional and deterministic.
+  window.handleSidebarAction=function(action){
+    const sidebar=document.getElementById('sidebar');
+    if(sidebar) sidebar.classList.remove('open');
+    const toggle=document.getElementById('sidebarToggle');
+    if(toggle) toggle.classList.remove('hidden');
+    switch(action){
+      case 'export': return handleSidebarExportCsv();
+      case 'pdf':
+        if(typeof printSalesReport==='function') return Swal.fire({icon:'info',title:'إنشاء PDF',text:'سيتم فتح الطباعة. اختر «حفظ كـ PDF» من نافذة الطباعة.',confirmButtonText:'متابعة',cancelButtonText:'إلغاء',showCancelButton:true}).then(r=>{if(r.isConfirmed) printSalesReport();});
+        return;
+      case 'print': return typeof printSalesReport==='function'?printSalesReport():showToast('❌ وظيفة الطباعة غير متاحة','error');
+      case 'refresh': return loadSales().then(()=>showToast('🔄 تم تحديث سجل المبيعات','success')).catch(e=>showToast('❌ فشل التحديث: '+(e.message||''),'error'));
+      case 'home': window.location.href='file:///android_asset/main.html'; return;
+      default: showToast('❌ إجراء غير معروف','error');
+    }
+  };
+
+  // Rebuild the sidebar export so it also uses the real Android exporter.
+  window.handleSidebarExportCsv=function(){
+    if(lastReportData?.rows?.length) return exportReportCsv();
+    if(!Array.isArray(allSales)||!allSales.length){ showToast('❌ لا توجد بيانات للتصدير','error'); return; }
+    if(window.AndroidInterface && typeof AndroidInterface.exportOperationalCsv==='function'){
+      try{
+        const immediate=AndroidInterface.exportOperationalCsv('sales_transactions',JSON.stringify({}));
+        const parsed=typeof immediate==='string'?JSON.parse(immediate):immediate;
+        if(parsed?.success){ showToast('⏳ جارٍ إنشاء ملف CSV الحقيقي...','info'); return; }
+      }catch(e){ console.error(e); }
+    }
+    try{
+      const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+      downloadCsvViaBlob(buildReportCsv(allSales,'—','—','كل السجلات الحالية'),`sales-log_${stamp}.csv`);
+      showToast('✅ تم تصدير السجلات الحالية','success');
+    }catch(e){ showToast('❌ فشل تصدير CSV: '+(e.message||''),'error'); }
+  };
+
+  // Force the two date fields to remain side-by-side after every modal open.
+  const forceDateLayout=()=>{
+    const row=document.querySelector('#reportModal .report-date-row');
+    if(row){ row.style.setProperty('display','grid','important'); row.style.setProperty('grid-template-columns','minmax(0,1fr) minmax(0,1fr)','important'); }
+  };
+  document.addEventListener('DOMContentLoaded',forceDateLayout);
+  const oldOpen=window.openReportModal;
+  window.openReportModal=function(){ const r=oldOpen?oldOpen.apply(this,arguments):null; forceDateLayout(); return r; };
+})();
+</script>
+
 </body>
 </html>

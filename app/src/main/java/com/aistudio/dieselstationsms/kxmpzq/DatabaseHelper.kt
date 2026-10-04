@@ -9232,8 +9232,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         put("total_count", totalCount)
         put("page_size", limit)
         put("offset", offset)
-        put("page", if (totalCount == 0) 0 else offset / limit)
-        put("total_pages", if (totalCount == 0) 0 else (totalCount + limit - 1) / limit)
+        put("page", if (limit > 0 && totalCount > 0) (offset / limit) + 1 else if (totalCount > 0) 1 else 0)
+        put("total_pages", if (totalCount == 0) 0 else if (limit > 0) (totalCount + limit - 1) / limit else 1)
     }
 
     fun getSalesPage(data: JSONObject, stationScopeId: Int): JSONObject {
@@ -9859,7 +9859,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getSalesLedgerPage(data: JSONObject, stationScopeId: Int): JSONObject {
         require(stationScopeId > 0) { "معرف المحطة مطلوب" }
-        val limit = data.optInt("limit", 100).coerceIn(1, 500)
+        val requestedLimit = data.optInt("limit", 100)
+        val limit = if (requestedLimit > 0) requestedLimit.coerceIn(1, 5000) else 0
         val offset = data.optInt("offset", 0).coerceAtLeast(0)
         val kind = data.optString("sale_type", data.optString("type", "all")).trim().lowercase()
         require(kind in setOf("all","fuel","product")) { "نوع المبيعات غير صالح" }
@@ -9906,22 +9907,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """.trimIndent()
         val from="($union) x"
         val total=readableDatabase.rawQuery("SELECT COUNT(*) FROM $from WHERE ${where.joinToString(" AND ")}",args.toTypedArray()).use{if(it.moveToFirst())it.getInt(0)else 0}
-        val pageArgs=(args+limit.toString()+offset.toString()).toTypedArray()
-        val rows=readableDatabase.rawQuery("""SELECT x.*, p.commercial_name AS customer_name
+        val rowSql = """SELECT x.*, p.commercial_name AS customer_name
                                               FROM $from LEFT JOIN parties p ON p.id=x.customer_party_id
                                               WHERE ${where.joinToString(" AND ")}
-                                              ORDER BY x.sale_date DESC,x.sale_id DESC,COALESCE(x.sale_item_id,x.fuel_sale_id) DESC LIMIT ? OFFSET ?""",pageArgs).use{cursorToJsonArray(it)}
+                                              ORDER BY x.sale_date DESC,x.sale_id DESC,COALESCE(x.sale_item_id,x.fuel_sale_id) DESC"""
+        val pageArgs = args.toMutableList()
+        val boundedSql = if (limit > 0) rowSql + " LIMIT ? OFFSET ?" else rowSql
+        if (limit > 0) { pageArgs += limit.toString(); pageArgs += offset.toString() }
+        val rows=readableDatabase.rawQuery(boundedSql,pageArgs.toTypedArray()).use{cursorToJsonArray(it)}
         return module008Page(rows,total,limit,offset)
     }
 
     fun getSalesTransactions(stationId: Int, limit: Int = 200, offset: Int = 0): JSONArray {
         require(stationId > 0) { "معرف المحطة مطلوب لقراءة المبيعات" }
-        val safeLimit = limit.coerceIn(1, 1000)
+        val safeLimit = if (limit > 0) limit.coerceIn(1, 5000) else 0
         val safeOffset = offset.coerceAtLeast(0)
         val arr = JSONArray()
         val db = readableDatabase
-        db.rawQuery(
-            """SELECT s.id, s.sale_code, s.station_id, s.shift_id, s.customer_party_id,
+        val baseSql = """SELECT s.id, s.sale_code, s.station_id, s.shift_id, s.customer_party_id,
                       s.liters, s.price_per_liter, s.subtotal, s.discount_amount, s.tax_amount,
                       s.gross_amount, s.net_amount, s.payment_method, s.payment_status,
                       s.paid_amount, s.remaining_amount, s.is_credit, s.due_date,
@@ -9929,9 +9932,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                       s.delivery_time, s.order_type, p.commercial_name AS customer_name
                FROM sales_transactions s
                LEFT JOIN parties p ON s.customer_party_id = p.id
-               WHERE s.station_id=? AND s.is_deleted=0 ORDER BY s.id DESC LIMIT ? OFFSET ?""",
-            arrayOf(stationId.toString(), safeLimit.toString(), safeOffset.toString())
-        ).use { cursor ->
+               WHERE s.station_id=? AND s.is_deleted=0 ORDER BY s.id DESC"""
+        val sql = if (safeLimit > 0) baseSql + " LIMIT ? OFFSET ?" else baseSql
+        val sqlArgs = if (safeLimit > 0) arrayOf(stationId.toString(), safeLimit.toString(), safeOffset.toString()) else arrayOf(stationId.toString())
+        db.rawQuery(sql, sqlArgs).use { cursor ->
             while (cursor.moveToNext()) {
                 arr.put(saleCursorToJson(cursor).apply {
                     put("customer_name", cursor.getString(cursor.getColumnIndexOrThrow("customer_name")))
@@ -12075,8 +12079,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        ORDER BY $sortColumn $sortDirection, im.id DESC LIMIT ? OFFSET ?"""
             val pageArgs = args.toMutableList().apply { add(pageSize.toString()); add(offset.toString()) }
             val rows = db.rawQuery(sql, pageArgs.toTypedArray()).use { cursorToJsonArray(it) }
-            val page = (offset / pageSize) + 1
-            val totalPages = if (totalCount == 0) 0 else (totalCount + pageSize - 1) / pageSize
+            val page = if (pageSize > 0) (offset / pageSize) + 1 else 1
+            val totalPages = if (totalCount == 0) 0 else if (pageSize > 0) (totalCount + pageSize - 1) / pageSize else 1
             JSONObject().apply {
                 put("rows", rows)
                 put("count", rows.length())
@@ -12084,8 +12088,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("page", page)
                 put("page_size", pageSize)
                 put("total_pages", totalPages)
-                put("has_next", page < totalPages)
-                put("has_previous", page > 1)
+                put("has_next", pageSize > 0 && page < totalPages)
+                put("has_previous", pageSize > 0 && page > 1)
             }
         } finally {
             dbLock.unlock()
@@ -12768,7 +12772,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             val categoryTotals = linkedMapOf<String, Double>()
             val movementSeries = JSONArray()
-            val pageSize = data.optInt("limit", 200).coerceIn(1, 1000)
+            val requestedPageSize = data.optInt("limit", 200)
+            val pageSize = if (requestedPageSize > 0) requestedPageSize.coerceIn(1, 5000) else 0
             val offset = data.optInt("offset", 0).coerceAtLeast(0)
             var totalCount = 0
             var aggregateLoaded = false
@@ -12808,10 +12813,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     LEFT JOIN users u ON im.performed_by = u.id
                     WHERE ${where.joinToString(" AND ")}
                     ORDER BY datetime(im.created_at) DESC, im.id DESC
-                    LIMIT ? OFFSET ?
                 """.trimIndent()
-                val pageArgs = args.toMutableList().apply { add(pageSize.toString()); add(offset.toString()) }
-                db.rawQuery(sql, pageArgs.toTypedArray()).use { cursor ->
+                val pageArgs = args.toMutableList()
+                val boundedSql = if (pageSize > 0) sql + " LIMIT ? OFFSET ?" else sql
+                if (pageSize > 0) { pageArgs.add(pageSize.toString()); pageArgs.add(offset.toString()) }
+                db.rawQuery(boundedSql, pageArgs.toTypedArray()).use { cursor ->
                     while (cursor.moveToNext()) rows.put(cursorToJsonObject(cursor))
                 }
                 db.rawQuery(
@@ -12821,7 +12827,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        LEFT JOIN products p ON im.product_id = p.id
                        WHERE im.is_deleted = 0 AND im.station_id = ?
                        GROUP BY date(im.created_at)
-                       ORDER BY day ASC LIMIT 90""",
+                       ORDER BY day ASC""",
                     arrayOf(stationScopeId.toString())
                 ).use { cursor -> while (cursor.moveToNext()) movementSeries.put(cursorToJsonObject(cursor)) }
             } else {
@@ -12874,10 +12880,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     $levelSource
                     WHERE ${where.joinToString(" AND ")}
                     ORDER BY $sortColumn $sortDirection, p.id ASC
-                    LIMIT ? OFFSET ?
                 """.trimIndent()
-                val pageArgs = args.toMutableList().apply { add(pageSize.toString()); add(offset.toString()) }
-                db.rawQuery(sql, pageArgs.toTypedArray()).use { cursor ->
+                val pageArgs = args.toMutableList()
+                val boundedSql = if (pageSize > 0) sql + " LIMIT ? OFFSET ?" else sql
+                if (pageSize > 0) { pageArgs.add(pageSize.toString()); pageArgs.add(offset.toString()) }
+                db.rawQuery(boundedSql, pageArgs.toTypedArray()).use { cursor ->
                     while (cursor.moveToNext()) {
                         val item = cursorToJsonObject(cursor)
                         val itemStatus = item.optString("status", "active")
@@ -12921,8 +12928,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             val categories = JSONArray()
             categoryTotals.forEach { (name, value) -> categories.put(JSONObject().put("category_name", name).put("total_value", value)) }
-            val page = (offset / pageSize) + 1
-            val totalPages = if (totalCount == 0) 0 else (totalCount + pageSize - 1) / pageSize
+            val page = if (pageSize > 0) (offset / pageSize) + 1 else 1
+            val totalPages = if (totalCount == 0) 0 else if (pageSize > 0) (totalCount + pageSize - 1) / pageSize else 1
             JSONObject().apply {
                 put("report_type", reportType)
                 put("rows", rows)
@@ -12931,8 +12938,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("page", page)
                 put("page_size", pageSize)
                 put("total_pages", totalPages)
-                put("has_next", page < totalPages)
-                put("has_previous", page > 1)
+                put("has_next", pageSize > 0 && page < totalPages)
+                put("has_previous", pageSize > 0 && page > 1)
                 put("stats", stats)
                 put("categories", categories)
                 put("movement_series", movementSeries)
@@ -18826,15 +18833,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val to = params.optString("to_date", params.optString("end_date", "")).trim()
             if (from.isNotBlank()) { where += "date($dateColumn) >= date(?)"; args += from }
             if (to.isNotBlank()) { where += "date($dateColumn) <= date(?)"; args += to }
-            val limit = params.optInt("limit", 200).coerceIn(1, 1000)
+            val requestedLimit = params.optInt("limit", 200)
+            val limit = if (requestedLimit > 0) requestedLimit.coerceIn(1, 5000) else 0
             val offset = params.optInt("offset", 0).coerceAtLeast(0)
             val whereSql = if (where.isEmpty()) "" else " WHERE " + where.joinToString(" AND ")
-            val pageArgs = args.toMutableList().apply { add(limit.toString()); add(offset.toString()) }
+            val pageArgs = args.toMutableList()
             val allowedSortColumns = setOf("id", "created_at", "sale_code", "invoice_number", "net_amount", "quantity", "reading_date", "status", "vehicle_code", "plate_number", "driver_code", "full_name", "trip_date", "expense_date", "amount", "location_time", "distance_km", "current_odometer", "vehicle_id", "driver_id", "fuel_code", "fuel_name", "default_sale_price", "list_code", "list_name", "valid_from", "valid_to", "product_id", "old_price", "new_price", "change_date", "tank_code", "tank_name", "capacity_liters", "minimum_level", "maximum_level", "current_quantity", "pump_code", "pump_number", "meter_current", "nozzle_id", "refill_code", "delivered_quantity", "arrival_date", "fuel_type_id", "tank_id", "test_date", "refill_id", "result", "density", "calibration_code", "entity_type", "entity_id", "calibration_date", "next_calibration_date")
             val requestedSort = params.optString("sort_by", "id").trim()
             val sortColumn = if (requestedSort in allowedSortColumns && spec.columns.contains(requestedSort) || requestedSort == "id") requestedSort else "id"
             val sortDirection = if (params.optString("sort_dir", "desc").equals("asc", ignoreCase = true)) "ASC" else "DESC"
-            db.rawQuery("SELECT id, ${spec.columns.joinToString(", ")} FROM ${spec.table}$whereSql ORDER BY $sortColumn $sortDirection LIMIT ? OFFSET ?", pageArgs.toTypedArray()).use { cursor -> cursorToJsonArray(cursor) }
+            val sql = "SELECT id, ${spec.columns.joinToString(", ")} FROM ${spec.table}$whereSql ORDER BY $sortColumn $sortDirection"
+            val boundedSql = if (limit > 0) sql + " LIMIT ? OFFSET ?" else sql
+            if (limit > 0) { pageArgs.add(limit.toString()); pageArgs.add(offset.toString()) }
+            db.rawQuery(boundedSql, pageArgs.toTypedArray()).use { cursor -> cursorToJsonArray(cursor) }
         } finally { dbLock.unlock() }
     }
 
@@ -18967,7 +18978,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getOperationalReport(screenKey: String, params: JSONObject = JSONObject()): JSONObject {
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
-        val pageSize = params.optInt("limit", 200).coerceIn(1, 1000)
+        val requestedPageSize = params.optInt("limit", 200)
+        val pageSize = if (requestedPageSize > 0) requestedPageSize.coerceIn(1, 5000) else 0
         val offset = params.optInt("offset", 0).coerceAtLeast(0)
         val pageParams = JSONObject(params.toString()).apply {
             put("limit", pageSize)
@@ -18998,8 +19010,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             scanOffset += scanRows.length()
         }
 
-        val page = (offset / pageSize) + 1
-        val totalPages = if (totalCount == 0) 0 else ((totalCount + pageSize - 1) / pageSize)
+        val page = if (pageSize > 0) (offset / pageSize) + 1 else 1
+        val totalPages = if (totalCount == 0) 0 else if (pageSize > 0) ((totalCount + pageSize - 1) / pageSize) else 1
         return JSONObject().apply {
             put("rows", rows)
             put("count", rows.length())
@@ -19007,8 +19019,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             put("page", page)
             put("page_size", pageSize)
             put("total_pages", totalPages)
-            put("has_next", page < totalPages)
-            put("has_previous", page > 1)
+            put("has_next", pageSize > 0 && page < totalPages)
+            put("has_previous", pageSize > 0 && page > 1)
             put("totals", totals)
             put("source", spec.table)
         }
@@ -19218,7 +19230,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      */
     fun getVehicleTripWorkspace(params: JSONObject = JSONObject(), stationId: Int): JSONObject {
         require(stationId > 0) { "معرف المحطة غير صالح" }
-        val limit = params.optInt("limit", 20).coerceIn(1, 100)
+        val requestedLimit = params.optInt("limit", 20)
+            val limit = if (requestedLimit > 0) requestedLimit.coerceIn(1, 1000) else 0
         val offset = params.optInt("offset", 0).coerceAtLeast(0)
         val allowedSorts = mapOf(
             "trip_date" to "t.trip_date",
@@ -21807,8 +21820,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 FROM warehouses w LEFT JOIN inventory_levels il ON il.warehouse_id = w.id
                 WHERE w.station_id = ?
             """.trimIndent(), arrayOf(stationScopeId.toString())).use { if (it.moveToFirst()) cursorToJsonObject(it) else JSONObject() }
-            val page = (offset / pageSize) + 1
-            val totalPages = if (totalCount == 0) 0 else (totalCount + pageSize - 1) / pageSize
+            val page = if (pageSize > 0) (offset / pageSize) + 1 else 1
+            val totalPages = if (totalCount == 0) 0 else if (pageSize > 0) (totalCount + pageSize - 1) / pageSize else 1
             JSONObject().apply {
                 put("rows", rows); put("count", rows.length()); put("total_count", totalCount)
                 put("page", page); put("page_size", pageSize); put("total_pages", totalPages)
@@ -21879,8 +21892,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 LIMIT ? OFFSET ?
             """.trimIndent(), (args + pageSize.toString() + offset.toString()).toTypedArray()).use { cursorToJsonArray(it) }
             val stats = db.rawQuery("SELECT COUNT(*) AS total_count, COALESCE(SUM(dp.quantity),0) AS total_quantity, COALESCE(SUM(CASE WHEN dp.status='pending' THEN 1 ELSE 0 END),0) AS pending_count, COALESCE(SUM(CASE WHEN dp.status='approved' THEN 1 ELSE 0 END),0) AS approved_count, COALESCE(SUM(CASE WHEN dp.status='rejected' THEN 1 ELSE 0 END),0) AS rejected_count, COALESCE(SUM(dp.quantity * COALESCE(p.purchase_price,0)),0) AS total_value FROM damaged_products dp LEFT JOIN products p ON p.id=dp.product_id LEFT JOIN warehouses w ON w.id=dp.warehouse_id WHERE $whereSql", args.toTypedArray()).use { if (it.moveToFirst()) cursorToJsonObject(it) else JSONObject() }
-            val page = (offset / pageSize) + 1
-            val totalPages = if (totalCount == 0) 0 else (totalCount + pageSize - 1) / pageSize
+            val page = if (pageSize > 0) (offset / pageSize) + 1 else 1
+            val totalPages = if (totalCount == 0) 0 else if (pageSize > 0) (totalCount + pageSize - 1) / pageSize else 1
             JSONObject().apply { put("rows", rows); put("count", rows.length()); put("total_count", totalCount); put("page", page); put("page_size", pageSize); put("total_pages", totalPages); put("has_next", page < totalPages); put("has_previous", page > 1); put("stats", stats) }
         } finally { dbLock.unlock() }
     }
@@ -25937,7 +25950,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = readableDatabase
-            val limit = params.optInt("limit", 20).coerceIn(1, 100)
+            val requestedLimit = params.optInt("limit", 20)
+            val limit = if (requestedLimit > 0) requestedLimit.coerceIn(1, 1000) else 0
             val offset = params.optInt("offset", 0).coerceAtLeast(0)
             val where = StringBuilder("WHERE je.station_id = ? AND je.is_deleted = 0")
             val args = mutableListOf(stationScopeId.toString())
@@ -25950,8 +25964,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val query = "%$it%"; repeat(4) { args.add(query) }
             }
             val count = db.rawQuery("SELECT COUNT(*) FROM journal_entries je $where", args.toTypedArray()).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
-            val rows = db.rawQuery(
-                """
+            val rowSql = """
                 SELECT je.*, COALESCE(u.full_name_ar, u.full_name, u.username, 'نظام') AS created_by_name,
                        COALESCE(pu.full_name_ar, pu.full_name, pu.username, 'نظام') AS posted_by_name,
                        COALESCE(je.reference_code, je.reference_type, '') AS reference,
@@ -25961,9 +25974,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 LEFT JOIN users pu ON pu.id = je.posted_by
                 $where
                 ORDER BY date(je.entry_date) DESC, je.id DESC
-                LIMIT ? OFFSET ?
-                """.trimIndent(), (args + listOf(limit.toString(), offset.toString())).toTypedArray()
-            ).use { cursorToJsonArray(it) }
+                """.trimIndent()
+            val rowArgs = args.toMutableList()
+            val boundedSql = if (limit > 0) rowSql + " LIMIT ? OFFSET ?" else rowSql
+            if (limit > 0) { rowArgs += limit.toString(); rowArgs += offset.toString() }
+            val rows = db.rawQuery(boundedSql, rowArgs.toTypedArray()).use { cursorToJsonArray(it) }
             val stats = JSONObject().apply {
                 put("total", count)
                 put("posted", db.rawQuery("SELECT COUNT(*) FROM journal_entries WHERE station_id = ? AND is_deleted = 0 AND status = 'posted'", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 })
@@ -29321,73 +29336,44 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
 
-    /**
-     * Resolves and verifies the complete report source before an operational document can open.
-     * This is deliberately separate from ordinary detail APIs so legacy CRUD calls are unaffected.
-     */
+    /** Verifies the immutable source identity, station and report period before document opening. */
     fun resolveSourceTraceContract(requestJson: JSONObject, currentStationId: Int): JSONObject {
-        val contract = SourceTraceContract.requireContract(requestJson, currentStationId)
-        val origin = when (contract.sourceTable) {
-            "inventory_movements" -> resolveTraceOrigin(
-                "SELECT id, reference_code, station_id, COALESCE(created_at,'') FROM inventory_movements WHERE id=? AND station_id=? AND is_deleted=0",
-                contract, currentStationId, "inventory-movements.html", "inventory_movement")
-            "sales_transactions" -> resolveTraceOrigin(
-                "SELECT id, sale_code, station_id, COALESCE(created_at,'') FROM sales_transactions WHERE id=? AND station_id=? AND is_deleted=0",
-                contract, currentStationId, "fuel-sales.html", "sale")
-            "fuel_sales" -> resolveTraceOrigin(
-                "SELECT fs.id, COALESCE(st.sale_code,''), st.station_id, COALESCE(fs.sale_date,fs.created_at,'') FROM fuel_sales fs JOIN sales_transactions st ON st.id=fs.sale_id WHERE fs.id=? AND st.station_id=? AND fs.is_deleted=0 AND st.is_deleted=0",
-                contract, currentStationId, "fuel-sales.html", "fuel_sale")
-            "tank_refills" -> resolveTraceOrigin(
-                "SELECT id, refill_code, station_id, COALESCE(arrival_date,created_at,'') FROM tank_refills WHERE id=? AND station_id=? AND is_deleted=0",
-                contract, currentStationId, "fuel-supplies.html", "fuel_refill")
-            "journal_entries" -> resolveTraceOrigin(
-                "SELECT id, entry_number, station_id, COALESCE(entry_date,'') FROM journal_entries WHERE id=? AND station_id=? AND is_deleted=0",
-                contract, currentStationId, "journal-entries.html", "journal_entry")
-            "journal_entry_items" -> resolveTraceOrigin(
-                "SELECT je.id, je.entry_number, je.station_id, COALESCE(je.entry_date,'') FROM journal_entry_items ji JOIN journal_entries je ON je.id=ji.journal_entry_id WHERE ji.id=? AND je.station_id=? AND je.is_deleted=0",
-                contract, currentStationId, "journal-entries.html", "journal_entry")
-            "stocktakes" -> resolveTraceOrigin(
-                "SELECT s.id, CAST(s.id AS TEXT), w.station_id, COALESCE(s.end_date,s.start_date,s.created_at,'') FROM stocktakes s JOIN warehouses w ON w.id=s.warehouse_id WHERE s.id=? AND w.station_id=? AND s.archived=0",
-                contract, currentStationId, "stocktake.html", "stocktake")
-            "stocktake_details" -> resolveTraceOrigin(
-                "SELECT s.id, CAST(s.id AS TEXT), w.station_id, COALESCE(s.end_date,s.start_date,s.created_at,'') FROM stocktake_details d JOIN stocktakes s ON s.id=d.stocktake_id JOIN warehouses w ON w.id=s.warehouse_id WHERE d.id=? AND w.station_id=? AND d.archived=0 AND s.archived=0",
-                contract, currentStationId, "stocktake.html", "stocktake")
-            else -> throw IllegalArgumentException("source_table غير مدعوم: ${contract.sourceTable}")
+        val c = SourceTraceContract.requireContract(requestJson, currentStationId)
+        data class Origin(val id: Long, val reference: String, val station: Int, val date: String, val screen: String, val type: String)
+        val origin: Origin = when (c.sourceTable) {
+            "inventory_movements" -> resolveTraceOrigin("SELECT id, COALESCE(reference_code,movement_code,''), station_id, COALESCE(created_at,''), movement_code FROM inventory_movements WHERE id=? AND station_id=? AND COALESCE(deleted_at,'')=''", c, "inventory-movements.html", "inventory_movement")
+            "sales_transactions" -> resolveTraceOrigin("SELECT id, sale_code, station_id, COALESCE(created_at,''), sale_code FROM sales_transactions WHERE id=? AND station_id=? AND is_deleted=0", c, "sales-log.html", "sale")
+            "fuel_sales" -> resolveTraceOrigin("SELECT fs.id, st.sale_code, st.station_id, COALESCE(st.created_at,''), st.sale_code FROM fuel_sales fs JOIN sales_transactions st ON st.id=fs.sale_id WHERE fs.id=? AND st.station_id=? AND st.is_deleted=0", c, "fuel-sales.html", "fuel_sale")
+            "tank_refills" -> resolveTraceOrigin("SELECT id, refill_code, station_id, COALESCE(unloading_end,unloading_start,created_at,''), refill_code FROM tank_refills WHERE id=? AND station_id=? AND COALESCE(deleted_at,'')=''", c, "fuel-supplies.html", "fuel_refill")
+            "journal_entries" -> resolveTraceOrigin("SELECT id, entry_number, station_id, COALESCE(entry_date,created_at,''), entry_number FROM journal_entries WHERE id=? AND station_id=? AND is_deleted=0", c, "journal-entries.html", "journal_entry")
+            "journal_entry_items" -> resolveTraceOrigin("SELECT je.id, je.entry_number, je.station_id, COALESCE(je.entry_date,je.created_at,''), je.entry_number FROM journal_entry_items ji JOIN journal_entries je ON je.id=ji.journal_entry_id WHERE ji.id=? AND je.station_id=? AND je.is_deleted=0", c, "journal-entries.html", "journal_entry")
+            "stocktakes" -> resolveTraceOrigin("SELECT s.id, CAST(s.id AS TEXT), w.station_id, COALESCE(s.end_date,s.start_date,s.created_at,''), CAST(s.id AS TEXT) FROM stocktakes s JOIN warehouses w ON w.id=s.warehouse_id WHERE s.id=? AND w.station_id=? AND s.archived=0", c, "stocktake.html", "stocktake")
+            "stocktake_details" -> resolveTraceOrigin("SELECT s.id, CAST(s.id AS TEXT), w.station_id, COALESCE(s.end_date,s.start_date,s.created_at,''), CAST(s.id AS TEXT) FROM stocktake_details d JOIN stocktakes s ON s.id=d.stocktake_id JOIN warehouses w ON w.id=s.warehouse_id WHERE d.id=? AND w.station_id=? AND d.archived=0 AND s.archived=0", c, "stocktake.html", "stocktake")
+            else -> throw IllegalArgumentException("source_table غير مدعوم: ${c.sourceTable}")
         }
-
         require(origin.station == currentStationId) { "المصدر خارج نطاق المحطة" }
-        require(origin.ref == contract.referenceCode) { "reference_code لا يطابق المصدر الأصلي" }
-        require(origin.type == contract.documentType) { "document_type لا يطابق المصدر الأصلي" }
+        require(origin.reference == c.referenceCode) { "reference_code لا يطابق المصدر الأصلي" }
+        require(origin.type == c.documentType) { "document_type لا يطابق المصدر الأصلي" }
         val day = origin.date.take(10)
-        if (contract.dateScope.from.isNotEmpty()) require(day >= contract.dateScope.from) { "المصدر خارج بداية الفترة" }
-        if (contract.dateScope.to.isNotEmpty()) require(day <= contract.dateScope.to) { "المصدر خارج نهاية الفترة" }
-
+        if (c.dateScope.from.isNotEmpty()) require(day >= c.dateScope.from) { "المصدر خارج بداية الفترة" }
+        if (c.dateScope.to.isNotEmpty()) require(day <= c.dateScope.to) { "المصدر خارج نهاية الفترة" }
         val originJson = JSONObject().apply {
-            put("source_table", contract.sourceTable)
-            put("source_id", origin.id)
-            put("reference_code", origin.ref)
-            put("station_id", origin.station)
-            put("document_date", origin.date)
-            put("document_type", origin.type)
+            put("source_table", c.sourceTable); put("source_id", origin.id); put("reference_code", origin.reference)
+            put("station_id", origin.station); put("document_date", origin.date); put("document_type", origin.type)
         }
-        return SourceTraceContract.verified(contract, origin.date, origin.screen, originJson)
+        return c.toJson().apply {
+            put("success", true); put("verified", true); put("contract_version", SourceTraceContract.VERSION)
+            put("operational_screen", origin.screen); put("document_date", origin.date); put("sqlite_origin", originJson)
+        }
     }
 
-    private fun resolveTraceOrigin(
-        sql: String,
-        contract: SourceTraceContract.Contract,
-        stationId: Int,
-        screen: String,
-        documentType: String
-    ): TraceOrigin {
-        readableDatabase.rawQuery(sql, arrayOf(contract.sourceId.toString(), stationId.toString())).use { cursor ->
+    private fun resolveTraceOrigin(sql: String, contract: SourceTraceContract.Contract, screen: String, type: String): Any {
+        readableDatabase.rawQuery(sql, arrayOf(contract.sourceId.toString(), contract.stationId.toString())).use { cursor ->
             require(cursor.moveToFirst()) { "المصدر الأصلي غير موجود أو خارج نطاق المحطة" }
-            return TraceOrigin(
-                cursor.getLong(0), cursor.getString(1).orEmpty(), cursor.getInt(2), cursor.getString(3).orEmpty(), screen, documentType
-            )
+            return TraceOrigin(cursor.getLong(0), cursor.getString(1).orEmpty(), cursor.getInt(2), cursor.getString(3).orEmpty(), screen, type)
         }
     }
 
-    private data class TraceOrigin(val id: Long, val ref: String, val station: Int, val date: String, val screen: String, val type: String)
+    private data class TraceOrigin(val id: Long, val reference: String, val station: Int, val date: String, val screen: String, val type: String)
 
 }
