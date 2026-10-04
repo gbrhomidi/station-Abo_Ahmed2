@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
   <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
   <link href="file:///android_asset/assets-local/css/all.min.css" rel="stylesheet">
+  <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
   <script src="file:///android_asset/assets-local/js/sweetalert2@11"></script>
   <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
   <script src="file:///android_asset/assets-local/js/chart.umd.min.js"></script>
@@ -1450,10 +1451,8 @@
     }
   </style>
   <meta name="reports-bridge-methods" content="generateInventoryReport,getWarehouses,getCategories,getInventoryProductDetails">
-    <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
 </head>
 <body>
-    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-database"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
 
   <!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
@@ -1967,8 +1966,6 @@
       }
     }
 
-    const inventoryPagination = { sortBy: 'name_asc' };
-
     function apiCall(action, params = {}) {
       const p = params || {};
       switch (action) {
@@ -2190,19 +2187,16 @@
 
       showLoading(true);
       try {
-        const res = await apiCall('generateInventoryReport', {
+        const filters = ReportsRuntime.validateReportFilters({
           start_date: from,
           end_date: to,
-          from_date: from,
-          to_date: to,
-          warehouse_id: warehouse || null,
-          category_id: category || null,
+          warehouse_id: warehouse,
+          category_id: category,
           report_type: type,
-          status: status || null,
-          return_all: true,
-          sort_by: inventoryPagination.sortBy,
-          search: String(document.getElementById('inventorySearch').value || '')
-        });
+          status: status,
+          return_all: true
+        }, { requireDateRange: false });
+        const res = await apiCall('generateInventoryReport', filters);
 
         const extracted = extractInventoryReport(res);
 

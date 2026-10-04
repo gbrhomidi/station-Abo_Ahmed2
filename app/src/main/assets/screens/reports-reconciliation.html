@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>مطابقة التقارير</title>
+<link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+<script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
+<style>
+:root{--card:#fff;--line:#e5e7eb;--muted:#64748b;--good:#15803d;--bad:#b91c1c;--warn:#b45309}
+*{box-sizing:border-box}body{margin:0;background:var(--bg-primary,#f8fafc);color:var(--text-primary,#0f172a);font-family:Arial,sans-serif;padding:16px;min-width:0}
+.wrap{max-width:1100px;margin:auto}.head{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:14px}.title{margin:0;font-size:1.35rem}.filters,.card,.exception{background:var(--card);border:1px solid var(--line);border-radius:14px}.filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:12px;margin-bottom:14px}.field{min-width:0}.field label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:5px}.field input,.btn{width:100%;min-height:42px;border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:inherit;color:inherit}.btn{cursor:pointer;font-weight:700}.btn.primary{background:var(--primary-color,#087ea4);color:#fff;border-color:transparent}.btn.secondary{background:transparent}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}.card{padding:13px;min-width:0}.label{color:var(--muted);font-size:.78rem}.value{font-size:1.2rem;font-weight:800;margin-top:6px;overflow-wrap:anywhere}.ok{color:var(--good)}.bad{color:var(--bad)}.warn{color:var(--warn)}.summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}.section{margin-top:14px}.section h2{font-size:1rem;margin:0 0 8px}.exception{padding:10px;margin-bottom:8px;overflow:hidden}.exception-top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-weight:700}.exception pre{white-space:pre-wrap;word-break:break-word;margin:7px 0 0;color:var(--muted);font:inherit;font-size:.78rem}.empty{padding:22px;text-align:center;color:var(--muted);background:var(--card);border:1px dashed var(--line);border-radius:14px}.status{margin-bottom:10px;font-size:.8rem;color:var(--muted)}
+@media(max-width:720px){body{padding:10px}.filters{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr 1fr}.summary{grid-template-columns:1fr}.head{align-items:stretch}.head .btn{width:auto}.exception-top{display:block}.exception-top strong{display:block;margin-bottom:4px}}
+@media(max-width:430px){.filters{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.title{font-size:1.1rem}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head"><h1 class="title">مطابقة وسلامة بيانات التقارير</h1><button class="btn secondary" style="width:auto" onclick="location.href='dashboard.html'">لوحة التحكم</button></div>
+  <div class="status" id="reportsDataSource"></div>
+  <div class="filters">
+    <div class="field"><label>من تاريخ</label><input id="fromDate" type="date"></div>
+    <div class="field"><label>إلى تاريخ</label><input id="toDate" type="date"></div>
+    <div class="field"><label>&nbsp;</label><button class="btn primary" onclick="runReconciliation()">تشغيل المطابقة</button></div>
+  </div>
+  <div class="grid">
+    <div class="card"><div class="label">إجمالي المبيعات</div><div class="value" id="salesTotal">—</div></div>
+    <div class="card"><div class="label">المدفوعات المرتبطة</div><div class="value" id="paymentsTotal">—</div></div>
+    <div class="card"><div class="label">فرق المبيعات/المدفوعات</div><div class="value" id="paymentVariance">—</div></div>
+    <div class="card"><div class="label">عدد الاستثناءات</div><div class="value" id="exceptionCount">—</div></div>
+  </div>
+  <div class="summary">
+    <div class="card"><div class="label">القيود غير المتوازنة</div><div class="value" id="journalErrors">—</div></div>
+    <div class="card"><div class="label">أخطاء حركات المخزون</div><div class="value" id="inventoryErrors">—</div></div>
+    <div class="card"><div class="label">الورديات المفتوحة</div><div class="value" id="openShifts">—</div></div>
+  </div>
+  <div class="section"><h2>الاستثناءات الفعلية</h2><div id="exceptions"></div></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const money=v=>Number(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+function pad(n){return String(n).padStart(2,'0')}
+function setDefaultDates(){const d=new Date(), y=d.getFullYear(),m=d.getMonth(); $('fromDate').value=`${y}-${pad(m+1)}-01`; $('toDate').value=`${y}-${pad(m+1)}-${pad(new Date(y,m+1,0).getDate())}`}
+function parse(raw){try{return typeof raw==='string'?JSON.parse(raw):raw}catch(e){throw new Error('استجابة المطابقة غير صالحة')}}
+function call(params){if(!window.AndroidInterface||typeof AndroidInterface.getReportsReconciliation!=='function')throw new Error('مسار المطابقة غير متاح في Android Bridge');return parse(AndroidInterface.getReportsReconciliation(JSON.stringify(params)))}
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function exceptionTitle(type){return ({SALE_PAYMENT_MISMATCH:'اختلاف بين المدفوع المسجل والمدفوعات المرتبطة',CREDIT_SALE_WITHOUT_CUSTOMER:'بيع آجل بدون عميل',UNBALANCED_JOURNAL:'قيد يومية غير متوازن',INVENTORY_MOVEMENT_ARITHMETIC_ERROR:'خطأ حسابي في حركة المخزون',SHIFT_SALES_MISMATCH:'اختلاف مبيعات الوردية',OPEN_SHIFT:'وردية مفتوحة'})[type]||type}
+function renderExceptions(rows){if(!rows.length){$('exceptions').innerHTML='<div class="empty">لا توجد استثناءات ضمن الفترة والموقع الحاليين.</div>';return} $('exceptions').innerHTML=rows.map((r,i)=>`<div class="exception"><div class="exception-top"><strong>${i+1}. ${esc(exceptionTitle(r.exception_type))}</strong><span class="bad">${esc(r.variance??'')}</span></div><pre>${esc(JSON.stringify(r,null,2))}</pre></div>`).join('')}
+async function runReconciliation(){try{const filters=ReportsRuntime.validateReportFilters({from_date:$('fromDate').value,to_date:$('toDate').value,return_all:true});const res=call(filters);if(!res.success)throw new Error(res.message||'تعذر تنفيذ المطابقة');const d=res.data||res; $('salesTotal').textContent=money(d.sales?.sales_total);$('paymentsTotal').textContent=money(d.payments?.payments_total);const pv=Number(d.sales_payment_variance||0);$('paymentVariance').textContent=money(pv);$('paymentVariance').className='value '+(Math.abs(pv)<=.01?'ok':'bad');$('exceptionCount').textContent=Number(d.exception_count||0).toLocaleString('en-US');$('journalErrors').textContent=Number(d.journals?.unbalanced_count||0).toLocaleString('en-US');$('journalErrors').className='value '+(Number(d.journals?.unbalanced_count||0)?'bad':'ok');$('inventoryErrors').textContent=Number(d.inventory?.arithmetic_errors||0).toLocaleString('en-US');$('inventoryErrors').className='value '+(Number(d.inventory?.arithmetic_errors||0)?'bad':'ok');$('openShifts').textContent=Number(d.shifts?.open_shift_count||0).toLocaleString('en-US');$('openShifts').className='value '+(Number(d.shifts?.open_shift_count||0)?'warn':'ok');renderExceptions(Array.isArray(d.exceptions)?d.exceptions:[])}catch(e){console.error(e);alert(e.message||'فشل تنفيذ المطابقة')}}
+setDefaultDates();
+</script>
+</body>
+</html>

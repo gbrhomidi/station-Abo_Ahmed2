@@ -7746,6 +7746,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun getReportsReconciliation(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val params = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("معاملات المطابقة غير صالحة") }
+            return try {
+                val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
+                reportCacheResponse(db, "reports_reconciliation", params, 300L) { dataResponseObject(db.getReportsReconciliation(params, stationId)) }
+            } catch (e: Exception) {
+                DebugLogger.logException("ReportsReconciliation", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
         fun getKPIDashboard(jsonData: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val params = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("معاملات التقرير غير صالحة") }

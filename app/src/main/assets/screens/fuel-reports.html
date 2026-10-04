@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
   <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
   <link href="file:///android_asset/assets-local/css/all.min.css" rel="stylesheet">
+  <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
   <script src="file:///android_asset/assets-local/js/sweetalert2@11"></script>
   <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
   <script src="file:///android_asset/assets-local/js/chart.umd.min.js"></script>
@@ -1376,12 +1377,9 @@
       }
     }
   </style>
-  <meta name="reports-bridge-methods" content="getFuelReportPage,getFuelReport,getTanks,getPumps,getFuelTypes,getFuelTransactionDetails,getMeterReadingRecords,generateMeterReadingReport">
-    <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
-<style>.report-source-banner{margin:8px 12px;padding:8px 10px;border-radius:10px;font-size:.78rem;display:flex;gap:8px;align-items:center;border:1px solid rgba(16,185,129,.25)}.report-source-banner.is-incomplete{border-color:rgba(245,158,11,.45)}.report-source-banner.is-unavailable{border-color:rgba(239,68,68,.35)}</style>
+  <meta name="reports-bridge-methods" content="getFuelReportPage,getFuelReport,getTanks,getPumps,getFuelTypes">
 </head>
 <body>
-    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-database"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
 
   <!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
@@ -1476,13 +1474,6 @@
   </div>
 
   <!-- ===== Quick Presets ===== -->
-  <div class="report-mode-actions" role="tablist" aria-label="نوع تقرير الوقود">
-    <button type="button" class="btn-filter" role="tab" onclick="loadMeterReadings()">قراءات العدادات</button>
-  </div>
-  <div id="meterReadingsPanel" hidden class="chart-card">
-    <div class="chart-title">قراءات العدادات الفعلية من SQLite</div>
-    <div class="table-scroll"><table><thead><tr><th>reading_code</th><th>reading_date</th><th>meter_id</th><th>reading_value</th></tr></thead><tbody id="meterReadingsBody"><tr><td colspan="4">لم يتم تحميل القراءات بعد</td></tr></tbody></table></div>
-  </div>
   <div class="quick-presets" id="quickPresets"></div>
 
   <!-- ===== KPIs ===== -->
@@ -2119,17 +2110,14 @@
       showLoading(true);
 
       try {
-        const params = {
+        const params = ReportsRuntime.validateReportFilters({
           from_date: from,
           to_date: to,
-          start_date: from,
-          end_date: to,
-          fuel_type_id: fuelType || null,
-          tank_id: tank || null,
+          fuel_type_id: fuelType,
+          tank_id: tank,
           report_type: reportType,
-          search: String(document.getElementById('fuelSearch').value || ''),
           return_all: true
-        };
+        });
 
         const res = await apiCall('getFuelReportPage', params);
         const extracted = extractFuelReport(res);
@@ -2326,19 +2314,6 @@
 
       renderPagination();
     }
-
-    async function loadMeterReadings() {
-      const panel = document.getElementById('meterReadingsPanel');
-      const body = document.getElementById('meterReadingsBody');
-      if (panel) panel.hidden = false;
-      try {
-        const result = await apiCall('getMeterReadingRecords', { from_date: $('filterDateFrom').value, to_date: $('filterDateTo').value, fuel_type_id: $('filterFuelType').value || null, tank_id: $('filterTank').value || null, return_all: true });
-        const rows = Array.isArray(result) ? result : (result && Array.isArray(result.data) ? result.data : (result && Array.isArray(result.rows) ? result.rows : []));
-        body.innerHTML = rows.length ? rows.map(r => '<tr><td>'+escapeHtml(r.reading_code || r.code || '')+'</td><td>'+escapeHtml(r.reading_date || r.date || '')+'</td><td>'+escapeHtml(String(r.meter_id ?? r.pump_id ?? ''))+'</td><td>'+escapeHtml(String(r.reading_value ?? r.reading ?? ''))+'</td></tr>').join('') : '<tr><td colspan="4">لا توجد قراءات مطابقة</td></tr>';
-      } catch (e) { body.innerHTML = '<tr><td colspan="4">فشل تحميل قراءات العدادات</td></tr>'; showToast(e.message || 'فشل تحميل القراءات', 'error'); }
-    }
-
-    function goToFuelPage(page) { pagination.page = Math.max(1, Math.min(Number(page) || 1, pagination.totalPages || 1)); generateReport(); }
 
     function renderPagination() {
       const target = $('fuelPagination');

@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
     <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
+    <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
     <script src="file:///android_asset/assets-local/js/sweetalert2@11"></script>
     <script src="file:///android_asset/assets-local/js/chart.umd.min.js"></script>
     <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
@@ -1663,8 +1664,7 @@
             }
         }
     </style>
-    <meta name="reports-bridge-methods" content="generateSalesTransactionReport,retrieveInvoice,getShifts,getProducts,getCustomers">
-    <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
+    <meta name="reports-bridge-methods" content="generateSalesTransactionReport,retrieveInvoice,getShifts">
 </head>
 <body>
     <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
@@ -2106,12 +2106,10 @@
         rows: [],
         filteredRows: [],
         reportMeta: null,
-        pagination: { page: 1, pageSize: 25, totalCount: 0, totalPages: 0, sortBy: 'date_desc' },
+        pagination: { page: 1, pageSize: 25, totalCount: 0, totalPages: 0 },
         loadedAt: null,
         charts: { trend: null, payment: null, forecast: null }
     };
-
-    const salesPagination = state.pagination;
 
     function getBridge() {
         return window.AndroidInterface || window.Android || null;
@@ -2442,30 +2440,22 @@
         }
 
         // ⚠️ إزالة حقل الحالة تماماً من الإرسال
-        var params = {
+        var params = ReportsRuntime.validateReportFilters({
             from_date: from,
             to_date: to,
-            start_date: from,
-            end_date: to,
-            return_all: true,
-            sort_by: salesPagination.sortBy,
-            search: salesPagination.search
-        };
+            product_id: $('filterProduct') ? $('filterProduct').value : '',
+            customer_id: $('filterCustomer') ? $('filterCustomer').value : '',
+            payment_method: $('filterPaymentMethod') ? $('filterPaymentMethod').value : '',
+            sale_type: $('filterSaleType') ? $('filterSaleType').value : '',
+            report_type: $('filterReportType') ? $('filterReportType').value : '',
+            return_all: true
+        });
 
         var p = $('filterProduct') ? $('filterProduct').value : '';
-        if (p) params.product_id = p;
-
         var c = $('filterCustomer') ? $('filterCustomer').value : '';
-        if (c) params.customer_id = c;
-
         var m = $('filterPaymentMethod') ? $('filterPaymentMethod').value : '';
-        if (m) params.payment_method = m;
-
         var st = $('filterSaleType') ? $('filterSaleType').value : 'all';
-        if (st && st !== 'all') params.sale_type = st;
-
         var rt = $('filterReportType') ? $('filterReportType').value : 'detailed';
-        params.report_type = rt;
 
         // ❌ لا نرسل params.status لأن DatabaseHelper لا يعرفه
 
@@ -2551,7 +2541,7 @@
     }
 
     function handleSearch(term) {
-        salesPagination.search = String(term || '').toLowerCase().trim();
+        state.searchTerm = String(term || '').toLowerCase().trim();
         applyFilters();
     }
 
@@ -2600,8 +2590,6 @@
             b.onclick = function () { viewInvoice(b.getAttribute('data-view')); };
         });
     }
-
-    function goToSalesPage(page) { state.pagination.page = Math.max(1, Math.min(Number(page) || 1, state.pagination.totalPages || 1)); generateReport(); }
 
     function renderPagination() {
         var target = $('salesPagination');
