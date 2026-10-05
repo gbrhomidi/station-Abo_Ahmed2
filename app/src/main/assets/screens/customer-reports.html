@@ -1171,10 +1171,9 @@
      <meta name="reports-bridge-methods" content="generateCRMReport,getCustomers">
     <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 <script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script></head>
- </head>
-    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
-
-  <!-- Pull-to-Refresh -->
+ <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
+</head>
+<!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
    <i class="fas fa-arrow-down">
    </i>
@@ -1217,8 +1216,7 @@
       </i>
      </button>
      <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
-      <i class="fas fa-moon" id="themeIcon">
-      </i>
+      <span id="themeIcon" aria-hidden="true">🌙</span>
      </button>
      <button class="icon-btn" onclick="openAIAdvisor()" style="border-color:rgba(168,130,255,0.3);" title="المستشار الذكي">
       <i class="fas fa-robot" style="color:var(--violet-primary);">
@@ -1616,11 +1614,8 @@
      </span>
     </button>
     <button class="sidebar-btn" onclick="handleAction('home')">
-     <i class="fas fa-home">
-     </i>
-     <span>
-      رجوع
-     </span>
+     <span class="back-emoji" aria-hidden="true">🏠</span>
+     <span>رجوع</span>
     </button>
    </div>
   </div>
@@ -1898,14 +1893,14 @@
             document.documentElement.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
             const icon = document.getElementById('themeIcon');
-            icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+            icon.textContent = newTheme === 'dark' ? '🌞' : '🌙'; icon.className = '';
         }
 
         function loadSavedTheme() {
             const saved = localStorage.getItem('theme') || 'light'; // الوضع الفاتح افتراضي
             document.documentElement.setAttribute('data-theme', saved);
             const icon = document.getElementById('themeIcon');
-            icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+            icon.textContent = saved === 'dark' ? '🌞' : '🌙'; icon.className = '';
         }
 
         // ===================================================================

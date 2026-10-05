@@ -1012,20 +1012,14 @@
         }
 
         /* ====== Stats Grid ====== */
+        /* بطاقات الإحصائيات: عمودان ثابتان على جميع أحجام الشاشات */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 14px;
             margin-top: 39px;
             margin-bottom: 18px;
             width: 100%;
-        }
-
-        @media (min-width: 720px) {
-            .stats-grid { grid-template-columns: repeat(3, 1fr); }
-        }
-        @media (min-width: 1024px) {
-            .stats-grid { grid-template-columns: repeat(4, 1fr); }
         }
 
         /* ====== بطاقة إحصائية مسطحة تماماً - بدون أي تأثير ====== */
@@ -1084,7 +1078,48 @@
             border: 1px solid rgba(212, 168, 106, .2);
         }
 
-        .stat-card .stat-value {
+        
+        .stat-card .stat-value.split-stat-values {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            align-items: stretch;
+            width: 100%;
+            margin-top: 6px;
+        }
+
+        .stat-card .split-stat-item {
+            min-width: 0;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 8px 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            background: rgba(255,255,255,.025);
+        }
+
+        .stat-card .split-stat-value {
+            font-size: 18px;
+            font-weight: 800;
+            line-height: 1.2;
+            color: var(--text);
+            font-family: 'Outfit', 'Tajawal', sans-serif;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        .stat-card .split-stat-label {
+            font-size: 10px;
+            line-height: 1.35;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+.stat-card .stat-value {
             font-size: 20px;
             font-weight: 700;
             color: var(--text);
@@ -2281,8 +2316,8 @@
                     'قراءات العدادات', 'تعبئة الخزانات', 'فحوصات الجودة', 'معايرة المعدات'] },
             { id: 'inventory', label: 'المخزون والمستودعات', icon: 'fa-warehouse', children: ['إدارة المستودعات',
                    'مشتريات/توريد وقود', 'مستويات المخزون', 'حركات المخزون', 'الجرد والتسوية', 'المنتجات التالفة', 'تنبيهات المخزون'] },
-            { id: 'sales', label: 'المبيعات والورديات', icon: 'fa-shopping-cart', children: ['نقطة البيع (POS)',
-                    'إدارة الورديات', 'سجل المبيعات', 'إدارة الطلبات', 'إدارة التوصيلات', 'مبيعات الوقود'] },
+            { id: 'sales', label: 'المبيعات والورديات', icon: 'fa-shopping-cart', children: ['مبيعات الوقود', 'نقطة البيع (POS)',
+                    'إدارة الورديات', 'سجل المبيعات', 'إدارة الطلبات', 'إدارة التوصيلات'] },
             { id: 'finance', label: 'المالية والحسابات', icon: 'fa-money-bill-wave', children: ['إدارة المدفوعات',
                     'إدارة الإيصالات', 'إدارة الصناديق', 'حركات النقدية', 'البنوك والحسابات', 'شجرة الحسابات',
                     'القيود المحاسبية', 'فئات المصروفات', 'إدارة المصروفات', 'الميزانيات', 'الإيداعات النقدية',
@@ -3102,10 +3137,16 @@
                     badge: stats.low_stock || 0, cls: 'danger-card' },
                 { id: 'card-due-invoices', header: 'الفواتير المستحقة', icon: 'fa-file-invoice',
                     value: stats.due_invoices || 0, label: 'فاتورة خلال أسبوع', cls: 'info-card' },
-                { id: 'card-returned-products', header: 'المنتجات المرتجعة', icon: 'fa-undo',
-                    value: (stats.returned_products_today || 0).toFixed(2), label: 'كمية اليوم (لتر)' },
-                { id: 'card-damaged-products', header: 'المنتجات التالفة', icon: 'fa-ban',
-                    value: (stats.damaged_products_today || 0).toFixed(2), label: 'كمية اليوم (لتر)' },
+                { id: 'card-returned-products', header: 'المرتجعات', icon: 'fa-undo',
+                    splitValues: [
+                        { value: (Number(stats.returned_fuel_today) || 0).toFixed(2), label: 'كمية اليوم (لتر)' },
+                        { value: (Number(stats.returned_product_today) || 0).toFixed(2), label: 'كمية اليوم (منتج)' }
+                    ] },
+                { id: 'card-damaged-products', header: 'التالفة', icon: 'fa-ban',
+                    splitValues: [
+                        { value: (Number(stats.damaged_fuel_today) || 0).toFixed(2), label: 'كمية اليوم (لتر)' },
+                        { value: (Number(stats.damaged_product_today) || 0).toFixed(2), label: 'كمية اليوم (منتج)' }
+                    ] },
                 { id: 'card-customer-debts', header: 'مديونية العملاء', icon: 'fa-hand-holding-usd',
                     value: (stats.customer_debts || 0).toFixed(2) + ' ر.ي',
                     label: 'إجمالي الديون المستحقة', cls: 'warning-card' },
@@ -3141,15 +3182,23 @@
                     const up = def.trendUp !== false;
                     trendHtml = `<div class="stat-trend trend-${up ? 'up' : 'down'}"><i class="fas fa-arrow-${up ? 'up' : 'down'}"></i> ${def.trend}</div>`;
                 }
+                const valueHtml = Array.isArray(def.splitValues)
+                    ? `<div class="stat-value split-stat-values">${def.splitValues.map(item => `
+                        <div class="split-stat-item">
+                            <span class="split-stat-value">${item.value}</span>
+                            <span class="split-stat-label">${item.label}</span>
+                        </div>`).join('')}</div>`
+                    : `<div class="stat-value">${def.value}</div>`;
+
                 card.innerHTML = `
                     <div class="card-header">
                         <div class="card-icon-wrapper"><i class="fas ${def.icon}"></i></div>
                         <h3>${def.header}</h3>
                     </div>
-                    <div class="stat-value">${def.value}</div>
+                    ${valueHtml}
                     <div class="stat-footer">
                         ${trendHtml}
-                        <span class="stat-label">${def.label}</span>
+                        ${def.splitValues ? '' : `<span class="stat-label">${def.label}</span>`}
                     </div>
                     ${badgeHtml}
                     ${progressHtml}

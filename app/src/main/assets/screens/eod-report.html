@@ -1502,7 +1502,8 @@
             }
         }
     </style>
-<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script><script src="file:///android_asset/assets-local/js/finance-integrity-runtime.js"></script></head>
+<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script><script src="file:///android_asset/assets-local/js/finance-integrity-runtime.js"></script><script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
+</head>
 <body>
 
     <!-- Pull-to-Refresh -->
@@ -1529,10 +1530,10 @@
             </div>
             <div class="header-actions">
                 <button type="button" class="icon-btn theme-btn" id="themeToggle" title="تبديل الوضع" aria-label="تبديل الوضع">
-                    <i class="fas fa-moon" id="themeIcon"></i>
+                    <span id="themeIcon" aria-hidden="true">🌙</span>
                 </button>
                 <button type="button" class="icon-btn home-btn" id="homeBtn" onclick="goHome()" title="الرجوع للرئيسية" aria-label="الرئيسية">
-                    <i class="fas fa-home"></i>
+                    <span aria-hidden="true">🏠</span>
                 </button>
             </div>
         </div>
@@ -1590,7 +1591,7 @@
                 <i class="fas fa-print"></i><span>طباعة</span>
             </button>
             <button type="button" class="sidebar-btn" data-action="home">
-                <i class="fas fa-home"></i><span>رجوع</span>
+                <span class="back-emoji" aria-hidden="true">🏠</span><span>رجوع</span>
             </button>
         </div>
     </aside>
@@ -3389,7 +3390,7 @@
 
             var icon = $('themeIcon');
             if (icon) {
-                icon.className = next === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+                icon.textContent = next === 'dark' ? '🌞' : '🌙'; icon.className = '';
             }
             haptic('light');
             showToast(next === 'dark' ? 'تم تفعيل الوضع الليلي' : 'تم تفعيل الوضع النهاري', 'info');
@@ -3400,7 +3401,7 @@
             document.documentElement.setAttribute('data-theme', saved);
             var icon = $('themeIcon');
             if (icon) {
-                icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+                icon.textContent = saved === 'dark' ? '🌞' : '🌙'; icon.className = '';
             }
         }
 

@@ -1360,15 +1360,55 @@
   </style>
   <meta name="reports-bridge-methods" content="getKPIDashboard,getKPIDetails">
   <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
-<style>.report-source-banner{margin:8px 12px;padding:8px 10px;border-radius:10px;font-size:.78rem;display:flex;gap:8px;align-items:center}.report-source-banner.is-verified{border:1px solid rgba(16,185,129,.35)}.report-source-banner.is-incomplete{border:1px solid rgba(245,158,11,.4)}.report-source-banner.is-unavailable{border:1px solid rgba(239,68,68,.3)}</style>
+<style>.report-source-banner{margin:8px 12px;padding:8px 10px;border-radius:10px;font-size:.78rem;display:flex;gap:8px;align-items:center}.report-source-banner.is-verified{border:1px solid rgba(16,185,129,.35)}.report-source-banner.is-incomplete{border:1px solid rgba(245,158,11,.4)}.report-source-banner.is-unavailable{border:1px solid rgba(239,68,68,.3)}
+    /* ===== ضمان استجابة KPI وعدم تجاوز حدود شاشة الهاتف ===== */
+    html, body {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      overflow-x: hidden;
+      box-sizing: border-box;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+    .top-bar, .main-content, .kpi-grid, .scorecard-grid, .charts-grid,
+    .performers-grid, .table-section {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+    }
+    .kpi-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      padding-inline: clamp(10px, 3vw, 22px);
+    }
+    .kpi-card, .scorecard-card, .chart-card, .performer-card {
+      min-width: 0;
+      max-width: 100%;
+    }
+    .kpi-card .kpi-value, .kpi-card .kpi-label,
+    .scorecard-card, .performer-card {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    @media (max-width: 480px) {
+      .kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        padding-inline: 10px;
+      }
+      .kpi-card {
+        padding-inline: 8px;
+      }
+      .kpi-card .kpi-value {
+        max-width: 100%;
+        font-size: clamp(1rem, 4.6vw, 1.2rem);
+      }
+    }
+</style>
 </head>
 <body>
-  <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status" aria-live="polite">
-    <i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span>
-  </div>
-
-
-  <!-- Pull-to-Refresh -->
+<!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
     <i class="fas fa-arrow-down"></i>
     <span>اسحب للتحديث</span>
@@ -1399,7 +1439,7 @@
           <i class="fas fa-bell"></i>
         </button>
         <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
-          <i class="fas fa-moon" id="themeIcon"></i>
+          <span id="themeIcon" aria-hidden="true">🌙</span>
         </button>
         <button class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي">
           <i class="fas fa-robot" style="color:var(--cobalt-primary);"></i>
@@ -1652,7 +1692,7 @@
         <i class="fas fa-robot"></i><span>AI</span>
       </button>
       <button class="sidebar-btn" data-action="home">
-        <i class="fas fa-home"></i><span>رجوع</span>
+        <span class="back-emoji" aria-hidden="true">🏠</span><span>رجوع</span>
       </button>
     </div>
   </aside>
@@ -1915,14 +1955,14 @@
       const next = current === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       localStorage.setItem('kpi_theme', next);
-      $('themeIcon').className = next === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+      $('themeIcon').textContent = next === 'dark' ? '🌞' : '🌙'; $('themeIcon').className = '';
       haptic('light');
     }
 
     function loadSavedTheme() {
       const saved = localStorage.getItem('kpi_theme') || 'dark';
       document.documentElement.setAttribute('data-theme', saved);
-      $('themeIcon').className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+      $('themeIcon').textContent = saved === 'dark' ? '🌞' : '🌙'; $('themeIcon').className = '';
     }
 
     // ================================================================

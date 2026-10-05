@@ -1450,7 +1450,8 @@
     }
   </style>
   <meta name="reports-bridge-methods" content="generateInventoryReport,getWarehouses,getCategories,getInventoryProductDetails">
-<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script></head>
+<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script><script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
+</head>
 <body>
 
   <!-- Pull-to-Refresh -->
@@ -1486,7 +1487,7 @@
           <i class="fas fa-bell"></i>
         </button>
         <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
-          <i class="fas fa-moon" id="themeIcon"></i>
+          <span id="themeIcon" aria-hidden="true">🌙</span>
         </button>
         <button class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي">
           <i class="fas fa-robot" style="color:var(--violet-primary);"></i>
@@ -1761,7 +1762,7 @@
         <span>AI</span>
       </button>
       <button class="sidebar-btn" data-action="home">
-        <i class="fas fa-home"></i>
+        <span class="back-emoji" aria-hidden="true">🏠</span>
         <span>رجوع</span>
       </button>
     </div>
@@ -3347,14 +3348,14 @@
       const next = current === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       localStorage.setItem('inventory_reports_theme', next);
-      $('themeIcon').className = next === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+      $('themeIcon').textContent = next === 'dark' ? '🌞' : '🌙'; $('themeIcon').className = '';
       haptic('light');
     }
 
     function loadSavedTheme() {
       const saved = localStorage.getItem('inventory_reports_theme') || 'light';
       document.documentElement.setAttribute('data-theme', saved);
-      $('themeIcon').className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+      $('themeIcon').textContent = saved === 'dark' ? '🌞' : '🌙'; $('themeIcon').className = '';
     }
 
     // ================================================================

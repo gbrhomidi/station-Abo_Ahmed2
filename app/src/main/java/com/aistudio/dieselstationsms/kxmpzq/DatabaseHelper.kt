@@ -16699,30 +16699,78 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         // 6. الفواتير المستحقة (خلال أسبوع) في المحطة
         db.rawQuery(
             """SELECT COUNT(*) FROM sales_transactions
-               WHERE station_id=? AND remaining_amount > 0
-               AND date(due_date) BETWEEN date('now') AND date('now', '+7 days')
-               AND is_deleted=0""",
+               WHERE station_id=?
+               AND is_credit=1
+               AND remaining_amount > 0
+               AND date(COALESCE(due_date, created_at)) BETWEEN date('now') AND date('now', '+7 days')
+               AND is_deleted=0
+               AND status NOT IN ('cancelled', 'refunded')""",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("due_invoices", cursor.getInt(0))
         }
 
-        // 7. كمية المنتجات المرتجعة اليوم في المحطة
+        // 7. المرتجعات اليومية: وقود ومنتجات من جداول التسوية الفعلية.
+        // fuel_sale_adjustments هو المصدر القانوني لمرتجعات الوقود،
+        // وsale_item_adjustments هو المصدر القانوني لمرتجعات المنتجات.
         db.rawQuery(
-            """SELECT COALESCE(SUM(quantity_change),0) FROM inventory_movements
-               WHERE station_id=? AND movement_type='return' AND date(created_at)=date('now') AND is_deleted=0""",
+            """SELECT
+                   COALESCE(SUM(CASE WHEN adjustment_type='return' THEN quantity ELSE 0 END), 0)
+               FROM fuel_sale_adjustments
+               WHERE station_id=?
+                 AND adjustment_type='return'
+                 AND status='posted'
+                 AND date(created_at)=date('now')""",
             arrayOf(stationId.toString())
         ).use { cursor ->
-            if (cursor.moveToFirst()) stats.put("returned_products_today", cursor.getDouble(0))
+            if (cursor.moveToFirst()) stats.put("returned_fuel_today", cursor.getDouble(0))
         }
 
-        // 8. كمية المنتجات التالفة اليوم في المحطة (مع station_id)
         db.rawQuery(
-            "SELECT COALESCE(SUM(quantity),0) FROM damaged_products WHERE station_id=? AND date(report_date)=date('now') AND status='approved'",
+            """SELECT
+                   COALESCE(SUM(CASE WHEN adjustment_type='return' THEN quantity ELSE 0 END), 0)
+               FROM sale_item_adjustments
+               WHERE station_id=?
+                 AND adjustment_type='return'
+                 AND status='posted'
+                 AND date(created_at)=date('now')""",
             arrayOf(stationId.toString())
         ).use { cursor ->
-            if (cursor.moveToFirst()) stats.put("damaged_products_today", cursor.getDouble(0))
+            if (cursor.moveToFirst()) stats.put("returned_product_today", cursor.getDouble(0))
         }
+
+        // مفاتيح التوافق القديمة: قيمة المنتجات المرتجعة فقط.
+        stats.put("returned_products_today", stats.optDouble("returned_product_today", 0.0))
+
+        // 8. التالف اليومي: وقود من fuel_sale_adjustments ومنتجات من damaged_products.
+        db.rawQuery(
+            """SELECT
+                   COALESCE(SUM(CASE WHEN adjustment_type='damage' THEN quantity ELSE 0 END), 0)
+               FROM fuel_sale_adjustments
+               WHERE station_id=?
+                 AND adjustment_type='damage'
+                 AND status='posted'
+                 AND date(created_at)=date('now')""",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("damaged_fuel_today", cursor.getDouble(0))
+        }
+
+        db.rawQuery(
+            """SELECT
+                   COALESCE(SUM(quantity), 0)
+               FROM damaged_products
+               WHERE station_id=?
+                 AND date(report_date)=date('now')
+                 AND status='approved'
+                 AND archived=0""",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("damaged_product_today", cursor.getDouble(0))
+        }
+
+        // مفتاح التوافق القديم: قيمة المنتجات التالفة فقط.
+        stats.put("damaged_products_today", stats.optDouble("damaged_product_today", 0.0))
 
         // 9. مديونية العملاء (المبالغ المتبقية للفواتير الآجلة) في المحطة
         db.rawQuery(
