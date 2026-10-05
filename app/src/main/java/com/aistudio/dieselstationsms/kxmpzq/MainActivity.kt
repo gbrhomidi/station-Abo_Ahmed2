@@ -7850,10 +7850,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
             val whatsappPackage = "com.whatsapp"
             return try {
-                val launchIntent = activity.packageManager.getLaunchIntentForPackage(whatsappPackage)
-                    ?: return errorResponse("تطبيق WhatsApp غير مثبت على الجهاز")
+                require(activity.packageManager.getLaunchIntentForPackage(whatsappPackage) != null) {
+                    "تطبيق WhatsApp غير مثبت على الجهاز"
+                }
                 val outputDir = File(activity.filesDir, "invoices").apply { mkdirs() }
-                val outputFile = File(outputDir, "invoice_${System.currentTimeMillis()}.jpg")
+                val outputFile = File(outputDir, "invoice_${System.currentTimeMillis()}.png")
                 val latch = CountDownLatch(1)
                 var captured: Throwable? = null
                 var bitmap: Bitmap? = null
@@ -7866,17 +7867,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         val capture = WebView(activity)
                         captureWebView = capture
                         capture.settings.javaScriptEnabled = true
+                        capture.settings.domStorageEnabled = true
                         capture.settings.defaultTextEncodingName = "UTF-8"
                         capture.setBackgroundColor(android.graphics.Color.WHITE)
-                        // Keep the capture visually off-screen while preserving full opacity.
-                        // Direct WebView drawing must not inherit a near-zero alpha.
+                        capture.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
                         val widthPx = 794
                         capture.translationX = -widthPx.toFloat()
                         capture.alpha = 1f
-                        root.addView(
-                            capture,
-                            ViewGroup.LayoutParams(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT)
-                        )
+                        root.addView(capture, ViewGroup.LayoutParams(widthPx, 1123))
+
                         val wrappedHtml = """
                             <!doctype html>
                             <html lang="ar" dir="rtl">
@@ -7885,17 +7884,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                               <meta name="viewport" content="width=$widthPx, initial-scale=1.0">
                               <style>
                                 html,body{margin:0;padding:0;background:#fff;width:${widthPx}px;}
-                                body{overflow:hidden;}
+                                body{overflow:visible;}
                               </style>
                             </head>
                             <body>$invoiceHtml</body>
                             </html>
                         """.trimIndent()
+
                         capture.webViewClient = object : WebViewClient() {
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 val target = view ?: return
                                 target.evaluateJavascript(
-                                    "(function(){return Math.max(document.body.scrollHeight,document.documentElement.scrollHeight);})()"
+                                    "(document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(function(){ return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight); })"
                                 ) { rawHeight ->
                                     try {
                                         val cssHeight = rawHeight?.trim()?.removeSurrounding("\"")?.toDoubleOrNull()?.toInt() ?: 1123
@@ -7909,13 +7909,21 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                             View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY)
                                         )
                                         target.layout(0, 0, widthPx, heightPx)
-                                        bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
-                                        val canvas = android.graphics.Canvas(bitmap!!)
-                                        canvas.drawColor(android.graphics.Color.WHITE)
-                                        target.draw(canvas)
+                                        target.postDelayed({
+                                            try {
+                                                val capturedBitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+                                                val canvas = android.graphics.Canvas(capturedBitmap)
+                                                canvas.drawColor(android.graphics.Color.WHITE)
+                                                target.draw(canvas)
+                                                bitmap = capturedBitmap
+                                            } catch (e: Throwable) {
+                                                captured = e
+                                            } finally {
+                                                latch.countDown()
+                                            }
+                                        }, 250L)
                                     } catch (e: Throwable) {
                                         captured = e
-                                    } finally {
                                         latch.countDown()
                                     }
                                 }
@@ -7928,7 +7936,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     }
                 }
 
-                if (!latch.await(12, TimeUnit.SECONDS)) {
+                if (!latch.await(15, TimeUnit.SECONDS)) {
                     captured = IllegalStateException("انتهت مهلة إنشاء صورة الفاتورة")
                 }
                 activity.runOnUiThread {
@@ -7943,15 +7951,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 captured?.let { throw it }
                 val finalBitmap = bitmap ?: throw IllegalStateException("فشل إنشاء صورة الفاتورة")
                 FileOutputStream(outputFile).use { stream ->
-                    require(finalBitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream)) {
-                        "تعذر حفظ صورة الفاتورة بصيغة JPG"
+                    require(finalBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                        "تعذر حفظ صورة الفاتورة بصيغة PNG"
                     }
                 }
                 finalBitmap.recycle()
 
                 val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", outputFile)
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/jpeg"
+                    type = "image/png"
                     putExtra(Intent.EXTRA_STREAM, uri)
                     putExtra("jid", "$normalizedPhone@s.whatsapp.net")
                     putExtra(Intent.EXTRA_TEXT, "فاتورة بيع")
@@ -7962,18 +7970,16 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 require(shareIntent.resolveActivity(activity.packageManager) != null) {
                     "تطبيق WhatsApp غير متاح لاستقبال صورة"
                 }
-                activity.runOnUiThread {
-                    activity.startActivity(shareIntent)
-                }
+                activity.runOnUiThread { activity.startActivity(shareIntent) }
                 JSONObject().apply {
                     put("success", true)
                     put("path", outputFile.absolutePath)
                     put("phone", normalizedPhone)
-                    put("message", "تم إنشاء صورة الفاتورة وفتح تطبيق WhatsApp. اضغط إرسال داخل WhatsApp لإتمام الإرسال.")
+                    put("message", "تم إنشاء صورة الفاتورة بصيغة PNG وفتح تطبيق WhatsApp. اضغط إرسال داخل WhatsApp لإتمام الإرسال.")
                 }.toString()
             } catch (e: Exception) {
                 DebugLogger.logException("InvoiceWhatsApp", e)
-                errorResponse(e.message ?: "تعذر فتح WhatsApp بصورة الفاتورة")
+                errorResponse(e.message ?: "تعذر إنشاء أو مشاركة فاتورة WhatsApp")
             }
         }
 

@@ -1502,7 +1502,23 @@
             }
         }
     </style>
-<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script><script src="file:///android_asset/assets-local/js/finance-integrity-runtime.js"></script><script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
+<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script><script src="file:///android_asset/assets-local/js/finance-integrity-runtime.js"></script>
+    <style>
+    /* حاوية فلاتر قابلة للفتح والطي — تبدأ مطوية في كل مرة تُفتح فيها الشاشة */
+    .report-filter-toggle {
+      width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px;
+      margin:8px 0 0; padding:9px 14px; border:1px solid var(--border-color, rgba(148,163,184,.25));
+      border-radius:12px; background:var(--bg-glass, rgba(255,255,255,.04)); color:var(--text-primary, inherit);
+      font:700 .82rem/1.2 inherit; cursor:pointer; touch-action:manipulation;
+    }
+    .report-filter-toggle:hover { border-color:var(--cobalt-primary, #3b82f6); }
+    .report-filter-toggle .filter-arrow { font-size:1rem; transition:transform .2s ease; }
+    .report-filter-toggle[aria-expanded="true"] .filter-arrow { transform:rotate(180deg); }
+    .report-filter-collapsible { overflow:hidden; max-height:0; opacity:0; visibility:hidden;
+      transition:max-height .25s ease, opacity .2s ease, padding .2s ease; }
+    .report-filter-collapsible.is-open { max-height:1200px; opacity:1; visibility:visible; }
+    </style>
+
 </head>
 <body>
 
@@ -1591,7 +1607,7 @@
                 <i class="fas fa-print"></i><span>طباعة</span>
             </button>
             <button type="button" class="sidebar-btn" data-action="home">
-                <span class="back-emoji" aria-hidden="true">🏠</span><span>رجوع</span>
+                <span aria-hidden="true">🏠</span><span>رجوع</span>
             </button>
         </div>
     </aside>
@@ -3390,7 +3406,7 @@
 
             var icon = $('themeIcon');
             if (icon) {
-                icon.textContent = next === 'dark' ? '🌞' : '🌙'; icon.className = '';
+                icon.className = next === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
             }
             haptic('light');
             showToast(next === 'dark' ? 'تم تفعيل الوضع الليلي' : 'تم تفعيل الوضع النهاري', 'info');
@@ -3401,7 +3417,7 @@
             document.documentElement.setAttribute('data-theme', saved);
             var icon = $('themeIcon');
             if (icon) {
-                icon.textContent = saved === 'dark' ? '🌞' : '🌙'; icon.className = '';
+                icon.textContent = saved === 'dark' ? '🌞' : '🌙';
             }
         }
 
@@ -3559,5 +3575,32 @@
     </script>
 
     <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
+
+<script>
+(function initReportFilterCollapse(){
+  function setup(){
+    document.querySelectorAll('.filter-bar, .filter-chips').forEach(function(container, index){
+      if (!container || container.dataset.filterCollapseReady === '1') return;
+      container.dataset.filterCollapseReady = '1';
+      container.classList.add('report-filter-collapsible');
+      var id = 'reportFilterPanel_' + index;
+      container.id = container.id || id;
+      var toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'report-filter-toggle';
+      toggle.setAttribute('aria-expanded','false');
+      toggle.setAttribute('aria-controls',container.id);
+      toggle.innerHTML = '<span>عناصر الفلترة</span><span class="filter-arrow" aria-hidden="true">▼</span>';
+      container.parentNode.insertBefore(toggle, container);
+      toggle.addEventListener('click', function(){
+        var open = container.classList.toggle('is-open');
+        toggle.setAttribute('aria-expanded', String(open));
+      });
+    });
+  }
+  setup();
+})();
+</script>
+
 </body>
 </html>

@@ -2038,8 +2038,6 @@
             const icon = document.getElementById('themeIcon');
             icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
         }
-        document.getElementById('themeToggle').addEventListener('click', toggleTheme);
-
         /* ============================================================
            Sidebar
            ============================================================ */
@@ -2659,6 +2657,41 @@
             await archiveTask(selectedTaskId);
         }
 
+        async function restoreTask(id) {
+            const task = allTasks.find(t => Number(t.id) === Number(id));
+            if (!task) {
+                showToast('❌ المهمة غير موجودة', 'error');
+                return;
+            }
+
+            const confirmed = await Swal.fire({
+                title: '↩️ استعادة المهمة',
+                text: 'سيتم إخراج المهمة رقم ' + id + ' من الأرشيف وإعادتها إلى قائمة المهام.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#0d7a4a',
+                cancelButtonColor: '#5a5a7a',
+                confirmButtonText: 'نعم، استعادة',
+                cancelButtonText: 'إلغاء'
+            });
+            if (!confirmed.isConfirmed) return;
+
+            showLoading(true);
+            try {
+                const result = await apiCall('restoreTask', { id: Number(id) });
+                if (!result.success) {
+                    throw new Error(result.message || 'فشل في استعادة المهمة');
+                }
+                showToast('✅ تمت استعادة المهمة بنجاح', 'success');
+                selectedTaskId = null;
+                await loadData(false);
+            } catch (e) {
+                showToast('❌ ' + (e.message || 'خطأ في استعادة المهمة'), 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
         async function resolveTask(id) {
             const task = allTasks.find(t => t.id == id);
             if (!task) { showToast('❌ المهمة غير موجودة', 'error'); return; }
@@ -3114,6 +3147,7 @@ let pullStartY = 0,
         window.openAIAdvisor = openAIAdvisor;
         window.closeAIModal = closeAIModal;
         window.archiveTask = archiveTask;
+        window.restoreTask = restoreTask;
         window.archiveSelected = archiveSelected;
         window.resolveTask = resolveTask;
         window.viewTask = viewTask;

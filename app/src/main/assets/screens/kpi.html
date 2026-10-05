@@ -352,6 +352,10 @@
     }
 
     /* ===== KPIs ===== */
+    .page-container, .top-bar, .kpi-grid, .scorecard-grid, .kpi-card, .scorecard-card { max-width:100%; box-sizing:border-box; min-width:0; }
+    .kpi-grid > .kpi-card, .scorecard-grid > .scorecard-card { min-width:0; width:100%; }
+    .kpi-card .kpi-label, .kpi-card .kpi-trend, .scorecard-card .sc-title, .scorecard-card .sc-sub { overflow-wrap:anywhere; word-break:break-word; }
+    .kpi-card .kpi-value, .scorecard-card .sc-value { max-width:100%; overflow-wrap:anywhere; }
     .kpi-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -1360,52 +1364,24 @@
   </style>
   <meta name="reports-bridge-methods" content="getKPIDashboard,getKPIDetails">
   <script src="file:///android_asset/assets-local/js/reports-runtime.js"></script>
-<style>.report-source-banner{margin:8px 12px;padding:8px 10px;border-radius:10px;font-size:.78rem;display:flex;gap:8px;align-items:center}.report-source-banner.is-verified{border:1px solid rgba(16,185,129,.35)}.report-source-banner.is-incomplete{border:1px solid rgba(245,158,11,.4)}.report-source-banner.is-unavailable{border:1px solid rgba(239,68,68,.3)}
-    /* ===== ضمان استجابة KPI وعدم تجاوز حدود شاشة الهاتف ===== */
-    html, body {
-      width: 100%;
-      max-width: 100%;
-      min-width: 0;
-      overflow-x: hidden;
-      box-sizing: border-box;
+<style>.report-source-banner{margin:8px 12px;padding:8px 10px;border-radius:10px;font-size:.78rem;display:flex;gap:8px;align-items:center}.report-source-banner.is-verified{border:1px solid rgba(16,185,129,.35)}.report-source-banner.is-incomplete{border:1px solid rgba(245,158,11,.4)}.report-source-banner.is-unavailable{border:1px solid rgba(239,68,68,.3)}</style>
+
+    <style>
+    /* حاوية فلاتر قابلة للفتح والطي — تبدأ مطوية في كل مرة تُفتح فيها الشاشة */
+    .report-filter-toggle {
+      width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px;
+      margin:8px 0 0; padding:9px 14px; border:1px solid var(--border-color, rgba(148,163,184,.25));
+      border-radius:12px; background:var(--bg-glass, rgba(255,255,255,.04)); color:var(--text-primary, inherit);
+      font:700 .82rem/1.2 inherit; cursor:pointer; touch-action:manipulation;
     }
-    *, *::before, *::after {
-      box-sizing: border-box;
-    }
-    .top-bar, .main-content, .kpi-grid, .scorecard-grid, .charts-grid,
-    .performers-grid, .table-section {
-      width: 100%;
-      max-width: 100%;
-      min-width: 0;
-    }
-    .kpi-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      padding-inline: clamp(10px, 3vw, 22px);
-    }
-    .kpi-card, .scorecard-card, .chart-card, .performer-card {
-      min-width: 0;
-      max-width: 100%;
-    }
-    .kpi-card .kpi-value, .kpi-card .kpi-label,
-    .scorecard-card, .performer-card {
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-    @media (max-width: 480px) {
-      .kpi-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
-        padding-inline: 10px;
-      }
-      .kpi-card {
-        padding-inline: 8px;
-      }
-      .kpi-card .kpi-value {
-        max-width: 100%;
-        font-size: clamp(1rem, 4.6vw, 1.2rem);
-      }
-    }
-</style>
+    .report-filter-toggle:hover { border-color:var(--cobalt-primary, #3b82f6); }
+    .report-filter-toggle .filter-arrow { font-size:1rem; transition:transform .2s ease; }
+    .report-filter-toggle[aria-expanded="true"] .filter-arrow { transform:rotate(180deg); }
+    .report-filter-collapsible { overflow:hidden; max-height:0; opacity:0; visibility:hidden;
+      transition:max-height .25s ease, opacity .2s ease, padding .2s ease; }
+    .report-filter-collapsible.is-open { max-height:1200px; opacity:1; visibility:visible; }
+    </style>
+
 </head>
 <body>
 <!-- Pull-to-Refresh -->
@@ -1440,6 +1416,7 @@
         </button>
         <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
           <span id="themeIcon" aria-hidden="true">🌙</span>
+                <button type="button" class="icon-btn home-btn" id="homeBtn" onclick="location.href='../main.html'" title="الرئيسية" aria-label="الرئيسية"><span aria-hidden="true">🏠</span></button>
         </button>
         <button class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي">
           <i class="fas fa-robot" style="color:var(--cobalt-primary);"></i>
@@ -1510,7 +1487,7 @@
       <div class="kpi-icon gold">
         <i class="fas fa-arrow-trend-up"></i>
       </div>
-      <div class="kpi-value" id="kpiAchievement">—div>
+      <div class="kpi-value" id="kpiAchievement">—</div>
       <div class="kpi-label">🎯 متوسط الإنجاز</div>
       <div class="kpi-trend" id="trendAchiev">—</div>
     </div>
@@ -1536,25 +1513,25 @@
   <div class="scorecard-grid">
     <div class="scorecard-card financial">
       <div class="sc-title"><i class="fas fa-coins"></i> المنظور المالي</div>
-      <div class="sc-value" id="scFinancial">—div>
+      <div class="sc-value" id="scFinancial">—</div>
       <div class="sc-sub" id="scFinancialCount">0 مؤشرات</div>
       <div class="sc-bar"><div class="sc-bar-fill" id="scFinancialBar" style="width:0%"></div></div>
     </div>
     <div class="scorecard-card customer">
       <div class="sc-title"><i class="fas fa-users"></i> منظور العملاء</div>
-      <div class="sc-value" id="scCustomer">—div>
+      <div class="sc-value" id="scCustomer">—</div>
       <div class="sc-sub" id="scCustomerCount">0 مؤشرات</div>
       <div class="sc-bar"><div class="sc-bar-fill" id="scCustomerBar" style="width:0%"></div></div>
     </div>
     <div class="scorecard-card process">
       <div class="sc-title"><i class="fas fa-cogs"></i> العمليات الداخلية</div>
-      <div class="sc-value" id="scProcess">—div>
+      <div class="sc-value" id="scProcess">—</div>
       <div class="sc-sub" id="scProcessCount">0 مؤشرات</div>
       <div class="sc-bar"><div class="sc-bar-fill" id="scProcessBar" style="width:0%"></div></div>
     </div>
     <div class="scorecard-card learning">
       <div class="sc-title"><i class="fas fa-graduation-cap"></i> التعلّم والنمو</div>
-      <div class="sc-value" id="scLearning">—div>
+      <div class="sc-value" id="scLearning">—</div>
       <div class="sc-sub" id="scLearningCount">0 مؤشرات</div>
       <div class="sc-bar"><div class="sc-bar-fill" id="scLearningBar" style="width:0%"></div></div>
     </div>
@@ -1648,7 +1625,7 @@
         </span>
         <span class="total-item">
           <span class="label">متوسط الإنجاز:</span>
-          <span class="value" id="footerAvg">—span>
+          <span class="value" id="footerAvg">—</span>
         </span>
         <span class="total-item">
           <span class="label">حرج:</span>
@@ -1692,7 +1669,7 @@
         <i class="fas fa-robot"></i><span>AI</span>
       </button>
       <button class="sidebar-btn" data-action="home">
-        <span class="back-emoji" aria-hidden="true">🏠</span><span>رجوع</span>
+        <span aria-hidden="true">🏠</span><span>رجوع</span>
       </button>
     </div>
   </aside>
@@ -1955,14 +1932,14 @@
       const next = current === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       localStorage.setItem('kpi_theme', next);
-      $('themeIcon').textContent = next === 'dark' ? '🌞' : '🌙'; $('themeIcon').className = '';
+      $('themeIcon').textContent = next === 'dark' ? '🌞' : '🌙';
       haptic('light');
     }
 
     function loadSavedTheme() {
       const saved = localStorage.getItem('kpi_theme') || 'dark';
       document.documentElement.setAttribute('data-theme', saved);
-      $('themeIcon').textContent = saved === 'dark' ? '🌞' : '🌙'; $('themeIcon').className = '';
+      $('themeIcon').textContent = saved === 'dark' ? '🌞' : '🌙';
     }
 
     // ================================================================
@@ -3234,5 +3211,32 @@
   </script>
 
   <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
+
+<script>
+(function initReportFilterCollapse(){
+  function setup(){
+    document.querySelectorAll('.filter-bar, .filter-chips').forEach(function(container, index){
+      if (!container || container.dataset.filterCollapseReady === '1') return;
+      container.dataset.filterCollapseReady = '1';
+      container.classList.add('report-filter-collapsible');
+      var id = 'reportFilterPanel_' + index;
+      container.id = container.id || id;
+      var toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'report-filter-toggle';
+      toggle.setAttribute('aria-expanded','false');
+      toggle.setAttribute('aria-controls',container.id);
+      toggle.innerHTML = '<span>عناصر الفلترة</span><span class="filter-arrow" aria-hidden="true">▼</span>';
+      container.parentNode.insertBefore(toggle, container);
+      toggle.addEventListener('click', function(){
+        var open = container.classList.toggle('is-open');
+        toggle.setAttribute('aria-expanded', String(open));
+      });
+    });
+  }
+  setup();
+})();
+</script>
+
 </body>
 </html>

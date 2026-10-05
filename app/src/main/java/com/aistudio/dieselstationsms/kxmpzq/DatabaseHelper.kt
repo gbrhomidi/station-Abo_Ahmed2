@@ -16699,78 +16699,30 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         // 6. الفواتير المستحقة (خلال أسبوع) في المحطة
         db.rawQuery(
             """SELECT COUNT(*) FROM sales_transactions
-               WHERE station_id=?
-               AND is_credit=1
-               AND remaining_amount > 0
-               AND date(COALESCE(due_date, created_at)) BETWEEN date('now') AND date('now', '+7 days')
-               AND is_deleted=0
-               AND status NOT IN ('cancelled', 'refunded')""",
+               WHERE station_id=? AND remaining_amount > 0
+               AND date(due_date) BETWEEN date('now') AND date('now', '+7 days')
+               AND is_deleted=0""",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("due_invoices", cursor.getInt(0))
         }
 
-        // 7. المرتجعات اليومية: وقود ومنتجات من جداول التسوية الفعلية.
-        // fuel_sale_adjustments هو المصدر القانوني لمرتجعات الوقود،
-        // وsale_item_adjustments هو المصدر القانوني لمرتجعات المنتجات.
+        // 7. كمية المنتجات المرتجعة اليوم في المحطة
         db.rawQuery(
-            """SELECT
-                   COALESCE(SUM(CASE WHEN adjustment_type='return' THEN quantity ELSE 0 END), 0)
-               FROM fuel_sale_adjustments
-               WHERE station_id=?
-                 AND adjustment_type='return'
-                 AND status='posted'
-                 AND date(created_at)=date('now')""",
+            """SELECT COALESCE(SUM(quantity_change),0) FROM inventory_movements
+               WHERE station_id=? AND movement_type='return' AND date(created_at)=date('now') AND is_deleted=0""",
             arrayOf(stationId.toString())
         ).use { cursor ->
-            if (cursor.moveToFirst()) stats.put("returned_fuel_today", cursor.getDouble(0))
+            if (cursor.moveToFirst()) stats.put("returned_products_today", cursor.getDouble(0))
         }
 
+        // 8. كمية المنتجات التالفة اليوم في المحطة (مع station_id)
         db.rawQuery(
-            """SELECT
-                   COALESCE(SUM(CASE WHEN adjustment_type='return' THEN quantity ELSE 0 END), 0)
-               FROM sale_item_adjustments
-               WHERE station_id=?
-                 AND adjustment_type='return'
-                 AND status='posted'
-                 AND date(created_at)=date('now')""",
+            "SELECT COALESCE(SUM(quantity),0) FROM damaged_products WHERE station_id=? AND date(report_date)=date('now') AND status='approved'",
             arrayOf(stationId.toString())
         ).use { cursor ->
-            if (cursor.moveToFirst()) stats.put("returned_product_today", cursor.getDouble(0))
+            if (cursor.moveToFirst()) stats.put("damaged_products_today", cursor.getDouble(0))
         }
-
-        // مفاتيح التوافق القديمة: قيمة المنتجات المرتجعة فقط.
-        stats.put("returned_products_today", stats.optDouble("returned_product_today", 0.0))
-
-        // 8. التالف اليومي: وقود من fuel_sale_adjustments ومنتجات من damaged_products.
-        db.rawQuery(
-            """SELECT
-                   COALESCE(SUM(CASE WHEN adjustment_type='damage' THEN quantity ELSE 0 END), 0)
-               FROM fuel_sale_adjustments
-               WHERE station_id=?
-                 AND adjustment_type='damage'
-                 AND status='posted'
-                 AND date(created_at)=date('now')""",
-            arrayOf(stationId.toString())
-        ).use { cursor ->
-            if (cursor.moveToFirst()) stats.put("damaged_fuel_today", cursor.getDouble(0))
-        }
-
-        db.rawQuery(
-            """SELECT
-                   COALESCE(SUM(quantity), 0)
-               FROM damaged_products
-               WHERE station_id=?
-                 AND date(report_date)=date('now')
-                 AND status='approved'
-                 AND archived=0""",
-            arrayOf(stationId.toString())
-        ).use { cursor ->
-            if (cursor.moveToFirst()) stats.put("damaged_product_today", cursor.getDouble(0))
-        }
-
-        // مفتاح التوافق القديم: قيمة المنتجات التالفة فقط.
-        stats.put("damaged_products_today", stats.optDouble("damaged_product_today", 0.0))
 
         // 9. مديونية العملاء (المبالغ المتبقية للفواتير الآجلة) في المحطة
         db.rawQuery(
@@ -23442,10 +23394,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 require(startDate <= endDate) { "تاريخ البداية يجب ألا يكون بعد تاريخ النهاية" }
             }
             val sql = """SELECT s.id AS sale_id, s.invoice_number, s.created_at AS sale_date,
-                    si.product_id, p.product_name, p.barcode,
+                    si.id AS item_id, si.product_id, p.product_name, p.barcode,
                     si.quantity, COALESCE(si.returned_quantity, 0) AS returned_quantity,
-                    MAX(0, si.quantity - COALESCE(si.returned_quantity, 0)) AS returnable_quantity,
-                    MAX(0, si.quantity - COALESCE(si.returned_quantity, 0)) AS net_quantity,
+                    COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'), 0) AS damaged_quantity,
+                    MAX(0, si.quantity - COALESCE(si.returned_quantity, 0) - COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'), 0)) AS returnable_quantity,
+                    MAX(0, si.quantity - COALESCE(si.returned_quantity, 0) - COALESCE((SELECT SUM(a.quantity) FROM sale_item_adjustments a WHERE a.sale_item_id=si.id AND a.adjustment_type='damage' AND a.status='posted'), 0)) AS net_quantity,
                     si.unit_price,
                     si.line_total AS total_price,
                     (si.line_total * CASE WHEN si.quantity > 0 THEN MAX(0, si.quantity - COALESCE(si.returned_quantity, 0)) / si.quantity ELSE 0 END) AS net_total
@@ -23780,7 +23733,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     private fun findFinancialAccount(db: SQLiteDatabase, kind: String): Long {
         val sql = when (kind) {
             "revenue" -> "SELECT id FROM accounts WHERE account_type='revenue' AND is_active=1 AND is_deleted=0 ORDER BY CASE WHEN account_category LIKE '%sales%' OR account_category LIKE '%revenue%' THEN 0 ELSE 1 END, id LIMIT 1"
-            "cash" -> "SELECT id FROM accounts WHERE is_cash_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1"
+            "cash" -> """
+                SELECT id
+                FROM accounts
+                WHERE account_type='asset'
+                  AND is_active=1
+                  AND is_deleted=0
+                  AND (
+                      is_cash_account=1
+                      OR account_code='1101'
+                      OR account_name_ar LIKE '%النقدية بالصندوق%'
+                      OR account_name LIKE '%Cash on Hand%'
+                  )
+                ORDER BY CASE WHEN is_cash_account=1 THEN 0 ELSE 1 END,
+                         CASE WHEN account_code='1101' THEN 0 ELSE 1 END,
+                         id
+                LIMIT 1
+            """
             "bank" -> "SELECT id FROM accounts WHERE is_bank_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1"
             "receivable" -> "SELECT id FROM accounts WHERE account_type='asset' AND is_active=1 AND is_deleted=0 AND (account_category LIKE '%receiv%' OR account_name LIKE '%customer%' OR account_name_ar LIKE '%عملاء%' OR account_name_ar LIKE '%ذمم%') ORDER BY id LIMIT 1"
             else -> throw IllegalArgumentException("نوع الحساب المالي غير معروف")

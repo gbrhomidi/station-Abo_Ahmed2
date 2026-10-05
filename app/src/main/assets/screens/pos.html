@@ -4960,7 +4960,7 @@ async function sendInvoiceWhatsApp() {
             const response = await Promise.race([nativePromise, timeoutPromise]);
             if (response && response.success) {
                 imageShared = true;
-                showToast(response.message || 'تم إنشاء JPG وفتح WhatsApp.', 'success');
+                showToast(response.message || 'تم إنشاء PNG وفتح WhatsApp.', 'success');
             }
         } catch (nativeError) {
             console.warn('Native JPG share unavailable, falling back to text:', nativeError && nativeError.message);
@@ -5330,7 +5330,7 @@ function saveReturn() {
     apiCall('processProductSaleAdjustment', {
         invoice_number: invoiceNumber,
         sale_id: Number(selectedReturnSale.sale_id || 0),
-        sale_item_id: Number(selectedReturnSale.item_id || 0),
+        sale_item_id: Number(selectedReturnSale.item_id || selectedReturnSale.sale_item_id || 0),
         product_id: Number(selectedReturnSale.product_id || 0),
         barcode: String(selectedReturnSale.barcode || ''),
         quantity,
