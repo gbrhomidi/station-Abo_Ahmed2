@@ -45,7 +45,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 40
+        const val VERSION = 41
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -208,6 +208,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureFuelCommerceSchema(db)
             ensureFuelStocktakeSchema(db)
             ensureFinanceIntegritySchema(db)
+            ensurePricingV41Schema(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
         } finally {
@@ -254,6 +255,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     34 -> migrateV34ToV35(db)
                     35 -> migrateV35ToV36(db)
                     36 -> migrateV36ToV37(db)
+                    40 -> migrateV40ToV41(db)
                 }
             }
             ensureModule006Schema(db)
@@ -268,6 +270,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureVehicleArchiveSchema(db)
             ensureVehicleTripLifecycleSchema(db)
             ensureFinanceIntegritySchema(db)
+            ensurePricingV41Schema(db)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -1424,6 +1427,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureColumn(db, "fuel_sales", "station_id", "INTEGER")
         ensureColumn(db, "fuel_sales", "status", "TEXT DEFAULT 'completed'")
         ensureColumn(db, "fuel_sales", "updated_at", "TEXT")
+        ensureColumn(db, "fuel_sales", "business_day", "TEXT")
         db.execSQL("""
             UPDATE fuel_sales
                SET station_id = (SELECT station_id FROM sales_transactions st WHERE st.id = fuel_sales.sale_id)
@@ -9197,6 +9201,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("status", "completed")
                     put("remarks", notes)
                     put("order_type", orderType)
+                    put("business_day", BusinessDay.currentDate())
                     if (deliveryLocation != null) put("delivery_location", deliveryLocation)
                     if (deliveryTime != null) put("delivery_time", deliveryTime)
                 }
@@ -9213,6 +9218,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("is_partial", if (actualPaid + 1e-9 < netAmount) 1 else 0)
                         put("total_invoice_amount", netAmount)
                         put("remaining_after", (netAmount - actualPaid).coerceAtLeast(0.0))
+                        put("business_day", BusinessDay.currentDate())
                         put("status", "completed")
                         put("created_by", cashierId)
                     }
@@ -10057,13 +10063,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val fuelTypeId = data.optLong("fuel_type_id", 0L).toInt()
         require(fuelTypeId > 0) { "نوع الوقود مطلوب للطلب" }
         val db = writableDatabase
-        val pricePerLiter = if (data.has("price_per_liter") && !data.isNull("price_per_liter")) data.optDouble("price_per_liter", Double.NaN) else db.rawQuery(
-            "SELECT default_sale_price FROM fuel_types WHERE id = ? AND is_deleted = 0 AND is_active = 1",
-            arrayOf(fuelTypeId.toString())
-        ).use { cursor -> if (cursor.moveToFirst()) cursor.getDouble(0) else Double.NaN }
-        require(pricePerLiter.isFinite() && pricePerLiter >= 0.0) { "سعر الوقود غير متاح أو غير صالح" }
+        val resolvedPrice = resolveFuelSalePrice(fuelTypeId.toLong(), stationScopeId, customerPartyId?.toLong(), data.optString("transaction_time", "").ifBlank { getCurrentDateTime() })
+        val pricePerLiter = resolvedPrice.unitPrice
         val subtotal = liters * pricePerLiter
-        val totalAmount = data.optDouble("total_amount", subtotal)
+        val totalAmount = subtotal
         require(totalAmount.isFinite() && totalAmount >= 0.0) { "إجمالي الطلب غير صالح" }
         val paymentMethod = when (data.optString("payment_method", "credit")) {
             "بطاقة", "credit_card" -> "credit_card"
@@ -10909,18 +10912,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(stationScopeId > 0) { "معرف المحطة غير صالح" }
         require(cashierId > 0) { "معرف المستخدم غير صالح" }
         val liters = data.optDouble("quantity", 0.0)
-        val pricePerLiter = data.optDouble("price_per_liter", Double.NaN)
         require(liters.isFinite() && liters > 0.0) { "كمية الوقود يجب أن تكون أكبر من صفر" }
-        require(pricePerLiter.isFinite() && pricePerLiter >= 0.0) { "سعر الوقود غير صالح" }
-        val subtotal = liters * pricePerLiter
-        val totalAmount = data.optDouble("total_amount", subtotal)
-        require(totalAmount.isFinite() && totalAmount >= 0.0) { "إجمالي مبيعات الوقود غير صالح" }
         val shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0L)?.toInt()
             ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
         val customerId = data.optLong("customer_id", 0L).takeIf { it > 0L }?.toInt()
         val pumpId = data.optLong("pump_id", 0L).takeIf { it > 0L }?.toInt()
         val fuelTypeId = data.optLong("fuel_type_id", 0L).toInt()
         require(fuelTypeId > 0) { "نوع الوقود مطلوب" }
+        val requestedAt = data.optString("transaction_time", "").trim().ifBlank { getCurrentDateTime() }
+        val resolvedPrice = resolveFuelSalePrice(fuelTypeId.toLong(), stationScopeId, customerId?.toLong(), requestedAt)
+        val pricePerLiter = resolvedPrice.unitPrice
+        val subtotal = liters * pricePerLiter
+        val totalAmount = subtotal
         val paymentMethod = when (data.optString("payment_method", "cash").trim()) {
             "آجل", "credit", "credit_sale", "credit_account" -> "credit"
             "بطاقة", "card", "credit_card", "debit_card" -> "credit_card"
@@ -10991,12 +10994,21 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("vehicle_plate", data.optString("vehicle_plate", ""))
                     put("sale_date", data.optString("sale_date", getCurrentDate()))
                     put("sale_time", data.optString("sale_time", getCurrentTime()))
+                    put("business_day", BusinessDay.currentDate())
                     put("notes", data.optString("notes", ""))
                     put("status", "completed")
                     put("created_at", getCurrentDateTime())
                     put("updated_at", getCurrentDateTime())
                 }
                 db.insertOrThrow("fuel_sales", null, cv)
+                db.update("sales_transactions", ContentValues().apply {
+                    put("extra_data", JSONObject().apply {
+                        put("price_source", resolvedPrice.source)
+                        put("price_source_id", resolvedPrice.sourceId ?: JSONObject.NULL)
+                        put("price_reason", resolvedPrice.reason ?: JSONObject.NULL)
+                        put("price_valid_until", resolvedPrice.validUntil ?: JSONObject.NULL)
+                    }.toString())
+                }, "id = ? AND station_id = ?", arrayOf(saleId.toString(), stationScopeId.toString()))
 
                 db.rawQuery(
                     """
@@ -11174,18 +11186,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 require(productId > 0L) { "المنتج في السطر ${i + 1} غير صالح" }
                 require(quantity.isFinite() && quantity > 0.0) { "كمية السطر ${i + 1} غير صالحة" }
                 val product = db.rawQuery(
-                    "SELECT id, sale_price, product_name FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'",
+                    "SELECT id, product_name FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'",
                     arrayOf(productId.toString(), stationScopeId.toString())
                 ).use { cursor ->
                     require(cursor.moveToFirst()) { "المنتج في السطر ${i + 1} خارج نطاق المحطة أو غير نشط" }
-                    JSONObject().apply { put("id", cursor.getLong(0)); put("unit_price", cursor.getDouble(1)); put("product_name", cursor.getString(2)) }
+                    JSONObject().apply { put("id", cursor.getLong(0)); put("product_name", cursor.getString(1)) }
                 }
-                val unitPrice = product.getDouble("unit_price")
+                val resolvedPrice = resolveProductSalePrice(productId, stationScopeId, data.optLong("entity_id", 0L).takeIf { it > 0L }, data.optString("transaction_time", "").trim().ifBlank { getCurrentDateTime() }, data.optString("occasion_code", "").trim().ifBlank { null })
+                val unitPrice = resolvedPrice.unitPrice
                 require(unitPrice.isFinite() && unitPrice >= 0.0) { "سعر المنتج غير صالح" }
                 val lineTotal = quantity * unitPrice
                 require(lineTotal.isFinite() && lineTotal >= 0.0) { "إجمالي السطر غير صالح" }
                 total += lineTotal
-                prepared += JSONObject().apply { put("product_id", productId); put("quantity", quantity); put("unit_price", unitPrice); put("line_total", lineTotal) }
+                prepared += JSONObject().apply { put("product_id", productId); put("quantity", quantity); put("unit_price", unitPrice); put("line_total", lineTotal); put("price_source", resolvedPrice.source); put("price_source_id", resolvedPrice.sourceId ?: JSONObject.NULL); put("price_reason", resolvedPrice.reason ?: JSONObject.NULL); put("price_valid_until", resolvedPrice.validUntil ?: JSONObject.NULL) }
             }
             require(total.isFinite() && total >= 0.0) { "إجمالي البيع غير صالح" }
             val paymentType = data.optString("payment_type", "cash")
@@ -11235,6 +11248,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 paidAmount = paidAmount,
                 manageTransaction = false
             )
+            val pricingMetadata = JSONArray()
+            prepared.forEach { item -> pricingMetadata.put(JSONObject().apply {
+                put("product_id", item.getLong("product_id"))
+                put("unit_price", item.getDouble("unit_price"))
+                put("price_source", item.getString("price_source"))
+                put("price_source_id", item.opt("price_source_id"))
+                put("price_reason", item.opt("price_reason"))
+                put("price_valid_until", item.opt("price_valid_until"))
+            }) }
+            db.update("sales_transactions", ContentValues().apply { put("extra_data", JSONObject().apply { put("pricing", pricingMetadata); put("business_day", BusinessDay.currentDate()) }.toString()) }, "id = ? AND station_id = ?", arrayOf(saleId.toString(), stationScopeId.toString()))
 
             prepared.forEachIndexed { index, item ->
                 val productId = item.getLong("product_id")
@@ -22907,7 +22930,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             var oldMinimumStock = 0.0
             var oldCategoryId = 0L
             var oldUnitId = 0L
-            var oldProductName = ""
             db.rawQuery("SELECT sale_price, purchase_price, quantity, minimum_stock, category_id, unit_id, product_name FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString())).use { cursor ->
                 require(cursor.moveToFirst()) { "المنتج غير موجود في نطاق المحطة" }
                 oldSalePrice = cursor.getDouble(0)
@@ -22916,7 +22938,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 oldMinimumStock = cursor.getDouble(3)
                 oldCategoryId = cursor.getLong(4)
                 oldUnitId = cursor.getLong(5)
-                oldProductName = cursor.getString(6) ?: ""
             }
             val newSalePrice = if (data.has("sale_price")) data.optDouble("sale_price", Double.NaN) else oldSalePrice
             val newPurchasePrice = if (data.has("purchase_price")) data.optDouble("purchase_price", Double.NaN) else oldPurchasePrice
@@ -22957,18 +22978,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
                 val rows = db.update("products", cv, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString()))
                 require(rows == 1) { "تعذر تحديث المنتج داخل نطاق المحطة" }
-                if (data.has("sale_price") && newSalePrice != oldSalePrice) {
-                    val history = ContentValues().apply {
-                        put("product_id", id)
-                        put("old_price", oldSalePrice)
-                        put("new_price", newSalePrice)
-                        put("change_date", getCurrentDateTime())
-                        put("change_reason", data.optString("change_reason", "تغيير سعر المنتج: $oldProductName"))
-                        put("created_by", actorId)
-                        put("archived", 0)
-                    }
-                    db.insertOrThrow("price_history", null, history)
-                }
                 logActivity("system", "update_product", "تحديث منتج $id في المحطة $stationScopeId")
                 db.setTransactionSuccessful()
                 rows
@@ -28501,6 +28510,47 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
     }
 
+
+    fun addPriceListItemsBatch(data: JSONObject, actorId: Long, stationScopeId: Int): JSONArray {
+        require(actorId > 0 && stationScopeId > 0) { "سياق المستخدم والمحطة مطلوب" }
+        val listId = data.optLong("price_list_id", 0L)
+        val items = data.optJSONArray("items") ?: throw IllegalArgumentException("بنود قائمة الأسعار مطلوبة")
+        require(listId > 0 && items.length() > 0) { "قائمة الأسعار والبنود مطلوبة" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                db.rawQuery("SELECT id FROM price_lists WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(listId.toString(), stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "قائمة الأسعار خارج نطاق المحطة" } }
+                val result = JSONArray()
+                for (i in 0 until items.length()) {
+                    val item = items.getJSONObject(i)
+                    val productId = item.optLong("product_id", 0L)
+                    val unitPrice = item.optDouble("unit_price", Double.NaN)
+                    require(productId > 0 && unitPrice.isFinite() && unitPrice >= 0) { "بيانات بند الأسعار رقم ${i + 1} غير صالحة" }
+                    db.rawQuery("SELECT id FROM products WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(productId.toString(), stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "المنتج في البند ${i + 1} خارج نطاق المحطة" } }
+                    val id = db.insertOrThrow("price_list_items", null, ContentValues().apply {
+                        put("uuid", UUID.randomUUID().toString()); put("price_list_id", listId); put("product_id", productId); put("unit_price", unitPrice)
+                        put("min_quantity", item.optDouble("min_quantity", 1.0)); put("max_quantity", item.optDouble("max_quantity", 0.0).takeIf { it > 0 }); put("discount_percent", item.optDouble("discount_percent", 0.0))
+                        put("valid_from", item.optString("valid_from").takeIf { it.isNotBlank() }); put("valid_to", item.optString("valid_to").takeIf { it.isNotBlank() }); put("is_active", item.optInt("is_active", 1))
+                    })
+                    result.put(id)
+                }
+                db.update("price_lists", ContentValues().apply { put("updated_at", getCurrentDateTime()) }, "id=? AND station_id=?", arrayOf(listId.toString(), stationScopeId.toString()))
+                db.setTransactionSuccessful()
+                result
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getNextPriceListCode(stationScopeId: Int): String {
+        require(stationScopeId > 0)
+        return readableDatabase.rawQuery("SELECT COALESCE(MAX(CAST(substr(list_code, instr(list_code, '-') + 1) AS INTEGER)), 0) FROM price_lists WHERE station_id=?", arrayOf(stationScopeId.toString())).use { c ->
+            val next = if (c.moveToFirst()) c.getLong(0) + 1 else 1L
+            "PL-${next.toString().padStart(3, '0')}"
+        }
+    }
+
     fun insertPriceListItem(data: JSONObject, actorId: Long = 0L, stationScopeId: Int? = null): Long {
         val listId = data.optLong("price_list_id").also { require(it > 0) }
         val productId = data.optLong("product_id").also { require(it > 0) }
@@ -28547,6 +28597,209 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
     }
 
+
+
+    // ========================================================================
+    // Pricing V41: مصدر الحقيقة المركزي للأسعار + اليوم التشغيلي
+    // ========================================================================
+
+    private fun migrateV40ToV41(db: SQLiteDatabase) {
+        ensurePricingV41Schema(db)
+        Log.d(TAG, "Migrated pricing/business-day schema V40 -> V41")
+    }
+
+    private fun ensurePricingV41Schema(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS fuel_price_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                fuel_type_id INTEGER NOT NULL,
+                station_id INTEGER NOT NULL,
+                old_price REAL,
+                new_price REAL NOT NULL CHECK(new_price >= 0),
+                price_kind TEXT NOT NULL DEFAULT 'default',
+                change_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                change_reason TEXT,
+                created_by INTEGER,
+                archived INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (fuel_type_id) REFERENCES fuel_types(id),
+                FOREIGN KEY (station_id) REFERENCES stations(id),
+                FOREIGN KEY (created_by) REFERENCES users(id)
+            )
+        """.trimIndent())
+        ensureColumn(db, "price_lists", "occasion_code", "TEXT")
+        ensureColumn(db, "price_lists", "occasion_name_ar", "TEXT")
+        ensureColumn(db, "price_lists", "applies_when", "TEXT")
+        ensureColumn(db, "price_lists", "clearance_mode", "TEXT")
+        ensureColumn(db, "price_lists", "clearance_stock_below", "REAL")
+        ensureColumn(db, "price_lists", "priority", "INTEGER NOT NULL DEFAULT 0")
+        ensureColumn(db, "sales_transactions", "business_day", "TEXT")
+        ensureColumn(db, "payments", "business_day", "TEXT")
+        ensureColumn(db, "stock_movements", "business_day", "TEXT")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_price_history_station_fuel_date ON fuel_price_history(station_id, fuel_type_id, change_date, id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_price_lists_resolution ON price_lists(station_id, is_deleted, is_active, priority, valid_from, valid_to)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_price_list_items_resolution ON price_list_items(price_list_id, product_id, is_active, valid_from, valid_to)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_business_day ON sales_transactions(station_id, business_day, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_sales_business_day ON fuel_sales(station_id, business_day, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_payments_business_day ON payments(business_day, created_at)")
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS trg_products_sale_price_history AFTER UPDATE OF sale_price ON products\n            WHEN OLD.sale_price IS NOT NEW.sale_price AND NEW.is_deleted = 0\n            BEGIN\n                INSERT INTO price_history(product_id, old_price, new_price, change_date, change_reason, created_by, archived)\n                VALUES(OLD.id, OLD.sale_price, NEW.sale_price, COALESCE(NEW.updated_at, CURRENT_TIMESTAMP), 'تغيير سعر المنتج', NEW.updated_by, 0);\n            END")
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS trg_fuel_types_sale_price_history AFTER UPDATE OF default_sale_price ON fuel_types\n            WHEN OLD.default_sale_price IS NOT NEW.default_sale_price AND NEW.is_deleted = 0\n            BEGIN\n                INSERT INTO fuel_price_history(uuid, fuel_type_id, station_id, old_price, new_price, price_kind, change_date, change_reason, created_by, archived)\n                SELECT lower(hex(randomblob(16))), OLD.id, s.id, OLD.default_sale_price, NEW.default_sale_price, 'default', COALESCE(NEW.updated_at, CURRENT_TIMESTAMP), 'تغيير سعر الوقود', NEW.updated_by, 0\n                FROM stations s WHERE s.id IN (SELECT DISTINCT station_id FROM tanks WHERE fuel_type_id = OLD.id AND is_deleted = 0);\n            END")
+        db.execSQL("UPDATE sales_transactions SET business_day = substr(COALESCE(created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
+        db.execSQL("UPDATE fuel_sales SET business_day = substr(COALESCE(sale_date, created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
+        db.execSQL("UPDATE payments SET business_day = substr(COALESCE(created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
+        db.execSQL("UPDATE stock_movements SET business_day = substr(COALESCE(movement_date, created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
+    }
+
+    private fun parsePriceInstant(value: String): String = value.trim().replace('T', ' ')
+
+    private fun priceValiditySql(alias: String, time: String): String = "($alias.valid_from IS NULL OR trim($alias.valid_from) = '' OR replace($alias.valid_from,'T',' ') <= ?) AND ($alias.valid_to IS NULL OR trim($alias.valid_to) = '' OR ? < replace($alias.valid_to,'T',' '))"
+
+    fun resolveProductSalePrice(productId: Long, stationScopeId: Int, customerId: Long? = null, transactionTime: String = getCurrentDateTime(), occasionCode: String? = null): PriceResolution {
+        require(productId > 0 && stationScopeId > 0) { "معرف المنتج والمحطة مطلوبان" }
+        val at = parsePriceInstant(transactionTime.ifBlank { getCurrentDateTime() })
+        val db = readableDatabase
+        val customer = customerId?.takeIf { it > 0 }
+        val occasion = occasionCode?.trim()?.takeIf { it.isNotEmpty() }
+        val sql = """
+            SELECT pli.unit_price, pl.id, pl.list_code, pl.priority,
+                   CASE WHEN pl.party_id = ? THEN 4 WHEN pl.party_type_id IS NOT NULL AND pl.party_type_id = (SELECT party_type_id FROM parties WHERE id = ? AND station_id = ?) THEN 3 ELSE 0 END AS specificity,
+                   pl.valid_from, pl.valid_to, pl.list_name_ar, pl.occasion_code
+            FROM price_list_items pli JOIN price_lists pl ON pl.id = pli.price_list_id
+            WHERE pli.product_id = ? AND pli.is_active = 1 AND pl.is_active = 1 AND pl.is_deleted = 0 AND (pl.station_id = ? OR pl.station_id IS NULL)
+              AND ${priceValiditySql("pl", "?")} AND ${priceValiditySql("pli", "?")}
+              AND (pl.occasion_code IS NULL OR trim(pl.occasion_code) = '' OR pl.occasion_code = ?)
+            ORDER BY pl.priority DESC, specificity DESC, CASE WHEN pl.station_id = ? THEN 1 ELSE 0 END DESC, replace(COALESCE(pli.valid_from, pl.valid_from, ''),'T',' ') DESC, pl.id DESC, pli.id DESC
+            LIMIT 1
+        """
+        val args = arrayOf(
+            customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(),
+            productId.toString(), stationScopeId.toString(), at, at, at, at, occasion ?: "", stationScopeId.toString()
+        )
+        db.rawQuery(sql, args).use { c ->
+            if (c.moveToFirst()) return PriceResolution(c.getDouble(0), "price_list", c.getLong(1), c.getString(7), c.getString(6))
+        }
+        db.rawQuery("SELECT sale_price FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'", arrayOf(productId.toString(), stationScopeId.toString())).use { c ->
+            require(c.moveToFirst()) { "المنتج خارج نطاق المحطة أو غير نشط" }
+            val price = c.getDouble(0)
+            require(price.isFinite() && price >= 0) { "سعر المنتج المخزن غير صالح" }
+            return PriceResolution(price, "product.sale_price", productId, "السعر الافتراضي للمنتج", null)
+        }
+    }
+
+    fun resolveFuelSalePrice(fuelTypeId: Long, stationScopeId: Int, customerId: Long? = null, transactionTime: String = getCurrentDateTime()): PriceResolution {
+        require(fuelTypeId > 0 && stationScopeId > 0) { "معرف الوقود والمحطة مطلوبان" }
+        val at = parsePriceInstant(transactionTime.ifBlank { getCurrentDateTime() })
+        val db = readableDatabase
+        val customer = customerId?.takeIf { it > 0 }
+        val sql = """
+            SELECT pli.unit_price, pl.id, pl.list_code, pl.priority,
+                   CASE WHEN pl.party_id = ? THEN 4 WHEN pl.party_type_id IS NOT NULL AND pl.party_type_id = (SELECT party_type_id FROM parties WHERE id = ? AND station_id = ?) THEN 3 ELSE 0 END AS specificity,
+                   pl.valid_from, pl.valid_to, pl.list_name_ar
+            FROM price_list_items pli JOIN price_lists pl ON pl.id = pli.price_list_id
+            JOIN products p ON p.id = pli.product_id AND p.fuel_type_id = ? AND p.station_id = ? AND p.is_deleted = 0
+            WHERE pli.is_active = 1 AND pl.is_active = 1 AND pl.is_deleted = 0 AND (pl.station_id = ? OR pl.station_id IS NULL)
+              AND ${priceValiditySql("pl", "?")} AND ${priceValiditySql("pli", "?")}
+            ORDER BY pl.priority DESC, specificity DESC, CASE WHEN pl.station_id = ? THEN 1 ELSE 0 END DESC, replace(COALESCE(pli.valid_from, pl.valid_from, ''),'T',' ') DESC, pl.id DESC, pli.id DESC
+            LIMIT 1
+        """
+        val args = arrayOf(customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(), fuelTypeId.toString(), stationScopeId.toString(), stationScopeId.toString(), at, at, at, at, stationScopeId.toString())
+        db.rawQuery(sql, args).use { c -> if (c.moveToFirst()) return PriceResolution(c.getDouble(0), "fuel_price_list", c.getLong(1), c.getString(6), c.getString(5)) }
+        db.rawQuery("SELECT default_sale_price FROM fuel_types WHERE id = ? AND is_deleted = 0 AND is_active = 1", arrayOf(fuelTypeId.toString())).use { c ->
+            require(c.moveToFirst()) { "نوع الوقود غير صالح" }
+            val price = c.getDouble(0)
+            require(price.isFinite() && price >= 0) { "سعر الوقود المخزن غير صالح" }
+            return PriceResolution(price, "fuel_type.default_sale_price", fuelTypeId, "السعر الافتراضي للوقود", null)
+        }
+    }
+
+    fun changeProductSalePrice(productId: Long, newPrice: Double, stationScopeId: Int, actorId: Long, reason: String = ""): PriceResolution {
+        require(productId > 0 && stationScopeId > 0 && actorId > 0) { "بيانات تغيير السعر غير صالحة" }
+        require(newPrice.isFinite() && newPrice >= 0) { "السعر الجديد غير صالح" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                db.rawQuery("SELECT sale_price, purchase_price FROM products WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(productId.toString(), stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "المنتج خارج نطاق المحطة" }; require(newPrice + 1e-9 >= c.getDouble(1)) { "سعر البيع أقل من سعر الشراء" } }
+                val rows = db.update("products", ContentValues().apply { put("sale_price", newPrice); put("updated_by", actorId); put("updated_at", getCurrentDateTime()) }, "id=? AND station_id=? AND is_deleted=0", arrayOf(productId.toString(), stationScopeId.toString()))
+                require(rows == 1) { "تعذر تغيير سعر المنتج" }
+                db.execSQL("UPDATE price_history SET change_reason=? WHERE id=(SELECT id FROM price_history WHERE product_id=? ORDER BY id DESC LIMIT 1)", arrayOf(reason.ifBlank { "تغيير سعر المنتج" }, productId))
+                db.setTransactionSuccessful()
+                PriceResolution(newPrice, "product.sale_price", productId, reason.ifBlank { "تغيير سعر المنتج" }, null)
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+    fun changeFuelSalePrice(fuelTypeId: Long, newPrice: Double, stationScopeId: Int, actorId: Long, reason: String = "", priceKind: String = "default"): PriceResolution {
+        require(fuelTypeId > 0 && stationScopeId > 0 && actorId > 0) { "بيانات تغيير السعر غير صالحة" }
+        require(newPrice.isFinite() && newPrice >= 0) { "السعر الجديد غير صالح" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                var oldPrice = 0.0
+                db.rawQuery("SELECT default_sale_price FROM fuel_types WHERE id=? AND is_deleted=0 AND is_active=1", arrayOf(fuelTypeId.toString())).use { c -> require(c.moveToFirst()) { "نوع الوقود غير صالح" }; oldPrice = if (c.isNull(0)) 0.0 else c.getDouble(0) }
+                db.rawQuery("SELECT 1 FROM tanks WHERE station_id=? AND fuel_type_id=? AND is_deleted=0 LIMIT 1", arrayOf(stationScopeId.toString(), fuelTypeId.toString())).use { c -> require(c.moveToFirst()) { "نوع الوقود غير مرتبط بالمحطة الحالية" } }
+                val rows = db.update("fuel_types", ContentValues().apply { put("default_sale_price", newPrice); put("updated_by", actorId); put("updated_at", getCurrentDateTime()) }, "id=? AND is_deleted=0", arrayOf(fuelTypeId.toString()))
+                require(rows == 1) { "تعذر تغيير سعر الوقود" }
+                val historyUpdated = db.update("fuel_price_history", ContentValues().apply { put("change_reason", reason.ifBlank { "تغيير سعر الوقود" }); put("price_kind", priceKind) }, "id=(SELECT id FROM fuel_price_history WHERE fuel_type_id=? AND station_id=? ORDER BY id DESC LIMIT 1)", arrayOf(fuelTypeId.toString(), stationScopeId.toString()))
+                if (historyUpdated == 0) {
+                    db.insertOrThrow("fuel_price_history", null, ContentValues().apply {
+                        put("uuid", UUID.randomUUID().toString()); put("fuel_type_id", fuelTypeId); put("station_id", stationScopeId); put("old_price", oldPrice); put("new_price", newPrice); put("price_kind", priceKind); put("change_date", getCurrentDateTime()); put("change_reason", reason.ifBlank { "تغيير سعر الوقود" }); put("created_by", actorId); put("archived", 0)
+                    })
+                }
+                db.setTransactionSuccessful()
+                PriceResolution(newPrice, "fuel_type.default_sale_price", fuelTypeId, reason.ifBlank { "تغيير سعر الوقود" }, null)
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+    fun changePriceListItemPrice(id: Long, newPrice: Double, stationScopeId: Int, actorId: Long): PriceResolution {
+        require(id > 0 && stationScopeId > 0 && actorId > 0) { "بيانات تغيير السعر غير صالحة" }
+        require(newPrice.isFinite() && newPrice >= 0) { "السعر الجديد غير صالح" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                var productId=0L
+                db.rawQuery("SELECT pli.product_id FROM price_list_items pli JOIN price_lists pl ON pl.id=pli.price_list_id WHERE pli.id=? AND pl.station_id=? AND pl.is_deleted=0", arrayOf(id.toString(), stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "عنصر قائمة الأسعار خارج نطاق المحطة" }; productId=c.getLong(0) }
+                require(db.update("price_list_items", ContentValues().apply { put("unit_price", newPrice) }, "id=?", arrayOf(id.toString())) == 1) { "تعذر تغيير سعر عنصر القائمة" }
+                db.setTransactionSuccessful()
+                PriceResolution(newPrice, "price_list_item", id, "تغيير سعر عنصر قائمة الأسعار", null)
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+
+    fun getUnifiedPriceChangeLog(data: JSONObject, stationScopeId: Int): JSONArray {
+        require(stationScopeId > 0)
+        val from = data.optString("from_date").trim().takeIf { it.isNotEmpty() }
+        val to = data.optString("to_date").trim().takeIf { it.isNotEmpty() }
+        val productRows = mutableListOf<JSONObject>()
+        val productSql = StringBuilder("SELECT ph.*, p.product_name, p.product_name_ar, u.name AS created_by_name FROM price_history ph JOIN products p ON p.id=ph.product_id LEFT JOIN users u ON u.id=ph.created_by WHERE p.station_id=? AND ph.archived=0")
+        val productArgs=mutableListOf(stationScopeId.toString())
+        if(from!=null){productSql.append(" AND ph.change_date>=?");productArgs+="$from 00:00:00"}
+        if(to!=null){productSql.append(" AND ph.change_date<?");productArgs+="$to 00:00:00"}
+        readableDatabase.rawQuery(productSql.toString(), productArgs.toTypedArray()).use{c-> while(c.moveToNext()) productRows+=cursorToJsonObject(c).apply{put("source_type","product");put("fuel_type_id",JSONObject.NULL)} }
+        val fuelSql=StringBuilder("SELECT h.*, f.fuel_name, f.fuel_name_ar, u.name AS created_by_name FROM fuel_price_history h JOIN fuel_types f ON f.id=h.fuel_type_id LEFT JOIN users u ON u.id=h.created_by WHERE h.station_id=? AND h.archived=0")
+        val fuelArgs=mutableListOf(stationScopeId.toString())
+        if(from!=null){fuelSql.append(" AND h.change_date>=?");fuelArgs+="$from 00:00:00"}
+        if(to!=null){fuelSql.append(" AND h.change_date<?");fuelArgs+="$to 00:00:00"}
+        readableDatabase.rawQuery(fuelSql.toString(), fuelArgs.toTypedArray()).use{c-> while(c.moveToNext()) productRows+=cursorToJsonObject(c).apply{put("source_type","fuel");put("product_id",JSONObject.NULL);put("product_name",optString("fuel_name"));put("product_name_ar",optString("fuel_name_ar"))} }
+        productRows.sortByDescending { it.optString("change_date") + String.format("%010d", it.optLong("id")) }
+        val result=JSONArray(); productRows.forEach{result.put(it)}; return result
+    }
+
+    fun getFuelPriceHistoryRecords(data: JSONObject, stationScopeId: Int): JSONArray {
+        require(stationScopeId > 0)
+        val conditions=mutableListOf("h.station_id=?","h.archived=0"); val args=mutableListOf(stationScopeId.toString())
+        data.optLong("fuel_type_id",0).takeIf{it>0}?.let{conditions+="h.fuel_type_id=?";args+=it.toString()}
+        data.optString("from_date").takeIf{it.isNotBlank()}?.let{conditions+="h.change_date>=?";args+=it+" 00:00:00"}
+        data.optString("to_date").takeIf{it.isNotBlank()}?.let{conditions+="h.change_date<?";args+=(it+" 00:00:00")}
+        return readableDatabase.rawQuery("SELECT h.*, f.fuel_name_ar, f.fuel_name FROM fuel_price_history h JOIN fuel_types f ON f.id=h.fuel_type_id WHERE ${conditions.joinToString(" AND ")} ORDER BY h.change_date DESC,h.id DESC",args.toTypedArray()).use{cursorToJsonArray(it)}
+    }
 
     private fun employeePaymentRows(query: String, args: Array<String>): List<Map<String, Any>> {
         val result = mutableListOf<Map<String, Any>>()

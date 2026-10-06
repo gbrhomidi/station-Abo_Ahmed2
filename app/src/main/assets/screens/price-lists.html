@@ -273,7 +273,7 @@
   };
   const $ = id => document.getElementById(id);
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const today = () => new Date().toISOString().slice(0,10);
+  const today = () => (()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`})();
   const now = () => { const d = new Date(); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
 
   function parse(v) { if (v == null) throw Error('لم يرجع الجسر نتيجة'); const x = typeof v === 'string' ? JSON.parse(v) : v; if (x && x.success === false) throw Error(x.error || x.message || 'فشلت العملية'); return x; }
@@ -364,14 +364,13 @@
 
   function find(id) { return state.rows.find((r, i) => String(r.id ?? i) === String(id)); }
 
-  function nextCode() {
-    let max = 0;
-    state.rows.forEach(r => { const m = String(r.list_code || '').match(/(\d+)$/); if (m) max = Math.max(max, Number(m[1])); });
-    return 'PL-' + String(max + 1).padStart(3, '0');
+  async function nextCode() {
+    try { const r = await invoke('getNextPriceListCode', []); return String(dataOf(r) || 'PL-001'); }
+    catch (e) { throw new Error('تعذر توليد رمز القائمة من SQLite: ' + e.message); }
   }
 
   function fillForm(r) {
-    $('list_code').value = r?.list_code || nextCode();
+    $('list_code').value = r?.list_code || ''; if (!r) { nextCode().then(v => $('list_code').value=v).catch(e => toast(e.message,'error')); }
     $('list_name').value = r?.list_name || '';
     $('description').value = r?.description || '';
     $('party_type_id').value = r?.party_type_id ?? '';
@@ -395,8 +394,8 @@
       sel.innerHTML = '<option value="">اختر نوع الطرف</option>' + state.partyTypes.map(x => `<option value="${esc(x.id)}">${esc(x.type_name_ar || x.type_name)}</option>`).join('');
     } catch (e) {
       toast('فشل تحميل أنواع الأطراف: ' + e.message, 'warning');
-      state.partyTypes = [{ id: 1, type_name_ar: 'عميل', is_active: 1 }];
-      $('party_type_id').innerHTML = '<option value="">اختر نوع الطرف</option><option value="1">عميل</option>';
+      state.partyTypes = [];
+      $('party_type_id').innerHTML = '<option value="">تعذر تحميل أنواع الأطراف من SQLite</option>';
     }
     try {
       const ps = await invoke('getParties', []);
@@ -404,8 +403,8 @@
       $('party_id').innerHTML = '<option value="">اختر الطرف/العميل</option>' + state.parties.map(x => `<option value="${esc(x.id)}">${esc(x.commercial_name_ar || x.commercial_name)}</option>`).join('');
     } catch (e) {
       toast('فشل تحميل الأطراف: ' + e.message, 'error');
-      state.parties = [{ id: 1, commercial_name_ar: 'شركة افتراضية', party_type_id: 1 }];
-      $('party_id').innerHTML = '<option value="">اختر الطرف/العميل</option><option value="1">شركة افتراضية</option>';
+      state.parties = [];
+      $('party_id').innerHTML = '<option value="">تعذر تحميل الأطراف من SQLite</option>';
     }
     try {
       const pr = await invoke('getProducts', []);
@@ -609,7 +608,7 @@
       return;
     }
     const list = $('lookupList');
-    list.innerHTML = state.products.map(p => `<button class="lookup" data-id="${p.id}" onclick="addProductToCurrentList(${p.id}, '${esc(p.name_ar || p.name)}')">${esc(p.name_ar || p.name)}<small>${esc(p.product_code || '')} - ${p.unit_price || 0}</small></button>`).join('');
+    list.innerHTML = `<div style="padding:8px 0 12px"><label style="font-weight:800;display:block;margin-bottom:6px">سعر الوحدة</label><input id="lookupUnitPrice" class="input" type="number" min="0" step="0.0001" placeholder="0.0000"></div>` + state.products.map(p => `<button class="lookup" data-id="${p.id}" onclick="addProductToCurrentList(${p.id})">${esc(p.name_ar || p.name)}<small>${esc(p.product_code || '')}</small></button>`).join('');
     $('lookupTitle').textContent = 'اختر منتجاً للإضافة';
     $('lookupSearch').value = '';
     $('lookupSearch').oninput = function() {
@@ -622,11 +621,9 @@
     setTimeout(() => $('lookupSearch').focus(), 100);
   }
 
-  window.addProductToCurrentList = async function(productId, productName) {
+  window.addProductToCurrentList = async function(productId) {
     if (!state.currentDetailId) { toast('لم يتم تحديد قائمة', 'error'); return; }
-    const price = prompt(`أدخل السعر للمنتج "${productName}":`, '0.00');
-    if (price === null) return;
-    const unitPrice = parseFloat(price);
+    const unitPrice = Number($('lookupUnitPrice')?.value);
     if (isNaN(unitPrice) || unitPrice < 0) { toast('السعر غير صحيح', 'error'); return; }
     try {
       const data = {
@@ -649,12 +646,8 @@
 
   async function bulkAddItems() {
     if (!state.products || !state.products.length) { toast('لا توجد منتجات', 'warning'); return; }
-    const price = prompt('أدخل السعر الموحد لجميع المنتجات المحددة:', '0.00');
-    if (price === null) return;
-    const unitPrice = parseFloat(price);
-    if (isNaN(unitPrice) || unitPrice < 0) { toast('السعر غير صحيح', 'error'); return; }
     const list = $('lookupList');
-    list.innerHTML = state.products.map(p => `<label class="lookup" style="display:flex; align-items:center; gap:10px; cursor:pointer;"><input type="checkbox" value="${p.id}"><span>${esc(p.name_ar || p.name)}</span><small>${esc(p.product_code || '')}</small></label>`).join('');
+    list.innerHTML = `<div style="padding:8px 0 12px"><label style="font-weight:800;display:block;margin-bottom:6px">السعر الموحد</label><input id="lookupBulkPrice" class="input" type="number" min="0" step="0.0001" placeholder="0.0000"></div>` + state.products.map(p => `<label class="lookup" style="display:flex; align-items:center; gap:10px; cursor:pointer;"><input type="checkbox" value="${p.id}"><span>${esc(p.name_ar || p.name)}</span><small>${esc(p.product_code || '')}</small></label>`).join('');
     $('lookupTitle').textContent = 'اختر المنتجات (متعدد)';
     const confirmBtn = document.createElement('button');
     confirmBtn.className = 'btn primary';
@@ -663,25 +656,14 @@
     confirmBtn.onclick = async function() {
       const checked = document.querySelectorAll('.lookup input[type="checkbox"]:checked');
       if (!checked.length) { toast('لم تختار أي منتج', 'warning'); return; }
-      let success = 0;
-      for (const cb of checked) {
-        try {
-          const data = {
-            price_list_id: state.currentDetailId,
-            product_id: Number(cb.value),
-            unit_price: unitPrice,
-            min_quantity: 1,
-            max_quantity: 0,
-            discount_percent: 0,
-            valid_from: '',
-            valid_to: '',
-            is_active: 1
-          };
-          await invoke('addPriceListItem', [JSON.stringify(data)]);
-          success++;
-        } catch (e) { console.error('فشل إضافة المنتج ' + cb.value, e); }
-      }
-      toast(`تمت إضافة ${success} منتج بنجاح`);
+      const unitPrice = Number($('lookupBulkPrice')?.value);
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) { toast('السعر غير صحيح', 'error'); return; }
+      const items = Array.from(checked).map(cb => ({ price_list_id: state.currentDetailId, product_id: Number(cb.value), unit_price: unitPrice, min_quantity: 1, max_quantity: 0, discount_percent: 0, valid_from: '', valid_to: '', is_active: 1 }));
+      try {
+        const result = await invoke('addPriceListItemsBatch', [JSON.stringify({ price_list_id: state.currentDetailId, items })]);
+        const added = Array.isArray(dataOf(result)) ? dataOf(result).length : items.length;
+        toast(`تمت إضافة ${added} منتجاً بصورة ذرية`);
+      } catch (e) { toast('فشل الإضافة الذرية: ' + e.message, 'error'); return; }
       close('lookupOverlay');
       await loadItems(state.currentDetailId);
     };
@@ -782,8 +764,11 @@
   async function runAnalysis() {
     const type = $('analysisType').value;
     const period = parseInt($('analysisPeriod').value);
-    toast('تحليل ' + type + ' لفترة ' + period + ' يوم (محاكاة)', 'warning');
-    $('analysisResult').innerHTML = `<div style="text-align:center;padding:20px;color:var(--muted);">📊 تحليل ${type} سيعرض هنا بعد التكامل مع البيانات الفعلية.</div>`;
+    const active = state.rows.filter(r => Number(r.is_active) === 1).length;
+    const defaults = state.rows.filter(r => Number(r.is_default) === 1).length;
+    const priorities = state.rows.map(r => Number(r.priority) || 0);
+    const avgPriority = priorities.length ? priorities.reduce((a,b)=>a+b,0)/priorities.length : 0;
+    $('analysisResult').innerHTML = `<div class="notice"><b>تحليل ${esc(type)}</b><br>الفترة: ${period} يوم<br>القوائم الفعالة: ${active.toLocaleString('ar-EG')}<br>القوائم الافتراضية: ${defaults.toLocaleString('ar-EG')}<br>متوسط الأولوية من SQLite: ${avgPriority.toFixed(2)}</div>`;
   }
 
   async function load() {

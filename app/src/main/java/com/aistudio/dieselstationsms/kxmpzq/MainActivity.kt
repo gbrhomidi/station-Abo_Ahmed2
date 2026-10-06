@@ -387,6 +387,12 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         webView?.onResume()
         updateUIState()
+        val businessDayPayload = JSONObject().apply {
+            put("business_day", BusinessDay.currentDate())
+            put("start", BusinessDay.context().startDateTime)
+            put("end", BusinessDay.context().endDateTime)
+        }
+        webView?.evaluateJavascript("window.dispatchEvent(new CustomEvent('business-day-changed',{detail:$businessDayPayload}))", null)
         if (!isDestroyed.get() && webView != null) {
             if (!webView!!.isAttachedToWindow) {
                 handler.postDelayed({
@@ -8493,6 +8499,66 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun resolveFuelTypeRecord(id: Long, note: String = "") = operationalResolve("products", "fuel_types", id, note)
 
         @JavascriptInterface
+        fun getCurrentBusinessDay(): String = try {
+            dataResponse(BusinessDay.context().let { JSONObject().apply { put("business_day", it.businessDate); put("start", it.startDateTime); put("end", it.endDateTime); put("timezone", it.zoneId) } })
+        } catch(e:Exception){ errorResponse(e.message) }
+
+        @JavascriptInterface
+        fun resolveProductPrice(jsonData: String = "{}"): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val stationId = requireCurrentStationId(db, activity.currentUserId)
+            val d = JSONObject(jsonData)
+            dataResponse(db.resolveProductSalePrice(d.optLong("product_id"), stationId, d.optLong("customer_id", 0L).takeIf { it > 0 }, d.optString("transaction_time").ifBlank { "" }, d.optString("occasion_code").ifBlank { null }).toJson())
+        } catch (e: Exception) { errorResponse(e.message) }
+
+        @JavascriptInterface
+        fun resolveFuelPrice(jsonData: String = "{}"): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val stationId = requireCurrentStationId(db, activity.currentUserId)
+            val d = JSONObject(jsonData)
+            dataResponse(db.resolveFuelSalePrice(d.optLong("fuel_type_id"), stationId, d.optLong("customer_id", 0L).takeIf { it > 0 }, d.optString("transaction_time").ifBlank { "" }).toJson())
+        } catch (e: Exception) { errorResponse(e.message) }
+
+        @JavascriptInterface
+        fun changeProductSalePrice(jsonData: String): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            if (!checkPermission("products", "write")) return errorResponse("لا تملك صلاحية تغيير أسعار المنتجات")
+            val d = JSONObject(jsonData)
+            val stationId = requireCurrentStationId(db, activity.currentUserId)
+            dataResponse(db.changeProductSalePrice(d.optLong("product_id"), d.optDouble("new_price", Double.NaN), stationId, activity.currentUserId, d.optString("reason")).toJson())
+        } catch (e: Exception) { errorResponse(e.message) }
+
+        @JavascriptInterface
+        fun changeFuelSalePrice(jsonData: String): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            if (!checkPermission("products", "write")) return errorResponse("لا تملك صلاحية تغيير أسعار الوقود")
+            val d = JSONObject(jsonData)
+            val stationId = requireCurrentStationId(db, activity.currentUserId)
+            dataResponse(db.changeFuelSalePrice(d.optLong("fuel_type_id"), d.optDouble("new_price", Double.NaN), stationId, activity.currentUserId, d.optString("reason"), d.optString("price_kind", "default")).toJson())
+        } catch (e: Exception) { errorResponse(e.message) }
+
+        @JavascriptInterface
+        fun changePriceListItemPrice(jsonData: String): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            if (!checkPermission("products", "write")) return errorResponse("لا تملك صلاحية تغيير أسعار القوائم")
+            val d = JSONObject(jsonData)
+            val stationId = requireCurrentStationId(db, activity.currentUserId)
+            dataResponse(db.changePriceListItemPrice(d.optLong("id"), d.optDouble("new_price", Double.NaN), stationId, activity.currentUserId).toJson())
+        } catch (e: Exception) { errorResponse(e.message) }
+
+        @JavascriptInterface
+        fun getFuelPriceHistoryRecords(jsonData: String = "{}"): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            dataResponse(db.getFuelPriceHistoryRecords(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId)))
+        } catch (e: Exception) { errorResponse(e.message) }
+
+        @JavascriptInterface
         fun getPriceListRecords(jsonData: String = "{}"): String = try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
@@ -8508,6 +8574,29 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun deletePriceListRecord(id: Long) = operationalDelete("products", "price_lists", id)
         @JavascriptInterface
         fun resolvePriceListRecord(id: Long, note: String = "") = operationalResolve("products", "price_lists", id, note)
+
+        @JavascriptInterface
+        fun getNextPriceListCode(): String = try {
+            val db=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity=getActivity() ?: return errorResponse("النشاط غير متاح")
+            dataResponse(db.getNextPriceListCode(requireCurrentStationId(db, activity.currentUserId)))
+        } catch(e:Exception){ errorResponse(e.message) }
+
+        @JavascriptInterface
+        fun addPriceListItemsBatch(jsonData: String): String = try {
+            val db=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity=getActivity() ?: return errorResponse("النشاط غير متاح")
+            if (!checkPermission("products", "write")) return errorResponse("لا تملك صلاحية تعديل قوائم الأسعار")
+            val stationId=requireCurrentStationId(db, activity.currentUserId)
+            dataResponse(db.addPriceListItemsBatch(JSONObject(jsonData), activity.currentUserId, stationId))
+        } catch(e:Exception){ errorResponse(e.message) }
+
+        @JavascriptInterface
+        fun getUnifiedPriceChangeLog(jsonData: String = "{}"): String = try {
+            val db=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity=getActivity() ?: return errorResponse("النشاط غير متاح")
+            dataResponse(db.getUnifiedPriceChangeLog(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId)))
+        } catch(e:Exception){ errorResponse(e.message) }
 
         @JavascriptInterface
         fun getPriceListItems(priceListId: Long): String = try {
@@ -9290,7 +9379,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
-        fun updateFuelSaleRecord(id: Long, jsonData: String): String { val a=getActivity()?:return errorResponse("النشاط غير متاح"); val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try { val stationId=requireCurrentStationId(db,a.currentUserId); val rows=db.updateOperationalRecord("fuel_sales",id,operationalScopedJson(jsonData),a.currentUserId); if(rows>0)dataResponseObject(JSONObject().apply{put("success",true);put("message","تم تعديل عملية البيع فعلياً");put("record",db.getOperationalRecord("fuel_sales",id)?:JSONObject());put("station_id",stationId)}).toString() else successResponse(false,"لم يتم العثور على عملية البيع") } catch(e:Exception){DebugLogger.logException("UpdateFuelSaleRecord",e);errorResponse(e.message?:"فشل تعديل عملية البيع")} }
+        fun updateFuelSaleRecord(id: Long, jsonData: String): String {
+            val a=getActivity()?:return errorResponse("النشاط غير متاح")
+            val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId=requireCurrentStationId(db,a.currentUserId)
+                val input=JSONObject(jsonData.ifBlank { "{}" })
+                val immutableFields=listOf("price_per_liter","total_amount","quantity","fuel_type_id","sale_date","sale_time","business_day","sale_id","station_id","shift_id")
+                require(immutableFields.none { input.has(it) && !input.isNull(it) }) { "لا يمكن تعديل السعر أو الكمية أو التاريخ أو نطاق عملية بيع محفوظة" }
+                val rows=db.updateOperationalRecord("fuel_sales",id,operationalScopedJson(input.toString()),a.currentUserId)
+                if(rows>0)dataResponseObject(JSONObject().apply{put("success",true);put("message","تم تعديل الحقول المسموح بها فقط والتحقق من SQLite");put("record",db.getOperationalRecord("fuel_sales",id)?:JSONObject());put("station_id",stationId)}).toString() else successResponse(false,"لم يتم العثور على عملية البيع")
+            } catch(e:Exception){DebugLogger.logException("UpdateFuelSaleRecord",e);errorResponse(e.message?:"فشل تعديل عملية البيع")}
+        }
         @JavascriptInterface
         fun deleteFuelSaleRecord(id: Long): String { val a=getActivity()?:return errorResponse("النشاط غير متاح"); val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); return try { val stationId=requireCurrentStationId(db,a.currentUserId); val rows=db.deleteOperationalRecord("fuel_sales",id,a.currentUserId,stationId); successResponse(rows>0,if(rows>0)"تم إلغاء/أرشفة عملية البيع فعلياً" else "لم يتم العثور على عملية البيع") } catch(e:Exception){DebugLogger.logException("DeleteFuelSaleRecord",e);errorResponse(e.message?:"فشل إلغاء عملية البيع")} }
         @JavascriptInterface

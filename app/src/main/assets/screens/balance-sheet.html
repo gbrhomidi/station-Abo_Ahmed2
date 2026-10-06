@@ -5,1040 +5,1225 @@
     <meta name="color-scheme" content="light dark">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>نظام إدارة محطات الوقود – الميزانية العمومية</title>
-        <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
-<link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
+    <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
+    <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
     <script src="file:///android_asset/assets-local/js/sweetalert2@11"></script>
     <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
     <style>
-        /* ============================================================
-           المتغيرات الأساسية (دعم الوضع الداكن والنهاري)
-           ============================================================ */
-        :root {
-            /* === الوضع الفاتح (Light Mode - افتراضي) === */
-            --bg-color: #f5efe6;
-            --surface-color: #faf3e8;
-            --surface-elevated: #fdf8f0;
-            --primary-color: #007ACC;
-            --primary-hover: #005f9e;
-            --primary-dim: rgba(0,122,204,0.12);
-            --accent-color: #d4a017;
-            --accent-dim: rgba(212,160,23,0.12);
-            --success: #10b981;
-            --error: #ef4444;
-            --warning: #f59e0b;
-            --text-color: #1a2a3a;
-            --text-muted: #6a7f94;
-            --border-color: #003366;
-            --border-style: dashed;
-            --border-width: 2px;
-            --shadow-glow: 0 0 20px rgba(0,122,204,0.08);
-            --glass-bg: rgba(255,248,240,0.85);
-            --header-bg: linear-gradient(135deg, #e8e0d5 0%, #d5cdc0 100%);
-            --card-hover-bg: rgba(0,122,204,0.04);
-            --fab-shadow: rgba(0,122,204,0.3);
-            --toast-bg: #fdf8f0;
-            --scrollbar-track: #f5efe6;
-            --scrollbar-thumb: rgba(0,51,102,0.2);
-            --skeleton-bg: #e8e0d5;
-            --skeleton-shine: #f5efe6;
-            --modal-border-color: #003366;
-            --modal-border-style: dashed;
-            --input-bg: #fdf8f0;
-            --input-border: #003366;
-            --input-border-style: dashed;
-            --data-text-color: #1a2a3a;
-            --data-text-muted: #4a5a6a;
-            --readonly-color: #d32f2f;
-            --asset-color: #4CAF50;
-            --liability-color: #2196F3;
-            --equity-color: #9C27B0;
-        }
+/* ============================================================
+   نظام Ivory Sage — عاجي دافئ + أخضر مريمي + برونزي
+   مطبّق على شاشة الميزانية العمومية
+   ============================================================ */
+:root {
+    --ivory-50:#FDFCF8; --ivory-100:#F8F6EF; --ivory-200:#F1EEE3;
+    --ivory-300:#E8E4D6; --ivory-400:#DDD7C4;
+    --sage-900:#1F2D24; --sage-800:#2E4034; --sage-700:#3D5A4C;
+    --sage-600:#4E7060; --sage-500:#6B8E7F; --sage-400:#93AFA3;
+    --sage-300:#B8CBC1; --sage-200:#D5E0DA; --sage-100:#E8EFEB; --sage-50:#F2F7F4;
+    --bronze-800:#6B5230; --bronze-700:#8C6D3F; --bronze-600:#A67C45;
+    --bronze-500:#B8935A; --bronze-400:#C9A976; --bronze-300:#DBC29A;
+    --bronze-200:#EAD9BD; --bronze-100:#F5EBD9; --bronze-50:#FAF4E8;
+    --charcoal-900:#26241F; --charcoal-800:#3A362E; --charcoal-700:#4F4A40;
+    --charcoal-600:#686156; --charcoal-500:#827A6E; --charcoal-400:#9E968A;
+    --charcoal-300:#BEB7AC; --charcoal-200:#D9D3C9; --charcoal-100:#EDE9E1; --charcoal-50:#F6F4EF;
+    --moss-700:#3A6B4A; --moss-600:#4A7C59; --moss-500:#6B9979; --moss-100:#E5F0E8; --moss-50:#F2F8F3;
+    --brick-700:#8B3D3D; --brick-600:#A54E4E; --brick-500:#C06A6A; --brick-100:#F3E0E0; --brick-50:#FAF0F0;
+    --clay-700:#8C6034; --clay-600:#A87444; --clay-500:#C08F5E; --clay-100:#F2E4D2; --clay-50:#FBF4E9;
+    --sky-700:#3A6072; --sky-600:#4A7488; --sky-500:#6B8DA0; --sky-100:#E0EBF0;
 
-        [data-theme="dark"] {
-            /* === الوضع المظلم (Dark Mode) === */
-            --bg-color: #0a0e1a;
-            --surface-color: #111827;
-            --surface-elevated: #1a2236;
-            --primary-color: #00d4ff;
-            --primary-hover: #00a8cc;
-            --primary-dim: rgba(0,212,255,0.15);
-            --accent-color: #f59e0b;
-            --accent-dim: rgba(245,158,11,0.15);
-            --success: #10b981;
-            --error: #ef4444;
-            --warning: #f59e0b;
-            --text-color: #f1f5f9;
-            --text-muted: #94a3b8;
-            --border-color: #e8d48b;
-            --border-style: dashed;
-            --border-width: 2px;
-            --shadow-glow: 0 0 20px rgba(0,212,255,0.1);
-            --glass-bg: rgba(22,34,64,0.85);
-            --header-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            --card-hover-bg: rgba(0,212,255,0.05);
-            --fab-shadow: rgba(0,212,255,0.3);
-            --toast-bg: #1a2236;
-            --scrollbar-track: transparent;
-            --scrollbar-thumb: rgba(255,255,255,0.1);
-            --skeleton-bg: #1e293b;
-            --skeleton-shine: #2d3a4f;
-            --modal-border-color: #e8d48b;
-            --modal-border-style: dashed;
-            --input-bg: #1e293b;
-            --input-border: #e8d48b;
-            --input-border-style: dashed;
-            --data-text-color: #f1f5f9;
-            --data-text-muted: #94a3b8;
-            --readonly-color: #ef5350;
-            --asset-color: #4CAF50;
-            --liability-color: #2196F3;
-            --equity-color: #9C27B0;
-        }
+    --primary:var(--sage-700); --primary-dark:var(--sage-800);
+    --primary-deep:var(--sage-900); --primary-light:var(--sage-500);
+    --primary-soft:var(--sage-100); --primary-ultra:var(--sage-50);
+    --primary-border:var(--sage-300);
+    --accent:var(--bronze-600); --accent-dark:var(--bronze-700);
+    --accent-soft:var(--bronze-100); --accent-border:var(--bronze-300);
+    --success:var(--moss-600); --success-dark:var(--moss-700); --success-soft:var(--moss-100);
+    --danger:var(--brick-600); --danger-dark:var(--brick-700); --danger-soft:var(--brick-100);
+    --warning:var(--clay-600); --warning-dark:var(--clay-700); --warning-soft:var(--clay-100);
+    --info:var(--sky-600); --info-dark:var(--sky-700); --info-soft:var(--sky-100);
 
-        /* ============================================================
-           الأنماط الأساسية
-           ============================================================ */
-        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    --bg-primary:var(--ivory-100); --bg-secondary:var(--ivory-50);
+    --bg-card:#FFFFFF; --bg-elevated:#FFFFFF;
+    --bg-glass:rgba(74,106,87,0.03); --bg-glass-light:rgba(74,106,87,0.06);
+    --bg-paper:var(--ivory-50);
+    --text-primary:var(--charcoal-900); --text-secondary:var(--charcoal-600);
+    --text-muted:var(--charcoal-500); --text-subtle:var(--charcoal-400);
+    --text-inverse:#FFFFFF; --text-accent:var(--bronze-700);
+    --border-color:var(--ivory-300); --border-strong:var(--charcoal-200);
+    --border-primary:var(--sage-300); --border-accent:var(--bronze-300);
 
-        body {
-            font-family: 'Cairo', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            direction: rtl;
-            overflow-x: hidden;
-            margin: 0;
-            padding: 0;
-            padding-bottom: 80px;
-            transition: background 0.4s ease, color 0.4s ease;
-            touch-action: pan-y;
-        }
+    --shadow-xs:0 1px 2px rgba(58,54,46,0.03);
+    --shadow-sm:0 2px 4px rgba(58,54,46,0.05),0 1px 2px rgba(58,54,46,0.03);
+    --shadow-md:0 4px 12px rgba(58,54,46,0.06),0 2px 4px rgba(58,54,46,0.03);
+    --shadow-lg:0 10px 28px rgba(58,54,46,0.08),0 4px 8px rgba(58,54,46,0.04);
+    --shadow-xl:0 20px 44px rgba(58,54,46,0.1);
+    --shadow-sage:0 6px 18px rgba(74,106,87,0.15);
+    --shadow-bronze:0 4px 12px rgba(166,124,69,0.15);
 
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
-        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+    --glow-title:0 0 14px rgba(107,142,127,0.12),0 1px 0 rgba(255,255,255,0.6);
+    --glow-value:0 0 12px rgba(107,142,127,0.1),0 1px 0 rgba(255,255,255,0.5);
+    --glow-data:0 0 10px rgba(74,106,87,0.06);
+    --glow-badge:0 0 8px rgba(74,106,87,0.08);
 
-        /* ===== Pull-to-Refresh Indicator ===== */
-        .pull-indicator {
-            position: fixed;
-            top: -60px;
-            left: 0;
-            right: 0;
-            height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-muted);
-            font-size: 0.8rem;
-            transition: top 0.2s ease;
-            z-index: 50;
-            background: var(--surface-elevated);
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-            pointer-events: none;
-        }
-        .pull-indicator.active { top: 0; }
-        .pull-indicator i { margin-left: 8px; transition: transform 0.3s; }
-        .pull-indicator.loading i { animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    --radius-card:14px; --radius-small:10px; --radius-tiny:8px;
+    --radius-xs:6px; --radius-pill:999px;
+    --transition:all 0.22s cubic-bezier(0.4,0,0.2,1);
+    --transition-fast:all 0.15s cubic-bezier(0.4,0,0.2,1);
 
-        /* ===== Loading ===== */
-        .loading-indicator {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
-            z-index: 3000;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            backdrop-filter: blur(8px);
-        }
-        .spinner {
-            width: 50px; height: 50px;
-            border: 4px solid rgba(0,212,255,0.2);
-            border-radius: 50%;
-            border-top: 4px solid var(--primary-color);
-            animation: spin 1s linear infinite;
-        }
+    --asset-color:#4CAF50;
+    --liability-color:#2196F3;
+    --equity-color:#9C27B0;
+    --readonly-color:#B23A3A;
+    color-scheme:light;
+}
 
-        /* ===== Skeleton Loading ===== */
-        .skeleton-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            padding: 0 16px 16px;
-        }
-        .skeleton-card {
-            background: var(--surface-elevated);
-            border-radius: 18px;
-            padding: 16px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            position: relative;
-            overflow: hidden;
-        }
-        .skeleton-card::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(90deg,
-                transparent 0%,
-                var(--skeleton-shine) 50%,
-                transparent 100%);
-            animation: shimmer 1.5s infinite;
-        }
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-        .skeleton-row {
-            height: 12px;
-            background: var(--skeleton-bg);
-            border-radius: 6px;
-            margin-bottom: 8px;
-        }
-        .skeleton-row.short { width: 40%; }
-        .skeleton-row.medium { width: 60%; }
-        .skeleton-row.long { width: 80%; }
+[data-theme="dark"] {
+    --bg-primary:#1C1A15; --bg-secondary:#24211C; --bg-card:#2B2822;
+    --bg-elevated:#2B2822; --bg-glass:rgba(232,228,214,0.04);
+    --bg-glass-light:rgba(232,228,214,0.08); --bg-paper:#24211C;
+    --text-primary:#EDE9E1; --text-secondary:#BEB7AC; --text-muted:#9E968A;
+    --text-subtle:#827A6E; --text-accent:var(--bronze-400);
+    --border-color:rgba(190,183,172,0.16); --border-strong:rgba(190,183,172,0.28);
+    --border-primary:rgba(147,175,163,0.32); --border-accent:rgba(201,169,118,0.32);
+    --primary-soft:rgba(107,142,127,0.14); --primary-ultra:rgba(107,142,127,0.06);
+    --accent-soft:rgba(184,147,90,0.14); --success-soft:rgba(74,124,89,0.14);
+    --danger-soft:rgba(165,78,78,0.16); --warning-soft:rgba(168,116,68,0.16);
+    --shadow-xs:0 1px 2px rgba(0,0,0,0.25); --shadow-sm:0 2px 4px rgba(0,0,0,0.3);
+    --shadow-md:0 4px 14px rgba(0,0,0,0.35); --shadow-lg:0 10px 28px rgba(0,0,0,0.42);
+    --shadow-xl:0 20px 44px rgba(0,0,0,0.5);
+    --shadow-sage:0 6px 18px rgba(74,106,87,0.28);
+    --shadow-bronze:0 4px 12px rgba(166,124,69,0.25);
+    --glow-title:0 0 20px rgba(184,147,90,0.45),0 0 40px rgba(184,147,90,0.2);
+    --glow-value:0 0 18px rgba(184,147,90,0.4),0 0 36px rgba(184,147,90,0.15);
+    --glow-data:0 0 12px rgba(201,169,118,0.3);
+    --glow-badge:0 0 10px rgba(184,147,90,0.28);
+    --readonly-color:#EF9A9A;
+    color-scheme:dark;
+}
 
-        /* ===== Offline Banner ===== */
-        .offline-banner {
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            background: linear-gradient(90deg, var(--warning), #f97316);
-            color: #000;
-            text-align: center;
-            padding: 8px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            z-index: 2000;
-            transform: translateY(-100%);
-            transition: transform 0.3s;
-        }
-        .offline-banner.show { transform: translateY(0); }
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+    font-family:'Cairo','Inter',system-ui,-apple-system,sans-serif;
+    background-color:var(--bg-primary); color:var(--text-primary);
+    direction:rtl; overflow-x:hidden; margin:0; padding:0 0 96px;
+    background-image:
+        radial-gradient(circle at 15% 10%,rgba(107,142,127,0.05) 0%,transparent 40%),
+        radial-gradient(circle at 85% 90%,rgba(184,147,90,0.04) 0%,transparent 40%);
+    background-attachment:fixed;
+    transition:background 0.3s ease,color 0.3s ease;
+    touch-action:pan-y; -webkit-font-smoothing:antialiased;
+    text-align:center; line-height:1.5;
+}
+[data-theme="dark"] body{
+    background-image:
+        radial-gradient(circle at 15% 10%,rgba(107,142,127,0.08) 0%,transparent 40%),
+        radial-gradient(circle at 85% 90%,rgba(184,147,90,0.06) 0%,transparent 40%);
+}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--sage-300);border-radius:3px}
+[data-theme="dark"] ::-webkit-scrollbar-thumb{background:var(--sage-600)}
 
-        /* ============================================================
-           الشريط العلوي (Header)
-           ============================================================ */
-        .top-bar {
-            position: sticky;
-            top: 0;
-            display: flex;
-            flex-direction: column;
-            padding: 16px;
-            background: var(--header-bg);
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-            z-index: 100;
-            backdrop-filter: blur(20px);
-            transition: background 0.4s ease;
-        }
-        .header-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
-        .top-title h2 {
-            margin: 0;
-            font-size: 1.3rem;
-            font-weight: 800;
-            background: linear-gradient(90deg, var(--primary-color), #a78bfa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .header-actions {
-            display: flex;
-            gap: 8px;
-        }
-        .icon-btn {
-            width: 40px; height: 40px;
-            border-radius: 12px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-elevated);
-            color: var(--text-muted);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 1rem;
-            position: relative;
-        }
-        .icon-btn:hover {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            border-color: var(--primary-color);
-            transform: translateY(-2px);
-        }
-        .icon-btn:active { transform: scale(0.92); }
-        .icon-btn.has-badge::after {
-            content: '';
-            position: absolute;
-            top: 6px; right: 6px;
-            width: 8px; height: 8px;
-            background: var(--error);
-            border-radius: 50%;
-            box-shadow: 0 0 8px var(--error);
-            animation: pulse-dot 2s infinite;
-        }
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.3); }
-        }
+/* Pull to refresh */
+.pull-indicator{
+    position:fixed; top:-60px; left:0; right:0; height:60px;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--text-muted); font-size:0.8rem;
+    transition:top 0.2s ease; z-index:50;
+    background:var(--bg-secondary);
+    border-bottom:1px solid var(--border-color);
+    pointer-events:none; font-weight:600;
+}
+.pull-indicator.active{top:0}
+.pull-indicator i{margin-left:8px;color:var(--sage-600)}
+.pull-indicator.loading i{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 
-        .ai-badge {
-            background: linear-gradient(135deg, #8b5cf6, #6366f1);
-            color: white;
-            font-size: 0.6rem;
-            font-weight: 700;
-            padding: 2px 8px;
-            border-radius: 10px;
-            margin-right: 6px;
-            vertical-align: middle;
-        }
+/* Loading */
+.loading-indicator{
+    position:fixed; inset:0; background:rgba(38,36,31,0.4);
+    z-index:3000; display:none; justify-content:center; align-items:center;
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+}
+[data-theme="dark"] .loading-indicator{background:rgba(0,0,0,0.65)}
+.loading-indicator.show,
+.loading-indicator[style*="display: flex"]{display:flex !important}
+.spinner{
+    width:46px; height:46px;
+    border:3px solid rgba(74,106,87,0.15);
+    border-top-color:var(--sage-600);
+    border-radius:50%; animation:spin 0.9s linear infinite;
+}
 
-        /* ============================================================
-           البحث والفلاتر
-           ============================================================ */
-        .search-wrap {
-            position: relative;
-            margin-bottom: 10px;
-        }
-        .search-input {
-            width: 100%;
-            padding: 12px 44px 12px 16px;
-            border-radius: 14px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-elevated);
-            color: var(--text-color);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.9rem;
-            transition: all 0.3s;
-            outline: none;
-        }
-        .search-input:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px var(--primary-dim);
-        }
-        .search-wrap i {
-            position: absolute;
-            right: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-muted);
-        }
+/* Skeleton */
+.skeleton-grid{display:flex; flex-direction:column; gap:12px; padding:8px 16px}
+.skeleton-card{
+    background:var(--bg-card);
+    border-radius:var(--radius-card);
+    padding:16px; border:1px dashed var(--border-color);
+    position:relative; overflow:hidden;
+}
+.skeleton-card::after{
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(90deg,transparent 0%,var(--ivory-200) 50%,transparent 100%);
+    animation:shimmer 1.5s infinite;
+}
+[data-theme="dark"] .skeleton-card::after{
+    background:linear-gradient(90deg,transparent 0%,rgba(232,228,214,0.08) 50%,transparent 100%);
+}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.skeleton-row{
+    height:12px; background:var(--ivory-300);
+    border-radius:6px; margin-bottom:8px;
+}
+[data-theme="dark"] .skeleton-row{background:rgba(232,228,214,0.1)}
 
-        .filter-chips {
-            display: flex;
-            gap: 8px;
-            overflow-x: auto;
-            padding-bottom: 4px;
-            scrollbar-width: none;
-        }
-        .filter-chips::-webkit-scrollbar { display: none; }
-        .filter-chip {
-            padding: 6px 14px;
-            border-radius: 20px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            font-size: 0.75rem;
-            font-family: 'Cairo', sans-serif;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .filter-chip:active { transform: scale(0.95); }
-        .filter-chip.active {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-        .filter-chip:hover:not(.active) {
-            border-color: var(--text-muted);
-            color: var(--text-color);
-        }
+/* Offline */
+.offline-banner{
+    position:fixed; top:0; left:0; right:0;
+    background:linear-gradient(90deg,var(--clay-600),#C08F5E);
+    color:#FFFFFF; text-align:center;
+    padding:10px; font-size:0.78rem;
+    font-weight:700; z-index:2000;
+    transform:translateY(-100%);
+    transition:transform 0.3s;
+    box-shadow:0 5px 18px rgba(245,158,11,0.28);
+}
+.offline-banner.show{transform:translateY(0)}
 
-        /* ============================================================
-           بطاقات الإحصائيات (مؤشرات الميزانية)
-           ============================================================ */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            padding: 16px;
-        }
-        .stat-card {
-            background: var(--surface-elevated);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 16px;
-            padding: 16px;
-            position: relative;
-            overflow: hidden;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            cursor: pointer;
-            touch-action: manipulation;
-        }
-        .stat-card:active { transform: scale(0.96); }
-        .stat-card:hover {
-            transform: translateY(-4px);
-            border-color: var(--primary-color);
-            box-shadow: var(--shadow-glow);
-        }
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .stat-card:hover::before { opacity: 1; }
-        .stat-icon {
-            width: 40px; height: 40px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.1rem;
-            margin-bottom: 12px;
-        }
-        .stat-icon.green { background: rgba(76,175,80,0.15); color: var(--asset-color); }
-        .stat-icon.blue { background: rgba(33,150,243,0.15); color: var(--liability-color); }
-        .stat-icon.purple { background: rgba(156,39,176,0.15); color: var(--equity-color); }
-        .stat-icon.gold { background: var(--accent-dim); color: var(--accent-color); }
-        .stat-value {
-            font-size: 1.4rem;
-            font-weight: 800;
-            margin-bottom: 4px;
-            color: var(--data-text-color);
-        }
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-        .stat-trend {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 0.7rem;
-            margin-top: 8px;
-            padding: 2px 8px;
-            border-radius: 8px;
-        }
-        .stat-trend.up { background: rgba(16,185,129,0.15); color: var(--success); }
-        .stat-trend.down { background: rgba(239,68,68,0.15); color: var(--error); }
+/* Top bar */
+.top-bar{
+    position:sticky; top:0; z-index:120;
+    background:rgba(253,252,248,0.92);
+    backdrop-filter:blur(20px) saturate(1.4);
+    -webkit-backdrop-filter:blur(20px) saturate(1.4);
+    border-bottom:1px solid var(--border-color);
+    padding:14px 18px 14px;
+    display:flex; flex-direction:column; gap:12px;
+    transition:var(--transition);
+    box-shadow:0 10px 30px rgba(15,23,42,0.10);
+}
+[data-theme="dark"] .top-bar{background:rgba(36,33,28,0.92)}
+.header-top{display:flex; justify-content:space-between; align-items:center; gap:12px}
+.top-title h2{
+    font-size:1.28rem; font-weight:800; margin:0;
+    color:var(--charcoal-900); letter-spacing:-0.4px;
+    display:flex; align-items:center; gap:10px;
+    text-shadow:var(--glow-title);
+}
+[data-theme="dark"] .top-title h2{color:var(--ivory-100)}
+.top-title h2 i{
+    color:var(--sage-700); font-size:1.1rem;
+    background:var(--sage-100); padding:8px;
+    border-radius:var(--radius-tiny);
+    display:inline-flex; align-items:center; justify-content:center;
+}
+[data-theme="dark"] .top-title h2 i{background:var(--sage-800); color:var(--sage-300)}
+.header-actions{display:flex; gap:8px; align-items:center}
 
-        @media (min-width: 768px) {
-            .stats-grid { grid-template-columns: repeat(4, 1fr); }
-        }
+.icon-btn{
+    width:40px; height:40px; border-radius:var(--radius-small);
+    border:1px solid var(--border-color); background:var(--bg-secondary);
+    color:var(--charcoal-600);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:var(--transition);
+    font-size:1rem; position:relative;
+    box-shadow:var(--shadow-sm);
+}
+[data-theme="dark"] .icon-btn{
+    background:var(--bg-card); border-color:var(--border-color);
+    color:var(--text-secondary);
+}
+.icon-btn:hover,.icon-btn:active{
+    background:var(--sage-100); border-color:var(--sage-400);
+    color:var(--sage-700); transform:translateY(-1px);
+    box-shadow:var(--shadow-md);
+}
+[data-theme="dark"] .icon-btn:hover{background:var(--sage-800); color:var(--sage-300)}
+.icon-btn:active{transform:scale(0.95)}
+.icon-btn.has-badge::after{
+    content:''; position:absolute; top:6px; right:6px;
+    width:9px; height:9px; background:var(--brick-600);
+    border-radius:50%; box-shadow:0 0 8px var(--brick-600);
+    animation:pulse-dot 2s infinite;
+}
+@keyframes pulse-dot{
+    0%,100%{opacity:1; transform:scale(1)}
+    50%{opacity:0.5; transform:scale(1.3)}
+}
 
-        /* ============================================================
-           الميزانية العمومية (Balance Sheet)
-           ============================================================ */
-        .balance-sheet-container {
-            padding: 0 16px 20px;
-        }
+/* Search */
+.search-wrap{position:relative}
+.search-input{
+    width:100%; padding:12px 44px 12px 18px;
+    border-radius:var(--radius-small);
+    border:1px solid var(--border-strong);
+    background:var(--bg-card); color:var(--text-primary);
+    font-family:inherit; font-size:0.88rem;
+    outline:none; transition:var(--transition);
+    text-align:center; font-weight:600;
+    text-shadow:var(--glow-data);
+}
+.search-input:focus{
+    border-color:var(--sage-600);
+    box-shadow:0 0 0 3px var(--sage-100);
+    transform:translateY(-1px);
+}
+[data-theme="dark"] .search-input:focus{box-shadow:0 0 0 3px rgba(107,142,127,0.2)}
+.search-input::placeholder{color:var(--text-subtle); text-shadow:none; font-weight:500}
+.search-wrap i{
+    position:absolute; right:16px; top:50%;
+    transform:translateY(-50%); color:var(--charcoal-400);
+    font-size:0.9rem; pointer-events:none;
+}
 
-        /* ===== محدد التاريخ ===== */
-        .date-selector {
-            background: var(--surface-elevated);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 16px;
-            padding: 16px;
-            margin-bottom: 16px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            align-items: center;
-        }
-        .date-selector label {
-            font-size: 0.9rem;
-            font-weight: 700;
-            color: var(--data-text-color);
-        }
-        .date-selector input {
-            padding: 10px 14px;
-            border-radius: 12px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-color);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.9rem;
-            outline: none;
-            min-width: 160px;
-        }
-        .date-selector input:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px var(--primary-dim);
-        }
-        .date-selector .btn-apply {
-            padding: 10px 24px;
-            border-radius: 12px;
-            border: none;
-            background: var(--primary-color);
-            color: white;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-family: 'Cairo', sans-serif;
-        }
-        .date-selector .btn-apply:hover {
-            background: var(--primary-hover);
-            transform: translateY(-2px);
-        }
+/* Filter chips */
+.filter-chips{
+    display:flex; gap:8px; overflow-x:auto;
+    padding:5px 4px; scrollbar-width:none;
+    background:var(--ivory-200);
+    border:1px solid var(--border-color);
+    border-radius:var(--radius-pill);
+    box-shadow:inset 0 1px 2px rgba(58,54,46,0.04);
+}
+[data-theme="dark"] .filter-chips{
+    background:rgba(232,228,214,0.06);
+    box-shadow:inset 0 1px 2px rgba(0,0,0,0.2);
+}
+.filter-chips::-webkit-scrollbar{display:none}
+.filter-chip{
+    padding:9px 15px; border:1px solid transparent;
+    background:transparent; color:var(--charcoal-500);
+    font-family:inherit; font-size:0.8rem; font-weight:600;
+    cursor:pointer; white-space:nowrap; transition:var(--transition);
+    display:inline-flex; align-items:center; gap:6px;
+    touch-action:manipulation; flex-shrink:0;
+    border-radius:var(--radius-pill);
+    letter-spacing:0.1px; text-shadow:var(--glow-data);
+}
+[data-theme="dark"] .filter-chip{color:var(--text-muted)}
+.filter-chip i{font-size:0.74rem; opacity:0.85}
+.filter-chip:active{transform:scale(0.97)}
+.filter-chip:hover{color:var(--sage-700); background:rgba(255,255,255,0.6)}
+.filter-chip.active{
+    background:var(--bg-card); color:var(--sage-800);
+    font-weight:800; border:1.5px solid var(--sage-500);
+    box-shadow:0 0 0 2px rgba(107,142,127,0.18),0 2px 6px rgba(58,54,46,0.1),var(--glow-badge);
+    text-shadow:0 0 8px rgba(61,90,76,0.15);
+}
+[data-theme="dark"] .filter-chip.active{
+    background:var(--bg-card); color:var(--bronze-400);
+    border-color:var(--bronze-500);
+}
 
-        /* ===== عرض الميزانية ===== */
-        .balance-sheet-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
+/* Stats */
+.stats-grid{
+    display:grid; grid-template-columns:repeat(2,1fr);
+    gap:14px; padding:18px 16px 6px;
+}
+.stat-card{
+    position:relative; padding:18px 14px;
+    background:var(--bg-card); border:1px solid var(--border-strong);
+    border-radius:var(--radius-card); box-shadow:var(--shadow-sm);
+    transition:var(--transition); text-align:center;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    cursor:pointer; overflow:hidden;
+}
+[data-theme="dark"] .stat-card{border-color:var(--border-color)}
+.stat-card::before{
+    content:''; position:absolute; inset:5px;
+    border:1px dashed var(--sage-300);
+    border-radius:calc(var(--radius-card) - 5px);
+    opacity:0.55; pointer-events:none; transition:var(--transition);
+}
+.stat-card::after{
+    content:''; position:absolute; inset:5px;
+    border-radius:calc(var(--radius-card) - 5px);
+    pointer-events:none;
+    background:
+        linear-gradient(to right,var(--sage-500) 0,var(--sage-500) 8px,transparent 8px) top left/100% 1.5px no-repeat,
+        linear-gradient(to left,var(--sage-500) 0,var(--sage-500) 8px,transparent 8px) top right/100% 1.5px no-repeat,
+        linear-gradient(to right,var(--sage-500) 0,var(--sage-500) 8px,transparent 8px) bottom left/100% 1.5px no-repeat,
+        linear-gradient(to left,var(--sage-500) 0,var(--sage-500) 8px,transparent 8px) bottom right/100% 1.5px no-repeat;
+    opacity:0; transition:var(--transition);
+}
+.stat-card:hover::after{opacity:0.9}
+.stat-card:hover{
+    transform:translateY(-2px); box-shadow:var(--shadow-md);
+    border-color:var(--sage-400);
+}
+.stat-card:hover::before{opacity:0.9; border-color:var(--sage-500)}
+.stat-card:active{transform:scale(0.98)}
+.stat-icon{
+    width:36px; height:36px; border-radius:var(--radius-tiny);
+    display:flex; align-items:center; justify-content:center;
+    font-size:0.95rem; background:var(--sage-100); color:var(--sage-700);
+    margin-bottom:9px; border:1px solid var(--sage-200);
+    position:relative; z-index:1;
+}
+[data-theme="dark"] .stat-icon{
+    background:var(--sage-800); color:var(--sage-300);
+    border-color:var(--sage-600);
+}
+.stat-icon.green{color:var(--asset-color); background:rgba(76,175,80,0.15); border-color:rgba(76,175,80,0.25)}
+.stat-icon.blue{color:var(--liability-color); background:rgba(33,150,243,0.15); border-color:rgba(33,150,243,0.25)}
+.stat-icon.purple{color:var(--equity-color); background:rgba(156,39,176,0.15); border-color:rgba(156,39,176,0.25)}
+.stat-icon.gold{color:var(--bronze-700); background:var(--bronze-100); border-color:var(--bronze-300)}
+.stat-value{
+    font-size:1.4rem; font-weight:800;
+    font-family:'Inter','Cairo',sans-serif;
+    letter-spacing:-0.4px; line-height:1.15;
+    color:var(--charcoal-900); margin:2px 0 4px;
+    direction:ltr; text-align:center;
+    font-variant-numeric:tabular-nums;
+    position:relative; z-index:1; text-shadow:var(--glow-value);
+}
+[data-theme="dark"] .stat-value{color:var(--ivory-100)}
+.stat-label{
+    font-size:0.7rem; color:var(--text-muted);
+    font-weight:600; text-align:center;
+    letter-spacing:0.2px; position:relative; z-index:1;
+}
+.stat-trend{
+    display:inline-flex; align-items:center; gap:4px;
+    font-size:0.7rem; margin-top:8px;
+    padding:2px 10px; border-radius:var(--radius-pill);
+    position:relative; z-index:1;
+    background:var(--success-soft); color:var(--success-dark);
+}
+[data-theme="dark"] .stat-trend{color:#A0CEAE}
 
-        .balance-column {
-            background: var(--surface-elevated);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 16px;
-            padding: 16px;
-            overflow: hidden;
-        }
-        .balance-column .column-title {
-            font-size: 1.1rem;
-            font-weight: 800;
-            padding-bottom: 12px;
-            margin-bottom: 12px;
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-            color: var(--primary-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .balance-column .column-title .badge-total {
-            font-size: 0.75rem;
-            font-weight: 600;
-            padding: 2px 10px;
-            border-radius: 12px;
-            background: var(--primary-dim);
-            color: var(--primary-color);
-        }
+/* Section title */
+.section-title{
+    display:flex; gap:10px; justify-content:space-between;
+    align-items:center; margin-bottom:16px;
+    padding:0 16px 14px;
+    position:relative;
+    flex-wrap:wrap;
+    max-width:1180px; margin-inline:auto;
+}
+.section-title::after{
+    content:''; position:absolute; right:16px; left:16px; bottom:0;
+    height:2px; border-radius:99px;
+    background:linear-gradient(90deg,var(--primary),transparent);
+    opacity:0.55;
+}
+.section-title h3{
+    font-size:1rem; font-weight:800;
+    color:var(--charcoal-900);
+    display:flex; align-items:center; gap:8px;
+    margin:0; letter-spacing:-0.2px;
+    text-shadow:var(--glow-title);
+}
+[data-theme="dark"] .section-title h3{color:var(--ivory-100)}
+.section-title h3 i{color:var(--sage-700)}
 
-        /* ===== بنود الميزانية ===== */
-        .balance-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 6px 0;
-            border-bottom: 1px solid var(--border-color);
-            border-bottom-style: var(--border-style);
-            transition: all 0.3s;
-            cursor: default;
-            font-size: 0.85rem;
-        }
-        .balance-item:hover {
-            background: var(--card-hover-bg);
-            padding-right: 8px;
-        }
-        .balance-item .item-name {
-            color: var(--data-text-color);
-            font-weight: 500;
-        }
-        .balance-item .item-amount {
-            font-weight: 600;
-            font-family: 'Arial', sans-serif;
-            direction: ltr;
-            color: var(--data-text-color);
-        }
-        .balance-item.level-1 { padding-right: 0; }
-        .balance-item.level-2 { padding-right: 20px; }
-        .balance-item.level-3 { padding-right: 40px; }
-        .balance-item.level-4 { padding-right: 60px; }
+.count-badge{
+    background:var(--sage-100); color:var(--sage-800);
+    border:1px solid var(--sage-300);
+    border-radius:var(--radius-pill);
+    padding:3px 12px; font-size:0.72rem;
+    font-weight:800; letter-spacing:0.2px;
+    font-variant-numeric:tabular-nums; text-shadow:var(--glow-data);
+}
+[data-theme="dark"] .count-badge{
+    background:var(--sage-800); color:var(--sage-200);
+    border-color:var(--sage-600);
+}
 
-        .balance-item.total-row {
-            font-weight: 700;
-            border-bottom: var(--border-width) var(--border-style) var(--primary-color);
-            background: var(--primary-dim);
-            border-radius: 8px;
-            padding: 8px 12px;
-            margin-top: 4px;
-        }
-        .balance-item.total-row .item-name {
-            font-weight: 800;
-            color: var(--primary-color);
-        }
-        .balance-item.total-row .item-amount {
-            font-weight: 800;
-            color: var(--primary-color);
-        }
+/* View toggle */
+.view-toggle{
+    display:inline-flex;
+    background:var(--ivory-200);
+    border:1px solid var(--border-color);
+    border-radius:var(--radius-small);
+    padding:3px; gap:2px;
+}
+[data-theme="dark"] .view-toggle{
+    background:rgba(232,228,214,0.08);
+}
+.view-toggle button{
+    padding:6px 12px; border-radius:var(--radius-xs);
+    border:none; background:transparent; color:var(--charcoal-500);
+    font-size:0.74rem; font-weight:600; cursor:pointer;
+    transition:var(--transition);
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:inherit; white-space:nowrap;
+    min-height:34px;
+}
+[data-theme="dark"] .view-toggle button{color:var(--text-muted)}
+.view-toggle button.active{
+    background:var(--bg-card); color:var(--sage-800);
+    font-weight:800; box-shadow:var(--shadow-xs);
+}
+[data-theme="dark"] .view-toggle button.active{
+    background:var(--bg-card); color:var(--bronze-400);
+}
 
-        .balance-item .item-amount.asset-color { color: var(--asset-color); }
-        .balance-item .item-amount.liability-color { color: var(--liability-color); }
-        .balance-item .item-amount.equity-color { color: var(--equity-color); }
+/* Date selector */
+.date-selector{
+    background:var(--bg-card);
+    border:1px solid var(--border-color);
+    border-radius:var(--radius-card);
+    padding:16px; margin:0 16px 16px;
+    display:flex; flex-wrap:wrap; gap:12px;
+    align-items:center; justify-content:center;
+    max-width:1180px; margin-inline:auto;
+    box-shadow:var(--shadow-sm);
+}
+.date-selector label{
+    font-size:0.85rem; font-weight:700;
+    color:var(--text-primary);
+    display:flex; align-items:center; gap:6px;
+}
+.date-selector input{
+    padding:10px 14px; border-radius:var(--radius-small);
+    border:1px solid var(--border-strong);
+    background:var(--bg-card); color:var(--text-primary);
+    font-family:inherit; font-size:0.88rem;
+    outline:none; min-width:160px;
+    text-align:center; font-weight:600;
+    -webkit-appearance:none; appearance:none;
+    cursor:pointer;
+}
+.date-selector input:focus{
+    border-color:var(--sage-600);
+    box-shadow:0 0 0 3px var(--sage-100);
+}
+.date-selector .btn-apply{
+    padding:10px 24px;
+    border-radius:var(--radius-small);
+    border:1px solid var(--sage-800);
+    background:var(--sage-700); color:#FFFFFF;
+    font-weight:700; cursor:pointer;
+    transition:var(--transition);
+    font-family:inherit; font-size:0.88rem;
+    display:inline-flex; align-items:center; gap:6px;
+    min-height:44px;
+}
+[data-theme="dark"] .date-selector .btn-apply{
+    background:var(--bronze-600); border-color:var(--bronze-700);
+}
+.date-selector .btn-apply:hover{
+    background:var(--sage-800); transform:translateY(-1px);
+    box-shadow:var(--shadow-sage);
+}
+[data-theme="dark"] .date-selector .btn-apply:hover{background:var(--bronze-500)}
+.date-selector .info-note{
+    margin-right:auto; font-size:0.75rem;
+    color:var(--text-muted); font-weight:500;
+    display:inline-flex; align-items:center; gap:4px;
+}
 
-        /* ===== معادلة المحاسبة ===== */
-        .accounting-equation {
-            background: var(--surface-elevated);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 16px;
-            padding: 20px;
-            margin-top: 16px;
-            text-align: center;
-        }
-        .accounting-equation .equation {
-            font-size: 1.3rem;
-            font-weight: 800;
-            color: var(--data-text-color);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-        .accounting-equation .equation .eq-asset { color: var(--asset-color); }
-        .accounting-equation .equation .eq-liability { color: var(--liability-color); }
-        .accounting-equation .equation .eq-equity { color: var(--equity-color); }
-        .accounting-equation .equation .eq-sign { color: var(--text-muted); font-weight: 400; }
-        .accounting-equation .equation .eq-equals { color: var(--accent-color); font-weight: 700; }
-        .accounting-equation .equation .eq-total {
-            background: var(--primary-dim);
-            padding: 4px 16px;
-            border-radius: 12px;
-            font-weight: 800;
-        }
-        .accounting-equation .equation .eq-total.asset { color: var(--asset-color); border: 1px solid var(--asset-color); }
-        .accounting-equation .equation .eq-total.liability { color: var(--liability-color); border: 1px solid var(--liability-color); }
-        .accounting-equation .equation .eq-total.equity { color: var(--equity-color); border: 1px solid var(--equity-color); }
+/* Balance columns */
+.balance-sheet-container{
+    padding:0 16px 20px;
+    max-width:1180px; margin-inline:auto;
+}
+.balance-sheet-grid{
+    display:grid; grid-template-columns:1fr 1fr;
+    gap:16px;
+}
+.balance-column{
+    background:var(--bg-card);
+    border:1px solid var(--border-color);
+    border-radius:var(--radius-card);
+    padding:16px; overflow:hidden;
+    box-shadow:var(--shadow-sm);
+    transition:var(--transition);
+}
+.balance-column:hover{border-color:var(--sage-400); box-shadow:var(--shadow-md)}
+.balance-column .column-title{
+    font-size:1rem; font-weight:800;
+    padding-bottom:12px; margin-bottom:12px;
+    border-bottom:1px dashed var(--border-color);
+    color:var(--sage-700);
+    display:flex; justify-content:space-between;
+    align-items:center; flex-wrap:wrap; gap:8px;
+    text-align:center;
+}
+[data-theme="dark"] .balance-column .column-title{color:var(--bronze-400)}
+.balance-column .column-title .badge-total{
+    font-size:0.75rem; font-weight:800;
+    padding:3px 12px; border-radius:var(--radius-pill);
+    background:var(--sage-100); color:var(--sage-800);
+    border:1px solid var(--sage-300);
+    font-variant-numeric:tabular-nums;
+    direction:ltr;
+}
+[data-theme="dark"] .balance-column .column-title .badge-total{
+    background:var(--sage-800); color:var(--sage-200);
+    border-color:var(--sage-600);
+}
 
-        .accounting-equation .equation-status {
-            margin-top: 12px;
-            font-size: 0.9rem;
-            font-weight: 600;
-        }
-        .accounting-equation .equation-status.balanced { color: var(--success); }
-        .accounting-equation .equation-status.unbalanced { color: var(--error); }
-        .accounting-equation .equation-status.unavailable { color: var(--text-muted); }
+/* Balance items */
+.balance-item{
+    display:flex; justify-content:space-between;
+    align-items:center; padding:8px 6px;
+    border-bottom:1px dashed var(--border-color);
+    transition:var(--transition);
+    font-size:0.85rem;
+    text-align:center;
+    gap:10px;
+}
+.balance-item:hover{
+    background:var(--primary-ultra);
+    border-radius:var(--radius-xs);
+    padding-inline:12px;
+}
+.balance-item .item-name{
+    color:var(--text-primary);
+    font-weight:600; flex:1;
+    overflow-wrap:anywhere; text-align:right;
+}
+.balance-item .item-amount{
+    font-weight:700;
+    font-family:'Inter','Cairo',sans-serif;
+    direction:ltr; font-variant-numeric:tabular-nums;
+    color:var(--text-primary);
+    white-space:nowrap;
+    text-shadow:var(--glow-value);
+}
+.balance-item.level-1{padding-right:6px}
+.balance-item.level-2{padding-right:20px}
+.balance-item.level-3{padding-right:36px}
+.balance-item.level-4{padding-right:52px}
 
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: var(--text-muted);
-        }
-        .empty-state i { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
+.balance-item.total-row{
+    font-weight:800;
+    border-bottom:none;
+    background:var(--sage-100);
+    border-radius:var(--radius-small);
+    padding:10px 12px;
+    margin-top:8px;
+    border:1px dashed var(--sage-300);
+}
+[data-theme="dark"] .balance-item.total-row{
+    background:rgba(107,142,127,0.14);
+    border-color:rgba(147,175,163,0.35);
+}
+.balance-item.total-row .item-name{
+    font-weight:800; color:var(--sage-800);
+}
+[data-theme="dark"] .balance-item.total-row .item-name{color:var(--sage-200)}
+.balance-item.total-row .item-amount{
+    font-weight:800; color:var(--sage-800);
+}
+[data-theme="dark"] .balance-item.total-row .item-amount{color:var(--sage-200)}
 
-        /* ============================================================
-           الزر العائم (FAB) - تصدير
-           ============================================================ */
-        .fab {
-            position: fixed;
-            bottom: 90px;
-            left: 24px;
-            width: 56px; height: 56px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary-color), #6366f1);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            color: white;
-            font-size: 1.5rem;
-            cursor: pointer;
-            box-shadow: 0 4px 20px var(--fab-shadow);
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            z-index: 200;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            touch-action: manipulation;
-        }
-        .fab:active { transform: scale(0.9); }
-        .fab:hover {
-            transform: scale(1.1) rotate(90deg);
-            box-shadow: 0 6px 30px var(--fab-shadow);
-        }
+.balance-item .item-amount.asset-color{color:var(--asset-color)}
+.balance-item .item-amount.liability-color{color:var(--liability-color)}
+.balance-item .item-amount.equity-color{color:var(--equity-color)}
 
-        /* ============================================================
-           القائمة الجانبية (Sidebar)
-           ============================================================ */
-        .sidebar-toggle {
-            position: fixed;
-            top: 50%;
-            right: 0;
-            transform: translateY(-50%);
-            background: linear-gradient(145deg, #4B0082, #5a1a9a);
-            color: white;
-            width: 35px; height: 35px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50% 0 0 50%;
-            cursor: pointer;
-            z-index: 1001;
-            box-shadow: -3px 0 10px rgba(0,0,0,0.4);
-            transition: all 0.3s;
-            border: 1px solid rgba(255,255,255,0.2);
-            touch-action: manipulation;
-        }
-        .sidebar-toggle:active { transform: translateY(-50%) scale(0.9); }
-        .sidebar-toggle.hidden { opacity: 0; pointer-events: none; }
-        .sidebar {
-            position: fixed;
-            top: 50%;
-            right: -90px;
-            transform: translateY(-50%);
-            width: 70px;
-            background: var(--surface-elevated);
-            z-index: 999;
-            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-            padding: 8px;
-            border-radius: 15px 0 0 15px;
-            overflow-y: auto;
-            box-shadow: -5px 0 20px rgba(0,0,0,0.4);
-            backdrop-filter: blur(10px);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            opacity: 0;
-        }
-        .sidebar.open { right: 0; opacity: 1; }
-        .sidebar-content { display: flex; flex-direction: column; gap: 8px; }
-        .sidebar-btn {
-            position: relative;
-            background: rgba(75, 0, 130, 0.8);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            padding: 8px 4px;
-            border-radius: 10px;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            min-height: 55px;
-            text-align: center;
-            font-size: 0.75rem;
-            font-family: 'Cairo', sans-serif;
-            touch-action: manipulation;
-        }
-        .sidebar-btn:active { transform: scale(0.95); }
-        .sidebar-btn:hover {
-            transform: scale(1.05);
-            background: rgba(75,0,130,0.35);
-            box-shadow: 0 0 15px rgba(0,212,255,0.2);
-        }
-        .sidebar-btn i { font-size: 1.1rem; }
-        .sidebar-btn span { font-size: 0.65rem; }
+/* Accounting equation */
+.accounting-equation{
+    background:var(--bg-card);
+    border:1px solid var(--border-color);
+    border-radius:var(--radius-card);
+    padding:20px; margin-top:16px;
+    text-align:center;
+    box-shadow:var(--shadow-sm);
+}
+.accounting-equation .equation{
+    font-size:1.2rem; font-weight:800;
+    color:var(--text-primary);
+    display:flex; justify-content:center;
+    align-items:center; gap:12px; flex-wrap:wrap;
+    text-align:center;
+}
+.accounting-equation .equation .eq-asset{color:var(--asset-color)}
+.accounting-equation .equation .eq-liability{color:var(--liability-color)}
+.accounting-equation .equation .eq-equity{color:var(--equity-color)}
+.accounting-equation .equation .eq-sign{color:var(--text-muted); font-weight:400; font-size:0.85rem}
+.accounting-equation .equation .eq-equals{color:var(--accent); font-weight:800; font-size:1.4rem}
+.accounting-equation .equation-status{
+    margin-top:14px; font-size:0.9rem; font-weight:700;
+    padding:8px 12px; border-radius:var(--radius-small);
+    display:inline-flex; align-items:center; gap:8px;
+}
+.accounting-equation .equation-status.balanced{
+    color:var(--success-dark);
+    background:var(--success-soft);
+    border:1px dashed rgba(74,124,89,0.35);
+}
+.accounting-equation .equation-status.unbalanced{
+    color:var(--danger-dark);
+    background:var(--danger-soft);
+    border:1px dashed rgba(165,78,78,0.35);
+}
+.accounting-equation .equation-status.unavailable{
+    color:var(--text-muted);
+    background:var(--ivory-200);
+    border:1px dashed var(--border-strong);
+}
+[data-theme="dark"] .accounting-equation .equation-status.balanced{color:#A0CEAE}
+[data-theme="dark"] .accounting-equation .equation-status.unbalanced{color:#E5A0A0}
+[data-theme="dark"] .accounting-equation .equation-status.unavailable{background:rgba(232,228,214,0.06)}
 
-        /* ============================================================
-           القائمة السفلية (Bottom Navigation)
-           ============================================================ */
-        .bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-top: var(--border-width) var(--border-style) var(--border-color);
-            display: flex;
-            justify-content: space-around;
-            padding: 8px 0 env(safe-area-inset-bottom, 8px) 0;
-            z-index: 300;
-        }
-        .bottom-nav .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 2px;
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.55rem;
-            cursor: pointer;
-            transition: all 0.3s;
-            padding: 4px 8px;
-            position: relative;
-            touch-action: manipulation;
-            flex: 1;
-        }
-        .bottom-nav .nav-item:active { transform: scale(0.9); }
-        .bottom-nav .nav-item i { font-size: 18px; transition: all 0.3s; }
-        .bottom-nav .nav-item span { font-weight: 600; margin-top: 2px; }
-        .bottom-nav .nav-item.active { color: var(--primary-color); }
-        .bottom-nav .nav-item.active i { transform: translateY(-3px); text-shadow: 0 0 20px var(--primary-dim); }
-        .bottom-nav .nav-item.active::after {
-            content: '';
-            position: absolute;
-            top: -1px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 20px;
-            height: 3px;
-            background: var(--primary-color);
-            border-radius: 10px;
-        }
+/* Table view */
+.table-wrap{
+    overflow-x:auto;
+    border-radius:var(--radius-small);
+    border:1px solid var(--border-color);
+    background:var(--bg-card);
+    box-shadow:var(--shadow-xs);
+    -webkit-overflow-scrolling:touch;
+    margin:0 16px 16px;
+    max-width:1180px;
+    margin-inline:auto;
+    display:none;
+}
+.accounts-table{
+    width:100%; min-width:620px;
+    border-collapse:collapse; font-size:0.8rem;
+    font-family:inherit;
+}
+.accounts-table thead th{
+    background:var(--ivory-100);
+    color:var(--charcoal-700);
+    padding:12px; font-weight:800;
+    font-size:0.7rem; letter-spacing:0.5px;
+    white-space:nowrap; text-align:center;
+    border-bottom:1px solid var(--border-strong);
+    position:sticky; top:0; z-index:5;
+}
+[data-theme="dark"] .accounts-table thead th{
+    background:rgba(232,228,214,0.06);
+    color:var(--text-secondary);
+}
+.accounts-table tbody td{
+    padding:11px; text-align:center;
+    border-bottom:1px solid var(--border-color);
+    vertical-align:middle; color:var(--text-secondary);
+    font-weight:500; white-space:nowrap;
+}
+.accounts-table tbody tr:hover{background:var(--sage-50)}
+[data-theme="dark"] .accounts-table tbody tr:hover{background:rgba(107,142,127,0.06)}
+.accounts-table tbody tr:last-child td{border-bottom:none}
+.accounts-table .col-code{
+    font-family:'Inter','Cairo',monospace;
+    font-weight:800; color:var(--sage-800);
+    direction:ltr; font-size:0.72rem;
+}
+[data-theme="dark"] .accounts-table .col-code{color:var(--sage-300)}
+.accounts-table .col-balance{
+    font-family:'Inter','Cairo',sans-serif;
+    font-weight:800; color:var(--charcoal-900);
+    direction:ltr; font-variant-numeric:tabular-nums;
+    font-size:0.82rem;
+}
+[data-theme="dark"] .accounts-table .col-balance{color:var(--ivory-100)}
 
-        /* ============================================================
-           مودال التقارير
-           ============================================================ */
-        .report-modal-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(8px);
-            z-index: 900;
-            display: none;
-            align-items: flex-end;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .report-modal-overlay.show { display: flex; opacity: 1; }
-        .report-modal {
-            background: var(--surface-elevated);
-            border-radius: 24px 24px 0 0;
-            width: 100%;
-            max-height: 92vh;
-            overflow-y: auto;
-            padding: 24px 20px;
-            transform: translateY(100%);
-            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-bottom: none;
-        }
-        .report-modal-overlay.show .report-modal { transform: translateY(0); }
-        .report-modal .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .report-modal .modal-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); }
-        .report-modal .modal-close {
-            width: 36px; height: 36px;
-            border-radius: 10px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-muted);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .report-modal .modal-close:active { transform: scale(0.9); }
-        .report-modal .modal-close:hover {
-            background: var(--error);
-            color: white;
-            border-color: var(--error);
-        }
-        .report-filter-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-        .report-filter-row .form-group { margin-bottom: 0; }
-        .report-filter-row .form-label {
-            display: block;
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            margin-bottom: 4px;
-        }
-        .report-filter-row .form-input {
-            width: 100%;
-            padding: 10px 12px;
-            border-radius: 12px;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            background: var(--surface-color);
-            color: var(--text-color);
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.85rem;
-            transition: all 0.3s;
-            outline: none;
-        }
-        .report-filter-row .form-input:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px var(--primary-dim);
-        }
-        .report-actions {
-            display: flex;
-            gap: 12px;
-            margin-top: 8px;
-        }
-        .report-actions .btn {
-            flex: 1;
-            padding: 12px;
-            border-radius: 14px;
-            border: none;
-            font-weight: 700;
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .report-actions .btn:active { transform: scale(0.97); }
-        .report-actions .btn-primary {
-            background: linear-gradient(135deg, var(--primary-color), #6366f1);
-            color: white;
-        }
-        .report-actions .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px var(--primary-dim);
-        }
-        .report-actions .btn-secondary {
-            background: var(--surface-color);
-            color: var(--text-muted);
-            border: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .report-actions .btn-secondary:hover { background: var(--border-color); }
-        .report-results {
-            margin-top: 20px;
-            max-height: 300px;
-            overflow-y: auto;
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 14px;
-        }
-        .report-results table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.8rem;
-        }
-        .report-results table th {
-            background: var(--primary-dim);
-            color: var(--primary-color);
-            padding: 10px 12px;
-            text-align: center;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            font-weight: 700;
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-        }
-        .report-results table td {
-            padding: 8px 12px;
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-            text-align: center;
-            color: var(--data-text-color);
-        }
-        .report-results table tr:hover { background: var(--card-hover-bg); }
-        .report-results .empty-state {
-            padding: 30px;
-            text-align: center;
-            color: var(--text-muted);
-        }
+/* Empty state */
+.empty-state{
+    text-align:center; color:var(--text-muted);
+    padding:40px 20px; line-height:1.8;
+    border:1px dashed var(--border-color);
+    border-radius:var(--radius-card);
+    margin:8px 0;
+    background:linear-gradient(145deg,var(--bg-secondary),transparent);
+}
+.empty-state i{font-size:3rem; display:block; color:var(--sage-300); margin-bottom:14px}
+[data-theme="dark"] .empty-state i{color:var(--sage-600)}
+.empty-state p{font-size:0.88rem; font-weight:600}
 
-        /* ============================================================
-           مودال المستشار الذكي (AI Advisor)
-           ============================================================ */
-        .ai-modal .modal {
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-bottom: none;
-        }
+/* Alerts container */
+.alerts-container{padding:0 16px 16px; max-width:1180px; margin-inline:auto}
 
-        /* ============================================================
-           Toast إشعارات
-           ============================================================ */
-        .toast {
-            position: fixed;
-            top: 70px;
-            left: 50%;
-            transform: translateX(-50%) translateY(-20px);
-            background: var(--toast-bg);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            border-radius: 14px;
-            padding: 14px 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 600;
-            opacity: 0;
-            transition: all 0.4s;
-            pointer-events: none;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-        }
-        .toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-        .toast.success { border-color: var(--success); }
-        .toast.error { border-color: var(--error); }
-        .toast.warning { border-color: var(--warning); }
-        .toast-icon {
-            width: 28px; height: 28px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8rem;
-        }
-        .toast.success .toast-icon { background: rgba(16,185,129,0.15); color: var(--success); }
-        .toast.error .toast-icon { background: rgba(239,68,68,0.15); color: var(--error); }
-        .toast.warning .toast-icon { background: var(--accent-dim); color: var(--warning); }
+/* FAB */
+.fab{
+    position:fixed; bottom:90px; left:24px;
+    width:56px; height:56px; border-radius:50%;
+    background:linear-gradient(135deg,var(--sage-700),var(--sage-600));
+    border:1px solid var(--sage-800);
+    color:white; font-size:1.5rem; cursor:pointer;
+    box-shadow:0 4px 20px var(--shadow-sage);
+    transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    z-index:200; display:flex;
+    align-items:center; justify-content:center;
+    touch-action:manipulation;
+}
+[data-theme="dark"] .fab{
+    background:linear-gradient(135deg,var(--bronze-600),var(--bronze-500));
+    border-color:var(--bronze-700);
+}
+.fab:active{transform:scale(0.9)}
+.fab:hover{transform:scale(1.1) rotate(90deg); box-shadow:0 6px 30px var(--shadow-sage)}
 
-        /* ============================================================
-           الرسوم المتحركة
-           ============================================================ */
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-up {
-            animation: fadeUp 0.5s ease forwards;
-        }
+/* Sidebar */
+.sidebar-toggle{
+    position:fixed; top:50%; right:0;
+    transform:translateY(-50%);
+    background:var(--sage-700); color:#FFFFFF;
+    width:34px; height:42px;
+    display:flex; align-items:center; justify-content:center;
+    border-radius:var(--radius-small) 0 0 var(--radius-small);
+    cursor:pointer; z-index:1001;
+    box-shadow:-4px 0 14px rgba(74,106,87,0.25);
+    transition:all 0.35s cubic-bezier(0.4,0,0.2,1);
+    border:none; touch-action:manipulation;
+}
+[data-theme="dark"] .sidebar-toggle{
+    background:var(--bronze-600); color:var(--ivory-50);
+}
+.sidebar-toggle:active{transform:translateY(-50%) scale(0.94)}
+.sidebar-toggle.hidden{
+    opacity:0; pointer-events:none;
+    transform:translateY(-50%) translateX(20px);
+}
+.sidebar{
+    position:fixed; top:50%; right:-170px;
+    transform:translateY(-50%);
+    width:140px;
+    background:var(--bg-secondary);
+    z-index:999;
+    transition:all 0.4s cubic-bezier(0.34,1.2,0.64,1);
+    padding:10px 8px;
+    border-radius:var(--radius-card) 0 0 var(--radius-card);
+    overflow-y:auto;
+    box-shadow:-12px 0 40px rgba(58,54,46,0.15);
+    border:1px solid var(--border-strong);
+    border-right:none; opacity:0;
+}
+[data-theme="dark"] .sidebar{background:var(--bg-secondary)}
+.sidebar.open{right:0; opacity:1}
+.sidebar-content{display:flex; flex-direction:column; gap:6px}
+.sidebar-btn{
+    position:relative;
+    background:var(--bg-card);
+    border:1px solid var(--border-color);
+    padding:11px 6px;
+    border-radius:var(--radius-small);
+    color:var(--charcoal-700);
+    font-weight:700; cursor:pointer;
+    transition:var(--transition);
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    gap:4px; min-height:58px;
+    text-align:center; font-size:0.72rem;
+    font-family:inherit; touch-action:manipulation;
+}
+[data-theme="dark"] .sidebar-btn{
+    background:var(--bg-card);
+    border-color:var(--border-color);
+    color:var(--text-secondary);
+}
+.sidebar-btn:active{transform:scale(0.96)}
+.sidebar-btn:hover{
+    background:var(--sage-50);
+    border-color:var(--sage-400);
+    color:var(--sage-800);
+    transform:translateX(-2px);
+}
+[data-theme="dark"] .sidebar-btn:hover{
+    background:rgba(107,142,127,0.1);
+    color:var(--sage-300);
+}
+.sidebar-btn i{
+    font-size:1.15rem; color:var(--sage-700);
+    transition:var(--transition);
+}
+[data-theme="dark"] .sidebar-btn i{color:var(--bronze-400)}
+.sidebar-btn:hover i{transform:scale(1.12); color:var(--sage-800)}
+[data-theme="dark"] .sidebar-btn:hover i{color:var(--bronze-300)}
+.sidebar-btn span{font-size:0.62rem; margin-top:1px; font-weight:700}
+.sidebar-btn[data-back="true"]{
+    background:var(--brick-50) !important;
+    border-color:rgba(165,78,78,0.35) !important;
+    color:var(--brick-700) !important;
+}
+[data-theme="dark"] .sidebar-btn[data-back="true"]{
+    background:rgba(165,78,78,0.12) !important;
+    color:#D68B8B !important;
+}
+.sidebar-btn[data-back="true"]:hover{
+    background:var(--brick-600) !important;
+    color:#FFFFFF !important;
+}
+.sidebar-btn[data-back="true"] i{color:var(--brick-600) !important}
+.sidebar-btn[data-back="true"]:hover i{color:#FFFFFF !important}
 
-        /* ============================================================
-           تحسينات للهواتف
-           ============================================================ */
-        @media (max-width: 768px) {
-            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px; }
-            .stat-card { padding: 12px; }
-            .stat-value { font-size: 1.1rem; }
-            .balance-sheet-grid { grid-template-columns: 1fr; }
-            .date-selector { flex-direction: column; align-items: stretch; }
-            .date-selector input { min-width: unset; }
-            .report-filter-row { grid-template-columns: 1fr; }
-            .bottom-nav .nav-item i { font-size: 15px; }
-            .bottom-nav .nav-item span { font-size: 0.5rem; }
-            .sidebar { width: 60px; }
-            .sidebar-btn { min-height: 45px; font-size: 0.65rem; }
-            .sidebar-btn i { font-size: 0.9rem; }
-            .fab { width: 48px; height: 48px; font-size: 1.2rem; bottom: 80px; left: 16px; }
-            .filter-chip { font-size: 0.65rem; padding: 4px 10px; }
-            .top-title h2 { font-size: 1rem; }
-            .icon-btn { width: 34px; height: 34px; font-size: 0.85rem; }
-            .report-modal { padding: 16px; }
-            .report-results { max-height: 200px; }
-            .report-results table th,
-            .report-results table td { padding: 6px 8px; font-size: 0.7rem; }
-            .accounting-equation .equation { font-size: 1rem; }
-            .balance-item { font-size: 0.8rem; }
-        }
+.sidebar-overlay{
+    position:fixed; inset:0;
+    background:rgba(38,36,31,0.3);
+    backdrop-filter:blur(3px);
+    -webkit-backdrop-filter:blur(3px);
+    z-index:998; opacity:0;
+    pointer-events:none; transition:opacity 0.3s;
+}
+.sidebar-overlay.show{opacity:1; pointer-events:auto}
 
-        @media (max-width: 480px) {
-            .stats-grid { gap: 6px; padding: 10px; }
-            .stat-card { padding: 10px; }
-            .stat-value { font-size: 0.95rem; }
-            .stat-icon { width: 32px; height: 32px; font-size: 0.85rem; }
-            .balance-item.level-2 { padding-right: 12px; }
-            .balance-item.level-3 { padding-right: 24px; }
-            .balance-item.level-4 { padding-right: 36px; }
-            .bottom-nav .nav-item { padding: 4px 4px; }
-            .bottom-nav .nav-item i { font-size: 13px; }
-            .bottom-nav .nav-item span { font-size: 0.45rem; }
-            .accounting-equation .equation { font-size: 0.85rem; gap: 6px; }
-            .accounting-equation .equation .eq-total { padding: 2px 8px; }
-        }
+/* Bottom nav */
+.bottom-nav{
+    position:fixed; bottom:0; left:0; right:0;
+    background:rgba(253,252,248,0.96);
+    backdrop-filter:blur(20px);
+    -webkit-backdrop-filter:blur(20px);
+    border-top:1px solid var(--border-color);
+    display:flex; justify-content:space-around;
+    padding:8px 0 env(safe-area-inset-bottom,8px) 0;
+    z-index:300; overflow-x:auto; scrollbar-width:none;
+}
+[data-theme="dark"] .bottom-nav{
+    background:rgba(36,33,28,0.96);
+}
+.bottom-nav::-webkit-scrollbar{display:none}
+.bottom-nav .nav-item{
+    display:flex; flex-direction:column; align-items:center;
+    gap:3px; background:none; border:1.5px solid transparent;
+    color:var(--charcoal-500); font-family:inherit;
+    font-size:0.7rem; cursor:pointer; transition:var(--transition);
+    padding:7px 8px; position:relative;
+    touch-action:manipulation; flex:1; min-width:66px;
+    border-radius:var(--radius-small);
+    margin:0 2px;
+}
+[data-theme="dark"] .bottom-nav .nav-item{color:var(--text-muted)}
+.bottom-nav .nav-item:active{transform:scale(0.94)}
+.bottom-nav .nav-item i{font-size:20px; transition:var(--transition)}
+.bottom-nav .nav-item span{font-weight:700; margin-top:2px; font-size:0.62rem; white-space:nowrap}
+.bottom-nav .nav-item.active{
+    color:var(--sage-800);
+    background:var(--sage-50);
+    border-color:var(--sage-400);
+    box-shadow:0 0 0 2px rgba(107,142,127,0.15),0 2px 6px rgba(58,54,46,0.08);
+}
+[data-theme="dark"] .bottom-nav .nav-item.active{
+    color:var(--bronze-400);
+    background:rgba(184,147,90,0.1);
+    border-color:var(--bronze-500);
+}
+.bottom-nav .nav-item.active i{transform:translateY(-2px)}
+
+/* Modals */
+.modal-overlay,.report-modal-overlay{
+    position:fixed; inset:0;
+    background:rgba(38,36,31,0.42);
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+    z-index:950; display:none;
+    align-items:flex-end; justify-content:center;
+    opacity:0; transition:opacity 0.3s;
+    overflow-y:auto;
+}
+[data-theme="dark"] .modal-overlay,
+[data-theme="dark"] .report-modal-overlay{background:rgba(0,0,0,0.7)}
+.modal-overlay.show,.report-modal-overlay.show{display:flex; opacity:1}
+
+.modal,.report-modal{
+    background:var(--bg-secondary);
+    border-radius:var(--radius-card) var(--radius-card) 0 0;
+    width:100%; max-width:720px;
+    max-height:94vh;
+    overflow-y:auto;
+    padding:22px 18px;
+    transform:translateY(100%);
+    transition:transform 0.42s cubic-bezier(0.16,1,0.3,1);
+    border:1px solid var(--border-strong);
+    border-bottom:none;
+    box-shadow:0 -14px 50px rgba(58,54,46,0.18);
+    margin:0 auto; position:relative;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+}
+[data-theme="dark"] .modal,[data-theme="dark"] .report-modal{
+    background:var(--bg-secondary);
+}
+.modal::before,.report-modal::before{
+    content:''; position:absolute; top:0; left:50%;
+    transform:translateX(-50%);
+    width:42px; height:4px;
+    background:var(--sage-400);
+    border-radius:0 0 4px 4px; opacity:0.6;
+}
+.modal-overlay.show .modal,
+.report-modal-overlay.show .report-modal{transform:translateY(0)}
+
+.modal-header{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:18px; padding-bottom:14px;
+    border-bottom:1px dashed var(--border-color);
+    gap:10px; margin-top:8px;
+    position:sticky; top:0; z-index:11;
+    background:var(--bg-secondary);
+    margin-inline:-18px;
+    padding-inline:18px;
+}
+.modal-title{
+    font-size:1.05rem; font-weight:800;
+    color:var(--charcoal-900);
+    text-align:center; flex:1;
+    display:flex; align-items:center;
+    justify-content:center; gap:10px;
+}
+[data-theme="dark"] .modal-title{color:var(--ivory-100)}
+.modal-close{
+    width:38px; height:38px;
+    border-radius:var(--radius-small);
+    border:1px solid var(--border-color);
+    background:var(--bg-card);
+    color:var(--charcoal-500);
+    cursor:pointer; display:flex;
+    align-items:center; justify-content:center;
+    transition:var(--transition); font-size:0.95rem;
+    flex-shrink:0;
+}
+[data-theme="dark"] .modal-close{
+    background:var(--bg-card);
+    color:var(--text-muted);
+}
+.modal-close:hover{
+    background:var(--brick-600); color:#FFFFFF;
+    border-color:var(--brick-600);
+}
+.modal-close:active{transform:scale(0.94)}
+
+/* Form */
+.form-group{display:flex; flex-direction:column; gap:6px; margin-bottom:12px}
+.form-label{
+    display:block; font-size:0.76rem; font-weight:700;
+    color:var(--charcoal-700); margin-bottom:5px;
+    text-align:center;
+}
+[data-theme="dark"] .form-label{color:var(--text-secondary)}
+.form-input{
+    width:100%; padding:11px 14px;
+    border-radius:var(--radius-small);
+    border:1px solid var(--border-strong);
+    background:var(--bg-card); color:var(--text-primary);
+    font-family:inherit; font-size:0.86rem;
+    font-weight:600; transition:var(--transition);
+    outline:none; text-align:center;
+}
+[data-theme="dark"] .form-input{
+    background:var(--bg-card);
+    border-color:var(--border-strong);
+    color:var(--text-primary);
+}
+.form-input:focus{
+    border-color:var(--sage-600);
+    box-shadow:0 0 0 3px var(--sage-100);
+    transform:translateY(-1px);
+}
+[data-theme="dark"] .form-input:focus{
+    border-color:var(--bronze-500);
+    box-shadow:0 0 0 3px rgba(184,147,90,0.18);
+}
+.form-input.error{
+    border-color:var(--brick-600);
+    box-shadow:0 0 0 3px var(--brick-100);
+}
+textarea.form-input{text-align:center; line-height:1.7; resize:vertical; min-height:82px}
+select.form-input{
+    text-align:center; cursor:pointer;
+    -webkit-appearance:none !important;
+    -moz-appearance:none !important;
+    appearance:none !important;
+    background-image:url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233D5A4C' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+    background-repeat:no-repeat !important;
+    background-position:left 12px center !important;
+    background-size:15px !important;
+    background-color:var(--bg-card) !important;
+    padding-left:36px;
+}
+[data-theme="dark"] select.form-input{
+    background-image:url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C9A976' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+}
+select.form-input option{background:var(--bg-card); color:var(--text-primary)}
+.form-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+}
+.form-grid .form-group.full,
+.form-grid .form-group[data-wide="true"],
+.form-grid .form-group:has(textarea){grid-column:1 / -1}
+.form-row{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+
+/* Report actions */
+.report-filter-row{
+    display:grid; grid-template-columns:1fr 1fr;
+    gap:12px; margin-bottom:14px;
+}
+.report-filter-row .form-group{margin-bottom:0}
+.report-actions{
+    display:flex; gap:10px; margin-top:8px;
+    flex-wrap:wrap;
+}
+.report-actions .btn{
+    flex:1; min-width:120px;
+    padding:12px 16px; font-size:0.84rem;
+    border-radius:var(--radius-small);
+    border:1px solid var(--border-strong);
+    background:var(--bg-card); color:var(--charcoal-700);
+    font-weight:700; cursor:pointer;
+    transition:var(--transition);
+    display:inline-flex; align-items:center; justify-content:center;
+    gap:6px; font-family:inherit;
+    min-height:46px;
+}
+[data-theme="dark"] .report-actions .btn{
+    background:var(--bg-card); color:var(--text-secondary);
+}
+.report-actions .btn:hover,.report-actions .btn:active{
+    background:var(--sage-100); color:var(--sage-800);
+    border-color:var(--sage-400); transform:translateY(-1px);
+}
+[data-theme="dark"] .report-actions .btn:hover{
+    background:var(--sage-800); color:var(--sage-200);
+}
+.report-actions .btn.primary,
+.report-actions .btn.btn-primary{
+    background:var(--sage-700); color:#FFFFFF;
+    border-color:var(--sage-800);
+}
+.report-actions .btn.primary:hover{
+    background:var(--sage-800); box-shadow:var(--shadow-sage);
+}
+[data-theme="dark"] .report-actions .btn.primary,
+[data-theme="dark"] .report-actions .btn.btn-primary{
+    background:var(--bronze-600); color:var(--ivory-50);
+    border-color:var(--bronze-700);
+}
+
+.report-results{
+    margin-top:18px; max-height:360px; overflow-y:auto;
+    border:1px solid var(--border-strong);
+    border-radius:var(--radius-small);
+    background:var(--bg-card); padding:4px;
+    -webkit-overflow-scrolling:touch;
+}
+.report-results table{
+    width:100%; border-collapse:collapse;
+    font-size:0.78rem;
+}
+.report-results table th{
+    background:var(--ivory-100);
+    color:var(--charcoal-700);
+    padding:11px; text-align:center;
+    position:sticky; top:0; z-index:10;
+    font-weight:800; font-size:0.7rem;
+    border-bottom:1px solid var(--border-strong);
+}
+[data-theme="dark"] .report-results table th{
+    background:rgba(232,228,214,0.06);
+    color:var(--text-secondary);
+}
+.report-results table td{
+    padding:10px 12px;
+    border-bottom:1px dashed var(--border-color);
+    text-align:center; color:var(--text-secondary);
+    vertical-align:middle; font-weight:500;
+}
+.report-results table tr:hover td{background:var(--sage-50)}
+[data-theme="dark"] .report-results table tr:hover td{background:rgba(107,142,127,0.06)}
+
+/* Toast */
+.toast{
+    position:fixed; top:80px; left:50%;
+    transform:translateX(-50%) translateY(-20px);
+    background:var(--bg-card);
+    border:1px solid var(--border-strong);
+    border-radius:var(--radius-small);
+    padding:12px 20px;
+    display:flex; align-items:center; gap:10px;
+    z-index:2000; opacity:0;
+    transition:all 0.4s ease;
+    pointer-events:none;
+    box-shadow:var(--shadow-lg);
+    min-width:220px; font-size:0.85rem;
+    color:var(--text-primary);
+    font-weight:600;
+    max-width:calc(100vw - 32px);
+}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+.toast.success{border-color:var(--moss-500)}
+.toast.error{border-color:var(--brick-500)}
+.toast.warning{border-color:var(--clay-500)}
+.toast.info{border-color:var(--sage-500)}
+.toast-icon{
+    width:28px; height:28px;
+    border-radius:var(--radius-xs);
+    display:flex; align-items:center; justify-content:center;
+    font-size:0.78rem;
+    background:var(--sage-100); color:var(--sage-700);
+    flex-shrink:0;
+}
+[data-theme="dark"] .toast-icon{
+    background:var(--sage-800); color:var(--sage-300);
+}
+.toast.success .toast-icon{background:var(--success-soft); color:var(--moss-700)}
+.toast.error .toast-icon{background:var(--danger-soft); color:var(--brick-700)}
+.toast.warning .toast-icon{background:var(--warning-soft); color:var(--clay-700)}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.animate-fade-up{animation:fadeUp 0.5s ease forwards}
+
+/* Print */
+@media print{
+    .top-bar,.bottom-nav,.sidebar-toggle,.sidebar,.fab,
+    .filter-chips,.view-toggle,.date-selector,
+    .modal-overlay,.report-modal-overlay,.sidebar-overlay,.toast,
+    .alerts-container,.accounting-equation{display:none !important}
+    body{background:#fff; color:#111; padding:0}
+    .balance-column{break-inside:avoid; border:1px solid #ccc !important}
+}
+
+/* Responsive */
+@media(min-width:768px){
+    .stats-grid{grid-template-columns:repeat(4,1fr)}
+    .modal,.report-modal{border-radius:var(--radius-card); max-width:840px; margin-bottom:5vh}
+}
+@media(max-width:768px){
+    .balance-sheet-grid{grid-template-columns:1fr}
+    .date-selector{flex-direction:column; align-items:stretch; text-align:center}
+    .date-selector input{min-width:0; width:100%}
+    .date-selector .btn-apply{width:100%}
+    .date-selector .info-note{margin:8px 0 0 0; justify-content:center}
+}
+@media(max-width:480px){
+    .stats-grid{gap:10px; padding:14px 12px 4px}
+    .stat-card{padding:14px 10px}
+    .stat-card::before{inset:4px}
+    .stat-value{font-size:1.15rem}
+    .stat-icon{width:30px; height:30px; font-size:0.82rem; margin-bottom:7px}
+    .stat-label{font-size:0.64rem}
+    .filter-chip{font-size:0.72rem; padding:8px 12px}
+    .filter-chips{padding:3px}
+    .top-title h2{font-size:1.05rem}
+    .top-title h2 i{padding:6px; font-size:0.95rem}
+    .icon-btn{width:36px; height:36px; font-size:0.9rem}
+    .modal,.report-modal{padding:16px 14px}
+    .modal-header{margin-inline:-14px; padding-inline:14px}
+    .form-input{padding:10px 10px; font-size:0.78rem}
+    select.form-input{padding-left:28px; background-size:13px !important; background-position:left 9px center !important}
+    .balance-item{font-size:0.78rem}
+    .balance-item.level-2{padding-right:12px}
+    .balance-item.level-3{padding-right:24px}
+    .balance-item.level-4{padding-right:36px}
+    .accounting-equation .equation{font-size:0.95rem; gap:6px}
+    .bottom-nav .nav-item{padding:6px 4px; min-width:60px; margin:0 1px}
+    .bottom-nav .nav-item i{font-size:18px}
+    .bottom-nav .nav-item span{font-size:0.56rem}
+    .report-results table th,
+    .report-results table td{padding:6px 8px; font-size:0.7rem}
+    .report-filter-row{grid-template-columns:1fr 1fr !important; gap:8px}
+    .report-actions{flex-direction:column}
+    .report-actions .btn{min-width:100%}
+}
+@media(prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; transition-duration:.01ms !important;}
+}
     </style>
-  <script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script>
-  <script src="source-trace-contract.js"></script>
-<script src="file:///android_asset/assets-local/js/finance-integrity-runtime.js"></script></head>
+    <script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script>
+    <script src="source-trace-contract.js"></script>
+    <script src="file:///android_asset/assets-local/js/finance-integrity-runtime.js"></script>
+</head>
 <body>
 
-    <!-- Pull-to-Refresh Indicator -->
+    <!-- Pull-to-Refresh -->
     <div class="pull-indicator" id="pullIndicator">
         <i class="fas fa-arrow-down"></i>
         <span>اسحب للتحديث</span>
@@ -1054,42 +1239,38 @@
         <div class="spinner"></div>
     </div>
 
-    <!-- ============================================================
-    الشريط العلوي (Header)
-    ============================================================ -->
+    <!-- Header -->
     <header class="top-bar">
         <div class="header-top">
             <div class="top-title">
-                <h2>⚖️ الميزانية العمومية <span class="ai-badge">🤖 AI</span></h2>
+                <h2><i class="fas fa-scale-balanced"></i> الميزانية العمومية</h2>
             </div>
             <div class="header-actions">
                 <button type="button" class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات" aria-label="عرض التنبيهات">
                     <i class="fas fa-bell"></i>
                 </button>
-                <button type="button" class="icon-btn" id="themeToggle" title="تبديل الوضع" aria-label="تبديل الوضع الفاتح والمظلم">
+                <button type="button" class="icon-btn" id="themeToggle" title="تبديل المظهر" aria-label="تبديل الوضع الفاتح والمظلم">
                     <i class="fas fa-moon" id="themeIcon"></i>
                 </button>
-                <button type="button" class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي" aria-label="فتح المستشار الذكي" style="background:var(--primary-dim);color:var(--primary-color);">
-                    <i class="fas fa-robot"></i>
+                <button type="button" class="icon-btn" onclick="goHome()" title="الرئيسية" aria-label="العودة للرئيسية">
+                    <i class="fas fa-house"></i>
                 </button>
             </div>
         </div>
         <div class="search-wrap">
             <i class="fas fa-search"></i>
-            <input type="text" class="search-input" id="searchInput" placeholder="ابحث عن حساب في الميزانية..." oninput="handleSearch(this.value)">
+            <input type="search" class="search-input" id="searchInput" placeholder="ابحث عن حساب في الميزانية..." oninput="handleSearch(this.value)" autocomplete="off">
         </div>
-        <div class="filter-chips">
-            <button type="button" class="filter-chip active" aria-pressed="true" onclick="setFilter('all', this)">الكل</button>
-            <button type="button" class="filter-chip" aria-pressed="false" onclick="setFilter('asset', this)">الأصول</button>
-            <button type="button" class="filter-chip" aria-pressed="false" onclick="setFilter('liability', this)">الخصوم</button>
-            <button type="button" class="filter-chip" aria-pressed="false" onclick="setFilter('equity', this)">حقوق الملكية</button>
+        <div class="filter-chips" aria-label="الفلاتر">
+            <button type="button" class="filter-chip active" aria-pressed="true" onclick="setFilter('all', this)" data-filter="all"><i class="fas fa-list"></i> الكل</button>
+            <button type="button" class="filter-chip" aria-pressed="false" onclick="setFilter('asset', this)" data-filter="asset"><i class="fas fa-building-columns"></i> الأصول</button>
+            <button type="button" class="filter-chip" aria-pressed="false" onclick="setFilter('liability', this)" data-filter="liability"><i class="fas fa-hand-holding-usd"></i> الخصوم</button>
+            <button type="button" class="filter-chip" aria-pressed="false" onclick="setFilter('equity', this)" data-filter="equity"><i class="fas fa-chart-pie"></i> حقوق الملكية</button>
         </div>
     </header>
 
-    <!-- ============================================================
-    بطاقات الإحصائيات (مؤشرات الميزانية)
-    ============================================================ -->
-    <div class="stats-grid">
+    <!-- Stats -->
+    <section class="stats-grid">
         <div class="stat-card animate-fade-up" role="button" tabindex="0" aria-label="عرض تفاصيل إجمالي الأصول" onclick="showStatDetail('assets')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showStatDetail('assets');}">
             <div class="stat-icon green"><i class="fas fa-building-columns"></i></div>
             <div class="stat-value" id="statAssets">0</div>
@@ -1114,33 +1295,42 @@
             <div class="stat-label">الفارق (الأصول - الخصوم)</div>
             <div class="stat-trend up"><i class="fas fa-arrow-up"></i> <span id="trendDifference">---</span></div>
         </div>
+    </section>
+
+    <!-- Alerts -->
+    <div class="alerts-container" id="alertsContainer"></div>
+
+    <!-- Section title + view toggle -->
+    <div class="section-title">
+        <h3><i class="fas fa-table-columns"></i> تفاصيل الميزانية</h3>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;">
+            <div class="view-toggle" id="viewToggle" role="tablist" aria-label="طريقة العرض">
+                <button type="button" data-view-btn="columns" class="active" title="عرض أعمدة"><i class="fas fa-table-columns"></i> أعمدة</button>
+                <button type="button" data-view-btn="cards" title="عرض بطاقات"><i class="fas fa-th-large"></i> بطاقات</button>
+                <button type="button" data-view-btn="table" title="عرض جدول"><i class="fas fa-table"></i> جدول</button>
+            </div>
+            <span class="count-badge" id="accountsCount">0</span>
+        </div>
     </div>
 
-    <!-- ============================================================
-    حاوية التنبيهات
-    ============================================================ -->
-    <div class="alerts-container" id="alertsContainer" style="padding:0 16px 16px;"></div>
+    <!-- Date selector -->
+    <div class="date-selector">
+        <label for="balanceDate"><i class="fas fa-calendar-day"></i> تاريخ الميزانية</label>
+        <input type="date" id="balanceDate" inputmode="none">
+        <button type="button" class="btn-apply" onclick="loadBalanceSheet()" aria-label="عرض الميزانية حسب التاريخ">
+            <i class="fas fa-magnifying-glass"></i> عرض
+        </button>
+        <span class="info-note">
+            <i class="fas fa-info-circle"></i> يتم احتساب الأرصدة حتى هذا التاريخ
+        </span>
+    </div>
 
-    <!-- ============================================================
-    الميزانية العمومية
-    ============================================================ -->
+    <!-- Balance Sheet (columns view) -->
     <div class="balance-sheet-container">
-        <!-- محدد التاريخ -->
-        <div class="date-selector">
-            <label for="balanceDate">📅 تاريخ الميزانية</label>
-            <input type="date" id="balanceDate">
-            <button type="button" class="btn-apply" onclick="loadBalanceSheet()" aria-label="عرض الميزانية حسب التاريخ">🔍 عرض</button>
-            <span style="margin-right:auto;font-size:0.8rem;color:var(--text-muted);">
-                <i class="fas fa-info-circle"></i> يتم حساب الأرصدة حتى هذا التاريخ
-            </span>
-        </div>
-
-        <!-- الميزانية العمومية -->
         <div class="balance-sheet-grid" id="balanceSheetGrid">
-            <!-- عمود الأصول -->
             <div class="balance-column" id="assetsColumn">
                 <div class="column-title">
-                    <span>📊 الأصول (Assets)</span>
+                    <span><i class="fas fa-building-columns"></i> الأصول</span>
                     <span class="badge-total" id="assetsTotalBadge">0.00</span>
                 </div>
                 <div id="assetsList">
@@ -1148,10 +1338,9 @@
                 </div>
             </div>
 
-            <!-- عمود الخصوم + حقوق الملكية -->
             <div class="balance-column" id="liabilitiesColumn">
                 <div class="column-title">
-                    <span>📊 الخصوم (Liabilities)</span>
+                    <span><i class="fas fa-hand-holding-usd"></i> الخصوم</span>
                     <span class="badge-total" id="liabilitiesTotalBadge">0.00</span>
                 </div>
                 <div id="liabilitiesList">
@@ -1161,7 +1350,7 @@
                 <div style="height:16px;"></div>
 
                 <div class="column-title">
-                    <span>📊 حقوق الملكية (Equity)</span>
+                    <span><i class="fas fa-chart-pie"></i> حقوق الملكية</span>
                     <span class="badge-total" id="equityTotalBadge">0.00</span>
                 </div>
                 <div id="equityList">
@@ -1170,7 +1359,27 @@
             </div>
         </div>
 
-        <!-- معادلة المحاسبة -->
+        <!-- Cards view -->
+        <div id="cardsView" style="display:none;gap:14px;flex-direction:column;margin-top:8px;"></div>
+
+        <!-- Table view -->
+        <div class="table-wrap" id="tableWrap">
+            <table class="accounts-table" id="accountsTable">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>الكود</th>
+                        <th>اسم الحساب</th>
+                        <th>النوع</th>
+                        <th>المستوى</th>
+                        <th>الرصيد</th>
+                    </tr>
+                </thead>
+                <tbody id="accountsTableBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Accounting Equation -->
         <div class="accounting-equation" id="accountingEquation">
             <div class="equation">
                 <span class="eq-asset" id="eqAssets">---</span>
@@ -1188,89 +1397,66 @@
         </div>
     </div>
 
-    <!-- ============================================================
-    الزر العائم (FAB) - تصدير
-    ============================================================ -->
+    <!-- FAB (kept for export) -->
     <button type="button" class="fab" onclick="exportBalanceSheet()" aria-label="تصدير الميزانية العمومية" title="تصدير الميزانية العمومية">
         <i class="fas fa-file-export"></i>
     </button>
 
-    <!-- ============================================================
-    القائمة الجانبية (Sidebar)
-    ============================================================ -->
+    <!-- Sidebar -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="فتح القائمة الجانبية" title="فتح القائمة الجانبية">
         <i class="fas fa-bars" aria-hidden="true"></i>
     </button>
-    <div class="sidebar" id="sidebar">
+    <aside class="sidebar" id="sidebar" aria-label="القائمة الجانبية">
         <div class="sidebar-content">
-            <button type="button" class="sidebar-btn" onclick="handleSidebarAction('refresh')">
-                <i class="fas fa-sync-alt"></i> <span>تحديث</span>
-            </button>
-            <button type="button" class="sidebar-btn" onclick="handleSidebarAction('export')">
-                <i class="fas fa-file-export"></i> <span>تصدير</span>
-            </button>
-            <button type="button" class="sidebar-btn" onclick="handleSidebarAction('print')">
-                <i class="fas fa-print"></i> <span>طباعة</span>
-            </button>
-            <button type="button" class="sidebar-btn" onclick="handleSidebarAction('ai_advisor')" style="background:rgba(139,92,246,0.3);">
-                <i class="fas fa-robot"></i> <span>AI</span>
-            </button>
-            <button type="button" class="sidebar-btn" onclick="handleSidebarAction('save_report')">
-                <i class="fas fa-save"></i> <span>حفظ التقرير</span>
-            </button>
-            <button type="button" class="sidebar-btn" onclick="handleSidebarAction('home')">
-                <i class="fas fa-home"></i> <span>رجوع</span>
-            </button>
+            <button type="button" class="sidebar-btn" onclick="handleSidebarAction('refresh')"><i class="fas fa-sync-alt"></i><span>تحديث</span></button>
+            <button type="button" class="sidebar-btn" onclick="handleSidebarAction('reports')"><i class="fas fa-chart-line"></i><span>التقارير</span></button>
+            <button type="button" class="sidebar-btn" onclick="handleSidebarAction('ai_advisor')" style="background:rgba(139,92,246,0.2);"><i class="fas fa-robot"></i><span>الروبوت</span></button>
+            <button type="button" class="sidebar-btn" onclick="handleSidebarAction('export')"><i class="fas fa-file-export"></i><span>تصدير</span></button>
+            <button type="button" class="sidebar-btn" onclick="handleSidebarAction('print')"><i class="fas fa-print"></i><span>طباعة</span></button>
+            <button type="button" class="sidebar-btn" onclick="handleSidebarAction('save_report')"><i class="fas fa-save"></i><span>حفظ التقرير</span></button>
+            <button type="button" class="sidebar-btn" data-back="true" onclick="handleSidebarAction('home')"><i class="fas fa-arrow-right-from-bracket"></i><span>رجوع</span></button>
         </div>
-    </div>
+    </aside>
 
-    <!-- ============================================================
-    القائمة السفلية (Bottom Navigation)
-    ============================================================ -->
-    <nav class="bottom-nav">
+    <!-- Bottom nav -->
+    <nav class="bottom-nav" aria-label="التنقل السريع">
         <button type="button" class="nav-item active" onclick="openReport('summary')">
-            <i class="fas fa-chart-pie"></i>
-            <span>ملخص</span>
+            <i class="fas fa-chart-pie"></i><span>ملخص</span>
         </button>
         <button type="button" class="nav-item" onclick="openReport('balance_sheet')">
-            <i class="fas fa-balance-scale"></i>
-            <span>الميزانية</span>
+            <i class="fas fa-scale-balanced"></i><span>الميزانية</span>
         </button>
         <button type="button" class="nav-item" onclick="openReport('comparative')">
-            <i class="fas fa-arrows-left-right"></i>
-            <span>مقارن</span>
+            <i class="fas fa-arrows-left-right"></i><span>مقارن</span>
         </button>
         <button type="button" class="nav-item" onclick="openReport('ratios')">
-            <i class="fas fa-percent"></i>
-            <span>نسب مالية</span>
+            <i class="fas fa-percent"></i><span>نسب مالية</span>
         </button>
         <button type="button" class="nav-item" onclick="openReport('detailed')">
-            <i class="fas fa-table"></i>
-            <span>مفصل</span>
+            <i class="fas fa-table"></i><span>مفصل</span>
         </button>
     </nav>
 
-    <!-- ============================================================
-    مودال التقارير
-    ============================================================ -->
+    <!-- Report Modal -->
     <div class="report-modal-overlay" id="reportModal" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle" onclick="closeReportModal(event)">
         <div class="report-modal" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h3 class="modal-title" id="reportModalTitle">📊 تقرير الميزانية العمومية</h3>
-                <button type="button" class="modal-close" onclick="closeReportModal()">
-                    <i class="fas fa-times"></i>
-                </button>
+                <h3 class="modal-title" id="reportModalTitle"><i class="fas fa-chart-line"></i> تقرير الميزانية العمومية</h3>
+                <button type="button" class="modal-close" onclick="closeReportModal()" aria-label="إغلاق"><i class="fas fa-times"></i></button>
             </div>
+
             <div class="report-filter-row">
                 <div class="form-group">
                     <label class="form-label">📅 من تاريخ</label>
-                    <input type="date" class="form-input" id="reportFrom">
+                    <input type="date" class="form-input" id="reportFrom" inputmode="none">
                 </div>
                 <div class="form-group">
                     <label class="form-label">📅 إلى تاريخ</label>
-                    <input type="date" class="form-input" id="reportTo">
+                    <input type="date" class="form-input" id="reportTo" inputmode="none">
                 </div>
             </div>
+
             <div class="report-filter-row">
                 <div class="form-group">
                     <label class="form-label">📊 نوع التقرير</label>
@@ -1289,33 +1475,83 @@
                     </select>
                 </div>
             </div>
-            <div class="report-actions">
-                <button type="button" class="btn btn-primary" onclick="generateReport()">
-                    <i class="fas fa-cog"></i> توليد التقرير
-                </button>
-                <button type="button" class="btn btn-secondary" onclick="closeReportModal()">
-                    <i class="fas fa-times"></i> إلغاء
-                </button>
+
+            <!-- Additional filters -->
+            <div class="report-filter-row">
+                <div class="form-group">
+                    <label class="form-label">💼 فئة الحساب</label>
+                    <select class="form-input" id="reportCategory">
+                        <option value="">الكل</option>
+                        <option value="asset">الأصول</option>
+                        <option value="liability">الخصوم</option>
+                        <option value="equity">حقوق الملكية</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">🔢 المستوى</label>
+                    <select class="form-input" id="reportLevel">
+                        <option value="">الكل</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                    </select>
+                </div>
             </div>
+
+            <div class="report-filter-row">
+                <div class="form-group">
+                    <label class="form-label">💰 الحد الأدنى للرصيد</label>
+                    <input type="number" step="0.01" class="form-input" id="reportMinBalance" placeholder="اختياري">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">💰 الحد الأقصى للرصيد</label>
+                    <input type="number" step="0.01" class="form-input" id="reportMaxBalance" placeholder="اختياري">
+                </div>
+            </div>
+
+            <div class="report-filter-row">
+                <div class="form-group">
+                    <label class="form-label">🔄 ترتيب حسب</label>
+                    <select class="form-input" id="reportSortBy">
+                        <option value="account_code">الكود</option>
+                        <option value="account_name_ar">اسم الحساب</option>
+                        <option value="balance">الرصيد</option>
+                        <option value="level">المستوى</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">⬆️ اتجاه الترتيب</label>
+                    <select class="form-input" id="reportSortDir">
+                        <option value="asc">تصاعدي</option>
+                        <option value="desc">تنازلي</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="report-actions">
+                <button type="button" class="btn primary" onclick="generateReport()"><i class="fas fa-cog"></i> توليد التقرير</button>
+                <button type="button" class="btn" onclick="exportReportCSV()"><i class="fas fa-file-csv"></i> CSV</button>
+                <button type="button" class="btn" onclick="exportReportPDF()"><i class="fas fa-file-pdf"></i> PDF</button>
+                <button type="button" class="btn" onclick="printReport()"><i class="fas fa-print"></i> طباعة</button>
+                <button type="button" class="btn" onclick="closeReportModal()"><i class="fas fa-times"></i> إلغاء</button>
+            </div>
+
             <div class="report-results" id="reportResults">
                 <div class="empty-state">
-                    <i class="fas fa-file-alt" style="font-size:2rem;display:block;margin-bottom:8px;"></i>
-                    <p>اختر الفترة ونوع التقرير ثم اضغط "توليد التقرير"</p>
+                    <i class="fas fa-file-alt"></i>
+                    <p>اختر الفلاتر ثم اضغط "توليد التقرير"</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ============================================================
-    مودال المستشار الذكي (AI Advisor)
-    ============================================================ -->
-    <div class="modal-overlay ai-modal" id="aiModal" role="dialog" aria-modal="true" aria-labelledby="aiModalTitle" onclick="closeAIModal(event)">
+    <!-- AI Modal -->
+    <div class="modal-overlay" id="aiModal" role="dialog" aria-modal="true" aria-labelledby="aiModalTitle" onclick="closeAIModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="max-height:80vh;">
             <div class="modal-header">
-                <h3 class="modal-title" id="aiModalTitle">🤖 المستشار الذكي - الميزانية العمومية</h3>
-                <button type="button" class="modal-close" onclick="closeAIModal()">
-                    <i class="fas fa-times"></i>
-                </button>
+                <h3 class="modal-title" id="aiModalTitle"><i class="fas fa-robot"></i> المستشار الذكي</h3>
+                <button type="button" class="modal-close" onclick="closeAIModal()" aria-label="إغلاق"><i class="fas fa-times"></i></button>
             </div>
             <div id="aiContent" style="padding:8px 0;">
                 <div style="text-align:center;color:var(--text-muted);padding:20px;">
@@ -1326,22 +1562,17 @@
         </div>
     </div>
 
-    <!-- ============================================================
-    Toast إشعارات
-    ============================================================ -->
+    <!-- Toast -->
     <div class="toast" id="toast" role="status" aria-live="polite">
         <div class="toast-icon"><i class="fas fa-check"></i></div>
         <span id="toastMessage">تمت العملية بنجاح</span>
     </div>
 
-    <!-- ============================================================
-    JavaScript المتكامل
-    ============================================================ -->
     <script>
         // ============================================================
-        // 1. دالة apiCall الموحدة
+        // 1. Bridge invocation
         // ============================================================
-                function invokeExistingBridgeAction(action, params = {}) {
+        function invokeExistingBridgeAction(action, params = {}) {
             const bridge = window.AndroidInterface;
             if (!bridge) throw new Error('AndroidInterface bridge unavailable');
             const p = params || {};
@@ -1390,7 +1621,7 @@
             return result;
         }
 
-function parseBridgeResult(result) {
+        function parseBridgeResult(result) {
             if (typeof result === 'string') {
                 try { return JSON.parse(result); }
                 catch (e) { return { success: false, error: 'استجابة غير صالحة من الجسر' }; }
@@ -1415,7 +1646,7 @@ function parseBridgeResult(result) {
         }
 
         // ============================================================
-        // 2. نظام التخزين المحلي (Offline Mode)
+        // 2. Local cache
         // ============================================================
         const LocalDB = {
             prefix: 'fuel_station_',
@@ -1431,8 +1662,6 @@ function parseBridgeResult(result) {
             remove: function(key) { localStorage.removeItem(this.prefix + key); },
             getBalanceSheet: function() { return this.get('balance_sheet', null); },
             setBalanceSheet: function(data) { this.set('balance_sheet', data); },
-            getAccounts: function() { return this.get('accounts', []); },
-            setAccounts: function(data) { this.set('accounts', data); },
             getStats: function() { return this.get('balance_stats', {}); },
             setStats: function(stats) { this.set('balance_stats', stats); },
             getNotifications: function() { return this.get('balance_notifications', []); },
@@ -1442,7 +1671,7 @@ function parseBridgeResult(result) {
         };
 
         // ============================================================
-        // 3. حالة الاتصال
+        // 3. Online status
         // ============================================================
         let isOnline = navigator.onLine;
         let hasAnnouncedNetworkStatus = false;
@@ -1462,10 +1691,8 @@ function parseBridgeResult(result) {
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
 
-        // لا توجد عمليات كتابة في هذه الشاشة؛ لا يتم إنشاء طابور مزامنة وهمي.
-
         // ============================================================
-        // 5. Haptic Feedback
+        // 4. Haptic
         // ============================================================
         function hapticFeedback(type) {
             try {
@@ -1478,20 +1705,21 @@ function parseBridgeResult(result) {
         }
 
         // ============================================================
-        // 6. دوال مساعدة
+        // 5. Helpers
         // ============================================================
         function showToast(message, type) {
             const toast = document.getElementById('toast');
             const msgEl = document.getElementById('toastMessage');
             const iconEl = toast.querySelector('.toast-icon i');
-            toast.className = 'toast ' + type;
+            toast.className = 'toast ' + (type || 'success');
             msgEl.textContent = message;
-            if (type === 'success') { iconEl.className = 'fas fa-check';
-                hapticFeedback('success'); } else if (type === 'error') { iconEl.className = 'fas fa-times';
-                hapticFeedback('error'); } else if (type === 'warning') { iconEl.className = 'fas fa-exclamation-triangle';
-                hapticFeedback('light'); }
+            if (type === 'success') { iconEl.className = 'fas fa-check'; hapticFeedback('success'); }
+            else if (type === 'error') { iconEl.className = 'fas fa-times'; hapticFeedback('error'); }
+            else if (type === 'warning') { iconEl.className = 'fas fa-exclamation-triangle'; hapticFeedback('light'); }
+            else { iconEl.className = 'fas fa-info-circle'; }
             toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 3500);
+            clearTimeout(toast._timer);
+            toast._timer = setTimeout(() => toast.classList.remove('show'), 3500);
         }
 
         function showLoading(show) {
@@ -1502,17 +1730,16 @@ function parseBridgeResult(result) {
 
         function normalizeBalanceData(data) {
             const source = data && typeof data === 'object' ? data : {};
-            const normalized = {
-                ...source,
-                total_assets: toFiniteNumber(source.total_assets ?? source.assets_total, 0),
-                total_liabilities: toFiniteNumber(source.total_liabilities ?? source.liabilities_total, 0),
-                total_equity: toFiniteNumber(source.total_equity ?? source.equity_total, 0),
+            const normalized = Object.assign({}, source, {
+                total_assets: toFiniteNumber(source.total_assets != null ? source.total_assets : source.assets_total, 0),
+                total_liabilities: toFiniteNumber(source.total_liabilities != null ? source.total_liabilities : source.liabilities_total, 0),
+                total_equity: toFiniteNumber(source.total_equity != null ? source.total_equity : source.equity_total, 0),
                 net_income: toFiniteNumber(source.net_income, 0),
                 difference: toFiniteNumber(source.difference, 0),
                 assets: Array.isArray(source.assets) ? source.assets : [],
                 liabilities: Array.isArray(source.liabilities) ? source.liabilities : [],
                 equity: Array.isArray(source.equity) ? source.equity : []
-            };
+            });
             normalized.is_balanced = typeof source.is_balanced === 'boolean' ? source.is_balanced :
                 Math.abs(normalized.difference) <= 0.01;
             return normalized;
@@ -1538,7 +1765,8 @@ function parseBridgeResult(result) {
             showToast('⚠️ ' + BALANCE_CONTRACT_BLOCKED_MESSAGE, 'warning');
         }
 
-        function toFiniteNumber(value, fallback = 0) {
+        function toFiniteNumber(value, fallback) {
+            if (fallback === undefined) fallback = 0;
             const number = Number(value);
             return Number.isFinite(number) ? number : fallback;
         }
@@ -1554,17 +1782,15 @@ function parseBridgeResult(result) {
             if (num === null || num === undefined || num === '') return '0.00';
             const value = Number(num);
             if (!Number.isFinite(value)) return '---';
-            return value.toLocaleString('en', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            });
+            return value.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
-        function getLocalDateInputValue(date = new Date()) {
+        function getLocalDateInputValue(date) {
+            if (!date) date = new Date();
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
+            return year + '-' + month + '-' + day;
         }
 
         function isValidDateInput(value) {
@@ -1574,9 +1800,9 @@ function parseBridgeResult(result) {
         }
 
         function escapeHtml(text) {
-            if (!text) return '';
+            if (text === null || text === undefined) return '';
             const div = document.createElement('div');
-            div.textContent = text;
+            div.textContent = String(text);
             return div.innerHTML;
         }
 
@@ -1591,77 +1817,75 @@ function parseBridgeResult(result) {
             return map[type] || 'غير مصنف';
         }
 
+        function getAccountTypeIcon(type) {
+            const map = {
+                'asset': 'fa-building-columns',
+                'liability': 'fa-hand-holding-usd',
+                'equity': 'fa-chart-pie',
+                'revenue': 'fa-arrow-trend-up',
+                'expense': 'fa-arrow-trend-down'
+            };
+            return map[type] || 'fa-circle';
+        }
+
+        function getAccountTypeClass(type) {
+            const map = {
+                'asset': 'asset',
+                'liability': 'liability',
+                'equity': 'equity',
+                'revenue': 'revenue',
+                'expense': 'expense'
+            };
+            return map[type] || '';
+        }
+
         function getAccountLevel(level) {
             const parsed = Math.trunc(toFiniteNumber(level, 1));
             return Math.min(4, Math.max(1, parsed));
         }
 
         // ============================================================
-        // 7. نظام تبديل الوضع (مع أيقونة شمس/هلال صحيحة)
+        // 6. Theme
         // ============================================================
         function toggleTheme() {
             const current = document.documentElement.getAttribute('data-theme');
             const isDark = current === 'dark';
             const newTheme = isDark ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-
+            try { localStorage.setItem('theme', newTheme); } catch(_) {}
             const icon = document.getElementById('themeIcon');
-            if (newTheme === 'dark') {
-                icon.className = 'fas fa-sun';
-            } else {
-                icon.className = 'fas fa-moon';
-            }
+            icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
             hapticFeedback('light');
         }
 
         function loadSavedTheme() {
-            const saved = localStorage.getItem('theme');
+            let saved = 'light';
+            try { saved = localStorage.getItem('theme') || 'light'; } catch(_) {}
             const theme = saved === 'dark' || saved === 'light' ? saved : 'light';
             document.documentElement.setAttribute('data-theme', theme);
-
             const icon = document.getElementById('themeIcon');
-            if (theme === 'dark') {
-                icon.className = 'fas fa-sun';
-            } else {
-                icon.className = 'fas fa-moon';
-            }
+            if (icon) icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
         }
 
         // ============================================================
-        // 8. Pull-to-Refresh
+        // 7. Pull to refresh
         // ============================================================
-                // لا يبدأ pull-to-refresh من عناصر تفاعلية أو من داخل مودال؛
-        // منع preventDefault هنا يحافظ على تركيز حقول الإدخال ولوحة المفاتيح في WebView.
-        const isInteractiveTouchTarget = (target) => Boolean(
-            target && target.closest && target.closest(
+        const isInteractiveTouchTarget = function(target) {
+            return Boolean(target && target.closest && target.closest(
                 'input, textarea, select, button, a, [contenteditable="true"], .modal-overlay, [role="dialog"]'
-            )
-        );
+            ));
+        };
 
-let pullStartY = 0,
-            pullOffset = 0,
-            isPulling = false;
+        let pullStartY = 0, pullOffset = 0, isPulling = false;
 
         document.addEventListener('touchstart', function(e) {
-            if (isInteractiveTouchTarget(e.target)) {
-                isPulling = false;
-                pullOffset = 0;
-                return;
-            }
+            if (isInteractiveTouchTarget(e.target)) { isPulling = false; pullOffset = 0; return; }
             const scrollTop = window.scrollY || document.documentElement.scrollTop;
-            if (scrollTop <= 0) {
-                pullStartY = e.touches[0].clientY;
-                isPulling = true;
-            }
+            if (scrollTop <= 0) { pullStartY = e.touches[0].clientY; isPulling = true; }
         }, { passive: true });
 
         document.addEventListener('touchmove', function(e) {
-            if (isInteractiveTouchTarget(e.target)) {
-                isPulling = false;
-                pullOffset = 0;
-                return;
-            }
+            if (isInteractiveTouchTarget(e.target)) { isPulling = false; pullOffset = 0; return; }
             if (!isPulling) return;
             const currentY = e.touches[0].clientY;
             const diff = currentY - pullStartY;
@@ -1669,13 +1893,7 @@ let pullStartY = 0,
                 pullOffset = Math.min(diff, 80);
                 const indicator = document.getElementById('pullIndicator');
                 indicator.style.top = (pullOffset - 60) + 'px';
-                if (pullOffset > 60) {
-                    indicator.querySelector('i').className = 'fas fa-arrow-down';
-                    indicator.querySelector('span').textContent = 'حرر للتحديث';
-                } else {
-                    indicator.querySelector('i').className = 'fas fa-arrow-down';
-                    indicator.querySelector('span').textContent = 'اسحب للتحديث';
-                }
+                indicator.querySelector('span').textContent = pullOffset > 60 ? 'حرر للتحديث' : 'اسحب للتحديث';
                 e.preventDefault();
             }
         }, { passive: false });
@@ -1685,23 +1903,22 @@ let pullStartY = 0,
                 const indicator = document.getElementById('pullIndicator');
                 indicator.querySelector('i').className = 'fas fa-spinner fa-spin';
                 indicator.querySelector('span').textContent = 'جاري التحديث...';
-                setTimeout(() => {
+                setTimeout(function() {
                     loadBalanceSheet();
-                    setTimeout(() => {
+                    setTimeout(function() {
                         indicator.style.top = '-60px';
-                        isPulling = false;
-                        pullOffset = 0;
+                        indicator.querySelector('i').className = 'fas fa-arrow-down';
+                        isPulling = false; pullOffset = 0;
                     }, 500);
                 }, 300);
             } else {
                 document.getElementById('pullIndicator').style.top = '-60px';
-                isPulling = false;
-                pullOffset = 0;
+                isPulling = false; pullOffset = 0;
             }
         }, { passive: true });
 
         // ============================================================
-        // 9. AI Advisor - تحليل الميزانية العمومية
+        // 8. AI Advisor
         // ============================================================
         function analyzeBalanceSheet(data) {
             const insights = [];
@@ -1710,18 +1927,15 @@ let pullStartY = 0,
             const assets = toFiniteNumber(data.total_assets, 0);
             const liabilities = toFiniteNumber(data.total_liabilities, 0);
             const equity = toFiniteNumber(data.total_equity, 0);
-            const difference = assets - liabilities;
 
             insights.push({
                 type: 'info',
                 title: '📊 نظرة عامة',
-                suggestion: 'إجمالي الأصول: ' + formatCurrency(assets) + ' | الخصوم: ' + formatCurrency(liabilities) +
-                    ' | حقوق الملكية: ' + formatCurrency(equity),
+                suggestion: 'إجمالي الأصول: ' + formatCurrency(assets) + ' | الخصوم: ' + formatCurrency(liabilities) + ' | حقوق الملكية: ' + formatCurrency(equity),
                 reason: 'المعادلة المحاسبية: الأصول = الخصوم + حقوق الملكية',
                 priority: 'low'
             });
 
-            // تحليل النسب المالية
             if (liabilities > 0 && assets > 0) {
                 const debtRatio = (liabilities / assets) * 100;
                 if (debtRatio > 70) {
@@ -1762,7 +1976,6 @@ let pullStartY = 0,
                 });
             }
 
-            // فحص التوازن
             if (Math.abs(assets - (liabilities + equity)) > 0.01) {
                 insights.push({
                     type: 'error',
@@ -1781,7 +1994,7 @@ let pullStartY = 0,
             const insights = LocalDB.getAIInsights();
             if (insights.length === 0) return null;
             const priority = { 'high': 3, 'medium': 2, 'low': 1 };
-            return insights.reduce((a, b) => (priority[a.priority] > priority[b.priority] ? a : b));
+            return insights.reduce(function(a, b) { return priority[a.priority] > priority[b.priority] ? a : b; });
         }
 
         function openAIAdvisor() {
@@ -1799,45 +2012,31 @@ let pullStartY = 0,
             const insights = analyzeBalanceSheet(balanceData);
 
             if (insights.length === 0) {
-                content.innerHTML = `
-                    <div style="text-align:center;color:var(--text-muted);padding:30px;">
-                        <i class="fas fa-robot" style="font-size:3rem;margin-bottom:12px;display:block;"></i>
-                        <p>لا توجد بيانات كافية للتحليل الذكي</p>
-                        <p style="font-size:0.8rem;">قم بتحميل الميزانية أولاً للحصول على توصيات</p>
-                    </div>
-                `;
+                content.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:30px;"><i class="fas fa-robot" style="font-size:3rem;margin-bottom:12px;display:block;"></i><p>لا توجد بيانات كافية للتحليل الذكي</p></div>';
                 return;
             }
 
             const top = getTopAIInsight();
-            const allSuggestions = insights.slice(0, 5);
+            let html = '<div style="background:var(--primary-soft);border-radius:16px;padding:16px;margin-bottom:16px;border:1px dashed var(--sage-500);text-align:center;">';
+            html += '<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;">';
+            html += '<i class="fas fa-star" style="color:var(--accent);"></i>';
+            html += '<span style="font-weight:800;font-size:1rem;color:var(--text-primary);">التوصية الأولى</span>';
+            html += '</div>';
+            html += '<div style="font-size:0.95rem;font-weight:700;color:var(--sage-800);">' + (top ? escapeHtml(top.suggestion) : '') + '</div>';
+            html += '<div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">' + (top ? escapeHtml(top.reason) : '') + '</div>';
+            html += '</div>';
+            html += '<div style="font-weight:800;font-size:0.9rem;margin-bottom:12px;color:var(--text-primary);text-align:center;">📋 توصيات أخرى</div>';
 
-            let html = `
-                <div style="background:var(--primary-dim);border-radius:16px;padding:16px;margin-bottom:16px;border:2px dashed var(--primary-color);">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                        <i class="fas fa-star" style="color:var(--accent-color);"></i>
-                        <span style="font-weight:700;font-size:1rem;color:var(--data-text-color);">التوصية الأولى</span>
-                        ${top && top.priority === 'high' ? '<span style="background:var(--error);color:white;padding:0 8px;border-radius:4px;font-size:0.6rem;">عاجل</span>' : ''}
-                    </div>
-                    <div style="font-size:0.95rem;font-weight:600;color:var(--primary-color);">${top ? top.suggestion : ''}</div>
-                    <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">${top ? top.reason : ''}</div>
-                </div>
-                <div style="font-weight:700;font-size:0.9rem;margin-bottom:12px;color:var(--data-text-color);">📋 توصيات أخرى</div>
-            `;
-
-            allSuggestions.forEach((insight, idx) => {
-                const borderColor = insight.priority === 'high' ? 'var(--error)' : insight.priority === 'medium' ?
-                    'var(--warning)' : 'var(--success)';
-                html += `
-                    <div style="background:var(--surface-color);border-radius:12px;padding:12px;margin-bottom:8px;border:2px dashed ${borderColor};border-right:4px solid ${borderColor};">
-                        <div style="display:flex;justify-content:space-between;align-items:center;">
-                            <span style="font-weight:600;color:var(--data-text-color);">${insight.title}</span>
-                            <span style="font-size:0.7rem;color:var(--text-muted);">${insight.priority === 'high' ? 'عاجل' : insight.priority === 'medium' ? 'مهم' : 'عادي'}</span>
-                        </div>
-                        <div style="font-size:0.85rem;color:var(--data-text-color);">${insight.suggestion}</div>
-                        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">${insight.reason}</div>
-                    </div>
-                `;
+            insights.slice(0, 5).forEach(function(insight) {
+                const borderColor = insight.priority === 'high' ? 'var(--danger)' : insight.priority === 'medium' ? 'var(--warning)' : 'var(--success)';
+                html += '<div style="background:var(--bg-card);border-radius:12px;padding:12px;margin-bottom:8px;border:1px dashed ' + borderColor + ';border-right:4px solid ' + borderColor + ';text-align:center;">';
+                html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+                html += '<span style="font-weight:700;color:var(--text-primary);">' + escapeHtml(insight.title) + '</span>';
+                html += '<span style="font-size:0.7rem;color:var(--text-muted);">' + (insight.priority === 'high' ? 'عاجل' : insight.priority === 'medium' ? 'مهم' : 'عادي') + '</span>';
+                html += '</div>';
+                html += '<div style="font-size:0.85rem;color:var(--text-primary);margin-top:6px;">' + escapeHtml(insight.suggestion) + '</div>';
+                html += '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">' + escapeHtml(insight.reason) + '</div>';
+                html += '</div>';
             });
 
             content.innerHTML = html;
@@ -1851,10 +2050,11 @@ let pullStartY = 0,
         }
 
         // ============================================================
-        // 10. نظام التقارير
+        // 9. Reports
         // ============================================================
         let currentReportType = 'summary';
         let reportData = [];
+        let currentViewMode = 'columns';
 
         function openReport(type) {
             currentReportType = type;
@@ -1867,11 +2067,13 @@ let pullStartY = 0,
             };
             document.getElementById('reportModalTitle').textContent = titles[type] || '📊 التقرير';
             const reportTypeSelect = document.getElementById('reportType');
-            if ([...reportTypeSelect.options].some(option => option.value === type)) {
+            if ([].slice.call(reportTypeSelect.options).some(function(option) { return option.value === type; })) {
                 reportTypeSelect.value = type;
             }
-            document.querySelectorAll('.bottom-nav .nav-item').forEach(item => item.classList.remove('active'));
-            const activeNav = [...document.querySelectorAll('.bottom-nav .nav-item')].find(item => item.getAttribute('onclick')?.includes(`'${type}'`));
+            document.querySelectorAll('.bottom-nav .nav-item').forEach(function(item) { item.classList.remove('active'); });
+            const activeNav = [].slice.call(document.querySelectorAll('.bottom-nav .nav-item')).find(function(item) {
+                return (item.getAttribute('onclick') || '').indexOf("'" + type + "'") !== -1;
+            });
             if (activeNav) activeNav.classList.add('active');
 
             const today = new Date();
@@ -1882,12 +2084,7 @@ let pullStartY = 0,
 
             document.getElementById('reportModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            document.getElementById('reportResults').innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-file-alt" style="font-size:2rem;display:block;margin-bottom:8px;"></i>
-                    <p>اختر الفترة ونوع التقرير ثم اضغط "توليد التقرير"</p>
-                </div>
-            `;
+            document.getElementById('reportResults').innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i><p>اختر الفلاتر ثم اضغط "توليد التقرير"</p></div>';
             hapticFeedback('light');
         }
 
@@ -1902,6 +2099,12 @@ let pullStartY = 0,
             const to = document.getElementById('reportTo').value;
             const type = document.getElementById('reportType').value;
             const currency = document.getElementById('reportCurrency').value;
+            const categoryFilter = document.getElementById('reportCategory').value;
+            const levelFilter = document.getElementById('reportLevel').value;
+            const minBalance = document.getElementById('reportMinBalance').value;
+            const maxBalance = document.getElementById('reportMaxBalance').value;
+            const sortBy = document.getElementById('reportSortBy').value;
+            const sortDir = document.getElementById('reportSortDir').value;
             currentReportType = type;
 
             if (!from || !to || !isValidDateInput(from) || !isValidDateInput(to)) {
@@ -1923,7 +2126,6 @@ let pullStartY = 0,
 
             showLoading(true);
             try {
-                // القراءة الفعلية تتم بواسطة getBalanceSheet حتى تاريخ النهاية؛ لا يتم اختراع بيانات للفترة السابقة.
                 const result = await apiCall('getBalanceSheet', {
                     reportDate: to,
                     currencyId: Number(currency || 0)
@@ -1931,11 +2133,29 @@ let pullStartY = 0,
                 if (!result.success) {
                     throw new Error(result.error || result.message || 'فشل توليد التقرير');
                 }
-                const data = normalizeBalanceData(result.data || result);
+                let data = normalizeBalanceData(result.data || result);
                 balanceSheetData = data;
                 LocalDB.setBalanceSheet(data);
+                // Apply additional filters client-side
+                if (categoryFilter || levelFilter || minBalance || maxBalance) {
+                    const filterItems = function(items, type) {
+                        return items.filter(function(item) {
+                            if (categoryFilter && type !== categoryFilter) return false;
+                            if (levelFilter && String(getAccountLevel(item.level)) !== String(levelFilter)) return false;
+                            const bal = toFiniteNumber(item.balance, 0);
+                            if (minBalance && bal < parseFloat(minBalance)) return false;
+                            if (maxBalance && bal > parseFloat(maxBalance)) return false;
+                            return true;
+                        });
+                    };
+                    data = Object.assign({}, data, {
+                        assets: filterItems(data.assets, 'asset'),
+                        liabilities: filterItems(data.liabilities, 'liability'),
+                        equity: filterItems(data.equity, 'equity')
+                    });
+                }
                 reportData = data;
-                renderReportResults(data);
+                renderReportResults(data, sortBy, sortDir);
                 showToast('✅ تم توليد التقرير من قاعدة البيانات الفعلية', 'success');
             } catch (e) {
                 showToast('❌ ' + (e.message || 'فشل توليد التقرير'), 'error');
@@ -1945,7 +2165,7 @@ let pullStartY = 0,
             }
         }
 
-        function renderReportResults(data) {
+        function renderReportResults(data, sortBy, sortDir) {
             const container = document.getElementById('reportResults');
             if (!data || (Array.isArray(data) && data.length === 0)) {
                 container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox" aria-hidden="true"></i><p>لا توجد بيانات مطابقة للفترة المحددة</p></div>';
@@ -1955,11 +2175,24 @@ let pullStartY = 0,
             let headers = [];
             let rows = [];
             const report = Array.isArray(data) ? { accounts: data } : data;
-            const accountRows = [
-                ...(report.assets || []).map(item => ({ ...item, account_type: 'asset' })),
-                ...(report.liabilities || []).map(item => ({ ...item, account_type: 'liability' })),
-                ...(report.equity || []).map(item => ({ ...item, account_type: 'equity' }))
-            ];
+            let accountRows = [].concat(
+                (report.assets || []).map(function(item) { return Object.assign({}, item, { account_type: 'asset' }); }),
+                (report.liabilities || []).map(function(item) { return Object.assign({}, item, { account_type: 'liability' }); }),
+                (report.equity || []).map(function(item) { return Object.assign({}, item, { account_type: 'equity' }); })
+            );
+
+            // Sort
+            if (sortBy) {
+                accountRows.sort(function(a, b) {
+                    let av = a[sortBy], bv = b[sortBy];
+                    if (sortBy === 'balance') { av = toFiniteNumber(av, 0); bv = toFiniteNumber(bv, 0); }
+                    else if (sortBy === 'level') { av = toFiniteNumber(av, 0); bv = toFiniteNumber(bv, 0); }
+                    else { av = String(av || '').toLowerCase(); bv = String(bv || '').toLowerCase(); }
+                    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+                    if (av > bv) return sortDir === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }
 
             switch (currentReportType) {
                 case 'summary':
@@ -1968,23 +2201,20 @@ let pullStartY = 0,
                         [1, 'إجمالي الأصول', formatCurrency(report.total_assets)],
                         [2, 'إجمالي الخصوم', formatCurrency(report.total_liabilities)],
                         [3, 'حقوق الملكية', formatCurrency(report.total_equity)],
-                        [4, 'صافي الأصول', formatCurrency(report.total_assets - report.total_liabilities)],
+                        [4, 'صافي الأصول', formatCurrency(toFiniteNumber(report.total_assets, 0) - toFiniteNumber(report.total_liabilities, 0))],
                         [5, 'الفارق المحاسبي', formatCurrency(report.difference)]
                     ];
                     break;
                 case 'balance_sheet':
                     headers = ['#', 'الحساب', 'النوع', 'الرصيد'];
-                    rows = accountRows.map((item, idx) => [
-                        idx + 1,
-                        item.account_name_ar || item.account_name || '---',
-                        getAccountTypeLabel(item.account_type),
-                        formatCurrency(item.balance)
-                    ]);
+                    rows = accountRows.map(function(item, idx) {
+                        return [idx + 1, item.account_name_ar || item.account_name || '---', getAccountTypeLabel(item.account_type), formatCurrency(item.balance)];
+                    });
                     break;
                 case 'comparative': {
                     headers = ['#', 'الحساب', 'الفترة الحالية', 'الفترة السابقة', 'التغير', 'نسبة التغير'];
                     const comparisonRows = Array.isArray(data) ? data : (Array.isArray(data.comparative) ? data.comparative : []);
-                    rows = comparisonRows.map((item, idx) => {
+                    rows = comparisonRows.map(function(item, idx) {
                         const current = toFiniteNumber(item.current_balance, 0);
                         const previous = toFiniteNumber(item.previous_balance, 0);
                         return [idx + 1, item.account_name_ar || item.account_name || '---', formatCurrency(current), formatCurrency(previous),
@@ -2005,13 +2235,15 @@ let pullStartY = 0,
                         ['النسبة الجارية', null, 'غير متاحة من عقد الميزانية الحالي'],
                         ['النسبة السريعة', null, 'غير متاحة من عقد الميزانية الحالي']
                     ];
-                    rows = ratios.map((r, idx) => [idx + 1, r[0], r[1] === null ? '---' : Number(r[1]).toFixed(2) + '%', r[2]]);
+                    rows = ratios.map(function(r, idx) { return [idx + 1, r[0], r[1] === null ? '---' : Number(r[1]).toFixed(2) + '%', r[2]]; });
                     break;
                 }
                 case 'detailed':
                     headers = ['#', 'الحساب', 'النوع', 'الرصيد الافتتاحي', 'المدين', 'الدائن', 'الرصيد النهائي'];
-                    rows = accountRows.map((item, idx) => [idx + 1, item.account_name_ar || item.account_name || '---', getAccountTypeLabel(item.account_type),
-                        formatCurrency(item.opening_balance), formatCurrency(item.debit_total), formatCurrency(item.credit_total), formatCurrency(item.balance)]);
+                    rows = accountRows.map(function(item, idx) {
+                        return [idx + 1, item.account_name_ar || item.account_name || '---', getAccountTypeLabel(item.account_type),
+                            formatCurrency(item.opening_balance), formatCurrency(item.debit_total), formatCurrency(item.credit_total), formatCurrency(item.balance)];
+                    });
                     break;
                 default:
                     rows = [];
@@ -2022,14 +2254,107 @@ let pullStartY = 0,
                 return;
             }
 
-            const safeCell = value => escapeHtml(String(value ?? ''));
-            container.innerHTML = `<table><thead><tr>${headers.map(h => `<th scope="col" style="color:var(--data-text-color);">${safeCell(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td style="color:var(--data-text-color);">${safeCell(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+            const safeCell = function(value) { return escapeHtml(String(value != null ? value : '')); };
+            container.innerHTML = '<table><thead><tr>' + headers.map(function(h) { return '<th>' + safeCell(h) + '</th>'; }).join('') + '</tr></thead><tbody>' + rows.map(function(row) {
+                return '<tr>' + row.map(function(cell) { return '<td>' + safeCell(cell) + '</td>'; }).join('') + '</tr>';
+            }).join('') + '</tbody></table>';
+        }
+
+        function exportReportCSV() {
+            if (!reportData || (Array.isArray(reportData) && reportData.length === 0) || (typeof reportData === 'object' && !reportData.total_assets)) {
+                showToast('⚠️ قم بتوليد التقرير أولاً', 'warning');
+                return;
+            }
+            try {
+                const report = Array.isArray(reportData) ? { accounts: reportData } : reportData;
+                const rows = [].concat(
+                    (report.assets || []).map(function(i) { return Object.assign({}, i, { account_type: 'asset' }); }),
+                    (report.liabilities || []).map(function(i) { return Object.assign({}, i, { account_type: 'liability' }); }),
+                    (report.equity || []).map(function(i) { return Object.assign({}, i, { account_type: 'equity' }); })
+                );
+                const headers = ['اسم الحساب', 'النوع', 'الرصيد', 'المستوى'];
+                const body = rows.map(function(item) {
+                    return [item.account_name_ar || item.account_name || '', getAccountTypeLabel(item.account_type), toFiniteNumber(item.balance, 0).toFixed(2), getAccountLevel(item.level)];
+                });
+                const csv = '\ufeff' + [headers].concat(body).map(function(row) {
+                    return row.map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+                }).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'balance-sheet-report-' + Date.now() + '.csv';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(function() { URL.revokeObjectURL(url); }, 1500);
+                showToast('✅ تم تصدير التقرير بصيغة CSV', 'success');
+            } catch (e) { showToast('❌ فشل CSV', 'error'); }
+        }
+
+        function exportReportPDF() {
+            if (!reportData || (Array.isArray(reportData) && reportData.length === 0) || (typeof reportData === 'object' && !reportData.total_assets)) {
+                showToast('⚠️ قم بتوليد التقرير أولاً', 'warning');
+                return;
+            }
+            if (!window.jspdf || !window.jspdf.jsPDF) { showToast('مكتبة PDF غير متاحة', 'error'); return; }
+            try {
+                const doc = new window.jspdf.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+                const title = document.getElementById('reportModalTitle').textContent || 'Balance Sheet Report';
+                doc.setFontSize(16); doc.setTextColor(25, 71, 115); doc.text(title, 40, 38);
+                doc.setFontSize(9); doc.setTextColor(90, 100, 115);
+                doc.text('Generated: ' + new Date().toLocaleString('en-GB'), 40, 55);
+                const report = Array.isArray(reportData) ? { accounts: reportData } : reportData;
+                const rows = [].concat(
+                    (report.assets || []).map(function(i) { return Object.assign({}, i, { account_type: 'asset' }); }),
+                    (report.liabilities || []).map(function(i) { return Object.assign({}, i, { account_type: 'liability' }); }),
+                    (report.equity || []).map(function(i) { return Object.assign({}, i, { account_type: 'equity' }); })
+                );
+                const headers = ['#', 'Account', 'Type', 'Balance'];
+                const widths = [25, 260, 120, 120];
+                let y = 80;
+                const drawRow = function(values, isHeader) {
+                    let x = 40;
+                    if (isHeader) {
+                        doc.setFillColor(25, 71, 115);
+                        doc.setTextColor(255, 255, 255);
+                    } else {
+                        doc.setTextColor(35, 45, 60);
+                    }
+                    doc.rect(40, y - 13, widths.reduce(function(a, b) { return a + b; }, 0), 18, isHeader ? 'F' : 'S');
+                    values.forEach(function(v, i) {
+                        doc.text(String(v != null ? v : '').substring(0, 50), x + 3, y, { maxWidth: widths[i] - 6 });
+                        x += widths[i];
+                    });
+                    y += 20;
+                };
+                drawRow(headers, true);
+                rows.forEach(function(item, idx) {
+                    if (y > 760) { doc.addPage(); y = 40; drawRow(headers, true); }
+                    drawRow([idx + 1, item.account_name_ar || item.account_name || '', getAccountTypeLabel(item.account_type), toFiniteNumber(item.balance, 0).toFixed(2)]);
+                });
+                doc.save('balance-sheet-report-' + Date.now() + '.pdf');
+                showToast('✅ تم تصدير التقرير بصيغة PDF', 'success');
+            } catch (e) { showToast('❌ فشل PDF', 'error'); }
+        }
+
+        function printReport() {
+            if (!reportData) { showToast('⚠️ قم بتوليد التقرير أولاً', 'warning'); return; }
+            try {
+                if (window.AndroidInterface && typeof window.AndroidInterface.printCurrentPage === 'function') {
+                    const result = window.AndroidInterface.printCurrentPage();
+                    try {
+                        const parsed = JSON.parse(result);
+                        if (parsed && parsed.success) { showToast('✅ تم فتح نافذة الطباعة', 'success'); return; }
+                    } catch (_) { /* ignore */ }
+                }
+                window.print();
+            } catch (e) { showToast('❌ فشل الطباعة', 'error'); }
         }
 
         // ============================================================
-        // 11. متغيرات الحالة
+        // 10. State
         // ============================================================
-        let allAccounts = [];
         let balanceSheetData = null;
         let isInitialLoad = true;
         let isLoadingBalance = false;
@@ -2037,23 +2362,19 @@ let pullStartY = 0,
         let currentFilter = 'all';
 
         // ============================================================
-        // 12. تحميل الميزانية العمومية
+        // 11. Load balance sheet
         // ============================================================
         function renderSkeleton() {
             const assetsList = document.getElementById('assetsList');
             const liabilitiesList = document.getElementById('liabilitiesList');
             const equityList = document.getElementById('equityList');
-
-            const skeletonItems = (count) => {
+            const skeletonItems = function(count) {
                 let html = '';
                 for (let i = 0; i < count; i++) {
-                    html += `
-                        <div class="skeleton-row" style="height:20px;margin-bottom:6px;"></div>
-                    `;
+                    html += '<div class="skeleton-row" style="height:20px;margin-bottom:6px;"></div>';
                 }
                 return html;
             };
-
             assetsList.innerHTML = skeletonItems(8);
             liabilitiesList.innerHTML = skeletonItems(5);
             equityList.innerHTML = skeletonItems(4);
@@ -2075,7 +2396,7 @@ let pullStartY = 0,
                 if (!Number.isInteger(currencyId) || currencyId < 0) {
                     throw new Error('معرف العملة غير صالح');
                 }
-                const result = await apiCall('getBalanceSheet', { reportDate: date, currencyId });
+                const result = await apiCall('getBalanceSheet', { reportDate: date, currencyId: currencyId });
                 if (!result.success) {
                     throw new Error(result.error || result.message || 'فشل قراءة الميزانية من قاعدة البيانات');
                 }
@@ -2108,84 +2429,149 @@ let pullStartY = 0,
         }
 
         // ============================================================
-        // 13. عرض الميزانية العمومية
+        // 12. Render balance sheet
         // ============================================================
         function renderBalanceSheet(data) {
-            // عرض الأصول
             const assetsList = document.getElementById('assetsList');
             const liabilitiesList = document.getElementById('liabilitiesList');
             const equityList = document.getElementById('equityList');
 
-            // تحديث المجاميع
             document.getElementById('assetsTotalBadge').textContent = formatCurrency(data.total_assets || 0);
             document.getElementById('liabilitiesTotalBadge').textContent = formatCurrency(data.total_liabilities || 0);
             document.getElementById('equityTotalBadge').textContent = formatCurrency(data.total_equity || 0);
 
-            // عرض بنود الأصول
             if (data.assets && data.assets.length > 0) {
-                assetsList.innerHTML = data.assets.map((item, idx) => `
-                    <div class="balance-item level-${getAccountLevel(item.level)}">
-                        <span class="item-name">${escapeHtml(item.account_name_ar || item.account_name || '---')}</span>
-                        <span class="item-amount asset-color">${formatCurrency(item.balance)}</span>
-                    </div>
-                `).join('');
-
-                // إضافة المجموع
-                assetsList.innerHTML += `
-                    <div class="balance-item total-row">
-                        <span class="item-name">إجمالي الأصول</span>
-                        <span class="item-amount asset-color">${formatCurrency(data.total_assets || 0)}</span>
-                    </div>
-                `;
+                assetsList.innerHTML = data.assets.map(function(item) {
+                    return '<div class="balance-item level-' + getAccountLevel(item.level) + '">' +
+                        '<span class="item-name">' + escapeHtml(item.account_name_ar || item.account_name || '---') + '</span>' +
+                        '<span class="item-amount asset-color">' + formatCurrency(item.balance) + '</span>' +
+                        '</div>';
+                }).join('');
+                assetsList.innerHTML += '<div class="balance-item total-row"><span class="item-name">إجمالي الأصول</span><span class="item-amount asset-color">' + formatCurrency(data.total_assets || 0) + '</span></div>';
             } else {
-                assetsList.innerHTML = '<div class="empty-state">لا توجد أصول مسجلة</div>';
+                assetsList.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>لا توجد أصول مسجلة</p></div>';
             }
 
-            // عرض بنود الخصوم
             if (data.liabilities && data.liabilities.length > 0) {
-                liabilitiesList.innerHTML = data.liabilities.map((item, idx) => `
-                    <div class="balance-item level-${getAccountLevel(item.level)}">
-                        <span class="item-name">${escapeHtml(item.account_name_ar || item.account_name || '---')}</span>
-                        <span class="item-amount liability-color">${formatCurrency(item.balance)}</span>
-                    </div>
-                `).join('');
-
-                liabilitiesList.innerHTML += `
-                    <div class="balance-item total-row">
-                        <span class="item-name">إجمالي الخصوم</span>
-                        <span class="item-amount liability-color">${formatCurrency(data.total_liabilities || 0)}</span>
-                    </div>
-                `;
+                liabilitiesList.innerHTML = data.liabilities.map(function(item) {
+                    return '<div class="balance-item level-' + getAccountLevel(item.level) + '">' +
+                        '<span class="item-name">' + escapeHtml(item.account_name_ar || item.account_name || '---') + '</span>' +
+                        '<span class="item-amount liability-color">' + formatCurrency(item.balance) + '</span>' +
+                        '</div>';
+                }).join('');
+                liabilitiesList.innerHTML += '<div class="balance-item total-row"><span class="item-name">إجمالي الخصوم</span><span class="item-amount liability-color">' + formatCurrency(data.total_liabilities || 0) + '</span></div>';
             } else {
-                liabilitiesList.innerHTML = '<div class="empty-state">لا توجد خصوم مسجلة</div>';
+                liabilitiesList.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>لا توجد خصوم مسجلة</p></div>';
             }
 
-            // عرض بنود حقوق الملكية
             if (data.equity && data.equity.length > 0) {
-                equityList.innerHTML = data.equity.map((item, idx) => `
-                    <div class="balance-item level-${getAccountLevel(item.level)}">
-                        <span class="item-name">${escapeHtml(item.account_name_ar || item.account_name || '---')}</span>
-                        <span class="item-amount equity-color">${formatCurrency(item.balance)}</span>
-                    </div>
-                `).join('');
-
-                equityList.innerHTML += `
-                    <div class="balance-item total-row">
-                        <span class="item-name">إجمالي حقوق الملكية</span>
-                        <span class="item-amount equity-color">${formatCurrency(data.total_equity || 0)}</span>
-                    </div>
-                `;
+                equityList.innerHTML = data.equity.map(function(item) {
+                    return '<div class="balance-item level-' + getAccountLevel(item.level) + '">' +
+                        '<span class="item-name">' + escapeHtml(item.account_name_ar || item.account_name || '---') + '</span>' +
+                        '<span class="item-amount equity-color">' + formatCurrency(item.balance) + '</span>' +
+                        '</div>';
+                }).join('');
+                equityList.innerHTML += '<div class="balance-item total-row"><span class="item-name">إجمالي حقوق الملكية</span><span class="item-amount equity-color">' + formatCurrency(data.total_equity || 0) + '</span></div>';
             } else {
-                equityList.innerHTML = '<div class="empty-state">لا توجد حقوق ملكية مسجلة</div>';
+                equityList.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>لا توجد حقوق ملكية مسجلة</p></div>';
             }
 
-            const activeFilterButton = [...document.querySelectorAll('.filter-chip')].find(button => button.classList.contains('active'));
-            setFilter(currentFilter, activeFilterButton);
-            handleSearch(document.getElementById('searchInput').value || '');
+            // Render cards and table
+            renderCardsView(data);
+            renderTableView(data);
+
+            // Update count
+            const totalAccounts = (data.assets || []).length + (data.liabilities || []).length + (data.equity || []).length;
+            document.getElementById('accountsCount').textContent = totalAccounts;
+
+            // Re-apply current filter/search
+            applyCurrentFilterAndSearch();
+        }
+
+        function renderCardsView(data) {
+            const container = document.getElementById('cardsView');
+            if (!container) return;
+            const allItems = [].concat(
+                (data.assets || []).map(function(i) { return Object.assign({}, i, { account_type: 'asset' }); }),
+                (data.liabilities || []).map(function(i) { return Object.assign({}, i, { account_type: 'liability' }); }),
+                (data.equity || []).map(function(i) { return Object.assign({}, i, { account_type: 'equity' }); })
+            );
+            if (allItems.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>لا توجد حسابات</p></div>';
+                return;
+            }
+            container.innerHTML = allItems.map(function(item) {
+                const typeClass = getAccountTypeClass(item.account_type);
+                const typeLabel = getAccountTypeLabel(item.account_type);
+                const typeIcon = getAccountTypeIcon(item.account_type);
+                return '<article class="stat-card" style="cursor:default;text-align:center;padding:16px;">' +
+                    '<div class="stat-icon ' + (item.account_type === 'asset' ? 'green' : item.account_type === 'liability' ? 'blue' : 'purple') + '" style="margin:0 auto 8px;"><i class="fas ' + typeIcon + '"></i></div>' +
+                    '<div style="font-weight:800;color:var(--text-primary);font-size:0.92rem;margin-bottom:4px;">' + escapeHtml(item.account_name_ar || item.account_name || '---') + '</div>' +
+                    '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;">' + escapeHtml(item.account_code || '') + ' · ' + typeLabel + '</div>' +
+                    '<div style="font-size:1.05rem;font-weight:800;direction:ltr;color:' + (item.account_type === 'asset' ? 'var(--asset-color)' : item.account_type === 'liability' ? 'var(--liability-color)' : 'var(--equity-color)') + ';">' + formatCurrency(item.balance) + '</div>' +
+                    '</article>';
+            }).join('');
+        }
+
+        function renderTableView(data) {
+            const tbody = document.getElementById('accountsTableBody');
+            if (!tbody) return;
+            const allItems = [].concat(
+                (data.assets || []).map(function(i) { return Object.assign({}, i, { account_type: 'asset' }); }),
+                (data.liabilities || []).map(function(i) { return Object.assign({}, i, { account_type: 'liability' }); }),
+                (data.equity || []).map(function(i) { return Object.assign({}, i, { account_type: 'equity' }); })
+            );
+            if (allItems.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state" style="border:none;padding:20px;"><i class="fas fa-inbox"></i><p>لا توجد حسابات</p></div></td></tr>';
+                return;
+            }
+            tbody.innerHTML = allItems.map(function(item, idx) {
+                return '<tr>' +
+                    '<td>' + (idx + 1) + '</td>' +
+                    '<td class="col-code">' + escapeHtml(item.account_code || '---') + '</td>' +
+                    '<td style="font-weight:700;color:var(--text-primary);">' + escapeHtml(item.account_name_ar || item.account_name || '---') + '</td>' +
+                    '<td>' + getAccountTypeLabel(item.account_type) + '</td>' +
+                    '<td>' + getAccountLevel(item.level) + '</td>' +
+                    '<td class="col-balance">' + formatCurrency(item.balance) + '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        function applyCurrentFilterAndSearch() {
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) handleSearch(searchInput.value || '');
+            const activeChip = document.querySelector('.filter-chip.active');
+            if (activeChip) applyFilterLogic(currentFilter, false);
         }
 
         // ============================================================
-        // 14. تحديث الإحصائيات
+        // 13. View toggle
+        // ============================================================
+        function setViewMode(mode) {
+            currentViewMode = mode;
+            document.querySelectorAll('#viewToggle [data-view-btn]').forEach(function(b) {
+                b.classList.toggle('active', b.dataset.viewBtn === mode);
+            });
+            const grid = document.getElementById('balanceSheetGrid');
+            const cards = document.getElementById('cardsView');
+            const table = document.getElementById('tableWrap');
+            if (grid) grid.style.display = (mode === 'columns') ? '' : 'none';
+            if (cards) cards.style.display = (mode === 'cards') ? 'flex' : 'none';
+            if (table) table.style.display = (mode === 'table') ? 'block' : 'none';
+        }
+
+        function initViewToggle() {
+            document.querySelectorAll('#viewToggle [data-view-btn]').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    setViewMode(btn.dataset.viewBtn);
+                    hapticFeedback('light');
+                });
+            });
+            setViewMode(currentViewMode);
+        }
+
+        // ============================================================
+        // 14. Stats & equation
         // ============================================================
         function updateStats(data) {
             const assets = toFiniteNumber(data.total_assets, 0);
@@ -2198,19 +2584,15 @@ let pullStartY = 0,
             document.getElementById('statEquity').textContent = formatNumber(equity);
             document.getElementById('statDifference').textContent = formatNumber(difference);
 
-            // حقول الاتجاه غير موجودة في عقد getBalanceSheet الحالي؛ لا نخترع نسباً.
-            const trendText = value => value === null || value === undefined || value === '' ? '---' : String(value) + '%';
+            const trendText = function(value) { return (value === null || value === undefined || value === '') ? '---' : String(value) + '%'; };
             document.getElementById('trendAssets').textContent = trendText(data.assets_trend);
             document.getElementById('trendLiabilities').textContent = trendText(data.liabilities_trend);
             document.getElementById('trendEquity').textContent = trendText(data.equity_trend);
             document.getElementById('trendDifference').textContent = trendText(data.difference_trend);
 
-            LocalDB.setStats({ assets, liabilities, equity, difference });
+            LocalDB.setStats({ assets: assets, liabilities: liabilities, equity: equity, difference: difference });
         }
 
-        // ============================================================
-        // 15. تحديث معادلة المحاسبة
-        // ============================================================
         function updateAccountingEquation(data) {
             const assets = toFiniteNumber(data.total_assets, 0);
             const liabilities = toFiniteNumber(data.total_liabilities, 0);
@@ -2228,32 +2610,33 @@ let pullStartY = 0,
                 statusEl.innerHTML = '<i class="fas fa-check-circle"></i> ✅ الميزانية متوازنة';
             } else {
                 statusEl.className = 'equation-status unbalanced';
-                statusEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ⚠️ الميزانية غير متوازنة (الفارق: ' +
-                    formatCurrency(diff) + ')';
+                statusEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ⚠️ الميزانية غير متوازنة (الفارق: ' + formatCurrency(diff) + ')';
             }
         }
 
         // ============================================================
-        // 16. البحث والفلاتر
+        // 15. Search & Filters
         // ============================================================
         function handleSearch(query) {
-            const search = query.trim().toLowerCase();
+            const search = (query || '').trim().toLowerCase();
             const items = document.querySelectorAll('.balance-item:not(.total-row)');
-            items.forEach(item => {
-                const name = item.querySelector('.item-name')?.textContent?.toLowerCase() || '';
-                if (name.includes(search)) {
-                    item.style.display = 'flex';
-                } else {
-                    item.style.display = 'none';
-                }
+            items.forEach(function(item) {
+                const name = (item.querySelector('.item-name')?.textContent || '').toLowerCase();
+                item.style.display = name.indexOf(search) !== -1 ? 'flex' : 'none';
+            });
+            // Also filter table rows
+            const tableRows = document.querySelectorAll('#accountsTableBody tr');
+            tableRows.forEach(function(row) {
+                const text = (row.textContent || '').toLowerCase();
+                row.style.display = text.indexOf(search) !== -1 ? '' : 'none';
             });
         }
 
         function setFilter(filter, btn) {
-            const allowedFilters = new Set(['all', 'asset', 'liability', 'equity']);
-            if (!allowedFilters.has(filter)) return;
+            const allowedFilters = ['all', 'asset', 'liability', 'equity'];
+            if (allowedFilters.indexOf(filter) === -1) return;
             currentFilter = filter;
-            document.querySelectorAll('.filter-chip').forEach(c => {
+            document.querySelectorAll('.filter-chip').forEach(function(c) {
                 c.classList.remove('active');
                 c.setAttribute('aria-pressed', 'false');
             });
@@ -2261,44 +2644,49 @@ let pullStartY = 0,
                 btn.classList.add('active');
                 btn.setAttribute('aria-pressed', 'true');
             }
+            applyFilterLogic(filter, true);
+            hapticFeedback('light');
+        }
 
-            // عرض أو إخفاء الأعمدة حسب الفلتر
+        function applyFilterLogic(filter, animate) {
             const assetsCol = document.getElementById('assetsColumn');
             const liabilitiesCol = document.getElementById('liabilitiesColumn');
+            if (!assetsCol || !liabilitiesCol) return;
+
+            const liabilitiesList = document.getElementById('liabilitiesList');
+            const equityList = document.getElementById('equityList');
 
             if (filter === 'all') {
                 assetsCol.style.display = 'block';
                 liabilitiesCol.style.display = 'block';
-                document.getElementById('liabilitiesList').style.display = 'block';
-                document.getElementById('equityList').style.display = 'block';
+                liabilitiesList.style.display = 'block';
+                equityList.style.display = 'block';
             } else if (filter === 'asset') {
                 assetsCol.style.display = 'block';
                 liabilitiesCol.style.display = 'none';
             } else if (filter === 'liability') {
                 assetsCol.style.display = 'none';
                 liabilitiesCol.style.display = 'block';
-                document.getElementById('liabilitiesList').style.display = 'block';
-                document.getElementById('equityList').style.display = 'none';
+                liabilitiesList.style.display = 'block';
+                equityList.style.display = 'none';
             } else if (filter === 'equity') {
                 assetsCol.style.display = 'none';
                 liabilitiesCol.style.display = 'block';
-                document.getElementById('liabilitiesList').style.display = 'none';
-                document.getElementById('equityList').style.display = 'block';
+                liabilitiesList.style.display = 'none';
+                equityList.style.display = 'block';
             }
-            hapticFeedback('light');
         }
 
         function showStatDetail(type) {
             const values = {
-                assets: ['إجمالي الأصول', balanceSheetData?.total_assets],
-                liabilities: ['إجمالي الخصوم', balanceSheetData?.total_liabilities],
-                equity: ['حقوق الملكية', balanceSheetData?.total_equity],
-                difference: ['الفارق المحاسبي', balanceSheetData?.difference ??
-                    (toFiniteNumber(balanceSheetData?.total_assets, 0) - toFiniteNumber(balanceSheetData?.total_liabilities, 0) - toFiniteNumber(balanceSheetData?.total_equity, 0))]
+                assets: ['إجمالي الأصول', balanceSheetData && balanceSheetData.total_assets],
+                liabilities: ['إجمالي الخصوم', balanceSheetData && balanceSheetData.total_liabilities],
+                equity: ['حقوق الملكية', balanceSheetData && balanceSheetData.total_equity],
+                difference: ['الفارق المحاسبي', balanceSheetData ? (toFiniteNumber(balanceSheetData.total_assets, 0) - toFiniteNumber(balanceSheetData.total_liabilities, 0) - toFiniteNumber(balanceSheetData.total_equity, 0)) : undefined]
             };
             const item = values[type];
             if (!item) return;
-            const message = item[1] === undefined ? 'لا توجد بيانات محملة لهذا المؤشر' : formatCurrency(item[1]);
+            const message = (item[1] === undefined || item[1] === null) ? 'لا توجد بيانات محملة لهذا المؤشر' : formatCurrency(item[1]);
             if (window.Swal) {
                 Swal.fire({ title: item[0], text: message, icon: 'info', confirmButtonText: 'إغلاق' });
             } else {
@@ -2307,7 +2695,7 @@ let pullStartY = 0,
         }
 
         // ============================================================
-        // 17. نظام التنبيهات
+        // 16. Alerts
         // ============================================================
         function generateAlerts() {
             const alerts = [];
@@ -2316,7 +2704,6 @@ let pullStartY = 0,
                 const liabilities = toFiniteNumber(balanceSheetData.total_liabilities, 0);
                 const equity = toFiniteNumber(balanceSheetData.total_equity, 0);
                 const diff = assets - liabilities - equity;
-
                 if (Math.abs(diff) > 0.01) {
                     alerts.push({
                         type: 'danger',
@@ -2326,7 +2713,6 @@ let pullStartY = 0,
                         time: 'الآن'
                     });
                 }
-
                 if (liabilities > 0 && assets > 0) {
                     const debtRatio = (liabilities / assets) * 100;
                     if (debtRatio > 70) {
@@ -2347,35 +2733,32 @@ let pullStartY = 0,
         function renderAlerts(alerts) {
             const container = document.getElementById('alertsContainer');
             if (!container) return;
-            if (!alerts || alerts.length === 0) {
-                container.innerHTML = '';
-                return;
-            }
-            const safeIcon = icon => ['fa-exclamation-triangle', 'fa-clock'].includes(icon) ? icon : 'fa-info-circle';
-            container.innerHTML = alerts.slice(0, 3).map((a, i) => `
-                <div class="alert-item ${a.type === 'danger' ? 'danger' : 'warning'}" style="animation-delay:${i * 0.1}s;padding:10px 16px;background:var(--surface-elevated);border-radius:12px;margin-bottom:8px;border:2px dashed ${a.type === 'danger' ? 'var(--error)' : 'var(--warning)'};display:flex;align-items:center;gap:10px;">
-                    <div class="alert-icon" style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;${a.type === 'danger' ? 'background:rgba(239,68,68,0.15);color:var(--error);' : 'background:rgba(245,158,11,0.15);color:var(--warning);'}"><i class="fas ${safeIcon(a.icon)}" aria-hidden="true"></i></div>
-                    <div class="alert-content" style="flex:1;"><div class="alert-title" style="font-size:0.85rem;font-weight:700;color:var(--data-text-color);">${escapeHtml(a.title)}</div><div class="alert-desc" style="font-size:0.75rem;color:var(--text-muted);">${escapeHtml(a.desc)}</div></div>
-                    <div class="alert-time" style="font-size:0.7rem;color:var(--text-muted);">${escapeHtml(a.time)}</div>
-                </div>
-            `).join('');
+            if (!alerts || alerts.length === 0) { container.innerHTML = ''; return; }
+            const safeIcon = function(icon) { return ['fa-exclamation-triangle', 'fa-clock'].indexOf(icon) !== -1 ? icon : 'fa-info-circle'; };
+            container.innerHTML = alerts.slice(0, 3).map(function(a, i) {
+                return '<div style="animation-delay:' + (i * 0.1) + 's;padding:10px 16px;background:var(--bg-card);border-radius:12px;margin-bottom:8px;border:1px dashed ' + (a.type === 'danger' ? 'var(--danger)' : 'var(--warning)') + ';display:flex;align-items:center;gap:10px;">' +
+                    '<div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;' + (a.type === 'danger' ? 'background:var(--danger-soft);color:var(--danger);' : 'background:var(--warning-soft);color:var(--warning);') + '"><i class="fas ' + safeIcon(a.icon) + '" aria-hidden="true"></i></div>' +
+                    '<div style="flex:1;text-align:center;">' +
+                    '<div style="font-size:0.85rem;font-weight:700;color:var(--text-primary);">' + escapeHtml(a.title) + '</div>' +
+                    '<div style="font-size:0.75rem;color:var(--text-muted);">' + escapeHtml(a.desc) + '</div>' +
+                    '</div>' +
+                    '<div style="font-size:0.7rem;color:var(--text-muted);">' + escapeHtml(a.time) + '</div>' +
+                    '</div>';
+            }).join('');
         }
 
         function showNotifications() {
             const notifications = LocalDB.getNotifications();
-            if (notifications.length === 0) {
-                showToast('🔔 لا توجد إشعارات جديدة', 'info');
-                return;
-            }
+            if (notifications.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
             showToast('🔔 لديك ' + notifications.length + ' إشعارات', 'info');
             hapticFeedback('light');
         }
 
         // ============================================================
-        // 18. تصدير الميزانية العمومية
+        // 17. Export
         // ============================================================
         function csvCell(value) {
-            return '"' + String(value ?? '').replace(/"/g, '""') + '"';
+            return '"' + String(value == null ? '' : value).replace(/"/g, '""') + '"';
         }
 
         function exportBalanceSheet() {
@@ -2385,50 +2768,43 @@ let pullStartY = 0,
                 return;
             }
 
-            // إنشاء CSV
             let csv = csvCell('الميزانية العمومية في تاريخ ' + date) + '\n\n';
             csv += csvCell('الأصول') + ',' + csvCell('المبلغ') + '\n';
-            const assetItems = document.querySelectorAll('#assetsList .balance-item:not(.total-row)');
-            assetItems.forEach(item => {
+            document.querySelectorAll('#assetsList .balance-item:not(.total-row)').forEach(function(item) {
                 const name = item.querySelector('.item-name')?.textContent?.trim() || '';
                 const amount = item.querySelector('.item-amount')?.textContent?.trim() || '0.00';
                 csv += csvCell(name) + ',' + csvCell(amount) + '\n';
             });
-            const assetsTotal = document.querySelector('#assetsTotalBadge')?.textContent || '0.00';
-            csv += csvCell('إجمالي الأصول') + ',' + csvCell(assetsTotal) + '\n\n';
+            csv += csvCell('إجمالي الأصول') + ',' + csvCell(document.querySelector('#assetsTotalBadge')?.textContent || '0.00') + '\n\n';
 
             csv += csvCell('الخصوم') + ',' + csvCell('المبلغ') + '\n';
-            const liabilityItems = document.querySelectorAll('#liabilitiesList .balance-item:not(.total-row)');
-            liabilityItems.forEach(item => {
+            document.querySelectorAll('#liabilitiesList .balance-item:not(.total-row)').forEach(function(item) {
                 const name = item.querySelector('.item-name')?.textContent?.trim() || '';
                 const amount = item.querySelector('.item-amount')?.textContent?.trim() || '0.00';
                 csv += csvCell(name) + ',' + csvCell(amount) + '\n';
             });
-            const liabilitiesTotal = document.querySelector('#liabilitiesTotalBadge')?.textContent || '0.00';
-            csv += csvCell('إجمالي الخصوم') + ',' + csvCell(liabilitiesTotal) + '\n\n';
+            csv += csvCell('إجمالي الخصوم') + ',' + csvCell(document.querySelector('#liabilitiesTotalBadge')?.textContent || '0.00') + '\n\n';
 
             csv += csvCell('حقوق الملكية') + ',' + csvCell('المبلغ') + '\n';
-            const equityItems = document.querySelectorAll('#equityList .balance-item:not(.total-row)');
-            equityItems.forEach(item => {
+            document.querySelectorAll('#equityList .balance-item:not(.total-row)').forEach(function(item) {
                 const name = item.querySelector('.item-name')?.textContent?.trim() || '';
                 const amount = item.querySelector('.item-amount')?.textContent?.trim() || '0.00';
                 csv += csvCell(name) + ',' + csvCell(amount) + '\n';
             });
-            const equityTotal = document.querySelector('#equityTotalBadge')?.textContent || '0.00';
-            csv += csvCell('إجمالي حقوق الملكية') + ',' + csvCell(equityTotal) + '\n\n';
+            csv += csvCell('إجمالي حقوق الملكية') + ',' + csvCell(document.querySelector('#equityTotalBadge')?.textContent || '0.00') + '\n\n';
 
             const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = `الميزانية_العمومية_${date}.csv`;
+            link.download = 'الميزانية_العمومية_' + date + '.csv';
             link.click();
-            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            setTimeout(function() { URL.revokeObjectURL(link.href); }, 1000);
             showToast('✅ تم تصدير الميزانية العمومية', 'success');
             hapticFeedback('success');
         }
 
         // ============================================================
-        // 19. حفظ التقرير
+        // 18. Save report
         // ============================================================
         async function saveReport() {
             if (isSavingReport) return;
@@ -2441,7 +2817,6 @@ let pullStartY = 0,
                 showToast('❌ لا يمكن حفظ ميزانية غير متوازنة؛ راجع الفارق المحاسبي أولاً', 'error');
                 return;
             }
-
             isSavingReport = true;
             showLoading(true);
             try {
@@ -2464,37 +2839,117 @@ let pullStartY = 0,
         }
 
         // ============================================================
-        // 20. معالج أزرار القائمة الجانبية
+        // 19. Sidebar
         // ============================================================
-        function handleSidebarAction(action) {
+        function openSidebar() {
             const sidebar = document.getElementById('sidebar');
-            sidebar.classList.remove('open');
-            document.getElementById('sidebarToggle').classList.remove('hidden');
+            const toggle = document.getElementById('sidebarToggle');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.add('open');
+            toggle.classList.add('hidden');
+            if (overlay) overlay.classList.add('show');
+            hapticFeedback('light');
+        }
 
+        function closeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('sidebarToggle');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.remove('open');
+            toggle.classList.remove('hidden');
+            if (overlay) overlay.classList.remove('show');
+        }
+
+        function setupSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('sidebarToggle');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (!sidebar || !toggle) return;
+
+            toggle.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (sidebar.classList.contains('open')) closeSidebar();
+                else openSidebar();
+            });
+
+            if (overlay) overlay.addEventListener('click', closeSidebar);
+
+            document.addEventListener('click', function(e) {
+                if (!sidebar.classList.contains('open')) return;
+                if (!sidebar.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
+                    closeSidebar();
+                }
+            });
+        }
+
+        function handleSidebarAction(action) {
+            closeSidebar();
             switch (action) {
-                case 'refresh':
-                    loadBalanceSheet();
-                    break;
-                case 'export':
-                    exportBalanceSheet();
-                    break;
-                case 'print':
-                    window.print();
-                    break;
-                case 'ai_advisor':
-                    openAIAdvisor();
-                    break;
-                case 'save_report':
-                    saveReport();
-                    break;
-                case 'home':
-                    window.location.href = "../main.html";
-                    break;
-                default:
-                    showToast('❌ إجراء غير معروف', 'error');
+                case 'refresh': loadBalanceSheet(); break;
+                case 'reports': openReport('summary'); break;
+                case 'ai_advisor': openAIAdvisor(); break;
+                case 'export': exportBalanceSheet(); break;
+                case 'print': window.print(); break;
+                case 'save_report': saveReport(); break;
+                case 'home': goHome(); break;
+                default: showToast('❌ إجراء غير معروف', 'error');
             }
         }
 
+        function goHome() {
+            window.location.href = '../main.html';
+        }
+
+        // ============================================================
+        // 20. Mobile Escape alternative
+        // ============================================================
+        function closeAllOverlays() {
+            ['reportModal', 'aiModal'].forEach(function(id) {
+                const el = document.getElementById(id);
+                if (el) el.classList.remove('show');
+            });
+            closeSidebar();
+            document.body.style.overflow = '';
+            showToast('تم إغلاق جميع النوافذ', 'info');
+        }
+
+        function setupEscapeHandlers() {
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    const anyOpen = ['reportModal', 'aiModal'].some(function(id) {
+                        const el = document.getElementById(id);
+                        return el && el.classList.contains('show');
+                    });
+                    const sidebarOpen = document.getElementById('sidebar') && document.getElementById('sidebar').classList.contains('open');
+                    if (anyOpen || sidebarOpen) closeAllOverlays();
+                }
+            });
+
+            let fabTimer = null;
+            const fab = document.querySelector('.fab');
+            if (fab) {
+                fab.addEventListener('touchstart', function() {
+                    fabTimer = setTimeout(function() {
+                        closeAllOverlays();
+                        fabTimer = null;
+                    }, 800);
+                }, { passive: true });
+                fab.addEventListener('touchend', function() {
+                    if (fabTimer) { clearTimeout(fabTimer); fabTimer = null; }
+                });
+                fab.addEventListener('touchmove', function() {
+                    if (fabTimer) { clearTimeout(fabTimer); fabTimer = null; }
+                });
+                fab.addEventListener('contextmenu', function(e) {
+                    e.preventDefault();
+                    closeAllOverlays();
+                });
+            }
+        }
+
+        // ============================================================
+        // 21. Load currencies
+        // ============================================================
         async function loadCurrencies() {
             try {
                 const result = await apiCall('getCurrencies', {});
@@ -2506,9 +2961,9 @@ let pullStartY = 0,
                 defaultOption.value = '';
                 defaultOption.textContent = 'الافتراضية';
                 select.appendChild(defaultOption);
-                result.data.forEach(currency => {
+                result.data.forEach(function(currency) {
                     const option = document.createElement('option');
-                    option.value = String(currency.id ?? '');
+                    option.value = String(currency.id != null ? currency.id : '');
                     option.textContent = String(currency.currency_name_ar || currency.currency_name || currency.currency_code || currency.id);
                     if (currency.is_default === 1 || currency.is_default === true) option.dataset.default = 'true';
                     select.appendChild(option);
@@ -2520,62 +2975,57 @@ let pullStartY = 0,
         }
 
         // ============================================================
-        // 21. إعداد القائمة الجانبية
+        // 22. Init
         // ============================================================
-        function setupSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const toggle = document.getElementById('sidebarToggle');
-            toggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                sidebar.classList.toggle('open');
-                toggle.classList.toggle('hidden');
-                hapticFeedback('light');
-            });
-            document.addEventListener('click', (e) => {
-                if (!sidebar.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
-                    sidebar.classList.remove('open');
-                    toggle.classList.remove('hidden');
-                }
-            });
-        }
-
-        // ============================================================
-        // 22. التهيئة النهائية
-        // ============================================================
-        document.addEventListener('DOMContentLoaded', async function() {
+        function init() {
             loadSavedTheme();
             setupSidebar();
-            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+            setupEscapeHandlers();
+            initViewToggle();
+
+            const themeBtn = document.getElementById('themeToggle');
+            if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
+
             updateOnlineStatus();
 
-            // تعيين التاريخ الافتراضي
             const today = getLocalDateInputValue();
-            document.getElementById('balanceDate').value = today;
+            const balanceDateInput = document.getElementById('balanceDate');
+            if (balanceDateInput) balanceDateInput.value = today;
 
-            // تحميل العملات ثم الميزانية من Bridge وقاعدة البيانات
-            await loadCurrencies();
-            await loadBalanceSheet();
-
-            document.getElementById('reportModal').addEventListener('click', function(e) {
-                if (e.target === this) closeReportModal();
+            loadCurrencies().then(function() {
+                loadBalanceSheet();
             });
 
-            document.getElementById('aiModal').addEventListener('click', function(e) {
-                if (e.target === this) closeAIModal();
-            });
+            const reportModal = document.getElementById('reportModal');
+            if (reportModal) {
+                reportModal.addEventListener('click', function(e) {
+                    if (e.target === this) closeReportModal();
+                });
+            }
+            const aiModal = document.getElementById('aiModal');
+            if (aiModal) {
+                aiModal.addEventListener('click', function(e) {
+                    if (e.target === this) closeAIModal();
+                });
+            }
 
-            // توليد التنبيهات
             setTimeout(generateAlerts, 1500);
 
-            setTimeout(() => {
+            setTimeout(function() {
                 if (balanceSheetData) {
                     const insights = LocalDB.getAIInsights();
                     if (insights.length > 0) {
-                        showToast('🤖 المستشار الذكي جاهز - انقر على أيقونة الروبوت 🧠', 'info');
+                        showToast('🤖 المستشار الذكي جاهز', 'info');
                     }
                 }
             }, 2000);
-        });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
     </script>
 
     <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>

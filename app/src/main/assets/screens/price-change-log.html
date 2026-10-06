@@ -379,7 +379,7 @@ td{color:var(--text)}
 const CFG = {
  title:'سجل تغيير الأسعار',
  operationKey:'price_history',
- listMethod:'getPriceHistoryRecords',
+ listMethod:'getUnifiedPriceChangeLog',
  createMethod:'savePriceHistoryRecord',
  updateMethod:'updatePriceHistoryRecord',
  deleteMethod:'deletePriceHistoryRecord',
@@ -397,7 +397,7 @@ const state = {
 
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? '—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const today = () => new Date().toISOString().slice(0,10);
+const today = () => (()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`})();
 const num = v => { const n=Number(v); return Number.isFinite(n)?n:0; };
 const fmt = v => num(v).toLocaleString('ar-EG',{maximumFractionDigits:4});
 const dateOnly = v => String(v||'').slice(0,10);
