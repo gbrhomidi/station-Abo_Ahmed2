@@ -8504,25 +8504,30 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         } catch(e:Exception){ errorResponse(e.message) }
 
         @JavascriptInterface
-        fun resolveProductPrice(jsonData: String = "{}"): String = try {
+        fun resolveProductPrice(jsonData: String = "{}"): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val stationId = requireCurrentStationId(db, activity.currentUserId)
             val d = JSONObject(jsonData)
             dataResponse(db.resolveProductSalePrice(d.optLong("product_id"), stationId, d.optLong("customer_id", 0L).takeIf { it > 0 }, d.optString("transaction_time").ifBlank { "" }, d.optString("occasion_code").ifBlank { null }).toJson())
         } catch (e: Exception) { errorResponse(e.message) }
+        }
 
         @JavascriptInterface
-        fun resolveFuelPrice(jsonData: String = "{}"): String = try {
+        fun resolveFuelPrice(jsonData: String = "{}"): String {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val stationId = requireCurrentStationId(db, activity.currentUserId)
             val d = JSONObject(jsonData)
             dataResponse(db.resolveFuelSalePrice(d.optLong("fuel_type_id"), stationId, d.optLong("customer_id", 0L).takeIf { it > 0 }, d.optString("transaction_time").ifBlank { "" }).toJson())
         } catch (e: Exception) { errorResponse(e.message) }
+        }
 
         @JavascriptInterface
-        fun changeProductSalePrice(jsonData: String): String = try {
+        fun changeProductSalePrice(jsonData: String): String {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             if (!checkPermission("products", "write")) return errorResponse("لا تملك صلاحية تغيير أسعار المنتجات")
@@ -8530,9 +8535,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val stationId = requireCurrentStationId(db, activity.currentUserId)
             dataResponse(db.changeProductSalePrice(d.optLong("product_id"), d.optDouble("new_price", Double.NaN), stationId, activity.currentUserId, d.optString("reason")).toJson())
         } catch (e: Exception) { errorResponse(e.message) }
+        }
 
         @JavascriptInterface
-        fun changeFuelSalePrice(jsonData: String): String = try {
+        fun changeFuelSalePrice(jsonData: String): String {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             if (!checkPermission("products", "write")) return errorResponse("لا تملك صلاحية تغيير أسعار الوقود")
@@ -8540,9 +8547,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val stationId = requireCurrentStationId(db, activity.currentUserId)
             dataResponse(db.changeFuelSalePrice(d.optLong("fuel_type_id"), d.optDouble("new_price", Double.NaN), stationId, activity.currentUserId, d.optString("reason"), d.optString("price_kind", "default")).toJson())
         } catch (e: Exception) { errorResponse(e.message) }
+        }
 
         @JavascriptInterface
-        fun changePriceListItemPrice(jsonData: String): String = try {
+        fun changePriceListItemPrice(jsonData: String): String {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             if (!checkPermission("products", "write")) return errorResponse("لا تملك صلاحية تغيير أسعار القوائم")
@@ -8550,20 +8559,25 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val stationId = requireCurrentStationId(db, activity.currentUserId)
             dataResponse(db.changePriceListItemPrice(d.optLong("id"), d.optDouble("new_price", Double.NaN), stationId, activity.currentUserId).toJson())
         } catch (e: Exception) { errorResponse(e.message) }
+        }
 
         @JavascriptInterface
-        fun getFuelPriceHistoryRecords(jsonData: String = "{}"): String = try {
+        fun getFuelPriceHistoryRecords(jsonData: String = "{}"): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             dataResponse(db.getFuelPriceHistoryRecords(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId)))
         } catch (e: Exception) { errorResponse(e.message) }
+        }
 
         @JavascriptInterface
-        fun getPriceListRecords(jsonData: String = "{}"): String = try {
+        fun getPriceListRecords(jsonData: String = "{}"): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
             dataResponse(db.getPriceListsWithItemCount(stationId))
         } catch (e: Exception) { errorResponse(e.message) }
+        }
         @JavascriptInterface
         fun generatePriceListReport(jsonData: String = "{}") = operationalReport("products", "price_lists", jsonData)
         @JavascriptInterface
@@ -8576,59 +8590,75 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun resolvePriceListRecord(id: Long, note: String = "") = operationalResolve("products", "price_lists", id, note)
 
         @JavascriptInterface
-        fun getNextPriceListCode(): String = try {
+        fun getNextPriceListCode(): String  {
+            return try {
             val db=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity=getActivity() ?: return errorResponse("النشاط غير متاح")
             dataResponse(db.getNextPriceListCode(requireCurrentStationId(db, activity.currentUserId)))
         } catch(e:Exception){ errorResponse(e.message) }
+        }
 
         @JavascriptInterface
-        fun addPriceListItemsBatch(jsonData: String): String = try {
+        fun addPriceListItemsBatch(jsonData: String): String  {
+            return try {
             val db=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity=getActivity() ?: return errorResponse("النشاط غير متاح")
             if (!checkPermission("products", "write")) return errorResponse("لا تملك صلاحية تعديل قوائم الأسعار")
             val stationId=requireCurrentStationId(db, activity.currentUserId)
             dataResponse(db.addPriceListItemsBatch(JSONObject(jsonData), activity.currentUserId, stationId))
         } catch(e:Exception){ errorResponse(e.message) }
+        }
 
         @JavascriptInterface
-        fun getUnifiedPriceChangeLog(jsonData: String = "{}"): String = try {
+        fun getUnifiedPriceChangeLog(jsonData: String = "{}"): String  {
+            return try {
             val db=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity=getActivity() ?: return errorResponse("النشاط غير متاح")
             dataResponse(db.getUnifiedPriceChangeLog(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId)))
         } catch(e:Exception){ errorResponse(e.message) }
+        }
 
         @JavascriptInterface
-        fun getPriceListItems(priceListId: Long): String = try {
+        fun getPriceListItems(priceListId: Long): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
             dataResponse(db.getPriceListItems(priceListId, stationId))
         } catch (e: Exception) { errorResponse(e.message) }
+        }
         @JavascriptInterface
-        fun addPriceListItem(jsonData: String): String = try {
+        fun addPriceListItem(jsonData: String): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
             val id = db.insertPriceListItem(JSONObject(jsonData), getActivity()?.currentUserId ?: 0L, stationId)
             successResponse(id, "تمت إضافة عنصر قائمة الأسعار")
         } catch (e: Exception) { errorResponse(e.message) }
+        }
         @JavascriptInterface
-        fun updatePriceListItem(id: Long, jsonData: String): String = try {
+        fun updatePriceListItem(id: Long, jsonData: String): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
             successResponse(db.updatePriceListItem(id, JSONObject(jsonData), stationId) > 0, "تم تحديث عنصر قائمة الأسعار")
         } catch (e: Exception) { errorResponse(e.message) }
+        }
         @JavascriptInterface
-        fun deletePriceListItem(id: Long): String = try {
+        fun deletePriceListItem(id: Long): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
             successResponse(db.deletePriceListItem(id, stationId) > 0, "تم حذف عنصر قائمة الأسعار")
         } catch (e: Exception) { errorResponse(e.message) }
+        }
         @JavascriptInterface
-        fun getProductPriceHistory(productId: Long, limit: Int = 50): String = try {
+        fun getProductPriceHistory(productId: Long, limit: Int = 50): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
             dataResponse(db.getPriceHistory(productId, limit, stationId))
         } catch (e: Exception) { errorResponse(e.message) }
+        }
         @JavascriptInterface
         fun getPriceListItemRecords(jsonData: String = "{}") = operationalList("products", "price_list_items", jsonData)
         @JavascriptInterface
@@ -10487,50 +10517,64 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun resolvePayrollRecord(id: Long, note: String = "") = operationalResolve("hr", "payroll", id, note)
 
         @JavascriptInterface
-        fun getEmployeePaymentRecords(jsonData: String = "{}"): String = try {
+        fun getEmployeePaymentRecords(jsonData: String = "{}"): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             dataResponse(db.getEmployeePaymentRecords(jsonData, requireCurrentStationId(db, activity.currentUserId)))
         } catch (e: Exception) { errorResponse(e.message) }
+        }
         @JavascriptInterface
         fun generateEmployeePaymentReport(jsonData: String = "{}") = operationalReport("hr", "employee_payments", jsonData)
         @JavascriptInterface
-        fun saveEmployeePaymentRecord(jsonData: String): String = try {
+        fun saveEmployeePaymentRecord(jsonData: String): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val stationId = requireCurrentStationId(db, activity.currentUserId)
             successResponse(db.insertEmployeePayment(JSONObject(jsonData), stationId, activity.currentUserId), "تم حفظ دفعة الموظف")
         } catch (e: Exception) { errorResponse(e.message) }
+        }
         @JavascriptInterface
-        fun updateEmployeePaymentRecord(id: Long, jsonData: String): String = try {
+        fun updateEmployeePaymentRecord(id: Long, jsonData: String): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             successResponse(db.updateEmployeePayment(id, JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId) > 0, "تم تحديث دفعة الموظف")
         } catch (e: Exception) { errorResponse(e.message) }
+        }
         @JavascriptInterface
-        fun deleteEmployeePaymentRecord(id: Long): String = try {
+        fun deleteEmployeePaymentRecord(id: Long): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             successResponse(db.reverseEmployeePaymentRecord(id, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId, "عكس من شاشة دفعات الموظفين") > 0, "تم عكس دفعة الموظف مالياً وتسجيل الأثر العكسي")
         } catch (e: Exception) { errorResponse(e.message) }
+        }
         @JavascriptInterface
-        fun getEmployeePaymentSummary(fromDate: String? = null, toDate: String? = null): String = try {
+        fun getEmployeePaymentSummary(fromDate: String? = null, toDate: String? = null): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             JSONObject(db.getEmployeePaymentSummary(fromDate.orEmpty(), toDate.orEmpty(), requireCurrentStationId(db, activity.currentUserId))).toString()
         } catch (e: Exception) { errorResponse(e.message) }
+        }
         @JavascriptInterface
-        fun getEmployeeById(id: Int): String = try {
+        fun getEmployeeById(id: Int): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             JSONObject(db.getEmployeeById(id, requireCurrentStationId(db, activity.currentUserId)) ?: emptyMap<String, Any>()).put("success", true).toString()
         } catch (e: Exception) { errorResponse(e.message) }
+        }
         @JavascriptInterface
-        fun getEmployeePaymentReport(jsonData: String = "{}"): String = try {
+        fun getEmployeePaymentReport(jsonData: String = "{}"): String  {
+            return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             dataResponse(db.getEmployeePaymentReport(jsonData, requireCurrentStationId(db, activity.currentUserId)))
         } catch (e: Exception) { errorResponse(e.message) }
+        }
         @JavascriptInterface
         fun resolveEmployeePaymentRecord(id: Long, note: String = "") = operationalResolve("hr", "employee_payments", id, note)
 
