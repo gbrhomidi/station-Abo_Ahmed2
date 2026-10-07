@@ -288,7 +288,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     override fun onOpen(db: SQLiteDatabase) {
-        super.onOpen(db)
+        try {
+            super.onOpen(db)
         ensureSmsMessagesTable(db)
         ensureSmsMessagesColumns(db)
         createNotificationTables(db)
@@ -335,6 +336,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureLegacySettingsSchema(db)
         ensureManagementIdentitySchema(db)
         ensureScreenPermissionsSchema(db)
+        } catch (e: Exception) {
+            Log.e(TAG, "Database onOpen initialization failed", e)
+            throw e
+        }
     }
 
     /**
