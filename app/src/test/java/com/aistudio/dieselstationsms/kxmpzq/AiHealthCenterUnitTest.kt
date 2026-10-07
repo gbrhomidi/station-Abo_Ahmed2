@@ -22,8 +22,13 @@ class AiHealthCenterUnitTest {
     fun setup() {
         context = RuntimeEnvironment.getApplication()
         dbHelper = DatabaseHelper.getInstance(context)
-        // تهيئة قاعدة البيانات بإنشاء الجداول
-        val db = dbHelper.writableDatabase
+        // تشخيص مؤقت: اطبع الاستثناء الكامل عند فتح SQLite دون تغيير سلوك الاختبار.
+        val db = try {
+            dbHelper.writableDatabase
+        } catch (e: Exception) {
+            e.printStackTrace()
+            throw e
+        }
         assertNotNull(db)
     }
 
