@@ -365,7 +365,7 @@
   function find(id) { return state.rows.find((r, i) => String(r.id ?? i) === String(id)); }
 
   async function nextCode() {
-    try { const r = await invoke('getNextPriceListCode', []); return String(dataOf(r) || 'PL-001'); }
+    try { const r = await invoke('getNextPriceListCode', []); return String(data(r) || 'PL-001'); }
     catch (e) { throw new Error('تعذر توليد رمز القائمة من SQLite: ' + e.message); }
   }
 
@@ -398,7 +398,7 @@
       $('party_type_id').innerHTML = '<option value="">تعذر تحميل أنواع الأطراف من SQLite</option>';
     }
     try {
-      const ps = await invoke('getParties', []);
+      const ps = await invoke('getCustomers', []);
       state.parties = rows(ps);
       $('party_id').innerHTML = '<option value="">اختر الطرف/العميل</option>' + state.parties.map(x => `<option value="${esc(x.id)}">${esc(x.commercial_name_ar || x.commercial_name)}</option>`).join('');
     } catch (e) {
@@ -457,8 +457,8 @@
       list_name: $('list_name').value.trim(),
       list_name_ar: $('list_name').value.trim(),
       description: $('description').value.trim(),
-      party_id: $('party_id').value ? Number($('party_id').value) : 0,
-      party_type_id: $('party_type_id').value ? Number($('party_type_id').value) : 0,
+      party_id: $('party_id').value ? Number($('party_id').value) : null,
+      party_type_id: $('party_type_id').value ? Number($('party_type_id').value) : null,
       station_id: $('station_id').value ? Number($('station_id').value) : state.stationId || 0,
       valid_from: $('valid_from').value || '',
       valid_to: $('valid_to').value || '',
@@ -661,7 +661,7 @@
       const items = Array.from(checked).map(cb => ({ price_list_id: state.currentDetailId, product_id: Number(cb.value), unit_price: unitPrice, min_quantity: 1, max_quantity: 0, discount_percent: 0, valid_from: '', valid_to: '', is_active: 1 }));
       try {
         const result = await invoke('addPriceListItemsBatch', [JSON.stringify({ price_list_id: state.currentDetailId, items })]);
-        const added = Array.isArray(dataOf(result)) ? dataOf(result).length : items.length;
+        const added = Array.isArray(data(result)) ? data(result).length : items.length;
         toast(`تمت إضافة ${added} منتجاً بصورة ذرية`);
       } catch (e) { toast('فشل الإضافة الذرية: ' + e.message, 'error'); return; }
       close('lookupOverlay');
