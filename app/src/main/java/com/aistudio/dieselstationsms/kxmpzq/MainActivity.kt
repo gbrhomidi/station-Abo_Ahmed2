@@ -5622,7 +5622,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getPumps called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                PumpMeterSmsRepository(context, db).ensureSchema()
+                PumpMeterSmsRepository(activity.applicationContext, db).ensureSchema()
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val pumps = db.getPumps(requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(pumps)
@@ -8719,7 +8719,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val pumpId = JSONObject(jsonData.ifBlank { "{}" }).optInt("pump_id", 0)
-                dataResponse(PumpMeterSmsRepository(context, db).listNozzles(stationId, pumpId))
+                dataResponse(PumpMeterSmsRepository(activity.applicationContext, db).listNozzles(stationId, pumpId))
             } catch (e: Exception) {
                 DebugLogger.logException("PumpNozzles", e)
                 errorResponse(e.message)
@@ -8732,7 +8732,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
-                PumpMeterSmsRepository(context, db).savePumpEmployee(stationId, pumpId, employeeId, shiftType).toString()
+                PumpMeterSmsRepository(activity.applicationContext, db).savePumpEmployee(stationId, pumpId, employeeId, shiftType).toString()
             } catch (e: Exception) {
                 DebugLogger.logException("PumpEmployeeAssignment", e)
                 errorResponse(e.message)
@@ -8746,7 +8746,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val pumpId = JSONObject(jsonData.ifBlank { "{}" }).optInt("pump_id", 0)
-                dataResponse(PumpMeterSmsRepository(context, db).listNozzles(stationId, pumpId))
+                dataResponse(PumpMeterSmsRepository(activity.applicationContext, db).listNozzles(stationId, pumpId))
             } catch (e: Exception) {
                 DebugLogger.logException("PumpNozzleList", e)
                 errorResponse(e.message)
@@ -9419,7 +9419,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     stationScopeId,
                     currentUserId
                 )
-                PumpMeterSmsRepository(context, db).ensureSchema()
+                PumpMeterSmsRepository(activity.applicationContext, db).ensureSchema()
                 val nozzleId = input.optLong("nozzle_id", 0L)
                 if (nozzleId > 0L) {
                     db.writableDatabase.execSQL(
