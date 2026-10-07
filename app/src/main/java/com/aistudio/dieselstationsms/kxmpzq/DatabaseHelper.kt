@@ -198,13 +198,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureModule010Schema(db)
             ensureReportCacheTable(db)
             insertInitialData(db)
-            try {
-                // V41 must be established after the fresh reference data is seeded.
-                ensurePricingV41Schema(db)
-            } catch (e: Exception) {
-                Log.e(TAG, "V41 pricing schema initialization failed", e)
-                throw e
-            }
             ensureContractSchema(db)
             ensureActivityPermissions(db)
             ensureTaskPermissions(db)
@@ -215,6 +208,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureFuelCommerceSchema(db)
             ensureFuelStocktakeSchema(db)
             ensureFinanceIntegritySchema(db)
+            ensurePricingV41Schema(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
         } finally {
@@ -261,12 +255,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     34 -> migrateV34ToV35(db)
                     35 -> migrateV35ToV36(db)
                     36 -> migrateV36ToV37(db)
-                    40 -> try {
-                        migrateV40ToV41(db)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "V40 -> V41 migration failed", e)
-                        throw e
-                    }
+                    40 -> migrateV40ToV41(db)
                 }
             }
             ensureModule006Schema(db)
@@ -289,8 +278,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     override fun onOpen(db: SQLiteDatabase) {
-        try {
-            super.onOpen(db)
+        super.onOpen(db)
         ensureSmsMessagesTable(db)
         ensureSmsMessagesColumns(db)
         createNotificationTables(db)
@@ -337,10 +325,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureLegacySettingsSchema(db)
         ensureManagementIdentitySchema(db)
         ensureScreenPermissionsSchema(db)
-        } catch (e: Exception) {
-            Log.e(TAG, "Database onOpen initialization failed", e)
-            throw e
-        }
     }
 
     /**
@@ -28627,33 +28611,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         Log.d(TAG, "Migrated pricing/business-day schema V40 -> V41")
     }
 
-        private class V41FuelSalesStageException(cause: Throwable) : RuntimeException(cause)
-    private class V41HistoryStageException(cause: Throwable) : RuntimeException(cause)
-    private class V41ColumnsStageException(cause: Throwable) : RuntimeException(cause)
-    private class V41PriceListsOccasionCodeException(cause: Throwable) : RuntimeException(cause)
-    private class V41PriceListsOccasionNameException(cause: Throwable) : RuntimeException(cause)
-    private class V41PriceListsAppliesWhenException(cause: Throwable) : RuntimeException(cause)
-    private class V41PriceListsClearanceModeException(cause: Throwable) : RuntimeException(cause)
-    private class V41PriceListsClearanceStockException(cause: Throwable) : RuntimeException(cause)
-    private class V41PriceListsPriorityException(cause: Throwable) : RuntimeException(cause)
-    private class V41SalesBusinessDayException(cause: Throwable) : RuntimeException(cause)
-    private class V41PaymentsBusinessDayException(cause: Throwable) : RuntimeException(cause)
-    private class V41StockMovementsBusinessDayException(cause: Throwable) : RuntimeException(cause)
-    private class V41IndexesStageException(cause: Throwable) : RuntimeException(cause)
-    private class V41TriggersStageException(cause: Throwable) : RuntimeException(cause)
-    private class V41BackfillStageException(cause: Throwable) : RuntimeException(cause)
-    private class V41GeneralStageException(cause: Throwable) : RuntimeException(cause)
-
-private fun ensurePricingV41Schema(db: SQLiteDatabase) {
-        var stage = "start"
-        try {
+    private fun ensurePricingV41Schema(db: SQLiteDatabase) {
         // Keep V41 self-contained for both fresh databases and upgrades from
         // older schemas where fuel_sales did not yet expose these columns.
-        System.err.println("V41-1 ensureFuelSalesSchema")
-        stage = "fuel_sales"
         ensureFuelSalesSchema(db)
-        System.err.println("V41-2 fuel_sales schema ready")
-        stage = "history_table"
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS fuel_price_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28672,66 +28633,51 @@ private fun ensurePricingV41Schema(db: SQLiteDatabase) {
                 FOREIGN KEY (created_by) REFERENCES users(id)
             )
         """.trimIndent())
-        System.err.println("V41-3 fuel_price_history table ready")
-        stage = "columns"
-        stage = "price_lists_occasion_code"
         ensureColumn(db, "price_lists", "occasion_code", "TEXT")
-        stage = "price_lists_occasion_name_ar"
         ensureColumn(db, "price_lists", "occasion_name_ar", "TEXT")
-        stage = "price_lists_applies_when"
         ensureColumn(db, "price_lists", "applies_when", "TEXT")
-        stage = "price_lists_clearance_mode"
         ensureColumn(db, "price_lists", "clearance_mode", "TEXT")
-        stage = "price_lists_clearance_stock_below"
         ensureColumn(db, "price_lists", "clearance_stock_below", "REAL")
-        stage = "price_lists_priority"
         ensureColumn(db, "price_lists", "priority", "INTEGER NOT NULL DEFAULT 0")
-        stage = "sales_transactions_business_day"
+        // stock_movements is a legacy table whose definition existed only in V9->V10.
+        // Fresh V41 databases never execute that migration, so establish the base table
+        // before adding the V41 business_day column and indexes.
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS stock_movements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                product_id INTEGER REFERENCES products(id),
+                movement_type TEXT DEFAULT 'in',
+                quantity REAL DEFAULT 0,
+                unit_cost REAL DEFAULT 0,
+                total_cost REAL DEFAULT 0,
+                reference_type TEXT,
+                reference_id INTEGER,
+                movement_date TEXT,
+                notes TEXT,
+                created_by TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                is_deleted INTEGER DEFAULT 0,
+                business_day TEXT
+            )
+        """.trimIndent())
         ensureColumn(db, "sales_transactions", "business_day", "TEXT")
-        stage = "payments_business_day"
         ensureColumn(db, "payments", "business_day", "TEXT")
-        stage = "stock_movements_business_day"
         ensureColumn(db, "stock_movements", "business_day", "TEXT")
-        System.err.println("V41-4 columns ready")
-        stage = "indexes"
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_price_history_station_fuel_date ON fuel_price_history(station_id, fuel_type_id, change_date, id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_price_lists_resolution ON price_lists(station_id, is_deleted, is_active, priority, valid_from, valid_to)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_price_list_items_resolution ON price_list_items(price_list_id, product_id, is_active, valid_from, valid_to)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_business_day ON sales_transactions(station_id, business_day, is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_sales_business_day ON fuel_sales(station_id, business_day, is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payments_business_day ON payments(business_day, created_at)")
-        System.err.println("V41-5 indexes ready")
-        stage = "triggers"
         db.execSQL("CREATE TRIGGER IF NOT EXISTS trg_products_sale_price_history AFTER UPDATE OF sale_price ON products\n            WHEN OLD.sale_price IS NOT NEW.sale_price AND NEW.is_deleted = 0\n            BEGIN\n                INSERT INTO price_history(product_id, old_price, new_price, change_date, change_reason, created_by, archived)\n                VALUES(OLD.id, OLD.sale_price, NEW.sale_price, COALESCE(NEW.updated_at, CURRENT_TIMESTAMP), 'تغيير سعر المنتج', NEW.updated_by, 0);\n            END")
-        System.err.println("V41-6 product trigger ready")
         db.execSQL("CREATE TRIGGER IF NOT EXISTS trg_fuel_types_sale_price_history AFTER UPDATE OF default_sale_price ON fuel_types\n            WHEN OLD.default_sale_price IS NOT NEW.default_sale_price AND NEW.is_deleted = 0\n            BEGIN\n                INSERT INTO fuel_price_history(uuid, fuel_type_id, station_id, old_price, new_price, price_kind, change_date, change_reason, created_by, archived)\n                SELECT lower(hex(randomblob(16))), OLD.id, s.id, OLD.default_sale_price, NEW.default_sale_price, 'default', COALESCE(NEW.updated_at, CURRENT_TIMESTAMP), 'تغيير سعر الوقود', NEW.updated_by, 0\n                FROM stations s WHERE s.id IN (SELECT DISTINCT station_id FROM tanks WHERE fuel_type_id = OLD.id AND is_deleted = 0);\n            END")
-        System.err.println("V41-7 fuel trigger ready")
-        stage = "backfill"
         db.execSQL("UPDATE sales_transactions SET business_day = substr(COALESCE(created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
         db.execSQL("UPDATE fuel_sales SET business_day = substr(COALESCE(sale_date, created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
         db.execSQL("UPDATE payments SET business_day = substr(COALESCE(created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
         db.execSQL("UPDATE stock_movements SET business_day = substr(COALESCE(movement_date, created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
-    
-        } catch (e: Exception) {
-            when (stage) {
-                "fuel_sales" -> throw V41FuelSalesStageException(e)
-                "history_table" -> throw V41HistoryStageException(e)
-                "price_lists_occasion_code" -> throw V41PriceListsOccasionCodeException(e)
-                "price_lists_occasion_name_ar" -> throw V41PriceListsOccasionNameException(e)
-                "price_lists_applies_when" -> throw V41PriceListsAppliesWhenException(e)
-                "price_lists_clearance_mode" -> throw V41PriceListsClearanceModeException(e)
-                "price_lists_clearance_stock_below" -> throw V41PriceListsClearanceStockException(e)
-                "price_lists_priority" -> throw V41PriceListsPriorityException(e)
-                "sales_transactions_business_day" -> throw V41SalesBusinessDayException(e)
-                "payments_business_day" -> throw V41PaymentsBusinessDayException(e)
-                "stock_movements_business_day" -> throw V41StockMovementsBusinessDayException(e)
-                "indexes" -> throw V41IndexesStageException(e)
-                "triggers" -> throw V41TriggersStageException(e)
-                "backfill" -> throw V41BackfillStageException(e)
-                else -> throw V41GeneralStageException(e)
-            }
-        }
     }
+
     private fun parsePriceInstant(value: String): String = value.trim().replace('T', ' ')
 
     private fun priceValiditySql(alias: String, time: String): String = "($alias.valid_from IS NULL OR trim($alias.valid_from) = '' OR replace($alias.valid_from,'T',' ') <= ?) AND ($alias.valid_to IS NULL OR trim($alias.valid_to) = '' OR ? < replace($alias.valid_to,'T',' '))"
