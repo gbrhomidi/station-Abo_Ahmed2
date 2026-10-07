@@ -316,10 +316,19 @@ td{color:var(--text)}
     <div class="form-grid">
      <div class="form-group" style="display:none"><label class="form-label">رقم السجل</label><input class="form-input readonly" id="recordId" type="number" readonly tabindex="-1"></div>
      <div class="form-group full">
+      <label class="form-label">نوع السعر *</label>
+      <select class="form-input" id="priceTargetType"><option value="product">منتج</option><option value="fuel">وقود</option></select>
+     </div>
+     <div class="form-group full" id="productField">
       <label class="form-label">المنتج *</label>
       <input class="form-input product-search" id="productSearch" type="search" placeholder="اكتب اسم المنتج للبحث..." autocomplete="off">
-      <select class="form-input product-select" id="productSelect" required><option value="">جاري تحميل المنتجات...</option></select>
-      <div class="help">القيمة المحفوظة في سجل الأسعار هي رقم المنتج فقط، بينما اسم المنتج معروض للمستخدم.</div>
+      <select class="form-input product-select" id="productSelect"><option value="">جاري تحميل المنتجات...</option></select>
+      <div class="help">يتم اعتماد السعر وتسجيله داخل SQLite عبر Android.</div>
+     </div>
+     <div class="form-group full" id="fuelField" style="display:none">
+      <label class="form-label">نوع الوقود *</label>
+      <select class="form-input" id="fuelSelect"><option value="">جاري تحميل أنواع الوقود...</option></select>
+      <div class="help">يتم اعتماد سعر الوقود داخل SQLite عبر Android.</div>
      </div>
      <div class="form-group"><label class="form-label">السعر القديم</label><input class="form-input readonly" id="oldPrice" type="number" step="0.0001" readonly tabindex="-1"></div>
      <div class="form-group"><label class="form-label">السعر الجديد *</label><input class="form-input" id="newPrice" type="number" step="0.0001" min="0" inputmode="decimal" required></div>
@@ -392,7 +401,7 @@ const CFG = {
 const bridge = window.AndroidInterface;
 const state = {
  rows:[],filtered:[],editing:null,tab:'all',loadedAt:null,
- products:[],stations:[],currentStationId:0,loading:false
+ products:[],fuels:[],stations:[],currentStationId:0,loading:false
 };
 
 const $ = id => document.getElementById(id);
@@ -403,7 +412,10 @@ const fmt = v => num(v).toLocaleString('ar-EG',{maximumFractionDigits:4});
 const dateOnly = v => String(v||'').slice(0,10);
 const productLabel = p => p?.product_name_ar || p?.product_name || p?.short_name_ar || p?.short_name || ('منتج #'+(p?.id??''));
 const rowProduct = row => state.products.find(p=>String(p.id)===String(row?.product_id));
-const rowProductName = row => rowProduct(row) ? productLabel(rowProduct(row)) : (row?.product_name_ar || row?.product_name || ('منتج #'+(row?.product_id??'—')));
+const rowFuel = row => state.fuels.find(f=>String(f.id)===String(row?.fuel_type_id));
+const rowProductName = row => String(row?.source_type||'')==='fuel'
+ ? (row?.product_name_ar || row?.product_name || row?.fuel_name_ar || row?.fuel_name || ('وقود #'+(row?.fuel_type_id??'—')))
+ : (rowProduct(row) ? productLabel(rowProduct(row)) : (row?.product_name_ar || row?.product_name || ('منتج #'+(row?.product_id??'—'))));
 const delta = row => num(row?.new_price)-num(row?.old_price);
 const direction = row => delta(row)>0?'increase':delta(row)<0?'decrease':'flat';
 
@@ -583,17 +595,31 @@ function applyProduct(rowId){
  const p=state.products.find(x=>String(x.id)===String(rowId));
  $('oldPrice').value=p?(p.sale_price??p.default_sale_price??p.current_price??''):'';
 }
+function applyFuel(fuelId){
+ const f=state.fuels.find(x=>String(x.id)===String(fuelId));
+ $('oldPrice').value=f?(f.default_sale_price??f.sale_price??f.current_price??''):'';
+}
+function togglePriceTarget(){
+ const fuel=$('priceTargetType').value==='fuel';
+ $('productField').style.display=fuel?'none':'';
+ $('fuelField').style.display=fuel?'':'none';
+ $('productSelect').required=!fuel;
+ $('fuelSelect').required=fuel;
+ if(fuel) applyFuel($('fuelSelect').value); else applyProduct($('productSelect').value);
+}
 function openForm(row=null){
  state.editing=row||null;
  $('formTitle').textContent=row?'تعديل سجل تغيير السعر':'إضافة سجل جديد';
  $('recordId').value=row?.id??nextRecordId();
+ $('priceTargetType').value=String(row?.source_type||'product')==='fuel'?'fuel':'product';
  $('changeDate').value=dateOnly(row?.change_date)||today();
  $('newPrice').value=row?.new_price??'';
  $('changeReason').value=row?.change_reason??'';
  $('archived').value=String(row?.archived??0);
  $('productSearch').value='';
  renderProductOptions(row?.product_id||'');
- applyProduct(row?.product_id||'');
+ renderFuelOptions(row?.fuel_type_id||'');
+ togglePriceTarget();
  populateStationContext();
  $('validation').classList.remove('show');$('validation').innerHTML='';
  openModal('formModal');
@@ -601,7 +627,9 @@ function openForm(row=null){
 }
 function formErrors(){
  const errors=[];
- if(!$('productSelect').value)errors.push('يجب اختيار المنتج.');
+ if($('priceTargetType').value==='fuel'){
+  if(!$('fuelSelect').value)errors.push('يجب اختيار نوع الوقود.');
+ } else if(!$('productSelect').value)errors.push('يجب اختيار المنتج.');
  const np=$('newPrice').value.trim(),op=$('oldPrice').value.trim();
  if(!np||!Number.isFinite(Number(np)))errors.push('السعر الجديد مطلوب ويجب أن يكون رقماً.');
  if(np&&Number(np)<0)errors.push('السعر الجديد لا يمكن أن يكون سالباً.');
@@ -614,7 +642,8 @@ async function saveForm(){
  const rawDate=$('changeDate').value.trim();
  const finalDate=rawDate?rawDate:today();
  const payload={
-  product_id:Number($('productSelect').value),
+  product_id:$('priceTargetType').value==='fuel'?0:Number($('productSelect').value||0),
+  fuel_type_id:$('priceTargetType').value==='fuel'?Number($('fuelSelect').value):0,
   old_price:$('oldPrice').value===''?0:Number($('oldPrice').value),
   new_price:Number($('newPrice').value),
   change_date:finalDate,
@@ -624,8 +653,13 @@ async function saveForm(){
  setLoading(true);
  try{
   let result;
-  if(state.editing)result=await invoke(CFG.updateMethod,[Number(state.editing.id),JSON.stringify(payload)]);
-  else result=await invoke(CFG.createMethod,[JSON.stringify(payload)]);
+  if(state.editing){
+   result=await invoke(CFG.updateMethod,[Number(state.editing.id),JSON.stringify(payload)]);
+  }else if($('priceTargetType').value==='fuel'){
+   result=await invoke('changeFuelSalePrice',[JSON.stringify({fuel_type_id:Number($('fuelSelect').value),new_price:Number($('newPrice').value),reason:$('changeReason').value.trim(),price_kind:'default'})]);
+  }else{
+   result=await invoke(CFG.createMethod,[JSON.stringify(payload)]);
+  }
   parse(result);toast(state.editing?'تم تعديل سجل تغيير السعر فعلياً':'تم حفظ سجل تغيير السعر فعلياً');
   closeModal('formModal');await loadRows(state.tab==='archived')
  }catch(e){box.innerHTML='• '+esc(e.message||'فشلت عملية الحفظ');box.classList.add('show');toast(e.message||'فشلت عملية الحفظ','error')}
@@ -639,6 +673,18 @@ async function deleteRow(row){
  catch(e){toast(e.message||'فشل الحذف','error')}finally{setLoading(false)}
 }
 
+function renderFuelOptions(selected=''){
+ const list=state.fuels||[];
+ $('fuelSelect').innerHTML='<option value="">اختر نوع الوقود...</option>'+list.map(f=>`<option value="${esc(f.id)}">${esc(f.fuel_name_ar||f.fuel_name||f.fuel_code||('وقود #'+f.id))}</option>`).join('');
+ if(selected) $('fuelSelect').value=String(selected);
+}
+async function loadFuelTypes(){
+ if(!bridge)return;
+ try{
+  const result=await invoke('getFuelTypes',[]);
+  const raw=dataOf(result);state.fuels=Array.isArray(raw)?raw:(raw?.rows||raw?.data||[]);
+ }catch(e){state.fuels=[];toast(e.message||'تعذر تحميل أنواع الوقود','error')}
+}
 async function loadProducts(){
  if(!bridge)return;
  try{
@@ -672,7 +718,7 @@ async function loadRows(includeArchived=false){
 }
 async function refresh(){
  $('pullIndicator').classList.add('show','spin');$('pullIndicator span').textContent='جاري التحديث...';
- try{await loadProducts();await loadStations();populateStationContext();await loadRows(state.tab==='archived')}
+ try{await loadProducts();await loadFuelTypes();await loadStations();populateStationContext();await loadRows(state.tab==='archived')}
  finally{setTimeout(()=>{$('pullIndicator').classList.remove('show','spin');$('pullIndicator span').textContent='اسحب للتحديث'},250)}
 }
 
@@ -733,6 +779,8 @@ function bind(){
  $('searchBtn').onclick=()=>applyFilter();
  $('productSearch').addEventListener('input',()=>renderProductOptions($('productSelect').value));
  $('productSelect').addEventListener('change',()=>{applyProduct($('productSelect').value);setFocusLater($('newPrice'))});
+ $('fuelSelect').addEventListener('change',()=>{applyFuel($('fuelSelect').value);setFocusLater($('newPrice'))});
+ $('priceTargetType').addEventListener('change',togglePriceTarget);
  $('reportProductSearch').addEventListener('input',()=>renderReportProductOptions($('reportProductSelect').value));
  document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeModal(b.dataset.close));
  document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)closeModal(o.id)}));
