@@ -2785,17 +2785,16 @@ class SmsProcessor(
     ): Boolean {
 
         val history =
-            runCatching {
+            try {
                 customerResolver.getOrderHistoryByPhone(
                     customer.phone,
                     100
                 )
-            }.getOrElse {
-
+            } catch (e: Exception) {
                 Log.e(
                     TAG,
                     "Failed to load invoice data",
-                    it
+                    e
                 )
 
                 replyManager.sendReplyOnce(
