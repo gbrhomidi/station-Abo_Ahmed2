@@ -260,7 +260,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     34 -> migrateV34ToV35(db)
                     35 -> migrateV35ToV36(db)
                     36 -> migrateV36ToV37(db)
-                    40 -> migrateV40ToV41(db)
+                    40 -> try {
+                        migrateV40ToV41(db)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "V40 -> V41 migration failed", e)
+                        throw e
+                    }
                 }
             }
             ensureModule006Schema(db)
