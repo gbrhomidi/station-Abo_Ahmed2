@@ -7848,147 +7848,248 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
 
+
+        /**
+         * يلتقط صورة الفاتورة عبر WebView منفصل، ويحفظها في filesDir/invoices/{invoiceNumber}.png
+         * ثم يفتح WhatsApp مع الصورة مرفقة.
+         */
         @JavascriptInterface
         fun shareInvoiceJpg(invoiceHtml: String, phone: String = ""): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             if (invoiceHtml.isBlank()) return errorResponse("محتوى الفاتورة غير متوفر")
+
             val normalizedPhone = phone.filter { it.isDigit() }
-            if (normalizedPhone.length !in 8..15) return errorResponse("رقم الهاتف غير صالح. استخدم الرقم الدولي بدون مسافات أو رموز.")
+            if (normalizedPhone.length !in 8..15) {
+                return errorResponse("رقم الهاتف غير صالح. استخدم الرقم الدولي بدون مسافات أو رموز.")
+            }
 
-            val whatsappPackage = "com.whatsapp"
-            return try {
-                require(activity.packageManager.getLaunchIntentForPackage(whatsappPackage) != null) {
-                    "تطبيق WhatsApp غير مثبت على الجهاز"
-                }
-                val outputDir = File(activity.filesDir, "invoices").apply { mkdirs() }
-                val outputFile = File(outputDir, "invoice_${System.currentTimeMillis()}.png")
-                val latch = CountDownLatch(1)
-                var captured: Throwable? = null
-                var bitmap: Bitmap? = null
-                var captureWebView: WebView? = null
+            val invoiceNumber = Regex("invoice-number-value[^>]*>([^<]+)<")
+                .find(invoiceHtml)
+                ?.groupValues?.getOrNull(1)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: "invoice_${D}System.currentTimeMillis()}"
+            val safeNumber = invoiceNumber
+                .replace(Regex("[^A-Za-z0-9_\\-]"), "_")
+                .take(80)
 
-                activity.runOnUiThread {
-                    try {
-                        val root = activity.findViewById<ViewGroup>(android.R.id.content)
-                            ?: throw IllegalStateException("حاوية واجهة التطبيق غير متاحة")
-                        val capture = WebView(activity)
-                        captureWebView = capture
-                        capture.settings.javaScriptEnabled = true
-                        capture.settings.domStorageEnabled = true
-                        capture.settings.defaultTextEncodingName = "UTF-8"
-                        capture.setBackgroundColor(android.graphics.Color.WHITE)
-                        capture.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                        val widthPx = 794
-                        capture.translationX = -widthPx.toFloat()
-                        capture.alpha = 1f
-                        root.addView(capture, ViewGroup.LayoutParams(widthPx, 1123))
+            val latch = CountDownLatch(1)
+            var result = JSONObject()
+                .put("success", false)
+                .put("error", "لم تبدأ العملية")
+            var capture: WebView? = null
 
-                        val wrappedHtml = """
-                            <!doctype html>
-                            <html lang="ar" dir="rtl">
-                            <head>
-                              <meta charset="utf-8">
-                              <meta name="viewport" content="width=$widthPx, initial-scale=1.0">
-                              <style>
-                                html,body{margin:0;padding:0;background:#fff;width:${widthPx}px;}
-                                body{overflow:visible;}
-                              </style>
-                            </head>
-                            <body>$invoiceHtml</body>
-                            </html>
-                        """.trimIndent()
+            activity.runOnUiThread {
+                try {
+                    val root = activity.findViewById<ViewGroup>(android.R.id.content)
+                        ?: throw IllegalStateException("حاوية الجذر غير متاحة")
+                    val widthPx = 794
+                    val heightPx = 1123
 
-                        capture.webViewClient = object : WebViewClient() {
-                            override fun onPageFinished(view: WebView?, url: String?) {
-                                val target = view ?: return
-                                target.evaluateJavascript(
-                                    "(document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(function(){ return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight); })"
-                                ) { rawHeight ->
+                    capture = WebView(activity).apply {
+                        settings.javaScriptEnabled = false
+                        settings.domStorageEnabled = false
+                        settings.allowFileAccess = true
+                        settings.allowContentAccess = false
+                        settings.loadsImagesAutomatically = true
+                        setBackgroundColor(android.graphics.Color.WHITE)
+                        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                        alpha = 0f
+                    }
+                    root.addView(capture, ViewGroup.LayoutParams(widthPx, heightPx))
+
+                    val wrappedHtml = buildInvoiceWrapperHtml(invoiceHtml)
+
+                    capture?.webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView, url: String?) {
+                            super.onPageFinished(view, url)
+                            val renderTask = Runnable {
+                                try {
+                                    view.measure(
+                                        View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+                                        View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY)
+                                    )
+                                    view.layout(0, 0, widthPx, heightPx)
+
+                                    val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
                                     try {
-                                        val cssHeight = rawHeight?.trim()?.removeSurrounding("\"")?.toDoubleOrNull()?.toInt() ?: 1123
-                                        val heightPx = cssHeight.coerceIn(900, 5000)
-                                        val lp = target.layoutParams
-                                        lp.width = widthPx
-                                        lp.height = heightPx
-                                        target.layoutParams = lp
-                                        target.measure(
-                                            View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
-                                            View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY)
-                                        )
-                                        target.layout(0, 0, widthPx, heightPx)
-                                        target.postDelayed({
-                                            try {
-                                                val capturedBitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
-                                                val canvas = android.graphics.Canvas(capturedBitmap)
-                                                canvas.drawColor(android.graphics.Color.WHITE)
-                                                target.draw(canvas)
-                                                bitmap = capturedBitmap
-                                            } catch (e: Throwable) {
-                                                captured = e
-                                            } finally {
-                                                latch.countDown()
+                                        val canvas = android.graphics.Canvas(bitmap)
+                                        canvas.drawColor(android.graphics.Color.WHITE)
+                                        view.draw(canvas)
+
+                                        val invoiceDir = File(activity.filesDir, "invoices").apply { mkdirs() }
+                                        val imageFile = File(invoiceDir, "${D}safeNumber}.png")
+                                        FileOutputStream(imageFile).use { stream ->
+                                            if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                                                throw IllegalStateException("فشل ضغط الصورة")
                                             }
-                                        }, 250L)
-                                    } catch (e: Throwable) {
-                                        captured = e
-                                        latch.countDown()
+                                            stream.flush()
+                                        }
+                                        require(imageFile.isFile && imageFile.length() > 0L) {
+                                            "ملف الصورة الناتج فارغ"
+                                        }
+
+                                        val uri = FileProvider.getUriForFile(
+                                            activity,
+                                            "${D}activity.packageName}.fileprovider",
+                                            imageFile
+                                        )
+                                        val waPackage = listOf("com.whatsapp", "com.whatsapp.w4b")
+                                            .firstOrNull { pkg ->
+                                                activity.packageManager.getLaunchIntentForPackage(pkg) != null
+                                            }
+
+                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "image/png"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            putExtra("jid", "${D}normalizedPhone}@s.whatsapp.net")
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            waPackage?.let { setPackage(it) }
+                                            clipData = android.content.ClipData.newRawUri("invoice", uri)
+                                        }
+
+                                        if (shareIntent.resolveActivity(activity.packageManager) != null) {
+                                            runCatching {
+                                                activity.startActivity(
+                                                    Intent.createChooser(shareIntent, "إرسال الفاتورة")
+                                                )
+                                            }.onFailure { err ->
+                                                DebugLogger.logException("ShareInvoiceStart", err)
+                                                Toast.makeText(
+                                                    activity,
+                                                    "الفاتورة محفوظة: ${D}imageFile.name}",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                        } else {
+                                            Toast.makeText(
+                                                activity,
+                                                "WhatsApp غير مثبت. الفاتورة محفوظة في: ${D}imageFile.name}",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
+
+                                        result = JSONObject().apply {
+                                            put("success", true)
+                                            put("path", imageFile.absolutePath)
+                                            put("file_name", imageFile.name)
+                                            put("bytes", imageFile.length())
+                                            put("phone", normalizedPhone)
+                                            put("message", "تم حفظ الفاتورة كصورة PNG باسم رقم الفاتورة وفتح WhatsApp")
+                                        }
+                                    } finally {
+                                        bitmap.recycle()
                                     }
+                                } catch (e: Exception) {
+                                    DebugLogger.logException("ShareInvoiceRender", e)
+                                    result = JSONObject()
+                                        .put("success", false)
+                                        .put("error", e.message ?: "فشل رسم الفاتورة")
+                                } finally {
+                                    runCatching {
+                                        (view.parent as? ViewGroup)?.removeView(view)
+                                        view.stopLoading()
+                                        view.destroy()
+                                    }
+                                    latch.countDown()
                                 }
                             }
-                        }
-                        capture.loadDataWithBaseURL("file:///android_asset/", wrappedHtml, "text/html", "UTF-8", null)
-                    } catch (e: Throwable) {
-                        captured = e
-                        latch.countDown()
-                    }
-                }
 
-                if (!latch.await(15, TimeUnit.SECONDS)) {
-                    captured = IllegalStateException("انتهت مهلة إنشاء صورة الفاتورة")
-                }
-                activity.runOnUiThread {
-                    try {
-                        captureWebView?.let { wv ->
-                            (wv.parent as? ViewGroup)?.removeView(wv)
-                            wv.stopLoading()
-                            wv.destroy()
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                view.postVisualStateCallback(
+                                    System.nanoTime(),
+                                    object : WebView.VisualStateCallback() {
+                                        override fun onComplete(requestId: Long) {
+                                            view.postDelayed(renderTask, 120L)
+                                        }
+                                    }
+                                )
+                            } else {
+                                view.postDelayed(renderTask, 500L)
+                            }
                         }
-                    } catch (_: Throwable) {}
-                }
-                captured?.let { throw it }
-                val finalBitmap = bitmap ?: throw IllegalStateException("فشل إنشاء صورة الفاتورة")
-                FileOutputStream(outputFile).use { stream ->
-                    require(finalBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
-                        "تعذر حفظ صورة الفاتورة بصيغة PNG"
-                    }
-                }
-                finalBitmap.recycle()
 
-                val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", outputFile)
-                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/png"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    putExtra("jid", "$normalizedPhone@s.whatsapp.net")
-                    putExtra(Intent.EXTRA_TEXT, "فاتورة بيع")
-                    setPackage(whatsappPackage)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    clipData = android.content.ClipData.newRawUri("invoice", uri)
+                        override fun onReceivedError(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                            error: WebResourceError?
+                        ) {
+                            DebugLogger.warn(
+                                "ShareInvoice",
+                                "HTTP/Error: ${D}error?.description}"
+                            )
+                        }
+                    }
+
+                    capture?.loadDataWithBaseURL(
+                        "file:///android_asset/",
+                        wrappedHtml,
+                        "text/html",
+                        "UTF-8",
+                        null
+                    )
+                } catch (e: Exception) {
+                    DebugLogger.logException("ShareInvoiceSetup", e)
+                    runCatching {
+                        capture?.let {
+                            (it.parent as? ViewGroup)?.removeView(it)
+                            it.destroy()
+                        }
+                    }
+                    result = JSONObject()
+                        .put("success", false)
+                        .put("error", e.message ?: "فشل تهيئة WebView")
+                    latch.countDown()
                 }
-                require(shareIntent.resolveActivity(activity.packageManager) != null) {
-                    "تطبيق WhatsApp غير متاح لاستقبال صورة"
-                }
-                activity.runOnUiThread { activity.startActivity(shareIntent) }
-                JSONObject().apply {
-                    put("success", true)
-                    put("path", outputFile.absolutePath)
-                    put("phone", normalizedPhone)
-                    put("message", "تم إنشاء صورة الفاتورة بصيغة PNG وفتح تطبيق WhatsApp. اضغط إرسال داخل WhatsApp لإتمام الإرسال.")
-                }.toString()
-            } catch (e: Exception) {
-                DebugLogger.logException("InvoiceWhatsApp", e)
-                errorResponse(e.message ?: "تعذر إنشاء أو مشاركة فاتورة WhatsApp")
             }
+
+            val completed = latch.await(30, TimeUnit.SECONDS)
+            if (!completed) {
+                activity.runOnUiThread {
+                    runCatching {
+                        capture?.let {
+                            (it.parent as? ViewGroup)?.removeView(it)
+                            it.destroy()
+                        }
+                    }
+                }
+                return errorResponse("انتهت مهلة تحويل الفاتورة إلى صورة (30 ثانية)")
+            }
+            return result.toString()
         }
+
+        private fun buildInvoiceWrapperHtml(invoiceHtml: String): String = """
+            <!DOCTYPE html>
+            <html lang="ar" dir="rtl">
+            <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=794, initial-scale=1.0, user-scalable=no">
+            <style>
+              *, *::before, *::after { box-sizing: border-box; }
+              html, body {
+                margin: 0; padding: 0; border: 0;
+                width: 794px; min-width: 794px;
+                min-height: 1123px;
+                background: #ffffff;
+                direction: rtl;
+                font-family: 'Cairo', 'Noto Sans Arabic', Arial, sans-serif;
+                -webkit-font-smoothing: antialiased;
+                font-variant-numeric: lining-nums tabular-nums;
+                font-feature-settings: "lnum" 1, "tnum" 1;
+                overflow: visible !important;
+              }
+              body > #posInvoice { display: block !important; }
+              img { max-width: 100%; display: block; }
+              table { border-collapse: separate; }
+              * { animation: none !important; transition: none !important; }
+            </style>
+            </head>
+            <body>
+            $invoiceHtml
+            </body>
+            </html>
+        """.trimIndent()
+
 
         @JavascriptInterface
         fun printCurrentPage(): String {
@@ -7997,7 +8098,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     val manager = getSystemService(Context.PRINT_SERVICE) as? PrintManager
                     val currentWebView = webView
                     if (manager == null || currentWebView == null) {
-                        Toast.makeText(this@MainActivity, "خدمة الطباعة غير متاحة حالياً", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            this@MainActivity,
+                            "خدمة الطباعة غير متاحة حالياً",
+                            Toast.LENGTH_SHORT
+                        ).show()
                     } else {
                         val adapter = currentWebView.createPrintDocumentAdapter("accounting-report")
                         manager.print(
@@ -8017,6 +8122,37 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+        @JavascriptInterface
+        fun printCurrentPageWithTitle(title: String = "طباعة"): String {
+            return try {
+                runOnUiThread {
+                    val manager = getSystemService(Context.PRINT_SERVICE) as? PrintManager
+                    val currentWebView = webView
+                    if (manager == null || currentWebView == null) {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "خدمة الطباعة غير متاحة حالياً",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        val safeTitle = title.trim().ifBlank { "document" }
+                        val adapter = currentWebView.createPrintDocumentAdapter(safeTitle)
+                        manager.print(
+                            title.trim().ifBlank { "طباعة" },
+                            adapter,
+                            PrintAttributes.Builder()
+                                .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                                .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+                                .build()
+                        )
+                    }
+                }
+                successResponse(true, "تم فتح نافذة الطباعة")
+            } catch (e: Exception) {
+                DebugLogger.logException("PrintWithTitle", e)
+                errorResponse(e.message ?: "تعذر فتح نافذة الطباعة")
+            }
+        }
 
         private fun operationalJson(jsonData: String): JSONObject = try {
             JSONObject(jsonData.ifBlank { "{}" })
