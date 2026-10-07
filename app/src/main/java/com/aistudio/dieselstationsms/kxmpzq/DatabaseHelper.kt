@@ -28604,11 +28604,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // ========================================================================
 
     private fun migrateV40ToV41(db: SQLiteDatabase) {
+        // V41 depends on station_id/business_day in fuel_sales; establish that
+        // compatibility schema before creating V41 indexes and backfills.
+        ensureFuelSalesSchema(db)
         ensurePricingV41Schema(db)
         Log.d(TAG, "Migrated pricing/business-day schema V40 -> V41")
     }
 
     private fun ensurePricingV41Schema(db: SQLiteDatabase) {
+        // Keep V41 self-contained for both fresh databases and upgrades from
+        // older schemas where fuel_sales did not yet expose these columns.
+        ensureFuelSalesSchema(db)
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS fuel_price_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
