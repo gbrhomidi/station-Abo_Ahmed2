@@ -481,6 +481,19 @@ class SmsProcessor(
                 }
             }
 
+            // Pump-meter SMS is deterministic and must be evaluated before customer/driver routing.
+            // A valid pump-meter message is fully consumed here; invalid/unrelated SMS continues through the existing pipeline.
+            runCatching {
+                if (PumpMeterSmsRepository(context, db).handleIncomingSms(sender, rawBody)) {
+                    diagnosticsOutcome = true
+                    safeLogSms(sender, msgBody, "received", "pump_meter_handled")
+                    metrics.recordEvent(SmsMetrics.EventType.SMS_RECEIVED, normalizedSender, "Pump meter SMS")
+                    return true
+                }
+            }.onFailure {
+                Log.e(TAG, "Pump meter SMS processing failed", it)
+            }
+
             // Driver replies are handled before customer resolution because a driver
             // may not exist in the customer directory.
             if (driverAssignmentEngine.handleDriverReply(sender, msgBody)) {
