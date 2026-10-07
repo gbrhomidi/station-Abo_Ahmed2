@@ -74,7 +74,13 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
             return audit(database,employee,pump,nozzle,parsed,sender,body,"OPENING_ACCEPTED","تم اعتماد قراءة الافتتاح",previous,0.0,parsed.reading)
         }
         val sold=soldLiters(database,employee.stationId,pump.getLong("id"),nozzle.getLong("id"),shiftId); val expected=if(previous.isNaN())parsed.reading else previous+sold
-        val price=salePrice(database,pump.getLong("id"),nozzle.getLong("id"),nozzle.optLong("fuel_type_id",0),employee.stationId); val diff=parsed.reading-expected
+        val price=salePrice(database,pump.getLong("id"),nozzle.getLong("id"),nozzle.optLong("fuel_type_id",0),employee.stationId)
+        val diff=parsed.reading-expected
+        if(price<=0.0 && kotlin.math.abs(diff)>=0.0001){
+            audit(database,employee,pump,nozzle,parsed,sender,body,"PRICE_MISSING","تعذر العثور على سعر بيع صالح؛ لم يتم إنشاء استقطاع مالي تلقائياً",previous,sold,expected,diff,0.0,0.0)
+            warn(sender,"تعذر اعتماد فرق القراءة لأن سعر البيع غير موجود في قاعدة البيانات. يرجى مراجعة سعر الوقود ثم إعادة التحقق.")
+            return true
+        }
         if(kotlin.math.abs(diff)<0.0001){
             upsertState(database,employee.stationId,pump.getLong("id"),nozzle.getLong("id"),employee.id,shift,state?.optDouble("opening_reading",Double.NaN)?.takeUnless{it.isNaN()},parsed.reading,parsed.reading)
             database.execSQL("UPDATE pumps SET meter_current=? WHERE id=? AND station_id=?",arrayOf(parsed.reading,pump.getLong("id"),employee.stationId))
