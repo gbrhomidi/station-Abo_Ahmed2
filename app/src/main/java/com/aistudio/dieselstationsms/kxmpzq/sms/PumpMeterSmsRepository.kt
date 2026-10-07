@@ -21,6 +21,12 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
     fun ensureSchema(database: SQLiteDatabase = db.writableDatabase) {
         addColumn(database,"pumps","employee_id INTEGER")
         addColumn(database,"fuel_sales","nozzle_id INTEGER")
+        addColumn(database,"pump_nozzles","station_id INTEGER NOT NULL DEFAULT 0")
+        addColumn(database,"pump_nozzles","nozzle_code TEXT")
+        addColumn(database,"pump_nozzles","nozzle_number INTEGER NOT NULL DEFAULT 0")
+        addColumn(database,"pump_nozzles","fuel_type_id INTEGER")
+        addColumn(database,"pump_nozzles","is_deleted INTEGER NOT NULL DEFAULT 0")
+        try { database.execSQL("UPDATE pump_nozzles SET station_id=(SELECT station_id FROM pumps WHERE pumps.id=pump_nozzles.pump_id) WHERE COALESCE(station_id,0)=0") } catch (_: Exception) {}
         database.execSQL("CREATE TABLE IF NOT EXISTS pump_nozzles(id INTEGER PRIMARY KEY AUTOINCREMENT,station_id INTEGER NOT NULL DEFAULT 0,pump_id INTEGER NOT NULL,nozzle_code TEXT,nozzle_number INTEGER NOT NULL,fuel_type_id INTEGER,is_deleted INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(pump_id,nozzle_number))")
         database.execSQL("CREATE TABLE IF NOT EXISTS pump_shift_assignments(id INTEGER PRIMARY KEY AUTOINCREMENT,station_id INTEGER NOT NULL,pump_id INTEGER NOT NULL,employee_id INTEGER NOT NULL,shift_type TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1,assigned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,released_at TEXT,opening_confirmed INTEGER NOT NULL DEFAULT 0,closing_confirmed INTEGER NOT NULL DEFAULT 0,opening_notes TEXT,closing_notes TEXT)")
         database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS ux_active_pump_assignment ON pump_shift_assignments(station_id,pump_id) WHERE active=1")
@@ -45,7 +51,7 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
             require(valid){"الموظف غير موجود أو غير نشط في المحطة"}
             database.execSQL("UPDATE pumps SET employee_id=? WHERE id=? AND station_id=?",arrayOf(employeeId,pumpId,stationId))
             database.execSQL("UPDATE pump_shift_assignments SET active=0,released_at=CURRENT_TIMESTAMP WHERE station_id=? AND pump_id=? AND active=1",arrayOf(stationId,pumpId))
-            database.execSQL("INSERT INTO pump_shift_assignments(station_id,pump_id,employee_id,shift_type,active) VALUES(?,?,?,?,1)",arrayOf(stationId,pumpId,normalizeShift(shiftType),1))
+            database.execSQL("INSERT INTO pump_shift_assignments(station_id,pump_id,employee_id,shift_type,active) VALUES(?,?,?,?,1)",arrayOf(stationId,pumpId,employeeId,normalizeShift(shiftType)))
             database.setTransactionSuccessful()
             JSONObject().put("success",true).put("id",pumpId).put("employee_id",employeeId).put("shift_type",normalizeShift(shiftType))
         }finally{database.endTransaction()}
