@@ -198,6 +198,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureModule010Schema(db)
             ensureReportCacheTable(db)
             insertInitialData(db)
+            try {
+                // V41 must be established after the fresh reference data is seeded.
+                ensurePricingV41Schema(db)
+            } catch (e: Exception) {
+                Log.e(TAG, "V41 pricing schema initialization failed", e)
+                throw e
+            }
             ensureContractSchema(db)
             ensureActivityPermissions(db)
             ensureTaskPermissions(db)
@@ -208,12 +215,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureFuelCommerceSchema(db)
             ensureFuelStocktakeSchema(db)
             ensureFinanceIntegritySchema(db)
-            try {
-                ensurePricingV41Schema(db)
-            } catch (e: Exception) {
-                Log.e(TAG, "V41 pricing schema initialization failed", e)
-                throw e
-            }
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
         } finally {
