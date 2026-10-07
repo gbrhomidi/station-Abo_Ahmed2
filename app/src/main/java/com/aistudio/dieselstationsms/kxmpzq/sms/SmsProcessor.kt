@@ -630,11 +630,13 @@ class SmsProcessor(
 
                 is SmsSecurity.RateLimitResult.WARNING -> {
 
-                    runCatching {
+                    try {
                         replyManager.sendReplyOnce(
                             normalizedSender,
                             rateLimitResult.message
                         )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to send rate-limit warning reply", e)
                     }
 
                     metrics.recordEvent(
