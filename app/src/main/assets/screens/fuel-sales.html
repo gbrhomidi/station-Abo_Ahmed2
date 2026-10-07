@@ -1430,6 +1430,7 @@
                 {label:'معرف البيع',key:'sale_id',type:'number',required:false,readonly:true},
                 {label:'الوردية',key:'shift_id',type:'number',required:true,readonly:true},
                 {label:'المضخة',key:'pump_id',type:'select',required:true},
+                {label:'الفوهة',key:'nozzle_id',type:'select',required:true},
                 {label:'نوع الوقود',key:'fuel_type_id',type:'select',required:true},
                 {label:'الكمية (لتر)',key:'quantity',type:'number',required:true},
                 {label:'السعر / لتر',key:'price_per_liter',type:'number',required:true,readonly:true},
@@ -1568,6 +1569,7 @@
             if(shiftEl&&!row) shiftEl.value=shiftId||'';
             const pumpEl=document.querySelector('[data-key="pump_id"]');
             if(pumpEl){pumpEl.innerHTML='<option value="">اختر المضخة...</option>'+pumps.map(x=>`<option value="${esc(field(x,['id','pump_id']))}">${esc(field(x,['id','pump_id']))} — ${esc(field(x,['pump_name_ar','pump_name','pump_code','name'])||'مضخة')}</option>`).join('');if(row)pumpEl.value=field(row,['pump_id'])||'';}
+            await loadPumpNozzles(row ? field(row,['pump_id']) : (document.querySelector('[data-key="pump_id"]')?.value||''), row ? field(row,['nozzle_id']) : '');
             const fuelEl=document.querySelector('[data-key="fuel_type_id"]');
             if(fuelEl){fuelEl.innerHTML='<option value="">اختر نوع الوقود...</option>'+fuels.map(x=>`<option value="${esc(field(x,['id','fuel_type_id']))}" data-price="${esc(field(x,['default_sale_price','sale_price','price_per_liter'])||'')}">${esc(field(x,['id','fuel_type_id']))} — ${esc(field(x,['fuel_name_ar','fuel_name','name'])||'وقود')}</option>`).join('');if(row)fuelEl.value=field(row,['fuel_type_id'])||'';}
             const pay=document.querySelector('[data-key="payment_method"]');
@@ -1595,10 +1597,25 @@
             }
             if(!row){const now=new Date();document.querySelector('[data-key="sale_date"]')?.setAttribute('value',localDate(now));const dateEl=document.querySelector('[data-key="sale_date"]');if(dateEl)dateEl.value=localDate(now);const timeEl=document.querySelector('[data-key="sale_time"]');if(timeEl)timeEl.value=localTime(now);}
             bindFuelCalculation();
+            const pumpSelect=document.querySelector('[data-key="pump_id"]');
+            pumpSelect?.addEventListener('change',()=>loadPumpNozzles(pumpSelect.value,''));
+            if(pumpSelect?.value) await loadPumpNozzles(pumpSelect.value,row?field(row,['nozzle_id']):'');
         }
         function localDate(d=new Date()){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
         function localTime(d=new Date()){return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
-        function bindFuelCalculation(){const q=document.querySelector('[data-key="quantity"]'),p=document.querySelector('[data-key="price_per_liter"]'),t=document.querySelector('[data-key="total_amount"]'),f=document.querySelector('[data-key="fuel_type_id"]');const calc=()=>{if(t)t.value=(numeric(q?.value)*numeric(p?.value)).toFixed(2);};f?.addEventListener('change',()=>{const o=f.options[f.selectedIndex];if(p)p.value=o?.dataset.price||'';calc();});q?.addEventListener('input',calc);}
+        async function loadPumpNozzles(pumpId='',selectedId=''){
+            const nozzleEl=document.querySelector('[data-key="nozzle_id"]');
+            if(!nozzleEl)return;
+            nozzleEl.innerHTML='<option value="">اختر الفوهة...</option>';
+            if(!pumpId || !bridge || typeof bridge.getPumpNozzles!=='function')return;
+            try{
+                const result=parse(bridge.getPumpNozzles(JSON.stringify({pump_id:Number(pumpId)})));
+                const nozzles=rowsFrom(result);
+                nozzleEl.innerHTML='<option value="">اختر الفوهة...</option>'+nozzles.map(n=>'<option value="'+esc(n.id)+'">'+esc(n.nozzle_number||n.nozzle_code||n.id)+' — '+esc(n.nozzle_code||'فوهة')+'</option>').join('');
+                nozzleEl.value=String(selectedId||'');
+            }catch(e){ toast('تعذر تحميل فوهات المضخة: '+e.message,true); }
+        }
+                function bindFuelCalculation(){const q=document.querySelector('[data-key="quantity"]'),p=document.querySelector('[data-key="price_per_liter"]'),t=document.querySelector('[data-key="total_amount"]'),f=document.querySelector('[data-key="fuel_type_id"]');const calc=()=>{if(t)t.value=(numeric(q?.value)*numeric(p?.value)).toFixed(2);};f?.addEventListener('change',()=>{const o=f.options[f.selectedIndex];if(p)p.value=o?.dataset.price||'';calc();});q?.addEventListener('input',calc);}
         async function openForm(row=null) { if(!CFG.createMethod&&!CFG.updateMethod){toast('لا توجد عملية كتابة مدعومة لهذه الشاشة',true);return;}state.editing=row;const deliveryBtn=$('deliveryBtn');if(deliveryBtn){deliveryBtn.disabled=true;delete deliveryBtn.dataset.saleId;deliveryBtn.title='يتاح بعد حفظ عملية البيع بنجاح';}$('formTitle').textContent=row?'تعديل مبيعات الوقود':'إضافة عملية بيع وقود';$('recordForm').innerHTML=(CFG.fields||[]).map(def=>inputHtml(def,row)).join('');$('formModal').classList.add('show');try{await loadSaleFormLookups(row);}catch(e){toast(e.message||'تعذر تحميل بيانات النموذج',true);} }
         function collectForm(){const payload={};document.querySelectorAll('#recordForm [data-key]').forEach(el=>{if(el.dataset.key==='sale_id')return;let v=el.value;if(el.type==='number')v=v===''?0:Number(v);payload[el.dataset.key]=v;});payload.created_at=new Date().toISOString();return payload;}
         async function saveForm(){
@@ -1635,6 +1652,10 @@
 
             if(!payload.fuel_type_id){
                 return toast('اختر نوع الوقود', true);
+            }
+
+            if(!payload.nozzle_id){
+                return toast('اختر الفوهة التابعة للمضخة', true);
             }
 
             if(!(numeric(payload.quantity) > 0)){
