@@ -689,7 +689,10 @@ tr.selected {
 }
 
 /* ============================================================
-   Modal — تمركز جذري
+   Modal — تنسيق أساسي
+   ملاحظة: المودالات موجودة الآن خارج .container مباشرة في body
+   لضمان عمل position: fixed بشكل صحيح (backdrop-filter على .container
+   كان يُنشئ containing block جديد ويكسر ثبات المودالات على الشاشة).
    ============================================================ */
 .modal {
     display: none;
@@ -700,12 +703,14 @@ tr.selected {
     padding: 20px;
     box-sizing: border-box;
     overflow-y: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    align-items: flex-start;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
 }
 [data-theme="dark"] .modal { background: rgba(0, 0, 0, 0.82); }
 .modal-content {
@@ -723,7 +728,9 @@ tr.selected {
     animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     border: var(--silver-border-strong);
     position: relative;
-    margin: auto;
+    margin-top: auto;
+    margin-bottom: auto;
+    flex-shrink: 0;
 }
 .modal-content input, .modal-content select, .modal-content textarea { touch-action: manipulation; }
 .modal-content::before {
@@ -840,14 +847,14 @@ tr.selected {
     background: var(--bg-glass-light);
 }
 
-/* ✅ المودالات بعرض كامل (الحاوية الرئيسية بدون مسافات) */
+/* ✅ المودالات بعرض كامل */
 #salesReportModal,
 #invoiceRetrieveModal,
 #customerSearchModal,
 #returnOverlay {
     padding: 0 !important;
     align-items: stretch !important;
-    justify-content: stretch !important;
+    justify-content: flex-start !important;
 }
 #salesReportModal > .modal-content,
 #invoiceRetrieveModal > .modal-content,
@@ -855,7 +862,7 @@ tr.selected {
 #returnOverlay > .return-content {
     width: 100% !important;
     max-width: 100% !important;
-    max-height: 100vh !important;
+    max-height: none !important;
     min-height: 100vh !important;
     height: auto !important;
     margin: 0 !important;
@@ -871,7 +878,6 @@ tr.selected {
 #returnOverlay .return-content::before {
     border-radius: 0 !important;
 }
-/* إعادة تعريف أنماط التمركز لهذه المودالات */
 #salesReportModal .modal-content,
 #invoiceRetrieveModal .modal-content,
 #customerSearchModal .modal-content {
@@ -1181,12 +1187,14 @@ body.sleep-mode .sidebar-toggle { display: none; }
     100% { transform: rotate(360deg); }
 }
 
-/* Barcode */
+/* ============================================================
+   Barcode — حاوية أكبر لتحسين سرعة الالتقاط
+   ============================================================ */
 .barcode-container {
     width: 100%;
-    height: clamp(110px, 15vh, 150px);
-    min-height: 110px;
-    max-height: 150px;
+    height: clamp(160px, 24vh, 240px);
+    min-height: 160px;
+    max-height: 260px;
     margin: 0 auto;
     border: 2px dashed var(--gold-primary);
     border-radius: var(--radius-small);
@@ -1197,10 +1205,11 @@ body.sleep-mode .sidebar-toggle { display: none; }
 }
 @media (max-width: 480px) {
     .barcode-container {
-        height: clamp(110px, 18vh, 140px);
-        min-height: 110px;
+        height: clamp(170px, 28vh, 250px);
+        min-height: 170px;
+        max-height: 270px;
     }
-    #qr-reader, #qr-reader video, #qr-reader__scan_region { min-height: 105px; }
+    #qr-reader, #qr-reader video, #qr-reader__scan_region { min-height: 170px; }
 }
 .flash-btn {
     position: absolute;
@@ -1524,7 +1533,7 @@ body.sleep-mode .sidebar-toggle { display: none; }
 #qr-reader {
     width: 100%;
     height: 100%;
-    min-height: 105px;
+    min-height: 160px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1536,13 +1545,13 @@ body.sleep-mode .sidebar-toggle { display: none; }
 #qr-reader video {
     width: 100% !important;
     height: 100% !important;
-    min-height: 105px;
+    min-height: 160px;
     object-fit: cover;
     display: block;
 }
 #qr-reader__scan_region {
     width: 100% !important;
-    min-height: 105px;
+    min-height: 160px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2322,7 +2331,6 @@ body.sleep-mode .sidebar-toggle { display: none; }
     white-space: nowrap;
     min-width: 0;
 }
-/* ضمان السطر الواحد على الشاشات الصغيرة */
 @media (max-width: 720px) {
     .sales-report-filters {
         grid-template-columns: 1fr 1fr auto;
@@ -2534,21 +2542,24 @@ body.sleep-mode .sidebar-toggle { display: none; }
     overscroll-behavior: contain;
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    align-items: flex-start;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
 }
 .return-content, .damaged-content {
     background: var(--bg-secondary);
     border-radius: var(--radius-card);
     padding: 20px;
     width: min(100%, 1100px);
-    max-height: calc(100vh - 40px);
+    max-height: none;
     overflow-y: auto;
     box-shadow: var(--silver-shadow), var(--shadow-card);
     animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     border: var(--silver-border-strong);
     position: relative;
-    margin: auto;
+    margin-top: auto;
+    margin-bottom: auto;
+    flex-shrink: 0;
 }
 .return-content::before, .damaged-content::before {
     content: "";
@@ -2626,7 +2637,7 @@ body.sleep-mode .sidebar-toggle { display: none; }
 #returnOverlay .return-content {
     width: 100% !important;
     max-width: 100% !important;
-    max-height: 100vh !important;
+    max-height: none !important;
     min-height: 100vh !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -2746,7 +2757,7 @@ body.sales-report-print-mode #salesReportTable td {
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    max-height: 100vh !important;
+    max-height: none !important;
     overflow: auto !important;
 }
 .return-content { width: 100% !important; }
@@ -2754,9 +2765,10 @@ body.sales-report-print-mode #salesReportTable td {
 .pos-wide-modal {
     width: 100% !important;
     max-width: 100% !important;
-    max-height: 100vh;
+    max-height: none;
     overflow: auto;
-    margin: 0;
+    margin-top: auto;
+    margin-bottom: auto;
 }
 .manual-product-list {
     display: grid;
@@ -2830,7 +2842,8 @@ body.invoice-print-mode #posInvoice {
     .pos-wide-modal {
         width: 100% !important;
         max-width: none !important;
-        max-height: 100vh !important;
+        min-height: 100vh !important;
+        max-height: none !important;
         border-radius: 0 !important;
     }
     .manual-product-list { grid-template-columns: 1fr; }
@@ -3498,292 +3511,302 @@ body.invoice-print-mode #posInvoice {
       </button>
     </div>
   </div>
+</div>
 
-  <!-- تقرير المبيعات -->
-  <div id="salesReportModal" class="modal">
-    <div class="modal-content">
-      <button class="modal-close-x" type="button" onclick="closeModal('salesReportModal')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
-      <div class="modal-title">تقرير المبيعات</div>
-      <div class="sales-report-filters">
-        <div class="field-group">
-          <label class="form-label">من تاريخ</label>
-          <input type="date" id="salesReportStartDate" class="modal-input" dir="ltr">
-        </div>
-        <div class="field-group">
-          <label class="form-label">إلى تاريخ</label>
-          <input type="date" id="salesReportEndDate" class="modal-input" dir="ltr">
-        </div>
-        <button class="btn btn-primary" type="button" onclick="fetchSalesReport()">جلب التقرير</button>
-      </div>
-      <div class="table-container">
-        <table class="sales-report-table" id="salesReportTable">
-          <thead>
-            <tr>
-              <th>رقم الفاتورة</th>
-              <th>تاريخ البيع</th>
-              <th>إسم المنتج</th>
-              <th>الكمية المباعة</th>
-              <th>المرتجع</th>
-              <th>الصافي</th>
-            </tr>
-          </thead>
-          <tbody id="salesReportTableBody"></tbody>
-        </table>
-      </div>
-      <div class="action-buttons" style="margin-top:12px;">
-        <button class="modal-btn modal-btn-primary sales-report-print-btn" type="button" onclick="printSalesReport()">طباعة التقرير</button>
-        <button class="modal-btn modal-btn-primary" type="button" onclick="closeModal('salesReportModal')">إغلاق</button>
-      </div>
-    </div>
-  </div>
+<!--
+  ═══════════════════════════════════════════════════════════
+  جميع المودالات الآن خارج .container مباشرة في body
+  السبب: .container له backdrop-filter: blur(12px) وهو يُنشئ
+  containing block جديد لـ position: fixed، مما كان يجعل
+  المودالات تتحرك مع تمرير الصفحة بدلاً من البقاء ثابتة.
+  ═══════════════════════════════════════════════════════════
+-->
 
-  <!-- بحث عن عميل -->
-  <div id="customerSearchModal" class="modal">
-    <div class="modal-content">
-      <button class="modal-close-x" type="button" onclick="closeModal('customerSearchModal')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
-      <div class="modal-title">بحث عن عميل</div>
-      <div class="modal-input-group">
-        <input type="text" id="customerSearchInput" class="modal-input" placeholder="ابحث برقم العميل أو الاسم">
-      </div>
-      <div class="table-container" style="max-height: none; margin: 15px 0;">
-        <table class="product-table" id="customerSearchTable">
-          <thead>
-            <tr>
-              <th>رقم العميل</th>
-              <th>الاسم</th>
-              <th>اختيار</th>
-            </tr>
-          </thead>
-          <tbody id="customerSearchResults">
-          </tbody>
-        </table>
-      </div>
-      <div style="margin-top: 15px;">
-        <button class="modal-btn modal-btn-cancel" type="button" onclick="closeModal('customerSearchModal')">إلغاء</button>
-        <button class="modal-btn modal-btn-primary" type="button" onclick="searchCustomers()">بحث</button>
-        <button class="modal-btn modal-btn-primary" type="button" onclick="addNewCustomer()">عميل جديد</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="newCustomerModal" class="modal">
-    <div class="modal-content">
-      <button class="modal-close-x" type="button" onclick="closeModal('newCustomerModal')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
-      <div class="modal-title">إضافة عميل جديد</div>
-      <div class="form-grid">
-        <div class="field-group">
-          <label class="form-label">الاسم الكامل</label>
-          <input type="text" id="newCustomerName" class="modal-input">
-        </div>
-        <div class="field-group">
-          <label class="form-label">الهاتف</label>
-          <input type="tel" id="newCustomerPhone" class="modal-input" dir="ltr">
-        </div>
-        <div class="field-group">
-          <label class="form-label">البريد الإلكتروني</label>
-          <input type="email" id="newCustomerEmail" class="modal-input">
-        </div>
-        <div class="field-group">
-          <label class="form-label">الحد الائتماني</label>
-          <input type="number" id="newCustomerCreditLimit" class="modal-input" value="0" dir="ltr" inputmode="decimal">
-        </div>
-      </div>
-      <div style="margin-top: 15px;">
-        <button class="modal-btn modal-btn-cancel" type="button" onclick="closeModal('newCustomerModal')">إلغاء</button>
-        <button class="modal-btn modal-btn-primary" id="saveNewCustomerBtn" type="button">حفظ</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- إرجاع منتج بسيط -->
-  <div id="returnModal" class="modal">
-    <div class="modal-content">
-      <button class="modal-close-x" type="button" onclick="closeModal('returnModal')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
-      <div class="modal-title">إرجاع منتج</div>
-      <div class="form-grid">
-        <div class="field-group">
-          <label class="form-label">رقم الفاتورة</label>
-          <input type="text" id="returnInvoiceNumber" class="modal-input" dir="ltr">
-        </div>
-        <div class="field-group">
-          <label class="form-label">باركود المنتج</label>
-          <input type="text" id="returnBarcode" class="modal-input" dir="ltr">
-        </div>
-        <div class="field-group">
-          <label class="form-label">الكمية المراد إرجاعها</label>
-          <input type="number" id="returnQuantity" class="modal-input" min="1" dir="ltr" inputmode="numeric">
-        </div>
-        <div class="field-group">
-          <label class="form-label">سبب الإرجاع</label>
-          <textarea id="returnReason" class="modal-input" rows="3"></textarea>
-        </div>
-      </div>
-      <div style="margin-top: 15px;">
-        <button class="modal-btn modal-btn-cancel" type="button" onclick="closeModal('returnModal')">إلغاء</button>
-        <button class="modal-btn modal-btn-primary" type="button" onclick="processReturn()">تأكيد الإرجاع</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- اختيار منتج للإدخال اليدوي -->
-  <div id="manualProductPickerModal" class="modal">
-    <div class="modal-content pos-wide-modal">
-      <button class="modal-close-x" type="button" onclick="closeModal('manualProductPickerModal')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
-      <div class="modal-title">اختيار المنتج</div>
+<!-- تقرير المبيعات -->
+<div id="salesReportModal" class="modal">
+  <div class="modal-content">
+    <button class="modal-close-x" type="button" onclick="closeModal('salesReportModal')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
+    <div class="modal-title">تقرير المبيعات</div>
+    <div class="sales-report-filters">
       <div class="field-group">
-        <input type="search" id="manualProductSearch" class="form-control" placeholder="ابحث باسم المنتج أو الباركود" dir="rtl">
+        <label class="form-label">من تاريخ</label>
+        <input type="date" id="salesReportStartDate" class="modal-input" dir="ltr">
       </div>
-      <div id="manualProductList" class="manual-product-list" style="margin-top:12px;"></div>
-      <div class="floating-buttons">
-        <button class="btn btn-danger" type="button" onclick="closeModal('manualProductPickerModal')">إلغاء</button>
+      <div class="field-group">
+        <label class="form-label">إلى تاريخ</label>
+        <input type="date" id="salesReportEndDate" class="modal-input" dir="ltr">
       </div>
+      <button class="btn btn-primary" type="button" onclick="fetchSalesReport()">جلب التقرير</button>
+    </div>
+    <div class="table-container">
+      <table class="sales-report-table" id="salesReportTable">
+        <thead>
+          <tr>
+            <th>رقم الفاتورة</th>
+            <th>تاريخ البيع</th>
+            <th>إسم المنتج</th>
+            <th>الكمية المباعة</th>
+            <th>المرتجع</th>
+            <th>الصافي</th>
+          </tr>
+        </thead>
+        <tbody id="salesReportTableBody"></tbody>
+      </table>
+    </div>
+    <div class="action-buttons" style="margin-top:12px;">
+      <button class="modal-btn modal-btn-primary sales-report-print-btn" type="button" onclick="printSalesReport()">طباعة التقرير</button>
+      <button class="modal-btn modal-btn-primary" type="button" onclick="closeModal('salesReportModal')">إغلاق</button>
     </div>
   </div>
+</div>
 
-  <!-- استرجاع الفواتير -->
-  <div id="invoiceRetrieveModal" class="modal">
-    <div class="modal-content">
-      <button class="modal-close-x" type="button" onclick="closeModal('invoiceRetrieveModal')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
-      <div class="modal-title" style="color: var(--gold-primary);">استرجاع الفواتير</div>
-
-      <div class="date-range-container">
-        <div class="field-group">
-          <label class="form-label">من تاريخ</label>
-          <input type="date" id="startDate" class="modal-input" dir="ltr">
-        </div>
-        <div class="field-group">
-          <label class="form-label">إلى تاريخ</label>
-          <input type="date" id="endDate" class="modal-input" dir="ltr">
-        </div>
-      </div>
-
-      <div class="action-buttons">
-        <button class="modal-btn modal-btn-primary" type="button" onclick="searchInvoices()">بحث</button>
-        <button class="modal-btn modal-btn-cancel" type="button" onclick="closeModal('invoiceRetrieveModal')">إلغاء</button>
-      </div>
-
-      <div class="table-container" style="max-height: 280px; overflow: auto;">
-        <table class="product-table" id="invoiceResultsTable">
-          <thead>
-            <tr>
-              <th>رقم الفاتورة</th>
-              <th>المستخدم</th>
-              <th>العميل</th>
-              <th>نوع الدفع</th>
-              <th>المجموع الكلي</th>
-              <th>المبلغ المدفوع</th>
-              <th>تاريخ البيع</th>
-              <th>إجراءات</th>
-            </tr>
-          </thead>
-          <tbody id="invoiceResultsBody">
-          </tbody>
-        </table>
-      </div>
+<!-- بحث عن عميل -->
+<div id="customerSearchModal" class="modal">
+  <div class="modal-content">
+    <button class="modal-close-x" type="button" onclick="closeModal('customerSearchModal')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
+    <div class="modal-title">بحث عن عميل</div>
+    <div class="modal-input-group">
+      <input type="text" id="customerSearchInput" class="modal-input" placeholder="ابحث برقم العميل أو الاسم">
+    </div>
+    <div class="table-container" style="max-height: none; margin: 15px 0;">
+      <table class="product-table" id="customerSearchTable">
+        <thead>
+          <tr>
+            <th>رقم العميل</th>
+            <th>الاسم</th>
+            <th>اختيار</th>
+          </tr>
+        </thead>
+        <tbody id="customerSearchResults">
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top: 15px;">
+      <button class="modal-btn modal-btn-cancel" type="button" onclick="closeModal('customerSearchModal')">إلغاء</button>
+      <button class="modal-btn modal-btn-primary" type="button" onclick="searchCustomers()">بحث</button>
+      <button class="modal-btn modal-btn-primary" type="button" onclick="addNewCustomer()">عميل جديد</button>
     </div>
   </div>
+</div>
 
-  <!-- كنفاس الإرجاع المتقدم -->
-  <div id="returnOverlay" class="return-modal">
-    <div class="return-content">
-      <button class="modal-close-x" type="button" onclick="closeModal('returnOverlay')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
-      <div class="modal-title">توثيق المنتجات المرتجعه</div>
-
-      <div class="date-range-container">
-        <div class="field-group">
-          <label class="form-label">من تاريخ</label>
-          <input type="date" id="returnStartDate" class="modal-input" dir="ltr">
-        </div>
-        <div class="field-group">
-          <label class="form-label">إلى تاريخ</label>
-          <input type="date" id="returnEndDate" class="modal-input" dir="ltr" onchange="searchReturnSales()">
-        </div>
+<!-- إضافة عميل جديد -->
+<div id="newCustomerModal" class="modal">
+  <div class="modal-content">
+    <button class="modal-close-x" type="button" onclick="closeModal('newCustomerModal')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
+    <div class="modal-title">إضافة عميل جديد</div>
+    <div class="form-grid">
+      <div class="field-group">
+        <label class="form-label">الاسم الكامل</label>
+        <input type="text" id="newCustomerName" class="modal-input">
       </div>
-
-      <div class="return-sales-table-hint" id="returnSalesTableHint">قم بالنقر المزدوج على الفاتورة لاختيار عناصرها</div>
-      <div class="return-table-container" style="max-height:200px;">
-        <table class="product-table" id="returnSalesTable" tabindex="-1" aria-describedby="returnSalesTableHint">
-          <thead>
-            <tr>
-              <th>رقم الفاتورة</th>
-              <th>تاريخ البيع</th>
-              <th>اسم المنتج</th>
-              <th>الكمية المباعة</th>
-              <th>السعر</th>
-              <th>المجموع</th>
-              <th>المتاح للإرجاع</th>
-            </tr>
-          </thead>
-          <tbody id="returnSalesTableBody">
-          </tbody>
-        </table>
+      <div class="field-group">
+        <label class="form-label">الهاتف</label>
+        <input type="tel" id="newCustomerPhone" class="modal-input" dir="ltr">
       </div>
-
-      <h3 class="gold-text" style="margin-top: 20px;">تفاصيل الإرجاع</h3>
-
-      <div class="return-form-grid">
-        <div class="horizontal-row">
-          <div class="field-group">
-            <label class="form-label">رقم الفاتورة</label>
-            <input type="text" id="returnDetailInvoice" class="form-control" dir="ltr" readonly>
-          </div>
-          <div class="field-group">
-            <label class="form-label">المنتج</label>
-            <input type="text" id="returnDetailProduct" class="form-control" readonly>
-          </div>
-        </div>
-
-        <div class="return-operation-row">
-          <div class="field-group"><label class="form-label">نوع العملية</label><select id="returnDetailType" class="form-control"><option value="return">مرتجع — يعيد المنتج للمخزون</option><option value="damage">تالف — لا يعيد المنتج للمخزون</option></select></div>
-          <div class="field-group"><label class="form-label">الكمية</label><input type="number" id="returnDetailQuantity" class="form-control" dir="ltr" min="0.01" step="0.01" inputmode="decimal"></div>
-          <div class="field-group"><label class="form-label">سبب الإرجاع</label><select id="returnDetailReason" class="form-control"></select></div>
-        </div>
-
-        <div class="field-group">
-          <label class="form-label">ملاحظات إضافية</label>
-          <textarea id="returnDetailNotes" class="form-control" rows="2"></textarea>
-        </div>
+      <div class="field-group">
+        <label class="form-label">البريد الإلكتروني</label>
+        <input type="email" id="newCustomerEmail" class="modal-input">
       </div>
-
-      <div class="floating-buttons">
-        <button class="btn btn-success" type="button" onclick="saveReturn()">حفظ</button>
-        <button class="btn btn-danger" type="button" onclick="closeModal('returnOverlay')">إلغاء</button>
+      <div class="field-group">
+        <label class="form-label">الحد الائتماني</label>
+        <input type="number" id="newCustomerCreditLimit" class="modal-input" value="0" dir="ltr" inputmode="decimal">
       </div>
     </div>
+    <div style="margin-top: 15px;">
+      <button class="modal-btn modal-btn-cancel" type="button" onclick="closeModal('newCustomerModal')">إلغاء</button>
+      <button class="modal-btn modal-btn-primary" id="saveNewCustomerBtn" type="button">حفظ</button>
+    </div>
   </div>
+</div>
 
-  <!-- كنفاس اختيار العميل للدفع الآجل -->
-  <div id="deferredPaymentModal" class="modal">
-    <div class="modal-content">
-      <button class="modal-close-x" type="button" onclick="closeModal('deferredPaymentModal')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
-      <div class="modal-title">اختيار العميل</div>
+<!-- إرجاع منتج بسيط -->
+<div id="returnModal" class="modal">
+  <div class="modal-content">
+    <button class="modal-close-x" type="button" onclick="closeModal('returnModal')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
+    <div class="modal-title">إرجاع منتج</div>
+    <div class="form-grid">
+      <div class="field-group">
+        <label class="form-label">رقم الفاتورة</label>
+        <input type="text" id="returnInvoiceNumber" class="modal-input" dir="ltr">
+      </div>
+      <div class="field-group">
+        <label class="form-label">باركود المنتج</label>
+        <input type="text" id="returnBarcode" class="modal-input" dir="ltr">
+      </div>
+      <div class="field-group">
+        <label class="form-label">الكمية المراد إرجاعها</label>
+        <input type="number" id="returnQuantity" class="modal-input" min="1" dir="ltr" inputmode="numeric">
+      </div>
+      <div class="field-group">
+        <label class="form-label">سبب الإرجاع</label>
+        <textarea id="returnReason" class="modal-input" rows="3"></textarea>
+      </div>
+    </div>
+    <div style="margin-top: 15px;">
+      <button class="modal-btn modal-btn-cancel" type="button" onclick="closeModal('returnModal')">إلغاء</button>
+      <button class="modal-btn modal-btn-primary" type="button" onclick="processReturn()">تأكيد الإرجاع</button>
+    </div>
+  </div>
+</div>
+
+<!-- اختيار منتج للإدخال اليدوي -->
+<div id="manualProductPickerModal" class="modal">
+  <div class="modal-content pos-wide-modal">
+    <button class="modal-close-x" type="button" onclick="closeModal('manualProductPickerModal')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
+    <div class="modal-title">اختيار المنتج</div>
+    <div class="field-group">
+      <input type="search" id="manualProductSearch" class="form-control" placeholder="ابحث باسم المنتج أو الباركود" dir="rtl">
+    </div>
+    <div id="manualProductList" class="manual-product-list" style="margin-top:12px;"></div>
+    <div class="floating-buttons">
+      <button class="btn btn-danger" type="button" onclick="closeModal('manualProductPickerModal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- استرجاع الفواتير -->
+<div id="invoiceRetrieveModal" class="modal">
+  <div class="modal-content">
+    <button class="modal-close-x" type="button" onclick="closeModal('invoiceRetrieveModal')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
+    <div class="modal-title" style="color: var(--gold-primary);">استرجاع الفواتير</div>
+
+    <div class="date-range-container">
+      <div class="field-group">
+        <label class="form-label">من تاريخ</label>
+        <input type="date" id="startDate" class="modal-input" dir="ltr">
+      </div>
+      <div class="field-group">
+        <label class="form-label">إلى تاريخ</label>
+        <input type="date" id="endDate" class="modal-input" dir="ltr">
+      </div>
+    </div>
+
+    <div class="action-buttons">
+      <button class="modal-btn modal-btn-primary" type="button" onclick="searchInvoices()">بحث</button>
+      <button class="modal-btn modal-btn-cancel" type="button" onclick="closeModal('invoiceRetrieveModal')">إلغاء</button>
+    </div>
+
+    <div class="table-container" style="max-height: 280px; overflow: auto;">
+      <table class="product-table" id="invoiceResultsTable">
+        <thead>
+          <tr>
+            <th>رقم الفاتورة</th>
+            <th>المستخدم</th>
+            <th>العميل</th>
+            <th>نوع الدفع</th>
+            <th>المجموع الكلي</th>
+            <th>المبلغ المدفوع</th>
+            <th>تاريخ البيع</th>
+            <th>إجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="invoiceResultsBody">
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- كنفاس الإرجاع المتقدم -->
+<div id="returnOverlay" class="return-modal">
+  <div class="return-content">
+    <button class="modal-close-x" type="button" onclick="closeModal('returnOverlay')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
+    <div class="modal-title">توثيق المنتجات المرتجعه</div>
+
+    <div class="date-range-container">
+      <div class="field-group">
+        <label class="form-label">من تاريخ</label>
+        <input type="date" id="returnStartDate" class="modal-input" dir="ltr">
+      </div>
+      <div class="field-group">
+        <label class="form-label">إلى تاريخ</label>
+        <input type="date" id="returnEndDate" class="modal-input" dir="ltr" onchange="searchReturnSales()">
+      </div>
+    </div>
+
+    <div class="return-sales-table-hint" id="returnSalesTableHint">قم بالنقر المزدوج على الفاتورة لاختيار عناصرها</div>
+    <div class="return-table-container" style="max-height:200px;">
+      <table class="product-table" id="returnSalesTable" tabindex="-1" aria-describedby="returnSalesTableHint">
+        <thead>
+          <tr>
+            <th>رقم الفاتورة</th>
+            <th>تاريخ البيع</th>
+            <th>اسم المنتج</th>
+            <th>الكمية المباعة</th>
+            <th>السعر</th>
+            <th>المجموع</th>
+            <th>المتاح للإرجاع</th>
+          </tr>
+        </thead>
+        <tbody id="returnSalesTableBody">
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="gold-text" style="margin-top: 20px;">تفاصيل الإرجاع</h3>
+
+    <div class="return-form-grid">
       <div class="horizontal-row">
         <div class="field-group">
-          <label class="form-label">نوع العميل</label>
-          <select id="deferredEntityTypeSelect" class="form-control"></select>
+          <label class="form-label">رقم الفاتورة</label>
+          <input type="text" id="returnDetailInvoice" class="form-control" dir="ltr" readonly>
         </div>
-        <div class="field-group" id="deferredCustomerNameField">
-          <label class="form-label">اسم العميل</label>
-          <select id="deferredCustomerId" class="form-control"></select>
+        <div class="field-group">
+          <label class="form-label">المنتج</label>
+          <input type="text" id="returnDetailProduct" class="form-control" readonly>
         </div>
       </div>
-      <div id="deferredCustomerDetailsContainer" class="customer-info-grid" style="display: none;">
+
+      <div class="return-operation-row">
+        <div class="field-group"><label class="form-label">نوع العملية</label><select id="returnDetailType" class="form-control"><option value="return">مرتجع — يعيد المنتج للمخزون</option><option value="damage">تالف — لا يعيد المنتج للمخزون</option></select></div>
+        <div class="field-group"><label class="form-label">الكمية</label><input type="number" id="returnDetailQuantity" class="form-control" dir="ltr" min="0.01" step="0.01" inputmode="decimal"></div>
+        <div class="field-group"><label class="form-label">سبب الإرجاع</label><select id="returnDetailReason" class="form-control"></select></div>
       </div>
-      <div class="action-buttons">
-        <button class="modal-btn modal-btn-primary" type="button" onclick="confirmDeferredCustomer()">تأكيد</button>
-        <button class="modal-btn modal-btn-cancel" type="button" onclick="closeModal('deferredPaymentModal')">رجوع</button>
+
+      <div class="field-group">
+        <label class="form-label">ملاحظات إضافية</label>
+        <textarea id="returnDetailNotes" class="form-control" rows="2"></textarea>
       </div>
+    </div>
+
+    <div class="floating-buttons">
+      <button class="btn btn-success" type="button" onclick="saveReturn()">حفظ</button>
+      <button class="btn btn-danger" type="button" onclick="closeModal('returnOverlay')">إلغاء</button>
     </div>
   </div>
+</div>
 
-  <!-- كنفاس تفاصيل المنتج -->
-  <div id="productDetailsCanvas" class="modal">
-    <div class="modal-content">
-      <button class="modal-close-x" type="button" onclick="closeModal('productDetailsCanvas')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
-      <div class="modal-title">تفاصيل المنتج</div>
-      <div id="productDetailsContent"></div>
-      <button class="modal-btn modal-btn-primary" type="button" onclick="closeModal('productDetailsCanvas')" style="margin-top:12px;">إغلاق</button>
+<!-- كنفاس اختيار العميل للدفع الآجل -->
+<div id="deferredPaymentModal" class="modal">
+  <div class="modal-content">
+    <button class="modal-close-x" type="button" onclick="closeModal('deferredPaymentModal')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
+    <div class="modal-title">اختيار العميل</div>
+    <div class="horizontal-row">
+      <div class="field-group">
+        <label class="form-label">نوع العميل</label>
+        <select id="deferredEntityTypeSelect" class="form-control"></select>
+      </div>
+      <div class="field-group" id="deferredCustomerNameField">
+        <label class="form-label">اسم العميل</label>
+        <select id="deferredCustomerId" class="form-control"></select>
+      </div>
     </div>
+    <div id="deferredCustomerDetailsContainer" class="customer-info-grid" style="display: none;">
+    </div>
+    <div class="action-buttons">
+      <button class="modal-btn modal-btn-primary" type="button" onclick="confirmDeferredCustomer()">تأكيد</button>
+      <button class="modal-btn modal-btn-cancel" type="button" onclick="closeModal('deferredPaymentModal')">رجوع</button>
+    </div>
+  </div>
+</div>
+
+<!-- كنفاس تفاصيل المنتج -->
+<div id="productDetailsCanvas" class="modal">
+  <div class="modal-content">
+    <button class="modal-close-x" type="button" onclick="closeModal('productDetailsCanvas')" aria-label="إغلاق"><i class="fas fa-times"></i></button>
+    <div class="modal-title">تفاصيل المنتج</div>
+    <div id="productDetailsContent"></div>
+    <button class="modal-btn modal-btn-primary" type="button" onclick="closeModal('productDetailsCanvas')" style="margin-top:12px;">إغلاق</button>
   </div>
 </div>
 
@@ -3863,7 +3886,7 @@ function showLoading(show) {
 }
 
 // ============================================================
-// 3. قائمة المودالات + إدارة المودالات المتراكمة
+// 3. قائمة المودالات + إدارة المودالات
 // ============================================================
 const ALL_MODALS = [
     'salesReportModal',
@@ -3881,7 +3904,12 @@ function closeAllModals(opts) {
     const options = opts || {};
     ALL_MODALS.forEach(id => {
         const m = document.getElementById(id);
-        if (m) m.style.display = 'none';
+        if (m) {
+            m.style.display = 'none';
+            m.scrollTop = 0;
+            const inner = m.querySelector('.modal-content, .return-content, .damaged-content');
+            if (inner) inner.scrollTop = 0;
+        }
     });
     const dbl = document.querySelector('.double-click-actions-backdrop');
     if (dbl) dbl.remove();
@@ -3890,17 +3918,44 @@ function closeAllModals(opts) {
     }
 }
 
+/**
+ * فتح مودال مع إعادة تعيين موضع التمرير لأعلى المحتوى.
+ * المودالات موجودة الآن خارج .container — position: fixed يعمل بشكل صحيح.
+ */
 function openModal(modalId) {
-    // إغلاق جميع المودالات المفتوحة أولاً
     closeAllModals();
+
     const modal = document.getElementById(modalId);
-    if (modal) modal.style.display = 'flex';
+    if (!modal) return;
+
+    modal.scrollTop = 0;
+    modal.scrollLeft = 0;
+    const inner = modal.querySelector('.modal-content, .return-content, .damaged-content');
+    if (inner) {
+        inner.scrollTop = 0;
+        inner.scrollLeft = 0;
+    }
+
+    modal.style.display = 'flex';
+
+    requestAnimationFrame(() => {
+        modal.scrollTop = 0;
+        if (inner) inner.scrollTop = 0;
+    });
+    setTimeout(() => {
+        modal.scrollTop = 0;
+        if (inner) inner.scrollTop = 0;
+    }, 450);
 }
 
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) modal.style.display = 'none';
-    // إعادة التركيز إلى الحقل النشط سابقاً
+    if (modal) {
+        modal.style.display = 'none';
+        modal.scrollTop = 0;
+        const inner = modal.querySelector('.modal-content, .return-content, .damaged-content');
+        if (inner) inner.scrollTop = 0;
+    }
     setTimeout(restoreEditableFocus, 30);
 }
 
@@ -3947,7 +4002,6 @@ document.addEventListener('input', function (e) {
     }
 }, true);
 
-// تتبع آخر حقل تم تحريره (لإعادة التركيز إليه تلقائياً)
 let lastEditableField = null;
 document.addEventListener('focusin', function (e) {
     const t = e.target;
@@ -3960,8 +4014,8 @@ document.addEventListener('focusin', function (e) {
 function restoreEditableFocus() {
     const t = lastEditableField;
     if (!t || !document.body.contains(t)) return;
-    if (t.offsetParent === null) return; // hidden
-    if (document.activeElement === t) return; // already focused
+    if (t.offsetParent === null) return;
+    if (document.activeElement === t) return;
     try { t.focus({ preventScroll: true }); } catch (_) {}
 }
 
@@ -3988,7 +4042,7 @@ function loadThemeSettings() {
 }
 
 // ============================================================
-// 7. دوال الماسح الضوئي
+// 7. دوال الماسح الضوئي — مُحسَّنة للسرعة
 // ============================================================
 function scannerButtonState(running) {
     const stopButton = document.getElementById('stopScanBtn');
@@ -4001,18 +4055,44 @@ function scannerButtonState(running) {
 
 function barcodeFormats() {
     if (typeof Html5QrcodeSupportedFormats === 'undefined') return undefined;
-    const names = ['CODE_128', 'CODE_39', 'EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'QR_CODE'];
+    const names = ['CODE_128', 'EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'CODE_39', 'QR_CODE', 'ITF', 'CODABAR'];
     const formats = names.map(name => Html5QrcodeSupportedFormats[name]).filter(value => typeof value !== 'undefined');
     return formats.length ? formats : undefined;
 }
 
+/**
+ * إعدادات الماسح المُحسَّنة:
+ * - fps: 30 (ضعف السرعة)
+ * - useBarCodeDetectorIfSupported: يستخدم Android BarcodeDetector API (أسرع 3-5x)
+ * - qrbox ديناميكي بحجم 90%
+ * - focusMode: continuous
+ */
 function scannerConfig() {
-    const viewportWidth = Math.max(240, Math.min(320, (window.innerWidth || 360) - 40));
+    const viewportWidth = Math.max(260, Math.min(400, (window.innerWidth || 360) - 20));
+    const viewportHeight = Math.max(160, Math.min(280, Math.round(viewportWidth * 0.55)));
     const config = {
-        fps: 15,
-        qrbox: { width: viewportWidth, height: Math.max(80, Math.round(viewportWidth * 0.3)) },
-        aspectRatio: 1.777778,
-        disableFlip: true
+        fps: 30,
+        qrbox: function (viewfinderWidth, viewfinderHeight) {
+            const w = Math.floor(Math.max(viewfinderWidth * 0.9, viewportWidth));
+            const h = Math.floor(Math.max(viewfinderHeight * 0.45, viewportHeight));
+            return { width: w, height: h };
+        },
+        useBarCodeDetectorIfSupported: true,
+        experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true
+        },
+        rememberLastUsedCamera: true,
+        videoConstraints: {
+            facingMode: 'environment',
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 },
+            frameRate: { ideal: 30, min: 15 },
+            advanced: [
+                { focusMode: 'continuous' },
+                { exposureMode: 'continuous' },
+                { whiteBalanceMode: 'continuous' }
+            ]
+        }
     };
     const formats = barcodeFormats();
     if (formats) config.formatsToSupport = formats;
@@ -4190,7 +4270,7 @@ function onScanSuccess(decodedText) {
     const barcode = String(decodedText || '').trim();
     if (!barcode) return;
     const now = Date.now();
-    if (barcode === lastScannedBarcode && now - lastScannedAt < 1200) return;
+    if (barcode === lastScannedBarcode && now - lastScannedAt < 500) return;
     lastScannedBarcode = barcode;
     lastScannedAt = now;
     const input = document.getElementById('manualBarcodeInput');
@@ -4928,34 +5008,79 @@ function buildInvoiceWhatsAppText(invoice) {
 
 async function sendInvoiceWhatsApp() {
     try {
-        const invoice = await loadInvoiceForLastSale();
+        showLoading(true);
+        const invoiceResponse = await loadInvoiceForLastSale();
+        const invoice = invoiceResponse.data || invoiceResponse;
         await loadCurrentStationLogo();
-        renderSalesInvoice(invoice);
+
+        if (stationLogoDataUrl) {
+            try {
+                const img = new Image();
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                    img.src = stationLogoDataUrl;
+                });
+                window.__stationLogoImg = img;
+            } catch (logoErr) {
+                console.warn('Logo preload failed:', logoErr);
+                window.__stationLogoImg = null;
+            }
+        } else {
+            window.__stationLogoImg = null;
+        }
+
         const result = await Swal.fire({
             title: 'رقم الهاتف المحمول',
             input: 'tel',
             inputValue: String(invoice.customer_phone || ''),
-            inputLabel: invoice.customer_phone ? 'تم جلب الرقم من SQLite ويمكنك مراجعته' : 'أدخل الرقم الدولي للعميل',
+            inputLabel: invoice.customer_phone
+                ? 'تم جلب الرقم من SQLite ويمكنك مراجعته'
+                : 'أدخل الرقم الدولي للعميل',
             inputPlaceholder: 'مثال: 9677XXXXXXXX',
             showCancelButton: true,
             confirmButtonText: 'فتح WhatsApp',
             cancelButtonText: 'إلغاء',
             inputValidator: value => {
                 const digits = String(value || '').replace(/\D/g, '');
-                if (digits.length < 8 || digits.length > 15) return 'أدخل رقم هاتف صالحاً بصيغة دولية';
+                if (digits.length < 8 || digits.length > 15) {
+                    return 'أدخل رقم هاتف صالحاً بصيغة دولية';
+                }
                 return undefined;
             }
         });
         if (!result.isConfirmed) return;
         const phone = String(result.value || '').replace(/\D/g, '');
 
+        renderSalesInvoice(invoice);
+
+        if (stationLogoDataUrl) {
+            const logoCircle = document.querySelector('#posInvoice .invoice-logo-circle');
+            if (logoCircle && !logoCircle.querySelector('img')) {
+                const img = document.createElement('img');
+                img.src = stationLogoDataUrl;
+                img.alt = 'شعار المحطة';
+                logoCircle.innerHTML = '';
+                logoCircle.appendChild(img);
+            }
+        }
+
         let imageShared = false;
         try {
             showLoading(true);
-            const standaloneHtml = buildInvoiceStandaloneHtml();
-            const nativePromise = apiCall('shareInvoiceJpg', { invoice_html: standaloneHtml, phone });
+            const styleBlock = document.getElementById('posInvoiceStyleBlock');
+            const invoiceElement = document.getElementById('posInvoice');
+            const styles = styleBlock ? styleBlock.textContent : '';
+            const invoiceHtml =
+                `<style>${styles}</style>\n` +
+                invoiceElement.outerHTML;
+
+            const nativePromise = apiCall('shareInvoiceJpg', {
+                invoice_html: invoiceHtml,
+                phone: phone
+            });
             const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('native-share-timeout')), 8000)
+                setTimeout(() => reject(new Error('native-share-timeout')), 12000)
             );
             const response = await Promise.race([nativePromise, timeoutPromise]);
             if (response && response.success) {
@@ -5062,7 +5187,9 @@ function openCreditCustomerModal() {
     searchInput.value = '';
     renderCreditCustomerResults();
     loadCustomers().finally(() => renderCreditCustomerResults(searchInput.value));
-    setTimeout(() => searchInput.focus(), 120);
+    setTimeout(() => {
+        try { searchInput.focus({ preventScroll: true }); } catch (_) {}
+    }, 120);
 }
 
 function loadCustomers() {
@@ -5180,7 +5307,6 @@ function selectCustomer(customerId, customerName = '') {
     loadCustomerDetails(customerId);
 }
 
-/* ✅ زر "عميل جديد" → الانتقال إلى شاشة إدارة العملاء */
 function addNewCustomer() {
     closeModal('customerSearchModal');
     window.location.href = 'screens/customers.html';
@@ -5465,7 +5591,7 @@ function loadInvoiceData(data) {
             <td><input type="number" class="form-control quantity-input" value="${item.quantity}" min="1" dir="ltr" inputmode="numeric"></td>
             <td class="product-name-large">${item.name}</td>
             <td>${Number(item.unit_price).toFixed(2)}</td>
-            <td class="product-total">${Number(item.total_price).toFixed(2)}</td>
+            <td>${Number(item.total_price).toFixed(2)}</td>
             <td>
                 <button class="btn btn-sm btn-primary product-details-btn" title="تفاصيل المنتج" type="button"><i class="fas fa-info-circle"></i></button>
                 <button class="btn btn-sm btn-danger remove-product-btn" title="حذف" type="button"><i class="fas fa-trash"></i></button>
@@ -5563,7 +5689,7 @@ function fetchSalesReport() {
 }
 
 // ============================================================
-// 14. دوال القائمة الجانبية وإغلاق المودالات المتراكمة
+// 14. القائمة الجانبية
 // ============================================================
 function openSidebar() {
     const sidebar = document.getElementById('sidebar');
@@ -5571,9 +5697,7 @@ function openSidebar() {
         sidebar.classList.add('open');
         document.body.classList.add('sidebar-is-open');
         const toggle = document.getElementById('sidebarToggle');
-        if (toggle) {
-            toggle.setAttribute('aria-expanded', 'true');
-        }
+        if (toggle) toggle.setAttribute('aria-expanded', 'true');
     }
 }
 
@@ -5583,47 +5707,35 @@ function closeSidebar() {
         sidebar.classList.remove('open');
         document.body.classList.remove('sidebar-is-open');
         const toggle = document.getElementById('sidebarToggle');
-        if (toggle) {
-            toggle.setAttribute('aria-expanded', 'false');
-        }
+        if (toggle) toggle.setAttribute('aria-expanded', 'false');
     }
 }
 
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
-    if (sidebar.classList.contains('open')) {
-        closeSidebar();
-    } else {
-        openSidebar();
-    }
+    if (sidebar.classList.contains('open')) closeSidebar();
+    else openSidebar();
 }
 
-/* ✅ عند النقر على أي زر في القائمة → تُغلق القائمة أولاً */
 function handleButtonClick(action) {
-    // 1. أغلق القائمة الجانبية فوراً
     closeSidebar();
-    // 2. أغلق كل المودالات المفتوحة سابقاً
     closeAllModals();
 
     switch(action) {
         case 'newSale':
             resetForm();
             showToast('تم بدء عملية بيع جديدة', 'success');
-            // ✅ نقل التركيز إلى حقل طريقة الدفع
-            setTimeout(() => {
-                focusPosField('paymentType', true);
-            }, 350);
+            setTimeout(() => { focusPosField('paymentType', true); }, 350);
             break;
         case 'return':
-            // تأخير قصير للسماح للقائمة بالإغلاق قبل فتح المودال
-            setTimeout(() => { openReturnOverlay(); }, 220);
+            setTimeout(() => { openReturnOverlay(); }, 240);
             break;
         case 'invoiceRetrieveModal':
-            setTimeout(() => { retrieveInvoice(); }, 220);
+            setTimeout(() => { retrieveInvoice(); }, 240);
             break;
         case 'salesReport':
-            setTimeout(() => { toggleSalesReport(); }, 220);
+            setTimeout(() => { toggleSalesReport(); }, 240);
             break;
         case 'back':
             window.location.href = '../main.html';
@@ -5633,13 +5745,6 @@ function handleButtonClick(action) {
     }
 }
 
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) modal.style.display = 'none';
-    setTimeout(restoreEditableFocus, 30);
-}
-
-/* إعداد القائمة الجانبية */
 function setupSidebar() {
     const sidebar = document.getElementById('sidebar');
     const sidebarToggle = document.getElementById('sidebarToggle');
@@ -5650,7 +5755,6 @@ function setupSidebar() {
         toggleSidebar();
     });
 
-    // ✅ إغلاق القائمة عند النقر خارج حدودها
     document.addEventListener('click', function (e) {
         if (sidebar.classList.contains('open') &&
             !sidebar.contains(e.target) &&
@@ -5659,7 +5763,6 @@ function setupSidebar() {
         }
     }, true);
 
-    // إغلاق القائمة عند اللمس خارج حدودها (بعض الأجهزة لا تُطلق click)
     document.addEventListener('touchstart', function (e) {
         if (!sidebar.classList.contains('open')) return;
         const t = e.target;
@@ -5668,7 +5771,6 @@ function setupSidebar() {
         closeSidebar();
     }, { passive: true });
 
-    // إيماءة السحب
     let touchStartX = 0, touchEndX = 0, touchStartY = 0;
     document.addEventListener('touchstart', function (e) {
         touchStartX = e.changedTouches[0].screenX;
@@ -5679,17 +5781,13 @@ function setupSidebar() {
         const touchEndY = e.changedTouches[0].screenY;
         const dy = Math.abs(touchEndY - touchStartY);
         if (dy > 80) return;
-        if (touchEndX < touchStartX - 60) {
-            closeSidebar();
-        }
-        if (touchEndX > touchStartX + 60 && touchStartX < 40) {
-            openSidebar();
-        }
+        if (touchEndX < touchStartX - 60) closeSidebar();
+        if (touchEndX > touchStartX + 60 && touchStartX < 40) openSidebar();
     }, { passive: true });
 }
 
 // ============================================================
-// 15. دوال العميل للدفع الآجل
+// 15. العميل للدفع الآجل
 // ============================================================
 function loadDeferredEntityTypes() {
     apiCall('getEntityTypes', {})
@@ -5799,21 +5897,19 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(checkEl);
     }
 
-    // معالج التركيز العام
     document.addEventListener('touchstart', function (e) {
         const t = e.target;
         if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) {
-            setTimeout(() => { try { t.focus(); } catch (_) {} }, 50);
+            setTimeout(() => { try { t.focus({ preventScroll: true }); } catch (_) {} }, 50);
         }
     }, { passive: true });
     document.addEventListener('mousedown', function (e) {
         const t = e.target;
         if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) {
-            setTimeout(() => { try { t.focus(); } catch (_) {} }, 0);
+            setTimeout(() => { try { t.focus({ preventScroll: true }); } catch (_) {} }, 0);
         }
     });
 
-    // إظهار التلميح على الأزرار السفلية عند اللمس
     document.querySelectorAll('.pos-action-btn').forEach(btn => {
         let touchTimer = null;
         btn.addEventListener('touchstart', function () {
@@ -5831,7 +5927,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    /* عند تغيير طريقة الدفع إلى "آجل" */
     document.getElementById('paymentType').addEventListener('change', function() {
         const customerRow = document.getElementById('customerInfoRow');
         if (this.value === 'آجل') {
@@ -5912,7 +6007,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSidebar();
     loadDeferredEntityTypes();
 
-    // Escape يغلق كل المودالات المفتوحة
     document.addEventListener('keydown', function (e) {
         if (e.key !== 'Escape') return;
         closeAllModals({ restoreFocus: true });
@@ -5927,7 +6021,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
-<!-- فاتورة البيع المرجعية: HTML/CSS حقيقي للطباعة والتحويل إلى JPG -->
+<!-- فاتورة البيع المرجعية -->
 <section id="posInvoice" aria-label="فاتورة بيع"></section>
 </body>
 </html>
