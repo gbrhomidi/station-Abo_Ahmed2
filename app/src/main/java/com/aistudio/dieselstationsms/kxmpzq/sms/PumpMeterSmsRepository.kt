@@ -57,7 +57,7 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
         }finally{database.endTransaction()}
     }
 
-    fun handleIncomingSms(sender:String,body:String):Boolean{
+    suspend fun handleIncomingSms(sender:String,body:String):Boolean{
         val parsed=parse(body)?:return false; ensureSchema(); val database=db.writableDatabase
         val employee=findEmployee(database,normalizePhone(sender))
         if(employee==null){ auditRaw(database,sender,body,parsed,"UNAUTHORIZED","رقم المرسل غير مرتبط بموظف نشط"); return true }
@@ -114,7 +114,7 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
         database.execSQL("INSERT INTO pump_sms_audit(station_id,employee_id,employee_code,sender_phone,pump_number,nozzle_number,reading_kind,sms_reading,decision,reason,raw_message) VALUES(?,?,?,?,?,?,?,?,?,?,?)",arrayOf(e.stationId,e.id,e.code,sender,parsed.pumpNumber,parsed.nozzleNumber,parsed.kind.toString(),parsed.reading,decision,reason,body)); return true
     }
     private fun audit(database:SQLiteDatabase,e:Employee,p:JSONObject,n:JSONObject?,parsed:Parsed,sender:String,body:String,decision:String,reason:String,previous:Double=Double.NaN,sold:Double=0.0,expected:Double=Double.NaN,diff:Double=0.0,price:Double=0.0,deduction:Double=0.0):Boolean{database.execSQL("INSERT INTO pump_sms_audit(station_id,employee_id,employee_code,sender_phone,pump_id,pump_number,nozzle_id,nozzle_number,shift_type,reading_kind,sms_reading,previous_reading,sold_liters,expected_reading,difference_liters,unit_sale_price,deduction_amount,decision,reason,raw_message) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",arrayOf(e.stationId,e.id,e.code,sender,p.optLong("id"),p.optInt("pump_number"),n?.optLong("id"),n?.optInt("nozzle_number"),null,parsed.kind.toString(),parsed.reading,if(previous.isNaN())null else previous,sold,if(expected.isNaN())null else expected,diff,price,deduction,decision,reason,body));return true}
-    private fun warn(phone:String,message:String){runCatching{SmsReplyManager(context,db).sendReplyOnce(phone,message,"pump-meter-"+normalizePhone(phone)+"-"+System.currentTimeMillis()/60000)}.onFailure{Log.w(TAG,"Unable to send pump-meter warning",it)}}
+    private suspend fun warn(phone:String,message:String){runCatching{SmsReplyManager(context,db).sendReplyOnce(phone,message,"pump-meter-"+normalizePhone(phone)+"-"+System.currentTimeMillis()/60000)}.onFailure{Log.w(TAG,"Unable to send pump-meter warning",it)}}
     private fun normalizePhone(v:String):String{val d=v.filter{it.isDigit()};return when{d.startsWith("967")&&d.length>=12->d.substring(3);d.startsWith("0")&&d.length>=9->d.substring(1);else->d}}
     private fun normalizeShift(v:String)=if(v.lowercase(Locale.ROOT).contains("even")||v.contains("مساء"))"evening" else "morning"
     private fun fmt(v:Double)=String.format(Locale.US,"%.2f",v)
