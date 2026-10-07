@@ -5622,8 +5622,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getPumps called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                PumpMeterSmsRepository(activity.applicationContext, db).ensureSchema()
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                PumpMeterSmsRepository(activity.applicationContext, db).ensureSchema()
                 val pumps = db.getPumps(requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(pumps)
             } catch (e: Exception) {
