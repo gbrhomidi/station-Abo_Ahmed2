@@ -216,16 +216,14 @@ class SmsProcessor(
                     }
 
                     val processed =
-                        runCatching {
+                        try {
                             processSingleMessage(first, combinedBody)
-                        }.getOrElse {
-
+                        } catch (e: Exception) {
                             Log.e(
                                 TAG,
                                 "Unhandled SMS processing failure",
-                                it
+                                e
                             )
-
                             false
                         }
 
