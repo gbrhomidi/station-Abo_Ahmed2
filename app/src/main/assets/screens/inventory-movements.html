@@ -787,6 +787,14 @@
     .selection-button .btn { flex:0 0 auto; }
     .hidden-field { display:none !important; }
 
+    /* حقول بعرض كامل داخل شبكات النماذج */
+    .full-width-field { grid-column: 1 / -1 !important; }
+
+    /* صف اختيار قابل للنقر المزدوج */
+    .picker-row { cursor:pointer; transition: background .15s; }
+    .picker-row.dbl-selected { background: rgba(34,197,94,.18) !important; box-shadow: inset 0 0 0 2px var(--success-color); }
+    .picker-row:hover { background: rgba(37,99,235,.06); }
+
     .bottom-action-bar {
       position: fixed; right: 0; left: 0; bottom: 0; z-index: 1100;
       padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
@@ -818,6 +826,23 @@
     .data-table th:first-child{border-top-right-radius:8px}.data-table th:last-child{border-top-left-radius:8px}
     .modal .form-control{border-width:1px;min-height:42px}
     .modal .btn{border-radius:11px;min-height:40px}
+
+    /* شبكة مودال الإنشاء: عمودان ثابتان مع دعم الحقول الكاملة العرض */
+    .modal-form-grid {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 12px !important;
+      width: 100% !important;
+    }
+    .modal-form-grid > .full-width-field {
+      grid-column: 1 / -1 !important;
+    }
+    @media (max-width: 480px) {
+      .modal-form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      }
+    }
+
     /* مؤشر التحميل المخصص */
     .loading-indicator {
       position: fixed;
@@ -909,134 +934,91 @@
      <!-- فلترة -->
      <div class="form-container">
       <div class="form-row filter-fields-grid">
-       <div class="form-group">
-         <label class="form-label">📦 نوع المخزون</label>
-         <select class="form-control" id="filter-stock-type" onchange="onMovementStockTypeChanged()">
-          <option value="all">الكل — المنتجات + الوقود</option><option value="products">المنتجات</option><option value="fuel">الوقود</option>
-         </select>
+        <div class="form-group">
+          <label class="form-label">📦 نوع المخزون</label>
+          <select class="form-control" id="filter-stock-type" onchange="onMovementStockTypeChanged()">
+            <option value="all">الكل — المنتجات + الوقود</option>
+            <option value="products">المنتجات</option>
+            <option value="fuel">الوقود</option>
+          </select>
         </div>
         <div class="form-group" id="product-filter-group">
-         <label class="form-label">🔍 بحث بالمنتج</label>
-         <input class="form-control field-click-picker" id="search-product" placeholder="اضغط لاختيار منتج من SQLite" readonly type="text" onclick="openProductPicker('filter')">
+          <label class="form-label">🔍 بحث بالمنتج</label>
+          <input class="form-control field-click-picker" id="search-product" placeholder="اضغط لاختيار منتج من SQLite" readonly type="text" onclick="openProductPicker('filter')">
           <input id="filter-product-id" type="hidden" value="">
         </div>
         <div class="form-group hidden-field" id="fuel-filter-group">
-         <label class="form-label">⛽ بحث بالوقود</label>
-         <input class="form-control field-click-picker" id="search-fuel" placeholder="اضغط لاختيار نوع الوقود من SQLite" readonly type="text" onclick="openFuelPicker('filter')">
+          <label class="form-label">⛽ بحث بالوقود</label>
+          <input class="form-control field-click-picker" id="search-fuel" placeholder="اضغط لاختيار نوع الوقود من SQLite" readonly type="text" onclick="openFuelPicker('filter')">
           <input id="filter-fuel-id" type="hidden" value="">
         </div>
-       <div class="form-group">
-        <label class="form-label">
-         📝 نوع الحركة
-        </label>
-        <select class="form-control" id="filter-type">
-         <option value="">
-          جميع الأنواع
-         </option>
-         <option value="in">
-          📥 دخول مخزني
-         </option>
-         <option value="out">
-          📤 خروج مخزني
-         </option>
-         <option value="return_customer">
-          🔄 إرجاع من عميل
-         </option>
-         <option value="return_supplier">
-          🔄 إرجاع لمورد
-         </option>
-         <option value="waste">
-          🗑️ هالك
-         </option>
-         <option value="transfer">
-          🔄 تحويل بين مستودعات
-         </option>
-         <option value="adjustment">
-          ⚖️ تسوية مخزنية
-         </option>
-         <option value="stocktake">
-          📋 جرد
-         </option>
-        </select>
-       </div>
+        <div class="form-group full-width-field" id="filter-type-group">
+          <label class="form-label">📝 نوع الحركة</label>
+          <select class="form-control" id="filter-type">
+            <option value="">جميع الأنواع</option>
+            <option value="in">📥 دخول مخزني</option>
+            <option value="out">📤 خروج مخزني</option>
+            <option value="return_customer">🔄 إرجاع من عميل</option>
+            <option value="return_supplier">🔄 إرجاع لمورد</option>
+            <option value="waste">🗑️ هالك</option>
+            <option value="transfer">🔄 تحويل بين مستودعات</option>
+            <option value="adjustment">⚖️ تسوية مخزنية</option>
+            <option value="stocktake">📋 جرد</option>
+          </select>
+        </div>
       </div>
-      <div class="form-row-compact">
-       <div class="form-group-half">
-        <label class="form-label">
-         📅 من تاريخ
-        </label>
-        <input class="form-control numeric" id="filter-from" type="date">
-       </div>
-       <div class="form-group-half">
-        <label class="form-label">
-         📅 إلى تاريخ
-        </label>
-        <input class="form-control numeric" id="filter-to" type="date">
-       </div>
+
+      <div class="filter-fields-grid" style="margin-top:10px;">
+        <div class="form-group">
+          <label class="form-label">📅 من تاريخ</label>
+          <input class="form-control numeric" id="filter-from" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">📅 إلى تاريخ</label>
+          <input class="form-control numeric" id="filter-to" type="date">
+        </div>
+        <div class="form-group" id="filter-warehouse-group">
+          <label class="form-label">🏢 المستودع</label>
+          <select class="form-control" id="filter-warehouse">
+            <option value="">جميع المستودعات</option>
+          </select>
+        </div>
+        <div class="form-group hidden-field" id="filter-tank-group">
+          <label class="form-label">🛢️ الخزان</label>
+          <select class="form-control" id="filter-tank">
+            <option value="">جميع الخزانات</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">📊 الحالة</label>
+          <select class="form-control" id="filter-status">
+            <option value="">جميع الحالات</option>
+            <option value="completed">✅ مكتمل</option>
+            <option value="pending">⏳ قيد الانتظار</option>
+            <option value="cancelled">❌ ملغى</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">🏭 المورد</label>
+          <select class="form-control" id="filter-supplier">
+            <option value="">جميع الموردين</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">👥 العميل</label>
+          <select class="form-control" id="filter-customer">
+            <option value="">جميع العملاء</option>
+          </select>
+        </div>
       </div>
-      <div class="form-row-compact">
-       <div class="form-group-half">
-        <label class="form-label">
-         🏢 المستودع
-        </label>
-        <select class="form-control" id="filter-warehouse">
-         <option value="">
-          جميع المستودعات
-         </option>
-        </select>
-       </div>
-       <div class="form-group-half hidden-field" id="filter-tank-group"><label class="form-label">🛢️ الخزان</label><select class="form-control" id="filter-tank"><option value="">جميع الخزانات</option></select></div>
-       <div class="form-group-half">
-        <label class="form-label">
-         📊 الحالة
-        </label>
-        <select class="form-control" id="filter-status">
-         <option value="">
-          جميع الحالات
-         </option>
-         <option value="completed">
-          ✅ مكتمل
-         </option>
-         <option value="pending">
-          ⏳ قيد الانتظار
-         </option>
-         <option value="cancelled">
-          ❌ ملغى
-         </option>
-        </select>
-       </div>
-      </div>
-      <div class="form-row-compact">
-       <div class="form-group-half">
-        <label class="form-label">
-         🏭 المورد
-        </label>
-        <select class="form-control" id="filter-supplier">
-         <option value="">
-          جميع الموردين
-         </option>
-        </select>
-       </div>
-       <div class="form-group-half">
-        <label class="form-label">
-         👥 العميل
-        </label>
-        <select class="form-control" id="filter-customer">
-         <option value="">
-          جميع العملاء
-         </option>
-        </select>
-       </div>
-      </div>
+
       <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center;">
        <button class="btn btn-primary" onclick="applyFilters()">
-        <i class="fas fa-filter">
-        </i>
+        <i class="fas fa-filter"></i>
         🔍 تطبيق الفلترة
        </button>
        <button class="btn btn-secondary" onclick="resetFilters()">
-        <i class="fas fa-times">
-        </i>
+        <i class="fas fa-times"></i>
         🗑️ إعادة الضبط
        </button>
       </div>
@@ -1046,42 +1028,18 @@
       <table class="data-table">
        <thead>
         <tr>
-         <th>
-          #️⃣ #
-         </th>
-         <th>
-          📅 التاريخ
-         </th>
-         <th>
-          🛒 المنتج
-         </th>
-         <th>
-          📦 الكمية
-         </th>
-         <th>
-          📝 النوع
-         </th>
-         <th>
-          🏢 المستودع
-         </th>
-         <th>
-          🔄 المصدر/الهدف
-         </th>
-         <th>
-          👥 المورد/العميل
-         </th>
-         <th>
-          💰 السعر
-         </th>
-         <th>
-          💵 القيمة
-         </th>
-         <th>
-          📊 الحالة
-         </th>
-         <th>
-          🛠️ الإجراءات
-         </th>
+         <th>#️⃣ #</th>
+         <th>📅 التاريخ</th>
+         <th>🛒 الصنف / الوقود</th>
+         <th>📦 الكمية</th>
+         <th>📝 النوع</th>
+         <th>🏢 المستودع / الخزان</th>
+         <th>🔄 المصدر/الهدف</th>
+         <th>👥 المورد/العميل</th>
+         <th>💰 السعر</th>
+         <th>💵 القيمة</th>
+         <th>📊 الحالة</th>
+         <th>🛠️ الإجراءات</th>
         </tr>
        </thead>
        <tbody id="movements-table-body">
@@ -1097,31 +1055,6 @@
      <div style="margin-top: 15px; text-align: center;">
       <nav>
        <ul class="pagination" id="pagination-container">
-        <li class="page-item disabled">
-         <a class="page-link" href="#">
-          ⬅️ السابق
-         </a>
-        </li>
-        <li class="page-item active">
-         <a class="page-link" href="#">
-          1
-         </a>
-        </li>
-        <li class="page-item">
-         <a class="page-link" href="#">
-          2
-         </a>
-        </li>
-        <li class="page-item">
-         <a class="page-link" href="#">
-          3
-         </a>
-        </li>
-        <li class="page-item">
-         <a class="page-link" href="#">
-          ➡️ التالي
-         </a>
-        </li>
        </ul>
       </nav>
      </div>
@@ -1134,41 +1067,25 @@
       </h4>
       <div class="form-row">
        <div class="form-group">
-        <label class="form-label">
-         📊 نوع التقرير
-        </label>
+        <label class="form-label">📊 نوع التقرير</label>
         <select class="form-control" id="report-type">
          <option value="movement" selected>📋 حركات المخزون</option>
-         <option value="stock_detail">
-          📦 تفاصيل المخزون
-         </option>
-         <option value="movements_summary">
-          📈 ملخص الحركات
-         </option>
-         <option value="profit_product">
-          💰 الربح حسب المنتج
-         </option>
-         <option value="profit_supplier">
-          🏭 الربح حسب المورد
-         </option>
-         <option value="profit_customer">
-          👥 الربح حسب العميل
-         </option>
-         <option value="below_min">
-          📉 المنتجات تحت الحد الأدنى
-         </option>
-         <option value="movements_detailed">
-          📋 حركات مفصلة
-         </option>
+         <option value="stock_detail">📦 تفاصيل المخزون</option>
+         <option value="movements_summary">📈 ملخص الحركات</option>
+         <option value="profit_product">💰 الربح حسب المنتج</option>
+         <option value="profit_supplier">🏭 الربح حسب المورد</option>
+         <option value="profit_customer">👥 الربح حسب العميل</option>
+         <option value="below_min">📉 المنتجات تحت الحد الأدنى</option>
+         <option value="movements_detailed">📋 حركات مفصلة</option>
         </select>
        </div>
        <div class="form-group">
-        <label class="form-label">
-         ⚙️ خيارات إضافية
-        </label>
+        <label class="form-label">⚙️ خيارات إضافية</label>
         <input class="form-control" id="report-options" placeholder="خيارات التقرير" type="text">
        </div>
-       <div class="form-group">
+      </div>
+      <div class="form-row">
+       <div class="form-group full-width-field">
         <label class="form-label">📦 نطاق التقرير</label>
         <select class="form-control" id="report-stock-type">
          <option value="all">الكل — المنتجات + الوقود</option>
@@ -1193,13 +1110,11 @@
       </div>
       <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center;">
        <button class="btn btn-primary" onclick="generateReport()">
-        <i class="fas fa-cog">
-        </i>
+        <i class="fas fa-cog"></i>
         ⚙️ توليد التقرير
        </button>
        <button class="btn btn-success" onclick="exportReport()">
-        <i class="fas fa-file-export">
-        </i>
+        <i class="fas fa-file-export"></i>
         📤 تصدير التقرير
        </button>
       </div>
@@ -1283,33 +1198,32 @@
         <div class="form-group hidden-field" id="analytics-fuel-group"><label class="form-label">⛽ اختر الوقود</label>
          <input class="form-control field-click-picker" id="analytics-fuel-name" placeholder="اختر نوع الوقود من SQLite" readonly onclick="openFuelPicker('analytics')"><input id="analytics-fuel" type="hidden" value="">
         </div>
-       <div class="form-group">
-        <label class="form-label">
-         📅 الفترة (أيام)
-        </label>
-        <select class="form-control" id="analytics-days">
-         <option value="7">
-          🗓️ أسبوع
-         </option>
-         <option selected value="30">
-          🗓️ شهر
-         </option>
-         <option value="90">
-          🗓️ 3 أشهر
-         </option>
-         <option value="180">
-          🗓️ 6 أشهر
-         </option>
-         <option value="365">
-          🗓️ سنة
-         </option>
-        </select>
-       </div>
+        <div class="form-group full-width-field">
+         <label class="form-label">
+          📅 الفترة (أيام)
+         </label>
+         <select class="form-control" id="analytics-days">
+          <option value="7">
+           🗓️ أسبوع
+          </option>
+          <option selected value="30">
+           🗓️ شهر
+          </option>
+          <option value="90">
+           🗓️ 3 أشهر
+          </option>
+          <option value="180">
+           🗓️ 6 أشهر
+          </option>
+          <option value="365">
+           🗓️ سنة
+          </option>
+         </select>
+        </div>
       </div>
       <div style="text-align: center; margin-top: 10px;">
        <button class="btn btn-primary" onclick="loadProductAnalytics()">
-        <i class="fas fa-chart-line">
-        </i>
+        <i class="fas fa-chart-line"></i>
         📊 عرض التحليل
        </button>
       </div>
@@ -1361,184 +1275,126 @@
      </div>
      <div class="modal-body">
       <form id="movement-form">
-       <div class="form-grid">
-        <div class="form-row-compact">
-          <div class="form-group-half">
-           <label class="form-label">📦 نوع المخزون *</label>
-           <select class="form-control" id="movement-stock-type" onchange="toggleMovementStockType()">
-            <option value="products">المنتجات</option><option value="fuel">الوقود</option>
-           </select>
-          </div>
-          <div class="form-group-half">
-           <label class="form-label">📝 نوع الحركة *</label>
-           <select class="form-control" id="movement-type" onchange="toggleMovementFields()" required="">
-           <option value="">
-            اختر نوع الحركة
-           </option>
-           <option value="in">
-            📥 دخول مخزني (شراء)
-           </option>
-           <option value="out">
-            📤 خروج مخزني (بيع)
-           </option>
-           <option value="return_customer">
-            🔄 إرجاع من عميل
-           </option>
-           <option value="return_supplier">
-            🔄 إرجاع لمورد
-           </option>
-           <option value="waste">
-            🗑️ هالك
-           </option>
-           <option value="transfer">
-            🔄 تحويل بين مستودعات
-           </option>
-           <option value="adjustment">
-            ⚖️ تسوية مخزنية
-           </option>
-           <option value="stocktake">
-            📋 جرد
-           </option>
+       <div class="modal-form-grid">
+         <div class="form-group">
+          <label class="form-label">📦 نوع المخزون *</label>
+          <select class="form-control" id="movement-stock-type" onchange="toggleMovementStockType()">
+            <option value="products">المنتجات</option>
+            <option value="fuel">الوقود</option>
           </select>
          </div>
-         <div class="form-group-half">
-          <label class="form-label">
-           📅 التاريخ *
-          </label>
-          <input class="form-control numeric" id="movement-date" required="" type="datetime-local">
+         <div class="form-group">
+          <label class="form-label">📝 نوع الحركة *</label>
+          <select class="form-control" id="movement-type" onchange="toggleMovementFields()" required>
+            <option value="">اختر نوع الحركة</option>
+          </select>
          </div>
-        </div>
-        <div class="form-row-compact movement-fields-grid hidden-field" id="fuel-movement-fields">
-         <div class="form-group-half">
+
+         <div class="form-group full-width-field" id="product-selector-group">
+          <label class="form-label">🛒 المنتج *</label>
+          <div class="selection-button">
+            <input class="form-control field-click-picker" id="product-select-display" placeholder="اضغط لاختيار منتج من SQLite" readonly onclick="openProductPicker('create')">
+            <input id="product-select" type="hidden" value="">
+          </div>
+         </div>
+
+         <div class="form-group full-width-field hidden-field" id="fuel-selector-group">
           <label class="form-label">⛽ نوع الوقود *</label>
-          <input class="form-control field-click-picker" id="fuel-select-name" placeholder="اختر نوع الوقود من SQLite" readonly onclick="openFuelPicker('create')">
-          <input id="fuel-select" type="hidden" value="">
+          <div class="selection-button">
+            <input class="form-control field-click-picker" id="fuel-select-name" placeholder="اضغط لاختيار نوع الوقود من SQLite" readonly onclick="openFuelPicker('create')">
+            <input id="fuel-select" type="hidden" value="">
+          </div>
          </div>
-         <div class="form-group-half">
+
+         <div class="form-group hidden-field" id="tank-group">
+          <label class="form-label">🛢️ الخزان *</label>
+          <select class="form-control" id="tank-select">
+            <option value="">اختر الخزان</option>
+          </select>
+         </div>
+
+         <div class="form-group">
           <label class="form-label">📦 الكمية *</label>
           <input class="form-control numeric" id="movement-quantity" step="0.001" type="number" inputmode="decimal" required>
          </div>
-        </div>
-        <div class="form-row-compact movement-fields-grid" id="product-movement-fields">
-         <div class="form-group-half">
-          <label class="form-label">
-           🛒 المنتج *
-          </label>
-          <select class="form-control" id="product-select" onchange="loadProductInfo()" required="">
-           <option value="">
-            اختر المنتج
-           </option>
-          </select>
-         </div>
-        </div>
-        <div class="form-row-compact">
-         <div class="form-group-half">
-          <label class="form-label">
-           💰 سعر الوحدة
-          </label>
+
+         <div class="form-group">
+          <label class="form-label">💰 سعر الوحدة</label>
           <input class="form-control numeric" id="unit-price" step="0.01" type="number">
          </div>
-         <div class="form-group-half" id="adjustment-direction-group" style="display:none;">
+
+         <div class="form-group">
+          <label class="form-label">📅 التاريخ *</label>
+          <input class="form-control numeric" id="movement-date" required type="datetime-local">
+         </div>
+
+         <div class="form-group hidden-field" id="adjustment-direction-group">
           <label class="form-label">⚖️ اتجاه التسوية</label>
           <select class="form-control" id="adjustment-direction">
            <option value="increase">زيادة الرصيد</option>
            <option value="decrease">خفض الرصيد</option>
           </select>
          </div>
-         <div class="form-group-half" id="source-warehouse-group" style="display:none;">
-          <label class="form-label">
-           📤 المستودع المصدر
-          </label>
+
+         <div class="form-group hidden-field" id="source-warehouse-group">
+          <label class="form-label">📤 المستودع المصدر</label>
           <select class="form-control" id="source-warehouse">
-           <option value="">
-            اختر المستودع المصدر
-           </option>
+           <option value="">اختر المستودع المصدر</option>
           </select>
          </div>
-        </div>
-        <div class="form-row-compact">
-         <div class="form-group-half" id="target-warehouse-group" style="display:none;">
-          <label class="form-label">
-           📥 المستودع الهدف
-          </label>
+
+         <div class="form-group hidden-field" id="target-warehouse-group">
+          <label class="form-label">📥 المستودع الهدف</label>
           <select class="form-control" id="target-warehouse">
-           <option value="">
-            اختر المستودع الهدف
-           </option>
+           <option value="">اختر المستودع الهدف</option>
           </select>
          </div>
-         <div class="form-group-half" id="supplier-group" style="display:none;">
-          <label class="form-label">
-           🏭 المورد
-          </label>
+
+         <div class="form-group hidden-field" id="supplier-group">
+          <label class="form-label">🏭 المورد</label>
           <select class="form-control" id="supplier-select">
-           <option value="">
-            اختر المورد
-           </option>
+           <option value="">اختر المورد</option>
           </select>
          </div>
-        </div>
-        <div class="form-row-compact">
-         <div class="form-group-half" id="customer-group" style="display:none;">
-          <label class="form-label">
-           👥 العميل
-          </label>
+
+         <div class="form-group hidden-field" id="customer-group">
+          <label class="form-label">👥 العميل</label>
           <select class="form-control" id="customer-select">
-           <option value="">
-            اختر العميل
-           </option>
+           <option value="">اختر العميل</option>
           </select>
          </div>
-         <div class="form-group-half">
-          <label class="form-label">
-           📎 المرجع
-          </label>
+
+         <div class="form-group">
+          <label class="form-label">📎 المرجع</label>
           <input class="form-control" id="movement-reference" placeholder="رقم المرجع أو الوثيقة" type="text">
          </div>
-        </div>
-        <div class="form-group">
-         <label class="form-label">
-          📝 ملاحظات
-         </label>
-         <textarea class="form-control" id="movement-notes" rows="3" style="text-align: right;"></textarea>
-        </div>
+
+         <div class="form-group full-width-field">
+          <label class="form-label">📝 ملاحظات</label>
+          <textarea class="form-control" id="movement-notes" rows="3" style="text-align: right;"></textarea>
+         </div>
        </div>
+
        <div class="inventory-info" id="product-info" style="display: none;">
         <h4>
          📊 معلومات المخزون الحالية
         </h4>
         <div class="info-grid">
          <div class="info-item">
-          <span>
-           📦 الكمية المتاحة:
-          </span>
-          <span class="numeric" id="current-quantity">
-           0
-          </span>
+          <span>📦 الكمية المتاحة:</span>
+          <span class="numeric" id="current-quantity">0</span>
          </div>
          <div class="info-item">
-          <span>
-           💰 متوسط التكلفة:
-          </span>
-          <span class="numeric" id="current-cost">
-           0.00
-          </span>
+          <span>💰 متوسط التكلفة:</span>
+          <span class="numeric" id="current-cost">0.00</span>
          </div>
          <div class="info-item">
-          <span>
-           📉 الحد الأدنى:
-          </span>
-          <span class="numeric" id="min-stock">
-           0
-          </span>
+          <span>📉 الحد الأدنى:</span>
+          <span class="numeric" id="min-stock">0</span>
          </div>
          <div class="info-item">
-          <span>
-           🕒 آخر حركة:
-          </span>
-          <span id="last-movement">
-           ---
-          </span>
+          <span>🕒 آخر حركة:</span>
+          <span id="last-movement">---</span>
          </div>
         </div>
        </div>
@@ -1597,7 +1453,7 @@
     <div class="modal-header"><h5 class="modal-title">⛽ اختيار الوقود من SQLite</h5><button class="btn-close" data-bs-dismiss="modal" type="button"></button></div>
     <div class="modal-body">
      <input class="form-control mb-2" id="fuelPickerSearch" placeholder="بحث باسم الوقود أو الكود" oninput="renderFuelPicker()">
-     <div class="table-container"><table class="data-table"><thead><tr><th>الوقود</th><th>الكود</th><th>سعر الشراء</th><th>اختيار</th></tr></thead><tbody id="fuelPickerBody"></tbody></table></div>
+     <div class="table-container"><table class="data-table"><thead><tr><th>الوقود</th><th>الكود</th><th>سعر البيع</th><th>اختيار</th></tr></thead><tbody id="fuelPickerBody"></tbody></table></div>
     </div>
    </div></div>
   </div>
@@ -1636,8 +1492,6 @@ function invokeTypedBridge(method, args = []) {
                 reject(parsed || { success: false, error: 'استجابة غير صالحة من الجسر' });
                 return;
             }
-            // عقود القراءة التي تُرجع JSONObject مباشرة تحمل rows/stats في المستوى الأعلى.
-            // نوحّد عقد الواجهة بإضافة data alias دون تغيير الاستجابة الأصلية أو البيانات.
             if (!Object.prototype.hasOwnProperty.call(parsed, 'data')) {
                 parsed.data = parsed;
             }
@@ -1647,7 +1501,6 @@ function invokeTypedBridge(method, args = []) {
         }
     });
 }
-
 
 function bridgeDataArray(result) {
     if (!result || result.success !== true) return [];
@@ -1698,17 +1551,16 @@ function apiCall(action, params = {}) {
         case 'getProducts': return invokeTypedBridge('getProducts');
         case 'getWarehouses': return invokeTypedBridge('getWarehouses', [json]);
         case 'ensureOperationalWarehouse': return invokeTypedBridge('ensureOperationalWarehouse');
-        case 'getSuppliers': return invokeTypedBridge('getSuppliers');
-        case 'getCustomers': return invokeTypedBridge('getCustomers');
+        case 'getSuppliers': return invokeTypedBridge('getParties', ['supplier']);
+        case 'getCustomers': return invokeTypedBridge('getParties', ['customer']);
         case 'getMovements': return invokeTypedBridge('getInventoryMovementPage', [json]);
         case 'getMovementStats': return invokeTypedBridge('getInventoryMovementUnifiedStats', [json]);
         case 'getInventoryDetails': return invokeTypedBridge('getInventoryProductDetails', [Number(p.product_id)]);
-        case 'getMovement': return invokeTypedBridge('getStockMovements', [JSON.stringify({ movement_id: Number(p.movement_id), limit: 1 })]);
         case 'deleteMovement': return invokeTypedBridge('archiveStockMovement', [Number(p.movement_id)]);
-        case 'saveMovement': return p.stock_type === 'fuel' ? invokeTypedBridge('addFuelInventoryMovement', [json]) : invokeTypedBridge(p.movement_type === 'transfer' ? 'transferStockMovement' : 'addStockMovement', [json]);
+        case 'saveMovement': return p.stock_type === 'fuel'
+            ? invokeTypedBridge('addFuelInventoryMovement', [json])
+            : invokeTypedBridge('addStockMovement', [json]);
         case 'generateReport': return invokeTypedBridge('generateInventoryMovementReport', [json]);
-        case 'getInventoryAnalytics': return invokeTypedBridge('generateInventoryReport', [JSON.stringify({ report_type: 'summary' })]);
-        case 'getProductTrend': return invokeTypedBridge('getProductMovementTrend', [Number(p.product_id), Number(p.days || 30)]);
         case 'getFuelTypes': return invokeTypedBridge('getFuelTypesForInventoryMovements');
         case 'getTanks': return invokeTypedBridge('getInventoryFuelTanks');
         case 'getFuelAnalysis': return invokeTypedBridge('getFuelInventoryAnalysis', [json]);
@@ -1744,29 +1596,6 @@ function cancelPendingInventoryMovementDetails(reason = 'تم إلغاء تحم�
     });
 }
 
-function invokeInventoryMovementDetailsAsync(movementId) {
-    const bridge = window.AndroidInterface;
-    if (!bridge || typeof bridge.getStockMovementDetailsAsync !== 'function') {
-        return Promise.reject(new Error('جسر القراءة غير المتزامنة لتفاصيل الحركة غير متاح'));
-    }
-    const requestId = `inventory-movement-details-${Date.now().toString(36)}-${++inventoryMovementDetailsCallbackSequence}`;
-    return new Promise((resolve, reject) => {
-        const timeoutId = window.setTimeout(() => {
-            inventoryMovementDetailsCallbacks.delete(requestId);
-            reject(new Error('انتهت مهلة تحميل تفاصيل الحركة'));
-        }, 20000);
-        inventoryMovementDetailsCallbacks.set(requestId, { resolve, reject, timeoutId });
-        try {
-            const accepted = normalizeInventoryMovementBridgeResult(bridge.getStockMovementDetailsAsync(requestId, Number(movementId)));
-            if (!accepted.success) throw new Error(accepted.error || accepted.message || 'تعذر بدء تحميل تفاصيل الحركة');
-        } catch (error) {
-            inventoryMovementDetailsCallbacks.delete(requestId);
-            window.clearTimeout(timeoutId);
-            reject(error);
-        }
-    });
-}
-
 function handleAndroidResult(action, data) {
     try {
         const parsed = typeof data === 'string' ? JSON.parse(data) : data;
@@ -1784,17 +1613,23 @@ function handleAndroidResult(action, data) {
 // ============================================================
 function showToast(message, type = 'success') {
     const icon = type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning';
-    Swal.fire({
-        title: type === 'success' ? 'نجاح' : type === 'error' ? 'خطأ' : 'تنبيه',
-        text: message,
-        icon: icon,
-        timer: 3000,
-        showConfirmButton: false
-    });
+    if (window.Swal && typeof Swal.fire === 'function') {
+        Swal.fire({
+            title: type === 'success' ? 'نجاح' : type === 'error' ? 'خطأ' : 'تنبيه',
+            text: message,
+            icon: icon,
+            timer: 3000,
+            showConfirmButton: false
+        });
+    } else {
+        // fallback في حال عدم تحميل Swal
+        alert(message);
+    }
 }
 
 function showLoading(show) {
-    document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
+    const el = document.getElementById('loadingIndicator');
+    if (el) el.style.display = show ? 'flex' : 'none';
 }
 
 // ============================================================
@@ -1820,7 +1655,8 @@ function switchTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     const activeTab = document.querySelector(`.nav-tab[data-tab="${tabId}"]`);
     if (activeTab) { activeTab.classList.add('active'); activeTab.setAttribute('aria-selected','true'); }
-    document.getElementById(`${tabId}-tab`).classList.add('active');
+    const content = document.getElementById(`${tabId}-tab`);
+    if (content) content.classList.add('active');
     if (tabId === 'analytics') loadAnalytics();
     if (tabId === 'reports') loadReportDefaults();
 }
@@ -1850,55 +1686,50 @@ function goToDashboard() {
 // ============================================================
 async function loadInitialData() {
     showLoading(true);
+    const results = await Promise.allSettled([
+        loadProducts(),
+        loadFuelTypes(),
+        loadTanks(),
+        loadWarehouses(),
+        loadSuppliers(),
+        loadCustomers()
+    ]);
+    results.forEach((r, i) => {
+        if (r.status === 'rejected') console.warn('Initial data item failed at index', i, r.reason);
+    });
     try {
-        await Promise.all([
-            loadProducts(),
-            loadFuelTypes(),
-            loadTanks(),
-            loadWarehouses(),
-            loadSuppliers(),
-            loadCustomers(),
-            loadMovements(),
-            loadStats(),
-            loadAnalytics()
-        ]);
+        await loadMovements();
+        await loadStats();
+        await loadAnalytics();
     } catch (e) {
-        console.error('Error loading initial data:', e);
-        showToast('خطأ في تحميل البيانات الأساسية', 'error');
+        console.error('Error loading movements/stats:', e);
     } finally {
         showLoading(false);
     }
 }
 
 async function loadProducts() {
-    const result = await apiCall('getProducts', {});
-    if (!result.success) throw new Error(result.error || 'تعذر تحميل المنتجات من SQLite');
-    allProducts = bridgeDataArray(result);
-    populateProductDropdowns();
+    try {
+        const result = await apiCall('getProducts', {});
+        if (!result.success) throw new Error(result.error || 'تعذر تحميل المنتجات من SQLite');
+        allProducts = bridgeDataArray(result);
+    } catch (e) {
+        allProducts = [];
+        console.error('loadProducts failed:', e);
+    }
+    renderProductPicker();
     return allProducts;
 }
 
-function populateProductDropdowns() {
-    const selects = ['product-select'];
-    selects.forEach(id => {
-        const sel = document.getElementById(id);
-        if (!sel) return;
-        const currentVal = sel.value;
-        sel.innerHTML = '<option value="">اختر المنتج</option>';
-        allProducts.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p.product_id || p.id;
-            opt.textContent = (p.product_name || p.name) + ' - ' + (p.product_code || p.code || '');
-            sel.appendChild(opt);
-        });
-        if (currentVal) sel.value = currentVal;
-    });
-}
-
 async function loadFuelTypes() {
-    const result = await apiCall('getFuelTypes', {});
-    if (!result.success) throw new Error(result.error || 'تعذر تحميل أنواع الوقود من SQLite');
-    allFuelTypes = bridgeDataArray(result);
+    try {
+        const result = await apiCall('getFuelTypes', {});
+        if (!result.success) throw new Error(result.error || 'تعذر تحميل أنواع الوقود من SQLite');
+        allFuelTypes = bridgeDataArray(result);
+    } catch (e) {
+        allFuelTypes = [];
+        console.error('loadFuelTypes failed:', e);
+    }
     renderFuelPicker();
     return allFuelTypes;
 }
@@ -1908,23 +1739,13 @@ async function loadTanks() {
         const result = await apiCall('getTanks', {});
         if (result.success) {
             allTanks = bridgeDataArray(result);
-            const select = document.getElementById('tank-select');
-            if (select) {
-                select.innerHTML = '<option value="">اختر الخزان</option>';
-                allTanks.forEach(t => {
-                    const option = document.createElement('option');
-                    option.value = t.tank_id || t.id;
-                    option.textContent = `${t.tank_name || t.tank_code} — ${t.fuel_name_ar || t.fuel_name || ''} — رصيد ${Number(t.current_quantity || 0).toLocaleString('en')}`;
-                    select.appendChild(option);
-                });
-            }
             const filter = document.getElementById('filter-tank');
             if (filter) {
                 filter.innerHTML = '<option value="">جميع الخزانات</option>';
                 allTanks.forEach(t => {
                     const option = document.createElement('option');
                     option.value = t.tank_id || t.id;
-                    option.textContent = `${t.tank_name || t.tank_code} — ${t.fuel_name_ar || t.fuel_name || ''}`;
+                    option.textContent = `${t.tank_name || t.tank_code || ''} — ${t.fuel_name_ar || t.fuel_name || ''}`;
                     filter.appendChild(option);
                 });
             }
@@ -1938,7 +1759,7 @@ async function loadWarehouses() {
         if (result.success) {
             allWarehouses = bridgeDataArray(result);
             if (!allWarehouses.length) {
-                await apiCall('ensureOperationalWarehouse', {});
+                try { await apiCall('ensureOperationalWarehouse', {}); } catch (_) {}
                 const refreshed = await apiCall('getWarehouses', {});
                 allWarehouses = bridgeDataArray(refreshed);
             }
@@ -1950,16 +1771,20 @@ async function loadWarehouses() {
 }
 
 function populateWarehouseDropdowns() {
-    const selects = ['filter-warehouse', 'source-warehouse', 'target-warehouse'];
-    selects.forEach(id => {
-        const sel = document.getElementById(id);
+    const configs = [
+        { id: 'filter-warehouse', defaultLabel: 'جميع المستودعات' },
+        { id: 'source-warehouse', defaultLabel: 'اختر المستودع المصدر' },
+        { id: 'target-warehouse', defaultLabel: 'اختر المستودع الهدف' }
+    ];
+    configs.forEach(cfg => {
+        const sel = document.getElementById(cfg.id);
         if (!sel) return;
         const currentVal = sel.value;
-        sel.innerHTML = '<option value="">اختر المستودع</option>';
+        sel.innerHTML = `<option value="">${cfg.defaultLabel}</option>`;
         allWarehouses.forEach(w => {
             const opt = document.createElement('option');
             opt.value = w.warehouse_id || w.id;
-            opt.textContent = w.warehouse_name || w.name;
+            opt.textContent = w.warehouse_name || w.name || '';
             sel.appendChild(opt);
         });
         if (currentVal) sel.value = currentVal;
@@ -1971,7 +1796,7 @@ async function loadSuppliers() {
         const result = await apiCall('getSuppliers', {});
         if (result.success) {
             allSuppliers = bridgeDataArray(result);
-            populatePartyDropdowns('filter-supplier', 'supplier-select');
+            populatePartyDropdowns('filter-supplier', 'supplier-select', allSuppliers, 'جميع الموردين', 'اختر المورد');
         }
     } catch (e) {
         console.error('Error loading suppliers:', e);
@@ -1983,23 +1808,34 @@ async function loadCustomers() {
         const result = await apiCall('getCustomers', {});
         if (result.success) {
             allCustomers = bridgeDataArray(result);
-            populatePartyDropdowns('filter-customer', 'customer-select');
+            populatePartyDropdowns('filter-customer', 'customer-select', allCustomers, 'جميع العملاء', 'اختر العميل');
         }
     } catch (e) {
         console.error('Error loading customers:', e);
     }
 }
 
-function populatePartyDropdowns(filterId, selectId) {
-    const list = filterId === 'filter-supplier' ? allSuppliers : allCustomers;
+function populatePartyDropdowns(filterId, selectId, list, filterDefaultLabel, selectDefaultLabel) {
+    const filterSel = document.getElementById(filterId);
+    if (filterSel) {
+        const currentFilter = filterSel.value;
+        filterSel.innerHTML = `<option value="">${filterDefaultLabel}</option>`;
+        list.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.entity_id || p.id || p.party_id;
+            opt.textContent = p.commercial_name_ar || p.commercial_name || p.legal_name || p.name || 'غير محدد';
+            filterSel.appendChild(opt);
+        });
+        if (currentFilter) filterSel.value = currentFilter;
+    }
     const sel = document.getElementById(selectId);
     if (!sel) return;
     const currentVal = sel.value;
-    sel.innerHTML = '<option value="">اختر</option>';
+    sel.innerHTML = `<option value="">${selectDefaultLabel}</option>`;
     list.forEach(p => {
         const opt = document.createElement('option');
-        opt.value = p.entity_id || p.id;
-        opt.textContent = p.commercial_name || p.legal_name || p.name || 'غير محدد';
+        opt.value = p.entity_id || p.id || p.party_id;
+        opt.textContent = p.commercial_name_ar || p.commercial_name || p.legal_name || p.name || 'غير محدد';
         sel.appendChild(opt);
     });
     if (currentVal) sel.value = currentVal;
@@ -2025,29 +1861,36 @@ async function loadMovements() {
 
 function populateMovementsTable(movements) {
     const tbody = document.getElementById('movements-table-body');
+    if (!tbody) return;
     tbody.innerHTML = '';
     if (!movements || movements.length === 0) {
         tbody.innerHTML = '<tr><td colspan="12" class="text-center">❌ لا توجد حركات لعرضها</td></tr>';
         return;
     }
+    const pageOffset = (currentPage - 1) * pageSize;
     movements.forEach((m, idx) => {
         const row = document.createElement('tr');
         row.setAttribute('data-id', m.movement_id || m.id);
         row.onclick = function() { selectRow(this); };
-        const isFuel = m.stock_type === 'fuel';
+        const isFuel = String(m.stock_type || '').toLowerCase() === 'fuel';
         const typeLabel = getMovementTypeLabel(m.movement_type, m.movement_subtype);
-        const productOrFuel = `${isFuel ? '⛽ ' : '🛒 '}${m.item_name || '---'}`;
+        const productOrFuel = `${isFuel ? '⛽ ' : '🛒 '}${escapeHtml(m.item_name || '---')}`;
         const location = m.location_name || '---';
         const status = m.status || 'completed';
         const statusBadge = status === 'completed' ? '<span class="badge badge-success">✅ مكتمل</span>' :
             status === 'pending' || status === 'in_progress' ? '<span class="badge badge-warning">⏳ قيد الانتظار</span>' :
             status === 'cancelled' ? '<span class="badge badge-danger">❌ ملغى</span>' :
             '<span class="badge badge-info">' + escapeHtml(status) + '</span>';
+        // ترقيم متسلسل صحيح عبر الصفحات: pageOffset + idx + 1
+        const serialNumber = pageOffset + idx + 1;
+        // زر الحذف لا يظهر لحركات الوقود لأن archiveStockMovement يعمل على inventory_movements فقط
+        const deleteButton = isFuel ? '' :
+            `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteMovement(${Number(m.movement_id || m.id)})" title="أرشفة"><i class="fas fa-trash"></i></button>`;
         row.innerHTML = `
-          <td class="numeric">${m.movement_id || m.id || idx + 1}</td>
-          <td class="numeric">${escapeHtml(m.movement_date || '---')}</td>
-          <td>${escapeHtml(productOrFuel)}</td>
-          <td class="numeric">${Number(m.quantity || m.quantity_change || 0).toLocaleString('en')}</td>
+          <td class="numeric">${serialNumber}</td>
+          <td class="numeric">${escapeHtml(String(m.movement_date || '---').slice(0,19).replace('T',' '))}</td>
+          <td>${productOrFuel}</td>
+          <td class="numeric">${Number(m.quantity || m.quantity_change || 0).toLocaleString('en', {maximumFractionDigits:3})}</td>
           <td>${typeLabel}</td>
           <td>${escapeHtml(location)}</td>
           <td>${escapeHtml([m.source_location, m.target_location].filter(Boolean).join(' → ') || '---')}</td>
@@ -2055,7 +1898,10 @@ function populateMovementsTable(movements) {
           <td class="numeric">${Number(m.unit_cost || 0).toFixed(2)}</td>
           <td class="numeric">${Number(m.total_cost || 0).toFixed(2)}</td>
           <td>${statusBadge}</td>
-          <td><div class="btn-action-group"><button class="btn btn-sm btn-primary" onclick="event.stopPropagation();viewMovement(${Number(m.movement_id || m.id)})" title="عرض"><i class="fas fa-eye"></i></button>${m.stock_type === 'product' ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteMovement(${Number(m.movement_id || m.id)})" title="أرشفة"><i class="fas fa-trash"></i></button>` : ''}</div></td>`;
+          <td><div class="btn-action-group">
+            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();viewMovement(${Number(m.movement_id || m.id)}, '${isFuel ? 'fuel' : 'product'}')" title="عرض"><i class="fas fa-eye"></i></button>
+            ${deleteButton}
+          </div></td>`;
         tbody.appendChild(row);
     });
 }
@@ -2068,36 +1914,43 @@ function selectRow(row) {
 function getMovementTypeLabel(type, subtype = '') {
     const labels = {
         in: '<span class="badge badge-success status-indicator">دخول مخزني</span>',
-        out: `<span class="badge badge-danger status-indicator">${subtype === 'return_supplier' ? 'إرجاع لمورد' : 'خروج مخزني'}</span>`,
+        out: `<span class="badge badge-danger status-indicator">${subtype === 'return_supplier' ? 'إرجاع لمورد' : (subtype === 'fuel_sale' ? 'صرف وقود' : 'خروج مخزني')}</span>`,
         return: '<span class="badge badge-pink status-indicator">إرجاع من عميل</span>',
         damage: '<span class="badge badge-cyan status-indicator">هالك / تلف</span>',
         transfer: '<span class="badge badge-info status-indicator">تحويل بين مستودعات</span>',
-        adjustment: '<span class="badge badge-indigo status-indicator">تسوية مخزنية</span>'
+        adjustment: '<span class="badge badge-indigo status-indicator">تسوية مخزنية</span>',
+        refill: '<span class="badge badge-success status-indicator">تعبئة خزان</span>',
+        fuel_sale: '<span class="badge badge-danger status-indicator">صرف وقود</span>'
     };
     return labels[type] || `<span class="badge badge-secondary">${escapeHtml(type || 'غير محدد')}</span>`;
 }
 
 function updatePagination(total) {
     const container = document.getElementById('pagination-container');
+    if (!container) return;
     const totalPages = Math.ceil(total / pageSize);
     if (totalPages <= 1) { container.innerHTML = ''; return; }
     let html = `<li class="page-item ${currentPage <= 1 ? 'disabled' : ''}">
-        <a class="page-link" href="#" onclick="changePage(${currentPage-1})">⬅️ السابق</a>
+        <a class="page-link" href="#" onclick="event.preventDefault();changePage(${currentPage-1})">⬅️ السابق</a>
     </li>`;
-    for (let i = 1; i <= Math.min(totalPages, 5); i++) {
+    const maxShown = 5;
+    let start = Math.max(1, currentPage - 2);
+    let end = Math.min(totalPages, start + maxShown - 1);
+    if (end - start + 1 < maxShown) start = Math.max(1, end - maxShown + 1);
+    for (let i = start; i <= end; i++) {
         html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
-            <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+            <a class="page-link" href="#" onclick="event.preventDefault();changePage(${i})">${i}</a>
         </li>`;
     }
-    if (totalPages > 5) html += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+    if (end < totalPages) html += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
     html += `<li class="page-item ${currentPage >= totalPages ? 'disabled' : ''}">
-        <a class="page-link" href="#" onclick="changePage(${currentPage+1})">➡️ التالي</a>
+        <a class="page-link" href="#" onclick="event.preventDefault();changePage(${currentPage+1})">➡️ التالي</a>
     </li>`;
     container.innerHTML = html;
 }
 
 function changePage(page) {
-    if (page < 1) return;
+    if (page < 1 || page === currentPage) return;
     currentPage = page;
     loadMovements();
 }
@@ -2107,10 +1960,14 @@ async function loadStats() {
         const result = await apiCall('getMovementStats', { ...activeMovementFilters });
         if (result.success) {
             const s = bridgeDataObject(result);
-            document.getElementById('total-movements').textContent = toNumber(s.total_movements ?? s.movement_count ?? s.total_count).toLocaleString('en');
-            document.getElementById('total-value').textContent = toNumber(s.total_value ?? s.total_cost ?? s.value).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2});
-            document.getElementById('today-movements').textContent = toNumber(s.today_movements ?? s.today_count).toLocaleString('en');
-            document.getElementById('pending-count').textContent = toNumber(s.pending_count ?? s.pending_movements).toLocaleString('en');
+            const totalMovements = document.getElementById('total-movements');
+            const totalValue = document.getElementById('total-value');
+            const todayMovements = document.getElementById('today-movements');
+            const pendingCount = document.getElementById('pending-count');
+            if (totalMovements) totalMovements.textContent = toNumber(s.total_movements ?? s.movement_count ?? s.total_count).toLocaleString('en');
+            if (totalValue) totalValue.textContent = toNumber(s.total_value ?? s.movement_value ?? s.total_cost).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2});
+            if (todayMovements) todayMovements.textContent = toNumber(s.today_movements ?? s.today_count).toLocaleString('en');
+            if (pendingCount) pendingCount.textContent = toNumber(s.pending_count ?? s.pending_movements).toLocaleString('en');
         }
     } catch (e) {
         console.error('Error loading stats:', e);
@@ -2120,6 +1977,61 @@ async function loadStats() {
 // ============================================================
 // 7. دوال الفلترة
 // ============================================================
+function onMovementStockTypeChanged() {
+    const type = document.getElementById('filter-stock-type').value;
+    const productGroup = document.getElementById('product-filter-group');
+    const fuelGroup = document.getElementById('fuel-filter-group');
+    const tankGroup = document.getElementById('filter-tank-group');
+    const typeGroup = document.getElementById('filter-type-group');
+    const warehouseGroup = document.getElementById('filter-warehouse-group');
+
+    // عند "الكل": إخفاء حقول (بحث بالمنتج) و (بحث بالوقود) و (نوع الحركة) و (الخزان) و (المستودع)
+    if (productGroup) productGroup.classList.toggle('hidden-field', type !== 'products');
+    if (fuelGroup) fuelGroup.classList.toggle('hidden-field', type !== 'fuel');
+    if (tankGroup) tankGroup.classList.toggle('hidden-field', type !== 'fuel');
+    if (typeGroup) typeGroup.classList.toggle('hidden-field', type === 'all');
+    if (warehouseGroup) warehouseGroup.classList.toggle('hidden-field', type === 'fuel');
+
+    // تصفير الحقول المخفية
+    if (type !== 'products') {
+        const el = document.getElementById('filter-product-id'); if (el) el.value = '';
+        const el2 = document.getElementById('search-product'); if (el2) el2.value = '';
+    }
+    if (type !== 'fuel') {
+        const el = document.getElementById('filter-fuel-id'); if (el) el.value = '';
+        const el2 = document.getElementById('search-fuel'); if (el2) el2.value = '';
+        const el3 = document.getElementById('filter-tank'); if (el3) el3.value = '';
+    }
+    // إعادة بناء أنواع الحركة حسب نوع المخزون
+    populateFilterTypeOptions(type);
+}
+
+function populateFilterTypeOptions(stockType) {
+    const sel = document.getElementById('filter-type');
+    if (!sel) return;
+    const current = sel.value;
+    let options = '';
+    if (stockType === 'fuel') {
+        options = `<option value="">جميع الأنواع</option>
+            <option value="in">⛽ استلام / تعبئة</option>
+            <option value="out">🚚 صرف / استهلاك</option>
+            <option value="refill">🛢️ تعبئة خزان</option>
+            <option value="adjustment">⚖️ تسوية رصيد</option>`;
+    } else {
+        options = `<option value="">جميع الأنواع</option>
+            <option value="in">📥 دخول مخزني</option>
+            <option value="out">📤 خروج مخزني</option>
+            <option value="return_customer">🔄 إرجاع من عميل</option>
+            <option value="return_supplier">🔄 إرجاع لمورد</option>
+            <option value="waste">🗑️ هالك</option>
+            <option value="transfer">🔄 تحويل بين مستودعات</option>
+            <option value="adjustment">⚖️ تسوية مخزنية</option>
+            <option value="stocktake">📋 جرد</option>`;
+    }
+    sel.innerHTML = options;
+    if ([...sel.options].some(o => o.value === current)) sel.value = current;
+}
+
 function applyFilters() {
     const stockType = document.getElementById('filter-stock-type').value;
     const selectedType = document.getElementById('filter-type').value;
@@ -2131,7 +2043,9 @@ function applyFilters() {
         end_date: document.getElementById('filter-to').value,
         warehouse_id: stockType === 'products' ? Number(document.getElementById('filter-warehouse').value || 0) : 0,
         tank_id: stockType === 'fuel' ? Number(document.getElementById('filter-tank').value || 0) : 0,
-        status: document.getElementById('filter-status').value
+        status: document.getElementById('filter-status').value,
+        supplier_id: Number(document.getElementById('filter-supplier').value || 0),
+        customer_id: Number(document.getElementById('filter-customer').value || 0)
     };
     const selectedItemId = stockType === 'products'
         ? Number(document.getElementById('filter-product-id').value || 0)
@@ -2144,97 +2058,128 @@ function applyFilters() {
         : document.getElementById('search-fuel').value.trim();
     activeMovementFilters = filters;
     currentPage = 1;
-    loadMovements();
+    Promise.all([loadMovements(), loadStats()]);
 }
 
 function resetFilters() {
     document.getElementById('filter-stock-type').value = 'all';
+    const ids = ['filter-product-id','filter-fuel-id','search-product','search-fuel','filter-tank','filter-type','filter-from','filter-to','filter-warehouse','filter-supplier','filter-customer','filter-status'];
+    ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     onMovementStockTypeChanged();
-    document.getElementById('search-product').value = ''; 
-    document.getElementById('filter-product-id').value = '';
-    document.getElementById('search-fuel').value = '';
-    document.getElementById('filter-fuel-id').value = '';
-    document.getElementById('filter-tank').value = '';
-    document.getElementById('filter-type').value = '';
-    document.getElementById('filter-from').value = '';
-    document.getElementById('filter-to').value = '';
-    document.getElementById('filter-warehouse').value = '';
-    document.getElementById('filter-supplier').value = '';
-    document.getElementById('filter-customer').value = '';
-    document.getElementById('filter-status').value = '';
     activeMovementFilters = {};
     currentPage = 1;
-    loadMovements();
+    Promise.all([loadMovements(), loadStats()]);
     showToast('تم إعادة ضبط الفلترة', 'success');
 }
 
 // ============================================================
 // 8. دوال المودال والحركات
 // ============================================================
-
-function onMovementStockTypeChanged() {
-    const type = document.getElementById('filter-stock-type').value;
-    const productGroup = document.getElementById('product-filter-group');
-    const fuelGroup = document.getElementById('fuel-filter-group');
-    const tankGroup = document.getElementById('filter-tank-group');
-    productGroup.classList.toggle('hidden-field', type === 'fuel');
-    fuelGroup.classList.toggle('hidden-field', type !== 'fuel');
-    tankGroup.classList.toggle('hidden-field', type !== 'fuel');
-    if (type !== 'products') {
-        document.getElementById('filter-product-id').value = '';
-        document.getElementById('search-product').value = '';
-    }
-    if (type !== 'fuel') {
-        document.getElementById('filter-fuel-id').value = '';
-        document.getElementById('search-fuel').value = '';
-        document.getElementById('filter-tank').value = '';
-    }
-}
-
 function toggleMovementStockType() {
     const type = document.getElementById('movement-stock-type').value;
-    const product = document.getElementById('product-movement-fields');
-    const fuel = document.getElementById('fuel-movement-fields');
+    const productGroup = document.getElementById('product-selector-group');
+    const fuelGroup = document.getElementById('fuel-selector-group');
+    const tankGroup = document.getElementById('tank-group');
     const productInfo = document.getElementById('product-info');
-    product.classList.toggle('hidden-field', type !== 'products');
-    fuel.classList.toggle('hidden-field', type !== 'fuel');
-    const quantity = document.getElementById('movement-quantity');
-    if (quantity) {
-        quantity.required = true;
-        quantity.disabled = false;
-        quantity.setAttribute('aria-required', 'true');
-    }
-    productInfo.style.display = type === 'products' && document.getElementById('product-select').value ? 'block' : 'none';
-    const priceLabel = document.getElementById('unit-price-label');
-    if (priceLabel) priceLabel.textContent = type === 'fuel' ? '💰 سعر اللتر' : '💰 سعر الوحدة';
+    const typeSelect = document.getElementById('movement-type');
+
+    if (productGroup) productGroup.classList.toggle('hidden-field', type !== 'products');
+    if (fuelGroup) fuelGroup.classList.toggle('hidden-field', type !== 'fuel');
+    if (tankGroup) tankGroup.classList.toggle('hidden-field', type !== 'fuel');
+    if (productInfo) productInfo.style.display = 'none';
+
     if (type === 'products') {
-        document.getElementById('fuel-select').value = '';
-        document.getElementById('fuel-select-name').value = '';
-    }
-    const movementType = document.getElementById('movement-type');
-    if (type === 'fuel') {
-        movementType.innerHTML = '<option value="">اختر نوع الحركة</option><option value="in">⛽ استلام / تعبئة الخزان</option><option value="out">🚚 صرف / استهلاك الوقود</option><option value="adjustment">⚖️ تسوية رصيد الخزان</option>';
+        const fuelSel = document.getElementById('fuel-select');
+        const fuelSelName = document.getElementById('fuel-select-name');
+        const tankSel = document.getElementById('tank-select');
+        if (fuelSel) fuelSel.value = '';
+        if (fuelSelName) fuelSelName.value = '';
+        if (tankSel) {
+            tankSel.innerHTML = '<option value="">اختر الخزان</option>';
+            tankSel.value = '';
+        }
+        typeSelect.innerHTML = `<option value="">اختر نوع الحركة</option>
+          <option value="in">📥 دخول مخزني (شراء)</option>
+          <option value="out">📤 خروج مخزني (بيع)</option>
+          <option value="return_customer">🔄 إرجاع من عميل</option>
+          <option value="return_supplier">🔄 إرجاع لمورد</option>
+          <option value="waste">🗑️ هالك</option>
+          <option value="transfer">🔄 تحويل بين مستودعات</option>
+          <option value="adjustment">⚖️ تسوية مخزنية</option>
+          <option value="stocktake">📋 جرد</option>`;
     } else {
-        movementType.innerHTML = `<option value="">اختر نوع الحركة</option>
-          <option value="in">📥 دخول مخزني (شراء)</option><option value="out">📤 خروج مخزني (بيع)</option>
-          <option value="return_customer">🔄 إرجاع من عميل</option><option value="return_supplier">🔄 إرجاع لمورد</option>
-          <option value="waste">🗑️ هالك</option><option value="transfer">🔄 تحويل بين مستودعات</option>
-          <option value="adjustment">⚖️ تسوية مخزنية</option><option value="stocktake">📋 جرد</option>`;
+        const productSel = document.getElementById('product-select');
+        const productDisplay = document.getElementById('product-select-display');
+        if (productSel) productSel.value = '';
+        if (productDisplay) productDisplay.value = '';
+        typeSelect.innerHTML = `<option value="">اختر نوع الحركة</option>
+          <option value="in">⛽ استلام / تعبئة الخزان</option>
+          <option value="out">🚚 صرف / استهلاك الوقود</option>
+          <option value="adjustment">⚖️ تسوية رصيد الخزان</option>`;
     }
     toggleMovementFields();
 }
 
+function toggleMovementFields() {
+    const type = document.getElementById('movement-type').value;
+    const stockType = document.getElementById('movement-stock-type').value;
+    ['source-warehouse-group', 'target-warehouse-group', 'supplier-group', 'customer-group', 'adjustment-direction-group']
+        .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden-field'); });
+
+    if (stockType === 'fuel') {
+        if (type === 'adjustment') {
+            const el = document.getElementById('adjustment-direction-group');
+            if (el) el.classList.remove('hidden-field');
+        }
+        return;
+    }
+    if (type === 'in') {
+        document.getElementById('target-warehouse-group')?.classList.remove('hidden-field');
+        document.getElementById('supplier-group')?.classList.remove('hidden-field');
+    } else if (type === 'return_customer') {
+        document.getElementById('target-warehouse-group')?.classList.remove('hidden-field');
+        document.getElementById('customer-group')?.classList.remove('hidden-field');
+    } else if (type === 'out') {
+        document.getElementById('source-warehouse-group')?.classList.remove('hidden-field');
+        document.getElementById('customer-group')?.classList.remove('hidden-field');
+    } else if (type === 'return_supplier') {
+        document.getElementById('source-warehouse-group')?.classList.remove('hidden-field');
+        document.getElementById('supplier-group')?.classList.remove('hidden-field');
+    } else if (type === 'waste') {
+        document.getElementById('source-warehouse-group')?.classList.remove('hidden-field');
+    } else if (type === 'transfer') {
+        document.getElementById('source-warehouse-group')?.classList.remove('hidden-field');
+        document.getElementById('target-warehouse-group')?.classList.remove('hidden-field');
+    } else if (type === 'adjustment' || type === 'stocktake') {
+        document.getElementById('source-warehouse-group')?.classList.remove('hidden-field');
+        document.getElementById('adjustment-direction-group')?.classList.remove('hidden-field');
+    }
+    const defaultWarehouseId = allWarehouses.length === 1 ? String(allWarehouses[0].warehouse_id || allWarehouses[0].id || '') : '';
+    if (defaultWarehouseId) {
+        if (['in', 'return_customer', 'transfer'].includes(type)) {
+            const el = document.getElementById('target-warehouse');
+            if (el && !el.value) el.value = defaultWarehouseId;
+        }
+        if (['out', 'return_supplier', 'waste', 'adjustment', 'stocktake', 'transfer'].includes(type)) {
+            const el = document.getElementById('source-warehouse');
+            if (el && !el.value) el.value = defaultWarehouseId;
+        }
+    }
+}
+
 async function openProductPicker(target) {
     window.productPickerTarget = target;
-    document.getElementById('productPickerSearch').value = '';
+    const search = document.getElementById('productPickerSearch');
+    if (search) search.value = '';
     try {
         await loadProducts();
-        renderProductPicker();
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('productPickerModal')).show();
     } catch (e) {
         console.error('Product picker SQLite load failed:', e);
-        renderProductPicker();
         showToast(e.message || 'تعذر تحميل المنتجات من SQLite', 'error');
+    }
+    renderProductPicker();
+    if (window.bootstrap && window.bootstrap.Modal) {
+        window.bootstrap.Modal.getOrCreateInstance(document.getElementById('productPickerModal')).show();
     }
 }
 
@@ -2249,8 +2194,18 @@ function renderProductPicker() {
     body.innerHTML = rows.slice(0, 200).map(p => {
         const id = Number(p.product_id || p.id);
         const name = p.product_name_ar || p.product_name || p.name || '---';
-        return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(p.product_code || p.code || '---')}</td><td>${escapeHtml(p.barcode || '---')}</td><td><button class="btn btn-sm btn-primary" type="button" onclick="selectProduct(${id})">اختيار</button></td></tr>`;
+        return `<tr class="picker-row" data-id="${id}" onclick="markPickerRow(this)" ondblclick="selectProduct(${id})">
+            <td>${escapeHtml(name)}</td>
+            <td>${escapeHtml(p.product_code || p.code || '---')}</td>
+            <td>${escapeHtml(p.barcode || '---')}</td>
+            <td><button class="btn btn-sm btn-primary" type="button" onclick="event.stopPropagation();selectProduct(${id})">اختيار</button></td>
+        </tr>`;
     }).join('') || '<tr><td colspan="4" class="text-center">لا توجد منتجات مطابقة</td></tr>';
+}
+
+function markPickerRow(row) {
+    document.querySelectorAll('.picker-row').forEach(r => r.classList.remove('dbl-selected'));
+    row.classList.add('dbl-selected');
 }
 
 function selectProduct(id) {
@@ -2258,30 +2213,43 @@ function selectProduct(id) {
     if (!p) return;
     const name = p.product_name_ar || p.product_name || p.name || '---';
     const target = window.productPickerTarget;
-    if (target === 'create') document.getElementById('product-select').value = String(id);
+    if (target === 'create') {
+        const hidden = document.getElementById('product-select');
+        const display = document.getElementById('product-select-display');
+        if (hidden) hidden.value = String(id);
+        if (display) display.value = name;
+    }
     if (target === 'filter') {
-        document.getElementById('filter-product-id').value = String(id);
-        document.getElementById('search-product').value = name;
+        const filterId = document.getElementById('filter-product-id');
+        const searchBox = document.getElementById('search-product');
+        if (filterId) filterId.value = String(id);
+        if (searchBox) searchBox.value = name;
     }
     if (target === 'analytics') {
-        document.getElementById('analytics-product').value = String(id);
-        document.getElementById('analytics-product-name').value = name;
+        const analyticsId = document.getElementById('analytics-product');
+        const analyticsName = document.getElementById('analytics-product-name');
+        if (analyticsId) analyticsId.value = String(id);
+        if (analyticsName) analyticsName.value = name;
     }
-    bootstrap.Modal.getInstance(document.getElementById('productPickerModal'))?.hide();
+    if (window.bootstrap && window.bootstrap.Modal) {
+        window.bootstrap.Modal.getInstance(document.getElementById('productPickerModal'))?.hide();
+    }
     if (target === 'create') loadProductInfo();
 }
 
 async function openFuelPicker(target) {
     window.fuelPickerTarget = target;
-    document.getElementById('fuelPickerSearch').value = '';
+    const search = document.getElementById('fuelPickerSearch');
+    if (search) search.value = '';
     try {
         await loadFuelTypes();
-        renderFuelPicker();
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('fuelPickerModal')).show();
     } catch (e) {
         console.error('Fuel picker SQLite load failed:', e);
-        renderFuelPicker();
         showToast(e.message || 'تعذر تحميل أنواع الوقود من SQLite', 'error');
+    }
+    renderFuelPicker();
+    if (window.bootstrap && window.bootstrap.Modal) {
+        window.bootstrap.Modal.getOrCreateInstance(document.getElementById('fuelPickerModal')).show();
     }
 }
 
@@ -2294,51 +2262,79 @@ function renderFuelPicker() {
         return !q || text.includes(q);
     });
     body.innerHTML = rows.slice(0, 100).map(f => {
-        const id = Number(f.id || f.fuel_type_id);
+        const id = Number(f.fuel_type_id || f.id);
         const name = f.fuel_name_ar || f.fuel_name || '---';
-        return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(f.fuel_code || '---')}</td><td>${Number(f.default_purchase_price || 0).toFixed(2)}</td><td><button class="btn btn-sm btn-primary" type="button" onclick="selectFuel(${id})">اختيار</button></td></tr>`;
+        const price = Number(f.default_sale_price || f.default_purchase_price || 0).toFixed(2);
+        return `<tr class="picker-row" data-id="${id}" onclick="markPickerRow(this)" ondblclick="selectFuel(${id})">
+            <td>${escapeHtml(name)}</td>
+            <td>${escapeHtml(f.fuel_code || '---')}</td>
+            <td class="numeric">${price}</td>
+            <td><button class="btn btn-sm btn-primary" type="button" onclick="event.stopPropagation();selectFuel(${id})">اختيار</button></td>
+        </tr>`;
     }).join('') || '<tr><td colspan="4" class="text-center">لا توجد أنواع وقود مطابقة</td></tr>';
 }
 
 function selectFuel(id) {
-    const f = allFuelTypes.find(x => Number(x.id || x.fuel_type_id) === Number(id));
+    const f = allFuelTypes.find(x => Number(x.fuel_type_id || x.id) === Number(id));
     if (!f) return;
     const name = f.fuel_name_ar || f.fuel_name || '---';
     const target = window.fuelPickerTarget;
     if (target === 'create') {
-        document.getElementById('fuel-select').value = String(id);
-        document.getElementById('fuel-select-name').value = name;
+        const hidden = document.getElementById('fuel-select');
+        const display = document.getElementById('fuel-select-name');
+        if (hidden) hidden.value = String(id);
+        if (display) display.value = name;
+        // تصفية الخزانات حسب نوع الوقود المختار فقط
         const tank = document.getElementById('tank-select');
         if (tank) {
-            Array.from(tank.options).forEach(o => {
-                const t = allTanks.find(x => String(x.tank_id || x.id) === String(o.value));
-                o.hidden = !!t && Number(t.fuel_type_id || t.fuelTypeId || 0) !== Number(id);
-            });
-            tank.value = '';
+            tank.innerHTML = '<option value="">اختر الخزان</option>';
+            allTanks
+                .filter(t => Number(t.fuel_type_id || t.fuelTypeId || 0) === Number(id))
+                .forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.tank_id || t.id;
+                    opt.textContent = `${t.tank_name || t.tank_code || ''} — ${t.fuel_name_ar || t.fuel_name || ''}`;
+                    tank.appendChild(opt);
+                });
+            if (tank.options.length === 2) tank.selectedIndex = 1;
         }
-        const fuelPrice = toNumber(f.default_purchase_price ?? f.purchase_price ?? f.unit_price ?? f.current_price ?? f.selling_price);
-        document.getElementById('unit-price').value = fuelPrice > 0 ? fuelPrice.toFixed(2) : '';
+        const price = Number(f.default_sale_price || f.default_purchase_price || 0);
+        if (price > 0) {
+            const priceInput = document.getElementById('unit-price');
+            if (priceInput) priceInput.value = price.toFixed(2);
+        }
     } else if (target === 'filter') {
-        document.getElementById('filter-fuel-id').value = String(id);
-        document.getElementById('search-fuel').value = name;
+        const filterId = document.getElementById('filter-fuel-id');
+        const searchBox = document.getElementById('search-fuel');
+        if (filterId) filterId.value = String(id);
+        if (searchBox) searchBox.value = name;
     } else if (target === 'analytics') {
-        document.getElementById('analytics-fuel').value = String(id);
-        document.getElementById('analytics-fuel-name').value = name;
+        const analyticsId = document.getElementById('analytics-fuel');
+        const analyticsName = document.getElementById('analytics-fuel-name');
+        if (analyticsId) analyticsId.value = String(id);
+        if (analyticsName) analyticsName.value = name;
     }
-    bootstrap.Modal.getInstance(document.getElementById('fuelPickerModal'))?.hide();
+    if (window.bootstrap && window.bootstrap.Modal) {
+        window.bootstrap.Modal.getInstance(document.getElementById('fuelPickerModal'))?.hide();
+    }
 }
 
 function toggleAnalyticsSelector() {
     const type = document.getElementById('analytics-stock-type').value;
-    document.getElementById('analytics-product-group').classList.toggle('hidden-field', type !== 'products');
-    document.getElementById('analytics-fuel-group').classList.toggle('hidden-field', type !== 'fuel');
+    document.getElementById('analytics-product-group')?.classList.toggle('hidden-field', type !== 'products');
+    document.getElementById('analytics-fuel-group')?.classList.toggle('hidden-field', type !== 'fuel');
     if (type === 'products') {
-        document.getElementById('analytics-fuel').value = '';
-        document.getElementById('analytics-fuel-name').value = '';
+        const el = document.getElementById('analytics-fuel'); if (el) el.value = '';
+        const el2 = document.getElementById('analytics-fuel-name'); if (el2) el2.value = '';
     } else {
-        document.getElementById('analytics-product').value = '';
-        document.getElementById('analytics-product-name').value = '';
+        const el = document.getElementById('analytics-product'); if (el) el.value = '';
+        const el2 = document.getElementById('analytics-product-name'); if (el2) el2.value = '';
     }
+}
+
+function setValue(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
 }
 
 async function showCreateModal() {
@@ -2348,15 +2344,11 @@ async function showCreateModal() {
         return;
     }
 
-    // تهيئة النموذج قبل العرض حتى لا يعتمد فتح المودال على أي استعلام SQLite.
-    const setValue = (id, value) => {
-        const el = document.getElementById(id);
-        if (el) el.value = value;
-    };
+    // تهيئة النموذج قبل العرض
     setValue('movement-stock-type', 'products');
     setValue('movement-type', '');
     setValue('movement-date', new Date().toISOString().slice(0,16));
-    ['product-select','fuel-select','fuel-select-name','tank-select','movement-quantity','unit-price',
+    ['product-select','product-select-display','fuel-select','fuel-select-name','tank-select','movement-quantity','unit-price',
      'source-warehouse','target-warehouse','supplier-select','customer-select','movement-reference','movement-notes']
         .forEach(id => setValue(id, ''));
     const productInfo = document.getElementById('product-info');
@@ -2364,8 +2356,6 @@ async function showCreateModal() {
 
     if (typeof toggleMovementStockType === 'function') toggleMovementStockType();
 
-    // العرض لا ينتظر SQLite. استخدم Bootstrap إن كان متاحاً، وإلا استخدم
-    // fallback متوافقاً مع WebView حتى لا يصبح زر الإضافة بلا استجابة.
     try {
         if (window.bootstrap && window.bootstrap.Modal) {
             window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
@@ -2390,12 +2380,7 @@ async function showCreateModal() {
         return;
     }
 
-    // افتح النافذة فوراً؛ تحميل بيانات SQLite يجب ألا يمنع ظهورها.
-    Promise.all([loadProducts(), loadWarehouses(), loadFuelTypes(), loadTanks()])
-        .catch(error => {
-            console.error('Error loading create-movement data:', error);
-            showToast(error?.message || 'تعذر تحميل بعض بيانات الحركة من SQLite', 'error');
-        });
+    Promise.allSettled([loadProducts(), loadWarehouses(), loadFuelTypes(), loadTanks()]);
 }
 
 function closeCreateModal() {
@@ -2423,42 +2408,30 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
-function toggleMovementFields() {
-    const type = document.getElementById('movement-type').value;
-    const stockType = document.getElementById('movement-stock-type').value;
-    ['source-warehouse-group', 'target-warehouse-group', 'supplier-group', 'customer-group', 'adjustment-direction-group']
-        .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
-    if (stockType === 'fuel') {
-        document.getElementById('adjustment-direction-group').style.display = type === 'adjustment' ? 'block' : 'none';
-        return;
-    }
-    if (type === 'in') { document.getElementById('target-warehouse-group').style.display = 'block'; document.getElementById('supplier-group').style.display = 'block'; }
-    else if (type === 'return_customer') { document.getElementById('target-warehouse-group').style.display = 'block'; document.getElementById('customer-group').style.display = 'block'; }
-    else if (type === 'out') { document.getElementById('source-warehouse-group').style.display = 'block'; document.getElementById('customer-group').style.display = 'block'; }
-    else if (type === 'return_supplier') { document.getElementById('source-warehouse-group').style.display = 'block'; document.getElementById('supplier-group').style.display = 'block'; }
-    else if (type === 'waste') { document.getElementById('source-warehouse-group').style.display = 'block'; }
-    else if (type === 'transfer') { document.getElementById('source-warehouse-group').style.display = 'block'; document.getElementById('target-warehouse-group').style.display = 'block'; }
-    else if (type === 'adjustment' || type === 'stocktake') { document.getElementById('source-warehouse-group').style.display = 'block'; document.getElementById('adjustment-direction-group').style.display = 'block'; }
-    const defaultWarehouseId = allWarehouses.length === 1 ? String(allWarehouses[0].warehouse_id || allWarehouses[0].id || '') : '';
-    if (defaultWarehouseId) {
-        if (['in', 'return_customer', 'transfer'].includes(type) && !document.getElementById('target-warehouse').value) document.getElementById('target-warehouse').value = defaultWarehouseId;
-        if (['out', 'return_supplier', 'waste', 'adjustment', 'stocktake', 'transfer'].includes(type) && !document.getElementById('source-warehouse').value) document.getElementById('source-warehouse').value = defaultWarehouseId;
-    }
-}
-
 async function loadProductInfo() {
     const productId = Number(document.getElementById('product-select').value);
-    if (!productId) { document.getElementById('product-info').style.display = 'none'; return; }
+    if (!productId) {
+        document.getElementById('product-info').style.display = 'none';
+        return;
+    }
     try {
         const result = await apiCall('getInventoryDetails', { product_id: productId });
-        const d = result.data || {};
+        const d = result.data || result;
         document.getElementById('current-quantity').textContent = Number(d.quantity || 0).toLocaleString('en');
         document.getElementById('current-cost').textContent = Number(d.purchase_price || 0).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2});
         document.getElementById('min-stock').textContent = Number(d.minimum_stock || 0).toLocaleString('en');
-        document.getElementById('last-movement').textContent = (d.movements || [])[0]?.movement_date || '---';
-        if (!document.getElementById('unit-price').value && Number(d.purchase_price || 0) > 0) document.getElementById('unit-price').value = Number(d.purchase_price);
+        const movementsArr = Array.isArray(d.movements) ? d.movements : [];
+        document.getElementById('last-movement').textContent = movementsArr.length ? (movementsArr[0].movement_date || '---') : '---';
+        const unitPriceEl = document.getElementById('unit-price');
+        if (unitPriceEl && !unitPriceEl.value && Number(d.purchase_price || 0) > 0) {
+            unitPriceEl.value = Number(d.purchase_price).toFixed(2);
+        }
         document.getElementById('product-info').style.display = 'block';
-    } catch (e) { document.getElementById('product-info').style.display = 'none'; showToast(e.error || 'تعذر تحميل رصيد المنتج', 'error'); }
+    } catch (e) {
+        document.getElementById('product-info').style.display = 'none';
+        console.error('loadProductInfo failed:', e);
+        showToast(e.error || 'تعذر تحميل رصيد المنتج', 'error');
+    }
 }
 
 async function saveMovement() {
@@ -2469,16 +2442,28 @@ async function saveMovement() {
     const unitPrice = Number(document.getElementById('unit-price').value || 0);
     const reference = document.getElementById('movement-reference').value.trim();
     const notes = document.getElementById('movement-notes').value.trim();
-    if (!type || !Number.isFinite(quantity) || quantity <= 0 || !date) { showToast('يرجى ملء الحقول المطلوبة بقيم صحيحة', 'error'); return; }
+
+    if (!type || !Number.isFinite(quantity) || quantity <= 0 || !date) {
+        showToast('يرجى ملء الحقول المطلوبة بقيم صحيحة', 'error');
+        return;
+    }
 
     let data;
     if (stockType === 'fuel') {
         const fuelTypeId = Number(document.getElementById('fuel-select').value || 0);
         const tankId = Number(document.getElementById('tank-select').value || 0);
-        if (!fuelTypeId || !tankId) { showToast('اختر نوع الوقود والخزان من بيانات SQLite', 'error'); return; }
+        if (!fuelTypeId) { showToast('اختر نوع الوقود من بيانات SQLite', 'error'); return; }
+        if (!tankId) { showToast('اختر الخزان الذي ستُوثَّق إليه الحركة', 'error'); return; }
         data = {
-            stock_type: 'fuel', movement_type: type, fuel_type_id: fuelTypeId, tank_id: tankId,
-            quantity, unit_cost: unitPrice, movement_date: date, reference_code: reference, notes,
+            stock_type: 'fuel',
+            movement_type: type,
+            fuel_type_id: fuelTypeId,
+            tank_id: tankId,
+            quantity,
+            unit_cost: unitPrice,
+            movement_date: date,
+            reference_code: reference,
+            notes,
             adjustment_direction: document.getElementById('adjustment-direction').value
         };
     } else {
@@ -2488,79 +2473,162 @@ async function saveMovement() {
         const supplierId = Number(document.getElementById('supplier-select').value || 0);
         const customerId = Number(document.getElementById('customer-select').value || 0);
         if (!productId) { showToast('اختر المنتج من SQLite', 'error'); return; }
-        if (type === 'transfer' && (!sourceWarehouse || !targetWarehouse || sourceWarehouse === targetWarehouse)) { showToast('اختر مستودعين مختلفين للتحويل', 'error'); return; }
-        if (['in', 'return_customer'].includes(type) && !targetWarehouse) { showToast('اختر المستودع الهدف', 'error'); return; }
-        if (['out', 'return_supplier', 'waste', 'adjustment', 'stocktake'].includes(type) && !sourceWarehouse) { showToast('اختر المستودع المصدر', 'error'); return; }
-        const backendType = type === 'return_customer' ? 'return' : type === 'return_supplier' ? 'out' : type === 'waste' ? 'damage' : type === 'stocktake' ? 'adjustment' : type;
-        const signedQuantity = ['adjustment', 'stocktake'].includes(type) && document.getElementById('adjustment-direction').value === 'decrease' ? -quantity : quantity;
-        data = { stock_type:'products', movement_type:backendType, movement_subtype:type, product_id:productId, quantity, signed_quantity:signedQuantity,
-            movement_date:date, unit_cost:unitPrice, warehouse_id:['in','return_customer'].includes(type)?targetWarehouse:sourceWarehouse,
-            source_warehouse_id:sourceWarehouse || null, target_warehouse_id:targetWarehouse || null, supplier_id:supplierId || null,
-            customer_id:customerId || null, reference_code:reference, reference_type:type, notes };
+        if (type === 'transfer' && (!sourceWarehouse || !targetWarehouse || sourceWarehouse === targetWarehouse)) {
+            showToast('اختر مستودعين مختلفين للتحويل', 'error'); return;
+        }
+        if (['in', 'return_customer'].includes(type) && !targetWarehouse) {
+            showToast('اختر المستودع الهدف', 'error'); return;
+        }
+        if (['out', 'return_supplier', 'waste', 'adjustment', 'stocktake'].includes(type) && !sourceWarehouse) {
+            showToast('اختر المستودع المصدر', 'error'); return;
+        }
+        const backendType = type === 'return_customer' ? 'return'
+            : type === 'return_supplier' ? 'out'
+            : type === 'waste' ? 'damage'
+            : type === 'stocktake' ? 'adjustment'
+            : type;
+        const adjustmentDirectionEl = document.getElementById('adjustment-direction');
+        const signedQuantity = ['adjustment', 'stocktake'].includes(type) && adjustmentDirectionEl && adjustmentDirectionEl.value === 'decrease'
+            ? -quantity
+            : quantity;
+        data = {
+            stock_type: 'products',
+            movement_type: backendType,
+            movement_subtype: type,
+            product_id: productId,
+            quantity,
+            signed_quantity: signedQuantity,
+            movement_date: date,
+            unit_cost: unitPrice,
+            warehouse_id: ['in','return_customer'].includes(type) ? targetWarehouse : sourceWarehouse,
+            source_warehouse_id: sourceWarehouse || null,
+            target_warehouse_id: targetWarehouse || null,
+            supplier_id: supplierId || null,
+            customer_id: customerId || null,
+            reference_code: reference,
+            reference_type: type,
+            notes
+        };
     }
     showLoading(true);
     try {
         const result = await apiCall('saveMovement', data);
         showToast(result.message || 'تم حفظ الحركة وتحديث الرصيد بنجاح', 'success');
-        bootstrap.Modal.getInstance(document.getElementById('createModal'))?.hide();
+        if (window.bootstrap && window.bootstrap.Modal) {
+            window.bootstrap.Modal.getInstance(document.getElementById('createModal'))?.hide();
+        } else {
+            closeCreateModal();
+        }
         await Promise.all([loadMovements(), loadStats(), loadTanks()]);
-    } catch (e) { showToast(e.error || 'فشل الحفظ ولم يتم اعتماد الحركة', 'error'); }
-    finally { showLoading(false); }
-}
-
-async function viewMovement(id) {
-    const movementId = Number(id);
-    if (!movementId) { showToast('معرف الحركة غير صالح', 'error'); return; }
-    const modalElement = document.getElementById('viewModal');
-    const details = document.getElementById('movement-details');
-    details.innerHTML = '<div class="text-center py-4"><i class="fas fa-circle-notch fa-spin"></i> جاري تحميل التفاصيل من SQLite...</div>';
-    bootstrap.Modal.getOrCreateInstance(modalElement).show();
-    try {
-        const stockType = (allMovements.find(x => Number(x.movement_id || x.id) === movementId) || {}).stock_type || 'all';
-        const result = await apiCall('getMovements', { movement_id: movementId, stock_type: stockType, limit: 1, page: 1 });
-        const rows = (result.data && result.data.rows) || result.rows || [];
-        const m = rows[0];
-        if (!m) throw { error: 'الحركة غير موجودة أو لم تعد ضمن نطاق المحطة' };
-        details.innerHTML = `<div class="info-grid">
-          <div class="info-item"><span>نوع المخزون:</span><span>${m.stock_type === 'fuel' ? '⛽ الوقود' : '🛒 المنتجات'}</span></div>
-          <div class="info-item"><span>رقم الحركة:</span><span>${escapeHtml(String(m.movement_id || '---'))}</span></div>
-          <div class="info-item"><span>الصنف:</span><span>${escapeHtml(m.item_name || '---')}</span></div>
-          <div class="info-item"><span>نوع الحركة:</span><span>${getMovementTypeLabel(m.movement_type, m.movement_subtype)}</span></div>
-          <div class="info-item"><span>التاريخ:</span><span>${escapeHtml(m.movement_date || '---')}</span></div>
-          <div class="info-item"><span>الكمية:</span><span>${Number(m.quantity || 0).toLocaleString('en')}</span></div>
-          <div class="info-item"><span>سعر الوحدة:</span><span>${Number(m.unit_cost || 0).toFixed(2)}</span></div>
-          <div class="info-item"><span>القيمة:</span><span>${Number(m.total_cost || 0).toFixed(2)}</span></div>
-          <div class="info-item"><span>الموقع/الخزان:</span><span>${escapeHtml(m.location_name || '---')}</span></div>
-          <div class="info-item"><span>المسار:</span><span>${escapeHtml([m.source_location,m.target_location].filter(Boolean).join(' → ') || '---')}</span></div>
-          <div class="info-item"><span>المرجع:</span><span>${escapeHtml(m.reference_code || '---')}</span></div>
-          <div class="info-item"><span>المنفذ:</span><span>${escapeHtml(m.performed_by_name || '---')}</span></div>
-          <div class="info-item"><span>الحالة:</span><span>${escapeHtml(m.status || '---')}</span></div>
-        </div>`;
     } catch (e) {
-        details.innerHTML = `<div class="text-center text-danger py-4"><i class="fas fa-triangle-exclamation"></i> ${escapeHtml(e.error || e.message || 'تعذر تحميل التفاصيل من SQLite')}</div>`;
+        showToast(e.error || e.message || 'فشل الحفظ ولم يتم اعتماد الحركة', 'error');
+    } finally {
+        showLoading(false);
     }
 }
 
-document.getElementById('viewModal').addEventListener('hidden.bs.modal', () => {
-    inventoryMovementDetailsRequestVersion += 1;
-    cancelPendingInventoryMovementDetails();
-});
-window.addEventListener('pagehide', () => cancelPendingInventoryMovementDetails('تمت مغادرة شاشة حركات المخزون'));
+// ============================================================
+// 9. عرض تفاصيل الحركة من المصفوفة المحلية (بدون استعلام جديد)
+// ============================================================
+function viewMovement(id, hintStockType) {
+    const movementId = Number(id);
+    if (!movementId) { showToast('معرف الحركة غير صالح', 'error'); return; }
 
+    // المصدر الأول: المصفوفة المحلية — لأن getUnifiedInventoryMovements لا يدعم فلترة movement_id
+    let m = allMovements.find(x => Number(x.movement_id || x.id) === movementId);
+
+    if (!m) {
+        showToast('تعذر العثور على بيانات الحركة في الصفحة الحالية. انتقل إلى الصفحة التي تحتوي عليها.', 'warning');
+        return;
+    }
+
+    const details = document.getElementById('movement-details');
+    if (!details) return;
+    const isFuel = String(m.stock_type || '').toLowerCase() === 'fuel';
+    details.innerHTML = `<div class="info-grid">
+        <div class="info-item"><span>نوع المخزون:</span><span>${isFuel ? '⛽ الوقود' : '🛒 المنتجات'}</span></div>
+        <div class="info-item"><span>رقم الحركة:</span><span class="numeric">${escapeHtml(String(m.movement_id || m.id || '---'))}</span></div>
+        <div class="info-item"><span>الصنف:</span><span>${escapeHtml(m.item_name || '---')}</span></div>
+        <div class="info-item"><span>الكود:</span><span>${escapeHtml(m.item_code || '---')}</span></div>
+        <div class="info-item"><span>نوع الحركة:</span><span>${getMovementTypeLabel(m.movement_type, m.movement_subtype)}</span></div>
+        <div class="info-item"><span>التاريخ:</span><span class="numeric">${escapeHtml(String(m.movement_date || '---').slice(0,19).replace('T',' '))}</span></div>
+        <div class="info-item"><span>الكمية:</span><span class="numeric">${Number(m.quantity || m.quantity_change || 0).toLocaleString('en', {maximumFractionDigits:3})}</span></div>
+        <div class="info-item"><span>سعر الوحدة:</span><span class="numeric">${Number(m.unit_cost || 0).toFixed(2)}</span></div>
+        <div class="info-item"><span>القيمة:</span><span class="numeric">${Number(m.total_cost || 0).toFixed(2)}</span></div>
+        <div class="info-item"><span>الموقع/الخزان:</span><span>${escapeHtml(m.location_name || '---')}</span></div>
+        <div class="info-item"><span>المسار:</span><span>${escapeHtml([m.source_location, m.target_location].filter(Boolean).join(' → ') || '---')}</span></div>
+        <div class="info-item"><span>المرجع:</span><span>${escapeHtml(m.reference_code || '---')}</span></div>
+        <div class="info-item"><span>الطرف:</span><span>${escapeHtml(m.party_name || '---')}</span></div>
+        <div class="info-item"><span>المنفذ:</span><span>${escapeHtml(m.performed_by_name || '---')}</span></div>
+        <div class="info-item"><span>الحالة:</span><span>${escapeHtml(m.status || '---')}</span></div>
+        <div class="info-item"><span>الجدول المصدر:</span><span>${escapeHtml(m.source_table || '---')}</span></div>
+    </div>`;
+    if (window.bootstrap && window.bootstrap.Modal) {
+        window.bootstrap.Modal.getOrCreateInstance(document.getElementById('viewModal')).show();
+    }
+}
+
+// ============================================================
+// 10. الأرشفة — فحص صريح لزر التأكيد (لا يُنفّذ عند الإلغاء)
+// ============================================================
 async function deleteMovement(id) {
-    const confirmation = await Swal.fire({ title: 'أرشفة الحركة؟', text: 'سيتم إخفاؤها من القوائم دون حذفها من سجل التدقيق.', icon: 'warning', showCancelButton: true, confirmButtonText: 'أرشفة', cancelButtonText: 'إلغاء' });
-    if (!confirmation.isConfirmed) return;
+    const movementId = Number(id);
+    if (!movementId || movementId <= 0) { showToast('معرف الحركة غير صالح', 'error'); return; }
+
+    // حركات الوقود لا تُؤرشف من هذه الشاشة (الجسر archiveStockMovement يعمل على inventory_movements)
+    const movement = allMovements.find(x => Number(x.movement_id || x.id) === movementId);
+    if (movement && String(movement.stock_type || '').toLowerCase() === 'fuel') {
+        showToast('لا يمكن أرشفة حركات الوقود من هذه الشاشة', 'warning');
+        return;
+    }
+
+    let confirmation;
+    try {
+        if (window.Swal && typeof Swal.fire === 'function') {
+            confirmation = await Swal.fire({
+                title: 'أرشفة الحركة؟',
+                text: 'سيتم إخفاؤها من القوائم دون حذفها من سجل التدقيق.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'نعم، أرشفة',
+                cancelButtonText: 'إلغاء',
+                reverseButtons: true,
+                focusCancel: true,
+                allowOutsideClick: false,
+                allowEscapeKey: true
+            });
+        } else {
+            confirmation = { isConfirmed: confirm('هل تريد أرشفة السجل المحدد؟') };
+        }
+    } catch (e) {
+        console.error('Swal error:', e);
+        confirmation = { isConfirmed: confirm('هل تريد أرشفة السجل المحدد؟') };
+    }
+
+    // فحص صريح ومزدوج: لا نكمل إلا إذا أكّد المستخدم بنعم صراحةً
+    if (!confirmation || confirmation.isConfirmed !== true) {
+        return;
+    }
+
     showLoading(true);
-    try { const result = await apiCall('deleteMovement', { movement_id: Number(id) }); showToast(result.message || 'تمت الأرشفة', 'success'); await Promise.all([loadMovements(), loadStats()]); }
-    catch (e) { showToast(e.error || 'فشلت الأرشفة ولم تتغير البيانات', 'error'); }
-    finally { showLoading(false); }
+    try {
+        const result = await apiCall('deleteMovement', { movement_id: movementId });
+        showToast(result.message || 'تمت الأرشفة بنجاح', 'success');
+        await Promise.all([loadMovements(), loadStats()]);
+    } catch (e) {
+        showToast(e.error || e.message || 'فشلت الأرشفة ولم تتغير البيانات', 'error');
+    } finally {
+        showLoading(false);
+    }
 }
 
 function printMovement() {
     const content = document.getElementById('movement-details').innerHTML;
     const win = window.open('', '_blank');
+    if (!win) return;
     win.document.write(`
-        <html><head><title>تفاصيل الحركة</title>
+        <html dir="rtl"><head><title>تفاصيل الحركة</title>
+        <meta charset="utf-8">
         <style>body{font-family:Cairo,sans-serif;padding:20px;direction:rtl;}
         .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
         .info-item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #ddd;}</style>
@@ -2575,13 +2643,16 @@ function printMovement() {
 }
 
 // ============================================================
-// 9. دوال التقارير
+// 11. التقارير
 // ============================================================
 function loadReportDefaults() {
-    const today = new Date().toISOString().slice(0,10);
-    const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString().slice(0,10);
-    document.getElementById('report-from').value = weekAgo;
-    document.getElementById('report-to').value = today;
+    const today = new Date();
+    const weekAgo = new Date(Date.now() - 7*24*60*60*1000);
+    const fmt = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    const fromEl = document.getElementById('report-from');
+    const toEl = document.getElementById('report-to');
+    if (fromEl && !fromEl.value) fromEl.value = fmt(weekAgo);
+    if (toEl && !toEl.value) toEl.value = fmt(today);
 }
 
 async function generateReport() {
@@ -2591,27 +2662,127 @@ async function generateReport() {
     const stockType = document.getElementById('report-stock-type').value;
     showLoading(true);
     try {
-        const params = { report_type:type, start_date:from, end_date:to, stock_type:stockType, limit:1000, page:1 };
+        const params = { report_type: type, start_date: from, end_date: to, stock_type: stockType, limit: 5000, page: 1 };
         const result = await apiCall('generateReport', params);
         if (!result.success) throw result;
-        const page = (result.data && typeof result.data === 'object' && !Array.isArray(result.data)) ? result.data : result;
         const data = movementRows(result);
-        const titles = { movement:'📋 حركات المخزون', stock_detail:'📦 تفاصيل المخزون', movements_summary:'📈 ملخص الحركات', profit_product:'💰 الربح حسب المنتج', profit_supplier:'🏭 الربح حسب المورد', profit_customer:'👥 الربح حسب العميل', below_min:'📉 المنتجات تحت الحد الأدنى', movements_detailed:'📋 حركات مفصلة' };
+        const titles = {
+            movement:'📋 حركات المخزون',
+            stock_detail:'📦 تفاصيل المخزون',
+            movements_summary:'📈 ملخص الحركات',
+            profit_product:'💰 الربح حسب المنتج',
+            profit_supplier:'🏭 الربح حسب المورد',
+            profit_customer:'👥 الربح حسب العميل',
+            below_min:'📉 المنتجات تحت الحد الأدنى',
+            movements_detailed:'📋 حركات مفصلة'
+        };
         document.getElementById('report-title').textContent = `${titles[type] || '📊 التقرير'} — ${stockType === 'fuel' ? 'الوقود' : stockType === 'products' ? 'المنتجات' : 'الكل'}`;
         document.getElementById('report-date-range').textContent = `📅 الفترة: ${from || 'البداية'} إلى ${to || 'النهاية'} — ${data.length} سجل`;
-        updateReportTable(type, data, stockType);
-    } catch (e) { showToast(e.error || e.message || 'خطأ في توليد التقرير من SQLite', 'error'); }
-    finally { showLoading(false); }
+
+        // تجميع حقيقي من البيانات الخام لتقارير الربح والملخصات
+        const aggregated = aggregateReportData(type, data);
+        updateReportTable(type, aggregated, stockType);
+    } catch (e) {
+        showToast(e.error || e.message || 'خطأ في توليد التقرير من SQLite', 'error');
+    } finally { showLoading(false); }
+}
+
+// تجميع تقارير الربح والملخصات من البيانات الخام
+function aggregateReportData(reportType, data) {
+    if (!Array.isArray(data) || data.length === 0) return data;
+
+    const classify = (mt) => {
+        const t = String(mt || '').toLowerCase();
+        if (['out','damage','return_supplier','sale','waste','fuel_sale'].includes(t)) return 'out';
+        if (['in','return','return_customer','purchase','receive','refill'].includes(t)) return 'in';
+        return 'other';
+    };
+
+    if (reportType === 'profit_product') {
+        const map = new Map();
+        data.forEach(row => {
+            const itemName = row.item_name || row.product_name_ar || row.product_name || row.fuel_name_ar || row.fuel_name || 'غير محدد';
+            const key = String(row.stock_type || 'product') + '::' + itemName;
+            const b = map.get(key) || {
+                item_name: itemName,
+                stock_type: row.stock_type || 'product',
+                total_sales: 0,
+                total_cost: 0,
+                movement_count: 0
+            };
+            const qty = Math.abs(toNumber(row.quantity ?? row.quantity_change ?? row.qty));
+            const totalCost = Math.abs(toNumber(row.total_cost ?? row.total_value));
+            const unitCost = toNumber(row.unit_cost ?? row.unit_price);
+            const kind = classify(row.movement_type || row.movement_subtype);
+            b.movement_count++;
+            if (kind === 'out') {
+                b.total_sales += totalCost > 0 ? totalCost : (qty * unitCost);
+            } else if (kind === 'in') {
+                b.total_cost += totalCost > 0 ? totalCost : (qty * unitCost);
+            }
+            map.set(key, b);
+        });
+        return Array.from(map.values()).map(b => ({ ...b, profit: b.total_sales - b.total_cost }));
+    }
+
+    if (reportType === 'profit_customer' || reportType === 'profit_supplier') {
+        const map = new Map();
+        data.forEach(row => {
+            const key = row.party_name || row.supplier_name || row.customer_name || 'غير محدد';
+            const b = map.get(key) || {
+                item_name: key,
+                party_name: key,
+                stock_type: row.stock_type || 'product',
+                total_sales: 0,
+                total_cost: 0,
+                movement_count: 0
+            };
+            const qty = Math.abs(toNumber(row.quantity ?? row.quantity_change ?? row.qty));
+            const totalCost = Math.abs(toNumber(row.total_cost ?? row.total_value));
+            const unitCost = toNumber(row.unit_cost ?? row.unit_price);
+            const kind = classify(row.movement_type || row.movement_subtype);
+            b.movement_count++;
+            if (kind === 'out') b.total_sales += totalCost > 0 ? totalCost : (qty * unitCost);
+            else if (kind === 'in') b.total_cost += totalCost > 0 ? totalCost : (qty * unitCost);
+            map.set(key, b);
+        });
+        return Array.from(map.values()).map(b => ({ ...b, profit: b.total_sales - b.total_cost }));
+    }
+
+    if (reportType === 'movements_summary') {
+        const map = new Map();
+        data.forEach(row => {
+            const mt = row.movement_type || row.movement_subtype || 'unknown';
+            const itemName = row.item_name || row.product_name_ar || row.product_name || row.fuel_name_ar || row.fuel_name || 'غير محدد';
+            const key = String(row.stock_type || 'product') + '::' + mt + '::' + itemName;
+            const b = map.get(key) || {
+                item_name: itemName,
+                stock_type: row.stock_type || 'product',
+                movement_type: mt,
+                quantity: 0,
+                total_cost: 0,
+                movement_count: 0
+            };
+            b.quantity += Math.abs(toNumber(row.quantity ?? row.quantity_change));
+            b.total_cost += Math.abs(toNumber(row.total_cost ?? row.total_value));
+            b.movement_count++;
+            map.set(key, b);
+        });
+        return Array.from(map.values());
+    }
+
+    return data;
 }
 
 function updateReportTable(reportType, data, stockType = 'all') {
     const head = document.getElementById('report-table-head');
     const body = document.getElementById('report-table-body');
+    if (!head || !body) return;
     head.innerHTML = '';
     body.innerHTML = '';
 
-    const headers = reportType === 'movement' || reportType === 'movements_detailed'
-        ? ['التاريخ','نوع المخزون','الصنف / الوقود','نوع الحركة','الكمية','سعر الوحدة/اللتر','القيمة','المستودع/الخزان','المورد/العميل','المرجع','الحالة','الملاحظات']
+    const headers = (reportType === 'movement' || reportType === 'movements_detailed')
+        ? ['التاريخ','نوع المخزون','الصنف / الوقود','نوع الحركة','الكمية','سعر الوحدة/اللتر','القيمة','المستودع/الخزان','المورد/العميل','المرجع','الحالة']
         : reportType === 'stock_detail'
         ? ['الصنف','نوع المخزون','المستودع/الخزان','الرصيد','متوسط التكلفة/السعر','إجمالي القيمة','آخر حركة']
         : reportType === 'movements_summary'
@@ -2627,7 +2798,7 @@ function updateReportTable(reportType, data, stockType = 'all') {
         return;
     }
 
-    const stockLabel = item => (item.stock_type === 'fuel' || item.item_type === 'fuel') ? '⛽ الوقود' : '🛒 المنتجات';
+    const stockLabel = item => (String(item.stock_type || '').toLowerCase() === 'fuel' || item.item_type === 'fuel') ? '⛽ الوقود' : '🛒 المنتجات';
     const itemLabel = item => item.item_name || item.product_name_ar || item.product_name || item.fuel_name_ar || item.fuel_name || item.name || '---';
     const locationLabel = item => item.location_name || item.warehouse_name || item.tank_name || item.storage_name || '---';
     const partyLabel = item => item.party_name || item.supplier_name || item.customer_name || item.counterparty_name || '---';
@@ -2640,31 +2811,31 @@ function updateReportTable(reportType, data, stockType = 'all') {
         const movement = item.movement_type || item.movement_subtype || '';
         if (reportType === 'movement' || reportType === 'movements_detailed') {
             tr.innerHTML =
-                '<td>' + escapeHtml(item.movement_date || item.created_at || '---') + '</td>' +
+                '<td class="numeric">' + escapeHtml(String(item.movement_date || item.created_at || '---').slice(0,19).replace('T',' ')) + '</td>' +
                 '<td>' + stockLabel(item) + '</td>' +
                 '<td>' + escapeHtml(itemLabel(item)) + '</td>' +
-                '<td>' + escapeHtml(getMovementTypeLabel(movement, item.movement_subtype)) + '</td>' +
-                '<td class="numeric">' + qty(item).toLocaleString('en') + '</td>' +
+                '<td>' + getMovementTypeLabel(movement, item.movement_subtype) + '</td>' +
+                '<td class="numeric">' + qty(item).toLocaleString('en', {maximumFractionDigits:3}) + '</td>' +
                 '<td class="numeric">' + price(item).toFixed(2) + '</td>' +
                 '<td class="numeric">' + value(item).toFixed(2) + '</td>' +
                 '<td>' + escapeHtml(locationLabel(item)) + '</td>' +
                 '<td>' + escapeHtml(partyLabel(item)) + '</td>' +
                 '<td>' + escapeHtml(item.reference_code || item.reference || '---') + '</td>' +
-                '<td>' + escapeHtml(item.status || '---') + '</td>' +
-                '<td>' + escapeHtml(item.notes || item.remarks || '---') + '</td>';
+                '<td>' + escapeHtml(item.status || '---') + '</td>';
         } else if (reportType === 'stock_detail') {
             tr.innerHTML =
                 '<td>' + escapeHtml(itemLabel(item)) + '</td><td>' + stockLabel(item) + '</td>' +
                 '<td>' + escapeHtml(locationLabel(item)) + '</td>' +
-                '<td class="numeric">' + qty(item).toLocaleString('en') + '</td>' +
+                '<td class="numeric">' + qty(item).toLocaleString('en', {maximumFractionDigits:3}) + '</td>' +
                 '<td class="numeric">' + price(item).toFixed(2) + '</td>' +
                 '<td class="numeric">' + value(item).toFixed(2) + '</td>' +
-                '<td>' + escapeHtml(item.last_movement_date || item.last_count_date || item.movement_date || '---') + '</td>';
+                '<td class="numeric">' + escapeHtml(String(item.last_movement_date || item.last_count_date || item.movement_date || '---').slice(0,10)) + '</td>';
         } else if (reportType === 'movements_summary') {
             tr.innerHTML =
-                '<td>' + stockLabel(item) + '</td><td>' + escapeHtml(getMovementTypeLabel(movement)) + '</td>' +
+                '<td>' + stockLabel(item) + '</td>' +
+                '<td>' + getMovementTypeLabel(item.movement_type, item.movement_subtype) + '</td>' +
                 '<td>' + escapeHtml(itemLabel(item)) + '</td>' +
-                '<td class="numeric">' + qty(item).toLocaleString('en') + '</td>' +
+                '<td class="numeric">' + qty(item).toLocaleString('en', {maximumFractionDigits:3}) + '</td>' +
                 '<td class="numeric">' + value(item).toFixed(2) + '</td>' +
                 '<td class="numeric">' + toNumber(item.movement_count || item.count).toLocaleString('en') + '</td>';
         } else if (reportType === 'below_min') {
@@ -2672,25 +2843,23 @@ function updateReportTable(reportType, data, stockType = 'all') {
             const available = qty(item);
             tr.innerHTML =
                 '<td>' + escapeHtml(itemLabel(item)) + '</td><td>' + stockLabel(item) + '</td>' +
-                '<td class="numeric">' + available.toLocaleString('en') + '</td>' +
-                '<td class="numeric">' + minimum.toLocaleString('en') + '</td>' +
-                '<td class="numeric">' + Math.max(0, minimum - available).toLocaleString('en') + '</td>' +
+                '<td class="numeric">' + available.toLocaleString('en', {maximumFractionDigits:3}) + '</td>' +
+                '<td class="numeric">' + minimum.toLocaleString('en', {maximumFractionDigits:3}) + '</td>' +
+                '<td class="numeric">' + Math.max(0, minimum - available).toLocaleString('en', {maximumFractionDigits:3}) + '</td>' +
                 '<td class="numeric">' + value(item).toFixed(2) + '</td>';
         } else {
+            const profit = toNumber(item.profit);
+            const profitColor = profit >= 0 ? 'var(--success-color)' : 'var(--danger-color)';
             tr.innerHTML =
-                '<td>' + escapeHtml(itemLabel(item) || partyLabel(item)) + '</td><td>' + stockLabel(item) + '</td>' +
+                '<td>' + escapeHtml(itemLabel(item) || partyLabel(item)) + '</td>' +
+                '<td>' + stockLabel(item) + '</td>' +
                 '<td class="numeric">' + toNumber(item.total_sales ?? item.sales).toFixed(2) + '</td>' +
                 '<td class="numeric">' + toNumber(item.total_cost ?? item.cost).toFixed(2) + '</td>' +
-                '<td class="numeric">' + toNumber(item.profit).toFixed(2) + '</td>' +
+                '<td class="numeric" style="color:' + profitColor + ';">' + profit.toFixed(2) + '</td>' +
                 '<td class="numeric">' + toNumber(item.movement_count ?? item.count).toLocaleString('en') + '</td>';
         }
         body.appendChild(tr);
     });
-}
-
-function selectReportRow(row) {
-    document.querySelectorAll('#report-table-body tr').forEach(r => r.classList.remove('selected'));
-    row.classList.add('selected');
 }
 
 async function exportReport() {
@@ -2709,24 +2878,38 @@ async function exportReport() {
         });
         if (!result.success) throw result;
         showToast(result.message || 'تم إنشاء ملف CSV الحقيقي وفتحه', 'success');
-    } catch (e) { showToast(e.error || 'فشل إنشاء ملف التصدير الحقيقي', 'error'); }
-    finally { showLoading(false); }
+    } catch (e) {
+        showToast(e.error || 'فشل إنشاء ملف التصدير الحقيقي', 'error');
+    } finally { showLoading(false); }
 }
 
 // ============================================================
-// 10. دوال التحليلات
+// 12. التحليلات
 // ============================================================
 async function loadAnalytics() {
     try {
-        const result = await apiCall('getMovementStats', { stock_type: document.getElementById('analytics-stock-type')?.value || 'products' });
+        const stockType = document.getElementById('analytics-stock-type')?.value || 'products';
+        const result = await apiCall('getMovementStats', { stock_type: stockType });
         if (result.success) {
-            const a = result.data || {};
-            document.getElementById('analytics-total-value').textContent = Number(a.inventory_value ?? 0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
-            document.getElementById('analytics-total-products').textContent = Number(a.total_movements ?? 0).toLocaleString('en');
-            document.getElementById('analytics-total-warehouses').textContent = Number(a.inbound_quantity ?? 0).toLocaleString('en',{maximumFractionDigits:3});
-            document.getElementById('analytics-below-min').textContent = Number(a.outbound_quantity ?? 0).toLocaleString('en',{maximumFractionDigits:3});
+            const a = bridgeDataObject(result);
+            const totalValueEl = document.getElementById('analytics-total-value');
+            const totalProductsEl = document.getElementById('analytics-total-products');
+            const totalWarehousesEl = document.getElementById('analytics-total-warehouses');
+            const belowMinEl = document.getElementById('analytics-below-min');
+            if (totalValueEl) totalValueEl.textContent = Number(a.inventory_value ?? 0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+            if (totalProductsEl) totalProductsEl.textContent = Number(a.total_movements ?? 0).toLocaleString('en');
+            if (totalWarehousesEl) totalWarehousesEl.textContent = Number(a.inbound_quantity ?? 0).toLocaleString('en',{maximumFractionDigits:3});
+            if (belowMinEl) belowMinEl.textContent = Number(a.outbound_quantity ?? 0).toLocaleString('en',{maximumFractionDigits:3});
         }
     } catch (e) { console.error('Error loading analytics:', e); }
+}
+
+// توليد مفتاح اليوم بالتوقيت المحلي (لمطابقة movement_date المحلي من SQLite)
+function localDateKey(d) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 async function loadProductAnalytics() {
@@ -2736,17 +2919,17 @@ async function loadProductAnalytics() {
     try {
         const endDate = new Date();
         const startDate = new Date(endDate.getTime() - (days - 1) * 86400000);
-        const start = startDate.toISOString().slice(0,10);
-        const end = endDate.toISOString().slice(0,10);
+        const start = localDateKey(startDate);
+        const end = localDateKey(endDate);
         const itemId = stockType === 'fuel'
             ? Number(document.getElementById('analytics-fuel').value || 0)
             : Number(document.getElementById('analytics-product').value || 0);
         if (!itemId) {
             showToast(stockType === 'fuel' ? 'يرجى اختيار نوع الوقود أولاً' : 'يرجى اختيار المنتج أولاً', 'warning');
+            showLoading(false);
             return;
         }
 
-        // يعتمد التحليل على نفس استعلام SQLite الموحد المستخدم في جدول الحركات؛ لا توجد بيانات مشتقة ثابتة.
         const result = await apiCall('getMovements', {
             stock_type: stockType,
             item_id: itemId,
@@ -2759,28 +2942,30 @@ async function loadProductAnalytics() {
         });
         if (!result.success) throw result;
         const rows = movementRows(result);
+
         const byDay = new Map();
         rows.forEach(row => {
-            const day = String(row.movement_date || row.created_at || '').slice(0,10);
-            if (!day) return;
-            const bucket = byDay.get(day) || { count:0, inbound:0, outbound:0, value:0 };
+            // مفتاح اليوم مبني على التوقيت المحلي — مطابق لصيغة movement_date المحلية من SQLite
+            const rawDate = String(row.movement_date || row.created_at || '').slice(0, 10);
+            if (!rawDate || !/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) return;
+            const bucket = byDay.get(rawDate) || { count: 0, inbound: 0, outbound: 0, value: 0 };
             const q = Math.abs(toNumber(row.quantity ?? row.quantity_change ?? row.qty));
             const t = String(row.movement_type || row.movement_subtype || '').toLowerCase();
             bucket.count += 1;
-            bucket.value += toNumber(row.total_cost ?? row.total_value ?? row.value ?? (q * toNumber(row.unit_cost ?? row.unit_price)));
-            if (['in','return','return_customer','purchase','receive'].includes(t)) bucket.inbound += q;
-            else if (['out','damage','waste','return_supplier','sale'].includes(t)) bucket.outbound += q;
-            byDay.set(day, bucket);
+            bucket.value += Math.abs(toNumber(row.total_cost ?? row.total_value ?? row.value ?? (q * toNumber(row.unit_cost ?? row.unit_price))));
+            if (['in','return','return_customer','purchase','receive','refill'].includes(t)) bucket.inbound += q;
+            else if (['out','damage','waste','return_supplier','sale','fuel_sale'].includes(t)) bucket.outbound += q;
+            byDay.set(rawDate, bucket);
         });
 
         const labels = [];
         const counts = [];
         const inbound = [];
         const outbound = [];
-        for (let i=0; i<days; i++) {
-            const d = new Date(startDate.getTime() + i*86400000);
-            const key = d.toISOString().slice(0,10);
-            const b = byDay.get(key) || {count:0,inbound:0,outbound:0};
+        for (let i = 0; i < days; i++) {
+            const d = new Date(startDate.getTime() + i * 86400000);
+            const key = localDateKey(d);
+            const b = byDay.get(key) || { count: 0, inbound: 0, outbound: 0 };
             labels.push(key);
             counts.push(b.count);
             inbound.push(b.inbound);
@@ -2788,9 +2973,10 @@ async function loadProductAnalytics() {
         }
 
         document.getElementById('product-analytics-range').textContent =
-            (stockType === 'fuel' ? '⛽ ' + (document.getElementById('analytics-fuel-name').value || 'الوقود')
-                                  : '🛒 ' + (document.getElementById('analytics-product-name').value || 'المنتج')) +
-            ' — ' + days + ' يوم';
+            (stockType === 'fuel'
+                ? '⛽ ' + (document.getElementById('analytics-fuel-name').value || 'الوقود')
+                : '🛒 ' + (document.getElementById('analytics-product-name').value || 'المنتج'))
+            + ' — ' + days + ' يوم';
 
         renderChart(labels, counts, inbound, outbound);
         renderAnalyticsTable(labels, counts, inbound, outbound);
@@ -2798,7 +2984,9 @@ async function loadProductAnalytics() {
         showToast(e.error || e.message || 'لا توجد بيانات تحليل حقيقية للفترة المختارة', 'error');
         renderChart([], [], [], []);
         renderAnalyticsTable([], [], [], []);
-    } finally { showLoading(false); }
+    } finally {
+        showLoading(false);
+    }
 }
 
 function renderAnalyticsTable(labels, counts, inbound, outbound) {
@@ -2811,7 +2999,7 @@ function renderAnalyticsTable(labels, counts, inbound, outbound) {
     }
     labels.forEach((day, i) => {
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + day + '</td>' +
+        tr.innerHTML = '<td class="numeric">' + day + '</td>' +
             '<td class="numeric">' + toNumber(counts[i]).toLocaleString('en') + '</td>' +
             '<td class="numeric">' + toNumber(inbound[i]).toLocaleString('en',{maximumFractionDigits:3}) + '</td>' +
             '<td class="numeric">' + toNumber(outbound[i]).toLocaleString('en',{maximumFractionDigits:3}) + '</td>' +
@@ -2822,37 +3010,67 @@ function renderAnalyticsTable(labels, counts, inbound, outbound) {
 
 function renderChart(labels, values, inbound = [], outbound = []) {
     const container = document.getElementById('product-analytics-chart');
+    if (!container) return;
+    if (chartInstance) {
+        try { chartInstance.destroy(); } catch (_) {}
+        chartInstance = null;
+    }
+    if (!labels.length) {
+        container.innerHTML = '<div class="text-center" style="padding:20px;">لا توجد بيانات حركة للفترة المختارة</div>';
+        return;
+    }
     container.innerHTML = '<canvas id="productChart"></canvas>';
-    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-    const datasets = inbound.length || outbound.length ? [
-        { label: 'دخول / إرجاع', data: inbound, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', tension: 0.3, fill: true },
-        { label: 'خروج / تلف', data: outbound, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.08)', tension: 0.3, fill: true }
-    ] : values.length ? [{ label: 'عدد الحركات', data: values, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.1)', tension: 0.3, fill: true }] : [];
-    if (!datasets.length) { container.innerHTML = '<div class="empty-state"><i class="fas fa-chart-line"></i>لا توجد بيانات حركة للفترة المختارة</div>'; return; }
-    chartInstance = new Chart(document.getElementById('productChart').getContext('2d'), { type: 'line', data: { labels, datasets }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
+    if (typeof Chart === 'undefined') {
+        container.innerHTML = '<div class="text-center" style="padding:20px;">مكتبة الرسم البياني غير متوفرة</div>';
+        return;
+    }
+    const datasets = (inbound.some(v => v > 0) || outbound.some(v => v > 0))
+        ? [
+            { label: 'دخول / إرجاع', data: inbound, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', tension: 0.3, fill: true },
+            { label: 'خروج / تلف', data: outbound, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.08)', tension: 0.3, fill: true }
+        ]
+        : [{ label: 'عدد الحركات', data: values, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.1)', tension: 0.3, fill: true }];
+    chartInstance = new Chart(document.getElementById('productChart').getContext('2d'), {
+        type: 'line',
+        data: { labels, datasets },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+    });
 }
 
 // ============================================================
-// 11. التهيئة الأولية
+// 13. التهيئة الأولية
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
     restoreTheme();
     onMovementStockTypeChanged();
     toggleAnalyticsSelector();
-    document.getElementById('movement-date').value = new Date().toISOString().slice(0,16);
-    // تعيين التواريخ الافتراضية للتقرير
-    const today = new Date().toISOString().slice(0,10);
-    const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString().slice(0,10);
-    document.getElementById('report-from').value = weekAgo;
-    document.getElementById('report-to').value = today;
+
+    const now = new Date();
+    const localISO = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + 'T' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    const dateEl = document.getElementById('movement-date');
+    if (dateEl) dateEl.value = localISO;
+
+    const today = localDateKey(now);
+    const weekAgoDate = new Date(Date.now() - 7*24*60*60*1000);
+    const weekAgo = localDateKey(weekAgoDate);
+    const reportFrom = document.getElementById('report-from');
+    const reportTo = document.getElementById('report-to');
+    if (reportFrom) reportFrom.value = weekAgo;
+    if (reportTo) reportTo.value = today;
+
     loadInitialData().then(() => {
         const params = new URLSearchParams(window.location.search);
         const productId = params.get('product_id');
         const mode = params.get('mode');
         if (productId && mode === 'in') {
             showCreateModal().then(() => {
-                document.getElementById('movement-type').value = 'in';
-                document.getElementById('product-select').value = productId;
+                const mt = document.getElementById('movement-type');
+                if (mt) mt.value = 'in';
+                const ps = document.getElementById('product-select');
+                if (ps) ps.value = productId;
+                const pd = document.getElementById('product-select-display');
+                const p = allProducts.find(x => String(x.product_id || x.id) === String(productId));
+                if (pd && p) pd.value = p.product_name_ar || p.product_name || p.name || '';
                 toggleMovementFields();
                 loadProductInfo();
             });
