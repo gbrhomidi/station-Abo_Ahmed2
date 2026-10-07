@@ -78,6 +78,7 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
         if(kotlin.math.abs(diff)<0.0001){
             upsertState(database,employee.stationId,pump.getLong("id"),nozzle.getLong("id"),employee.id,shift,state?.optDouble("opening_reading",Double.NaN)?.takeUnless{it.isNaN()},parsed.reading,parsed.reading)
             database.execSQL("UPDATE pumps SET meter_current=? WHERE id=? AND station_id=?",arrayOf(parsed.reading,pump.getLong("id"),employee.stationId))
+            recordApprovedMeterReading(database,employee.stationId,pump.getLong("id"),nozzle.getLong("id"),employee.id,previous,parsed.reading,sold)
             audit(database,employee,pump,nozzle,parsed,sender,body,"MATCHED","القراءة تطابق القراءة المتوقعة",previous,sold,expected,0.0,price,0.0); return true
         }
         if(parsed.reading<expected){
@@ -98,6 +99,14 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
     private fun currentShiftId(database:SQLiteDatabase,station:Int,shift:String):Long?=database.rawQuery("SELECT id FROM shifts WHERE station_id=? AND shift_type=? AND status='open' ORDER BY id DESC LIMIT 1",arrayOf(station.toString(),shift)).use{if(it.moveToFirst())it.getLong(0)else null}
     private fun soldLiters(database:SQLiteDatabase,station:Int,pump:Long,nozzle:Long,shiftId:Long):Double=database.rawQuery("SELECT COALESCE(SUM(fs.quantity),0) FROM fuel_sales fs JOIN sales_transactions st ON st.id=fs.sale_id WHERE st.station_id=? AND st.is_deleted=0 AND fs.shift_id=? AND fs.pump_id=? AND fs.nozzle_id=? AND fs.is_deleted=0",arrayOf(station.toString(),shiftId.toString(),pump.toString(),nozzle.toString())).use{if(it.moveToFirst())it.getDouble(0)else 0.0}
     private fun salePrice(database:SQLiteDatabase,pump:Long,nozzle:Long,fuelType:Long,station:Int):Double{val sale=database.rawQuery("SELECT fs.price_per_liter FROM fuel_sales fs JOIN sales_transactions st ON st.id=fs.sale_id WHERE st.station_id=? AND st.is_deleted=0 AND fs.pump_id=? AND fs.nozzle_id=? AND fs.is_deleted=0 ORDER BY fs.id DESC LIMIT 1",arrayOf(station.toString(),pump.toString(),nozzle.toString())).use{if(it.moveToFirst())it.getDouble(0)else 0.0};if(sale>0)return sale;if(fuelType<=0)return 0.0;return database.rawQuery("SELECT COALESCE(default_sale_price,0) FROM fuel_types WHERE id=? AND COALESCE(is_deleted,0)=0 LIMIT 1",arrayOf(fuelType.toString())).use{if(it.moveToFirst())it.getDouble(0)else 0.0}}
+    private fun recordApprovedMeterReading(database:SQLiteDatabase,station:Int,pump:Long,nozzle:Long,employee:Long,opening:Double,closing:Double,sold:Double){
+        try{
+            val code="SMS-"+System.currentTimeMillis()+"-"+pump+"-"+nozzle
+            database.execSQL("INSERT INTO meter_readings(reading_code,pump_id,nozzle_id,station_id,reading_date,opening_reading,closing_reading,sold_liters,status,is_deleted) VALUES(?,?,?,?,CURRENT_TIMESTAMP,?,?,?,?,0)",arrayOf(code,pump,nozzle,station,opening,closing,sold,"approved"))
+            try{database.execSQL("UPDATE meter_readings SET read_by=? WHERE reading_code=?",arrayOf(employee,code))}catch(_:Exception){}
+            try{database.execSQL("UPDATE meter_readings SET system_sold_liters=?,difference=? WHERE reading_code=?",arrayOf(sold,0.0,code))}catch(_:Exception){}
+        }catch(e:Exception){Log.w(TAG,"Unable to mirror approved SMS reading into meter_readings",e)}
+    }
     private fun auditRaw(database:SQLiteDatabase,sender:String,body:String,parsed:Parsed,decision:String,reason:String):Boolean{
         database.execSQL("INSERT INTO pump_sms_audit(station_id,sender_phone,pump_number,nozzle_number,reading_kind,sms_reading,decision,reason,raw_message) VALUES(?,?,?,?,?,?,?,?,?)",arrayOf(0,sender,parsed.pumpNumber,parsed.nozzleNumber,parsed.kind.toString(),parsed.reading,decision,reason,body)); return true
     }
