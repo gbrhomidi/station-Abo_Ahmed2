@@ -7868,7 +7868,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 ?.groupValues?.getOrNull(1)
                 ?.trim()
                 ?.takeIf { it.isNotBlank() }
-                ?: "invoice_${D}System.currentTimeMillis()}"
+                ?: "invoice_${System.currentTimeMillis()}"
             val safeNumber = invoiceNumber
                 .replace(Regex("[^A-Za-z0-9_\\-]"), "_")
                 .take(80)
@@ -7918,7 +7918,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                         view.draw(canvas)
 
                                         val invoiceDir = File(activity.filesDir, "invoices").apply { mkdirs() }
-                                        val imageFile = File(invoiceDir, "${D}safeNumber}.png")
+                                        val imageFile = File(invoiceDir, "${safeNumber}.png")
                                         FileOutputStream(imageFile).use { stream ->
                                             if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
                                                 throw IllegalStateException("فشل ضغط الصورة")
@@ -7931,7 +7931,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
                                         val uri = FileProvider.getUriForFile(
                                             activity,
-                                            "${D}activity.packageName}.fileprovider",
+                                            "${activity.packageName}.fileprovider",
                                             imageFile
                                         )
                                         val waPackage = listOf("com.whatsapp", "com.whatsapp.w4b")
@@ -7942,7 +7942,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                         val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                             type = "image/png"
                                             putExtra(Intent.EXTRA_STREAM, uri)
-                                            putExtra("jid", "${D}normalizedPhone}@s.whatsapp.net")
+                                            putExtra("jid", "${normalizedPhone}@s.whatsapp.net")
                                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                             waPackage?.let { setPackage(it) }
                                             clipData = android.content.ClipData.newRawUri("invoice", uri)
@@ -7957,14 +7957,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                                 DebugLogger.logException("ShareInvoiceStart", err)
                                                 Toast.makeText(
                                                     activity,
-                                                    "الفاتورة محفوظة: ${D}imageFile.name}",
+                                                    "الفاتورة محفوظة: ${imageFile.name}",
                                                     Toast.LENGTH_LONG
                                                 ).show()
                                             }
                                         } else {
                                             Toast.makeText(
                                                 activity,
-                                                "WhatsApp غير مثبت. الفاتورة محفوظة في: ${D}imageFile.name}",
+                                                "WhatsApp غير مثبت. الفاتورة محفوظة في: ${imageFile.name}",
                                                 Toast.LENGTH_LONG
                                             ).show()
                                         }
@@ -8016,7 +8016,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         ) {
                             DebugLogger.warn(
                                 "ShareInvoice",
-                                "HTTP/Error: ${D}error?.description}"
+                                "HTTP/Error: ${error?.description}"
                             )
                         }
                     }
