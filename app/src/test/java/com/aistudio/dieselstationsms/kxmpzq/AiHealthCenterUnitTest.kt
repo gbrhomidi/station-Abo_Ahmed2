@@ -26,7 +26,10 @@ class AiHealthCenterUnitTest {
         val db = try {
             dbHelper.writableDatabase
         } catch (e: Exception) {
-            throw AssertionError("DIAGNOSTIC_SQLITE_OPEN: " + e::class.java.name + ": " + e.message, e)
+            System.err.println("DIAGNOSTIC_SQLITE_OPEN: ${e::class.java.name}: ${e.message}")
+            e.printStackTrace(System.err)
+            System.err.flush()
+            throw e
         }
         assertNotNull(db)
     }
