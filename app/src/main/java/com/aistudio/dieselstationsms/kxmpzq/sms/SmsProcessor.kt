@@ -401,22 +401,15 @@ class SmsProcessor(
 
                 if (managerPhone != null) {
 
-                    runCatching {
-
+                    try {
                         replyManager.notifyManager(
                             managerPhone,
                             "🚨 رسالة مشبوهة\n" +
                                 "من: $sender\n" +
                                 "نص: ${rawBody.take(100)}"
                         )
-
-                    }.onFailure {
-
-                        Log.e(
-                            TAG,
-                            "Failed to notify manager",
-                            it
-                        )
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to notify manager", e)
                     }
                 }
 
@@ -596,24 +589,26 @@ class SmsProcessor(
 
                 is SmsSecurity.RateLimitResult.BLOCKED -> {
 
-                    runCatching {
+                    try {
                         replyManager.sendReplyOnce(
                             normalizedSender,
                             rateLimitResult.message
                         )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to send rate-limit reply", e)
                     }
 
                     if (rateLimitResult.managerPhone != null) {
 
-                        runCatching {
-
+                        try {
                             replyManager.notifyManager(
                                 rateLimitResult.managerPhone,
                                 "🚫 حظر مؤقت\n" +
                                     "العميل: ${customerDisplayName(customer)}\n" +
                                     "السبب: تجاوز الحد"
                             )
-
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to notify manager about rate limit", e)
                         }
                     }
 
@@ -825,12 +820,13 @@ class SmsProcessor(
                 )
             }
 
-            runCatching {
-
+            try {
                 replyManager.safeSendReply(
                     sender,
                     "عذراً، حدث خطأ أثناء معالجة رسالتك. رمز: $errorId"
                 )
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to send SMS processing error reply", e)
             }
 
             runCatching {
@@ -1462,12 +1458,13 @@ class SmsProcessor(
                 )
             }
 
-            runCatching {
-
+            try {
                 replyManager.safeSendReply(
                     sender,
                     "عذراً ${customerDisplayName(customer)}، حدث خطأ. رمز: $errorId"
                 )
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to send business error reply", e)
             }
 
             false
