@@ -28629,7 +28629,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     private fun ensurePricingV41Schema(db: SQLiteDatabase) {
         // Keep V41 self-contained for both fresh databases and upgrades from
         // older schemas where fuel_sales did not yet expose these columns.
+        System.err.println("V41-1 ensureFuelSalesSchema")
         ensureFuelSalesSchema(db)
+        System.err.println("V41-2 fuel_sales schema ready")
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS fuel_price_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28648,6 +28650,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 FOREIGN KEY (created_by) REFERENCES users(id)
             )
         """.trimIndent())
+        System.err.println("V41-3 fuel_price_history table ready")
         ensureColumn(db, "price_lists", "occasion_code", "TEXT")
         ensureColumn(db, "price_lists", "occasion_name_ar", "TEXT")
         ensureColumn(db, "price_lists", "applies_when", "TEXT")
@@ -28657,14 +28660,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureColumn(db, "sales_transactions", "business_day", "TEXT")
         ensureColumn(db, "payments", "business_day", "TEXT")
         ensureColumn(db, "stock_movements", "business_day", "TEXT")
+        System.err.println("V41-4 columns ready")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_price_history_station_fuel_date ON fuel_price_history(station_id, fuel_type_id, change_date, id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_price_lists_resolution ON price_lists(station_id, is_deleted, is_active, priority, valid_from, valid_to)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_price_list_items_resolution ON price_list_items(price_list_id, product_id, is_active, valid_from, valid_to)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_business_day ON sales_transactions(station_id, business_day, is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_sales_business_day ON fuel_sales(station_id, business_day, is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payments_business_day ON payments(business_day, created_at)")
+        System.err.println("V41-5 indexes ready")
         db.execSQL("CREATE TRIGGER IF NOT EXISTS trg_products_sale_price_history AFTER UPDATE OF sale_price ON products\n            WHEN OLD.sale_price IS NOT NEW.sale_price AND NEW.is_deleted = 0\n            BEGIN\n                INSERT INTO price_history(product_id, old_price, new_price, change_date, change_reason, created_by, archived)\n                VALUES(OLD.id, OLD.sale_price, NEW.sale_price, COALESCE(NEW.updated_at, CURRENT_TIMESTAMP), 'تغيير سعر المنتج', NEW.updated_by, 0);\n            END")
+        System.err.println("V41-6 product trigger ready")
         db.execSQL("CREATE TRIGGER IF NOT EXISTS trg_fuel_types_sale_price_history AFTER UPDATE OF default_sale_price ON fuel_types\n            WHEN OLD.default_sale_price IS NOT NEW.default_sale_price AND NEW.is_deleted = 0\n            BEGIN\n                INSERT INTO fuel_price_history(uuid, fuel_type_id, station_id, old_price, new_price, price_kind, change_date, change_reason, created_by, archived)\n                SELECT lower(hex(randomblob(16))), OLD.id, s.id, OLD.default_sale_price, NEW.default_sale_price, 'default', COALESCE(NEW.updated_at, CURRENT_TIMESTAMP), 'تغيير سعر الوقود', NEW.updated_by, 0\n                FROM stations s WHERE s.id IN (SELECT DISTINCT station_id FROM tanks WHERE fuel_type_id = OLD.id AND is_deleted = 0);\n            END")
+        System.err.println("V41-7 fuel trigger ready")
         db.execSQL("UPDATE sales_transactions SET business_day = substr(COALESCE(created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
         db.execSQL("UPDATE fuel_sales SET business_day = substr(COALESCE(sale_date, created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
         db.execSQL("UPDATE payments SET business_day = substr(COALESCE(created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
