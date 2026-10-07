@@ -1298,10 +1298,10 @@
           </div>
          </div>
 
-         <div class="form-group full-width-field hidden-field" id="fuel-selector-group">
+         <div class="form-group full-width-field hidden-field" id="fuel-movement-fields">
           <label class="form-label">⛽ نوع الوقود *</label>
           <div class="selection-button">
-            <input class="form-control field-click-picker" id="fuel-select-name" placeholder="اضغط لاختيار نوع الوقود من SQLite" readonly onclick="openFuelPicker('create')">
+            <input class="form-control field-click-picker" id="fuel-select-display" placeholder="اضغط لاختيار نوع الوقود من SQLite" readonly onclick="openFuelPicker('create')">
             <input id="fuel-select" type="hidden" value="">
           </div>
          </div>
@@ -2078,7 +2078,7 @@ function resetFilters() {
 function toggleMovementStockType() {
     const type = document.getElementById('movement-stock-type').value;
     const productGroup = document.getElementById('product-selector-group');
-    const fuelGroup = document.getElementById('fuel-selector-group');
+    const fuelGroup = document.getElementById('fuel-movement-fields');
     const tankGroup = document.getElementById('tank-group');
     const productInfo = document.getElementById('product-info');
     const typeSelect = document.getElementById('movement-type');
@@ -2090,7 +2090,7 @@ function toggleMovementStockType() {
 
     if (type === 'products') {
         const fuelSel = document.getElementById('fuel-select');
-        const fuelSelName = document.getElementById('fuel-select-name');
+        const fuelSelName = document.getElementById('fuel-select-display');
         const tankSel = document.getElementById('tank-select');
         if (fuelSel) fuelSel.value = '';
         if (fuelSelName) fuelSelName.value = '';
@@ -2281,7 +2281,7 @@ function selectFuel(id) {
     const target = window.fuelPickerTarget;
     if (target === 'create') {
         const hidden = document.getElementById('fuel-select');
-        const display = document.getElementById('fuel-select-name');
+        const display = document.getElementById('fuel-select-display');
         if (hidden) hidden.value = String(id);
         if (display) display.value = name;
         // تصفية الخزانات حسب نوع الوقود المختار فقط
@@ -2348,7 +2348,7 @@ async function showCreateModal() {
     setValue('movement-stock-type', 'products');
     setValue('movement-type', '');
     setValue('movement-date', new Date().toISOString().slice(0,16));
-    ['product-select','product-select-display','fuel-select','fuel-select-name','tank-select','movement-quantity','unit-price',
+    ['product-select','product-select-display','fuel-select','fuel-select-display','tank-select','movement-quantity','unit-price',
      'source-warehouse','target-warehouse','supplier-select','customer-select','movement-reference','movement-notes']
         .forEach(id => setValue(id, ''));
     const productInfo = document.getElementById('product-info');
