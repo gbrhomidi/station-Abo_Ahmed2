@@ -8678,7 +8678,22 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun generatePriceHistoryReport(jsonData: String = "{}") = operationalReport("products", "price_history", jsonData)
         @JavascriptInterface
-        fun savePriceHistoryRecord(jsonData: String) = operationalSave("products", "price_history", jsonData)
+        fun savePriceHistoryRecord(jsonData: String): String {
+            return try {
+                val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                if (!checkPermission("products", "write")) return errorResponse("لا تملك صلاحية تغيير أسعار المنتجات")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val d = JSONObject(jsonData.ifBlank { "{}" })
+                val productId = d.optLong("product_id", 0L)
+                val newPrice = d.optDouble("new_price", Double.NaN)
+                val reason = d.optString("change_reason", "").trim()
+                dataResponse(db.changeProductSalePrice(productId, newPrice, stationId, activity.currentUserId, reason).toJson())
+            } catch (e: Exception) {
+                DebugLogger.logException("SavePriceHistoryRecord", e)
+                errorResponse(e.message)
+            }
+        }
         @JavascriptInterface
         fun updatePriceHistoryRecord(id: Long, jsonData: String) = operationalUpdate("products", "price_history", id, jsonData)
         @JavascriptInterface
