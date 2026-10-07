@@ -25,7 +25,7 @@ class AiHealthCenterUnitTest {
         // تشخيص مؤقت: اطبع الاستثناء الكامل عند فتح SQLite دون تغيير سلوك الاختبار.
         val db = try {
             dbHelper.writableDatabase
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             System.err.println("DIAGNOSTIC_SQLITE_OPEN: ${e::class.java.name}: ${e.message}")
             e.printStackTrace(System.err)
             System.err.flush()
