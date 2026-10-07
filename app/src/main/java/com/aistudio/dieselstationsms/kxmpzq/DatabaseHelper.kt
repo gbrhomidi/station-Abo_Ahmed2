@@ -28485,7 +28485,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val args = mutableListOf(priceListId.toString())
             val scope = if (stationScopeId != null) { require(stationScopeId > 0); args += stationScopeId.toString(); " AND EXISTS (SELECT 1 FROM price_lists pl WHERE pl.id = pli.price_list_id AND pl.station_id = ? AND pl.is_deleted = 0)" } else ""
             readableDatabase.rawQuery("""
-                SELECT pli.*, p.name_ar AS product_name_ar, p.name_en AS product_name, p.product_code
+                SELECT pli.*, p.product_name_ar AS product_name_ar, p.product_name AS product_name, p.product_code
                 FROM price_list_items pli
                 LEFT JOIN products p ON pli.product_id = p.id
                 WHERE pli.price_list_id = ?$scope
@@ -28501,7 +28501,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val args = mutableListOf(productId.toString(), safeLimit.toString())
             val scope = if (stationScopeId != null) { require(stationScopeId > 0); args.add(1, stationScopeId.toString()); " AND EXISTS (SELECT 1 FROM products sp WHERE sp.id = ph.product_id AND sp.station_id = ? AND sp.is_deleted = 0)" } else ""
-            val query = """SELECT ph.*, u.name AS created_by_name FROM price_history ph
+            val query = """SELECT ph.*, COALESCE(u.full_name_ar, u.full_name, u.display_name, u.username) AS created_by_name FROM price_history ph
                 LEFT JOIN users u ON ph.created_by = u.id
                 WHERE ph.product_id = ? AND ph.archived = 0$scope
                 ORDER BY ph.change_date DESC LIMIT ?"""
@@ -28806,12 +28806,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val from = data.optString("from_date").trim().takeIf { it.isNotEmpty() }
         val to = data.optString("to_date").trim().takeIf { it.isNotEmpty() }
         val productRows = mutableListOf<JSONObject>()
-        val productSql = StringBuilder("SELECT ph.*, p.product_name, p.product_name_ar, u.name AS created_by_name FROM price_history ph JOIN products p ON p.id=ph.product_id LEFT JOIN users u ON u.id=ph.created_by WHERE p.station_id=? AND ph.archived=0")
+        val productSql = StringBuilder("SELECT ph.*, p.product_name, p.product_name_ar, COALESCE(u.full_name_ar, u.full_name, u.display_name, u.username) AS created_by_name FROM price_history ph JOIN products p ON p.id=ph.product_id LEFT JOIN users u ON u.id=ph.created_by WHERE p.station_id=? AND ph.archived=0")
         val productArgs=mutableListOf(stationScopeId.toString())
         if(from!=null){productSql.append(" AND ph.change_date>=?");productArgs+="$from 00:00:00"}
         if(to!=null){productSql.append(" AND ph.change_date<?");productArgs+="$to 00:00:00"}
         readableDatabase.rawQuery(productSql.toString(), productArgs.toTypedArray()).use{c-> while(c.moveToNext()) productRows+=cursorToJsonObject(c).apply{put("source_type","product");put("fuel_type_id",JSONObject.NULL)} }
-        val fuelSql=StringBuilder("SELECT h.*, f.fuel_name, f.fuel_name_ar, u.name AS created_by_name FROM fuel_price_history h JOIN fuel_types f ON f.id=h.fuel_type_id LEFT JOIN users u ON u.id=h.created_by WHERE h.station_id=? AND h.archived=0")
+        val fuelSql=StringBuilder("SELECT h.*, f.fuel_name, f.fuel_name_ar, COALESCE(u.full_name_ar, u.full_name, u.display_name, u.username) AS created_by_name FROM fuel_price_history h JOIN fuel_types f ON f.id=h.fuel_type_id LEFT JOIN users u ON u.id=h.created_by WHERE h.station_id=? AND h.archived=0")
         val fuelArgs=mutableListOf(stationScopeId.toString())
         if(from!=null){fuelSql.append(" AND h.change_date>=?");fuelArgs+="$from 00:00:00"}
         if(to!=null){fuelSql.append(" AND h.change_date<?");fuelArgs+="$to 00:00:00"}
