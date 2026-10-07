@@ -208,7 +208,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureFuelCommerceSchema(db)
             ensureFuelStocktakeSchema(db)
             ensureFinanceIntegritySchema(db)
-            ensurePricingV41Schema(db)
+            try {
+                ensurePricingV41Schema(db)
+            } catch (e: Exception) {
+                Log.e(TAG, "V41 pricing schema initialization failed", e)
+                throw e
+            }
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
         } finally {
