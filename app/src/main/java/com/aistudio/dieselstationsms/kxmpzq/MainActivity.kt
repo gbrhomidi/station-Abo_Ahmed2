@@ -5622,6 +5622,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getPumps called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
+                PumpMeterSmsRepository(context, db).ensureSchema()
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val pumps = db.getPumps(requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(pumps)
@@ -8712,6 +8713,33 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun resolvePumpRecord(id: Long, note: String = "") = operationalResolve("pumps", "pumps", id, note)
 
         @JavascriptInterface
+        fun getPumpNozzles(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val pumpId = JSONObject(jsonData.ifBlank { "{}" }).optInt("pump_id", 0)
+                dataResponse(PumpMeterSmsRepository(context, db).listNozzles(stationId, pumpId))
+            } catch (e: Exception) {
+                DebugLogger.logException("PumpNozzles", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun assignPumpEmployee(pumpId: Long, employeeId: Long, shiftType: String = "morning"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                PumpMeterSmsRepository(context, db).savePumpEmployee(stationId, pumpId, employeeId, shiftType).toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("PumpEmployeeAssignment", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
         fun getPumpNozzleRecords(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getPumpNozzlesForStation(requireCurrentStationId(db, activity.currentUserId))) }
@@ -9384,6 +9412,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     stationScopeId,
                     currentUserId
                 )
+                PumpMeterSmsRepository(context, db).ensureSchema()
+                val nozzleId = input.optLong("nozzle_id", 0L)
+                if (nozzleId > 0L) {
+                    db.writableDatabase.execSQL(
+                        "UPDATE fuel_sales SET nozzle_id=? WHERE id=? AND station_id=?",
+                        arrayOf(nozzleId, saleId, stationScopeId)
+                    )
+                }
 
                 val smsResult = if (input.optString("payment_method").trim() in setOf("credit", "آجل", "credit_sale", "credit_account")) {
                     queueCreditSaleSms(db, saleId, stationScopeId, currentUserId)
