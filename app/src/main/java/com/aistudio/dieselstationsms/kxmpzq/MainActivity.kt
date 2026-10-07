@@ -8742,8 +8742,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getPumpNozzleRecords(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getPumpNozzlesForStation(requireCurrentStationId(db, activity.currentUserId))) }
-            catch (e: Exception) { DebugLogger.logException("PumpNozzleList", e); errorResponse(e.message) }
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val pumpId = JSONObject(jsonData.ifBlank { "{}" }).optInt("pump_id", 0)
+                dataResponse(PumpMeterSmsRepository(context, db).listNozzles(stationId, pumpId))
+            } catch (e: Exception) {
+                DebugLogger.logException("PumpNozzleList", e)
+                errorResponse(e.message)
+            }
         }
 
         @JavascriptInterface
