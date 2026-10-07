@@ -9423,8 +9423,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val nozzleId = input.optLong("nozzle_id", 0L)
                 if (nozzleId > 0L) {
                     db.writableDatabase.execSQL(
-                        "UPDATE fuel_sales SET nozzle_id=? WHERE id=? AND station_id=?",
-                        arrayOf(nozzleId, saleId, stationScopeId)
+                        "UPDATE fuel_sales SET nozzle_id=? WHERE id=?",
+                        arrayOf(nozzleId, saleId)
                     )
                 }
 
