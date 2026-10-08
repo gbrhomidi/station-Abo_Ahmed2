@@ -29102,11 +29102,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.rawQuery(sql, args).use { c ->
             if (c.moveToFirst()) return PriceResolution(c.getDouble(0), "fuel_price_list", c.getLong(1), c.getString(7), c.getString(6), c.getLong(9), if (c.isNull(10)) null else c.getDouble(10), c.getDouble(11))
         }
-        db.rawQuery("SELECT default_sale_price FROM fuel_types WHERE id = ? AND is_deleted = 0 AND is_active = 1", arrayOf(fuelTypeId.toString())).use { c ->
-            require(c.moveToFirst()) { "نوع الوقود غير صالح" }
+        db.rawQuery(
+            """SELECT COALESCE((SELECT h.new_price FROM fuel_price_history h
+                                  WHERE h.fuel_type_id=f.id AND h.station_id=? AND h.archived=0
+                                  ORDER BY h.change_date DESC, h.id DESC LIMIT 1), f.default_sale_price)
+               FROM fuel_types f
+               WHERE f.id=? AND f.is_deleted=0 AND f.is_active=1
+                 AND EXISTS (SELECT 1 FROM tanks t WHERE t.fuel_type_id=f.id AND t.station_id=? AND t.is_deleted=0)""",
+            arrayOf(stationScopeId.toString(), fuelTypeId.toString(), stationScopeId.toString())
+        ).use { c ->
+            require(c.moveToFirst()) { "نوع الوقود غير مرتبط بالمحطة الحالية أو غير نشط" }
             val price = c.getDouble(0)
             require(price.isFinite() && price >= 0) { "سعر الوقود المخزن غير صالح" }
-            return PriceResolution(price, "fuel_type.default_sale_price", fuelTypeId, "السعر الافتراضي للوقود", null)
+            return PriceResolution(price, "fuel_station_price", fuelTypeId, "السعر الافتراضي الخاص بالمحطة", null)
         }
     }
 
@@ -29159,18 +29167,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             db.beginTransaction()
             try {
                 var oldPrice = 0.0
-                db.rawQuery("SELECT default_sale_price FROM fuel_types WHERE id=? AND is_deleted=0 AND is_active=1", arrayOf(fuelTypeId.toString())).use { c -> require(c.moveToFirst()) { "نوع الوقود غير صالح" }; oldPrice = if (c.isNull(0)) 0.0 else c.getDouble(0) }
+                db.rawQuery(
+                    """SELECT COALESCE((SELECT h.new_price FROM fuel_price_history h
+                                          WHERE h.fuel_type_id=f.id AND h.station_id=? AND h.archived=0
+                                          ORDER BY h.change_date DESC, h.id DESC LIMIT 1), f.default_sale_price)
+                       FROM fuel_types f WHERE f.id=? AND f.is_deleted=0 AND f.is_active=1""",
+                    arrayOf(stationScopeId.toString(), fuelTypeId.toString())
+                ).use { c -> require(c.moveToFirst()) { "نوع الوقود غير صالح" }; oldPrice = if (c.isNull(0)) 0.0 else c.getDouble(0) }
                 db.rawQuery("SELECT 1 FROM tanks WHERE station_id=? AND fuel_type_id=? AND is_deleted=0 LIMIT 1", arrayOf(stationScopeId.toString(), fuelTypeId.toString())).use { c -> require(c.moveToFirst()) { "نوع الوقود غير مرتبط بالمحطة الحالية" } }
-                val rows = db.update("fuel_types", ContentValues().apply { put("default_sale_price", newPrice); put("updated_by", actorId); put("updated_at", getCurrentDateTime()) }, "id=? AND is_deleted=0", arrayOf(fuelTypeId.toString()))
-                require(rows == 1) { "تعذر تغيير سعر الوقود" }
-                val historyUpdated = db.update("fuel_price_history", ContentValues().apply { put("change_reason", reason.ifBlank { "تغيير سعر الوقود" }); put("price_kind", priceKind) }, "id=(SELECT id FROM fuel_price_history WHERE fuel_type_id=? AND station_id=? ORDER BY id DESC LIMIT 1)", arrayOf(fuelTypeId.toString(), stationScopeId.toString()))
-                if (historyUpdated == 0) {
-                    db.insertOrThrow("fuel_price_history", null, ContentValues().apply {
-                        put("uuid", UUID.randomUUID().toString()); put("fuel_type_id", fuelTypeId); put("station_id", stationScopeId); put("old_price", oldPrice); put("new_price", newPrice); put("price_kind", priceKind); put("change_date", getCurrentDateTime()); put("change_reason", reason.ifBlank { "تغيير سعر الوقود" }); put("created_by", actorId); put("archived", 0)
-                    })
-                }
+                db.insertOrThrow("fuel_price_history", null, ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString()); put("fuel_type_id", fuelTypeId); put("station_id", stationScopeId)
+                    put("old_price", oldPrice); put("new_price", newPrice); put("price_kind", priceKind)
+                    put("change_date", getCurrentDateTime()); put("change_reason", reason.ifBlank { "تغيير سعر الوقود" })
+                    put("created_by", actorId); put("archived", 0)
+                })
                 db.setTransactionSuccessful()
-                PriceResolution(newPrice, "fuel_type.default_sale_price", fuelTypeId, reason.ifBlank { "تغيير سعر الوقود" }, null)
+                PriceResolution(newPrice, "fuel_station_price", fuelTypeId, reason.ifBlank { "تغيير سعر الوقود" }, null)
             } finally { db.endTransaction() }
         } finally { dbLock.unlock() }
     }
