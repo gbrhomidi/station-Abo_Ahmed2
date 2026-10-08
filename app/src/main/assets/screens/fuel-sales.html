@@ -1406,8 +1406,9 @@
         <button type="button" class="nav-item" id="reportBtn"><i class="fas fa-chart-bar"></i><span>تقارير</span></button>
     </nav>
     <div class="modal-overlay" id="formModal" onclick="closeModal(event,'formModal')"><div class="modal" onclick="event.stopPropagation()">
-        <div class="modal-header"><h3 class="modal-title" id="formTitle">إضافة سجل</h3><button type="button" class="modal-close" onclick="closeModal(null,'formModal')"><i class="fas fa-times"></i></button></div>
+        <div class="modal-header"><h3 class="modal-title" id="formTitle">إضافة عملية بيع وقود</h3><button type="button" class="modal-close" onclick="closeModal(null,'formModal')"><i class="fas fa-times"></i></button></div>
         <div class="modal-body"><form id="recordForm" class="form-grid"></form></div>
+        <div class="toast" id="formToast" role="alert" aria-live="polite"></div>
         <div class="modal-footer"><button type="button" class="btn primary" id="saveBtn"><i class="fas fa-save"></i> حفظ فعلي</button><button type="button" class="btn" id="deliveryBtn" disabled title="يتاح بعد حفظ عملية البيع بنجاح"><i class="fas fa-truck"></i> توصيل الطلب</button><button type="button" class="btn" onclick="closeModal(null,'formModal')">إلغاء</button></div>
     </div></div>
     <div class="modal-overlay" id="detailsModal" onclick="closeModal(event,'detailsModal')"><div class="modal" onclick="event.stopPropagation()">
@@ -1439,7 +1440,7 @@
                 {label:'العميل',key:'customer_id',type:'select',required:false},
                 {label:'تاريخ البيع',key:'sale_date',type:'date',required:true,readonly:true},
                 {label:'وقت البيع',key:'sale_time',type:'time',required:true,readonly:true},
-                {label:'رمز العرض / المناسبة (اختياري)',key:'occasion_code',type:'text',required:false,placeholder:'مثال: RAMADAN-2027'},
+                {label:'رمز العرض / المناسبة (اختياري)',key:'occasion_code',type:'select',required:false,full:true},
                 {label:'ملاحظات',key:'notes',type:'textarea',required:false}
             ],
             valueFields:['total_amount'],
@@ -1472,7 +1473,7 @@
 
         const esc = (value) => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const today = () => new Date().toISOString().slice(0,10);
-        function toast(message, bad=false) { const node=$('toast'); node.textContent=message; node.className='toast show'; node.style.background=bad?'var(--error)':'#111827'; clearTimeout(node._timer); node._timer=setTimeout(()=>node.classList.remove('show'),3500); }
+        function toast(message, bad=false) { const node=$('formModal')?.classList.contains('show') ? $('formToast') : $('toast'); node.textContent=message; node.className='toast show'; node.style.background=bad?'var(--error)':'#111827'; clearTimeout(node._timer); node._timer=setTimeout(()=>node.classList.remove('show'),3500); }
         function setLoading(value) { $('loadingIndicator').classList.toggle('show', Boolean(value)); }
         function parse(raw) { if (raw == null) throw new Error('لم يرجع الجسر نتيجة'); const value=typeof raw==='string'?JSON.parse(raw):raw; if (value && value.success === false) throw new Error(value.error || value.message || 'فشلت العملية'); return value; }
         function dataOf(value) { return value && Object.prototype.hasOwnProperty.call(value,'data') ? value.data : value; }
@@ -1555,8 +1556,26 @@
             const cls=def.readonly?' readonly':'';
             const placeholder=def.placeholder?`placeholder="${esc(def.placeholder)}"`:'';
             if(def.type==='textarea') return `<div class="form-group full"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><textarea class="form-input" data-key="${esc(def.key)}" rows="3" ${req} ${placeholder}>${esc(value)}</textarea></div>`;
-            if(def.type==='select') return `<div class="form-group"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><select class="form-input${cls}" data-key="${esc(def.key)}" ${req} ${ro}><option value="">اختر...</option></select></div>`;
+            if(def.type==='select') return `<div class="form-group${def.full?' full':''}"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><select class="form-input${cls}" data-key="${esc(def.key)}" ${req} ${ro}><option value="">اختر...</option></select></div>`;
             return `<div class="form-group"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><input class="form-input${cls}" data-key="${esc(def.key)}" type="${esc(def.type)}" value="${esc(value)}" ${req} ${ro} ${placeholder}></div>`;
+        }
+        async function loadActivePromotions(row=null) {
+            const select=document.querySelector('[data-key="occasion_code"]');
+            if(!select || !bridge || typeof bridge.getPriceListRecords!=='function') return;
+            try {
+                const result=await invoke('getPriceListRecords',['{}']);
+                const active=rowsFrom(result).filter(r=>{
+                    if(!r || Number(r.is_active)!==1 || Number(r.is_deleted||0)===1) return false;
+                    const now=new Date().toISOString().slice(0,19).replace('T',' ');
+                    const from=String(r.valid_from||'').replace('T',' '), to=String(r.valid_to||'').replace('T',' ');
+                    return (!from||from<=now)&&(!to||to>=now);
+                });
+                select.innerHTML='<option value="">بدون عرض محدد</option>'+active.filter(r=>String(r.occasion_code||'').trim()).map(r=>`<option value="${esc(String(r.occasion_code).trim())}">${esc(r.list_name_ar||r.list_name||r.list_code||r.occasion_code)}</option>`).join('');
+                if(row && field(row,['occasion_code'])) select.value=String(field(row,['occasion_code']));
+                else if(active.length===1 && String(active[0].occasion_code||'').trim()) select.value=String(active[0].occasion_code).trim();
+                const apply=()=>{if(typeof refreshResolvedFuelPrice==='function')refreshResolvedFuelPrice();};
+                select.onchange=apply; apply();
+            } catch(e) { toast('تعذر تحميل العروض النشطة من SQLite: '+e.message,true); }
         }
         async function loadSaleFormLookups(row=null) {
             const results=await Promise.all([
@@ -1598,6 +1617,7 @@
                 customerEl.value = field(row,['customer_id','customer_party_id']) || '';
             }
             if(!row){const now=new Date();document.querySelector('[data-key="sale_date"]')?.setAttribute('value',localDate(now));const dateEl=document.querySelector('[data-key="sale_date"]');if(dateEl)dateEl.value=localDate(now);const timeEl=document.querySelector('[data-key="sale_time"]');if(timeEl)timeEl.value=localTime(now);}
+            await loadActivePromotions(row);
             bindFuelCalculation(!row);
             const pumpSelect=document.querySelector('[data-key="pump_id"]');
             pumpSelect?.addEventListener('change',()=>loadPumpNozzles(pumpSelect.value,''));
@@ -1653,7 +1673,7 @@
             f?.addEventListener('change',()=>{const o=f.options[f.selectedIndex];if(p)p.value=o?.dataset.price||'';calc();if(resolveDynamic)refreshResolvedFuelPrice();});
             q?.addEventListener('input',()=>{calc();if(resolveDynamic)refreshResolvedFuelPrice();});
             customer?.addEventListener('change',()=>{if(resolveDynamic)refreshResolvedFuelPrice();});
-            document.querySelector('[data-key="occasion_code"]')?.addEventListener('change',()=>{if(resolveDynamic)refreshResolvedFuelPrice();});
+            document.querySelector('[data-key="occasion_code"]')?.addEventListener('change',()=>refreshResolvedFuelPrice());
             calc();
             if(resolveDynamic)refreshResolvedFuelPrice();
         }

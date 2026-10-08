@@ -3753,7 +3753,7 @@ body.invoice-print-mode #posInvoice {
       <div class="field-group"><label class="form-label">الإجمالي النهائي</label><input type="number" id="totalAmount" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" inputmode="decimal"></div>
       <div class="field-group"><label class="form-label">المبلغ المدفوع</label><input type="number" id="amountPaid" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" inputmode="decimal"></div>
     </div>
-    <div class="field-group"><label class="form-label">رمز العرض / المناسبة (اختياري)</label><input type="text" id="occasionCode" class="form-control invoice-summary" maxlength="80" placeholder="مثال: RAMADAN-2027" autocomplete="off"></div>
+    <div class="field-group"><label class="form-label">رمز العرض / المناسبة (اختياري)</label><select id="occasionCode" class="form-control invoice-summary"><option value="">بدون عرض محدد</option></select></div>
     <div class="field-group"><label class="form-label">المتبقي</label><input type="number" id="remainingAmount" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" inputmode="decimal"></div>
     <input type="hidden" id="quantityOnHand" name="quantity_on_hand">
 
@@ -4057,6 +4057,7 @@ function apiCall(action, params) {
             case 'getProductByBarcode': raw = AndroidInterface.getProductByBarcode(String(p.barcode || '')); break;
             case 'getResolvedProductSalePrice': raw = AndroidInterface.getResolvedProductSalePrice(JSON.stringify(p)); break;
             case 'getProducts': raw = AndroidInterface.getProducts(); break;
+            case 'getPriceListRecords': raw = AndroidInterface.getPriceListRecords(JSON.stringify(p || {})); break;
             case 'getNextInvoiceNumber': raw = AndroidInterface.getNextInvoiceNumber(); break;
             case 'completeSale': raw = AndroidInterface.completeSale(JSON.stringify(p)); break;
             case 'getCustomers': raw = AndroidInterface.getCustomers(); break;
@@ -4518,7 +4519,7 @@ async function toggleFlash() {
     const canApplyWithTrack = !!(track && typeof track.applyConstraints === 'function');
     if (!capabilities && !canApplyWithScanner && !canApplyWithTrack) {
         if (button) button.title = 'الفلاش غير متاح في جلسة الكاميرا الحالية';
-        showToast('الفلاش غير متاح في جلسة الكاميرا الحالية', 'warning');
+        showToast('الفلاش غير متاح في جلسة الكاميرا الحالية؛ يمكنك متابعة المسح أو استخدام إضاءة خارجية', 'warning');
         return;
     }
     const nextValue = !flashEnabled;
@@ -4876,6 +4877,33 @@ function showProductDetailsCanvas(product, row) {
 
 function showProductDetails(product, row) {
     showProductDetailsCanvas(product, row || null);
+}
+
+function promotionRows(value) {
+    const raw = value?.data ?? value;
+    return Array.isArray(raw) ? raw : (raw?.rows || raw?.data || []);
+}
+
+async function loadActivePromotions() {
+    const select = document.getElementById('occasionCode');
+    if (!select || !window.AndroidInterface) return;
+    try {
+        const result = await apiCall('getPriceListRecords', { limit: 500, offset: 0 });
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        const active = promotionRows(result).filter(r => {
+            if (!r || Number(r.is_active) !== 1 || Number(r.is_deleted || 0) === 1) return false;
+            const from = String(r.valid_from || '').replace('T', ' ');
+            const to = String(r.valid_to || '').replace('T', ' ');
+            return (!from || from <= now) && (!to || to >= now);
+        });
+        select.innerHTML = '<option value="">بدون عرض محدد</option>' + active.filter(r => String(r.occasion_code || '').trim()).map(r => `<option value="${escapePosText(String(r.occasion_code).trim())}">${escapePosText(r.list_name_ar || r.list_name || r.list_code || r.occasion_code)}</option>`).join('');
+        if (active.length === 1 && String(active[0].occasion_code || '').trim()) select.value = String(active[0].occasion_code).trim();
+        applySelectedPromotion();
+    } catch (e) { showToast('تعذر تحميل العروض النشطة من SQLite: ' + (e.message || 'خطأ'), 'warning'); }
+}
+
+function applySelectedPromotion() {
+    document.querySelectorAll('#productsTableBody tr').forEach(row => resolveProductRowPrice(row));
 }
 
 async function resolveProductRowPrice(row) {
@@ -5245,6 +5273,12 @@ function renderSalesInvoice(invoice) {
     return section;
 }
 
+// Stable printing contract: the receipt is always rendered from the invoice
+// returned by retrieveInvoice, never from the editable POS form state.
+function renderReceiptForPrint(invoice) {
+    return renderSalesInvoice(invoice);
+}
+
 async function loadInvoiceForLastSale() {
     const invoiceNumber = lastInvoiceNumber;
     if (!invoiceNumber) throw new Error('لا توجد فاتورة محفوظة حالياً');
@@ -5259,7 +5293,7 @@ async function printReceipt() {
         const response = await loadInvoiceForLastSale();
         const invoice = response.data || response;
         await loadCurrentStationLogo();
-        renderSalesInvoice(response.data || response);
+        renderReceiptForPrint(response.data || response);
         document.body.classList.add('invoice-print-mode');
         const printResult = await apiCall('printReceipt');
         if (!printResult.success) throw new Error(printResult.message || printResult.error || 'فشل فتح نافذة الطباعة');
@@ -6391,6 +6425,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('deliverPurchaseBtn').addEventListener('click', deliverLastPurchase);
     document.getElementById('openCreditCustomerModalBtn').addEventListener('click', openCreditCustomerModal);
     document.getElementById('customerSearchInput').addEventListener('input', function() { renderCreditCustomerResults(this.value); });
+    loadActivePromotions();
     document.getElementById('addCustomerBtn').addEventListener('click', () => {
         closeModal('customerSearchModal');
         window.location.href = 'screens/customers.html';

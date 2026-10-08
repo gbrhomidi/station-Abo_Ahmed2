@@ -328,6 +328,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureLegacySettingsSchema(db)
         ensureManagementIdentitySchema(db)
         ensureScreenPermissionsSchema(db)
+        ensureSalesPricingDefaults(db)
     }
 
     /**
@@ -376,6 +377,59 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """.trimIndent())
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_screen_permissions_screen ON screen_permissions(screen_id, is_granted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_screen_permissions_permission ON screen_permissions(permission_id, is_granted)")
+    }
+
+    /**
+     * Keeps existing installations usable after adding pricing and promotion screens.
+     * This is intentionally idempotent and runs on every database open so older
+     * databases receive the same defaults as newly-created databases.
+     */
+    private fun ensureSalesPricingDefaults(db: SQLiteDatabase) {
+        db.execSQL("""
+            INSERT OR IGNORE INTO accounts
+                (uuid, account_code, account_name, account_name_ar, account_type, account_category, normal_balance, level, is_active)
+            VALUES
+                ('ACC-COGS-DEFAULT-UUID', '5105', 'Cost of Goods Sold', 'تكلفة البضاعة المباعة', 'expense', 'cost_of_goods_sold', 'debit', 3, 1)
+        """.trimIndent())
+        db.execSQL("UPDATE accounts SET is_active=1, is_deleted=0 WHERE account_code='5105' AND account_type='expense'")
+
+        // The station manager can operate the complete pricing/sales workflow,
+        // including newly-added screens, without requiring a manual repair step.
+        db.execSQL("""
+            INSERT OR IGNORE INTO role_permissions
+                (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve, is_deleted)
+            SELECT lower(hex(randomblob(16))), 3, id, 1, 1, 1, 1, 1, 1, 1, 0
+            FROM permissions
+            WHERE is_active=1 AND is_deleted=0
+        """.trimIndent())
+        db.execSQL("""
+            UPDATE role_permissions
+               SET can_create=1, can_read=1, can_update=1, can_delete=1,
+                   can_export=1, can_print=1, can_approve=1, is_deleted=0,
+                   updated_at=CURRENT_TIMESTAMP
+             WHERE role_id=3
+        """.trimIndent())
+
+        val screens = listOf(
+            Triple("price-lists", "products", "قوائم الأسعار"),
+            Triple("price-change-log", "products", "سجل تغيير الأسعار"),
+            Triple("promotions", "products", "العروض والمناسبات"),
+            Triple("pos", "sales", "نقطة البيع"),
+            Triple("fuel-sales", "sales", "مبيعات الوقود")
+        )
+        for ((name, module, description) in screens) {
+            db.execSQL(
+                "INSERT OR IGNORE INTO screens (uuid, screen_name, module, description, is_active, archived) VALUES (?,?,?,?,1,0)",
+                arrayOf("SCR-" + name.uppercase() + "-UUID", name, module, description)
+            )
+        }
+        db.execSQL("""
+            INSERT OR IGNORE INTO screen_permissions (screen_id, permission_id, is_granted)
+            SELECT s.id, p.id, 1
+            FROM screens s CROSS JOIN permissions p
+            WHERE s.screen_name IN ('price-lists','price-change-log','promotions','pos','fuel-sales')
+              AND p.is_active=1 AND p.is_deleted=0
+        """.trimIndent())
     }
 
     private fun migrateV36ToV37(db: SQLiteDatabase) {
