@@ -7,7 +7,10 @@ data class PriceResolution(
     val source: String,
     val sourceId: Long?,
     val reason: String?,
-    val validUntil: String?
+    val validUntil: String?,
+    val priceListItemId: Long? = null,
+    val quantityLimit: Double? = null,
+    val quantitySold: Double = 0.0
 ) {
     init {
         require(unitPrice.isFinite() && unitPrice >= 0.0) { "السعر المحلول غير صالح" }
@@ -19,5 +22,8 @@ data class PriceResolution(
         put("source_id", sourceId ?: JSONObject.NULL)
         put("reason", reason ?: JSONObject.NULL)
         put("valid_until", validUntil ?: JSONObject.NULL)
+        put("price_list_item_id", priceListItemId ?: JSONObject.NULL)
+        put("quantity_limit", quantityLimit ?: JSONObject.NULL)
+        put("quantity_sold", quantitySold)
     }
 }
