@@ -10952,6 +10952,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val existingSaleId = findFinancialIdempotency(db, "fuel_sale", stationScopeId, idempotencyKey)
                 if (existingSaleId != null) return existingSaleId
                 require(reserveFinancialIdempotency(db, "fuel_sale", stationScopeId, idempotencyKey)) { "مفتاح العملية مستخدم مسبقاً" }
+                if (resolvedPrice.priceListItemId != null && (resolvedPrice.quantityLimit ?: 0.0) > 0.0) {
+                    consumePriceListQuantity(db, resolvedPrice.priceListItemId, liters, stationScopeId)
+                }
                 val saleId = insertSaleTransactionInternal(db,
                     stationId = stationScopeId,
                     shiftId = shiftId,
@@ -11207,7 +11210,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val lineTotal = quantity * unitPrice
                 require(lineTotal.isFinite() && lineTotal >= 0.0) { "إجمالي السطر غير صالح" }
                 total += lineTotal
-                prepared += JSONObject().apply { put("product_id", productId); put("quantity", quantity); put("unit_price", unitPrice); put("line_total", lineTotal); put("price_source", resolvedPrice.source); put("price_source_id", resolvedPrice.sourceId ?: JSONObject.NULL); put("price_reason", resolvedPrice.reason ?: JSONObject.NULL); put("price_valid_until", resolvedPrice.validUntil ?: JSONObject.NULL) }
+                prepared += JSONObject().apply {
+                    put("product_id", productId); put("quantity", quantity); put("unit_price", unitPrice); put("line_total", lineTotal)
+                    put("price_source", resolvedPrice.source); put("price_source_id", resolvedPrice.sourceId ?: JSONObject.NULL)
+                    put("price_list_item_id", resolvedPrice.priceListItemId ?: JSONObject.NULL)
+                    put("quantity_limit", resolvedPrice.quantityLimit ?: JSONObject.NULL)
+                    put("price_reason", resolvedPrice.reason ?: JSONObject.NULL); put("price_valid_until", resolvedPrice.validUntil ?: JSONObject.NULL)
+                }
             }
             require(total.isFinite() && total >= 0.0) { "إجمالي البيع غير صالح" }
             val paymentType = data.optString("payment_type", "cash")
@@ -11234,6 +11243,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 return result
             }
             require(reserveFinancialIdempotency(db, "product_sale", stationScopeId, idempotencyKey)) { "مفتاح العملية مستخدم مسبقاً" }
+            prepared.forEach { item ->
+                val itemId = item.optLong("price_list_item_id", 0L).takeIf { it > 0L }
+                val cap = item.optDouble("quantity_limit", 0.0)
+                if (itemId != null && cap > 0.0) consumePriceListQuantity(db, itemId, item.getDouble("quantity"), stationScopeId)
+            }
             val saleId = insertSaleTransactionInternal(db,
                 stationId = stationScopeId,
                 shiftId = shiftId,
@@ -28975,6 +28989,28 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(price.isFinite() && price >= 0) { "سعر الوقود المخزن غير صالح" }
             return PriceResolution(price, "fuel_type.default_sale_price", fuelTypeId, "السعر الافتراضي للوقود", null)
         }
+    }
+
+    private fun consumePriceListQuantity(db: SQLiteDatabase, itemId: Long?, quantity: Double, stationScopeId: Int) {
+        if (itemId == null || itemId <= 0L) return
+        require(quantity.isFinite() && quantity > 0.0) { "كمية البيع المخصصة لقائمة الأسعار غير صالحة" }
+        val changed = db.compileStatement("""
+            UPDATE price_list_items
+               SET quantity_sold = COALESCE(quantity_sold, 0) + ?
+             WHERE id = ? AND is_active = 1
+               AND (quantity_limit IS NULL OR quantity_limit <= 0 OR COALESCE(quantity_sold, 0) + ? <= quantity_limit)
+               AND EXISTS (
+                   SELECT 1 FROM price_lists pl
+                    WHERE pl.id = price_list_items.price_list_id
+                      AND pl.station_id = ? AND pl.is_active = 1 AND pl.is_deleted = 0
+               )
+        """.trimIndent()).apply {
+            bindDouble(1, quantity)
+            bindLong(2, itemId)
+            bindDouble(3, quantity)
+            bindLong(4, stationScopeId.toLong())
+        }.executeUpdateDelete()
+        require(changed == 1) { "نفدت الكمية المخصصة في قائمة الأسعار؛ أعد احتساب السعر قبل إتمام البيع" }
     }
 
     fun changeProductSalePrice(productId: Long, newPrice: Double, stationScopeId: Int, actorId: Long, reason: String = ""): PriceResolution {
