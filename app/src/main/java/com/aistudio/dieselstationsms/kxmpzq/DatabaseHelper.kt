@@ -10955,6 +10955,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 if (resolvedPrice.priceListItemId != null && (resolvedPrice.quantityLimit ?: 0.0) > 0.0) {
                     consumePriceListQuantity(db, resolvedPrice.priceListItemId, liters, stationScopeId)
                 }
+                val fuelUnitCost = db.rawQuery(
+                    """SELECT CASE WHEN SUM(COALESCE(NULLIF(actual_quantity, 0), delivered_quantity)) > 0
+                              THEN SUM(COALESCE(NULLIF(net_amount, 0), NULLIF(total_amount, 0),
+                                               COALESCE(unit_price, 0) * COALESCE(NULLIF(actual_quantity, 0), delivered_quantity)))
+                                   / SUM(COALESCE(NULLIF(actual_quantity, 0), delivered_quantity))
+                              ELSE 0 END
+                       FROM tank_refills
+                       WHERE station_id = ? AND fuel_type_id = ? AND status = 'completed' AND is_deleted = 0
+                         AND COALESCE(NULLIF(actual_quantity, 0), delivered_quantity) > 0""",
+                    arrayOf(stationScopeId.toString(), fuelTypeId.toString())
+                ).use { c -> if (c.moveToFirst()) c.getDouble(0).coerceAtLeast(0.0) else 0.0 }
+                val fuelCostAmount = liters * fuelUnitCost
                 val saleId = insertSaleTransactionInternal(db,
                     stationId = stationScopeId,
                     shiftId = shiftId,
@@ -10994,6 +11006,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("fuel_type_id", fuelTypeId)
                     put("quantity", liters)
                     put("price_per_liter", pricePerLiter)
+                    put("cost_per_liter", fuelUnitCost)
+                    put("cost_amount", fuelCostAmount)
                     put("total_amount", totalAmount)
                     put("payment_method", paymentMethod)
                     if (customerId != null) put("customer_id", customerId)
@@ -11105,6 +11119,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     if (data.has("amount_paid") && !data.isNull("amount_paid")) data.optDouble("amount_paid", if (isCreditSale) 0.0 else totalAmount)
                     else if (isCreditSale) 0.0 else totalAmount
                 )
+                if (fuelCostAmount > 0.000001) postSaleCostJournalWithinTransaction(db, saleId, stationScopeId, cashierId, "fuel", fuelCostAmount)
                 completeFinancialIdempotency(db, "fuel_sale", stationScopeId, idempotencyKey, saleId)
                 db.setTransactionSuccessful()
                 saleId
