@@ -104,6 +104,41 @@ class PricingV41RobolectricTest {
     }
 
     @Test
+    fun occasionPriceListRequiresMatchingOccasionCode() {
+        val db = helper.writableDatabase
+        val categoryId = db.rawQuery("SELECT id FROM product_categories WHERE is_deleted=0 ORDER BY id LIMIT 1", null).use { check(it.moveToFirst()); it.getLong(0) }
+        val unitId = db.rawQuery("SELECT id FROM units ORDER BY id LIMIT 1", null).use { check(it.moveToFirst()); it.getLong(0) }
+        val productId = helper.insertProduct(JSONObject()
+            .put("product_name", "Occasion Price Test")
+            .put("product_name_ar", "اختبار سعر المناسبة")
+            .put("category_id", categoryId)
+            .put("unit_id", unitId)
+            .put("purchase_price", 5.0)
+            .put("sale_price", 100.0), 1, actorId)
+        val listId = db.insertOrThrow("price_lists", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("list_code", "OCC-${UUID.randomUUID().toString().take(6)}")
+            put("list_name", "Foundation day")
+            put("list_name_ar", "عرض يوم التأسيس")
+            put("station_id", 1)
+            put("valid_from", "2026-10-01 00:00:00")
+            put("valid_to", "2026-10-31 23:59:59")
+            put("applies_when", "occasion")
+            put("occasion_code", "FOUNDATION_DAY")
+            put("priority", 100)
+            put("is_active", 1)
+            put("is_deleted", 0)
+        })
+        helper.insertPriceListItem(
+            JSONObject().put("price_list_id", listId).put("product_id", productId).put("unit_price", 75.0),
+            actorId, 1
+        )
+        assertEquals(100.0, helper.resolveProductSalePrice(productId, 1, null, "2026-10-07 12:00:00").unitPrice, 0.0001)
+        assertEquals(100.0, helper.resolveProductSalePrice(productId, 1, null, "2026-10-07 12:00:00", "OTHER_EVENT").unitPrice, 0.0001)
+        assertEquals(75.0, helper.resolveProductSalePrice(productId, 1, null, "2026-10-07 12:00:00", "FOUNDATION_DAY").unitPrice, 0.0001)
+    }
+
+    @Test
     fun productPriceChangeIsAtomicAndAuditedByTrigger() {
         val db = helper.writableDatabase
         val categoryId = db.rawQuery("SELECT id FROM product_categories WHERE is_deleted=0 ORDER BY id LIMIT 1", null).use { check(it.moveToFirst()); it.getLong(0) }
