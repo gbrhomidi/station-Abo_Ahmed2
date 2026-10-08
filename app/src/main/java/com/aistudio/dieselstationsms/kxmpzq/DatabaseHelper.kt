@@ -28908,7 +28908,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
               AND (pl.occasion_code IS NULL OR trim(pl.occasion_code) = '' OR pl.occasion_code = ?)
               AND (COALESCE(pl.applies_when, 'always') NOT IN ('occasion', 'event') OR
                    (pl.occasion_code IS NOT NULL AND trim(pl.occasion_code) <> '' AND pl.occasion_code = ?))
-            ORDER BY pl.priority DESC, specificity DESC,
+            AND (COALESCE(pl.applies_when, 'always') NOT IN ('clearance_stock', 'clearance') OR
+                    (pl.clearance_stock_below IS NOT NULL AND
+                     COALESCE((SELECT SUM(il.quantity_on_hand) FROM inventory_levels il
+                               JOIN warehouses w ON w.id = il.warehouse_id
+                               WHERE il.product_id = p.id AND w.station_id = ? AND w.is_active = 1),
+                              p.quantity, 0) <= pl.clearance_stock_below))
+             ORDER BY pl.priority DESC, specificity DESC,
                      CASE WHEN pl.station_id = ? THEN 1 ELSE 0 END DESC,
                      replace(COALESCE(pli.valid_from, pl.valid_from, ''),'T',' ') DESC,
                      pl.id DESC, pli.id DESC
@@ -28967,7 +28973,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
               AND (pl.occasion_code IS NULL OR trim(pl.occasion_code) = '' OR pl.occasion_code = ?)
               AND (COALESCE(pl.applies_when, 'always') NOT IN ('occasion', 'event') OR
                    (pl.occasion_code IS NOT NULL AND trim(pl.occasion_code) <> '' AND pl.occasion_code = ?))
-            ORDER BY pl.priority DESC, specificity DESC,
+            AND (COALESCE(pl.applies_when, 'always') NOT IN ('clearance_stock', 'clearance') OR
+                    (pl.clearance_stock_below IS NOT NULL AND
+                     COALESCE((SELECT SUM(t.current_quantity) FROM tanks t
+                               WHERE t.station_id = ? AND t.fuel_type_id = p.fuel_type_id
+                                 AND t.is_deleted = 0 AND t.status <> 'retired'), 0) <= pl.clearance_stock_below))
+             ORDER BY pl.priority DESC, specificity DESC,
                      CASE WHEN pl.station_id = ? THEN 1 ELSE 0 END DESC,
                      replace(COALESCE(pli.valid_from, pl.valid_from, ''),'T',' ') DESC,
                      pl.id DESC, pli.id DESC
