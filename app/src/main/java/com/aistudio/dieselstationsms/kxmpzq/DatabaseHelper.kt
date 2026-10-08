@@ -28980,7 +28980,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private fun priceValiditySql(alias: String, time: String): String =
         "($alias.valid_from IS NULL OR trim($alias.valid_from) = '' OR replace($alias.valid_from,'T',' ') <= ?) " +
-        "AND ($alias.valid_to IS NULL OR trim($alias.valid_to) = '' OR ? < CASE WHEN length(trim($alias.valid_to)) = 10 THEN trim($alias.valid_to) || ' 23:59:59.999' ELSE replace($alias.valid_to,'T',' ') END)""
+        "AND ($alias.valid_to IS NULL OR trim($alias.valid_to) = '' OR ? < CASE WHEN length(trim($alias.valid_to)) = 10 THEN trim($alias.valid_to) || ' 23:59:59.999' ELSE replace($alias.valid_to,'T',' ') END)"
 
     fun resolveProductSalePrice(
         productId: Long,
