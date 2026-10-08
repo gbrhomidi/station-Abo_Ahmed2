@@ -4985,10 +4985,11 @@ function completeSale() {
     const paid = isCredit ? 0 : (parseFloat(document.getElementById('amountPaid').value) || 0);
     if (!isCredit && !paid) { showToast('يرجى إدخال المبلغ المدفوع', 'error'); return; }
     if (!isCredit && paid < total) { showToast('المبلغ المدفوع أقل من الإجمالي النهائي', 'error'); return; }
-    let entityId = null;
+    const selectedEntityId = Number(document.getElementById('customerId')?.value || 0);
+    let entityId = selectedEntityId > 0 ? selectedEntityId : null;
 
     if (isCredit) {
-        entityId = Number(document.getElementById('customerId').value || 0);
+        entityId = selectedEntityId;
         if (!entityId || !selectedCreditCustomer || Number(selectedCreditCustomer.id || selectedCreditCustomer.party_id || selectedCreditCustomer.entity_id) !== entityId) {
             showToast('اختر عميلاً نشطاً للبيع الآجل', 'error');
             return;
@@ -6217,6 +6218,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('customerId').addEventListener('change', function() {
         loadCustomerDetails(this.value);
+        document.querySelectorAll('#productsTableBody tr').forEach(row => resolveProductRowPrice(row));
     });
     ['subtotal','discountAmount','taxAmount','serviceFee'].forEach(id => {
         const field = document.getElementById(id);
