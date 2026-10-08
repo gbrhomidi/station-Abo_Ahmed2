@@ -3290,6 +3290,16 @@ body.invoice-print-mode #posInvoice {
   </style>
 
   <style id="posInvoiceStyleBlock">
+    /* ============================================================
+       ملاحظة تصميم مهمة:
+       - #posInvoice يبقى مخفياً بـ display:none على الشاشة لأن الفاتورة
+         تُعرض للمستخدم عبر المودالات فقط، وتُبنى نسخة جديدة داخل WebView
+         في Kotlin لالتقاطها كصورة PNG.
+       - عند إرسال الصورة، يُرسل محتوى هذا القسم + رابط خط Cairo صراحةً
+         إلى Kotlin. لا تعتمد على أن WebView الأصلي سيحمل الخط تلقائياً.
+       - أي تعديل على هذا القسم يجب أن يُختبر مع شاشة الأجهزة الحقيقية
+         لأن أي class جديد يستخدم Font Awesome يجب أن يُضاف للأصول المحلية.
+       ============================================================ */
     #posInvoice {
       display: none;
       width: 210mm;
@@ -4035,8 +4045,7 @@ body.invoice-print-mode #posInvoice {
 <script>
 // ============================================================
 // 1. apiCall — جسر AndroidInterface
-// ملاحظة: تم إزالة shareInvoiceJpg لأن Kotlin يستدعي latch.await(30s)
-// بشكل متزامن مما يُجمّد خيط JS. الحل: wa.me النصي الموثوق 100%.
+// مشاركة الفاتورة المصورة تتم عبر Android Bridge غير متزامن؛ لا تستخدم wa.me النصي.
 // ============================================================
 function apiCall(action, params) {
     const p = params || {};
@@ -4065,6 +4074,7 @@ function apiCall(action, params) {
             case 'retrieveInvoice': raw = AndroidInterface.retrieveInvoice(String(p.invoice_number || '')); break;
             case 'salesReport': raw = AndroidInterface.salesReport(); break;
             case 'printReceipt': raw = AndroidInterface.printCurrentPage(); break;
+            case 'shareInvoiceJpg': raw = AndroidInterface.shareInvoiceJpg(String(p.invoice_html || ''), String(p.phone || '')); break;
             case 'printSalesReport': raw = AndroidInterface.printCurrentPageWithTitle('تقرير المبيعات'); break;
             default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
         }
@@ -4072,15 +4082,48 @@ function apiCall(action, params) {
     } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
 }
 
+// ============================================================
+// جسر الردود غير المتزامنة (Async Bridge Results)
+// ────────────────────────────────────────────────────────────
+// يستخدم Map<action, resolver> بدل المتغير العام _pendingResolve.
+// هذا يمنع تسرّب النتائج بين الطلبات المتزامنة، ويمنع أي دالة Kotlin
+// أخرى تستدعي handleAndroidResult من استهلاك resolver طلب آخر.
+// ============================================================
+const _pendingCalls = new Map();
+
+/**
+ * تسجيل resolver لطلب غير متزامن معيّن بواسطة اسم الـaction.
+ * يُستبدل أي resolver سابق بنفس الاسم (سلوك مقصود لآخر طلب يفوز).
+ */
+function registerPendingCall(action, resolver) {
+    if (!action || typeof resolver !== 'function') return;
+    _pendingCalls.set(action, resolver);
+}
+
+/**
+ * تنظيف resolver طلب غير متزامن عند الانتهاء (نجاح/فشل/مهلة).
+ */
+function clearPendingCall(action) {
+    if (!action) return;
+    _pendingCalls.delete(action);
+}
+
+/**
+ * نقطة الدخول الوحيدة التي يستدعيها Kotlin عبر:
+ *   window.handleAndroidResult('action_name', jsonString)
+ */
 function handleAndroidResult(action, data) {
+    const resolver = _pendingCalls.get(action);
+    if (!resolver) {
+        console.warn('[Android Bridge] No pending call registered for action:', action);
+        return;
+    }
+    _pendingCalls.delete(action);
     try {
         const parsed = typeof data === 'string' ? JSON.parse(data) : data;
-        if (window._pendingResolve) {
-            window._pendingResolve(parsed);
-            window._pendingResolve = null;
-        }
+        resolver(parsed);
     } catch (e) {
-        console.error('Error in handleAndroidResult:', e);
+        console.error('Error in handleAndroidResult:', action, e);
     }
 }
 
@@ -4127,11 +4170,17 @@ function forceHideLoading() {
 // ============================================================
 function showToast(message, type = 'success') {
     forceHideLoading();
-    const icon = type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning';
+    const config = {
+        success: { title: 'نجاح', icon: 'success' },
+        error:   { title: 'خطأ',  icon: 'error'   },
+        warning: { title: 'تنبيه', icon: 'warning' },
+        info:    { title: 'معلومة', icon: 'info'   }
+    };
+    const selected = config[type] || config.success;
     Swal.fire({
-        title: type === 'success' ? 'نجاح' : type === 'error' ? 'خطأ' : 'تنبيه',
+        title: selected.title,
         text: message,
-        icon: icon,
+        icon: selected.icon,
         timer: 3000,
         showConfirmButton: false,
         customClass: { popup: 'swal-custom-popup' }
@@ -5279,12 +5328,22 @@ function openWhatsappShare() {
     if (modal) modal.classList.add('show');
     setTimeout(() => { if (phoneInput) phoneInput.focus(); }, 250);
 
-    // تحميل الفاتورة غير متزامن — بدون showLoading
+    /*
+     * تحميل الفاتورة غير متزامن — بدون showLoading.
+     * ملاحظة تصميم: نُجهّز #posInvoice كامل في الـDOM هنا حتى يكون
+     * جاهزاً لالتقاط صورة PNG لاحقاً من داخل WebView Kotlin. لا نعتمد
+     * على أن المستخدم سبق أن ضغط "طباعة" قبل استخدام واتساب.
+     */
     (async () => {
         try {
             const response = await loadInvoiceForLastSale();
             const invoice = response.data || response;
             _currentWhatsappInvoice = invoice;
+
+            // تجهيز صورة المحطة (data URL) قبل بناء الفاتورة في الـDOM.
+            await loadCurrentStationLogo();
+            renderSalesInvoice(invoice);
+
             if (previewEl) previewEl.textContent = buildInvoiceWhatsAppText(invoice);
 
             const customerPhone = String(invoice.customer_phone || '').replace(/\D/g, '');
@@ -5304,6 +5363,11 @@ function openWhatsappShare() {
 }
 
 function closeWhatsappShare() {
+    // حماية من الإغلاق أثناء عملية إرسال جارية — يمنع تسريب pending call.
+    if (_whatsappBusy && _pendingCalls.has('shareInvoiceJpg')) {
+        showWhatsappValidation('الرجاء الانتظار حتى اكتمال تجهيز الصورة');
+        return;
+    }
     const modal = document.getElementById('whatsappShareModal');
     if (modal) modal.classList.remove('show');
     _whatsappBusy = false;
@@ -5349,7 +5413,20 @@ function showWhatsappValidation(msg) {
     setTimeout(() => { el.classList.remove('show'); }, 4000);
 }
 
-function sendWhatsappInvoice() {
+/**
+ * إرسال الفاتورة كصورة PNG عبر واتساب.
+ *
+ * التدفق:
+ *   1. التحقق من الرقم (تطبيع) ووجود الفاتورة الجاهزة في #posInvoice.
+ *   2. تجميع HTML نهائي = روابط الخطوط والأيقونات + <style id="posInvoiceStyleBlock">
+ *      + <section id="posInvoice">. الروابط ضرورية لأن Kotlin يبني WebView جديداً
+ *      ولا يحمّل تلقائياً موارد المستند الأصلي.
+ *   3. تسجيل resolver بـ Map<action,resolver>، ثم استدعاء AndroidInterface.shareInvoiceJpg
+ *      الذي يعيد فوراً {success:true, queued:true}، ثم انتظار نتيجة غير متزامنة
+ *      عبر handleAndroidResult('shareInvoiceJpg', ...).
+ *   4. تنظيف الـtimeout وإلغاء تسجيل resolver في كل المسارات.
+ */
+async function sendWhatsappInvoice() {
     if (_whatsappBusy) return;
     const invoice = _currentWhatsappInvoice;
     if (!invoice) { showWhatsappValidation('لم يتم تحميل الفاتورة بعد. الرجاء الانتظار'); return; }
@@ -5364,19 +5441,71 @@ function sendWhatsappInvoice() {
     const sendBtn = document.getElementById('waSendBtn');
     if (sendBtn) sendBtn.disabled = true;
 
+    _whatsappBusy = true;
+    showLoading(true);
+
+    let timeoutId = null;
     try {
-        const text = buildInvoiceWhatsAppText(invoice);
-        const url = `https://wa.me/${result.number}?text=${encodeURIComponent(text)}`;
-        console.log('[WhatsApp] Opening:', url);
-        try { window.location.href = url; }
-        catch (navErr) { window.open(url, '_blank'); }
-        showToast('تم تجهيز الفاتورة وفتح واتساب', 'success');
+        const invoiceSection = document.getElementById('posInvoice');
+        if (!invoiceSection || !invoiceSection.innerHTML.trim()) {
+            throw new Error('تصميم الفاتورة غير جاهز للإرسال');
+        }
+        if (!window.AndroidInterface || typeof AndroidInterface.shareInvoiceJpg !== 'function') {
+            throw new Error('مشاركة الفاتورة المصورة متاحة من داخل تطبيق Android فقط');
+        }
+
+        /*
+         * جمع HTML كامل يُرسل لـKotlin. الروابط إلزامية:
+         * WebView الالتقاط في Kotlin لا يعرف موارد المستند الأصلي، فيحتاج
+         * تحميل Cairo و Font Awesome بشكل صريح قبل الرسم.
+         */
+        const fontLinks =
+            '<link rel="stylesheet" href="file:///android_asset/assets-local/css/css2">' +
+            '<link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">';
+        const invoiceStyle = document.getElementById('posInvoiceStyleBlock')?.outerHTML || '';
+        const invoiceHtml = fontLinks + invoiceStyle + invoiceSection.outerHTML;
+
+        const resultPromise = new Promise((resolve, reject) => {
+            registerPendingCall('shareInvoiceJpg', resolve);
+
+            timeoutId = setTimeout(() => {
+                clearPendingCall('shareInvoiceJpg');
+                reject(new Error('انتهت مهلة تحويل الفاتورة إلى صورة'));
+            }, 35000);
+
+            try {
+                const acknowledgement = JSON.parse(AndroidInterface.shareInvoiceJpg(invoiceHtml, result.number));
+                if (!acknowledgement.success && !acknowledgement.queued) {
+                    clearPendingCall('shareInvoiceJpg');
+                    if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+                    reject(new Error(acknowledgement.message || acknowledgement.error || 'تعذر بدء تحويل الفاتورة'));
+                }
+            } catch (bridgeError) {
+                clearPendingCall('shareInvoiceJpg');
+                if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+                reject(bridgeError);
+            }
+        });
+
+        showToast('جاري تجهيز صورة الفاتورة...', 'info');
+        const shareResult = await resultPromise;
+
+        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+
+        if (!shareResult || !shareResult.success) {
+            throw new Error(shareResult?.error || shareResult?.message || 'فشل إرسال صورة الفاتورة');
+        }
+        showToast('تم فتح واتساب مع الفاتورة كصورة كاملة', 'success');
         closeWhatsappShare();
     } catch (error) {
-        console.error('WhatsApp send failed:', error);
-        showWhatsappValidation('تعذر فتح واتساب: ' + (error.message || 'خطأ'));
+        console.error('WhatsApp image share failed:', error);
+        showWhatsappValidation(error.message || 'تعذر إرسال صورة الفاتورة');
     } finally {
+        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+        clearPendingCall('shareInvoiceJpg');
+        _whatsappBusy = false;
         if (sendBtn) sendBtn.disabled = false;
+        showLoading(false);
     }
 }
 

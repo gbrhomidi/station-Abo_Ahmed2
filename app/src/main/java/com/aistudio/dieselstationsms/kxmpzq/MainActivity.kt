@@ -7854,12 +7854,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         /**
          * يلتقط صورة الفاتورة عبر WebView منفصل، ويحفظها في filesDir/invoices/{invoiceNumber}.png
          * ثم يفتح WhatsApp مع الصورة مرفقة.
+         *
+         * التصميم المحدّث:
+         *  1) WebView غير مرئي لكن بدون alpha=0f (لتجنب bitmap فارغ على بعض OEMs).
+         *  2) ننتظر onLoadResource + onPageFinished + postVisualStateCallback.
+         *  3) تأخير ديناميكي 600ms / 900ms حسب عدد الموارد المعلّقة.
+         *  4) محاولة bitmap ARGB_8888 ثم fallback إلى RGB_565 عند OutOfMemoryError.
+         *  5) عند وجود WhatsApp: startActivity مباشر بـsetPackage بدون createChooser.
+         *  6) التقاط IllegalArgumentException حول FileProvider.getUriForFile.
+         *  7) نقوم بتنظيف HTML الوارد من DOCTYPE/HTML/HEAD/BODY المتكررة قبل التغليف.
          */
         @JavascriptInterface
         fun shareInvoiceJpg(invoiceHtml: String, phone: String = ""): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             if (invoiceHtml.isBlank()) return errorResponse("محتوى الفاتورة غير متوفر")
-
             val normalizedPhone = phone.filter { it.isDigit() }
             if (normalizedPhone.length !in 8..15) {
                 return errorResponse("رقم الهاتف غير صالح. استخدم الرقم الدولي بدون مسافات أو رموز.")
@@ -7875,18 +7883,142 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 .replace(Regex("[^A-Za-z0-9_\\-]"), "_")
                 .take(80)
 
-            val latch = CountDownLatch(1)
-            var result = JSONObject()
-                .put("success", false)
-                .put("error", "لم تبدأ العملية")
-            var capture: WebView? = null
+            val widthPx = 794
+            val maxHeightPx = 12000
 
+            // لا تنتظر النتيجة داخل دالة JavascriptInterface؛ ذلك يجمّد خيط WebView
+            // ويمنع runOnUiThread من تنفيذ عملية الرسم. يتم الإبلاغ بالنتيجة لاحقاً.
             activity.runOnUiThread {
+                var capture: WebView? = null
+
+                fun finish(result: JSONObject) {
+                    activity.runOnUiThread {
+                        val callback = "window.handleAndroidResult('shareInvoiceJpg', ${JSONObject.quote(result.toString())})"
+                        activity.webView?.evaluateJavascript(callback, null)
+                    }
+                }
+
+                fun detachCapture() {
+                    runCatching {
+                        capture?.let {
+                            (it.parent as? ViewGroup)?.removeView(it)
+                            it.stopLoading()
+                            it.destroy()
+                        }
+                    }
+                    capture = null
+                }
+
+                /**
+                 * يرسم WebView إلى Bitmap ويحفظه كـPNG ثم يفتح واتساب.
+                 * يُنفَّذ دائمًا على UI thread وبعد تأخير يسمح بتحميل الصور/الخطوط.
+                 */
+                fun performRender(view: WebView, onComplete: (JSONObject) -> Unit) {
+                    var bitmap: Bitmap? = null
+                    try {
+                        // المحاولة الأولى: 794px مع ARGB_8888 (أفضل جودة ممكنة).
+                        view.measure(
+                            View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+                            View.MeasureSpec.makeMeasureSpec(maxHeightPx, View.MeasureSpec.AT_MOST)
+                        )
+                        var measuredHeight = view.measuredHeight.coerceAtLeast(1123)
+                        view.layout(0, 0, widthPx, measuredHeight)
+                        var bitmapWidth = widthPx
+
+                        bitmap = try {
+                            Bitmap.createBitmap(bitmapWidth, measuredHeight, Bitmap.Config.ARGB_8888)
+                        } catch (oomFull: OutOfMemoryError) {
+                            DebugLogger.warn(
+                                "ShareInvoice",
+                                "OOM at ${bitmapWidth}x${measuredHeight}/ARGB_8888; falling back to 595px RGB_565"
+                            )
+                            bitmapWidth = 595
+                            view.measure(
+                                View.MeasureSpec.makeMeasureSpec(bitmapWidth, View.MeasureSpec.EXACTLY),
+                                View.MeasureSpec.makeMeasureSpec(maxHeightPx, View.MeasureSpec.AT_MOST)
+                            )
+                            measuredHeight = view.measuredHeight.coerceAtLeast(842)
+                            view.layout(0, 0, bitmapWidth, measuredHeight)
+                            try {
+                                Bitmap.createBitmap(bitmapWidth, measuredHeight, Bitmap.Config.RGB_565)
+                            } catch (oomFallback: OutOfMemoryError) {
+                                throw IllegalStateException("الذاكرة غير كافية لإنشاء صورة الفاتورة", oomFallback)
+                            }
+                        }
+
+                        val canvas = android.graphics.Canvas(bitmap)
+                        canvas.drawColor(android.graphics.Color.WHITE)
+                        view.draw(canvas)
+
+                        val invoiceDir = File(activity.filesDir, "invoices").apply { mkdirs() }
+                        val imageFile = File(invoiceDir, "${safeNumber}.png")
+                        FileOutputStream(imageFile).use { stream ->
+                            check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                                "فشل ضغط الصورة"
+                            }
+                            stream.flush()
+                        }
+                        require(imageFile.isFile && imageFile.length() > 0L) {
+                            "ملف الصورة الناتج فارغ"
+                        }
+
+                        val uri = try {
+                            FileProvider.getUriForFile(
+                                activity,
+                                "${activity.packageName}.fileprovider",
+                                imageFile
+                            )
+                        } catch (e: IllegalArgumentException) {
+                            throw IllegalStateException(
+                                "تعذر توليد URI للصورة؛ تحقق من إعداد file_paths.xml",
+                                e
+                            )
+                        }
+
+                        // نتحقق مبكرًا من وجود واتساب قبل بناء Intent، لأن resolveActivity()
+                        // بدون setPackage يُعيد أي تطبيق يقبل ACTION_SEND ولا يميّز واتساب.
+                        val waPackage = listOf("com.whatsapp", "com.whatsapp.w4b")
+                            .firstOrNull { pkg ->
+                                activity.packageManager.getLaunchIntentForPackage(pkg) != null
+                            } ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
+
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "image/png"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            putExtra("jid", "${normalizedPhone}@s.whatsapp.net")
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            setPackage(waPackage)
+                            clipData = android.content.ClipData.newRawUri("invoice", uri)
+                        }
+                        if (shareIntent.resolveActivity(activity.packageManager) == null) {
+                            throw IllegalStateException("WhatsApp مثبت لكن لا يستجيب لطلبات المشاركة")
+                        }
+                        // startActivity مباشرة بدون createChooser لتجنب تجاهل setPackage،
+                        // ومن ثمّ يصل الـjid والرقم إلى واتساب بشكل صحيح.
+                        activity.startActivity(shareIntent)
+
+                        onComplete(JSONObject().apply {
+                            put("success", true)
+                            put("path", imageFile.absolutePath)
+                            put("file_name", imageFile.name)
+                            put("bytes", imageFile.length())
+                            put("phone", normalizedPhone)
+                            put("message", "تم تحويل الفاتورة كاملة إلى صورة PNG وفتح واتساب")
+                        })
+                    } catch (e: Exception) {
+                        DebugLogger.logException("ShareInvoiceRender", e)
+                        onComplete(JSONObject().apply {
+                            put("success", false)
+                            put("error", e.message ?: "فشل تحويل الفاتورة إلى صورة")
+                        })
+                    } finally {
+                        runCatching { bitmap?.recycle() }
+                    }
+                }
+
                 try {
                     val root = activity.findViewById<ViewGroup>(android.R.id.content)
                         ?: throw IllegalStateException("حاوية الجذر غير متاحة")
-                    val widthPx = 794
-                    val heightPx = 1123
 
                     capture = WebView(activity).apply {
                         settings.javaScriptEnabled = false
@@ -7896,118 +8028,59 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         settings.loadsImagesAutomatically = true
                         setBackgroundColor(android.graphics.Color.WHITE)
                         setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                        alpha = 0f
+                        // WebView مرئي (alpha=1) لكنه مُزاح خارج الشاشة؛ استخدام alpha=0f
+                        // قد يُنتج bitmap فارغًا على بعض إصدارات WebView من OEMs.
+                        alpha = 1f
+                        translationY = -100_000f
+                        isClickable = false
+                        isFocusable = false
                     }
-                    root.addView(capture, ViewGroup.LayoutParams(widthPx, heightPx))
+                    root.addView(capture, ViewGroup.LayoutParams(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT))
 
                     val wrappedHtml = buildInvoiceWrapperHtml(invoiceHtml)
-
                     capture?.webViewClient = object : WebViewClient() {
+                        private var completed = false
+                        private var renderScheduled = false
+                        private var pendingResources = 0
+                        private var pageFinished = false
+
+                        private fun complete(result: JSONObject) {
+                            if (completed) return
+                            completed = true
+                            finish(result)
+                            detachCapture()
+                        }
+
+                        private fun scheduleRender(view: WebView) {
+                            if (renderScheduled) return
+                            renderScheduled = true
+                            // تأخير ديناميكي: إذا كانت هناك موارد معلّقة، نمنح المتصفح وقتًا كافيًا
+                            // لتحميلها قبل الرسم. 600ms للفواتير البسيطة، 900ms عند وجود صور/خطوط.
+                            val delay = if (pendingResources > 0) 900L else 600L
+                            view.postDelayed({
+                                if (!completed) performRender(view, ::complete)
+                            }, delay)
+                        }
+
+                        override fun onLoadResource(view: WebView?, url: String?) {
+                            super.onLoadResource(view, url)
+                            pendingResources += 1
+                        }
+
                         override fun onPageFinished(view: WebView, url: String?) {
                             super.onPageFinished(view, url)
-                            val renderTask = Runnable {
-                                try {
-                                    view.measure(
-                                        View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
-                                        View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY)
-                                    )
-                                    view.layout(0, 0, widthPx, heightPx)
-
-                                    val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
-                                    try {
-                                        val canvas = android.graphics.Canvas(bitmap)
-                                        canvas.drawColor(android.graphics.Color.WHITE)
-                                        view.draw(canvas)
-
-                                        val invoiceDir = File(activity.filesDir, "invoices").apply { mkdirs() }
-                                        val imageFile = File(invoiceDir, "${safeNumber}.png")
-                                        FileOutputStream(imageFile).use { stream ->
-                                            if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
-                                                throw IllegalStateException("فشل ضغط الصورة")
-                                            }
-                                            stream.flush()
-                                        }
-                                        require(imageFile.isFile && imageFile.length() > 0L) {
-                                            "ملف الصورة الناتج فارغ"
-                                        }
-
-                                        val uri = FileProvider.getUriForFile(
-                                            activity,
-                                            "${activity.packageName}.fileprovider",
-                                            imageFile
-                                        )
-                                        val waPackage = listOf("com.whatsapp", "com.whatsapp.w4b")
-                                            .firstOrNull { pkg ->
-                                                activity.packageManager.getLaunchIntentForPackage(pkg) != null
-                                            }
-
-                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                            type = "image/png"
-                                            putExtra(Intent.EXTRA_STREAM, uri)
-                                            putExtra("jid", "${normalizedPhone}@s.whatsapp.net")
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                            waPackage?.let { setPackage(it) }
-                                            clipData = android.content.ClipData.newRawUri("invoice", uri)
-                                        }
-
-                                        if (shareIntent.resolveActivity(activity.packageManager) != null) {
-                                            runCatching {
-                                                activity.startActivity(
-                                                    Intent.createChooser(shareIntent, "إرسال الفاتورة")
-                                                )
-                                            }.onFailure { err ->
-                                                DebugLogger.logException("ShareInvoiceStart", err)
-                                                Toast.makeText(
-                                                    activity,
-                                                    "الفاتورة محفوظة: ${imageFile.name}",
-                                                    Toast.LENGTH_LONG
-                                                ).show()
-                                            }
-                                        } else {
-                                            Toast.makeText(
-                                                activity,
-                                                "WhatsApp غير مثبت. الفاتورة محفوظة في: ${imageFile.name}",
-                                                Toast.LENGTH_LONG
-                                            ).show()
-                                        }
-
-                                        result = JSONObject().apply {
-                                            put("success", true)
-                                            put("path", imageFile.absolutePath)
-                                            put("file_name", imageFile.name)
-                                            put("bytes", imageFile.length())
-                                            put("phone", normalizedPhone)
-                                            put("message", "تم حفظ الفاتورة كصورة PNG باسم رقم الفاتورة وفتح WhatsApp")
-                                        }
-                                    } finally {
-                                        bitmap.recycle()
-                                    }
-                                } catch (e: Exception) {
-                                    DebugLogger.logException("ShareInvoiceRender", e)
-                                    result = JSONObject()
-                                        .put("success", false)
-                                        .put("error", e.message ?: "فشل رسم الفاتورة")
-                                } finally {
-                                    runCatching {
-                                        (view.parent as? ViewGroup)?.removeView(view)
-                                        view.stopLoading()
-                                        view.destroy()
-                                    }
-                                    latch.countDown()
-                                }
-                            }
-
+                            pageFinished = true
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                                 view.postVisualStateCallback(
                                     System.nanoTime(),
                                     object : WebView.VisualStateCallback() {
                                         override fun onComplete(requestId: Long) {
-                                            view.postDelayed(renderTask, 120L)
+                                            if (!completed) scheduleRender(view)
                                         }
                                     }
                                 )
                             } else {
-                                view.postDelayed(renderTask, 500L)
+                                view.postDelayed({ scheduleRender(view) }, 250L)
                             }
                         }
 
@@ -8016,10 +8089,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             request: WebResourceRequest?,
                             error: WebResourceError?
                         ) {
-                            DebugLogger.warn(
-                                "ShareInvoice",
-                                "HTTP/Error: ${error?.description}"
-                            )
+                            DebugLogger.warn("ShareInvoice", "HTTP/Error: ${error?.description} @ ${request?.url}")
                         }
                     }
 
@@ -8032,65 +8102,65 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     )
                 } catch (e: Exception) {
                     DebugLogger.logException("ShareInvoiceSetup", e)
-                    runCatching {
-                        capture?.let {
-                            (it.parent as? ViewGroup)?.removeView(it)
-                            it.destroy()
-                        }
-                    }
-                    result = JSONObject()
-                        .put("success", false)
-                        .put("error", e.message ?: "فشل تهيئة WebView")
-                    latch.countDown()
+                    detachCapture()
+                    finish(JSONObject().apply {
+                        put("success", false)
+                        put("error", e.message ?: "فشل تهيئة تحويل الفاتورة")
+                    })
                 }
             }
-
-            val completed = latch.await(30, TimeUnit.SECONDS)
-            if (!completed) {
-                activity.runOnUiThread {
-                    runCatching {
-                        capture?.let {
-                            (it.parent as? ViewGroup)?.removeView(it)
-                            it.destroy()
-                        }
-                    }
-                }
-                return errorResponse("انتهت مهلة تحويل الفاتورة إلى صورة (30 ثانية)")
-            }
-            return result.toString()
+            return JSONObject().apply {
+                put("success", true)
+                put("queued", true)
+                put("message", "جاري تحويل الفاتورة إلى صورة")
+            }.toString()
         }
 
-        private fun buildInvoiceWrapperHtml(invoiceHtml: String): String = """
-            <!DOCTYPE html>
-            <html lang="ar" dir="rtl">
-            <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=794, initial-scale=1.0, user-scalable=no">
-            <style>
-              *, *::before, *::after { box-sizing: border-box; }
-              html, body {
-                margin: 0; padding: 0; border: 0;
-                width: 794px; min-width: 794px;
-                min-height: 1123px;
-                background: #ffffff;
-                direction: rtl;
-                font-family: 'Cairo', 'Noto Sans Arabic', Arial, sans-serif;
-                -webkit-font-smoothing: antialiased;
-                font-variant-numeric: lining-nums tabular-nums;
-                font-feature-settings: "lnum" 1, "tnum" 1;
-                overflow: visible !important;
-              }
-              body > #posInvoice { display: block !important; }
-              img { max-width: 100%; display: block; }
-              table { border-collapse: separate; }
-              * { animation: none !important; transition: none !important; }
-            </style>
-            </head>
-            <body>
-            $invoiceHtml
-            </body>
-            </html>
-        """.trimIndent()
+        /**
+         * يغلّف invoiceHtml داخل مستند HTML قياسي A4 بخط عربي مناسب.
+         *
+         * - يُزيل أي DOCTYPE/html/head/body متكررة من HTML الوارد لتفادي DOM غير معياري.
+         * - لا يضيف <link> للخطوط لأن pos.html يرسلها بالفعل داخل invoiceHtml نفسه
+         *   (نتجنب تكرار الروابط وتضخيم عدد الطلبات في WebView الالتقاط).
+         */
+        private fun buildInvoiceWrapperHtml(invoiceHtml: String): String {
+            val cleaned = invoiceHtml
+                .replace(Regex("^\\s*<!DOCTYPE[^>]*>", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("</?html[^>]*>", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("</?head[^>]*>", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("</?body[^>]*>", RegexOption.IGNORE_CASE), "")
+            return """
+                <!DOCTYPE html>
+                <html lang="ar" dir="rtl">
+                <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=794, initial-scale=1.0, user-scalable=no">
+                <style>
+                  *, *::before, *::after { box-sizing: border-box; }
+                  html, body {
+                    margin: 0; padding: 0; border: 0;
+                    width: 794px; min-width: 794px;
+                    min-height: 1123px;
+                    background: #ffffff;
+                    direction: rtl;
+                    font-family: 'Cairo', 'Noto Sans Arabic', Arial, sans-serif;
+                    -webkit-font-smoothing: antialiased;
+                    font-variant-numeric: lining-nums tabular-nums;
+                    font-feature-settings: "lnum" 1, "tnum" 1;
+                    overflow: visible !important;
+                  }
+                  body > #posInvoice { display: block !important; }
+                  img { max-width: 100%; display: block; }
+                  table { border-collapse: separate; }
+                  * { animation: none !important; transition: none !important; }
+                </style>
+                </head>
+                <body>
+                $cleaned
+                </body>
+                </html>
+            """.trimIndent()
+        }
 
 
         @JavascriptInterface
@@ -11069,7 +11139,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
   }
         }
         // ============================================================
-        // Database Browser Bridge — dev-mode, بلا فحص صلاحيات
+        // Database Browser Bridge — dev-mode، بلا فحص صلاحيات
         // ============================================================
 
         @JavascriptInterface
