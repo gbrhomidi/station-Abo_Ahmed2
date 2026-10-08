@@ -674,16 +674,24 @@ async function deleteRow(row){
 }
 
 function renderFuelOptions(selected=''){
- const list=state.fuels||[];
- $('fuelSelect').innerHTML='<option value="">اختر نوع الوقود...</option>'+list.map(f=>`<option value="${esc(f.id)}">${esc(f.fuel_name_ar||f.fuel_name||f.fuel_code||('وقود #'+f.id))}</option>`).join('');
+ const list=(state.fuels||[]).filter(f=>f && (f.fuel_type_id!=null || f.id!=null) && (f.is_active===undefined || f.is_active===true || Number(f.is_active)===1));
+ const options=list.map(f=>{
+  const id=f.fuel_type_id??f.id;
+  const label=f.fuel_name_ar||f.fuel_name||f.fuel_code||('وقود #'+id);
+  return `<option value="${esc(id)}">${esc(label)}</option>`;
+ }).join('');
+ $('fuelSelect').innerHTML='<option value="">'+(list.length?'اختر نوع الوقود...':'لا توجد أنواع وقود نشطة متاحة')+'</option>'+options;
  if(selected) $('fuelSelect').value=String(selected);
 }
 async function loadFuelTypes(){
- if(!bridge)return;
+ if(!bridge){state.fuels=[];renderFuelOptions();return}
  try{
   const result=await invoke('getFuelTypes',[]);
-  const raw=dataOf(result);state.fuels=Array.isArray(raw)?raw:(raw?.rows||raw?.data||[]);
- }catch(e){state.fuels=[];toast(e.message||'تعذر تحميل أنواع الوقود','error')}
+  const raw=dataOf(result);
+  state.fuels=Array.isArray(raw)?raw:(raw?.rows||raw?.data||[]);
+  renderFuelOptions($('fuelSelect')?.value||'');
+  if(!state.fuels.length) toast('لم تُرجع SQLite أي أنواع وقود متاحة','warning');
+ }catch(e){state.fuels=[];renderFuelOptions();toast(e.message||'تعذر تحميل أنواع الوقود من SQLite','error')}
 }
 async function loadProducts(){
  if(!bridge)return;
