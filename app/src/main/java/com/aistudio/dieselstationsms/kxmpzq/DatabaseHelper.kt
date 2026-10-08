@@ -29011,9 +29011,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
               AND COALESCE(pli.min_quantity, 1.0) <= ?
               AND (pli.max_quantity IS NULL OR pli.max_quantity <= 0 OR pli.max_quantity >= ?)
               AND (pli.quantity_limit IS NULL OR pli.quantity_limit <= 0 OR COALESCE(pli.quantity_sold, 0) + ? <= pli.quantity_limit)
-              AND (pl.occasion_code IS NULL OR trim(pl.occasion_code) = '' OR pl.occasion_code = ?)
               AND (COALESCE(pl.applies_when, 'always') NOT IN ('occasion', 'event') OR
-                   (pl.occasion_code IS NOT NULL AND trim(pl.occasion_code) <> '' AND pl.occasion_code = ?))
+                   (pl.occasion_code IS NOT NULL AND trim(pl.occasion_code) <> ''))
             AND (COALESCE(pl.applies_when, 'always') NOT IN ('clearance_stock', 'clearance') OR
                     (pl.clearance_stock_below IS NOT NULL AND
                      COALESCE((SELECT SUM(il.quantity_on_hand) FROM inventory_levels il
@@ -29030,7 +29029,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(),
             stationScopeId.toString(), productId.toString(), stationScopeId.toString(), at, at, at, at,
             customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(),
-            quantity.toString(), quantity.toString(), quantity.toString(), occasion, occasion, stationScopeId.toString(), stationScopeId.toString()
+            quantity.toString(), quantity.toString(), quantity.toString(), stationScopeId.toString(), stationScopeId.toString()
         )
         db.rawQuery(sql, args).use { c ->
             if (c.moveToFirst()) return PriceResolution(c.getDouble(0), "price_list", c.getLong(1), c.getString(7), c.getString(6), c.getLong(9), if (c.isNull(10)) null else c.getDouble(10), c.getDouble(11))
@@ -29076,9 +29075,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
               AND COALESCE(pli.min_quantity, 1.0) <= ?
               AND (pli.max_quantity IS NULL OR pli.max_quantity <= 0 OR pli.max_quantity >= ?)
               AND (pli.quantity_limit IS NULL OR pli.quantity_limit <= 0 OR COALESCE(pli.quantity_sold, 0) + ? <= pli.quantity_limit)
-              AND (pl.occasion_code IS NULL OR trim(pl.occasion_code) = '' OR pl.occasion_code = ?)
               AND (COALESCE(pl.applies_when, 'always') NOT IN ('occasion', 'event') OR
-                   (pl.occasion_code IS NOT NULL AND trim(pl.occasion_code) <> '' AND pl.occasion_code = ?))
+                   (pl.occasion_code IS NOT NULL AND trim(pl.occasion_code) <> ''))
             AND (COALESCE(pl.applies_when, 'always') NOT IN ('clearance_stock', 'clearance') OR
                     (pl.clearance_stock_below IS NOT NULL AND
                      COALESCE((SELECT SUM(t.current_quantity) FROM tanks t
@@ -29095,7 +29093,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             stationScopeId.toString(), fuelTypeId.toString(), stationScopeId.toString(),
             at, at, at, at,
             customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(),
-            quantity.toString(), quantity.toString(), quantity.toString(), occasion, occasion, stationScopeId.toString(), stationScopeId.toString()
+            quantity.toString(), quantity.toString(), quantity.toString(), stationScopeId.toString(), stationScopeId.toString()
         )
         db.rawQuery(sql, args).use { c ->
             if (c.moveToFirst()) return PriceResolution(c.getDouble(0), "fuel_price_list", c.getLong(1), c.getString(7), c.getString(6), c.getLong(9), if (c.isNull(10)) null else c.getDouble(10), c.getDouble(11))
