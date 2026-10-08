@@ -22877,35 +22877,39 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال أنواع الوقود
     // ========================================================================
 
-    fun getFuelTypes(): JSONArray {
+    fun getFuelTypes(): JSONArray = getFuelTypes(null)
+
+    fun getFuelTypes(stationScopeId: Int?): JSONArray {
+        require(stationScopeId == null || stationScopeId > 0) { "معرف المحطة غير صالح" }
         dbLock.lock()
         return try {
             val arr = JSONArray()
             val db = readableDatabase
-            db.rawQuery(
-                "SELECT id, fuel_code, fuel_name, fuel_name_ar, default_sale_price, is_active FROM fuel_types WHERE is_deleted=0 ORDER BY fuel_name",
-                null
-            ).use { cursor ->
-                while (cursor.moveToNext()) {
-                    arr.put(JSONObject().apply {
-                        put("fuel_type_id", cursor.getInt(0))
-                        put("fuel_code", cursor.getString(1))
-                        put("fuel_name", cursor.getString(2))
-                        put("fuel_name_ar", cursor.getString(3))
-                        put("default_sale_price", cursor.getDouble(4))
-                        put("is_active", cursor.getInt(5) == 1)
-                    })
-                }
+            val sql = if (stationScopeId == null) {
+                "SELECT f.id, f.fuel_code, f.fuel_name, f.fuel_name_ar, f.default_sale_price, f.is_active FROM fuel_types f WHERE f.is_deleted=0 ORDER BY f.fuel_name"
+            } else {
+                """SELECT f.id, f.fuel_code, f.fuel_name, f.fuel_name_ar,
+                          COALESCE((SELECT h.new_price FROM fuel_price_history h
+                                    WHERE h.fuel_type_id=f.id AND h.station_id=? AND h.archived=0
+                                    ORDER BY h.change_date DESC, h.id DESC LIMIT 1), f.default_sale_price),
+                          f.is_active
+                   FROM fuel_types f
+                   WHERE f.is_deleted=0 AND EXISTS (
+                       SELECT 1 FROM tanks t WHERE t.fuel_type_id=f.id AND t.station_id=? AND t.is_deleted=0)
+                   ORDER BY f.fuel_name""".trimIndent()
+            }
+            val args = if (stationScopeId == null) null else arrayOf(stationScopeId.toString(), stationScopeId.toString())
+            db.rawQuery(sql, args).use { cursor ->
+                while (cursor.moveToNext()) arr.put(JSONObject().apply {
+                    put("fuel_type_id", cursor.getInt(0)); put("fuel_code", cursor.getString(1))
+                    put("fuel_name", cursor.getString(2)); put("fuel_name_ar", cursor.getString(3))
+                    put("default_sale_price", cursor.getDouble(4)); put("is_active", cursor.getInt(5) == 1)
+                })
             }
             arr
-        } finally {
-            dbLock.unlock()
-        }
+        } finally { dbLock.unlock() }
     }
 
-    // ========================================================================
-    // دوال إدارة المنتجات (CRUD)
-    // ========================================================================
 
     fun insertProduct(data: JSONObject): Long = insertProduct(data, data.optInt("station_id", 0), data.optLong("created_by", 0L))
 
