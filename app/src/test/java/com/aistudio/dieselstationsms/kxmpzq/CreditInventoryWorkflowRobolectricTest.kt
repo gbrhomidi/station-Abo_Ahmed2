@@ -55,6 +55,19 @@ class CreditInventoryWorkflowRobolectricTest {
             put("uuid", UUID.randomUUID().toString()); put("username", "credit-workflow-${UUID.randomUUID().toString().take(8)}")
             put("password_hash", "test-only"); put("full_name", "مستخدم اختبار البيع الآجل"); put("role_id", roleId); put("station_id", 1)
         })
+        // Provide real chart-of-account targets for the balanced cost journal.
+        db.insertOrThrow("accounts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("account_code", "TEST-INV-" + UUID.randomUUID().toString().take(8))
+            put("account_name", "Test Inventory"); put("account_name_ar", "المخزون")
+            put("level", 1); put("account_type", "asset"); put("account_category", "inventory")
+            put("normal_balance", "debit"); put("is_active", 1); put("is_deleted", 0); put("created_by", actorId)
+        })
+        db.insertOrThrow("accounts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("account_code", "TEST-COGS-" + UUID.randomUUID().toString().take(8))
+            put("account_name", "Test Cost of Goods Sold"); put("account_name_ar", "تكلفة البضاعة المباعة")
+            put("level", 1); put("account_type", "expense"); put("account_category", "cost_of_sales")
+            put("normal_balance", "debit"); put("is_active", 1); put("is_deleted", 0); put("created_by", actorId)
+        })
         val categoryId = db.rawQuery("SELECT id FROM product_categories WHERE is_deleted = 0 ORDER BY id LIMIT 1", null).use { check(it.moveToFirst()); it.getLong(0) }
         val unitId = db.rawQuery("SELECT id FROM units ORDER BY id LIMIT 1", null).use { check(it.moveToFirst()); it.getLong(0) }
         val productId = helper.insertProduct(JSONObject()
