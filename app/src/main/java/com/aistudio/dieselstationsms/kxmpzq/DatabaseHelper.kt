@@ -11198,12 +11198,21 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 require(productId > 0L) { "المنتج في السطر ${i + 1} غير صالح" }
                 require(quantity.isFinite() && quantity > 0.0) { "كمية السطر ${i + 1} غير صالحة" }
                 val product = db.rawQuery(
-                    "SELECT id, product_name FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'",
+                    "SELECT id, product_name, COALESCE(purchase_price, 0) FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'",
                     arrayOf(productId.toString(), stationScopeId.toString())
                 ).use { cursor ->
                     require(cursor.moveToFirst()) { "المنتج في السطر ${i + 1} خارج نطاق المحطة أو غير نشط" }
-                    JSONObject().apply { put("id", cursor.getLong(0)); put("product_name", cursor.getString(1)) }
+                    JSONObject().apply { put("id", cursor.getLong(0)); put("product_name", cursor.getString(1)); put("purchase_price", cursor.getDouble(2)) }
                 }
+                val inventoryUnitCost = db.rawQuery(
+                    """SELECT CASE WHEN SUM(il.quantity_on_hand) > 0
+                              THEN SUM(il.quantity_on_hand * il.average_cost) / SUM(il.quantity_on_hand)
+                              ELSE 0 END
+                       FROM inventory_levels il JOIN warehouses w ON w.id = il.warehouse_id
+                       WHERE il.product_id = ? AND w.station_id = ? AND w.is_active = 1""",
+                    arrayOf(productId.toString(), stationScopeId.toString())
+                ).use { c -> if (c.moveToFirst()) c.getDouble(0).coerceAtLeast(0.0) else 0.0 }
+                val unitCost = if (inventoryUnitCost > 0.0) inventoryUnitCost else product.optDouble("purchase_price", 0.0).coerceAtLeast(0.0)
                 val resolvedPrice = resolveProductSalePrice(productId, stationScopeId, data.optLong("entity_id", 0L).takeIf { it > 0L }, data.optString("transaction_time", "").trim().ifBlank { getCurrentDateTime() }, data.optString("occasion_code", "").trim().ifBlank { null }, quantity)
                 val unitPrice = resolvedPrice.unitPrice
                 require(unitPrice.isFinite() && unitPrice >= 0.0) { "سعر المنتج غير صالح" }
@@ -11212,6 +11221,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 total += lineTotal
                 prepared += JSONObject().apply {
                     put("product_id", productId); put("quantity", quantity); put("unit_price", unitPrice); put("line_total", lineTotal)
+                    put("cost_price", unitCost)
                     put("price_source", resolvedPrice.source); put("price_source_id", resolvedPrice.sourceId ?: JSONObject.NULL)
                     put("price_list_item_id", resolvedPrice.priceListItemId ?: JSONObject.NULL)
                     put("quantity_limit", resolvedPrice.quantityLimit ?: JSONObject.NULL)
@@ -11294,6 +11304,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("product_id", productId)
                     put("quantity", quantity)
                     put("unit_price", unitPrice)
+                    put("cost_price", item.optDouble("cost_price", 0.0).coerceAtLeast(0.0))
+                    put("total_cost", quantity * item.optDouble("cost_price", 0.0).coerceAtLeast(0.0))
                     put("subtotal", quantity * unitPrice)
                     put("line_total", quantity * unitPrice)
                 }
@@ -11307,7 +11319,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("movement_type", "out")
                         put("reference_type", "sale")
                         put("reference_id", saleId)
-                        put("unit_cost", unitPrice)
+                        put("unit_cost", item.optDouble("cost_price", 0.0).coerceAtLeast(0.0))
                     }, stationScopeId, cashierId
                 )
             }
@@ -11316,6 +11328,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 data.optLong("entity_id", 0L).takeIf { it > 0L }?.toInt(),
                 paymentMethod, total, paidAmount
             )
+            val productCostTotal = prepared.sumOf { it.optDouble("cost_price", 0.0).coerceAtLeast(0.0) * it.optDouble("quantity", 0.0) }
+            if (productCostTotal > 0.000001) postSaleCostJournalWithinTransaction(db, saleId, stationScopeId, cashierId, "products", productCostTotal)
             completeFinancialIdempotency(db, "product_sale", stationScopeId, idempotencyKey, saleId)
             db.setTransactionSuccessful()
             result.put("success", true)
