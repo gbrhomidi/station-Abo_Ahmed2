@@ -10063,7 +10063,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val fuelTypeId = data.optLong("fuel_type_id", 0L).toInt()
         require(fuelTypeId > 0) { "نوع الوقود مطلوب للطلب" }
         val db = writableDatabase
-        val resolvedPrice = resolveFuelSalePrice(fuelTypeId.toLong(), stationScopeId, customerPartyId?.toLong(), data.optString("transaction_time", "").ifBlank { getCurrentDateTime() })
+        val resolvedPrice = resolveFuelSalePrice(fuelTypeId.toLong(), stationScopeId, customerPartyId?.toLong(), data.optString("transaction_time", "").ifBlank { getCurrentDateTime() }, data.optString("occasion_code", "").trim().ifBlank { null }, liters)
         val pricePerLiter = resolvedPrice.unitPrice
         val subtotal = liters * pricePerLiter
         val totalAmount = subtotal
