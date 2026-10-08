@@ -11093,6 +11093,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     }
                 }
 
+                postSaleRevenueJournalWithinTransaction(
+                    db, saleId, stationScopeId, cashierId, "fuel", customerId,
+                    paymentMethod, totalAmount,
+                    if (data.has("amount_paid") && !data.isNull("amount_paid")) data.optDouble("amount_paid", if (isCreditSale) 0.0 else totalAmount)
+                    else if (isCreditSale) 0.0 else totalAmount
+                )
                 completeFinancialIdempotency(db, "fuel_sale", stationScopeId, idempotencyKey, saleId)
                 db.setTransactionSuccessful()
                 saleId
@@ -11288,6 +11294,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     }, stationScopeId, cashierId
                 )
             }
+            postSaleRevenueJournalWithinTransaction(
+                db, saleId, stationScopeId, cashierId, "products",
+                data.optLong("entity_id", 0L).takeIf { it > 0L }?.toInt(),
+                paymentMethod, total, paidAmount
+            )
             completeFinancialIdempotency(db, "product_sale", stationScopeId, idempotencyKey, saleId)
             db.setTransactionSuccessful()
             result.put("success", true)
@@ -23767,6 +23778,117 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(c.moveToFirst()) { "لا يوجد حساب محاسبي فعال من النوع المطلوب: $kind" }
             c.getLong(0)
         }
+    }
+
+    /**
+     * Posts the revenue/settlement journal for a completed sale while the caller's
+     * sale transaction is still open. A unique sale reference prevents duplicates.
+     */
+    private fun postSaleRevenueJournalWithinTransaction(
+        db: SQLiteDatabase,
+        saleId: Long,
+        stationId: Int,
+        actorId: Long,
+        orderType: String,
+        customerPartyId: Int?,
+        paymentMethod: String,
+        netAmount: Double,
+        paidAmount: Double
+    ): Long? {
+        require(saleId > 0 && stationId > 0 && actorId > 0) { "بيانات قيد المبيعات غير صالحة" }
+        require(netAmount.isFinite() && netAmount >= 0.0) { "صافي المبيعات غير صالح للقيد" }
+        require(paidAmount.isFinite() && paidAmount >= 0.0 && paidAmount <= netAmount + 1e-7) { "المبلغ المسدد غير صالح للقيد" }
+        if (netAmount <= 0.000001) return null
+
+        val existing = db.rawQuery(
+            "SELECT id FROM journal_entries WHERE station_id=? AND reference_type='sale' AND reference_id=? AND is_deleted=0 LIMIT 1",
+            arrayOf(stationId.toString(), saleId.toString())
+        ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+        if (existing > 0L) return existing
+
+        val revenueAccount = findFinancialAccount(db, "revenue")
+        val paid = paidAmount.coerceAtMost(netAmount)
+        val receivableAmount = (netAmount - paid).coerceAtLeast(0.0)
+        val settlementAccount = if (paid > 0.000001) {
+            val kind = if (paymentMethod == "cash" || paymentMethod == "credit") "cash" else "bank"
+            findFinancialAccount(db, kind)
+        } else 0L
+        val receivableAccount = if (receivableAmount > 0.000001) {
+            require(customerPartyId != null && customerPartyId > 0) { "العميل مطلوب لإثبات الذمم المدينة" }
+            findFinancialAccount(db, "receivable")
+        } else 0L
+        require(revenueAccount != settlementAccount || settlementAccount == 0L) { "حساب التسوية لا يجوز أن يكون حساب الإيرادات" }
+        require(revenueAccount != receivableAccount || receivableAccount == 0L) { "حساب الذمم لا يجوز أن يكون حساب الإيرادات" }
+
+        val invoiceNumber = db.rawQuery(
+            "SELECT invoice_number FROM sales_transactions WHERE id=? AND station_id=? AND is_deleted=0",
+            arrayOf(saleId.toString(), stationId.toString())
+        ).use { c ->
+            require(c.moveToFirst()) { "تعذر العثور على فاتورة البيع لترحيلها محاسبياً" }
+            c.getString(0).orEmpty()
+        }
+        val now = getCurrentDateTime()
+        val entryId = db.insertOrThrow("journal_entries", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("entry_number", journalEntryNumber(db, stationId))
+            put("entry_date", getDateOnlyFormat().format(Date()))
+            put("entry_type", "sales")
+            put("reference_type", "sale")
+            put("reference_id", saleId)
+            put("reference_code", invoiceNumber)
+            put("description", "قيد مبيعات $orderType $invoiceNumber")
+            put("description_ar", "قيد مبيعات $orderType للفاتورة $invoiceNumber")
+            put("total_debit", netAmount)
+            put("total_credit", netAmount)
+            put("is_balanced", 1)
+            put("status", "posted")
+            put("posted_at", now)
+            put("posted_by", actorId)
+            put("station_id", stationId)
+            put("created_at", now)
+            put("updated_at", now)
+            put("created_by", actorId)
+            put("updated_by", actorId)
+            put("is_deleted", 0)
+            put("extra_data", JSONObject().put("sale_id", saleId).put("order_type", orderType).put("payment_method", paymentMethod).toString())
+        })
+        var lineNumber = 1
+        if (paid > 0.000001) {
+            db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("journal_entry_id", entryId)
+                put("line_number", lineNumber++)
+                put("account_id", settlementAccount)
+                put("debit", paid)
+                put("credit", 0.0)
+                put("description", "تحصيل مبيعات $invoiceNumber")
+                put("description_ar", "تحصيل مبيعات $invoiceNumber")
+            })
+        }
+        if (receivableAmount > 0.000001) {
+            db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("journal_entry_id", entryId)
+                put("line_number", lineNumber++)
+                put("account_id", receivableAccount)
+                put("debit", receivableAmount)
+                put("credit", 0.0)
+                put("description", "ذمم مدينة عن الفاتورة $invoiceNumber")
+                put("description_ar", "ذمم مدينة عن الفاتورة $invoiceNumber")
+            })
+        }
+        db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("journal_entry_id", entryId)
+            put("line_number", lineNumber)
+            put("account_id", revenueAccount)
+            put("debit", 0.0)
+            put("credit", netAmount)
+            put("description", "إيراد مبيعات $invoiceNumber")
+            put("description_ar", "إيراد مبيعات $invoiceNumber")
+        })
+        require(kotlin.math.abs(paid + receivableAmount - netAmount) <= 0.000001) { "قيد المبيعات غير متوازن" }
+        return entryId
     }
 
     private fun postSalesReversalJournal(
