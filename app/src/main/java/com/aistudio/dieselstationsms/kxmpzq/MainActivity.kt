@@ -8687,6 +8687,38 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun getResolvedFuelSalePrice(jsonData: String): String {
+            return try {
+                val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val d = JSONObject(jsonData.ifBlank { "{}" })
+                val fuelTypeId = d.optLong("fuel_type_id", 0L)
+                val quantity = d.optDouble("quantity", 1.0)
+                val customerId = d.optLong("customer_id", 0L).takeIf { it > 0L }
+                val at = d.optString("transaction_time", "").trim().ifBlank { getCurrentDateTime() }
+                val occasion = d.optString("occasion_code", "").trim().ifBlank { null }
+                dataResponse(db.resolveFuelSalePrice(fuelTypeId, stationId, customerId, at, occasion, quantity).toJson())
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getResolvedProductSalePrice(jsonData: String): String {
+            return try {
+                val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val d = JSONObject(jsonData.ifBlank { "{}" })
+                val productId = d.optLong("product_id", 0L)
+                val quantity = d.optDouble("quantity", 1.0)
+                val customerId = d.optLong("customer_id", 0L).takeIf { it > 0L }
+                val at = d.optString("transaction_time", "").trim().ifBlank { getCurrentDateTime() }
+                val occasion = d.optString("occasion_code", "").trim().ifBlank { null }
+                dataResponse(db.resolveProductSalePrice(productId, stationId, customerId, at, occasion, quantity).toJson())
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
         fun changePriceListItemPrice(jsonData: String): String {
             return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
