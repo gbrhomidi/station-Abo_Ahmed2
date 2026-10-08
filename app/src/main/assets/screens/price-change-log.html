@@ -605,7 +605,10 @@ function togglePriceTarget(){
  $('fuelField').style.display=fuel?'':'none';
  $('productSelect').required=!fuel;
  $('fuelSelect').required=fuel;
- if(fuel) applyFuel($('fuelSelect').value); else applyProduct($('productSelect').value);
+ if(fuel) {
+  if(!Array.isArray(state.fuels)||state.fuels.length===0) loadFuelTypes().then(()=>applyFuel($('fuelSelect').value)).catch(()=>{});
+  else applyFuel($('fuelSelect').value);
+ } else applyProduct($('productSelect').value);
 }
 function openForm(row=null){
  state.editing=row||null;
