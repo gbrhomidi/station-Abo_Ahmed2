@@ -129,6 +129,24 @@
           <input class="input" id="valid_to" name="valid_to" type="date" inputmode="numeric">
         </div>
 
+        <!-- قواعد الانطباق: التاريخ والطرف والكمية تطبق معاً -->
+        <div class="field">
+          <label>نوع تطبيق القائمة</label>
+          <div class="select-wrap"><select class="input" id="applies_when" name="applies_when">
+            <option value="always">حسب الفترة والطرف والكمية</option>
+            <option value="occasion">مناسبة / حملة محددة</option>
+          </select></div>
+        </div>
+        <div class="field">
+          <label>أولوية القائمة</label>
+          <input class="input" id="priority" name="priority" type="number" step="1" value="0" inputmode="numeric">
+        </div>
+        <div class="field full" id="occasionFields">
+          <label>رمز المناسبة / الحملة</label>
+          <input class="input" id="occasion_code" name="occasion_code" type="text" maxlength="80" placeholder="مثال: RAMADAN-2027">
+          <small>عند اختيار «مناسبة / حملة» لن تطبق القائمة إلا إذا طابقت عملية البيع رمز المناسبة نفسه.</small>
+        </div>
+
         <!-- الحالة + القائمة الافتراضية (سطر واحد) -->
         <div class="field">
           <label>الحالة</label>
@@ -377,6 +395,10 @@
     $('party_id').value = r?.party_id ?? '';
     $('valid_from').value = r?.valid_from ? String(r.valid_from).slice(0,10) : '';
     $('valid_to').value = r?.valid_to ? String(r.valid_to).slice(0,10) : '';
+    $('applies_when').value = r?.applies_when || 'always';
+    $('priority').value = Number.isFinite(Number(r?.priority)) ? String(Number(r.priority)) : '0';
+    $('occasion_code').value = r?.occasion_code || '';
+    $('occasionFields').classList.toggle('hidden', $('applies_when').value !== 'occasion');
     $('is_active').value = r?.is_active == null ? '1' : String(r.is_active);
     $('is_default').value = r?.is_default == null ? '0' : String(r.is_default);
     state.stationId = Number(r?.station_id || state.stationId || 0);
@@ -444,6 +466,9 @@
     const e = [];
     if (!p.list_name.trim()) e.push('اسم القائمة مطلوب.');
     if (p.valid_from && p.valid_to && p.valid_from > p.valid_to) e.push('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية.');
+    if (!Number.isInteger(Number(p.priority))) e.push('أولوية القائمة يجب أن تكون عدداً صحيحاً.');
+    if (!['always','occasion'].includes(p.applies_when)) e.push('نوع تطبيق القائمة غير صالح.');
+    if (p.applies_when === 'occasion' && !String(p.occasion_code || '').trim()) e.push('رمز المناسبة مطلوب لهذا النوع من القوائم.');
     if (p.party_type_id && !state.partyTypes.some(x => String(x.id) === String(p.party_type_id))) e.push('نوع الطرف المحدد غير موجود في قاعدة البيانات.');
     if (p.party_id && !state.parties.some(x => String(x.id) === String(p.party_id))) e.push('الطرف المحدد غير موجود في قاعدة البيانات.');
     if (p.is_active !== '0' && p.is_active !== '1') e.push('حالة القائمة غير صحيحة.');
@@ -462,6 +487,10 @@
       station_id: $('station_id').value ? Number($('station_id').value) : state.stationId || 0,
       valid_from: $('valid_from').value || '',
       valid_to: $('valid_to').value || '',
+      applies_when: $('applies_when').value || 'always',
+      priority: Number($('priority').value || 0),
+      occasion_code: $('occasion_code').value.trim() || '',
+      occasion_name_ar: $('occasion_code').value.trim() || '',
       is_active: Number($('is_active').value),
       is_default: Number($('is_default').value),
       created_at: $('created_at').value || now()
@@ -821,6 +850,7 @@
   $('runHistoryReport').onclick = runHistoryReport;
   $('runAnalysis').onclick = runAnalysis;
   $('saveBtn').onclick = save;
+  $('applies_when').onchange = () => $('occasionFields').classList.toggle('hidden', $('applies_when').value !== 'occasion');
   $('cancelForm').onclick = () => close('formOverlay');
   $('closeForm').onclick = () => close('formOverlay');
   $('closeLookup').onclick = () => close('lookupOverlay');
