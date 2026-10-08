@@ -4587,7 +4587,7 @@ function addProductByBarcode(barcode) {
         return Promise.resolve(true);
     }
     return apiCall('getProductByBarcode', { barcode: barcode })
-        .then(data => {
+        .then(async data => {
             if (data.success) {
                 const payload = data.data || data;
                 const product = {
