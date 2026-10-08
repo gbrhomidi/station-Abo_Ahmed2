@@ -23771,7 +23771,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 LIMIT 1
             """
             "bank" -> "SELECT id FROM accounts WHERE is_bank_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1"
-            "receivable" -> "SELECT id FROM accounts WHERE account_type='asset' AND is_active=1 AND is_deleted=0 AND (account_category LIKE '%receiv%' OR account_name LIKE '%customer%' OR account_name_ar LIKE '%عملاء%' OR account_name_ar LIKE '%ذمم%') ORDER BY id LIMIT 1"
+            "receivable" -> "SELECT id FROM accounts WHERE account_type='asset' AND is_active=1 AND is_deleted=0 AND (account_code='1103' OR account_category LIKE '%receiv%' OR account_name LIKE '%customer%' OR account_name_ar LIKE '%عملاء%' OR account_name_ar LIKE '%ذمم%' OR account_name_ar LIKE '%المدينون%') ORDER BY CASE WHEN account_code='1103' THEN 0 ELSE 1 END, id LIMIT 1"
             else -> throw IllegalArgumentException("نوع الحساب المالي غير معروف")
         }
         return db.rawQuery(sql, null).use { c ->
@@ -23797,7 +23797,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     ): Long? {
         require(saleId > 0 && stationId > 0 && actorId > 0) { "بيانات قيد المبيعات غير صالحة" }
         require(netAmount.isFinite() && netAmount >= 0.0) { "صافي المبيعات غير صالح للقيد" }
-        require(paidAmount.isFinite() && paidAmount >= 0.0 && paidAmount <= netAmount + 1e-7) { "المبلغ المسدد غير صالح للقيد" }
+        require(paidAmount.isFinite() && paidAmount >= 0.0) { "المبلغ المسدد غير صالح للقيد" }
         if (netAmount <= 0.000001) return null
 
         val existing = db.rawQuery(
@@ -23806,7 +23806,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
         if (existing > 0L) return existing
 
-        val revenueAccount = findFinancialAccount(db, "revenue")
+        val revenueCode = if (orderType.equals("fuel", ignoreCase = true)) "4101" else "4102"
+        val revenueAccount = db.rawQuery(
+            "SELECT id FROM accounts WHERE account_code=? AND account_type='revenue' AND is_active=1 AND is_deleted=0 LIMIT 1",
+            arrayOf(revenueCode)
+        ).use { c -> if (c.moveToFirst()) c.getLong(0) else findFinancialAccount(db, "revenue") }
         val paid = paidAmount.coerceAtMost(netAmount)
         val receivableAmount = (netAmount - paid).coerceAtLeast(0.0)
         val settlementAccount = if (paid > 0.000001) {
