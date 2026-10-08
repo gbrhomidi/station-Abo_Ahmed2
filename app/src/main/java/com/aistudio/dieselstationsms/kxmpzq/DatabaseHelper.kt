@@ -23801,6 +23801,79 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      * Posts the revenue/settlement journal for a completed sale while the caller's
      * sale transaction is still open. A unique sale reference prevents duplicates.
      */
+    private fun findSaleCostAccount(db: SQLiteDatabase, kind: String): Long {
+        val sql = when (kind) {
+            "inventory" -> """
+                SELECT id FROM accounts WHERE account_type='asset' AND is_active=1 AND is_deleted=0
+                  AND (lower(COALESCE(account_category,'')) LIKE '%inventory%'
+                       OR lower(COALESCE(account_category,'')) LIKE '%stock%'
+                       OR COALESCE(account_name_ar,'') LIKE '%المخزون%'
+                       OR COALESCE(account_name_ar,'') LIKE '%البضاعة%'
+                       OR COALESCE(account_name,'') LIKE '%Inventory%')
+                ORDER BY is_control_account DESC, id LIMIT 1
+            """.trimIndent()
+            "cogs" -> """
+                SELECT id FROM accounts WHERE account_type='expense' AND is_active=1 AND is_deleted=0
+                  AND (lower(COALESCE(account_category,'')) LIKE '%cost%'
+                       OR lower(COALESCE(account_category,'')) LIKE '%cogs%'
+                       OR COALESCE(account_name_ar,'') LIKE '%تكلفة البضاعة%'
+                       OR COALESCE(account_name_ar,'') LIKE '%تكلفة المبيعات%'
+                       OR COALESCE(account_name,'') LIKE '%Cost of Goods Sold%')
+                ORDER BY is_control_account DESC, id LIMIT 1
+            """.trimIndent()
+            else -> throw IllegalArgumentException("نوع حساب تكلفة البيع غير معروف")
+        }
+        return db.rawQuery(sql, null).use { c ->
+            require(c.moveToFirst()) {
+                if (kind == "inventory") "لا يوجد حساب مخزون فعال في دليل الحسابات؛ اربط حساب المخزون قبل ترحيل تكلفة البيع"
+                else "لا يوجد حساب تكلفة بضاعة مباعة فعال في دليل الحسابات؛ اربط حساب تكلفة المبيعات قبل ترحيل البيع"
+            }
+            c.getLong(0)
+        }
+    }
+
+    private fun postSaleCostJournalWithinTransaction(
+        db: SQLiteDatabase, saleId: Long, stationId: Int, actorId: Long, orderType: String, costAmount: Double
+    ): Long? {
+        if (!costAmount.isFinite() || costAmount <= 0.000001) return null
+        val existing = db.rawQuery(
+            "SELECT id FROM journal_entries WHERE station_id=? AND reference_type='sale_cogs' AND reference_id=? AND is_deleted=0 LIMIT 1",
+            arrayOf(stationId.toString(), saleId.toString())
+        ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+        if (existing > 0L) return existing
+        val inventoryAccount = findSaleCostAccount(db, "inventory")
+        val cogsAccount = findSaleCostAccount(db, "cogs")
+        require(inventoryAccount != cogsAccount) { "حساب المخزون يجب أن يختلف عن حساب تكلفة المبيعات" }
+        val invoiceNumber = db.rawQuery(
+            "SELECT invoice_number FROM sales_transactions WHERE id=? AND station_id=? AND is_deleted=0",
+            arrayOf(saleId.toString(), stationId.toString())
+        ).use { c -> require(c.moveToFirst()) { "تعذر العثور على الفاتورة لترحيل التكلفة" }; c.getString(0).orEmpty() }
+        val now = getCurrentDateTime()
+        val entryId = db.insertOrThrow("journal_entries", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("entry_number", journalEntryNumber(db, stationId))
+            put("entry_date", getDateOnlyFormat().format(Date())); put("entry_type", "sales")
+            put("reference_type", "sale_cogs"); put("reference_id", saleId); put("reference_code", invoiceNumber)
+            put("description", "Cost of goods sold $orderType $invoiceNumber")
+            put("description_ar", "تكلفة البضاعة المباعة للفاتورة $invoiceNumber")
+            put("total_debit", costAmount); put("total_credit", costAmount); put("is_balanced", 1)
+            put("status", "posted"); put("posted_at", now); put("posted_by", actorId)
+            put("station_id", stationId); put("created_at", now); put("updated_at", now)
+            put("created_by", actorId); put("updated_by", actorId); put("is_deleted", 0)
+            put("extra_data", JSONObject().put("sale_id", saleId).put("order_type", orderType).put("cost_basis", "weighted_average").toString())
+        })
+        db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("journal_entry_id", entryId); put("line_number", 1)
+            put("account_id", cogsAccount); put("debit", costAmount); put("credit", 0.0)
+            put("description", "Cost of goods sold $invoiceNumber"); put("description_ar", "تكلفة البضاعة المباعة")
+        })
+        db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("journal_entry_id", entryId); put("line_number", 2)
+            put("account_id", inventoryAccount); put("debit", 0.0); put("credit", costAmount)
+            put("description", "Inventory cost relief $invoiceNumber"); put("description_ar", "تخفيض المخزون بتكلفة المبيعات")
+        })
+        return entryId
+    }
+
     private fun postSaleRevenueJournalWithinTransaction(
         db: SQLiteDatabase,
         saleId: Long,
@@ -28796,6 +28869,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     private fun ensurePricingV42Schema(db: SQLiteDatabase) {
         ensureColumn(db, "price_list_items", "quantity_limit", "REAL")
         ensureColumn(db, "price_list_items", "quantity_sold", "REAL NOT NULL DEFAULT 0")
+        ensureColumn(db, "sale_items", "cost_price", "REAL NOT NULL DEFAULT 0")
+        ensureColumn(db, "sale_items", "total_cost", "REAL NOT NULL DEFAULT 0")
+        ensureColumn(db, "fuel_sales", "cost_per_liter", "REAL NOT NULL DEFAULT 0")
+        ensureColumn(db, "fuel_sales", "cost_amount", "REAL NOT NULL DEFAULT 0")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_price_list_items_quantity_limit ON price_list_items(price_list_id, is_active, quantity_limit, quantity_sold)")
     }
 
