@@ -4045,6 +4045,7 @@ function apiCall(action, params) {
         let raw;
         switch (action) {
             case 'getProductByBarcode': raw = AndroidInterface.getProductByBarcode(String(p.barcode || '')); break;
+            case 'getResolvedProductSalePrice': raw = AndroidInterface.getResolvedProductSalePrice(JSON.stringify(p)); break;
             case 'getProducts': raw = AndroidInterface.getProducts(); break;
             case 'getNextInvoiceNumber': raw = AndroidInterface.getNextInvoiceNumber(); break;
             case 'completeSale': raw = AndroidInterface.completeSale(JSON.stringify(p)); break;
@@ -4601,6 +4602,8 @@ function addProductByBarcode(barcode) {
                     description: payload.description || payload.product_description || ''
                 };
                 addProductToTable(product);
+                const row = Array.from(document.querySelectorAll('#productsTableBody tr')).find(item => String(item.dataset.productId || '') === String(product.product_id));
+                if (row) await resolveProductRowPrice(row);
                 updateInvoiceSummary();
                 showSuccessCheckmark();
                 return true;
@@ -4825,12 +4828,54 @@ function showProductDetails(product, row) {
     showProductDetailsCanvas(product, row || null);
 }
 
+async function resolveProductRowPrice(row) {
+    if (!row || !window.AndroidInterface) throw new Error('جسر Android غير متاح لحساب سعر البيع');
+    const productId = Number(row.dataset.productId || 0);
+    const qty = Number(row.querySelector('.quantity-input')?.value || 1);
+    if (!Number.isInteger(productId) || productId <= 0 || !Number.isFinite(qty) || qty <= 0) throw new Error('معرّف المنتج أو كميته غير صالح');
+    const requestId = String((Number(row.dataset.priceRequestId || 0) + 1));
+    row.dataset.priceRequestId = requestId;
+    row.dataset.priceResolved = '0';
+    row.classList.add('price-resolving');
+    try {
+        const customerId = Number(document.getElementById('customerId')?.value || 0);
+        const raw = await apiCall('getResolvedProductSalePrice', {
+            product_id: productId,
+            quantity: qty,
+            customer_id: customerId > 0 ? customerId : 0,
+            transaction_time: new Date().toISOString().slice(0,19).replace('T',' ')
+        });
+        const resolved = raw?.data || raw;
+        if (raw?.success === false) throw new Error(raw.message || raw.error || 'تعذر احتساب السعر');
+        if (String(row.dataset.priceRequestId) !== requestId) return false;
+        const price = Number(resolved?.unit_price);
+        if (!Number.isFinite(price) || price < 0) throw new Error('لم يرجع محرك التسعير سعراً صالحاً');
+        row.querySelector('td:nth-child(3)').textContent = price.toFixed(4).replace(/0+$/,'').replace(/\.$/,'');
+        row.dataset.priceSource = String(resolved?.source || '');
+        row.dataset.priceSourceId = String(resolved?.source_id ?? '');
+        row.dataset.priceResolved = '1';
+        const total = price * qty;
+        row.querySelector('.product-total').textContent = total.toFixed(2);
+        updateInvoiceSummary();
+        return true;
+    } catch (error) {
+        if (String(row.dataset.priceRequestId) === requestId) {
+            row.dataset.priceResolved = '0';
+            showToast('تعذر احتساب السعر النهائي من قوائم الأسعار: ' + (error.message || 'خطأ غير معروف'), 'error');
+        }
+        return false;
+    } finally {
+        if (String(row.dataset.priceRequestId) === requestId) row.classList.remove('price-resolving');
+    }
+}
+
 function updateProductQuantity(row) {
     const qty = parseInt(row.querySelector('.quantity-input').value) || 1;
     const price = parseFloat(row.querySelector('td:nth-child(3)').textContent);
     const total = price * qty;
     row.querySelector('.product-total').textContent = total.toFixed(2);
     updateInvoiceSummary();
+    resolveProductRowPrice(row);
 }
 
 function removeProduct(row) {
@@ -4957,6 +5002,8 @@ function completeSale() {
     }));
 
     if (products.length === 0) { showToast('يرجى إضافة منتجات قبل الترحيل', 'error'); return; }
+    const unresolved = Array.from(document.querySelectorAll('#productsTableBody tr')).some(row => row.dataset.priceResolved !== '1' || row.classList.contains('price-resolving'));
+    if (unresolved) { showToast('انتظر حتى يكتمل احتساب أسعار القوائم الفعلية لجميع المنتجات', 'error'); return; }
 
     const invoiceData = {
         invoice_number: document.getElementById('invoiceNumber').value,
