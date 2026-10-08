@@ -28986,7 +28986,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """
         val args = arrayOf(
             customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(),
-            stationScopeId.toString(), fuelTypeId.toString(), stationScopeId.toString(), stationScopeId.toString(),
+            stationScopeId.toString(), fuelTypeId.toString(), stationScopeId.toString(),
             at, at, at, at,
             customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(),
             quantity.toString(), quantity.toString(), quantity.toString(), occasion, occasion, stationScopeId.toString(), stationScopeId.toString()
