@@ -692,6 +692,14 @@ async function loadFuelTypes(){
   const result=await invoke('getFuelTypes',[]);
   const raw=dataOf(result);
   state.fuels=Array.isArray(raw)?raw:(raw?.rows||raw?.data||[]);
+  // مسار getFuelTypes يقيّد النتائج أحياناً بالوقود المرتبط بخزان المحطة.
+  // سجل تغيير السعر يعرض كذلك الأنواع المحفوظة قبل اكتمال ربط الخزان.
+  if(!state.fuels.length && typeof bridge.getFuelTypeRecords==='function'){
+   const fallback=await invoke('getFuelTypeRecords',[JSON.stringify({limit:500,offset:0,search:''})]);
+   const fallbackRaw=dataOf(fallback);
+   const saved=Array.isArray(fallbackRaw)?fallbackRaw:(fallbackRaw?.rows||fallbackRaw?.data||[]);
+   state.fuels=saved.filter(f=>f && (f.is_active===undefined || f.is_active===true || Number(f.is_active)===1) && Number(f.is_deleted||0)===0);
+  }
   renderFuelOptions($('fuelSelect')?.value||'');
   if(!state.fuels.length) toast('لم تُرجع SQLite أي أنواع وقود متاحة','warning');
  }catch(e){state.fuels=[];renderFuelOptions();toast(e.message||'تعذر تحميل أنواع الوقود من SQLite','error')}

@@ -129,14 +129,17 @@
           <input class="input" id="valid_to" name="valid_to" type="date" inputmode="numeric">
         </div>
 
-        <!-- قواعد الانطباق: التاريخ والطرف والكمية تطبق معاً -->
+        <!-- قواعد الانطباق: الفترة والطرف والكمية والعروض والمناسبات -->
         <div class="field">
           <label>نوع تطبيق القائمة</label>
           <div class="select-wrap"><select class="input" id="applies_when" name="applies_when" onchange="toggleRuleFields()">
-            <option value="always">حسب الفترة والطرف والكمية</option>
+            <option value="always">حسب الفترة والطرف</option>
+            <option value="quantity">عرض حسب الكمية</option>
+            <option value="promotion">عرض ترويجي / خصم</option>
             <option value="occasion">مناسبة / حملة محددة</option>
-             <option value="clearance_stock">تصفية عند انخفاض المخزون</option>
+            <option value="clearance_stock">تصفية عند انخفاض المخزون</option>
           </select></div>
+          <small>تُحدد حدود الكمية والخصم لكل منتج من تفاصيل القائمة، وتُطبق الفترة والطرف تلقائياً.</small>
         </div>
         <div class="field">
           <label>أولوية القائمة</label>
@@ -482,7 +485,7 @@
     if (!p.list_name.trim()) e.push('اسم القائمة مطلوب.');
     if (p.valid_from && p.valid_to && p.valid_from > p.valid_to) e.push('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية.');
     if (!Number.isInteger(Number(p.priority))) e.push('أولوية القائمة يجب أن تكون عدداً صحيحاً.');
-    if (!['always','occasion','clearance_stock'].includes(p.applies_when)) e.push('نوع تطبيق القائمة غير صالح.');
+    if (!['always','quantity','promotion','occasion','clearance_stock'].includes(p.applies_when)) e.push('نوع تطبيق القائمة غير صالح.');
     if (p.applies_when === 'occasion' && !String(p.occasion_code || '').trim()) e.push('رمز المناسبة مطلوب لهذا النوع من القوائم.');
      if (p.applies_when === 'clearance_stock' && (p.clearance_stock_below === '' || !Number.isFinite(Number(p.clearance_stock_below)) || Number(p.clearance_stock_below) < 0)) e.push('حد المخزون مطلوب ويجب أن يكون صفراً أو أكبر.');
     if (p.party_type_id && !state.partyTypes.some(x => String(x.id) === String(p.party_type_id))) e.push('نوع الطرف المحدد غير موجود في قاعدة البيانات.');

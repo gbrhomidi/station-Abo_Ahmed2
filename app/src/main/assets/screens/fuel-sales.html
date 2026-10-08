@@ -1439,6 +1439,7 @@
                 {label:'العميل',key:'customer_id',type:'select',required:false},
                 {label:'تاريخ البيع',key:'sale_date',type:'date',required:true,readonly:true},
                 {label:'وقت البيع',key:'sale_time',type:'time',required:true,readonly:true},
+                {label:'رمز العرض / المناسبة (اختياري)',key:'occasion_code',type:'text',required:false,placeholder:'مثال: RAMADAN-2027'},
                 {label:'ملاحظات',key:'notes',type:'textarea',required:false}
             ],
             valueFields:['total_amount'],
@@ -1631,7 +1632,8 @@
                 const raw=await invoke('getResolvedFuelSalePrice',[JSON.stringify({
                     fuel_type_id:Number(f.value),quantity,
                     customer_id:Number(customer?.value||0),
-                    transaction_time:date+' '+time
+                    transaction_time:date+' '+time,
+                    occasion_code:document.querySelector('[data-key="occasion_code"]')?.value.trim()||null
                 })]);
                 const resolved=dataOf(raw);
                 if(seq!==state.priceLookupSeq||String(f.value)!==String(resolved?.source_id===undefined?f.value:f.value))return;
@@ -1651,6 +1653,7 @@
             f?.addEventListener('change',()=>{const o=f.options[f.selectedIndex];if(p)p.value=o?.dataset.price||'';calc();if(resolveDynamic)refreshResolvedFuelPrice();});
             q?.addEventListener('input',()=>{calc();if(resolveDynamic)refreshResolvedFuelPrice();});
             customer?.addEventListener('change',()=>{if(resolveDynamic)refreshResolvedFuelPrice();});
+            document.querySelector('[data-key="occasion_code"]')?.addEventListener('change',()=>{if(resolveDynamic)refreshResolvedFuelPrice();});
             calc();
             if(resolveDynamic)refreshResolvedFuelPrice();
         }
@@ -1665,6 +1668,7 @@
             }
 
             const payload = collectForm();
+            payload.transaction_time = String(payload.sale_date || localDate(new Date())) + ' ' + String(payload.sale_time || localTime(new Date()));
 
             const customerId = Number(payload.customer_id || 0);
 

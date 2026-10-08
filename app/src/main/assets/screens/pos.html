@@ -3753,6 +3753,7 @@ body.invoice-print-mode #posInvoice {
       <div class="field-group"><label class="form-label">الإجمالي النهائي</label><input type="number" id="totalAmount" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" inputmode="decimal"></div>
       <div class="field-group"><label class="form-label">المبلغ المدفوع</label><input type="number" id="amountPaid" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" inputmode="decimal"></div>
     </div>
+    <div class="field-group"><label class="form-label">رمز العرض / المناسبة (اختياري)</label><input type="text" id="occasionCode" class="form-control invoice-summary" maxlength="80" placeholder="مثال: RAMADAN-2027" autocomplete="off"></div>
     <div class="field-group"><label class="form-label">المتبقي</label><input type="number" id="remainingAmount" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" inputmode="decimal"></div>
     <input type="hidden" id="quantityOnHand" name="quantity_on_hand">
 
@@ -4892,7 +4893,8 @@ async function resolveProductRowPrice(row) {
             product_id: productId,
             quantity: qty,
             customer_id: customerId > 0 ? customerId : 0,
-            transaction_time: new Date().toISOString().slice(0,19).replace('T',' ')
+            transaction_time: new Date().toISOString().slice(0,19).replace('T',' '),
+            occasion_code: document.getElementById('occasionCode')?.value.trim() || null
         });
         const resolved = raw?.data || raw;
         if (raw?.success === false) throw new Error(raw.message || raw.error || 'تعذر احتساب السعر');
@@ -5017,6 +5019,7 @@ function resetForm() {
     document.getElementById('amountPaid').value = '';
     document.getElementById('amountPaid').readOnly = false;
     document.getElementById('remainingAmount').value = '0.00';
+    document.getElementById('occasionCode').value = '';
     document.getElementById('toggleScanBtn').innerHTML = '<i class="fas fa-play" style="color: #ffffff;"></i>';
     lastScannedBarcode = '';
     activeSaleOperationKey = '';
@@ -5067,6 +5070,8 @@ function completeSale() {
         service_fee: serviceFee,
         total_amount: total,
         amount_paid: paid,
+        transaction_time: new Date().toISOString().slice(0,19).replace('T',' '),
+        occasion_code: document.getElementById('occasionCode')?.value.trim() || null,
         idempotency_key: activeSaleOperationKey || (activeSaleOperationKey = newSaleOperationKey())
     };
 
@@ -6347,6 +6352,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('customerId').addEventListener('change', function() {
         loadCustomerDetails(this.value);
+        document.querySelectorAll('#productsTableBody tr').forEach(row => resolveProductRowPrice(row));
+    });
+    document.getElementById('occasionCode').addEventListener('change', function() {
         document.querySelectorAll('#productsTableBody tr').forEach(row => resolveProductRowPrice(row));
     });
     ['subtotal','discountAmount','taxAmount','serviceFee'].forEach(id => {
