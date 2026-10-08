@@ -49,8 +49,8 @@ class PricingV41RobolectricTest {
     }
 
     @Test
-    fun v41SchemaAndMigrationContractArePresent() {
-        assertEquals(41, DatabaseHelper.VERSION)
+    fun v42SchemaAndMigrationContractArePresent() {
+        assertEquals(42, DatabaseHelper.VERSION)
         val db = helper.writableDatabase
         assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fuel_price_history'", null).use { it.moveToFirst() })
         assertTrue(db.rawQuery("PRAGMA table_info(price_lists)", null).use { c ->
@@ -59,6 +59,14 @@ class PricingV41RobolectricTest {
         })
         assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='trg_products_sale_price_history'", null).use { it.moveToFirst() })
         assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='trg_fuel_types_sale_price_history'", null).use { it.moveToFirst() })
+        assertTrue(db.rawQuery("PRAGMA table_info(price_list_items)", null).use { c ->
+            val names = mutableSetOf<String>(); while (c.moveToNext()) names += c.getString(c.getColumnIndexOrThrow("name"))
+            names.containsAll(setOf("quantity_limit", "quantity_sold"))
+        })
+        assertTrue(db.rawQuery("PRAGMA table_info(sale_items)", null).use { c ->
+            val names = mutableSetOf<String>(); while (c.moveToNext()) names += c.getString(c.getColumnIndexOrThrow("name"))
+            names.containsAll(setOf("cost_price", "total_cost"))
+        })
     }
 
     @Test
