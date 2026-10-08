@@ -45,7 +45,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 41
+        const val VERSION = 42
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -209,6 +209,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureFuelStocktakeSchema(db)
             ensureFinanceIntegritySchema(db)
             ensurePricingV41Schema(db)
+            ensurePricingV42Schema(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
         } finally {
@@ -256,6 +257,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     35 -> migrateV35ToV36(db)
                     36 -> migrateV36ToV37(db)
                     40 -> migrateV40ToV41(db)
+                    41 -> migrateV41ToV42(db)
                 }
             }
             ensureModule006Schema(db)
@@ -271,6 +273,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureVehicleTripLifecycleSchema(db)
             ensureFinanceIntegritySchema(db)
             ensurePricingV41Schema(db)
+            ensurePricingV42Schema(db)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -28657,7 +28660,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     db.rawQuery("SELECT id FROM products WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(productId.toString(), stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "المنتج في البند ${i + 1} خارج نطاق المحطة" } }
                     val id = db.insertOrThrow("price_list_items", null, ContentValues().apply {
                         put("uuid", UUID.randomUUID().toString()); put("price_list_id", listId); put("product_id", productId); put("unit_price", unitPrice)
-                        put("min_quantity", item.optDouble("min_quantity", 1.0)); put("max_quantity", item.optDouble("max_quantity", 0.0).takeIf { it > 0 }); put("discount_percent", item.optDouble("discount_percent", 0.0))
+                        val minQuantity = item.optDouble("min_quantity", 1.0)
+                        val maxQuantity = item.optDouble("max_quantity", 0.0)
+                        val discountPercent = item.optDouble("discount_percent", 0.0)
+                        val quantityLimit = item.optDouble("quantity_limit", 0.0)
+                        require(minQuantity.isFinite() && minQuantity > 0.0) { "الحد الأدنى للكمية في البند غير صالح" }
+                        require(maxQuantity.isFinite() && (maxQuantity <= 0.0 || maxQuantity >= minQuantity)) { "الحد الأعلى للكمية في البند غير صالح" }
+                        require(discountPercent.isFinite() && discountPercent in 0.0..100.0) { "نسبة الخصم في البند غير صالحة" }
+                        require(quantityLimit.isFinite() && quantityLimit >= 0.0) { "حد الكمية في البند غير صالح" }
+                        put("min_quantity", minQuantity); put("max_quantity", maxQuantity.takeIf { it > 0 }); put("discount_percent", discountPercent)
+                        put("quantity_limit", quantityLimit.takeIf { it > 0.0 }); put("quantity_sold", 0.0)
                         put("valid_from", item.optString("valid_from").takeIf { it.isNotBlank() }); put("valid_to", item.optString("valid_to").takeIf { it.isNotBlank() }); put("is_active", item.optInt("is_active", 1))
                     })
                     result.put(id)
@@ -28688,10 +28700,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 writableDatabase.rawQuery("SELECT 1 FROM price_lists WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(listId.toString(), stationScopeId.toString())).use { require(it.moveToFirst()) { "قائمة الأسعار خارج نطاق المحطة" } }
                 writableDatabase.rawQuery("SELECT 1 FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(productId.toString(), stationScopeId.toString())).use { require(it.moveToFirst()) { "المنتج خارج نطاق المحطة" } }
             }
+            val minQuantity = data.optDouble("min_quantity", 1.0)
+            val maxQuantity = data.optDouble("max_quantity", 0.0)
+            val discountPercent = data.optDouble("discount_percent", 0.0)
+            val quantityLimit = data.optDouble("quantity_limit", 0.0)
+            require(minQuantity.isFinite() && minQuantity > 0.0) { "الحد الأدنى للكمية غير صالح" }
+            require(maxQuantity.isFinite() && (maxQuantity <= 0.0 || maxQuantity >= minQuantity)) { "الحد الأعلى للكمية غير صالح" }
+            require(discountPercent.isFinite() && discountPercent in 0.0..100.0) { "نسبة الخصم غير صالحة" }
+            require(quantityLimit.isFinite() && quantityLimit >= 0.0) { "حد الكمية غير صالح" }
             val values = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString()); put("price_list_id", listId); put("product_id", productId)
-                put("unit_price", unitPrice); put("min_quantity", data.optDouble("min_quantity", 1.0)); put("max_quantity", data.optDouble("max_quantity", 0.0).takeIf { it > 0 })
-                put("discount_percent", data.optDouble("discount_percent", 0.0)); put("valid_from", data.optString("valid_from").takeIf { it.isNotBlank() }); put("valid_to", data.optString("valid_to").takeIf { it.isNotBlank() }); put("is_active", data.optInt("is_active", 1))
+                put("unit_price", unitPrice); put("min_quantity", minQuantity); put("max_quantity", maxQuantity.takeIf { it > 0 })
+                put("discount_percent", discountPercent); put("quantity_limit", quantityLimit.takeIf { it > 0.0 })
+                put("quantity_sold", 0.0); put("valid_from", data.optString("valid_from").takeIf { it.isNotBlank() })
+                put("valid_to", data.optString("valid_to").takeIf { it.isNotBlank() }); put("is_active", data.optInt("is_active", 1))
             }
             writableDatabase.insertOrThrow("price_list_items", null, values)
         } finally { dbLock.unlock() }
@@ -28705,7 +28727,21 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 require(stationScopeId > 0)
                 writableDatabase.rawQuery("SELECT 1 FROM price_list_items pli JOIN price_lists pl ON pl.id = pli.price_list_id WHERE pli.id = ? AND pl.station_id = ? AND pl.is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString())).use { require(it.moveToFirst()) { "عنصر قائمة الأسعار خارج نطاق المحطة" } }
             }
-            val values = ContentValues().apply { put("unit_price", data.optDouble("unit_price", -1.0)); put("min_quantity", data.optDouble("min_quantity", 1.0)); put("max_quantity", data.optDouble("max_quantity", 0.0).takeIf { it > 0 }); put("discount_percent", data.optDouble("discount_percent", 0.0)); put("valid_from", data.optString("valid_from").takeIf { it.isNotBlank() }); put("valid_to", data.optString("valid_to").takeIf { it.isNotBlank() }); put("is_active", data.optInt("is_active", 1)) }
+            val unitPrice = data.optDouble("unit_price", Double.NaN)
+            val minQuantity = data.optDouble("min_quantity", 1.0)
+            val maxQuantity = data.optDouble("max_quantity", 0.0)
+            val discountPercent = data.optDouble("discount_percent", 0.0)
+            val quantityLimit = data.optDouble("quantity_limit", 0.0)
+            require(unitPrice.isFinite() && unitPrice >= 0.0) { "سعر الوحدة غير صالح" }
+            require(minQuantity.isFinite() && minQuantity > 0.0) { "الحد الأدنى للكمية غير صالح" }
+            require(maxQuantity.isFinite() && (maxQuantity <= 0.0 || maxQuantity >= minQuantity)) { "الحد الأعلى للكمية غير صالح" }
+            require(discountPercent.isFinite() && discountPercent in 0.0..100.0) { "نسبة الخصم غير صالحة" }
+            require(quantityLimit.isFinite() && quantityLimit >= 0.0) { "حد الكمية غير صالح" }
+            val values = ContentValues().apply {
+                put("unit_price", unitPrice); put("min_quantity", minQuantity); put("max_quantity", maxQuantity.takeIf { it > 0 })
+                put("discount_percent", discountPercent); put("quantity_limit", quantityLimit.takeIf { it > 0.0 })
+                put("valid_from", data.optString("valid_from").takeIf { it.isNotBlank() }); put("valid_to", data.optString("valid_to").takeIf { it.isNotBlank() }); put("is_active", data.optInt("is_active", 1))
+            }
             writableDatabase.update("price_list_items", values, "id = ?", arrayOf(id.toString()))
         } finally { dbLock.unlock() }
     }
@@ -28735,6 +28771,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureFuelSalesSchema(db)
         ensurePricingV41Schema(db)
         Log.d(TAG, "Migrated pricing/business-day schema V40 -> V41")
+    }
+
+    private fun migrateV41ToV42(db: SQLiteDatabase) {
+        ensurePricingV41Schema(db)
+        ensurePricingV42Schema(db)
+        Log.d(TAG, "Migrated pricing quantity caps to V42")
+    }
+
+    private fun ensurePricingV42Schema(db: SQLiteDatabase) {
+        ensureColumn(db, "price_list_items", "quantity_limit", "REAL")
+        ensureColumn(db, "price_list_items", "quantity_sold", "REAL NOT NULL DEFAULT 0")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_price_list_items_quantity_limit ON price_list_items(price_list_id, is_active, quantity_limit, quantity_sold)")
     }
 
     private fun ensurePricingV41Schema(db: SQLiteDatabase) {
@@ -28806,7 +28854,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private fun parsePriceInstant(value: String): String = value.trim().replace('T', ' ')
 
-    private fun priceValiditySql(alias: String, time: String): String = "($alias.valid_from IS NULL OR trim($alias.valid_from) = '' OR replace($alias.valid_from,'T',' ') <= ?) AND ($alias.valid_to IS NULL OR trim($alias.valid_to) = '' OR ? < replace($alias.valid_to,'T',' '))"
+    private fun priceValiditySql(alias: String, time: String): String =
+        "($alias.valid_from IS NULL OR trim($alias.valid_from) = '' OR replace($alias.valid_from,'T',' ') <= ?) " +
+        "AND ($alias.valid_to IS NULL OR trim($alias.valid_to) = '' OR ? < CASE WHEN length(trim($alias.valid_to)) = 10 THEN trim($alias.valid_to) || ' 23:59:59.999' ELSE replace($alias.valid_to,'T',' ') END)""
 
     fun resolveProductSalePrice(
         productId: Long,
@@ -28828,8 +28878,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    CASE WHEN pl.party_id = ? THEN 4
                         WHEN pl.party_type_id IS NOT NULL AND pl.party_type_id = (SELECT party_type_id FROM parties WHERE id = ? AND station_id = ? AND is_deleted = 0 AND is_active = 1) THEN 3
                         ELSE 0 END AS specificity,
-                   pl.valid_from, pl.valid_to, pl.list_name_ar, pl.occasion_code
+                   pl.valid_from, pl.valid_to, pl.list_name_ar, pl.occasion_code,
+                    pli.id, pli.quantity_limit, COALESCE(pli.quantity_sold, 0)
             FROM price_list_items pli JOIN price_lists pl ON pl.id = pli.price_list_id
+            JOIN products p ON p.id = pli.product_id AND p.station_id = ? AND p.is_deleted = 0 AND p.status = 'active'
             WHERE pli.product_id = ? AND pli.is_active = 1 AND pl.is_active = 1 AND pl.is_deleted = 0
               AND (pl.station_id = ? OR pl.station_id IS NULL)
               AND ${priceValiditySql("pl", "?")} AND ${priceValiditySql("pli", "?")}
@@ -28838,6 +28890,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     SELECT party_type_id FROM parties WHERE id = ? AND station_id = ? AND is_deleted = 0 AND is_active = 1))
               AND COALESCE(pli.min_quantity, 1.0) <= ?
               AND (pli.max_quantity IS NULL OR pli.max_quantity <= 0 OR pli.max_quantity >= ?)
+              AND (pli.quantity_limit IS NULL OR pli.quantity_limit <= 0 OR COALESCE(pli.quantity_sold, 0) + ? <= pli.quantity_limit)
               AND (pl.occasion_code IS NULL OR trim(pl.occasion_code) = '' OR pl.occasion_code = ?)
               AND (COALESCE(pl.applies_when, 'always') NOT IN ('occasion', 'event') OR
                    (pl.occasion_code IS NOT NULL AND trim(pl.occasion_code) <> '' AND pl.occasion_code = ?))
@@ -28849,12 +28902,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """
         val args = arrayOf(
             customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(),
-            productId.toString(), stationScopeId.toString(), at, at, at, at,
+            stationScopeId.toString(), productId.toString(), stationScopeId.toString(), at, at, at, at,
             customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(),
-            quantity.toString(), quantity.toString(), occasion, occasion, stationScopeId.toString()
+            quantity.toString(), quantity.toString(), quantity.toString(), occasion, occasion, stationScopeId.toString(), stationScopeId.toString()
         )
         db.rawQuery(sql, args).use { c ->
-            if (c.moveToFirst()) return PriceResolution(c.getDouble(0), "price_list", c.getLong(1), c.getString(7), c.getString(6))
+            if (c.moveToFirst()) return PriceResolution(c.getDouble(0), "price_list", c.getLong(1), c.getString(7), c.getString(6), c.getLong(9), if (c.isNull(10)) null else c.getDouble(10), c.getDouble(11))
         }
         db.rawQuery("SELECT sale_price FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'", arrayOf(productId.toString(), stationScopeId.toString())).use { c ->
             require(c.moveToFirst()) { "المنتج خارج نطاق المحطة أو غير نشط" }
@@ -28884,9 +28937,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    CASE WHEN pl.party_id = ? THEN 4
                         WHEN pl.party_type_id IS NOT NULL AND pl.party_type_id = (SELECT party_type_id FROM parties WHERE id = ? AND station_id = ? AND is_deleted = 0 AND is_active = 1) THEN 3
                         ELSE 0 END AS specificity,
-                   pl.valid_from, pl.valid_to, pl.list_name_ar, pl.occasion_code
+                   pl.valid_from, pl.valid_to, pl.list_name_ar, pl.occasion_code,
+                    pli.id, pli.quantity_limit, COALESCE(pli.quantity_sold, 0)
             FROM price_list_items pli JOIN price_lists pl ON pl.id = pli.price_list_id
-            JOIN products p ON p.id = pli.product_id AND p.fuel_type_id = ? AND p.station_id = ? AND p.is_deleted = 0 AND p.status = 'active'
+            JOIN products p ON p.id = pli.product_id AND p.station_id = ? AND p.fuel_type_id = ? AND p.is_deleted = 0 AND p.status = 'active'
             WHERE pli.is_active = 1 AND pl.is_active = 1 AND pl.is_deleted = 0
               AND (pl.station_id = ? OR pl.station_id IS NULL)
               AND ${priceValiditySql("pl", "?")} AND ${priceValiditySql("pli", "?")}
@@ -28895,6 +28949,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     SELECT party_type_id FROM parties WHERE id = ? AND station_id = ? AND is_deleted = 0 AND is_active = 1))
               AND COALESCE(pli.min_quantity, 1.0) <= ?
               AND (pli.max_quantity IS NULL OR pli.max_quantity <= 0 OR pli.max_quantity >= ?)
+              AND (pli.quantity_limit IS NULL OR pli.quantity_limit <= 0 OR COALESCE(pli.quantity_sold, 0) + ? <= pli.quantity_limit)
               AND (pl.occasion_code IS NULL OR trim(pl.occasion_code) = '' OR pl.occasion_code = ?)
               AND (COALESCE(pl.applies_when, 'always') NOT IN ('occasion', 'event') OR
                    (pl.occasion_code IS NOT NULL AND trim(pl.occasion_code) <> '' AND pl.occasion_code = ?))
@@ -28906,13 +28961,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """
         val args = arrayOf(
             customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(),
-            fuelTypeId.toString(), stationScopeId.toString(), stationScopeId.toString(),
+            stationScopeId.toString(), fuelTypeId.toString(), stationScopeId.toString(), stationScopeId.toString(),
             at, at, at, at,
             customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(),
-            quantity.toString(), quantity.toString(), occasion, occasion, stationScopeId.toString()
+            quantity.toString(), quantity.toString(), quantity.toString(), occasion, occasion, stationScopeId.toString(), stationScopeId.toString()
         )
         db.rawQuery(sql, args).use { c ->
-            if (c.moveToFirst()) return PriceResolution(c.getDouble(0), "fuel_price_list", c.getLong(1), c.getString(7), c.getString(6))
+            if (c.moveToFirst()) return PriceResolution(c.getDouble(0), "fuel_price_list", c.getLong(1), c.getString(7), c.getString(6), c.getLong(9), if (c.isNull(10)) null else c.getDouble(10), c.getDouble(11))
         }
         db.rawQuery("SELECT default_sale_price FROM fuel_types WHERE id = ? AND is_deleted = 0 AND is_active = 1", arrayOf(fuelTypeId.toString())).use { c ->
             require(c.moveToFirst()) { "نوع الوقود غير صالح" }
