@@ -17579,23 +17579,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
             "price_lists" -> OperationalTableSpec(
                 table = "price_lists",
-                columns = listOf("list_code", "list_name", "list_name_ar", "description", "party_id", "party_type_id", "station_id", "valid_from", "valid_to", "is_active", "is_default"),
+                columns = listOf("list_code", "list_name", "list_name_ar", "description", "party_id", "party_type_id", "station_id", "valid_from", "valid_to", "is_active", "is_default", "occasion_code", "occasion_name_ar", "applies_when", "clearance_mode", "clearance_stock_below", "priority"),
                 required = listOf("list_code", "list_name"),
                 searchColumns = listOf("list_code", "list_name", "list_name_ar", "description"),
                 softDeleted = true,
                 hasUpdatedAt = true,
                 hasStatus = true,
-                numericColumns = listOf("party_id", "party_type_id", "station_id")
+                numericColumns = listOf("party_id", "party_type_id", "station_id", "clearance_stock_below", "priority")
             )
             "price_list_items" -> OperationalTableSpec(
                 table = "price_list_items",
-                columns = listOf("price_list_id", "product_id", "unit_price", "min_quantity", "max_quantity", "discount_percent", "valid_from", "valid_to", "is_active"),
+                columns = listOf("price_list_id", "product_id", "unit_price", "min_quantity", "max_quantity", "discount_percent", "valid_from", "valid_to", "is_active", "quantity_limit"),
                 required = listOf("price_list_id", "product_id", "unit_price"),
                 searchColumns = listOf("price_list_id", "product_id"),
                 softDeleted = false,
                 hasUpdatedAt = false,
                 hasStatus = true,
-                numericColumns = listOf("price_list_id", "product_id", "unit_price", "min_quantity", "max_quantity", "discount_percent")
+                numericColumns = listOf("price_list_id", "product_id", "unit_price", "min_quantity", "max_quantity", "discount_percent", "quantity_limit")
             )
             "price_history" -> OperationalTableSpec(
                 table = "price_history",
