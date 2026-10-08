@@ -596,7 +596,7 @@ function applyProduct(rowId){
  $('oldPrice').value=p?(p.sale_price??p.default_sale_price??p.current_price??''):'';
 }
 function applyFuel(fuelId){
- const f=state.fuels.find(x=>String(x.id)===String(fuelId));
+ const f=state.fuels.find(x=>String(x.fuel_type_id??x.id)===String(fuelId));
  $('oldPrice').value=f?(f.default_sale_price??f.sale_price??f.current_price??''):'';
 }
 function togglePriceTarget(){
