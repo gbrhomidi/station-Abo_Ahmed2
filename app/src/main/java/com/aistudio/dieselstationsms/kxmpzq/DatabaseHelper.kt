@@ -10920,7 +10920,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val fuelTypeId = data.optLong("fuel_type_id", 0L).toInt()
         require(fuelTypeId > 0) { "نوع الوقود مطلوب" }
         val requestedAt = data.optString("transaction_time", "").trim().ifBlank { getCurrentDateTime() }
-        val resolvedPrice = resolveFuelSalePrice(fuelTypeId.toLong(), stationScopeId, customerId?.toLong(), requestedAt)
+        val resolvedPrice = resolveFuelSalePrice(fuelTypeId.toLong(), stationScopeId, customerId?.toLong(), requestedAt, data.optString("occasion_code", "").trim().ifBlank { null }, liters)
         val pricePerLiter = resolvedPrice.unitPrice
         val subtotal = liters * pricePerLiter
         val totalAmount = subtotal
@@ -11192,7 +11192,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     require(cursor.moveToFirst()) { "المنتج في السطر ${i + 1} خارج نطاق المحطة أو غير نشط" }
                     JSONObject().apply { put("id", cursor.getLong(0)); put("product_name", cursor.getString(1)) }
                 }
-                val resolvedPrice = resolveProductSalePrice(productId, stationScopeId, data.optLong("entity_id", 0L).takeIf { it > 0L }, data.optString("transaction_time", "").trim().ifBlank { getCurrentDateTime() }, data.optString("occasion_code", "").trim().ifBlank { null })
+                val resolvedPrice = resolveProductSalePrice(productId, stationScopeId, data.optLong("entity_id", 0L).takeIf { it > 0L }, data.optString("transaction_time", "").trim().ifBlank { getCurrentDateTime() }, data.optString("occasion_code", "").trim().ifBlank { null }, quantity)
                 val unitPrice = resolvedPrice.unitPrice
                 require(unitPrice.isFinite() && unitPrice >= 0.0) { "سعر المنتج غير صالح" }
                 val lineTotal = quantity * unitPrice
@@ -28682,26 +28682,50 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private fun priceValiditySql(alias: String, time: String): String = "($alias.valid_from IS NULL OR trim($alias.valid_from) = '' OR replace($alias.valid_from,'T',' ') <= ?) AND ($alias.valid_to IS NULL OR trim($alias.valid_to) = '' OR ? < replace($alias.valid_to,'T',' '))"
 
-    fun resolveProductSalePrice(productId: Long, stationScopeId: Int, customerId: Long? = null, transactionTime: String = getCurrentDateTime(), occasionCode: String? = null): PriceResolution {
+    fun resolveProductSalePrice(
+        productId: Long,
+        stationScopeId: Int,
+        customerId: Long? = null,
+        transactionTime: String = getCurrentDateTime(),
+        occasionCode: String? = null,
+        quantity: Double = 1.0
+    ): PriceResolution {
         require(productId > 0 && stationScopeId > 0) { "معرف المنتج والمحطة مطلوبان" }
+        require(quantity.isFinite() && quantity > 0.0) { "كمية التسعير غير صالحة" }
         val at = parsePriceInstant(transactionTime.ifBlank { getCurrentDateTime() })
         val db = readableDatabase
         val customer = customerId?.takeIf { it > 0 }
-        val occasion = occasionCode?.trim()?.takeIf { it.isNotEmpty() }
+        val occasion = occasionCode?.trim()?.takeIf { it.isNotEmpty() } ?: ""
         val sql = """
-            SELECT pli.unit_price, pl.id, pl.list_code, pl.priority,
-                   CASE WHEN pl.party_id = ? THEN 4 WHEN pl.party_type_id IS NOT NULL AND pl.party_type_id = (SELECT party_type_id FROM parties WHERE id = ? AND station_id = ?) THEN 3 ELSE 0 END AS specificity,
+            SELECT pli.unit_price * (1.0 - MIN(100.0, MAX(0.0, COALESCE(pli.discount_percent, 0.0))) / 100.0),
+                   pl.id, pl.list_code, pl.priority,
+                   CASE WHEN pl.party_id = ? THEN 4
+                        WHEN pl.party_type_id IS NOT NULL AND pl.party_type_id = (SELECT party_type_id FROM parties WHERE id = ? AND station_id = ? AND is_deleted = 0 AND is_active = 1) THEN 3
+                        ELSE 0 END AS specificity,
                    pl.valid_from, pl.valid_to, pl.list_name_ar, pl.occasion_code
             FROM price_list_items pli JOIN price_lists pl ON pl.id = pli.price_list_id
-            WHERE pli.product_id = ? AND pli.is_active = 1 AND pl.is_active = 1 AND pl.is_deleted = 0 AND (pl.station_id = ? OR pl.station_id IS NULL)
+            WHERE pli.product_id = ? AND pli.is_active = 1 AND pl.is_active = 1 AND pl.is_deleted = 0
+              AND (pl.station_id = ? OR pl.station_id IS NULL)
               AND ${priceValiditySql("pl", "?")} AND ${priceValiditySql("pli", "?")}
+              AND (pl.party_id IS NULL OR pl.party_id = ?)
+              AND (pl.party_type_id IS NULL OR pl.party_type_id = (
+                    SELECT party_type_id FROM parties WHERE id = ? AND station_id = ? AND is_deleted = 0 AND is_active = 1))
+              AND COALESCE(pli.min_quantity, 1.0) <= ?
+              AND (pli.max_quantity IS NULL OR pli.max_quantity <= 0 OR pli.max_quantity >= ?)
               AND (pl.occasion_code IS NULL OR trim(pl.occasion_code) = '' OR pl.occasion_code = ?)
-            ORDER BY pl.priority DESC, specificity DESC, CASE WHEN pl.station_id = ? THEN 1 ELSE 0 END DESC, replace(COALESCE(pli.valid_from, pl.valid_from, ''),'T',' ') DESC, pl.id DESC, pli.id DESC
+              AND (COALESCE(pl.applies_when, 'always') NOT IN ('occasion', 'event') OR
+                   (pl.occasion_code IS NOT NULL AND trim(pl.occasion_code) <> '' AND pl.occasion_code = ?))
+            ORDER BY pl.priority DESC, specificity DESC,
+                     CASE WHEN pl.station_id = ? THEN 1 ELSE 0 END DESC,
+                     replace(COALESCE(pli.valid_from, pl.valid_from, ''),'T',' ') DESC,
+                     pl.id DESC, pli.id DESC
             LIMIT 1
         """
         val args = arrayOf(
             customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(),
-            productId.toString(), stationScopeId.toString(), at, at, at, at, occasion ?: "", stationScopeId.toString()
+            productId.toString(), stationScopeId.toString(), at, at, at, at,
+            customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(),
+            quantity.toString(), quantity.toString(), occasion, occasion, stationScopeId.toString()
         )
         db.rawQuery(sql, args).use { c ->
             if (c.moveToFirst()) return PriceResolution(c.getDouble(0), "price_list", c.getLong(1), c.getString(7), c.getString(6))
@@ -28714,24 +28738,56 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun resolveFuelSalePrice(fuelTypeId: Long, stationScopeId: Int, customerId: Long? = null, transactionTime: String = getCurrentDateTime()): PriceResolution {
+    fun resolveFuelSalePrice(
+        fuelTypeId: Long,
+        stationScopeId: Int,
+        customerId: Long? = null,
+        transactionTime: String = getCurrentDateTime(),
+        occasionCode: String? = null,
+        quantity: Double = 1.0
+    ): PriceResolution {
         require(fuelTypeId > 0 && stationScopeId > 0) { "معرف الوقود والمحطة مطلوبان" }
+        require(quantity.isFinite() && quantity > 0.0) { "كمية تسعير الوقود غير صالحة" }
         val at = parsePriceInstant(transactionTime.ifBlank { getCurrentDateTime() })
         val db = readableDatabase
         val customer = customerId?.takeIf { it > 0 }
+        val occasion = occasionCode?.trim()?.takeIf { it.isNotEmpty() } ?: ""
         val sql = """
-            SELECT pli.unit_price, pl.id, pl.list_code, pl.priority,
-                   CASE WHEN pl.party_id = ? THEN 4 WHEN pl.party_type_id IS NOT NULL AND pl.party_type_id = (SELECT party_type_id FROM parties WHERE id = ? AND station_id = ?) THEN 3 ELSE 0 END AS specificity,
-                   pl.valid_from, pl.valid_to, pl.list_name_ar
+            SELECT pli.unit_price * (1.0 - MIN(100.0, MAX(0.0, COALESCE(pli.discount_percent, 0.0))) / 100.0),
+                   pl.id, pl.list_code, pl.priority,
+                   CASE WHEN pl.party_id = ? THEN 4
+                        WHEN pl.party_type_id IS NOT NULL AND pl.party_type_id = (SELECT party_type_id FROM parties WHERE id = ? AND station_id = ? AND is_deleted = 0 AND is_active = 1) THEN 3
+                        ELSE 0 END AS specificity,
+                   pl.valid_from, pl.valid_to, pl.list_name_ar, pl.occasion_code
             FROM price_list_items pli JOIN price_lists pl ON pl.id = pli.price_list_id
-            JOIN products p ON p.id = pli.product_id AND p.fuel_type_id = ? AND p.station_id = ? AND p.is_deleted = 0
-            WHERE pli.is_active = 1 AND pl.is_active = 1 AND pl.is_deleted = 0 AND (pl.station_id = ? OR pl.station_id IS NULL)
+            JOIN products p ON p.id = pli.product_id AND p.fuel_type_id = ? AND p.station_id = ? AND p.is_deleted = 0 AND p.status = 'active'
+            WHERE pli.is_active = 1 AND pl.is_active = 1 AND pl.is_deleted = 0
+              AND (pl.station_id = ? OR pl.station_id IS NULL)
               AND ${priceValiditySql("pl", "?")} AND ${priceValiditySql("pli", "?")}
-            ORDER BY pl.priority DESC, specificity DESC, CASE WHEN pl.station_id = ? THEN 1 ELSE 0 END DESC, replace(COALESCE(pli.valid_from, pl.valid_from, ''),'T',' ') DESC, pl.id DESC, pli.id DESC
+              AND (pl.party_id IS NULL OR pl.party_id = ?)
+              AND (pl.party_type_id IS NULL OR pl.party_type_id = (
+                    SELECT party_type_id FROM parties WHERE id = ? AND station_id = ? AND is_deleted = 0 AND is_active = 1))
+              AND COALESCE(pli.min_quantity, 1.0) <= ?
+              AND (pli.max_quantity IS NULL OR pli.max_quantity <= 0 OR pli.max_quantity >= ?)
+              AND (pl.occasion_code IS NULL OR trim(pl.occasion_code) = '' OR pl.occasion_code = ?)
+              AND (COALESCE(pl.applies_when, 'always') NOT IN ('occasion', 'event') OR
+                   (pl.occasion_code IS NOT NULL AND trim(pl.occasion_code) <> '' AND pl.occasion_code = ?))
+            ORDER BY pl.priority DESC, specificity DESC,
+                     CASE WHEN pl.station_id = ? THEN 1 ELSE 0 END DESC,
+                     replace(COALESCE(pli.valid_from, pl.valid_from, ''),'T',' ') DESC,
+                     pl.id DESC, pli.id DESC
             LIMIT 1
         """
-        val args = arrayOf(customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(), fuelTypeId.toString(), stationScopeId.toString(), stationScopeId.toString(), at, at, at, at, stationScopeId.toString())
-        db.rawQuery(sql, args).use { c -> if (c.moveToFirst()) return PriceResolution(c.getDouble(0), "fuel_price_list", c.getLong(1), c.getString(6), c.getString(5)) }
+        val args = arrayOf(
+            customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(),
+            fuelTypeId.toString(), stationScopeId.toString(), stationScopeId.toString(),
+            at, at, at, at,
+            customer?.toString() ?: "-1", customer?.toString() ?: "-1", stationScopeId.toString(),
+            quantity.toString(), quantity.toString(), occasion, occasion, stationScopeId.toString()
+        )
+        db.rawQuery(sql, args).use { c ->
+            if (c.moveToFirst()) return PriceResolution(c.getDouble(0), "fuel_price_list", c.getLong(1), c.getString(7), c.getString(6))
+        }
         db.rawQuery("SELECT default_sale_price FROM fuel_types WHERE id = ? AND is_deleted = 0 AND is_active = 1", arrayOf(fuelTypeId.toString())).use { c ->
             require(c.moveToFirst()) { "نوع الوقود غير صالح" }
             val price = c.getDouble(0)
