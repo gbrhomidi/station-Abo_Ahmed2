@@ -5502,7 +5502,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getFuelTypes called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val types = db.getFuelTypes()
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val types = db.getFuelTypes(stationId)
                 dataResponse(types)
             } catch (e: Exception) {
                 DebugLogger.logException("Fuel", e)
