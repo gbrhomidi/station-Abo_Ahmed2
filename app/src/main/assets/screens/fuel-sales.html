@@ -1454,7 +1454,8 @@
             editing: null,
             filter: 'all',
             loadedAt: null,
-            pendingIdempotencyKey: null
+            pendingIdempotencyKey: null,
+            priceLookupSeq: 0
         };
         const $ = (id) => document.getElementById(id);
         function newIdempotencyKey(){
@@ -1596,7 +1597,7 @@
                 customerEl.value = field(row,['customer_id','customer_party_id']) || '';
             }
             if(!row){const now=new Date();document.querySelector('[data-key="sale_date"]')?.setAttribute('value',localDate(now));const dateEl=document.querySelector('[data-key="sale_date"]');if(dateEl)dateEl.value=localDate(now);const timeEl=document.querySelector('[data-key="sale_time"]');if(timeEl)timeEl.value=localTime(now);}
-            bindFuelCalculation();
+            bindFuelCalculation(!row);
             const pumpSelect=document.querySelector('[data-key="pump_id"]');
             pumpSelect?.addEventListener('change',()=>loadPumpNozzles(pumpSelect.value,''));
             if(pumpSelect?.value) await loadPumpNozzles(pumpSelect.value,row?field(row,['nozzle_id']):'');
@@ -1615,7 +1616,44 @@
                 nozzleEl.value=String(selectedId||'');
             }catch(e){ toast('تعذر تحميل فوهات المضخة: '+e.message,true); }
         }
-                function bindFuelCalculation(){const q=document.querySelector('[data-key="quantity"]'),p=document.querySelector('[data-key="price_per_liter"]'),t=document.querySelector('[data-key="total_amount"]'),f=document.querySelector('[data-key="fuel_type_id"]');const calc=()=>{if(t)t.value=(numeric(q?.value)*numeric(p?.value)).toFixed(2);};f?.addEventListener('change',()=>{const o=f.options[f.selectedIndex];if(p)p.value=o?.dataset.price||'';calc();});q?.addEventListener('input',calc);}
+                async function refreshResolvedFuelPrice(){
+            const f=document.querySelector('[data-key="fuel_type_id"]');
+            const q=document.querySelector('[data-key="quantity"]');
+            const p=document.querySelector('[data-key="price_per_liter"]');
+            const t=document.querySelector('[data-key="total_amount"]');
+            const customer=document.querySelector('[data-key="customer_id"]');
+            if(!f||!p||!f.value)return;
+            const seq=++state.priceLookupSeq;
+            const quantity=Math.max(0.000001,numeric(q?.value)||1);
+            const date=document.querySelector('[data-key="sale_date"]')?.value||localDate(new Date());
+            const time=document.querySelector('[data-key="sale_time"]')?.value||localTime(new Date());
+            try{
+                const raw=await invoke('getResolvedFuelSalePrice',[JSON.stringify({
+                    fuel_type_id:Number(f.value),quantity,
+                    customer_id:Number(customer?.value||0),
+                    transaction_time:date+' '+time
+                })]);
+                const resolved=dataOf(raw);
+                if(seq!==state.priceLookupSeq||String(f.value)!==String(resolved?.source_id===undefined?f.value:f.value))return;
+                const price=Number(resolved?.unit_price);
+                if(!Number.isFinite(price)||price<0)throw new Error('لم يرجع محرك التسعير سعراً صالحاً');
+                p.value=price.toFixed(4).replace(/0+$/,'').replace(/\.$/,'');
+                p.dataset.priceSource=String(resolved?.source||'');
+                p.dataset.priceSourceId=String(resolved?.source_id??'');
+                if(t)t.value=(numeric(q?.value)*price).toFixed(2);
+            }catch(e){
+                if(seq===state.priceLookupSeq)toast('تعذر احتساب سعر الوقود الفعلي من قوائم الأسعار: '+(e.message||'خطأ غير معروف'),true);
+            }
+        }
+        function bindFuelCalculation(resolveDynamic=true){
+            const q=document.querySelector('[data-key="quantity"]'),p=document.querySelector('[data-key="price_per_liter"]'),t=document.querySelector('[data-key="total_amount"]'),f=document.querySelector('[data-key="fuel_type_id"]'),customer=document.querySelector('[data-key="customer_id"]');
+            const calc=()=>{if(t)t.value=(numeric(q?.value)*numeric(p?.value)).toFixed(2);};
+            f?.addEventListener('change',()=>{const o=f.options[f.selectedIndex];if(p)p.value=o?.dataset.price||'';calc();if(resolveDynamic)refreshResolvedFuelPrice();});
+            q?.addEventListener('input',()=>{calc();if(resolveDynamic)refreshResolvedFuelPrice();});
+            customer?.addEventListener('change',()=>{if(resolveDynamic)refreshResolvedFuelPrice();});
+            calc();
+            if(resolveDynamic)refreshResolvedFuelPrice();
+        }
         async function openForm(row=null) { if(!CFG.createMethod&&!CFG.updateMethod){toast('لا توجد عملية كتابة مدعومة لهذه الشاشة',true);return;}state.editing=row;const deliveryBtn=$('deliveryBtn');if(deliveryBtn){deliveryBtn.disabled=true;delete deliveryBtn.dataset.saleId;deliveryBtn.title='يتاح بعد حفظ عملية البيع بنجاح';}$('formTitle').textContent=row?'تعديل مبيعات الوقود':'إضافة عملية بيع وقود';$('recordForm').innerHTML=(CFG.fields||[]).map(def=>inputHtml(def,row)).join('');$('formModal').classList.add('show');try{await loadSaleFormLookups(row);}catch(e){toast(e.message||'تعذر تحميل بيانات النموذج',true);} }
         function collectForm(){const payload={};document.querySelectorAll('#recordForm [data-key]').forEach(el=>{if(el.dataset.key==='sale_id')return;let v=el.value;if(el.type==='number')v=v===''?0:Number(v);payload[el.dataset.key]=v;});payload.created_at=new Date().toISOString();return payload;}
         async function saveForm(){
