@@ -15794,6 +15794,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("operator", operator)
                 put("notes", notes.ifBlank { "تسديد عبر Bridge" })
                 put("created_at", getCurrentDateTime())
+                put("business_day", BusinessDay.currentDate())
             }
             val paymentId = db.insert("payments", null, cv)
             if (paymentId <= 0) throw IllegalStateException("تعذر تسجيل عملية التسديد")
@@ -16891,9 +16892,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(calendar.time)
     }
 
-    fun getDashboardStats(stationId: Int, params: JSONObject = JSONObject()): JSONObject {
+    fun getDashboardStats(stationId: Int, params: JSONObject = JSONObject()): JSONObject =
+        getDashboardStatsForDate(stationId, params, BusinessDay.currentDate())
+
+    internal fun getDashboardStatsForDate(stationId: Int, params: JSONObject, businessDate: String): JSONObject {
         val stats = JSONObject()
         val db = readableDatabase
+        val today = businessDate
 
         // 1. إجمالي المنتجات النشطة في المحطة
         db.rawQuery(
@@ -16905,8 +16910,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         // 2. المبيعات اليومية (صافي المبلغ)
         db.rawQuery(
-            "SELECT COALESCE(SUM(net_amount),0) FROM sales_transactions WHERE station_id=? AND date(created_at)=date('now') AND is_deleted=0",
-            arrayOf(stationId.toString())
+            "SELECT COALESCE(SUM(net_amount),0) FROM sales_transactions WHERE station_id=? AND business_day=? AND is_deleted=0",
+            arrayOf(stationId.toString(), today)
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("daily_sales", cursor.getDouble(0))
         }
@@ -16937,10 +16942,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 )
             FROM sales_transactions
             WHERE station_id = ?
-            AND date(created_at) = date('now')
+            AND business_day = ?
             AND is_deleted = 0
             """,
-            arrayOf(stationId.toString())
+            arrayOf(stationId.toString(), today)
         ).use { cursor ->
             if (cursor.moveToFirst()) {
                 stats.put(
@@ -16964,9 +16969,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             WHERE s.station_id = ?
             AND s.is_deleted = 0
             AND p.status = 'completed'
-            AND date(p.created_at) = date('now')
+            AND p.business_day = ?
             """,
-            arrayOf(stationId.toString())
+            arrayOf(stationId.toString(), today)
         ).use { cursor ->
             if (cursor.moveToFirst()) {
                 stats.put(
@@ -16988,8 +16993,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         // 4. المنتجات المنتهية قريباً (خلال 30 يوم) في المحطة
         db.rawQuery(
-            "SELECT COUNT(*) FROM products WHERE station_id = ? AND has_expiry=1 AND expiry_date BETWEEN date('now') AND date('now', '+30 days') AND is_deleted=0",
-            arrayOf(stationId.toString())
+            "SELECT COUNT(*) FROM products WHERE station_id = ? AND has_expiry=1 AND expiry_date BETWEEN date(?) AND date(?, '+30 days') AND is_deleted=0",
+            arrayOf(stationId.toString(), today, today)
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("expiry_soon", cursor.getInt(0))
         }
@@ -17013,9 +17018,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.rawQuery(
             """SELECT COUNT(*) FROM sales_transactions
                WHERE station_id=? AND remaining_amount > 0
-               AND date(due_date) BETWEEN date('now') AND date('now', '+7 days')
+               AND date(due_date) BETWEEN date(?) AND date(?, '+7 days')
                AND is_deleted=0""",
-            arrayOf(stationId.toString())
+            arrayOf(stationId.toString(), today, today)
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("due_invoices", cursor.getInt(0))
         }
@@ -17023,16 +17028,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         // 7. كمية المنتجات المرتجعة اليوم في المحطة
         db.rawQuery(
             """SELECT COALESCE(SUM(quantity_change),0) FROM inventory_movements
-               WHERE station_id=? AND movement_type='return' AND date(created_at)=date('now') AND is_deleted=0""",
-            arrayOf(stationId.toString())
+               WHERE station_id=? AND movement_type='return' AND date(created_at)=date(?) AND is_deleted=0""",
+            arrayOf(stationId.toString(), today)
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("returned_products_today", cursor.getDouble(0))
         }
 
         // 8. كمية المنتجات التالفة اليوم في المحطة (مع station_id)
         db.rawQuery(
-            "SELECT COALESCE(SUM(quantity),0) FROM damaged_products WHERE station_id=? AND date(report_date)=date('now') AND status='approved'",
-            arrayOf(stationId.toString())
+            "SELECT COALESCE(SUM(quantity),0) FROM damaged_products WHERE station_id=? AND date(report_date)=date(?) AND status='approved'",
+            arrayOf(stationId.toString(), today)
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("damaged_products_today", cursor.getDouble(0))
         }
@@ -17078,7 +17083,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
 
         // 13. حساب اتجاه المبيعات من فترتين متكافئتين فعليتين في SQLite
-        val today = getCurrentDate()
         val requestedFrom = params.optString("from_date", "").trim()
         val requestedTo = params.optString("to_date", "").trim()
         val currentEnd = if (requestedTo.isNotBlank()) requestedTo else today
@@ -17141,8 +17145,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         // الاحتفاظ بالمفاتيح القديمة لتوافق مع أي كود آخر (مع تحديثها لتراعي المحطة)
         // إجمالي المبيعات والليترات وعدد المعاملات اليوم
         db.rawQuery(
-            "SELECT COALESCE(SUM(net_amount),0), COALESCE(SUM(liters),0), COUNT(*) FROM sales_transactions WHERE station_id=? AND date(created_at) = date('now') AND is_deleted=0",
-            arrayOf(stationId.toString())
+            "SELECT COALESCE(SUM(net_amount),0), COALESCE(SUM(liters),0), COUNT(*) FROM sales_transactions WHERE station_id=? AND business_day=? AND is_deleted=0",
+            arrayOf(stationId.toString(), today)
         ).use { cursor ->
             if (cursor.moveToFirst()) {
                 stats.put("total_sales", cursor.getDouble(0))
@@ -17203,8 +17207,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         // عدد ومبلغ الفواتير المتأخرة في المحطة
         db.rawQuery(
-            "SELECT COUNT(*), COALESCE(SUM(remaining_amount),0) FROM sales_transactions WHERE station_id=? AND is_credit=1 AND date(due_date) < date('now') AND is_deleted=0",
-            arrayOf(stationId.toString())
+            "SELECT COUNT(*), COALESCE(SUM(remaining_amount),0) FROM sales_transactions WHERE station_id=? AND is_credit=1 AND date(due_date) < date(?) AND is_deleted=0",
+            arrayOf(stationId.toString(), today)
         ).use { cursor ->
             if (cursor.moveToFirst()) {
                 stats.put("overdue_count", cursor.getInt(0))
@@ -21210,6 +21214,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("status", "completed")
                     put("created_by", actorId)
                     put("created_at", getCurrentDateTime())
+                    put("business_day", BusinessDay.currentDate())
                 }
                 val id = db.insertOrThrow("payments", null, cv)
                 if (cashBoxId > 0) {

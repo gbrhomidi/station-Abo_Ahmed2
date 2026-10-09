@@ -271,6 +271,69 @@ class PricingV41RobolectricTest {
     }
 
     @Test
+    fun dashboardDailyCardsUseLocalBusinessDayAcrossUtcMidnightOffset() {
+        val db = helper.writableDatabase
+        val stationId = db.rawQuery("SELECT station_id FROM users WHERE id=?", arrayOf(actorId.toString())).use {
+            check(it.moveToFirst())
+            it.getLong(0)
+        }
+        val shiftId = db.insertOrThrow("shifts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("shift_code", "DASH-${UUID.randomUUID().toString().take(8)}")
+            put("station_id", stationId)
+            put("shift_date", "2026-10-07")
+            put("shift_type", "night")
+            put("start_time", "2026-10-07 18:00:00")
+            put("cashier_id", actorId)
+        })
+        fun insertSale(code: String, createdAtUtc: String, day: String, amount: Double, credit: Boolean): Long =
+            db.insertOrThrow("sales_transactions", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("sale_code", code)
+                put("station_id", stationId)
+                put("shift_id", shiftId)
+                put("subtotal", amount)
+                put("gross_amount", amount)
+                put("net_amount", amount)
+                put("payment_method", if (credit) "credit" else "cash")
+                put("is_credit", if (credit) 1 else 0)
+                put("cashier_id", actorId)
+                put("created_at", createdAtUtc)
+                put("business_day", day)
+                put("is_deleted", 0)
+            })
+
+        // In Riyadh, 20:59:59Z is 23:59:59 local; 21:00:00Z is the next day's midnight.
+        insertSale("DASH-BEFORE", "2026-10-07 20:59:59", "2026-10-07", 100.0, credit = false)
+        val nextDaySaleId = insertSale("DASH-AFTER", "2026-10-07 21:00:00", "2026-10-08", 200.0, credit = true)
+        db.insertOrThrow("payments", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("payment_code", "DASH-PAY-${UUID.randomUUID().toString().take(8)}")
+            put("sale_id", nextDaySaleId)
+            put("payment_type", "cash")
+            put("payment_method", "cash")
+            put("amount", 45.0)
+            put("status", "completed")
+            put("created_at", "2026-10-07 21:01:00")
+            put("business_day", "2026-10-08")
+        })
+
+        val previousDay = helper.getDashboardStatsForDate(stationId.toInt(), JSONObject(), "2026-10-07")
+        val newDay = helper.getDashboardStatsForDate(stationId.toInt(), JSONObject(), "2026-10-08")
+        assertEquals(100.0, previousDay.getDouble("daily_sales"), 0.001)
+        assertEquals(100.0, previousDay.getDouble("cash_sales"), 0.001)
+        assertEquals(0.0, previousDay.getDouble("credit_sales"), 0.001)
+        assertEquals(100.0, previousDay.getDouble("total_sales"), 0.001)
+        assertEquals(1, previousDay.getInt("transactions_today"))
+        assertEquals(200.0, newDay.getDouble("daily_sales"), 0.001)
+        assertEquals(0.0, newDay.getDouble("cash_sales"), 0.001)
+        assertEquals(200.0, newDay.getDouble("credit_sales"), 0.001)
+        assertEquals(45.0, newDay.getDouble("collected_amount"), 0.001)
+        assertEquals(200.0, newDay.getDouble("total_sales"), 0.001)
+        assertEquals(1, newDay.getInt("transactions_today"))
+    }
+
+    @Test
     fun v44CorrectsPreviouslyBackfilledUtcSalesDateWithoutChangingCorrectLocalDates() {
         val previousTimeZone = TimeZone.getDefault()
         try {

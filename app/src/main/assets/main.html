@@ -1719,6 +1719,7 @@
     </style>
     <meta name="reports-bridge-methods" content="getDashboardStats">
     <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
+    <script src="file:///android_asset/assets-local/js/business-day.js"></script>
   <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
 </head>
 <body>
@@ -1851,6 +1852,7 @@
         let androidInterface = null;
         let useAndroidInterface = false;
         let isRefreshing = false;
+        let dashboardRefreshQueued = false;
         let clockInterval = null;
 
         let sidebarNavData = [];
@@ -1865,6 +1867,9 @@
         let inactivityTimer = null;
         let sleepMoveInterval = null;
         let isSleeping = false;
+        const dashboardBusinessDayWatcher = createBusinessDayWatcher(() => {
+            if (!isSleeping) loadDashboard(true);
+        });
 
         // ================================================================
         // Elastic Sidebar Variables
@@ -1963,8 +1968,9 @@
         // الساعة والتاريخ
         // ================================================================
         function updateDateTime() {
-            if (isSleeping) return;
+            if (isSleeping) return false;
             const now = new Date();
+            const businessDayChanged = dashboardBusinessDayWatcher(now);
             const dateEl = document.getElementById('dateText');
             const timeEl = document.getElementById('timeText');
             if (dateEl) {
@@ -1985,6 +1991,7 @@
                     timeEl.textContent = now.toLocaleTimeString('en-GB');
                 }
             }
+            return businessDayChanged;
         }
 
         // ================================================================
@@ -2091,12 +2098,13 @@
 
             document.body.classList.remove('sleep-active');
 
+            let businessDayChanged = false;
             if (!clockInterval) {
                 clockInterval = setInterval(updateDateTime, 1000);
-                updateDateTime();
+                businessDayChanged = updateDateTime();
             }
 
-            loadDashboard(true);
+            if (!businessDayChanged) loadDashboard(true);
 
             if (!refreshInterval) {
                 refreshInterval = setInterval(() => { loadDashboard(true); }, 180000);
@@ -3301,7 +3309,10 @@
         }
 
         async function loadDashboard(forceRefresh = false) {
-            if (isRefreshing) return;
+            if (isRefreshing) {
+                if (forceRefresh) dashboardRefreshQueued = true;
+                return;
+            }
             isRefreshing = true;
             renderSkeletons();
 
@@ -3321,6 +3332,10 @@
                 showToast(e.message || 'تعذر تحميل بيانات SQLite', 'error');
             } finally {
                 isRefreshing = false;
+                if (dashboardRefreshQueued) {
+                    dashboardRefreshQueued = false;
+                    setTimeout(() => loadDashboard(true), 0);
+                }
             }
         }
 

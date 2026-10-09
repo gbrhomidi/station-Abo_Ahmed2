@@ -48,4 +48,20 @@
   };
 
   root.businessDayTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local';
+
+  root.createBusinessDayWatcher = function (onChange) {
+    let previousDay = null;
+    return function (date = new Date()) {
+      const currentDay = root.businessDayDate(date);
+      if (previousDay === null) {
+        previousDay = currentDay;
+        return false;
+      }
+      if (currentDay === previousDay) return false;
+      const oldDay = previousDay;
+      previousDay = currentDay;
+      if (typeof onChange === 'function') onChange(currentDay, oldDay);
+      return true;
+    };
+  };
 })(window);
