@@ -208,6 +208,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureFuelCommerceSchema(db)
             ensureFuelStocktakeSchema(db)
             ensureFinanceIntegritySchema(db)
+            // Fresh databases do not pass through the V40 -> V41 upgrade path.
+            // Establish business_day columns before onOpen creates report indexes.
             ensurePricingV41Schema(db)
             ensurePricingV42Schema(db)
             db.setTransactionSuccessful()
@@ -294,6 +296,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureFinancialIdempotencySchema(db)
         ensureSalesAdjustmentSchema(db)
         ensureReportCacheTable(db)
+        // A database created by an earlier V43 build may not contain this column:
+        // V43's fresh-install path previously relied on an upgrade-only initializer.
+        // Repair that schema before ensureModule003Indexes uses business_day.
+        ensurePricingV41Schema(db)
         createSmsProcessedTable(db)
         createSmsProcessedHashesTable(db)
         createSmsRateLimitsTable(db)

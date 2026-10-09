@@ -49,8 +49,8 @@ class PricingV41RobolectricTest {
     }
 
     @Test
-    fun v42SchemaAndMigrationContractArePresent() {
-        assertEquals(42, DatabaseHelper.VERSION)
+    fun v43SchemaAndMigrationContractArePresent() {
+        assertEquals(43, DatabaseHelper.VERSION)
         val db = helper.writableDatabase
         assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fuel_price_history'", null).use { it.moveToFirst() })
         assertTrue(db.rawQuery("PRAGMA table_info(price_lists)", null).use { c ->
@@ -67,6 +67,14 @@ class PricingV41RobolectricTest {
             val names = mutableSetOf<String>(); while (c.moveToNext()) names += c.getString(c.getColumnIndexOrThrow("name"))
             names.containsAll(setOf("cost_price", "total_cost"))
         })
+        assertTrue(db.rawQuery("PRAGMA table_info(sales_transactions)", null).use { c ->
+            var hasBusinessDay = false
+            while (c.moveToNext()) hasBusinessDay = hasBusinessDay || c.getString(c.getColumnIndexOrThrow("name")) == "business_day"
+            hasBusinessDay
+        })
+        assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_sales_station_deleted_business_day'", null).use { it.moveToFirst() })
+        assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_sales_station_business_day_deleted_payment'", null).use { it.moveToFirst() })
+        assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_sales_station_payment_business_day_deleted'", null).use { it.moveToFirst() })
     }
 
     @Test
