@@ -6975,10 +6975,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales_transactions(customer_party_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_date ON sales_transactions(created_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_status ON sales_transactions(status)")
-        // Composite report indexes: keep station/date filtering selective while
-        // covering the soft-delete and payment dimensions used by large reports.
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_station_business_day_deleted_payment ON sales_transactions(station_id, business_day, is_deleted, payment_method)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_station_payment_business_day_deleted ON sales_transactions(station_id, payment_method, business_day, is_deleted)")
+        ensureSalesReportIndexes(db)
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_code ON shifts(shift_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_station ON shifts(station_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_date ON shifts(shift_date)")
@@ -29202,6 +29199,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureColumn(db, "sales_transactions", "business_day", "TEXT")
         ensureColumn(db, "payments", "business_day", "TEXT")
         ensureColumn(db, "stock_movements", "business_day", "TEXT")
+        // These indexes were originally installed only through createIndexes(),
+        // which existing databases do not rerun on upgrade. Ensure them here so
+        // V40-V43 databases receive the same report-query plan as new installs.
+        ensureSalesReportIndexes(db)
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_price_history_station_fuel_date ON fuel_price_history(station_id, fuel_type_id, change_date, id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_price_lists_resolution ON price_lists(station_id, is_deleted, is_active, priority, valid_from, valid_to)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_price_list_items_resolution ON price_list_items(price_list_id, product_id, is_active, valid_from, valid_to)")
@@ -29214,6 +29215,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("UPDATE fuel_sales SET business_day = substr(COALESCE(sale_date, created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
         db.execSQL("UPDATE payments SET business_day = substr(COALESCE(created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
         db.execSQL("UPDATE stock_movements SET business_day = substr(COALESCE(movement_date, created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
+    }
+
+    private fun ensureSalesReportIndexes(db: SQLiteDatabase) {
+        // Match the most selective filter order for station/payment/date reports,
+        // while retaining a station/date-leading index for broader summaries.
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_station_business_day_deleted_payment ON sales_transactions(station_id, business_day, is_deleted, payment_method)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_station_payment_business_day_deleted ON sales_transactions(station_id, payment_method, business_day, is_deleted)")
     }
 
     private fun parsePriceInstant(value: String): String = value.trim().replace('T', ' ')

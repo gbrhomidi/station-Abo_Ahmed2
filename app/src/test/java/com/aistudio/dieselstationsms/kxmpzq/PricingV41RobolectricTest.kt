@@ -6,12 +6,14 @@ import androidx.test.core.app.ApplicationProvider
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.LocalDate
 import java.time.ZonedDateTime
 import java.util.UUID
 
@@ -146,6 +148,95 @@ class PricingV41RobolectricTest {
                 assertEquals("preserve-me", it.getString(0))
             }
         }
+    }
+
+    @Test
+    fun salesPaymentRangeQueryUsesMigratedIndexAndMeetsLatencyBudget() {
+        val db = helper.writableDatabase
+        val stationId = db.rawQuery("SELECT station_id FROM users WHERE id=?", arrayOf(actorId.toString())).use {
+            check(it.moveToFirst())
+            it.getLong(0)
+        }
+        val shiftId = db.insertOrThrow("shifts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("shift_code", "PERF-${UUID.randomUUID().toString().take(8)}")
+            put("station_id", stationId)
+            put("shift_date", "2026-01-01")
+            put("shift_type", "morning")
+            put("start_time", "2026-01-01 06:00:00")
+            put("cashier_id", actorId)
+        })
+
+        val insert = db.compileStatement("""
+            INSERT INTO sales_transactions
+                (uuid, sale_code, station_id, shift_id, subtotal, gross_amount, net_amount,
+                 payment_method, cashier_id, business_day, is_deleted)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+        """.trimIndent())
+        val dayValues = List(180) { LocalDate.of(2026, 1, 1).plusDays(it.toLong()).toString() }
+        db.beginTransaction()
+        try {
+            repeat(24_000) { index ->
+                val amount = ((index % 500) + 1).toDouble()
+                insert.clearBindings()
+                insert.bindString(1, "perf-uuid-$index")
+                insert.bindString(2, "PERF-SALE-$index")
+                insert.bindLong(3, stationId)
+                insert.bindLong(4, shiftId)
+                insert.bindDouble(5, amount)
+                insert.bindDouble(6, amount)
+                insert.bindDouble(7, amount)
+                insert.bindString(8, if (index % 4 == 0) "credit_card" else "cash")
+                insert.bindLong(9, actorId)
+                insert.bindString(10, dayValues[(index * 17) % dayValues.size])
+                insert.executeInsert()
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+            insert.close()
+        }
+
+        val query = """
+            SELECT COUNT(*), COALESCE(SUM(net_amount), 0)
+            FROM sales_transactions
+            WHERE station_id=? AND payment_method=? AND business_day BETWEEN ? AND ? AND is_deleted=0
+        """.trimIndent()
+        val args = arrayOf(stationId.toString(), "credit_card", "2026-01-03", "2026-01-09")
+        fun plan(database: android.database.sqlite.SQLiteDatabase): String = database.rawQuery("EXPLAIN QUERY PLAN $query", args).use { cursor ->
+            val details = mutableListOf<String>()
+            while (cursor.moveToNext()) details += cursor.getString(3)
+            details.joinToString(" | ")
+        }
+        fun p95Millis(database: android.database.sqlite.SQLiteDatabase): Double {
+            val samples = (0 until 7).map {
+                val started = System.nanoTime()
+                database.rawQuery(query, args).use { cursor -> check(cursor.moveToFirst()) }
+                (System.nanoTime() - started) / 1_000_000.0
+            }.sorted()
+            return samples[6]
+        }
+
+        db.execSQL("DROP INDEX IF EXISTS idx_sales_station_business_day_deleted_payment")
+        db.execSQL("DROP INDEX IF EXISTS idx_sales_station_payment_business_day_deleted")
+        db.version = 42
+        val oldPlan = plan(db)
+        assertFalse(oldPlan.contains("idx_sales_station_payment_business_day_deleted"))
+        val beforeUpgradeP95 = p95Millis(db)
+        DatabaseHelper.closeInstance()
+
+        helper = DatabaseHelper.getInstance(context)
+        val upgradedDb = helper.writableDatabase
+        assertEquals(DatabaseHelper.VERSION, upgradedDb.version)
+        val upgradedPlan = plan(upgradedDb)
+        assertTrue("Expected the migrated report index, got: $upgradedPlan", upgradedPlan.contains("idx_sales_station_payment_business_day_deleted"))
+        upgradedDb.rawQuery(query, args).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertTrue("Fixture must exercise a non-empty selective range", cursor.getLong(0) > 0)
+        }
+        val afterUpgradeP95 = p95Millis(upgradedDb)
+        assertTrue("Indexed report query exceeded 1 second p95: ${afterUpgradeP95}ms; plan=$upgradedPlan", afterUpgradeP95 < 1_000.0)
+        println("Sales report query p95: before=${"%.2f".format(beforeUpgradeP95)}ms after=${"%.2f".format(afterUpgradeP95)}ms; plan=$upgradedPlan")
     }
 
     @Test
