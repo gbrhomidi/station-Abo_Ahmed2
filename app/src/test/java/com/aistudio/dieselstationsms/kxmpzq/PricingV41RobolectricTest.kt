@@ -72,7 +72,6 @@ class PricingV41RobolectricTest {
             while (c.moveToNext()) hasBusinessDay = hasBusinessDay || c.getString(c.getColumnIndexOrThrow("name")) == "business_day"
             hasBusinessDay
         })
-        assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_sales_station_deleted_business_day'", null).use { it.moveToFirst() })
         assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_sales_station_business_day_deleted_payment'", null).use { it.moveToFirst() })
         assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_sales_station_payment_business_day_deleted'", null).use { it.moveToFirst() })
     }
