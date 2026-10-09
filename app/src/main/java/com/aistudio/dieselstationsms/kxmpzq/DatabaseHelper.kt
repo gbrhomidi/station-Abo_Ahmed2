@@ -208,9 +208,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureFuelCommerceSchema(db)
             ensureFuelStocktakeSchema(db)
             ensureFinanceIntegritySchema(db)
-            // Fresh databases do not pass through the V40 -> V41 upgrade path.
-            // Establish business_day columns before onOpen creates report indexes.
-            ensurePricingV41Schema(db)
             ensurePricingV42Schema(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
@@ -2282,6 +2279,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createUserOtpVerificationsTable(db)
         createSmsOutboundDedupeTable(db)
         createSmsPlatformTables(db)
+        // createIndexes includes indexes on sales_transactions.business_day. Fresh
+        // databases skip V40 -> V41 migrations, so establish this schema first.
+        ensurePricingV41Schema(db)
         createIndexes(db)
     }
 
