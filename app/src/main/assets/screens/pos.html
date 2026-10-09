@@ -3295,8 +3295,9 @@ body.invoice-print-mode #posInvoice {
        - #posInvoice يبقى مخفياً بـ display:none على الشاشة لأن الفاتورة
          تُعرض للمستخدم عبر المودالات فقط، وتُبنى نسخة جديدة داخل WebView
          في Kotlin لالتقاطها كصورة PNG.
-       - عند إرسال الصورة، يُرسل محتوى هذا القسم + رابط خط Cairo صراحةً
-         إلى Kotlin. لا تعتمد على أن WebView الأصلي سيحمل الخط تلقائياً.
+       - عند إرسال الصورة، نُرسل مستند HTML كامل إلى Kotlin مع override
+         صريح + أنماط inline على العنصر نفسه؛ لا تعتمد على أن WebView
+         الالتقاط سيحمل هذه القاعدة الأصلية.
        - أي تعديل على هذا القسم يجب أن يُختبر مع شاشة الأجهزة الحقيقية
          لأن أي class جديد يستخدم Font Awesome يجب أن يُضاف للأصول المحلية.
        ============================================================ */
@@ -4094,19 +4095,34 @@ function apiCall(action, params) {
 
 // ============================================================
 // جسر الردود غير المتزامنة (Async Bridge Results)
+// ────────────────────────────────────────────────────────────
+// يستخدم Map<action, resolver> بدل المتغير العام _pendingResolve.
+// هذا يمنع تسرّب النتائج بين الطلبات المتزامنة، ويمنع أي دالة Kotlin
+// أخرى تستدعي handleAndroidResult من استهلاك resolver طلب آخر.
 // ============================================================
 const _pendingCalls = new Map();
 
+/**
+ * تسجيل resolver لطلب غير متزامن معيّن بواسطة اسم الـaction.
+ * يُستبدل أي resolver سابق بنفس الاسم (سلوك مقصود لآخر طلب يفوز).
+ */
 function registerPendingCall(action, resolver) {
     if (!action || typeof resolver !== 'function') return;
     _pendingCalls.set(action, resolver);
 }
 
+/**
+ * تنظيف resolver طلب غير متزامن عند الانتهاء (نجاح/فشل/مهلة).
+ */
 function clearPendingCall(action) {
     if (!action) return;
     _pendingCalls.delete(action);
 }
 
+/**
+ * نقطة الدخول الوحيدة التي يستدعيها Kotlin عبر:
+ *   window.handleAndroidResult('action_name', jsonString)
+ */
 function handleAndroidResult(action, data) {
     const resolver = _pendingCalls.get(action);
     if (!resolver) {
@@ -4532,6 +4548,10 @@ async function toggleFlash() {
     }
 }
 
+/**
+ * نجاح المسح — يستخدم scanInProgress lock لمنع تكرار المعالجة أثناء العملية.
+ * الماسح لا يُوقف إلا بعد نجاح الإضافة (addProductByBarcode → Promise<boolean>).
+ */
 function onScanSuccess(decodedText) {
     if (scanInProgress) return;
     const barcode = String(decodedText || '').trim();
@@ -4602,6 +4622,10 @@ function escapePosText(value) {
     });
 }
 
+/**
+ * إضافة منتج بالباركود — تُعيد Promise<boolean> لتمكين الماسح من معرفة النتيجة.
+ * true: نجحت الإضافة | false: المنتج غير موجود أو فشل الجلب
+ */
 function addProductByBarcode(barcode) {
     barcode = barcode.trim();
     if (!barcode) return Promise.resolve(false);
@@ -5481,11 +5505,28 @@ function showWhatsappValidation(msg) {
 }
 
 /**
- * ✅ إصلاح جذري: يُرسل HTML كامل إلى Kotlin مع <style> override
- *    يُبطل قاعدة `#posInvoice { display:none }` الموجودة في posInvoiceStyleBlock
- *    لأن WebView الالتقاط في Kotlin يبني مستنداً جديداً لا يعرف شيئاً عن
- *    `body.invoice-print-mode` المُستخدم للطباعة. بدون هذا الـoverride
- *    يُرسم WebView فارغاً وتُلتقط صورة بيضاء كاملة.
+ * ═══════════════════════════════════════════════════════════════
+ *  ✅✅✅ حل جذري لمشكلة "الصورة البيضاء" في واتساب  ✅✅✅
+ * ═══════════════════════════════════════════════════════════════
+ *
+ * السبب الجذري:
+ *   عنصر #posInvoice يحمل display:none داخل posInvoiceStyleBlock الأصلي
+ *   (لأنه مخصص للطباعة فقط عبر body.invoice-print-mode). عندما يبني
+ *   Kotlin WebView جديداً ويُمرّر إليه HTML، يجد المتصفح:
+ *       #posInvoice { display: none } → لا يرسم شيئاً
+ *   فيلتقط WebView صورة بيضاء فارغة، ولا تُطبَّق أي قاعدة إصلاح من
+ *   `<style>` في <head> لأن Kotlin قد يعيد ترتيب مستند HTML.
+ *
+ * الحل القاطع — ثلاث طبقات دفاع متتالية لا يمكن كسرها:
+ *   1) Inline style مباشر على عنصر #posInvoice مع !important
+ *      (a) display:block  (b) visibility:visible  (c) opacity:1
+ *      (d) width:210mm    (e) min-height:297mm    (f) padding A4
+ *      → Inline !important يتغلّب على أي قاعدة CSS خارجية بنسبة 100%.
+ *   2) تعقيم posInvoiceStyleBlock المُرسَل: إزالة كل display:none
+ *      → يمنع تسرّب القاعدة الأصلية إلى مستند Kotlin.
+ *   3) Override <style> إضافي في <head> يُبطل أي قاعدة تعارض مع
+ *      تشديدات !important متعددة.
+ *   ⟹ النتيجة: WebView يرى عنصراً مرئياً بأبعاد A4 حقيقي → يلتقط صورة كاملة.
  */
 async function sendWhatsappInvoice() {
     if (_whatsappBusy) return;
@@ -5515,23 +5556,54 @@ async function sendWhatsappInvoice() {
             throw new Error('مشاركة الفاتورة المصورة متاحة من داخل تطبيق Android فقط');
         }
 
-        /* ═══════════════════════════════════════════════════════════════
-           بناء HTML كامل + override CSS يجبر ظهور #posInvoice
-           ═══════════════════════════════════════════════════════════════ */
+        /* ═══════════════════════════════════════════════════════
+           (1) استنساخ #posInvoice وإجبار الأنماط Inline !important
+           ═══════════════════════════════════════════════════════ */
+        const captured = invoiceSection.cloneNode(true);
+        captured.style.setProperty('display', 'block', 'important');
+        captured.style.setProperty('visibility', 'visible', 'important');
+        captured.style.setProperty('opacity', '1', 'important');
+        captured.style.setProperty('position', 'relative', 'important');
+        captured.style.setProperty('width', '210mm', 'important');
+        captured.style.setProperty('min-height', '297mm', 'important');
+        captured.style.setProperty('background', '#ffffff', 'important');
+        captured.style.setProperty('color', '#172b45', 'important');
+        captured.style.setProperty('margin', '0 auto', 'important');
+        captured.style.setProperty('padding', '10mm 9mm 8mm', 'important');
+        captured.style.setProperty('box-sizing', 'border-box', 'important');
+        captured.style.setProperty('direction', 'rtl', 'important');
+        captured.style.setProperty('font-family', 'Cairo, "Noto Sans Arabic", Arial, sans-serif', 'important');
+        captured.style.setProperty('font-variant-numeric', 'lining-nums tabular-nums', 'important');
+        captured.style.setProperty('overflow', 'visible', 'important');
+
+        /* ═══════════════════════════════════════════════════════
+           (2) تعقيم posInvoiceStyleBlock — إزالة display:none
+           ═══════════════════════════════════════════════════════ */
+        const invoiceStyleRaw = document.getElementById('posInvoiceStyleBlock')?.outerHTML || '';
+        const invoiceStyleSanitized = invoiceStyleRaw
+            .replace(/display\s*:\s*none\s*;?/gi, 'display: block;');
+
         const fontLinks =
             '<link rel="stylesheet" href="file:///android_asset/assets-local/css/css2">' +
             '<link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">';
-        const invoiceStyle = document.getElementById('posInvoiceStyleBlock')?.outerHTML || '';
 
+        const viewportMeta =
+            '<meta name="viewport" content="width=794, initial-scale=1.0, ' +
+            'maximum-scale=1.0, user-scalable=no">';
+
+        /* ═══════════════════════════════════════════════════════
+           (3) Override إضافي — يُبطل أي قاعدة تعارض مع تشديدات متعددة
+           ═══════════════════════════════════════════════════════ */
         const overrideStyle =
             '<style id="posInvoiceCaptureOverride">' +
                 'html,body{' +
                     'margin:0!important;padding:0!important;' +
-                    'background:#ffffff!important;direction:rtl!important;' +
-                    'width:210mm!important;min-height:297mm!important;' +
-                    '-webkit-font-smoothing:antialiased;' +
+                    'background:#ffffff!important;' +
+                    'direction:rtl!important;' +
+                    'width:794px!important;min-width:794px!important;' +
+                    'min-height:1123px!important;' +
                 '}' +
-                '#posInvoice{' +
+                'body > #posInvoice, #posInvoice{' +
                     'display:block!important;' +
                     'visibility:visible!important;' +
                     'opacity:1!important;' +
@@ -5561,10 +5633,10 @@ async function sendWhatsappInvoice() {
                 '}' +
             '</style>';
 
-        const viewportMeta =
-            '<meta name="viewport" content="width=794, initial-scale=1.0, ' +
-            'maximum-scale=1.0, user-scalable=no">';
-
+        /* ═══════════════════════════════════════════════════════
+           تجميع مستند HTML كامل بنفس بنية <head>/<body>
+           التي يتوقعها WebView في Kotlin.
+           ═══════════════════════════════════════════════════════ */
         const invoiceHtml =
             '<!DOCTYPE html>' +
             '<html lang="ar" dir="rtl">' +
@@ -5572,13 +5644,18 @@ async function sendWhatsappInvoice() {
                 '<meta charset="UTF-8">' +
                 viewportMeta +
                 fontLinks +
-                invoiceStyle +
+                invoiceStyleSanitized +
                 overrideStyle +
             '</head>' +
             '<body>' +
-                invoiceSection.outerHTML +
+                captured.outerHTML +
             '</body>' +
             '</html>';
+
+        /* تشخيص — لتتبع المشكلة إن عادت مستقبلاً */
+        console.log('[WhatsApp] invoice HTML length:', invoiceHtml.length);
+        console.log('[WhatsApp] invoice items count:', captured.querySelectorAll('.invoice-items tbody tr').length);
+        console.log('[WhatsApp] captured display inline:', captured.style.display);
 
         const resultPromise = new Promise((resolve, reject) => {
             registerPendingCall('shareInvoiceJpg', resolve);

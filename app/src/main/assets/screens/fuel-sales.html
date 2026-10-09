@@ -14,7 +14,6 @@
            المتغيرات الأساسية (دعم الوضع الفاتح والمظلم)
            ============================================================ */
         :root {
-            /* === الوضع الفاتح (Light Mode - افتراضي) === */
             --bg: #f4f7fb;
             --surface: #ffffff;
             --surface-2: #f8fafc;
@@ -36,7 +35,6 @@
             --radius-sm: 13px;
             --font-sans: "Cairo", "Noto Sans Arabic", Arial, sans-serif;
 
-            /* === متغيرات توافقية (backward compatibility) === */
             --bg-color: var(--bg);
             --surface-color: var(--surface);
             --surface-elevated: var(--surface);
@@ -71,7 +69,6 @@
         }
 
         [data-theme="dark"] {
-            /* === الوضع المظلم (Dark Mode) === */
             --bg: #06111f;
             --surface: #0c1b2d;
             --surface-2: #102238;
@@ -90,7 +87,6 @@
             --shadow: 0 14px 40px rgba(0,0,0,.38);
             --shadow-lg: 0 25px 75px rgba(0,0,0,.55);
 
-            /* === متغيرات توافقية === */
             --bg-color: var(--bg);
             --surface-color: var(--surface);
             --surface-elevated: var(--surface);
@@ -124,9 +120,6 @@
             --data-text-muted: var(--muted);
         }
 
-        /* ============================================================
-           الأنماط الأساسية
-           ============================================================ */
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
         body {
@@ -149,7 +142,6 @@
         ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
         ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
 
-        /* ===== Pull-to-Refresh Indicator ===== */
         .pull-indicator {
             position: fixed;
             top: -60px;
@@ -172,7 +164,6 @@
         .pull-indicator.loading i { animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* ===== Loading ===== */
         .loading-indicator {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -192,46 +183,6 @@
             animation: spin 1s linear infinite;
         }
 
-        /* ===== Skeleton Loading ===== */
-        .skeleton-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            padding: 0 16px 16px;
-        }
-        .skeleton-card {
-            background: var(--surface);
-            border-radius: 18px;
-            padding: 16px;
-            border: var(--border-width) var(--border-style) var(--border);
-            position: relative;
-            overflow: hidden;
-        }
-        .skeleton-card::after {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: linear-gradient(90deg,
-                transparent 0%,
-                var(--skeleton-shine) 50%,
-                transparent 100%);
-            animation: shimmer 1.5s infinite;
-        }
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-        .skeleton-row {
-            height: 12px;
-            background: var(--skeleton-bg);
-            border-radius: 6px;
-            margin-bottom: 8px;
-        }
-        .skeleton-row.short { width: 40%; }
-        .skeleton-row.medium { width: 60%; }
-        .skeleton-row.long { width: 80%; }
-
-        /* ===== Offline Banner ===== */
         .offline-banner {
             position: fixed;
             top: 0; left: 0; right: 0;
@@ -247,9 +198,6 @@
         }
         .offline-banner.show { transform: translateY(0); }
 
-        /* ============================================================
-           الشريط العلوي (Header)
-           ============================================================ */
         .top-bar {
             position: sticky;
             top: 0;
@@ -325,24 +273,7 @@
             50% { opacity: 0.5; transform: scale(1.3); }
         }
 
-        .ai-badge {
-            background: linear-gradient(135deg, #8b5cf6, #6366f1);
-            color: white;
-            font-size: 0.6rem;
-            font-weight: 700;
-            padding: 2px 8px;
-            border-radius: 10px;
-            margin-right: 6px;
-            vertical-align: middle;
-        }
-
-        /* ============================================================
-           البحث والفلاتر
-           ============================================================ */
-        .search-wrap {
-            position: relative;
-            margin-bottom: 10px;
-        }
+        .search-wrap { position: relative; margin-bottom: 10px; }
         .search-input {
             width: 100%;
             padding: 12px 44px 12px 16px;
@@ -401,9 +332,6 @@
             color: var(--text);
         }
 
-        /* ============================================================
-           بطاقات الإحصائيات
-           ============================================================ */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -460,30 +388,12 @@
             color: var(--data-text-color);
             text-align: center;
         }
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--muted);
-            text-align: center;
-        }
-        .stat-trend {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 0.7rem;
-            margin-top: 8px;
-            padding: 2px 8px;
-            border-radius: 8px;
-        }
-        .stat-trend.up { background: rgba(22,163,74,0.15); color: var(--success); }
-        .stat-trend.down { background: rgba(220,38,38,0.15); color: var(--danger); }
+        .stat-label { font-size: 0.75rem; color: var(--muted); text-align: center; }
 
         @media (min-width: 768px) {
             .stats-grid { grid-template-columns: repeat(4, 1fr); }
         }
 
-        /* ============================================================
-           بطاقات البنوك والحسابات
-           ============================================================ */
         .cards-container {
             padding: 0 16px 80px;
             display: flex;
@@ -492,189 +402,9 @@
             touch-action: pan-y;
         }
 
-        /* === Bank Card === */
-        .bank-card {
-            background: linear-gradient(145deg, var(--surface), var(--surface-2));
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 16px;
-            position: relative;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            cursor: pointer;
-            touch-action: pan-y;
-            box-shadow: var(--shadow);
-            text-align: center;
-        }
-        .bank-card:hover {
-            border-color: var(--primary);
-            box-shadow: var(--shadow-lg);
-            background: var(--card-hover-bg);
-            transform: translateY(-2px);
-        }
-        .bank-card.selected {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 2px var(--primary-soft), var(--shadow);
-        }
-        .bank-card:active { transform: scale(0.98); transition-duration: 0.05s; }
-
-        .bank-card .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 10px;
-        }
-        .bank-card .card-header .card-avatar {
-            width: 48px; height: 48px;
-            border-radius: 14px;
-            background: linear-gradient(135deg, var(--primary), #6366f1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2rem;
-            font-weight: 800;
-            color: white;
-            flex-shrink: 0;
-        }
-        .bank-card .card-header .card-status {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            border: 1px solid var(--border);
-        }
-        .card-status.active { background: rgba(22,163,74,0.15); color: var(--success); }
-        .card-status.inactive { background: rgba(100,116,139,0.15); color: var(--muted); }
-
-        .bank-card .card-name {
-            font-size: 1rem;
-            font-weight: 700;
-            color: var(--data-text-color);
-            margin-bottom: 2px;
-            text-align: center;
-        }
-        .bank-card .card-code {
-            font-size: 0.75rem;
-            color: var(--muted);
-            font-family: 'Arial', sans-serif;
-            margin-bottom: 8px;
-            text-align: center;
-        }
-        .bank-card .card-details {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px 12px;
-            margin: 8px 0 10px;
-        }
-        .bank-card .card-details .detail-item {
-            font-size: 0.8rem;
-            color: var(--data-text-muted);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            justify-content: center;
-        }
-        .bank-card .card-details .detail-item i {
-            font-size: 0.8rem;
-            color: var(--muted);
-        }
-        .bank-card .card-actions {
-            display: flex;
-            gap: 8px;
-        }
-        .bank-card .card-actions .card-btn {
-            flex: 1;
-            padding: 10px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            background: var(--surface-2);
-            color: var(--muted);
-            font-family: var(--font-sans);
-            font-size: 0.8rem;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .bank-card .card-actions .card-btn:active { transform: scale(0.95); }
-        .bank-card .card-actions .card-btn:hover {
-            background: var(--primary-soft);
-            color: var(--primary);
-            border-color: var(--primary);
-        }
-        .bank-card .card-actions .card-btn.danger:hover {
-            background: rgba(220,38,38,0.15);
-            color: var(--danger);
-            border-color: var(--danger);
-        }
-
-        /* === Account Card (nested inside Bank Card or separate) === */
-        .account-card {
-            background: var(--surface-2);
-            border-radius: 12px;
-            padding: 12px 14px;
-            margin-bottom: 10px;
-            border: 1px solid var(--border);
-            transition: all 0.3s;
-            text-align: center;
-        }
-        .account-card:hover {
-            border-color: var(--primary);
-            background: var(--card-hover-bg);
-        }
-        .account-card .account-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 6px;
-        }
-        .account-card .account-name {
-            font-weight: 700;
-            font-size: 0.9rem;
-            color: var(--data-text-color);
-        }
-        .account-card .account-number {
-            font-size: 0.75rem;
-            color: var(--muted);
-            font-family: 'Arial', sans-serif;
-        }
-        .account-card .account-balance {
-            font-size: 1.1rem;
-            font-weight: 800;
-            color: var(--primary);
-        }
-        .account-card .account-details {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            font-size: 0.7rem;
-            color: var(--muted);
-            justify-content: center;
-        }
-        .account-card .account-details .badge-type {
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-weight: 600;
-            border: 1px solid var(--border);
-        }
-        .badge-type.current { background: rgba(22,163,74,0.15); color: var(--success); }
-        .badge-type.savings { background: rgba(37,99,235,0.15); color: #3b82f6; }
-        .badge-type.deposit { background: rgba(139,92,246,0.15); color: #8b5cf6; }
-        .badge-type.loan { background: rgba(220,38,38,0.15); color: var(--danger); }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: var(--muted);
-        }
+        .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
         .empty-state i { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
 
-        /* ============================================================
-           الزر العائم (FAB)
-           ============================================================ */
         .fab {
             position: fixed;
             bottom: 90px;
@@ -700,9 +430,6 @@
             box-shadow: var(--shadow-lg);
         }
 
-        /* ============================================================
-           القائمة الجانبية (Sidebar)
-           ============================================================ */
         .sidebar-toggle {
             position: fixed;
             top: 50%;
@@ -773,9 +500,6 @@
         .sidebar-btn i { font-size: 1.1rem; }
         .sidebar-btn span { font-size: 0.65rem; }
 
-        /* ============================================================
-           القائمة السفلية (Bottom Navigation)
-           ============================================================ */
         .bottom-nav {
             position: fixed;
             bottom: 0;
@@ -814,7 +538,6 @@
         }
         .bottom-nav .nav-item:active { transform: scale(0.9); }
         .bottom-nav .nav-item i { font-size: 18px; transition: all 0.3s; }
-        /* span styles merged above */
         .bottom-nav .nav-item.active { color: var(--primary); font-weight: 950; }
         .bottom-nav .nav-item.active i { transform: translateY(-3px); text-shadow: 0 0 20px var(--primary-soft); }
         .bottom-nav .nav-item.active::after {
@@ -829,165 +552,6 @@
             border-radius: 10px;
         }
 
-        /* ============================================================
-           مودال التقارير
-           ============================================================ */
-        .report-modal-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(8px);
-            z-index: 900;
-            display: none;
-            align-items: flex-end;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .report-modal-overlay.show { display: flex; opacity: 1; }
-        .report-modal {
-            background: var(--surface);
-            border-radius: 24px 24px 0 0;
-            width: 100%;
-            max-height: 92vh;
-            overflow-y: auto;
-            padding: 24px 20px;
-            transform: translateY(100%);
-            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            border: 1px solid var(--border);
-            border-bottom: none;
-        }
-        .report-modal-overlay.show .report-modal { transform: translateY(0); }
-        .report-modal .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .report-modal .modal-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); }
-        .report-modal .modal-close {
-            width: 36px; height: 36px;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            background: var(--surface-2);
-            color: var(--muted);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .report-modal .modal-close:active { transform: scale(0.9); }
-        .report-modal .modal-close:hover {
-            background: var(--danger);
-            color: white;
-            border-color: var(--danger);
-        }
-        .report-filter-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-        .report-filter-row .form-group { margin-bottom: 0; }
-        .report-filter-row .form-label {
-            display: block;
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--muted);
-            margin-bottom: 4px;
-            text-align: center;
-        }
-        .report-filter-row .form-input {
-            width: 100%;
-            padding: 10px 12px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            background: var(--surface-2);
-            color: var(--text);
-            font-family: var(--font-sans);
-            font-size: 0.85rem;
-            transition: all 0.3s;
-            outline: none;
-            text-align: center;
-        }
-        .report-filter-row .form-input:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
-        }
-        .report-actions {
-            display: flex;
-            gap: 12px;
-            margin-top: 8px;
-        }
-        .report-actions .btn {
-            flex: 1;
-            padding: 12px;
-            border-radius: 14px;
-            border: none;
-            font-weight: 700;
-            font-family: var(--font-sans);
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.3s;
-            touch-action: manipulation;
-        }
-        .report-actions .btn:active { transform: scale(0.97); }
-        .report-actions .btn-primary {
-            background: linear-gradient(135deg, var(--primary-2), var(--primary));
-            color: white;
-            border: none;
-        }
-        .report-actions .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px var(--primary-soft);
-        }
-        .report-actions .btn-secondary {
-            background: var(--surface-2);
-            color: var(--muted);
-            border: 1px solid var(--border);
-        }
-        .report-actions .btn-secondary:hover { background: var(--border); }
-        .report-results {
-            margin-top: 20px;
-            max-height: 300px;
-            overflow-y: auto;
-            border: 1px solid var(--border);
-            border-radius: 14px;
-        }
-        .report-results table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.8rem;
-        }
-        .report-results table th {
-            background: var(--primary-soft);
-            color: var(--primary);
-            padding: 10px 12px;
-            text-align: center;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            font-weight: 700;
-            border-bottom: 1px solid var(--border);
-        }
-        .report-results table td {
-            padding: 8px 12px;
-            border-bottom: 1px solid var(--border);
-            text-align: center;
-            color: var(--data-text-color);
-        }
-        .report-results table tr:hover { background: var(--card-hover-bg); }
-        .report-results .empty-state {
-            padding: 30px;
-            text-align: center;
-            color: var(--muted);
-        }
-
-        /* ============================================================
-           مودال الإضافة / التعديل (البنوك والحسابات)
-           ============================================================ */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -1041,7 +605,6 @@
             border-color: var(--danger);
         }
 
-        /* ===== حقول النموذج ===== */
         .form-group { margin-bottom: 16px; }
         .form-label {
             display: block;
@@ -1073,127 +636,7 @@
             grid-template-columns: 1fr 1fr;
             gap: 12px;
         }
-        .submit-btn {
-            width: 100%;
-            padding: 14px;
-            border-radius: 14px;
-            border: none;
-            background: linear-gradient(135deg, var(--primary-2), var(--primary));
-            color: white;
-            font-family: var(--font-sans);
-            font-size: 1rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s;
-            margin-top: 8px;
-            touch-action: manipulation;
-        }
-        .submit-btn:active { transform: scale(0.97); }
-        .submit-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px var(--primary-soft);
-        }
 
-        /* ============================================================
-           مودال تفاصيل البنك/الحساب
-           ============================================================ */
-        .details-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.8);
-            backdrop-filter: blur(12px);
-            z-index: 850;
-            display: none;
-            opacity: 0;
-            transition: opacity 0.3s;
-            overflow-y: auto;
-        }
-        .details-overlay.show { display: block; opacity: 1; }
-        .details-content {
-            background: var(--surface);
-            min-height: 100vh;
-            padding: 20px;
-            border: 1px solid var(--border);
-            border-top: none;
-        }
-        .details-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            position: sticky;
-            top: 0;
-            background: var(--surface);
-            padding: 10px 0;
-            z-index: 10;
-        }
-        .details-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); }
-        .details-close {
-            width: 36px; height: 36px;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            background: var(--surface-2);
-            color: var(--muted);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            touch-action: manipulation;
-        }
-        .details-close:active { transform: scale(0.9); }
-        .details-close:hover { background: var(--danger); color: white; border-color: var(--danger); }
-        .details-profile { text-align: center; margin-bottom: 24px; }
-        .details-avatar {
-            width: 72px; height: 72px;
-            border-radius: 20px;
-            background: linear-gradient(135deg, var(--primary), #6366f1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: white;
-            margin: 0 auto 12px;
-        }
-        .details-name { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; color: var(--data-text-color); }
-        .details-status {
-            padding: 4px 16px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 700;
-            border: 1px solid var(--border);
-        }
-        .details-status.active { background: rgba(22,163,74,0.15); color: var(--success); }
-        .details-status.inactive { background: rgba(100,116,139,0.15); color: var(--muted); }
-        .details-section {
-            background: var(--surface-2);
-            border-radius: 16px;
-            padding: 16px;
-            margin-bottom: 16px;
-            border: 1px solid var(--border);
-        }
-        .details-section-title {
-            font-size: 0.9rem;
-            font-weight: 700;
-            margin-bottom: 12px;
-            color: var(--primary);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .details-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid var(--border);
-        }
-        .details-row:last-child { border-bottom: none; }
-        .details-label { font-size: 0.8rem; color: var(--muted); }
-        .details-value { font-size: 0.85rem; font-weight: 600; color: var(--data-text-color); }
-
-        /* ============================================================
-           Toast إشعارات
-           ============================================================ */
         .toast {
             position: fixed;
             top: 70px;
@@ -1219,76 +662,27 @@
         .toast.success { border-color: var(--success); }
         .toast.error { border-color: var(--danger); }
         .toast.warning { border-color: var(--warning); }
-        .toast-icon {
-            width: 28px; height: 28px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8rem;
-        }
-        .toast.success .toast-icon { background: rgba(22,163,74,0.15); color: var(--success); }
-        .toast.error .toast-icon { background: rgba(220,38,38,0.15); color: var(--danger); }
-        .toast.warning .toast-icon { background: rgba(217,119,6,0.15); color: var(--warning); }
         .toast.info { border-color: var(--primary); }
-        .toast.info .toast-icon { background: var(--primary-soft); color: var(--primary); }
 
-        /* ============================================================
-           الرسوم المتحركة
-           ============================================================ */
         @keyframes fadeUp {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fade-up {
-            animation: fadeUp 0.5s ease forwards;
-        }
 
-        /* ============================================================
-           تحسينات للهواتف
-           ============================================================ */
         @media (max-width: 768px) {
             .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px; }
             .stat-card { padding: 12px; }
             .stat-value { font-size: 1.1rem; }
-            .bank-card .card-details { grid-template-columns: 1fr; }
-            .report-filter-row { grid-template-columns: 1fr; }
-            .cards-container { padding: 0 12px 16px; }
-            .bottom-nav .nav-item i { font-size: 20px; }
-            .bottom-nav .nav-item span { font-size: 1.2rem; }
-            .sidebar { width: 60px; }
-            .sidebar-btn { min-height: 45px; font-size: 0.65rem; }
-            .sidebar-btn i { font-size: 0.9rem; }
-            .fab { width: 48px; height: 48px; font-size: 1.2rem; bottom: 80px; left: 16px; }
-            .filter-chip { font-size: 0.8rem; padding: 4px 10px; }
-            .top-title h2 { font-size: 1rem; }
-            .icon-btn { width: 34px; height: 34px; font-size: 0.85rem; }
-            .report-modal { padding: 16px; }
-            .report-results { max-height: 200px; }
-            .report-results table th,
-            .report-results table td { padding: 6px 8px; font-size: 0.7rem; }
             .form-row { grid-template-columns: 1fr; }
         }
-
         @media (max-width: 480px) {
             .stats-grid { gap: 6px; padding: 10px; }
             .stat-card { padding: 10px; }
             .stat-value { font-size: 0.95rem; }
             .stat-icon { width: 32px; height: 32px; font-size: 0.85rem; }
-            .bank-card .card-details { grid-template-columns: 1fr; }
-            .card-actions { flex-wrap: wrap; }
-            .card-btn { font-size: 0.7rem; padding: 8px; }
-            .bottom-nav .nav-item { padding: 4px 4px; }
-            .bottom-nav .nav-item i { font-size: 18px; }
-            .bottom-nav .nav-item span { font-size: 1.1rem; }
-            .modal { padding: 16px; }
-            .account-card .account-details { flex-direction: column; gap: 4px; }
         }
 
         .page-container { max-width: 1280px; margin: 0 auto; padding: 16px 0 90px; }
-        .notice-card { margin: 0 16px 16px; padding: 14px 16px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); line-height: 1.8; font-size: .8rem; text-align: center; }
-        .notice-card i { color: var(--primary); margin-left: 6px; }
-        .support-note { color: var(--warning); }
         .data-panel { margin: 0 16px; padding: 16px; border-radius: var(--radius); background: linear-gradient(145deg, var(--surface), var(--surface-2)); border: 1px solid var(--border); box-shadow: var(--shadow); }
         .section-title { display:flex; gap:8px; justify-content:space-between; align-items:center; margin-bottom:12px; }
         .section-title h3 { font-size: 1rem; }
@@ -1326,57 +720,25 @@
         .detail-item span { display:block; color:var(--muted); font-size:.7rem; }
         .detail-item strong { display:block; margin-top:3px; overflow-wrap:anywhere; }
         .raw-json { direction:ltr; text-align:left; white-space:pre-wrap; word-break:break-word; background:#0b1220; color:#dbeafe; padding:12px; border-radius:10px; font: .72rem/1.5 monospace; max-height:300px; overflow:auto; }
-        .settings-wrap { padding:0 16px; }
-        .settings-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px; }
-        .settings-line { display:flex; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px dashed var(--border); align-items:center; }
-        .settings-line:last-child { border-bottom:0; }
-        .settings-line label { font-size:.82rem; color:var(--muted); }
-        .settings-line input { max-width:230px; }
-        .ai-output { min-height:100px; white-space:pre-wrap; line-height:1.9; color:var(--data-text-color); text-align: center; }
-        .utility-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; padding:0 16px; }
-        .utility-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px; text-align: center; }
-        .utility-card h3 { font-size:.9rem; margin-bottom:8px; }
-        .utility-card p { color:var(--muted); font-size:.75rem; line-height:1.8; margin-bottom:12px; }
         .hidden { display:none !important; }
-        @media(max-width:640px){ .form-grid { grid-template-columns:1fr; } .form-group.full { grid-column:auto; } .data-card-head { flex-direction:column; } .data-card-value { align-self:flex-start; } }
-        @media print { .top-bar,.bottom-nav,.offline-banner,.action-row,.icon-btn { display:none !important; } body { background:#fff; color:#111; padding:0; } .data-panel,.data-card,.stat-card { box-shadow:none; color:#111; border:1px solid #aaa; } }
 
         .post-save-action{position:fixed;left:50%;bottom:92px;z-index:2500;transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;display:flex;gap:8px;align-items:center;padding:10px;border:1px solid var(--border);border-radius:16px;background:var(--glass-bg);backdrop-filter:blur(16px);box-shadow:0 15px 45px rgba(0,0,0,.25);transition:.2s ease}
         .post-save-action.show{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
         #recordForm{grid-template-columns:repeat(2,minmax(0,1fr));}
         #recordForm .form-group.full{grid-column:1/-1;}
         [data-key="sale_id"]{font-weight:900;opacity:.65;background:var(--surface-2);}
-        @media(max-width:390px){#recordForm{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.form-label{font-size:10px}.form-input{font-size:12px;padding:8px 5px}.post-save-action{max-width:94vw}}
 
-        /* إطار أزرق للدارك */
-        [data-theme="dark"] .panel,
-        [data-theme="dark"] .shift-card,
-        [data-theme="dark"] .kpi,
         [data-theme="dark"] .stat-card,
-        [data-theme="dark"] .bank-card,
-        [data-theme="dark"] .account-card,
         [data-theme="dark"] .data-card,
         [data-theme="dark"] .data-panel,
-        [data-theme="dark"] .report-modal,
         [data-theme="dark"] .modal,
-        [data-theme="dark"] .details-content,
-        [data-theme="dark"] .details-section,
-        [data-theme="dark"] .settings-card,
-        [data-theme="dark"] .utility-card,
-        [data-theme="dark"] .notice-card,
         [data-theme="dark"] .skeleton-card {
             border-color: #63c7ff !important;
             box-shadow: 0 0 0 1px rgba(99,199,255,.16), 0 0 18px rgba(99,199,255,.07);
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           NEW 1 — مفاتيح العرض (شجرة / بطاقات / جدول)
-           ═══════════════════════════════════════════════════════════ */
-        .title-actions {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        /* مفاتيح العرض */
+        .title-actions { display: flex; align-items: center; gap: 10px; }
         .view-switcher {
             display: inline-flex;
             padding: 4px;
@@ -1386,16 +748,12 @@
             gap: 2px;
         }
         .view-btn {
-            width: 36px;
-            height: 36px;
-            border: none;
-            border-radius: 10px;
+            width: 36px; height: 36px;
+            border: none; border-radius: 10px;
             background: transparent;
             color: var(--muted);
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: flex; align-items: center; justify-content: center;
             font-size: 0.95rem;
             transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
             touch-action: manipulation;
@@ -1408,9 +766,7 @@
         }
         .view-btn:active { transform: scale(0.9); }
 
-        /* ═══════════════════════════════════════════════════════════
-           NEW 2 — عرض الجدول (Table View)
-           ═══════════════════════════════════════════════════════════ */
+        /* Table View */
         .records-table-wrap {
             width: 100%;
             overflow-x: auto;
@@ -1427,16 +783,13 @@
             font-size: 0.82rem;
         }
         .records-table thead th {
-            position: sticky;
-            top: 0;
-            z-index: 5;
+            position: sticky; top: 0; z-index: 5;
             background: linear-gradient(135deg, var(--primary), var(--primary-2));
             color: #fff;
             padding: 12px 10px;
             text-align: center;
             font-weight: 800;
             font-size: 0.78rem;
-            letter-spacing: 0.3px;
             white-space: nowrap;
             border-bottom: 1px solid var(--border);
         }
@@ -1448,34 +801,17 @@
             font-weight: 600;
             white-space: nowrap;
         }
-        .records-table tbody tr { transition: background 0.2s; }
         .records-table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
         .records-table tbody tr:hover { background: var(--card-hover-bg); }
         .records-table .cell-actions { display: flex; gap: 6px; justify-content: center; }
-        .records-table .cell-actions .btn {
-            padding: 6px 10px;
-            font-size: 0.72rem;
-            border-radius: 8px;
-        }
-        .records-table .badge-pay {
-            display: inline-block;
-            padding: 3px 10px;
-            border-radius: 10px;
-            font-size: 0.7rem;
-            font-weight: 700;
-        }
+        .records-table .cell-actions .btn { padding: 6px 10px; font-size: 0.72rem; border-radius: 8px; }
+        .records-table .badge-pay { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 0.7rem; font-weight: 700; }
         .badge-pay.cash { background: rgba(22,163,74,0.15); color: var(--success); }
         .badge-pay.credit { background: rgba(217,119,6,0.15); color: var(--warning); }
         .badge-pay.other { background: var(--primary-soft); color: var(--primary); }
 
-        /* ═══════════════════════════════════════════════════════════
-           NEW 3 — عرض الشجرة (Tree View)
-           ═══════════════════════════════════════════════════════════ */
-        .tree-container {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
+        /* Tree View */
+        .tree-container { display: flex; flex-direction: column; gap: 10px; }
         .tree-group {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -1500,406 +836,148 @@
             color: var(--data-text-color);
             text-align: right;
             touch-action: manipulation;
-            transition: background 0.25s;
         }
-        .tree-group-header:hover {
-            background: linear-gradient(135deg,
-                color-mix(in srgb, var(--primary) 18%, transparent),
-                color-mix(in srgb, var(--primary-2) 12%, transparent));
-        }
-        .tree-group-header .tree-chevron {
-            color: var(--primary);
-            font-size: 0.9rem;
-            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
+        .tree-group-header .tree-chevron { color: var(--primary); font-size: 0.9rem; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .tree-group.collapsed .tree-chevron { transform: rotate(-90deg); }
-        .tree-group.collapsed .tree-group-body { max-height: 0; padding: 0; opacity: 0; }
-        .tree-group-body {
-            max-height: 5000px;
-            transition: max-height 0.45s ease, padding 0.3s ease, opacity 0.3s ease;
-            padding: 8px 14px 14px;
-            opacity: 1;
-        }
-        .tree-group-title {
-            flex: 1;
-            font-weight: 800;
-            font-size: 0.95rem;
-            color: var(--data-text-color);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+        .tree-group.collapsed .tree-group-body { max-height: 0; padding: 0; opacity: 0; overflow: hidden; }
+        .tree-group-body { max-height: 5000px; transition: max-height 0.45s ease, padding 0.3s ease, opacity 0.3s ease; padding: 8px 14px 14px; opacity: 1; }
+        .tree-group-title { flex: 1; font-weight: 800; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
         .tree-group-title i { color: var(--primary); font-size: 1rem; }
-        .tree-group-meta {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-        }
-        .tree-meta-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 4px 10px;
-            border-radius: 10px;
-            background: var(--surface-2);
-            color: var(--muted);
-            font-size: 0.7rem;
-            font-weight: 700;
-            border: 1px solid var(--border);
-        }
+        .tree-group-meta { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+        .tree-meta-item { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 10px; background: var(--surface-2); color: var(--muted); font-size: 0.7rem; font-weight: 700; border: 1px solid var(--border); }
         .tree-meta-item i { font-size: 0.7rem; color: var(--primary); }
         .tree-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 12px;
-            margin-top: 6px;
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 12px; margin-top: 6px;
             border-radius: 10px;
             background: var(--surface-2);
             border: 1px solid var(--border);
             transition: all 0.2s;
             cursor: pointer;
         }
-        .tree-item:hover {
-            background: var(--card-hover-bg);
-            border-color: var(--primary);
-            transform: translateX(-3px);
-        }
+        .tree-item:hover { background: var(--card-hover-bg); border-color: var(--primary); transform: translateX(-3px); }
         .tree-item-icon {
-            width: 36px;
-            height: 36px;
-            border-radius: 10px;
+            width: 36px; height: 36px; border-radius: 10px;
             background: linear-gradient(135deg, var(--primary), var(--primary-2));
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.95rem;
-            flex-shrink: 0;
+            color: #fff; display: flex; align-items: center; justify-content: center;
+            font-size: 0.95rem; flex-shrink: 0;
         }
         .tree-item-body { flex: 1; min-width: 0; text-align: right; }
-        .tree-item-title {
-            font-weight: 800;
-            font-size: 0.85rem;
-            color: var(--data-text-color);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .tree-item-sub {
-            font-size: 0.7rem;
-            color: var(--muted);
-            margin-top: 2px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .tree-item-value {
-            font-weight: 900;
-            color: var(--accent);
-            font-size: 0.9rem;
-            white-space: nowrap;
-        }
-        .tree-item-actions {
-            display: flex;
-            gap: 4px;
-            flex-shrink: 0;
-        }
+        .tree-item-title { font-weight: 800; font-size: 0.85rem; color: var(--data-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tree-item-sub { font-size: 0.7rem; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tree-item-value { font-weight: 900; color: var(--accent); font-size: 0.9rem; white-space: nowrap; }
+        .tree-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
         .tree-item-actions button {
-            width: 30px;
-            height: 30px;
-            border-radius: 8px;
+            width: 30px; height: 30px; border-radius: 8px;
             border: 1px solid var(--border);
-            background: var(--surface);
-            color: var(--muted);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.7rem;
-            transition: all 0.2s;
+            background: var(--surface); color: var(--muted);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 0.7rem; transition: all 0.2s;
         }
-        .tree-item-actions button:hover {
-            background: var(--primary-soft);
-            color: var(--primary);
-            border-color: var(--primary);
-        }
-        .tree-item-actions button.danger:hover {
-            background: rgba(220,38,38,0.15);
-            color: var(--danger);
-            border-color: var(--danger);
-        }
+        .tree-item-actions button:hover { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
+        .tree-item-actions button.danger:hover { background: rgba(220,38,38,0.15); color: var(--danger); border-color: var(--danger); }
 
-        /* ═══════════════════════════════════════════════════════════
-           NEW 4 — إشعار متطور (نجاح / فشل البيع)
-           ═══════════════════════════════════════════════════════════ */
+        /* Advanced Notification */
         .advanced-notification {
-            position: fixed;
-            top: 78px;
-            left: 50%;
+            position: fixed; top: 78px; left: 50%;
             transform: translate(-50%, -220%) scale(0.85);
             z-index: 5000;
             width: min(420px, 92vw);
             border-radius: 20px;
             overflow: hidden;
-            box-shadow: 0 24px 60px rgba(0,0,0,0.35),
-                        0 8px 20px rgba(0,0,0,0.22),
-                        inset 0 1px 0 rgba(255,255,255,0.25);
-            opacity: 0;
-            pointer-events: none;
-            transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
-                        opacity 0.35s ease;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.35), 0 8px 20px rgba(0,0,0,0.22);
+            opacity: 0; pointer-events: none;
+            transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s ease;
             direction: rtl;
         }
-        .advanced-notification.show {
-            transform: translate(-50%, 0) scale(1);
-            opacity: 1;
-            pointer-events: auto;
-        }
-        .advanced-notification.success {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: #fff;
-        }
-        .advanced-notification.error {
-            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
-            color: #fff;
-        }
-        .advanced-notification.warning {
-            background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
-            color: #fff;
-        }
-        .advanced-notification-content {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            padding: 16px 20px 18px;
-        }
+        .advanced-notification.show { transform: translate(-50%, 0) scale(1); opacity: 1; pointer-events: auto; }
+        .advanced-notification.success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; }
+        .advanced-notification.error { background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); color: #fff; }
+        .advanced-notification.warning { background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%); color: #fff; }
+        .advanced-notification-content { display: flex; align-items: center; gap: 14px; padding: 16px 20px 18px; }
         .advanced-notification-icon {
-            width: 52px;
-            height: 52px;
-            border-radius: 50%;
+            width: 52px; height: 52px; border-radius: 50%;
             background: rgba(255,255,255,0.22);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; flex-shrink: 0;
             backdrop-filter: blur(6px);
             box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35);
         }
-        .advanced-notification.success .advanced-notification-icon i {
-            animation: advancedPopCheck 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
+        .advanced-notification.success .advanced-notification-icon i { animation: advancedPopCheck 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); }
         @keyframes advancedPopCheck {
             0% { transform: scale(0.3); opacity: 0; }
             60% { transform: scale(1.25); opacity: 1; }
             100% { transform: scale(1); opacity: 1; }
         }
         .advanced-notification-text { flex: 1; min-width: 0; text-align: right; }
-        .advanced-notification-title {
-            font-size: 1rem;
-            font-weight: 900;
-            margin-bottom: 4px;
-            letter-spacing: 0.2px;
-        }
-        .advanced-notification-message {
-            font-size: 0.82rem;
-            line-height: 1.5;
-            opacity: 0.95;
-            word-wrap: break-word;
-        }
+        .advanced-notification-title { font-size: 1rem; font-weight: 900; margin-bottom: 4px; }
+        .advanced-notification-message { font-size: 0.82rem; line-height: 1.5; opacity: 0.95; word-wrap: break-word; }
         .advanced-notification-close {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.22);
-            border: none;
-            color: #fff;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.85rem;
-            flex-shrink: 0;
-            transition: background 0.2s;
+            width: 30px; height: 30px; border-radius: 50%;
+            background: rgba(255,255,255,0.22); border: none; color: #fff;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 0.85rem; flex-shrink: 0; transition: background 0.2s;
         }
         .advanced-notification-close:hover { background: rgba(255,255,255,0.4); }
-        .advanced-notification-progress {
-            height: 4px;
-            background: rgba(255,255,255,0.25);
-            position: relative;
-            overflow: hidden;
-        }
-        .advanced-notification-progress::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: #fff;
-            opacity: 0.85;
-            transform-origin: right center;
-            animation: advancedProgress 3.2s linear forwards;
-        }
-        @keyframes advancedProgress {
-            0% { transform: scaleX(1); }
-            100% { transform: scaleX(0); }
-        }
+        .advanced-notification-progress { height: 4px; background: rgba(255,255,255,0.25); position: relative; overflow: hidden; }
 
-        /* ═══════════════════════════════════════════════════════════
-           NEW 5 — مودال مرتجع/تالف مبيعات الوقود المُعاد تصميمه
-           ═══════════════════════════════════════════════════════════ */
-        .fuel-adjust-modal {
-            border-radius: 24px 24px 0 0;
-        }
-        .fuel-adjust-modal .modal-header {
-            padding: 4px 4px 16px;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 18px;
-            position: relative;
-        }
-        .fuel-adjust-modal .modal-title {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: var(--data-text-color);
-            font-size: 1.05rem;
-            font-weight: 900;
-        }
+        /* Fuel Adjustment Modal */
+        .fuel-adjust-modal { border-radius: 24px 24px 0 0; }
+        .fuel-adjust-modal .modal-header { padding: 4px 4px 16px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+        .fuel-adjust-modal .modal-title { display: flex; align-items: center; gap: 10px; color: var(--data-text-color); font-size: 1.05rem; font-weight: 900; }
         .fuel-adjust-modal .modal-title i {
-            width: 34px;
-            height: 34px;
-            border-radius: 10px;
+            width: 34px; height: 34px; border-radius: 10px;
             background: linear-gradient(135deg, var(--warning), #b45309);
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            color: #fff; display: flex; align-items: center; justify-content: center;
             font-size: 0.95rem;
         }
         .fuel-adjust-modal .modal-body { padding: 0 4px; }
-        .fuel-adjust-modal .form-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
-        }
+        .fuel-adjust-modal .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
         .fuel-adjust-modal .form-group.full { grid-column: 1 / -1; }
-        .fuel-adjust-modal .form-input {
-            padding: 11px 12px;
-            font-size: 0.88rem;
-            border-radius: 11px;
-        }
-        .fuel-adjust-modal .form-input.readonly,
-        .fuel-adjust-modal .form-input[readonly] {
-            background: color-mix(in srgb, var(--surface-2) 70%, transparent);
-            color: var(--muted);
-            cursor: default;
-            font-weight: 700;
-        }
+        .fuel-adjust-modal .form-input { padding: 11px 12px; font-size: 0.88rem; border-radius: 11px; }
+        .fuel-adjust-modal .form-input[readonly] { background: color-mix(in srgb, var(--surface-2) 70%, transparent); color: var(--muted); cursor: default; font-weight: 700; }
         .fuel-adjust-modal select.form-input {
-            cursor: pointer;
-            appearance: none;
-            background-image:
-                linear-gradient(45deg, transparent 50%, var(--muted) 50%),
-                linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-            background-position:
-                calc(100% - 18px) calc(50% - 3px),
-                calc(100% - 13px) calc(50% - 3px);
+            cursor: pointer; appearance: none;
+            background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+            background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 13px) calc(50% - 3px);
             background-size: 5px 5px, 5px 5px;
             background-repeat: no-repeat;
             padding-left: 30px;
         }
         .fuel-adjust-modal .required-mark { color: var(--danger); font-weight: 900; }
         .fuel-adjust-modal .modal-footer {
-            display: grid;
-            grid-template-columns: 1.4fr 1fr;
-            gap: 10px;
-            padding: 16px 4px 6px;
-            border-top: 1px solid var(--border);
-            margin-top: 8px;
+            display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px;
+            padding: 16px 4px 6px; border-top: 1px solid var(--border); margin-top: 8px;
         }
         .fuel-adjust-modal .modal-footer .btn {
-            padding: 13px 12px;
-            border-radius: 13px;
-            font-size: 0.9rem;
-            font-weight: 800;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            font-family: var(--font-sans);
-            cursor: pointer;
-            transition: all 0.25s;
+            padding: 13px 12px; border-radius: 13px; font-size: 0.9rem; font-weight: 800;
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            font-family: var(--font-sans); cursor: pointer; transition: all 0.25s;
         }
         .fuel-adjust-modal .modal-footer .btn.primary {
             background: linear-gradient(135deg, #10b981, #059669);
-            color: #fff;
-            border: none;
-            box-shadow: 0 8px 20px rgba(16,185,129,0.35);
+            color: #fff; border: none; box-shadow: 0 8px 20px rgba(16,185,129,0.35);
         }
-        .fuel-adjust-modal .modal-footer .btn.primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 26px rgba(16,185,129,0.5);
-        }
-        .fuel-adjust-modal .modal-footer .btn.primary:disabled {
-            opacity: 0.55;
-            cursor: not-allowed;
-            transform: none;
-        }
-        .fuel-adjust-modal .modal-footer .btn:not(.primary) {
-            background: var(--surface-2);
-            color: var(--muted);
-            border: 1px solid var(--border);
-        }
-        .fuel-adjust-modal .modal-footer .btn:not(.primary):hover {
-            background: var(--card-hover-bg);
-            color: var(--text);
-        }
+        .fuel-adjust-modal .modal-footer .btn.primary:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(16,185,129,0.5); }
+        .fuel-adjust-modal .modal-footer .btn.primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+        .fuel-adjust-modal .modal-footer .btn:not(.primary) { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
         .fuel-adjust-modal .sale-preview {
-            background: linear-gradient(135deg,
-                color-mix(in srgb, var(--primary) 8%, transparent),
-                color-mix(in srgb, var(--primary-2) 5%, transparent));
+            background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 8%, transparent), color-mix(in srgb, var(--primary-2) 5%, transparent));
             border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
-            border-radius: 12px;
-            padding: 12px 14px;
-            margin-bottom: 14px;
-            display: none;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 8px 14px;
+            border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;
+            display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px;
         }
         .fuel-adjust-modal .sale-preview.show { display: grid; }
-        .fuel-adjust-modal .sale-preview .preview-item {
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
-            text-align: right;
-        }
-        .fuel-adjust-modal .sale-preview .preview-item span {
-            font-size: 0.7rem;
-            color: var(--muted);
-            font-weight: 700;
-        }
-        .fuel-adjust-modal .sale-preview .preview-item strong {
-            font-size: 0.85rem;
-            color: var(--data-text-color);
-            font-weight: 800;
-            overflow-wrap: anywhere;
-        }
+        .fuel-adjust-modal .sale-preview .preview-item { display: flex; flex-direction: column; gap: 3px; text-align: right; }
+        .fuel-adjust-modal .sale-preview .preview-item span { font-size: 0.7rem; color: var(--muted); font-weight: 700; }
+        .fuel-adjust-modal .sale-preview .preview-item strong { font-size: 0.85rem; color: var(--data-text-color); font-weight: 800; overflow-wrap: anywhere; }
 
-        /* ═══════════════════════════════════════════════════════════
-           NEW 6 — زر القائمة السفلية "مرتجع/تالف" بتصميم متطور
-           ═══════════════════════════════════════════════════════════ */
-        .bottom-nav .nav-item.nav-warning {
-            color: var(--warning);
-            position: relative;
-        }
+        .bottom-nav .nav-item.nav-warning { color: var(--warning); position: relative; }
         .bottom-nav .nav-item.nav-warning::before {
             content: '';
-            position: absolute;
-            top: 2px;
-            left: 50%;
+            position: absolute; top: 2px; left: 50%;
             transform: translateX(-50%);
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
+            width: 30px; height: 30px; border-radius: 50%;
             background: radial-gradient(circle, rgba(217,119,6,0.22), transparent 70%);
             animation: warningPulse 2.4s ease-in-out infinite;
             pointer-events: none;
@@ -1908,10 +986,7 @@
             0%, 100% { transform: translateX(-50%) scale(0.9); opacity: 0.6; }
             50% { transform: translateX(-50%) scale(1.25); opacity: 1; }
         }
-        .bottom-nav .nav-item.nav-warning i {
-            color: var(--warning);
-            filter: drop-shadow(0 0 6px rgba(217,119,6,0.55));
-        }
+        .bottom-nav .nav-item.nav-warning i { color: var(--warning); filter: drop-shadow(0 0 6px rgba(217,119,6,0.55)); }
         .bottom-nav .nav-item.nav-warning span { color: var(--warning); }
     </style>
 <script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script>  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
@@ -1975,11 +1050,7 @@
         <div class="modal-header"><h3 class="modal-title">تقرير مبيعات الوقود</h3><button type="button" class="modal-close" onclick="closeModal(null,'reportModal')"><i class="fas fa-times"></i></button></div>
         <div class="modal-body"><div class="form-grid"><div class="form-group"><label class="form-label">من تاريخ</label><input class="form-input" type="date" id="reportFrom"></div><div class="form-group"><label class="form-label">إلى تاريخ</label><input class="form-input" type="date" id="reportTo"></div></div><div class="action-row"><button type="button" class="btn primary" onclick="generateReport()"><i class="fas fa-cog"></i> توليد من المصدر</button><button type="button" class="btn" onclick="exportData()"><i class="fas fa-file-export"></i> Excel/CSV</button><button type="button" class="btn" onclick="window.print()"><i class="fas fa-print"></i> طباعة/PDF</button></div><div id="reportResults" style="margin-top:14px"></div></div>
     </div></div>
-    <div class="modal-overlay" id="aiModal" onclick="closeModal(event,'aiModal')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-header"><h3 class="modal-title">المساعد الذكي</h3><button type="button" class="modal-close" onclick="closeModal(null,'aiModal')"><i class="fas fa-times"></i></button></div><div class="modal-body"><textarea class="form-input" id="aiPrompt" rows="4" placeholder="اكتب سؤالك..."></textarea><div class="action-row"><button class="btn primary" type="button" onclick="askAI()">إرسال</button></div><div class="ai-output" id="aiOutput"></div></div></div></div>
 
-    <!-- ═══════════════════════════════════════════════════════════
-         مودال مرتجع / تالف مبيعات الوقود — تصميم متطور مُعاد بناؤه
-         ═══════════════════════════════════════════════════════════ -->
     <div class="modal-overlay" id="fuelAdjustmentModal" onclick="closeModal(event,'fuelAdjustmentModal')">
         <div class="modal fuel-adjust-modal" onclick="event.stopPropagation()">
             <div class="modal-header">
@@ -2031,7 +1102,7 @@
 
                     <div class="form-group">
                         <label class="form-label" for="fuelAdjustmentAvailable">الكمية المتاحة (لتر)</label>
-                        <input class="form-input readonly" id="fuelAdjustmentAvailable" type="text" readonly placeholder="0.00">
+                        <input class="form-input" id="fuelAdjustmentAvailable" type="text" readonly placeholder="0.00">
                     </div>
 
                     <div class="form-group full">
@@ -2062,9 +1133,6 @@
 
     <div class="toast" id="toast"></div>
 
-    <!-- ═══════════════════════════════════════════════════════════
-         إشعار متطور للنجاح / الفشل
-         ═══════════════════════════════════════════════════════════ -->
     <div id="advancedNotification" class="advanced-notification" role="alert" aria-live="assertive" aria-atomic="true">
         <div class="advanced-notification-content">
             <div class="advanced-notification-icon" id="advancedNotificationIcon">
@@ -2111,7 +1179,8 @@
         }
 
         /* ============================================================
-           NEW — خريطة ترجمة الحقول إلى العربية (تظهر بدل مفاتيح DB)
+           ✅ خريطة الترجمة العربية — مُصحَّحة من الأخطاء النحوية السابقة
+           كل مفتاح نصي يجب أن يكون بعلامات اقتباس كاملة (بدون نقطتين داخلها)
            ============================================================ */
         const FIELD_LABELS = {
             sale_id:'رقم البيع',
@@ -2162,22 +1231,44 @@
             delivery_status:'حالة التوصيل'
         };
 
+        /* ============================================================
+           ✅ إصلاح جذري: الخطأ النحوي السابق كان في هذه الكتلة بالضبط.
+           كل مفتاح كان مكتوباً بشكل: 'inactive:'inactive'
+           والآن هو: inactive:'غير نشط'
+           ============================================================ */
         const VALUE_TRANSLATIONS = {
-            cash:'نقدي', 'cash_payment':'نقدي', 'نقداً':'نقدي', 'نقدي':'نقدي',
-            credit:'آجل', 'credit_sale':'آجل', 'credit_account':'آجل', 'آجل':'آجل',
-            credit_card:'بطاقة', 'card':'بطاقة',
-            bank_transfer:'تحويل بنكي', 'transfer':'تحويل بنكي',
-            cheque:'شيك', 'check':'شيك',
-            mobile_money:'محفظة إلكترونية', 'wallet':'محفظة إلكترونية',
-            active:'نشط', 'inactive:'inactive',
-            pending:'قيد المعالجة', 'processing:'قيد المعالجة',
-            completed:'مكتمل', 'done:'مكتمل',
-            cancelled:'ملغى', 'canceled:'ملغى',
-            failed:'فاشل', 'rejected:'مرفوض',
-            returned:'مرتجع',
-            damaged:'تالف',
-            true:'نعم', 'false':'لا',
-            '1':'نعم', '0':'لا'
+            cash: 'نقدي',
+            cash_payment: 'نقدي',
+            'نقداً': 'نقدي',
+            'نقدي': 'نقدي',
+            credit: 'آجل',
+            credit_sale: 'آجل',
+            credit_account: 'آجل',
+            'آجل': 'آجل',
+            credit_card: 'بطاقة',
+            card: 'بطاقة',
+            bank_transfer: 'تحويل بنكي',
+            transfer: 'تحويل بنكي',
+            cheque: 'شيك',
+            check: 'شيك',
+            mobile_money: 'محفظة إلكترونية',
+            wallet: 'محفظة إلكترونية',
+            active: 'نشط',
+            inactive: 'غير نشط',
+            pending: 'قيد المعالجة',
+            processing: 'قيد المعالجة',
+            completed: 'مكتمل',
+            done: 'مكتمل',
+            cancelled: 'ملغى',
+            canceled: 'ملغى',
+            failed: 'فاشل',
+            rejected: 'مرفوض',
+            returned: 'مرتجع',
+            damaged: 'تالف',
+            'true': 'نعم',
+            'false': 'لا',
+            '1': 'نعم',
+            '0': 'لا'
         };
 
         function translateFieldLabel(key) {
@@ -2225,11 +1316,10 @@
             loadedAt: null,
             pendingIdempotencyKey: null,
             priceLookupSeq: 0,
-            viewMode: 'cards',            /* NEW — وضع العرض الحالي */
-            fuelAdjustmentCache: []       /* NEW — ذاكرة مؤقتة لمبيعات الوقود */
+            viewMode: 'cards',
+            fuelAdjustmentCache: []
         };
 
-        /* استرجاع تفضيل طريقة العرض من localStorage */
         try {
             const savedView = localStorage.getItem('fuel-sales-view');
             if (savedView === 'cards' || savedView === 'tree' || savedView === 'table') {
@@ -2242,19 +1332,12 @@
             if(window.crypto?.randomUUID){
                 return window.crypto.randomUUID();
             }
-
-            return 'fuel-' +
-                Date.now() +
-                '-' +
-                Math.random().toString(36).slice(2,12);
+            return 'fuel-' + Date.now() + '-' + Math.random().toString(36).slice(2,12);
         }
 
         const esc = (value) => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const today = () => businessDayDate();
 
-        /* ============================================================
-           NEW — toast يدعم context صريح (form / global / auto)
-           ============================================================ */
         function toast(message, bad=false, context='auto') {
             let node;
             if (context === 'form') {
@@ -2275,9 +1358,6 @@
             node._timer = setTimeout(() => node.classList.remove('show'), 3500);
         }
 
-        /* ============================================================
-           NEW — إشعار متطور للنجاح/الفشل
-           ============================================================ */
         let _advTimeout = null;
         function showAdvancedNotification(message, type='success', title) {
             const el = $('advancedNotification');
@@ -2304,7 +1384,6 @@
             if (titleEl) titleEl.textContent = config.title;
             if (msgEl) msgEl.textContent = message || '';
 
-            /* إعادة تشغيل شريط التقدم */
             if (progressEl) {
                 progressEl.innerHTML = '';
                 const bar = document.createElement('div');
@@ -2323,7 +1402,6 @@
             _advTimeout = setTimeout(() => el.classList.remove('show'), config.duration);
         }
 
-        /* زر الإغلاق */
         document.addEventListener('DOMContentLoaded', () => {
             const closeBtn = $('advancedNotificationClose');
             if (closeBtn) {
@@ -2339,6 +1417,7 @@
         function parse(raw) { if (raw == null) throw new Error('لم يرجع الجسر نتيجة'); const value=typeof raw==='string'?JSON.parse(raw):raw; if (value && value.success === false) throw new Error(value.error || value.message || 'فشلت العملية'); return value; }
         function dataOf(value) { return value && Object.prototype.hasOwnProperty.call(value,'data') ? value.data : value; }
         function invoke(method,args=[]) { if (!bridge || typeof bridge[method] !== 'function') return Promise.reject(new Error('العقد '+method+' غير متاح في Android Bridge')); try { return Promise.resolve(parse(bridge[method](...args))); } catch (error) { return Promise.reject(error); } }
+
         function argsForLoad() {
             if (CFG.listMethod === 'getFuelSalesPage') {
                 const params = {limit: 200, offset: 0, search: $('searchInput').value || ''};
@@ -2350,15 +1429,16 @@
             if (CFG.reportKind === 'eod') return [];
             return CFG.listArgs || [];
         }
+
         function rowsFrom(value) {
             const raw=dataOf(value);
             if (Array.isArray(raw)) return raw;
             if (raw && Array.isArray(raw.rows)) return raw.rows;
             if (raw && Array.isArray(raw.data)) return raw.data;
-            if (CFG.objectMode && raw && typeof raw === 'object') return Object.entries(raw).map(([key,val])=>({key,value:val}));
             if (raw && typeof raw === 'object') return [raw];
             return [];
         }
+
         function field(row, names) { for (const name of (names||[])) { if (row && row[name] !== undefined && row[name] !== null && row[name] !== '') return row[name]; } return ''; }
         function titleOf(row) { return field(row, CFG.titleFields) || field(row,['name','title','label','id','key']) || 'سجل بلا اسم'; }
         function subtitleOf(row) { return (CFG.subtitleFields||[]).map(k => { const v=row&&row[k]; return v===undefined||v===null||v===''?null:k+': '+v; }).filter(Boolean).join(' · '); }
@@ -2366,9 +1446,6 @@
         function numeric(v) { const n=Number(v); return Number.isFinite(n)?n:0; }
         function setDateDefaults() { $('reportFrom').value = $('reportFrom').value || today(); $('reportTo').value = $('reportTo').value || today(); }
 
-        /* ============================================================
-           NEW — تفعيل مفاتيح العرض (شجرة / بطاقات / جدول)
-           ============================================================ */
         function setupViewSwitcher() {
             const container = $('viewSwitcher');
             if (!container) return;
@@ -2387,16 +1464,18 @@
         }
 
         function renderFilters() {
-                document.querySelectorAll('#filterChips .filter-chip').forEach(btn=>btn.addEventListener('click',()=>{
+            document.querySelectorAll('#filterChips .filter-chip').forEach(btn=>btn.addEventListener('click',()=>{
                 document.querySelectorAll('#filterChips .filter-chip').forEach(x=>x.classList.remove('active'));
                 btn.classList.add('active'); state.filter=btn.dataset.filter; reloadData();
             }));
         }
+
         function paymentType(row){
             const v=String(field(row,['payment_method','payment_type','paymentMethod','is_credit'])||'').trim().toLowerCase();
             if(['credit','credit_sale','credit_account','آجل','اجل','1','true'].includes(v)) return 'credit';
             return 'cash';
         }
+
         function applyFilter() {
             const q=($('searchInput').value||'').trim().toLowerCase();
             state.filtered=state.rows.filter(row=>{
@@ -2407,28 +1486,27 @@
             });
             renderCards();
         }
+
         function renderStats() {
-            const rows=state.filtered; $('statCount').textContent=rows.length.toLocaleString('ar'); $('itemCount').textContent=rows.length.toLocaleString('ar');
+            const rows=state.filtered;
+            $('statCount').textContent=rows.length.toLocaleString('ar');
+            $('itemCount').textContent=rows.length.toLocaleString('ar');
             const active=rows.filter(row=>['active','open','pending','completed','مفتوحة','نشط','قيد التنفيذ'].includes(String(field(row,['status','state','is_active'])))).length;
             $('statActive').textContent=active.toLocaleString('ar');
-            let total=0; (CFG.valueFields||[]).forEach(k=>total += rows.reduce((sum,row)=>sum+numeric(row&&row[k]),0)); $('statTotal').textContent=total?total.toLocaleString('ar',{maximumFractionDigits:2}):'—';
+            let total=0; (CFG.valueFields||[]).forEach(k=>total += rows.reduce((sum,row)=>sum+numeric(row&&row[k]),0));
+            $('statTotal').textContent=total?total.toLocaleString('ar',{maximumFractionDigits:2}):'—';
             $('statUpdated').textContent=state.loadedAt?state.loadedAt.toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}):'—';
         }
 
-        /* ============================================================
-           دالة التوزيع الرئيسية على أساس viewMode
-           ============================================================ */
         function renderCards() {
             renderStats();
             const box = $('cardsContainer');
             if (!box) return;
-
             if (!state.filtered.length) {
                 box.className = 'cards-container';
-                box.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>${CFG.mode==='unsupported'?'لا توجد عملية مدعومة لهذا المسار في العقد الحالي.':'لا توجد نتائج مطابقة أو لم تُرجع قاعدة البيانات سجلات.'}</p></div>`;
+                box.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>لا توجد نتائج مطابقة أو لم تُرجع قاعدة البيانات سجلات.</p></div>`;
                 return;
             }
-
             if (state.viewMode === 'table') {
                 box.className = 'cards-container view-table';
                 box.innerHTML = renderTableHtml();
@@ -2444,19 +1522,17 @@
             }
         }
 
-        /* ---------- عرض البطاقات (Card View) ---------- */
         function renderCardsHtml() {
             return state.filtered.map((row,index)=>{
                 const id=esc(idOf(row)||index);
                 const fields=(CFG.subtitleFields||[]).filter(k=>row && row[k]!==undefined && row[k]!==null && row[k]!=='');
                 const value=(CFG.valueFields||[]).map(k=>numeric(row&&row[k])).filter(v=>v!==0).reduce((a,b)=>a+b,0);
-                const buttons=`<div class="action-row"><button class="btn" type="button" data-view="${id}"><i class="fas fa-eye"></i> عرض</button>${CFG.updateMethod?`<button class="btn warning" type="button" data-edit="${id}"><i class="fas fa-edit"></i> تعديل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.deleteMethod?`<button class="btn danger" type="button" data-delete="${id}"><i class="fas fa-trash"></i> حذف</button>`:''}${row.sale_id?`<button class="btn warning" type="button" data-adjust="${id}"><i class="fas fa-rotate-left"></i> مرتجع/تالف</button>`:''}</div>`;
+                const buttons=`<div class="action-row"><button class="btn" type="button" data-view="${id}"><i class="fas fa-eye"></i> عرض</button>${CFG.updateMethod?`<button class="btn warning" type="button" data-edit="${id}"><i class="fas fa-edit"></i> تعديل</button>`:''}${CFG.deleteMethod?`<button class="btn danger" type="button" data-delete="${id}"><i class="fas fa-trash"></i> حذف</button>`:''}${row.sale_id?`<button class="btn warning" type="button" data-adjust="${id}"><i class="fas fa-rotate-left"></i> مرتجع/تالف</button>`:''}</div>`;
                 const subtitleHtml = fields.map(k => `${esc(translateFieldLabel(k))}: <strong>${esc(translateFieldValue(k, row[k]))}</strong>`).join(' · ');
                 return `<article class="data-card"><div class="data-card-head"><div><div class="data-card-title">${esc(titleOf(row))}</div><div class="data-card-subtitle">${subtitleHtml}</div></div>${value?`<div class="data-card-value">${value.toLocaleString('ar',{maximumFractionDigits:2})}</div>`:''}</div><div class="data-fields">${fields.map(k=>`<div class="data-field"><span>${esc(translateFieldLabel(k))}</span><strong>${esc(translateFieldValue(k, row[k]))}</strong></div>`).join('')}</div>${buttons}</article>`;
             }).join('');
         }
 
-        /* ---------- عرض الجدول (Table View) ---------- */
         function renderTableHtml() {
             const columns = [
                 { key:'sale_id',           label:'رقم البيع' },
@@ -2481,22 +1557,12 @@
                     }
                     return `<td>${esc(translateFieldValue(c.key, v))}</td>`;
                 }).join('');
-                const actions = `
-                    <td>
-                        <div class="cell-actions">
-                            <button class="btn" type="button" data-view="${id}" title="عرض"><i class="fas fa-eye"></i></button>
-                            ${CFG.updateMethod ? `<button class="btn warning" type="button" data-edit="${id}" title="تعديل"><i class="fas fa-edit"></i></button>` : ''}
-                            ${row.sale_id ? `<button class="btn warning" type="button" data-adjust="${id}" title="مرتجع/تالف"><i class="fas fa-rotate-left"></i></button>` : ''}
-                            ${CFG.deleteMethod ? `<button class="btn danger" type="button" data-delete="${id}" title="حذف"><i class="fas fa-trash"></i></button>` : ''}
-                        </div>
-                    </td>
-                `;
+                const actions = `<td><div class="cell-actions"><button class="btn" type="button" data-view="${id}" title="عرض"><i class="fas fa-eye"></i></button>${CFG.updateMethod ? `<button class="btn warning" type="button" data-edit="${id}" title="تعديل"><i class="fas fa-edit"></i></button>` : ''}${row.sale_id ? `<button class="btn warning" type="button" data-adjust="${id}" title="مرتجع/تالف"><i class="fas fa-rotate-left"></i></button>` : ''}${CFG.deleteMethod ? `<button class="btn danger" type="button" data-delete="${id}" title="حذف"><i class="fas fa-trash"></i></button>` : ''}</div></td>`;
                 return `<tr>${cells}${actions}</tr>`;
             }).join('');
             return `<div class="records-table-wrap"><table class="records-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
         }
 
-        /* ---------- عرض الشجرة (Tree View) — مجمّع حسب التاريخ ---------- */
         function renderTreeHtml() {
             const groups = new Map();
             state.filtered.forEach(row => {
@@ -2517,50 +1583,12 @@
                     const time = String(row.sale_time || '').trim() || '—';
                     const customer = row.customer_name || row.customer_name_ar || 'بيع نقدي';
                     const payment = translateFieldValue('payment_method', row.payment_method);
-                    return `
-                        <div class="tree-item" data-view="${id}">
-                            <div class="tree-item-icon"><i class="fas fa-gas-pump"></i></div>
-                            <div class="tree-item-body">
-                                <div class="tree-item-title">
-                                    #${esc(row.sale_id || id)} — ${esc(fuelName)}
-                                </div>
-                                <div class="tree-item-sub">
-                                    <i class="fas fa-clock"></i> ${esc(time)} ·
-                                    <i class="fas fa-user"></i> ${esc(customer)} ·
-                                    ${esc(payment)} ·
-                                    ${esc(numeric(row.quantity).toFixed(2))} لتر
-                                </div>
-                            </div>
-                            <div class="tree-item-value">${numeric(row.total_amount).toLocaleString('ar', { maximumFractionDigits: 2 })}</div>
-                            <div class="tree-item-actions">
-                                <button type="button" data-view="${id}" title="عرض"><i class="fas fa-eye"></i></button>
-                                ${row.sale_id ? `<button type="button" data-adjust="${id}" title="مرتجع/تالف"><i class="fas fa-rotate-left"></i></button>` : ''}
-                                ${CFG.deleteMethod ? `<button type="button" class="danger" data-delete="${id}" title="حذف"><i class="fas fa-trash"></i></button>` : ''}
-                            </div>
-                        </div>
-                    `;
+                    return `<div class="tree-item" data-view="${id}"><div class="tree-item-icon"><i class="fas fa-gas-pump"></i></div><div class="tree-item-body"><div class="tree-item-title">#${esc(row.sale_id || id)} — ${esc(fuelName)}</div><div class="tree-item-sub"><i class="fas fa-clock"></i> ${esc(time)} · <i class="fas fa-user"></i> ${esc(customer)} · ${esc(payment)} · ${esc(numeric(row.quantity).toFixed(2))} لتر</div></div><div class="tree-item-value">${numeric(row.total_amount).toLocaleString('ar', { maximumFractionDigits: 2 })}</div><div class="tree-item-actions"><button type="button" data-view="${id}" title="عرض"><i class="fas fa-eye"></i></button>${row.sale_id ? `<button type="button" data-adjust="${id}" title="مرتجع/تالف"><i class="fas fa-rotate-left"></i></button>` : ''}${CFG.deleteMethod ? `<button type="button" class="danger" data-delete="${id}" title="حذف"><i class="fas fa-trash"></i></button>` : ''}</div></div>`;
                 }).join('');
-
-                return `
-                    <div class="tree-group" data-group>
-                        <button type="button" class="tree-group-header" data-tree-toggle>
-                            <i class="fas fa-chevron-down tree-chevron"></i>
-                            <span class="tree-group-title"><i class="fas fa-calendar-day"></i> ${esc(dateLabel)}</span>
-                            <span class="tree-group-meta">
-                                <span class="tree-meta-item"><i class="fas fa-receipt"></i> ${rows.length}</span>
-                                <span class="tree-meta-item"><i class="fas fa-droplet"></i> ${totalQty.toFixed(2)} لتر</span>
-                                <span class="tree-meta-item"><i class="fas fa-coins"></i> ${totalAmount.toLocaleString('ar', { maximumFractionDigits: 2 })}</span>
-                            </span>
-                        </button>
-                        <div class="tree-group-body">${items}</div>
-                    </div>
-                `;
+                return `<div class="tree-group" data-group><button type="button" class="tree-group-header" data-tree-toggle><i class="fas fa-chevron-down tree-chevron"></i><span class="tree-group-title"><i class="fas fa-calendar-day"></i> ${esc(dateLabel)}</span><span class="tree-group-meta"><span class="tree-meta-item"><i class="fas fa-receipt"></i> ${rows.length}</span><span class="tree-meta-item"><i class="fas fa-droplet"></i> ${totalQty.toFixed(2)} لتر</span><span class="tree-meta-item"><i class="fas fa-coins"></i> ${totalAmount.toLocaleString('ar', { maximumFractionDigits: 2 })}</span></span></button><div class="tree-group-body">${items}</div></div>`;
             }).join('') + `</div>`;
         }
 
-        /* ============================================================
-           ربط الأحداث بعد الرسم (يعمل مع البطاقات والجدول والشجرة)
-           ============================================================ */
         function bindRowEvents(box) {
             box.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -2582,7 +1610,6 @@
                 e.stopPropagation();
                 openFuelAdjustment(findRow(b.dataset.adjust));
             }));
-            /* طيّ/فك طيّ مجموعات الشجرة */
             box.querySelectorAll('[data-tree-toggle]').forEach(h => h.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const group = h.closest('[data-group]');
@@ -2614,6 +1641,7 @@
             if(def.type==='select') return `<div class="form-group${def.full?' full':''}"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><select class="form-input${cls}" data-key="${esc(def.key)}" ${req} ${ro}><option value="">اختر...</option></select></div>`;
             return `<div class="form-group"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><input class="form-input${cls}" data-key="${esc(def.key)}" type="${esc(def.type)}" value="${esc(value)}" ${req} ${ro} ${placeholder}></div>`;
         }
+
         function normalizePromotionBoundary(value,isEnd=false) {
             const boundary=String(value||'').trim().replace('T',' ');
             if(!boundary)return '';
@@ -2632,9 +1660,6 @@
             return (!from||from<=instant)&&(!to||to>=instant);
         }
 
-        /* ============================================================
-           ✅ الإصلاح المُطبَّق سابقاً — getActivePriceListsForPricing
-           ============================================================ */
         async function loadActivePromotions(row=null) {
             const select = document.querySelector('[data-key="occasion_code"]');
             if (!select || !bridge || typeof bridge.getPriceListRecords !== 'function') return;
@@ -2642,9 +1667,7 @@
                 const at = selectedFuelSaleDateTime();
                 const customerId = Number(document.querySelector('[data-key="customer_id"]')?.value || 0);
                 const result = await invoke('getPriceListRecords', [JSON.stringify({})]);
-                if (result?.success === false) {
-                    throw new Error(result.message || result.error || 'تعذر قراءة قوائم الأسعار');
-                }
+                if (result?.success === false) throw new Error(result.message || result.error || 'تعذر قراءة قوائم الأسعار');
                 const isActive = (r) => {
                     if (!r) return false;
                     const v = r.is_active;
@@ -2663,21 +1686,14 @@
                     const n = Number(v);
                     return Number.isFinite(n) ? n === 1 : false;
                 };
-                const active = rowsFrom(result).filter(r =>
-                    r && isActive(r) && !isDeleted(r) && promotionIsValidAt(r, at)
-                );
+                const active = rowsFrom(result).filter(r => r && isActive(r) && !isDeleted(r) && promotionIsValidAt(r, at));
                 const occasionOptions = new Map();
                 active.forEach(r => {
                     const code = String(r.occasion_code || '').trim();
-                    if (code && !occasionOptions.has(code)) {
-                        occasionOptions.set(code, r.list_name_ar || r.list_name || r.list_code || code);
-                    }
+                    if (code && !occasionOptions.has(code)) occasionOptions.set(code, r.list_name_ar || r.list_name || r.list_code || code);
                 });
                 const previous = String(field(row,['occasion_code']) || select.value || '').trim();
-                select.innerHTML = '<option value="">بدون عرض محدد</option>' +
-                    Array.from(occasionOptions.entries()).map(([code, label]) =>
-                        `<option value="${esc(code)}">${esc(label)}</option>`
-                    ).join('');
+                select.innerHTML = '<option value="">بدون عرض محدد</option>' + Array.from(occasionOptions.entries()).map(([code, label]) => `<option value="${esc(code)}">${esc(label)}</option>`).join('');
                 if (previous && occasionOptions.has(previous)) select.value = previous;
                 else if (occasionOptions.size === 1) select.value = occasionOptions.keys().next().value;
                 const apply = () => { if (typeof refreshResolvedFuelPrice === 'function') refreshResolvedFuelPrice(); };
@@ -2706,36 +1722,29 @@
             if(fuelEl){fuelEl.innerHTML='<option value="">اختر نوع الوقود...</option>'+fuels.map(x=>`<option value="${esc(field(x,['id','fuel_type_id']))}" data-price="${esc(field(x,['default_sale_price','sale_price','price_per_liter'])||'')}">${esc(field(x,['id','fuel_type_id']))} — ${esc(field(x,['fuel_name_ar','fuel_name','name'])||'وقود')}</option>`).join('');if(row)fuelEl.value=field(row,['fuel_type_id'])||'';}
             const pay=document.querySelector('[data-key="payment_method"]');
             if(pay){
-                pay.innerHTML =
-                    '<option value="cash">نقدي</option>' +
-                    '<option value="credit">آجل</option>' +
-                    '<option value="credit_card">بطاقة</option>';
-
+                pay.innerHTML = '<option value="cash">نقدي</option><option value="credit">آجل</option><option value="credit_card">بطاقة</option>';
                 pay.value = field(row,['payment_method']) || 'cash';
             }
-
             const customerEl=document.querySelector('[data-key="customer_id"]');
-
             if(customerEl){
-                customerEl.innerHTML =
-                    '<option value="">اختر العميل عند الحاجة...</option>' +
-                    customers.map(x =>
-                        `<option value="${esc(field(x,['id','party_id','customer_id']))}">
-                            ${esc(field(x,['commercial_name_ar','commercial_name','legal_name','name']) || 'عميل')}
-                        </option>`
-                    ).join('');
-
+                customerEl.innerHTML = '<option value="">اختر العميل عند الحاجة...</option>' + customers.map(x => `<option value="${esc(field(x,['id','party_id','customer_id']))}">${esc(field(x,['commercial_name_ar','commercial_name','legal_name','name']) || 'عميل')}</option>`).join('');
                 customerEl.value = field(row,['customer_id','customer_party_id']) || '';
             }
-            if(!row){const now=new Date();document.querySelector('[data-key="sale_date"]')?.setAttribute('value',localDate(now));const dateEl=document.querySelector('[data-key="sale_date"]');if(dateEl)dateEl.value=localDate(now);const timeEl=document.querySelector('[data-key="sale_time"]');if(timeEl)timeEl.value=localTime(now);}
+            if(!row){
+                const now=new Date();
+                const dateEl=document.querySelector('[data-key="sale_date"]');if(dateEl)dateEl.value=localDate(now);
+                const timeEl=document.querySelector('[data-key="sale_time"]');if(timeEl)timeEl.value=localTime(now);
+            }
             await loadActivePromotions(row);
             bindFuelCalculation(!row);
             const pumpSelect=document.querySelector('[data-key="pump_id"]');
             pumpSelect?.addEventListener('change',()=>loadPumpNozzles(pumpSelect.value,''));
             if(pumpSelect?.value) await loadPumpNozzles(pumpSelect.value,row?field(row,['nozzle_id']):'');
         }
+
         function localDate(d=new Date()){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
         function localTime(d=new Date()){return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
+
         async function loadPumpNozzles(pumpId='',selectedId=''){
             const nozzleEl=document.querySelector('[data-key="nozzle_id"]');
             if(!nozzleEl)return;
@@ -2748,7 +1757,8 @@
                 nozzleEl.value=String(selectedId||'');
             }catch(e){ toast('تعذر تحميل فوهات المضخة: '+e.message,true,'form'); }
         }
-                async function refreshResolvedFuelPrice(){
+
+        async function refreshResolvedFuelPrice(){
             const f=document.querySelector('[data-key="fuel_type_id"]');
             const q=document.querySelector('[data-key="quantity"]');
             const p=document.querySelector('[data-key="price_per_liter"]');
@@ -2767,7 +1777,7 @@
                     occasion_code:document.querySelector('[data-key="occasion_code"]')?.value.trim()||null
                 })]);
                 const resolved=dataOf(raw);
-                if(seq!==state.priceLookupSeq||String(f.value)!==String(resolved?.source_id===undefined?f.value:f.value))return;
+                if(seq!==state.priceLookupSeq)return;
                 const price=Number(resolved?.unit_price);
                 if(!Number.isFinite(price)||price<0)throw new Error('لم يرجع محرك التسعير سعراً صالحاً');
                 p.value=price.toFixed(4).replace(/0+$/,'').replace(/\.$/,'');
@@ -2778,6 +1788,7 @@
                 if(seq===state.priceLookupSeq)toast('تعذر احتساب سعر الوقود الفعلي من قوائم الأسعار: '+(e.message||'خطأ غير معروف'),true,'form');
             }
         }
+
         function bindFuelCalculation(resolveDynamic=true){
             const q=document.querySelector('[data-key="quantity"]'),p=document.querySelector('[data-key="price_per_liter"]'),t=document.querySelector('[data-key="total_amount"]'),f=document.querySelector('[data-key="fuel_type_id"]'),customer=document.querySelector('[data-key="customer_id"]');
             const calc=()=>{if(t)t.value=(numeric(q?.value)*numeric(p?.value)).toFixed(2);};
@@ -2788,167 +1799,168 @@
             calc();
             if(resolveDynamic)refreshResolvedFuelPrice();
         }
-        async function openForm(row=null) { if(!CFG.createMethod&&!CFG.updateMethod){toast('لا توجد عملية كتابة مدعومة لهذه الشاشة',true,'global');return;}state.editing=row;const deliveryBtn=$('deliveryBtn');if(deliveryBtn){deliveryBtn.disabled=true;delete deliveryBtn.dataset.saleId;deliveryBtn.title='يتاح بعد حفظ عملية البيع بنجاح';}$('formTitle').textContent=row?'تعديل مبيعات الوقود':'إضافة عملية بيع وقود';$('recordForm').innerHTML=(CFG.fields||[]).map(def=>inputHtml(def,row)).join('');$('formModal').classList.add('show');try{await loadSaleFormLookups(row);}catch(e){toast(e.message||'تعذر تحميل بيانات النموذج',true,'form');} }
-        function collectForm(){const payload={};document.querySelectorAll('#recordForm [data-key]').forEach(el=>{if(el.dataset.key==='sale_id')return;let v=el.value;if(el.type==='number')v=v===''?0:Number(v);payload[el.dataset.key]=v;});payload.created_at=new Date().toISOString();return payload;}
+
+        async function openForm(row=null) {
+            if(!CFG.createMethod&&!CFG.updateMethod){toast('لا توجد عملية كتابة مدعومة لهذه الشاشة',true,'global');return;}
+            state.editing=row;
+            const deliveryBtn=$('deliveryBtn');
+            if(deliveryBtn){deliveryBtn.disabled=true;delete deliveryBtn.dataset.saleId;deliveryBtn.title='يتاح بعد حفظ عملية البيع بنجاح';}
+            $('formTitle').textContent=row?'تعديل مبيعات الوقود':'إضافة عملية بيع وقود';
+            $('recordForm').innerHTML=(CFG.fields||[]).map(def=>inputHtml(def,row)).join('');
+            $('formModal').classList.add('show');
+            try{await loadSaleFormLookups(row);}catch(e){toast(e.message||'تعذر تحميل بيانات النموذج',true,'form');}
+        }
+
+        function collectForm(){
+            const payload={};
+            document.querySelectorAll('#recordForm [data-key]').forEach(el=>{
+                if(el.dataset.key==='sale_id')return;
+                let v=el.value;
+                if(el.type==='number')v=v===''?0:Number(v);
+                payload[el.dataset.key]=v;
+            });
+            payload.created_at=new Date().toISOString();
+            return payload;
+        }
 
         async function saveForm(){
             const form = $('recordForm');
-            if(!form.reportValidity()){
-                return;
-            }
+            if(!form.reportValidity()) return;
 
             const payload = collectForm();
             payload.transaction_time = String(payload.sale_date || localDate(new Date())) + ' ' + String(payload.sale_time || localTime(new Date()));
 
             const customerId = Number(payload.customer_id || 0);
-
-            if(customerId > 0){
-                payload.customer_id = customerId;
-            }else{
-                delete payload.customer_id;
-            }
-
+            if(customerId > 0){ payload.customer_id = customerId; } else { delete payload.customer_id; }
             delete payload.vehicle_plate;
 
-            if(payload.payment_method === 'credit' && customerId <= 0){
-                return toast('اختر عميلاً حقيقياً للبيع الآجل', true, 'form');
-            }
+            if(payload.payment_method === 'credit' && customerId <= 0){ return toast('اختر عميلاً حقيقياً للبيع الآجل', true, 'form'); }
+            if(!payload.shift_id){ return toast('لا توجد وردية مفتوحة حالياً', true, 'form'); }
+            if(!payload.pump_id){ return toast('اختر المضخة', true, 'form'); }
+            if(!payload.fuel_type_id){ return toast('اختر نوع الوقود', true, 'form'); }
+            if(!payload.nozzle_id){ return toast('اختر الفوهة التابعة للمضخة', true, 'form'); }
+            if(!(numeric(payload.quantity) > 0)){ return toast('أدخل كمية أكبر من صفر', true, 'form'); }
 
-            if(!payload.shift_id){
-                return toast('لا توجد وردية مفتوحة حالياً', true, 'form');
-            }
+            payload.total_amount = (numeric(payload.quantity) * numeric(payload.price_per_liter)).toFixed(2);
 
-            if(!payload.pump_id){
-                return toast('اختر المضخة', true, 'form');
-            }
-
-            if(!payload.fuel_type_id){
-                return toast('اختر نوع الوقود', true, 'form');
-            }
-
-            if(!payload.nozzle_id){
-                return toast('اختر الفوهة التابعة للمضخة', true, 'form');
-            }
-
-            if(!(numeric(payload.quantity) > 0)){
-                return toast('أدخل كمية أكبر من صفر', true, 'form');
-            }
-
-            payload.total_amount =
-                (numeric(payload.quantity) *
-                 numeric(payload.price_per_liter)).toFixed(2);
-
-            if(!state.pendingIdempotencyKey){
-                state.pendingIdempotencyKey = newIdempotencyKey();
-            }
-
+            if(!state.pendingIdempotencyKey){ state.pendingIdempotencyKey = newIdempotencyKey(); }
             payload.idempotency_key = state.pendingIdempotencyKey;
 
             setLoading(true);
-
             try{
-
                 let result;
-
                 if(state.editing && CFG.updateMethod){
-
-                    result = await invoke(
-                        CFG.updateMethod,
-                        [
-                            Number(idOf(state.editing)),
-                            JSON.stringify(payload)
-                        ]
-                    );
-
+                    result = await invoke(CFG.updateMethod, [Number(idOf(state.editing)), JSON.stringify(payload)]);
                     parse(result);
-
-                    showAdvancedNotification(
-                        'تم تحديث عملية البيع بنجاح في قاعدة البيانات',
-                        'success',
-                        'تم التحديث بنجاح'
-                    );
-
+                    showAdvancedNotification('تم تحديث عملية البيع بنجاح في قاعدة البيانات', 'success', 'تم التحديث بنجاح');
                     closeModal(null,'formModal');
                     await reloadData();
                     return;
-
-                }else{
-
-                    result = await invoke(
-                        'saveFuelSaleRecord',
-                        [JSON.stringify(payload)]
-                    );
-
+                } else {
+                    result = await invoke('saveFuelSaleRecord', [JSON.stringify(payload)]);
                     const saved = parse(result);
-
-                    const saleId =
-                        Number(saved.sale_id || saved.id || 0);
-
-                    if(!saleId){
-                        throw new Error(
-                            'لم يتم استلام sale_id الحقيقي من SQLite'
-                        );
-                    }
-
+                    const saleId = Number(saved.sale_id || saved.id || 0);
+                    if(!saleId){ throw new Error('لم يتم استلام sale_id الحقيقي من SQLite'); }
                     state.lastSavedSaleId = saleId;
                     state.pendingIdempotencyKey = null;
-
                     const sms = saved.sms || {};
-                    const smsNote = sms.queued
-                        ? ' — تم وضع SMS في طابور الإرسال'
-                        : (payload.payment_method === 'credit'
-                            ? ' — تعذر تجهيز SMS: ' + (sms.reason || 'غير معروف')
-                            : '');
-
-                    /* ✅ إشعار متطور للنجاح */
-                    showAdvancedNotification(
-                        `تم حفظ عملية البيع رقم ${saleId} وتحديث المخزون فعلياً${smsNote}`,
-                        'success',
-                        '✅ عملية البيع تمت بنجاح'
-                    );
-
+                    const smsNote = sms.queued ? ' — تم وضع SMS في طابور الإرسال' : (payload.payment_method === 'credit' ? ' — تعذر تجهيز SMS: ' + (sms.reason || 'غير معروف') : '');
+                    showAdvancedNotification(`تم حفظ عملية البيع رقم ${saleId} وتحديث المخزون فعلياً${smsNote}`, 'success', '✅ عملية البيع تمت بنجاح');
                     showDeliveryAction(saleId);
-
-                    /* إغلاق المودال بعد نجاح الحفظ */
-                    setTimeout(() => {
-                        closeModal(null, 'formModal');
-                    }, 900);
-
+                    setTimeout(() => { closeModal(null, 'formModal'); }, 900);
                     await reloadData();
-
                     return;
                 }
-
-            }catch(e){
-
-                /* ✅ إشعار متطور للفشل */
-                showAdvancedNotification(
-                    e.message || 'فشل حفظ العملية، لم يتم أي تغيير في قاعدة البيانات',
-                    'error',
-                    '❌ فشل حفظ عملية البيع'
-                );
-
+            } catch(e){
+                showAdvancedNotification(e.message || 'فشل حفظ العملية، لم يتم أي تغيير في قاعدة البيانات', 'error', '❌ فشل حفظ عملية البيع');
                 toast(e.message || 'فشل حفظ العملية', true, 'form');
-
-            }finally{
-
+            } finally {
                 setLoading(false);
             }
         }
+
         function showDeliveryAction(saleId){const button=$('deliveryBtn');if(!button)return;button.disabled=false;button.dataset.saleId=String(saleId);button.title='تم الحفظ؛ يمكنك الآن إنشاء التوصيل';}
         function openDelivery(saleId){const id=Number(saleId||$('deliveryBtn')?.dataset.saleId||0);if(!id)return toast('احفظ عملية البيع أولاً',true,'form');sessionStorage.setItem('delivery_sale_id',String(id));window.location.href='deliveries.html?sale_id='+encodeURIComponent(id);}
-        async function deleteRow(row) { const id=row&&idOf(row); if(!id||!CFG.deleteMethod)return; if(!confirm('هل تريد تنفيذ الحذف الفعلي لهذا السجل؟'))return; setLoading(true); try { const result=await invoke(CFG.deleteMethod,[Number(id)]); parse(result); showAdvancedNotification('تم الحذف بنجاح','success','تم الحذف'); await reloadData(); } catch(error) { showAdvancedNotification(error.message||'فشل الحذف','error','فشل الحذف'); } finally { setLoading(false); } }
-        async function resolveRow(row) { const id=row&&idOf(row); if(!id||!CFG.resolveMethod)return; const note=prompt('أدخل ملاحظة الاعتماد/الحل إن لزم:',''); if(note===null)return; setLoading(true); try { const result=await invoke(CFG.resolveMethod,[Number(id),String(note)]); parse(result); showAdvancedNotification('تم تنفيذ العملية فعلياً','success','نجاح'); await reloadData(); } catch(error) { showAdvancedNotification(error.message||'فشل تنفيذ العملية','error','فشل'); } finally { setLoading(false); } }
-        async function reloadData() { if(CFG.mode==='unsupported'||CFG.mode==='ai'){ renderCards(); return; } if(CFG.mode==='backup'){ loadBackupHistory(); return; } if(!CFG.listMethod){ renderCards(); return; } if(!bridge){ $('offlineBanner').classList.add('show'); renderCards(); return; } setLoading(true); try { const result=await invoke(CFG.listMethod,argsForLoad()); state.rows=rowsFrom(result); state.loadedAt=new Date(); $('offlineBanner').classList.remove('show'); applyFilter(); } catch(error) { state.rows=[]; state.loadedAt=new Date(); renderCards(); toast(error.message||'فشل تحميل البيانات',true,'global'); } finally { setLoading(false); } }
-        function openModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.add('show'); } function closeModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.remove('show'); }
-        function openReport() { setDateDefaults(); $('reportResults').innerHTML='<div class="empty-state"><i class="fas fa-file-alt"></i><p>اضغط توليد التقرير لعرض البيانات المحملة من SQLite.</p></div>'; openModal(null,'reportModal'); }
-        async function generateReport() { setLoading(true); try { let result; if(CFG.reportKind==='balanceSheet') result=await invoke('getBalanceSheet',[($('reportTo').value||today()),0]); else if(CFG.reportKind==='eod') result=await invoke('getEodReport',[]); else if(String(CFG.reportKind||'').startsWith('operational:')) { const suffix=String(CFG.reportKind).split(':')[1]; result=await invoke('generate'+suffix+'Report',[JSON.stringify({from_date:$('reportFrom').value||'',to_date:$('reportTo').value||'',search:$('searchInput').value||'',include_archived:true,limit:1000})]); } else result={data:state.filtered}; $('reportResults').innerHTML=renderReport(rowsFrom(result)); showAdvancedNotification('تم توليد التقرير من المصدر الفعلي','success','التقرير جاهز'); } catch(e) { showAdvancedNotification(e.message||'فشل التقرير','error','فشل التقرير'); } finally { setLoading(false); } }
-        function renderReport(rows) { if(!rows.length)return '<div class="empty-state">لا توجد بيانات للتقرير.</div>'; return `<div class="data-fields">${rows.slice(0,100).map(row=>`<div class="data-field"><span>${esc(translateFieldLabel(titleOf(row)))}</span><strong>${esc(subtitleOf(row)||JSON.stringify(row))}</strong></div>`).join('')}</div>`; }
-        function exportData() { const rows=state.filtered; if(!rows.length){toast('لا توجد بيانات حقيقية لتصديرها',true,'global');return;} const keys=[...new Set(rows.flatMap(row=>Object.keys(row||{})))]; const csv='\ufeff'+[keys, ...rows.map(row=>keys.map(k=>String(row[k]??'').replace(/"/g,'""')))].map(row=>row.map(v=>`"${v}"`).join(',')).join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='{filename}.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); toast('تم إنشاء ملف CSV من البيانات المحملة فعلياً',false,'global'); }
-        async function askAI() { if(CFG.aiMethod!=='sendToAI'){toast('المساعد غير متاح لهذا المسار',true,'global');return;} const prompt=($('aiPrompt').value||'').trim(); if(!prompt){toast('اكتب السؤال أولاً',true,'global');return;} if(!bridge||typeof bridge.sendToAI!=='function'){toast('عقد المساعد غير متاح في Android Bridge',true,'global');return;} $('aiOutput').textContent='جاري انتظار رد Android...'; window.onAIResponse=(payload)=>{ const result=typeof payload==='string'?JSON.parse(payload):payload; if(result&&result.success){ $('aiOutput').textContent=result.response||'عاد الرد دون نص'; showAdvancedNotification('وصل رد المساعد فعلياً','success','رد المساعد'); } else { $('aiOutput').textContent=result&&result.error||'فشل رد المساعد'; showAdvancedNotification($('aiOutput').textContent,'error','فشل المساعد'); } setLoading(false); }; setLoading(true); try { const started=parse(bridge.sendToAI(prompt)); if(started.status!=='processing') window.onAIResponse(started); } catch(e) { setLoading(false); $('aiOutput').textContent=e.message; showAdvancedNotification(e.message,'error','فشل المساعد'); } }
+
+        async function deleteRow(row) {
+            const id=row&&idOf(row); if(!id||!CFG.deleteMethod)return;
+            if(!confirm('هل تريد تنفيذ الحذف الفعلي لهذا السجل؟'))return;
+            setLoading(true);
+            try { const result=await invoke(CFG.deleteMethod,[Number(id)]); parse(result); showAdvancedNotification('تم الحذف بنجاح','success','تم الحذف'); await reloadData(); }
+            catch(error) { showAdvancedNotification(error.message||'فشل الحذف','error','فشل الحذف'); }
+            finally { setLoading(false); }
+        }
+
+        async function resolveRow(row) {
+            const id=row&&idOf(row); if(!id||!CFG.resolveMethod)return;
+            const note=prompt('أدخل ملاحظة الاعتماد/الحل إن لزم:',''); if(note===null)return;
+            setLoading(true);
+            try { const result=await invoke(CFG.resolveMethod,[Number(id),String(note)]); parse(result); showAdvancedNotification('تم تنفيذ العملية فعلياً','success','نجاح'); await reloadData(); }
+            catch(error) { showAdvancedNotification(error.message||'فشل تنفيذ العملية','error','فشل'); }
+            finally { setLoading(false); }
+        }
+
+        async function reloadData() {
+            if(CFG.mode==='unsupported'||CFG.mode==='ai'){ renderCards(); return; }
+            if(CFG.mode==='backup'){ loadBackupHistory(); return; }
+            if(!CFG.listMethod){ renderCards(); return; }
+            if(!bridge){ $('offlineBanner').classList.add('show'); renderCards(); return; }
+            setLoading(true);
+            try {
+                const result=await invoke(CFG.listMethod,argsForLoad());
+                state.rows=rowsFrom(result);
+                state.loadedAt=new Date();
+                $('offlineBanner').classList.remove('show');
+                applyFilter();
+            } catch(error) {
+                state.rows=[]; state.loadedAt=new Date(); renderCards();
+                toast(error.message||'فشل تحميل البيانات',true,'global');
+            } finally { setLoading(false); }
+        }
+
+        function openModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.add('show'); }
+        function closeModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.remove('show'); }
+
+        function openReport() {
+            setDateDefaults();
+            $('reportResults').innerHTML='<div class="empty-state"><i class="fas fa-file-alt"></i><p>اضغط توليد التقرير لعرض البيانات المحملة من SQLite.</p></div>';
+            openModal(null,'reportModal');
+        }
+
+        async function generateReport() {
+            setLoading(true);
+            try {
+                let result;
+                if(CFG.reportKind==='balanceSheet') result=await invoke('getBalanceSheet',[($('reportTo').value||today()),0]);
+                else if(CFG.reportKind==='eod') result=await invoke('getEodReport',[]);
+                else if(String(CFG.reportKind||'').startsWith('operational:')) {
+                    const suffix=String(CFG.reportKind).split(':')[1];
+                    result=await invoke('generate'+suffix+'Report',[JSON.stringify({from_date:$('reportFrom').value||'',to_date:$('reportTo').value||'',search:$('searchInput').value||'',include_archived:true,limit:1000})]);
+                } else result={data:state.filtered};
+                $('reportResults').innerHTML=renderReport(rowsFrom(result));
+                showAdvancedNotification('تم توليد التقرير من المصدر الفعلي','success','التقرير جاهز');
+            } catch(e) { showAdvancedNotification(e.message||'فشل التقرير','error','فشل التقرير'); }
+            finally { setLoading(false); }
+        }
+
+        function renderReport(rows) {
+            if(!rows.length)return '<div class="empty-state">لا توجد بيانات للتقرير.</div>';
+            return `<div class="data-fields">${rows.slice(0,100).map(row=>`<div class="data-field"><span>${esc(translateFieldLabel(titleOf(row)))}</span><strong>${esc(subtitleOf(row)||JSON.stringify(row))}</strong></div>`).join('')}</div>`;
+        }
+
+        function exportData() {
+            const rows=state.filtered; if(!rows.length){toast('لا توجد بيانات حقيقية لتصديرها',true,'global');return;}
+            const keys=[...new Set(rows.flatMap(row=>Object.keys(row||{})))];
+            const csv='\ufeff'+[keys, ...rows.map(row=>keys.map(k=>String(row[k]??'').replace(/"/g,'""')))].map(row=>row.map(v=>`"${v}"`).join(',')).join('\n');
+            const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+            const url=URL.createObjectURL(blob);
+            const a=document.createElement('a'); a.href=url; a.download='fuel-sales-report.csv'; a.click();
+            setTimeout(()=>URL.revokeObjectURL(url),1000);
+            toast('تم إنشاء ملف CSV من البيانات المحملة فعلياً',false,'global');
+        }
 
         /* ============================================================
-           NEW — منطق مرتجع/تالف مبيعات الوقود (مُعاد بناؤه بالكامل)
+           منطق مرتجع/تالف مبيعات الوقود
            ============================================================ */
         let fuelAdjustmentRow = null;
 
@@ -2968,19 +1980,12 @@
             fuelAdjustmentRow = null;
         }
 
-        /**
-         * ملء النموذج من صف محدد — يستخدم في حالتين:
-         *  1) فتح المودال من زر البطاقة/الجدول/الشجرة (row مدفوع)
-         *  2) اختيار رقم بيع من القائمة المنسدلة
-         */
         function fillFuelAdjustmentFromRow(row) {
             if (!row) return;
             fuelAdjustmentRow = row;
 
-            /* استخراج الحقول من الصف مع احتياطات متعددة */
             const saleId = Number(row.sale_id || row.id || 0);
-            const fuelLabel = translateFieldValue('fuel_type_id',
-                row.fuel_name_ar || row.fuel_name || row.fuel_type_name || row.fuel_type_id);
+            const fuelLabel = translateFieldValue('fuel_type_id', row.fuel_name_ar || row.fuel_name || row.fuel_type_name || row.fuel_type_id);
             const saleDate = String(row.sale_date || '').trim() || '—';
             const saleTime = String(row.sale_time || '').trim();
             const saleDateFull = saleTime ? `${saleDate} — ${saleTime}` : saleDate;
@@ -2991,11 +1996,8 @@
             const alreadyDamaged = numeric(row.damaged_quantity);
             const available = Math.max(0, originalQty - alreadyReturned - alreadyDamaged);
 
-            /* التحديث المرئي */
             const sel = $('fuelAdjustmentSaleSelect');
-            if (sel && !sel.value && saleId) {
-                sel.value = String(saleId);
-            }
+            if (sel && !sel.value && saleId) sel.value = String(saleId);
 
             $('fuelAdjustmentPreviewFuel').textContent = fuelLabel;
             $('fuelAdjustmentPreviewDate').textContent = saleDateFull;
@@ -3010,9 +2012,6 @@
             if (preview) preview.classList.add('show');
         }
 
-        /**
-         * جلب قائمة مبيعات الوقود وملء القائمة المنسدلة (مرتّبة تنازلياً برقم البيع).
-         */
         async function populateFuelAdjustmentSaleSelect() {
             const sel = $('fuelAdjustmentSaleSelect');
             if (!sel) return;
@@ -3020,7 +2019,6 @@
             try {
                 const result = await invoke('getFuelSalesPage', [JSON.stringify({ limit: 500, offset: 0 })]);
                 const rows = rowsFrom(result);
-                /* ترتيب تنازلي بأحدث رقم بيع */
                 rows.sort((a, b) => {
                     const idA = Number(a.sale_id || a.id || 0);
                     const idB = Number(b.sale_id || b.id || 0);
@@ -3051,16 +2049,12 @@
             resetFuelAdjustmentForm({ keepDropdown: false });
 
             if (row) {
-                /* فتح من زر البطاقة/الجدول/الشجرة — row مدفوع بالكامل */
                 fillFuelAdjustmentFromRow(row);
-                /* ضمان تحميل القائمة أيضاً حتى يتمكن المستخدم من تغيير الرقم */
                 openModal(null, 'fuelAdjustmentModal');
                 populateFuelAdjustmentSaleSelect().then(() => {
-                    /* إعادة التحديد بعد التحميل */
                     const sel = $('fuelAdjustmentSaleSelect');
                     const saleId = Number(row.sale_id || row.id || 0);
                     if (sel && saleId) {
-                        /* نضع الخيار إذا لم يكن موجوداً */
                         let found = false;
                         for (let i = 0; i < sel.options.length; i++) {
                             if (Number(sel.options[i].value) === saleId) { found = true; break; }
@@ -3075,14 +2069,12 @@
                     }
                 });
             } else {
-                /* فتح من زر القائمة السفلية — القائمة المنسدلة فقط */
                 openModal(null, 'fuelAdjustmentModal');
                 await populateFuelAdjustmentSaleSelect();
             }
         }
 
         async function saveFuelAdjustment() {
-            /* استخراج sale_id من الصف المحدد أو من القائمة */
             const saleIdFromRow = fuelAdjustmentRow ? Number(fuelAdjustmentRow.sale_id || fuelAdjustmentRow.id || 0) : 0;
             const saleIdFromSelect = Number($('fuelAdjustmentSaleSelect')?.value || 0);
             const saleId = saleIdFromRow || saleIdFromSelect;
@@ -3092,7 +2084,6 @@
                 return;
             }
 
-            /* إذا اختار المستخدم رقماً مختلفاً في القائمة، نحضّر الصف منه */
             if (saleIdFromSelect && saleIdFromSelect !== saleIdFromRow) {
                 const cached = state.fuelAdjustmentCache.find(r => Number(r.sale_id || r.id) === saleIdFromSelect);
                 if (cached) fuelAdjustmentRow = cached;
@@ -3129,7 +2120,7 @@
                     idempotency_key: newIdempotencyKey()
                 };
                 const result = parse(await invoke('processFuelSaleAdjustment', [JSON.stringify(payload)]));
-                const message = result.message || result.data?.message || 'تم توثيق العملية بنجاح';
+                const message = result.message || (result.data && result.data.message) || 'تم توثيق العملية بنجاح';
                 showAdvancedNotification(message, 'success', '✅ تم التوثيق بنجاح');
                 closeModal(null, 'fuelAdjustmentModal');
                 resetFuelAdjustmentForm();
@@ -3142,7 +2133,6 @@
             }
         }
 
-        /* ربط تغيير القائمة المنسدلة بجلب التفاصيل */
         function setupFuelAdjustmentEvents() {
             const sel = $('fuelAdjustmentSaleSelect');
             if (sel) {
@@ -3152,32 +2142,32 @@
                         resetFuelAdjustmentForm({ keepDropdown: true });
                         return;
                     }
-                    /* البحث في الذاكرة المؤقتة أولاً */
                     let row = state.fuelAdjustmentCache.find(r => Number(r.sale_id || r.id) === saleId);
-                    if (!row) {
-                        /* احتياط: إذا لم يكن بالذاكرة، نجلبه من قاعدة البيانات مباشرة */
-                        row = { sale_id: saleId };
-                    }
+                    if (!row) row = { sale_id: saleId };
                     fillFuelAdjustmentFromRow(row);
                 });
             }
-
-            /* زر القائمة السفلية "مرتجع/تالف" */
             const btn = $('fuelAdjustmentBtn');
-            if (btn) {
-                btn.addEventListener('click', () => openFuelAdjustment(null));
-            }
+            if (btn) btn.addEventListener('click', () => openFuelAdjustment(null));
         }
 
         function goHome() { window.location.href='../main.html'; }
         function applyTheme() { const saved=localStorage.getItem('theme')||'light'; if(saved==='dark')document.documentElement.dataset.theme='dark'; $('themeIcon').textContent=saved==='dark'?'🌞':'🌙'; }
         function toggleTheme() { const dark=document.documentElement.dataset.theme==='dark'; if(dark)delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme='dark'; localStorage.setItem('theme',dark?'light':'dark'); $('themeIcon').textContent=dark?'🌙':'🌞'; }
+
         function initSpecial() {
             if(CFG.mode==='unsupported'){ $('newSaleBtn').classList.add('hidden'); }
             if(CFG.mode==='ai'){ $('newSaleBtn').classList.add('hidden'); $('cardsContainer').innerHTML='<div class="settings-wrap"><div class="settings-card"><h3>أرسل طلباً إلى المساعد</h3><p class="data-card-subtitle">لا تُحفظ الرسالة في localStorage ولا تُعرض نتيجة نجاح قبل عودة الجسر.</p><div class="action-row"><button class="btn primary" onclick="openModal(null,\'aiModal\')">فتح المساعد</button></div></div></div>'; }
             if(CFG.mode==='backup'){ $('newSaleBtn').classList.add('hidden'); $('cardsContainer').innerHTML='<div class="utility-grid"><div class="utility-card"><h3>نسخة قاعدة البيانات</h3><p>تنفيذ النسخ عبر Android ثم استقبال callback الفعلي.</p><button class="btn primary" onclick="startAsync(\'backupDatabase\',\'onBackupResult\')">إنشاء نسخة</button></div><div class="utility-card"><h3>تصدير كل البيانات</h3><p>يستخدم exportAllData ويعرض نتيجة callback.</p><button class="btn primary" onclick="startAsync(\'exportAllData\',\'onExportAllResult\')">بدء التصدير</button></div><div class="utility-card"><h3>معلومات قاعدة البيانات</h3><p id="dbInfo">اضغط لقراءة المعلومات الفعلية.</p><button class="btn" onclick="loadDbInfo()">قراءة</button></div></div>'; }
         }
-        function startAsync(method,callbackName){ if(!bridge||typeof bridge[method]!=='function'){toast('العقد '+method+' غير متاح',true,'global');return;} window[callbackName]=(value)=>{const parsed=typeof value==='string'?JSON.parse(value):value; if(parsed.success)showAdvancedNotification(parsed.message||'اكتملت العملية فعلياً','success','نجاح'); else showAdvancedNotification(parsed.error||'فشلت العملية','error','فشل');}; try{const result=parse(bridge[method]()); if(result.status==='processing')toast('بدأت العملية؛ انتظار نتيجة Android...',false,'global');}catch(e){toast(e.message,true,'global');} }
+
+        function startAsync(method,callbackName){
+            if(!bridge||typeof bridge[method]!=='function'){toast('العقد '+method+' غير متاح',true,'global');return;}
+            window[callbackName]=(value)=>{const parsed=typeof value==='string'?JSON.parse(value):value; if(parsed.success)showAdvancedNotification(parsed.message||'اكتملت العملية فعلياً','success','نجاح'); else showAdvancedNotification(parsed.error||'فشلت العملية','error','فشل');};
+            try{const result=parse(bridge[method]()); if(result.status==='processing')toast('بدأت العملية؛ انتظار نتيجة Android...',false,'global');}
+            catch(e){toast(e.message,true,'global');}
+        }
+
         async function loadDbInfo(){try{const result=await invoke('getDatabaseInfo',[]); $('dbInfo').textContent=JSON.stringify(dataOf(result));}catch(e){$('dbInfo').textContent=e.message;toast(e.message,true,'global');}}
         async function loadBackupHistory(){if(CFG.mode!=='backup'||!bridge||typeof bridge.getBackupHistoryRecords!=='function')return;try{const result=await invoke('getBackupHistoryRecords',[JSON.stringify({limit:100})]);const rows=rowsFrom(result);$('backupHistory').innerHTML=rows.length?rows.map(row=>`<div class="data-card"><strong>${esc(row.file_name||row.backup_type||row.id)}</strong><div class="data-card-subtitle">${esc([row.status,row.started_at,row.completed_at,row.file_size_mb,row.storage_location].filter(Boolean).join(' · '))}</div></div>`).join(''):'<div class="empty-state">لا توجد سجلات نسخ في SQLite.</div>';}catch(e){$('backupHistory').textContent=e.message;toast(e.message,true,'global');}}
 
@@ -3190,7 +2180,8 @@
         document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay').forEach(x=>x.classList.remove('show'));});
         window.addEventListener('online',()=>toast('عاد اتصال الجسر المحتمل؛ اضغط تحديث للتحقق',false,'global'));
         window.addEventListener('offline',()=>$('offlineBanner').classList.add('show'));
-        Object.assign(window, {goHome, openReport, exportData, reloadData, openForm, saveForm, openModal, closeModal, startAsync, loadDbInfo, askAI, openFuelAdjustment, saveFuelAdjustment});
+
+        Object.assign(window, {goHome, openReport, exportData, reloadData, openForm, saveForm, openModal, closeModal, startAsync, loadDbInfo, openFuelAdjustment, saveFuelAdjustment});
 
         applyTheme();
         renderFilters();
