@@ -25,7 +25,8 @@
   </style>
   <script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script>
   <script src="source-trace-contract.js"></script>
-<script src="file:///android_asset/assets-local/js/finance-integrity-runtime.js"></script></head>
+<script src="file:///android_asset/assets-local/js/finance-integrity-runtime.js"></script>  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
+</head>
 <body>
   <header class="topbar"><div class="app"><div class="title-row"><div class="title-wrap"><span class="title-icon"><i class="fas fa-car-side"></i></span><div><h1>مصروفات المركبات</h1><p>سجل وتحليل تكلفة الأسطول من SQLite</p></div></div><div class="head-actions"><button id="themeButton" class="icon-btn" type="button" title="تفعيل الوضع المظلم">🌙</button><button id="homeButton" class="icon-btn" type="button" title="الرئيسية">🏠</button></div></div><div class="search-row"><label class="search-wrap"><i class="fas fa-search"></i><input id="searchInput" class="control" type="search" placeholder="ابحث بالمركبة أو اللوحة أو النوع أو الوصف أو مسار الفاتورة"></label><button id="refreshButton" class="refresh-btn" type="button" title="تحديث"><i class="fas fa-rotate"></i></button></div><div class="quick-filters" aria-label="فترات سريعة"><button class="quick-btn active" type="button" data-period="all">كل الفترات</button><button class="quick-btn" type="button" data-period="today">اليوم</button><button class="quick-btn" type="button" data-period="week">هذا الأسبوع</button><button class="quick-btn" type="button" data-period="month">هذا الشهر</button></div></div></header>
   <main class="app"><div class="source-note"><strong>مصدر البيانات:</strong> تعرض الشاشة مصروفات ومركبات ورحلات وعملات المحطة من SQLite عبر AndroidInterface. لا تنشئ الشاشة سجلات أو مبالغ أو أنواع مصروفات تجريبية.</div><div id="bridgeError" class="bridge-error">تعذر قراءة مساحة عمل مصروفات المركبات من Android. لن تظهر بيانات بديلة.</div>
@@ -49,7 +50,7 @@
     const num=value=>{const n=Number(value);return Number.isFinite(n)?n:null};
     const money=(value,currency='')=>{const n=num(value);return n==null?'—':new Intl.NumberFormat('ar-YE',{maximumFractionDigits:2}).format(n)+(currency?' '+currency:'')};
     const quantity=value=>{const n=num(value);return n==null?'غير متاح':new Intl.NumberFormat('ar-YE',{maximumFractionDigits:2}).format(n)+' كم'};
-    const today=()=>new Date().toISOString().slice(0,10);
+    const today=()=>businessDayDate();
     const rowsOf=raw=>{const value=dataOf(raw);if(Array.isArray(value))return value;if(Array.isArray(value?.rows))return value.rows;return[]};
     const dataOf=raw=>{if(raw==null)throw new Error('لم يرجع Android Bridge نتيجة');const value=typeof raw==='string'?JSON.parse(raw):raw;if(value?.success===false)throw new Error(value.error||value.message||'فشلت العملية');return Object.prototype.hasOwnProperty.call(value||{},'data')?value.data:value};
     const invoke=(method,args=[])=>new Promise((resolve,reject)=>{if(!bridge||typeof bridge[method]!=='function'){reject(new Error('العقد '+method+' غير متاح في Android Bridge'));return}try{resolve(dataOf(bridge[method](...args)))}catch(error){reject(error)}});

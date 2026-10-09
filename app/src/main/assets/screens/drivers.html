@@ -304,6 +304,7 @@ html[data-theme=dark] .modal .icon-btn{
   .driver-card{break-inside:avoid}
 }
 </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -751,7 +752,7 @@ const $ = id => document.getElementById(id);
 const esc = value => String(value == null ? '—' : value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const num = value => { const n = Number(value); return Number.isFinite(n) ? n : 0; };
 const idOf = row => num(row && (row.id ?? row.driver_id));
-const today = () => new Date().toISOString().slice(0,10);
+const today = () => businessDayDate();
 
 function toast(message, type='') {
   const n = $('toast');

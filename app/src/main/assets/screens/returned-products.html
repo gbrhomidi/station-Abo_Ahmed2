@@ -1827,6 +1827,7 @@
             }
         }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -2810,7 +2811,7 @@
             const reason = document.getElementById('fReason').value.trim();
             const notes = document.getElementById('fNotes').value.trim();
             const status = document.getElementById('fStatus').value;
-            const returnDate = document.getElementById('fReturnDate').value || new Date().toISOString().split('T')[0];
+            const returnDate = document.getElementById('fReturnDate').value || businessDayDate();
 
             if (!invoiceNumber) { showToast('❌ رقم الفاتورة الأصلية مطلوب', 'error'); return; }
             if (!productId) { showToast('❌ الرجاء اختيار المنتج', 'error'); return; }
@@ -2895,7 +2896,7 @@
             document.getElementById('fReason').value = '';
             document.getElementById('fNotes').value = '';
             document.getElementById('fStatus').value = 'completed';
-            document.getElementById('fReturnDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('fReturnDate').value = businessDayDate();
             document.getElementById('formModal').classList.add('show');
             document.body.style.overflow = 'hidden';
             loadDropdowns();
@@ -3220,10 +3221,10 @@
                 `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل التقارير...</p></div>`;
 
             try {
-                const today = new Date().toISOString().split('T')[0];
+                const today = businessDayDate();
                 const monthAgo = new Date();
                 monthAgo.setDate(monthAgo.getDate() - 30);
-                const from = monthAgo.toISOString().split('T')[0];
+                const from = businessDayDate(monthAgo);
                 const countResult = await apiCall('getReturns', { start_date: from, end_date: today, station_id: 1 });
                 let totalCount = 0;
                 if (countResult.success && countResult.data) {
@@ -3449,8 +3450,8 @@
             const today = new Date();
             const monthAgo = new Date();
             monthAgo.setDate(monthAgo.getDate() - 30);
-            document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
-            document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
+            document.getElementById('filterDateFrom').value = businessDayDate(monthAgo);
+            document.getElementById('filterDateTo').value = businessDayDate(today);
 
             loadDropdowns();
             setTimeout(loadReturns, 600);

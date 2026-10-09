@@ -1454,7 +1454,8 @@
 }
 </style>
 
-<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script></head>
+<script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script>  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
+</head>
 <body>
 
     <!-- Pull-to-Refresh -->
@@ -2318,10 +2319,10 @@
             document.getElementById('reportModal').classList.add('show');
             document.body.style.overflow = 'hidden';
 
-            const today = new Date().toISOString().split('T')[0];
+            const today = businessDayDate();
             const monthAgo = new Date();
             monthAgo.setMonth(monthAgo.getMonth() - 1);
-            const monthAgoStr = monthAgo.toISOString().split('T')[0];
+            const monthAgoStr = businessDayDate(monthAgo);
 
             document.getElementById('reportFrom').value = monthAgoStr;
             document.getElementById('reportTo').value = today;

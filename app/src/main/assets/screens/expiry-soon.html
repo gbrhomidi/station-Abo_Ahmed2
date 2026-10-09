@@ -1845,6 +1845,7 @@
             }
         }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -3234,10 +3235,10 @@
                 `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل التقارير...</p></div>`;
 
             try {
-                const today = new Date().toISOString().split('T')[0];
+                const today = businessDayDate();
                 const monthAgo = new Date();
                 monthAgo.setDate(monthAgo.getDate() - 30);
-                const from = monthAgo.toISOString().split('T')[0];
+                const from = businessDayDate(monthAgo);
                 const untilDate = new Date();
                 untilDate.setDate(untilDate.getDate() + 30);
                 const countDays = Math.max(0, Math.ceil((untilDate - new Date()) / 86400000));
@@ -3462,8 +3463,8 @@
             const today = new Date();
             const monthAhead = new Date();
             monthAhead.setDate(monthAhead.getDate() + 30);
-            document.getElementById('filterDateFrom').value = today.toISOString().split('T')[0];
-            document.getElementById('filterDateTo').value = monthAhead.toISOString().split('T')[0];
+            document.getElementById('filterDateFrom').value = businessDayDate(today);
+            document.getElementById('filterDateTo').value = businessDayDate(monthAhead);
 
             loadDropdowns();
             setTimeout(loadExpiryProducts, 600);

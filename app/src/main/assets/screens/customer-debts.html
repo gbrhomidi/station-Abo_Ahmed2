@@ -1858,6 +1858,7 @@
         .due-bubble{position:fixed;top:82px;right:20px;z-index:100002;background:#dc2626;color:#fff;border-radius:999px;padding:10px 15px;display:none;align-items:center;gap:8px;box-shadow:0 12px 35px rgba(0,0,0,.28);cursor:pointer;font-weight:800}.due-bubble.show{display:flex}
 
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -2558,7 +2559,7 @@
             const customerId = finiteNumber(row.customer_party_id ?? row.customer_id ?? row.party_id);
             const dueDate = row.due_date || row.created_at || '';
             const explicitStatus = String(row.payment_status ?? row.status ?? '').toLowerCase();
-            const today = new Date().toISOString().slice(0, 10);
+            const today = businessDayDate();
             let status = explicitStatus;
             if (remaining <= 0) status = 'paid';
             else if (explicitStatus === 'overdue' || (dueDate && dueDate.slice(0, 10) < today)) status = 'overdue';
@@ -2705,7 +2706,7 @@
             let overdue = 0;
             let highest = 0;
             const debtors = new Set();
-            const today = new Date().toISOString().slice(0, 10);
+            const today = businessDayDate();
             const paidToday = Array.isArray(runtimeState.todayPayments) ? runtimeState.todayPayments.reduce((sum, payment) => {
                 const date = String(payment.created_at || payment.payment_date || payment.paid_at || '').slice(0, 10);
                 return date === today ? sum + finiteNumber(payment.amount) : sum;
@@ -2809,7 +2810,7 @@
             for (let offset = 6; offset >= 0; offset -= 1) {
                 const date = new Date(today);
                 date.setDate(today.getDate() - offset);
-                const key = date.toISOString().slice(0, 10);
+                const key = businessDayDate(date);
                 labels.push(date.toLocaleDateString('ar-SA', { weekday: 'short' }));
                 trendData.push(byDate.get(key) || 0);
             }
@@ -3728,8 +3729,8 @@
             const today = new Date();
             const monthAgo = new Date();
             monthAgo.setDate(monthAgo.getDate() - 30);
-            document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
-            document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
+            document.getElementById('filterDateFrom').value = businessDayDate(monthAgo);
+            document.getElementById('filterDateTo').value = businessDayDate(today);
 
             loadDropdowns();
             setTimeout(async()=>{ await loadDebts(); await refreshDueReminderCandidates(true); }, 600);

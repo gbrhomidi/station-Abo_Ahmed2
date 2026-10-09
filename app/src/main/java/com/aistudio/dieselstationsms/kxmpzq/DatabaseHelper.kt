@@ -9360,8 +9360,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             "products" ->
                 where += "s.product_id IS NOT NULL AND s.product_id > 0"
         }
-        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(s.created_at) >= date(?)"; args += it }
-        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(s.created_at) <= date(?)"; args += it }
+        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "s.business_day >= date(?)"; args += it }
+        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "s.business_day <= date(?)"; args += it }
         val whereSql = where.joinToString(" AND ")
         val db = readableDatabase
         val searchIndex = where.indexOfFirst { it.contains("p.commercial_name") }
@@ -9423,8 +9423,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val args = mutableListOf(stationScopeId.toString())
         data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(s.sale_code LIKE ? OR s.invoice_number LIKE ? OR COALESCE(p.commercial_name,'') LIKE ?)"; args += like; args += like; args += like }
         data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "s.status = ?"; args += it }
-        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(s.created_at) >= date(?)"; args += it }
-        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(s.created_at) <= date(?)"; args += it }
+        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "s.business_day >= date(?)"; args += it }
+        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "s.business_day <= date(?)"; args += it }
         val whereSql = where.joinToString(" AND ")
         val db = readableDatabase
         val searchIndex = where.indexOfFirst { it.contains("p.commercial_name") }
@@ -9942,8 +9942,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         data.optLong("pump_id", 0L).takeIf { it > 0L }?.let { where += "fs.pump_id = ?"; args += it.toString() }
         data.optLong("shift_id", 0L).takeIf { it > 0L }?.let { where += "fs.shift_id = ?"; args += it.toString() }
         data.optString("payment_method").trim().takeIf { it.isNotEmpty() }?.let { where += "fs.payment_method = ?"; args += it }
-        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(fs.sale_date) >= date(?)"; args += it }
-        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(fs.sale_date) <= date(?)"; args += it }
+        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "fs.business_day >= date(?)"; args += it }
+        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "fs.business_day <= date(?)"; args += it }
         val whereSql = where.joinToString(" AND ")
         val db = readableDatabase
         val searchIndex = where.indexOfFirst { it.contains("f.fuel_name") }
@@ -11193,7 +11193,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    FROM sales_transactions s
                    LEFT JOIN fuel_types f ON s.fuel_type_id = f.id
                    LEFT JOIN parties p ON s.customer_party_id = p.id
-                   WHERE date(s.created_at) = ? AND s.station_id = ? AND s.is_deleted = 0 AND s.sale_type = 'retail'
+                   WHERE s.business_day = ? AND s.station_id = ? AND s.is_deleted = 0 AND s.sale_type = 'retail'
                    ORDER BY s.created_at DESC""",
                 arrayOf(today, stationScopeId.toString())
             ).use { cursor -> cursorToJsonArray(cursor) }
@@ -12679,13 +12679,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val fuelLastSale = mutableMapOf<Long, String>()
             db.rawQuery(
                 """SELECT fs.fuel_type_id,
-                          COALESCE(SUM(CASE WHEN date(COALESCE(fs.sale_date,fs.created_at))>=date('now','-29 day') THEN ABS(fs.quantity) ELSE 0 END),0) demand30,
+                          COALESCE(SUM(CASE WHEN fs.business_day>=date('now','-29 day') THEN ABS(fs.quantity) ELSE 0 END),0) demand30,
                           COALESCE(SUM(ABS(fs.quantity)),0) demand60,
-                          COALESCE(MAX(COALESCE(fs.sale_date,fs.created_at)),'') last_sale
+                          COALESCE(MAX(fs.business_day),'') last_sale
                    FROM fuel_sales fs
                    JOIN pumps pu ON pu.id=fs.pump_id
                    WHERE pu.station_id=? AND fs.is_deleted=0
-                     AND date(COALESCE(fs.sale_date,fs.created_at))>=date('now','-59 day')
+                     AND fs.business_day>=date('now','-59 day')
                    GROUP BY fs.fuel_type_id""",
                 arrayOf(stationScopeId.toString())
             ).use { c ->
@@ -15676,7 +15676,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    FROM sales_transactions s
                    LEFT JOIN fuel_types f ON s.fuel_type_id = f.id
                    LEFT JOIN parties p ON s.customer_party_id = p.id
-                   WHERE s.station_id = ? AND date(s.created_at) = ? AND s.is_deleted = 0
+                   WHERE s.station_id = ? AND s.business_day = ? AND s.is_deleted = 0
                    ORDER BY s.created_at DESC""",
                 arrayOf(stationId.toString(), targetDate)
             ).use { cursor -> cursorToJsonArray(cursor) }
@@ -15694,12 +15694,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val y = year ?: cal.get(Calendar.YEAR)
             val monthStr = String.format("%02d", m)
             db.rawQuery(
-                """SELECT strftime('%Y-%m-%d', created_at) as day,
+                """SELECT business_day as day,
                           COUNT(*) as transactions,
                           COALESCE(SUM(net_amount),0) as total_sales,
                           COALESCE(SUM(liters),0) as total_liters
                    FROM sales_transactions
-                   WHERE station_id = ? AND strftime('%Y-%m', created_at) = ? AND is_deleted = 0
+                   WHERE station_id = ? AND substr(business_day, 1, 7) = ? AND is_deleted = 0
                    GROUP BY day
                    ORDER BY day""",
                 arrayOf(stationId.toString(), "$y-$monthStr")
@@ -15735,7 +15735,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             when (reportType) {
                 "sales", "eod", "dashboard" -> {
-                    val conditions = mutableListOf("s.station_id=?", "s.is_deleted=0", "date(s.created_at) BETWEEN date(?) AND date(?)")
+                    val conditions = mutableListOf("s.station_id=?", "s.is_deleted=0", "s.business_day BETWEEN date(?) AND date(?)")
                     val args = mutableListOf(stationScopeId.toString(), from, to)
                     data.optString("payment_method", "").trim().takeIf { it.isNotEmpty() }?.let { conditions += "s.payment_method=?"; args += it }
                     data.optString("sale_type", "").trim().takeIf { it.isNotEmpty() && it != "all" }?.let { conditions += "s.sale_type=?"; args += it }
@@ -15778,13 +15778,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     val adjustmentSql = """
                         SELECT
                           COALESCE((SELECT SUM(a.amount) FROM sale_item_adjustments a JOIN sales_transactions sx ON sx.id=a.sale_id
-                                   WHERE a.station_id=? AND a.status='posted' AND sx.is_deleted=0 AND date(sx.created_at) BETWEEN date(?) AND date(?)),0)
+                                   WHERE a.station_id=? AND a.status='posted' AND sx.is_deleted=0 AND sx.business_day BETWEEN date(?) AND date(?)),0)
                           + COALESCE((SELECT SUM(a.amount) FROM fuel_sale_adjustments a JOIN sales_transactions sx ON sx.id=a.sale_id
-                                   WHERE a.station_id=? AND a.status='posted' AND sx.is_deleted=0 AND date(sx.created_at) BETWEEN date(?) AND date(?)),0),
+                                   WHERE a.station_id=? AND a.status='posted' AND sx.is_deleted=0 AND sx.business_day BETWEEN date(?) AND date(?)),0),
                           COALESCE((SELECT COUNT(*) FROM sale_item_adjustments a JOIN sales_transactions sx ON sx.id=a.sale_id
-                                   WHERE a.station_id=? AND a.status='posted' AND sx.is_deleted=0 AND date(sx.created_at) BETWEEN date(?) AND date(?)),0)
+                                   WHERE a.station_id=? AND a.status='posted' AND sx.is_deleted=0 AND sx.business_day BETWEEN date(?) AND date(?)),0)
                           + COALESCE((SELECT COUNT(*) FROM fuel_sale_adjustments a JOIN sales_transactions sx ON sx.id=a.sale_id
-                                   WHERE a.station_id=? AND a.status='posted' AND sx.is_deleted=0 AND date(sx.created_at) BETWEEN date(?) AND date(?)),0)
+                                   WHERE a.station_id=? AND a.status='posted' AND sx.is_deleted=0 AND sx.business_day BETWEEN date(?) AND date(?)),0)
                     """.trimIndent()
                     val adjArgs = arrayOf(stationScopeId.toString(),from,to,stationScopeId.toString(),from,to,stationScopeId.toString(),from,to,stationScopeId.toString(),from,to)
                     db.rawQuery(adjustmentSql, adjArgs).use { c -> if(c.moveToFirst()) { evidence.put("posted_adjustment_total",c.getDouble(0)); evidence.put("posted_adjustment_count",c.getLong(1)) } }
@@ -15813,7 +15813,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     db.rawQuery("""
                         SELECT COUNT(*), COALESCE(SUM(quantity),0), COALESCE(SUM(total_amount),0)
                         FROM fuel_sales fs JOIN sales_transactions s ON s.id=fs.sale_id
-                        WHERE s.station_id=? AND s.is_deleted=0 AND fs.is_deleted=0 AND date(COALESCE(fs.sale_date,fs.created_at)) BETWEEN date(?) AND date(?)
+                        WHERE s.station_id=? AND s.is_deleted=0 AND fs.is_deleted=0 AND fs.business_day BETWEEN date(?) AND date(?)
                         """.trimIndent(), args.sliceArray(0..2)).use { c -> if(c.moveToFirst()) { evidence.put("source_table","fuel_sales+sales_transactions"); evidence.put("source_row_count",c.getLong(0)); evidence.put("source_liters",c.getDouble(1)); evidence.put("source_total",c.getDouble(2)) } }
                     db.rawQuery("SELECT COUNT(*), COALESCE(SUM(quantity),0), COALESCE(SUM(amount),0) FROM fuel_sale_adjustments WHERE station_id=? AND status='posted' AND date(created_at) BETWEEN date(?) AND date(?)", arrayOf(stationScopeId.toString(),from,to)).use { c -> if(c.moveToFirst()) { evidence.put("posted_adjustment_count",c.getLong(0)); evidence.put("posted_return_damage_liters",c.getDouble(1)); evidence.put("posted_return_damage_amount",c.getDouble(2)) } }
                     evidence.put("reconciliation_rule", "fuel report rows originate from fuel_sales joined to station-scoped sales_transactions; posted fuel adjustments explain returned/damaged quantity and amount")
@@ -15824,7 +15824,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         SELECT COUNT(DISTINCT s.customer_party_id), COALESCE(SUM(s.net_amount),0), COUNT(*)
                         FROM sales_transactions s
                         WHERE s.station_id=? AND s.is_deleted=0 AND s.customer_party_id IS NOT NULL AND s.customer_party_id>0
-                          AND date(s.created_at) BETWEEN date(?) AND date(?)
+                          AND s.business_day BETWEEN date(?) AND date(?)
                     """.trimIndent(), args).use { c -> if(c.moveToFirst()) {
                         evidence.put("source_table","sales_transactions+parties"); evidence.put("distinct_customer_count",c.getLong(0)); evidence.put("source_total_sales",c.getDouble(1)); evidence.put("source_transaction_count",c.getLong(2))
                     }}
@@ -15905,7 +15905,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                               WHERE sp.station_id=? AND date(sp.created_at) BETWEEN date(?) AND date(?)
                                 AND sp.is_deleted=0 AND p.status='completed' AND p.is_deleted=0),0) as total_payments
                    FROM sales_transactions s
-                   WHERE s.station_id = ? AND date(s.created_at) BETWEEN ? AND ? AND s.is_deleted = 0""",
+                   WHERE s.station_id = ? AND s.business_day BETWEEN ? AND ? AND s.is_deleted = 0""",
                 arrayOf(stationId.toString(), from, to, stationId.toString(), from, to)
             ).use { cursor ->
                 val result = JSONObject()
@@ -23390,8 +23390,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val where = mutableListOf("s.is_deleted=0", "s.station_id=?")
             val args = mutableListOf(stationScopeId.toString())
-            data.optString("start_date").takeIf { it.isNotBlank() }?.let { where += "date(s.created_at) >= date(?)"; args += it }
-            data.optString("end_date").takeIf { it.isNotBlank() }?.let { where += "date(s.created_at) <= date(?)"; args += it }
+            data.optString("start_date").takeIf { it.isNotBlank() }?.let { where += "s.business_day >= date(?)"; args += it }
+            data.optString("end_date").takeIf { it.isNotBlank() }?.let { where += "s.business_day <= date(?)"; args += it }
             val limit = data.optInt("limit", 100).coerceIn(1, 500)
             val sql = """SELECT s.id, s.invoice_number, s.payment_method AS payment_type,
                     s.gross_amount AS total_amount, s.paid_amount AS amount_paid, s.remaining_amount,
@@ -23506,11 +23506,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val args = mutableListOf(stationScopeId.toString())
             data.optString("start_date").takeIf { it.isNotBlank() }?.let {
                 require(Regex("""\d{4}-\d{2}-\d{2}""").matches(it)) { "تاريخ البداية غير صالح" }
-                where += "date(s.created_at) >= date(?)"; args += it
+                where += "s.business_day >= date(?)"; args += it
             }
             data.optString("end_date").takeIf { it.isNotBlank() }?.let {
                 require(Regex("""\d{4}-\d{2}-\d{2}""").matches(it)) { "تاريخ النهاية غير صالح" }
-                where += "date(s.created_at) <= date(?)"; args += it
+                where += "s.business_day <= date(?)"; args += it
             }
             val startDate = data.optString("start_date").trim()
             val endDate = data.optString("end_date").trim()
@@ -26210,8 +26210,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (requestedStatus >= 0) { where.append(" AND p.is_active = ?"); whereArgs.add(requestedStatus.toString()) }
             val dateClause = StringBuilder()
             val dateArgs = mutableListOf<String>()
-            if (startDate.isNotEmpty()) { dateClause.append(" AND date(s.created_at) >= date(?)"); dateArgs.add(startDate) }
-            if (endDate.isNotEmpty()) { dateClause.append(" AND date(s.created_at) <= date(?)"); dateArgs.add(endDate) }
+            if (startDate.isNotEmpty()) { dateClause.append(" AND s.business_day >= date(?)"); dateArgs.add(startDate) }
+            if (endDate.isNotEmpty()) { dateClause.append(" AND s.business_day <= date(?)"); dateArgs.add(endDate) }
             val args = dateArgs + whereArgs
             when (reportType) {
                 "activity" -> db.rawQuery(

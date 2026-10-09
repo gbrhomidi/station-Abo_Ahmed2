@@ -1382,6 +1382,7 @@
     .report-filter-collapsible.is-open { max-height:1200px; opacity:1; visibility:visible; }
     </style>
 
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 <!-- Pull-to-Refresh -->
@@ -2865,7 +2866,7 @@
       ];
       const book = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(book, sheet, 'KPI');
-      XLSX.writeFile(book, `kpi_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      XLSX.writeFile(book, `kpi_${businessDayDate()}.xlsx`);
       showToast('تم تصدير Excel', 'success');
       haptic('success');
     }
@@ -2891,7 +2892,7 @@
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `kpi_${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `kpi_${businessDayDate()}.csv`;
       link.style.display = 'none';
       document.body.appendChild(link);
       link.click();

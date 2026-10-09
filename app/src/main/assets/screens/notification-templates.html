@@ -1348,6 +1348,7 @@ select.form-input { text-align: center; }
     .modal { padding: 0; box-shadow: none; border: none; }
 }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -3042,7 +3043,7 @@ select.form-input { text-align: center; }
                     y += 4;
                 });
 
-                const fileName = `templates_${new Date().toISOString().substring(0, 10)}.pdf`;
+                const fileName = `templates_${businessDayDate()}.pdf`;
                 doc.save(fileName);
                 showToast('✅ تم تصدير القوالب بنجاح', 'success');
                 hapticFeedback('success');

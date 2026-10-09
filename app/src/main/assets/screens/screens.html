@@ -1793,6 +1793,7 @@
             }
         }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -3174,7 +3175,7 @@
                         const ws = XLSX.utils.json_to_sheet(data);
                         const wb = XLSX.utils.book_new();
                         XLSX.utils.book_append_sheet(wb, ws, 'الشاشات');
-                        XLSX.writeFile(wb, 'الشاشات_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+                        XLSX.writeFile(wb, 'الشاشات_' + businessDayDate() + '.xlsx');
                         showToast('✅ تم تصدير Excel بنجاح', 'success');
                     } else if (format === 'pdf') {
                         if (typeof window.jspdf === 'undefined') {
@@ -3201,14 +3202,14 @@
                             });
                             y += 6;
                         });
-                        doc.save('الشاشات_' + new Date().toISOString().slice(0, 10) + '.pdf');
+                        doc.save('الشاشات_' + businessDayDate() + '.pdf');
                         showToast('✅ تم تصدير PDF بنجاح', 'success');
                     } else if (format === 'json') {
                         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = 'الشاشات_' + new Date().toISOString().slice(0, 10) + '.json';
+                        a.download = 'الشاشات_' + businessDayDate() + '.json';
                         a.click();
                         URL.revokeObjectURL(url);
                         showToast('✅ تم تصدير JSON بنجاح', 'success');
@@ -3222,7 +3223,7 @@
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = 'الشاشات_' + new Date().toISOString().slice(0, 10) + '.csv';
+                        a.download = 'الشاشات_' + businessDayDate() + '.csv';
                         a.click();
                         URL.revokeObjectURL(url);
                         showToast('✅ تم تصدير CSV بنجاح', 'success');

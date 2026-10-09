@@ -1187,6 +1187,7 @@
     .report-filter-collapsible.is-open { max-height:1200px; opacity:1; visibility:visible; }
     </style>
 
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
@@ -2682,8 +2683,8 @@
             const today = new Date();
             const monthAgo = new Date();
             monthAgo.setDate(today.getDate() - 30);
-            document.getElementById('filterDateFrom').value = monthAgo.toISOString().slice(0, 10);
-            document.getElementById('filterDateTo').value = today.toISOString().slice(0, 10);
+            document.getElementById('filterDateFrom').value = businessDayDate(monthAgo);
+            document.getElementById('filterDateTo').value = businessDayDate(today);
             document.getElementById('filterType').value = '';
             document.getElementById('filterRisk').value = '';
             document.getElementById('filterStatus').value = '';
@@ -2805,8 +2806,8 @@
             const today = new Date();
             const monthAgo = new Date();
             monthAgo.setDate(monthAgo.getDate() - 30);
-            document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
-            document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
+            document.getElementById('filterDateFrom').value = businessDayDate(monthAgo);
+            document.getElementById('filterDateTo').value = businessDayDate(today);
 
             setupSortableHeaders();
             loadDropdowns();

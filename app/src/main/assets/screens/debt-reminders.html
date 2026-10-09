@@ -1553,6 +1553,7 @@ body {
     .full-content { padding: 0; min-height: auto; }
 }
 </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -2229,7 +2230,7 @@ const dateTimeText = v => {
     const d = new Date(v);
     return isNaN(d.getTime()) ? String(v) : d.toLocaleString('ar-EG');
 };
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => businessDayDate();
 
 function showToast(msg, type = 'info') {
     const t = $('toast');
@@ -3496,8 +3497,8 @@ function openReportsModal() {
     const now = new Date();
     const monthAgo = new Date();
     monthAgo.setDate(monthAgo.getDate() - 30);
-    if (!$('reportFrom').value) $('reportFrom').value = monthAgo.toISOString().slice(0, 10);
-    if (!$('reportTo').value) $('reportTo').value = now.toISOString().slice(0, 10);
+    if (!$('reportFrom').value) $('reportFrom').value = businessDayDate(monthAgo);
+    if (!$('reportTo').value) $('reportTo').value = businessDayDate(now);
     generateReports();
 }
 

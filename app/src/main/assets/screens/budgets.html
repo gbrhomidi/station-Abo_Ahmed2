@@ -1481,6 +1481,7 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
     body { background: #fff; color: #111; padding: 0; }
 }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
     <div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> Android Bridge غير متاح؛ لن تُحفظ أو تُعرض بيانات تجارية بديلة</div>
@@ -1793,7 +1794,7 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
 
         const $ = (id) => document.getElementById(id);
         const esc = (value) => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-        const today = () => new Date().toISOString().slice(0,10);
+        const today = () => businessDayDate();
 
         /* Arabic numerals helper — with English display for amounts */
         function toEnglishDigits(str) {

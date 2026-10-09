@@ -1269,6 +1269,7 @@
         @media(max-width:640px){ .form-grid { grid-template-columns:1fr; } .form-group.full { grid-column:auto; } .data-card-head { flex-direction:column; } .data-card-value { align-self:flex-start; } }
         @media print { .top-bar,.bottom-nav,.sidebar-toggle,.sidebar,.fab,.offline-banner,.action-row,.icon-btn,.notice-card { display:none !important; } body { background:#fff; color:#111; padding:0; } .data-panel,.data-card,.stat-card { box-shadow:none; color:#111; border:1px solid #aaa; } }
 </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
     <div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> Android Bridge غير متاح؛ لن تُحفظ أو تُعرض بيانات تجارية بديلة</div>
@@ -1331,7 +1332,7 @@
         const state = { rows: [], filtered: [], editing: null, filter: 'all', loadedAt: null };
         const $ = (id) => document.getElementById(id);
         const esc = (value) => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-        const today = () => new Date().toISOString().slice(0,10);
+        const today = () => businessDayDate();
         function toast(message, bad=false) { const node=$('toast'); const activeModal=document.querySelector('#formModal.show .modal'); if(activeModal&&node.parentElement!==activeModal)activeModal.appendChild(node); if(!activeModal&&node.parentElement!==document.body)document.body.appendChild(node); node.textContent=message; node.className='toast show'+(activeModal?' modal-toast':''); node.style.background=bad?'var(--error)':'#111827'; clearTimeout(node._timer); node._timer=setTimeout(()=>node.classList.remove('show'),3500); }
         function setLoading(value) { $('loadingIndicator').classList.toggle('show', Boolean(value)); }
         function parse(raw) { if (raw == null) throw new Error('لم يرجع الجسر نتيجة'); const value=typeof raw==='string'?JSON.parse(raw):raw; if (value && value.success === false) throw new Error(value.error || value.message || 'فشلت العملية'); return value; }

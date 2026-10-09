@@ -184,6 +184,7 @@
     @media (min-width: 700px) { .filters-grid { grid-template-columns: 2fr 1fr 1fr 1fr; } .filters-grid .wide { grid-column: auto; } .stats-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } .trip-card { padding: 16px 18px; } .modal { width: min(700px, 100%); margin: 0 auto; border-radius: 24px 24px 0 0; } }
     @media (max-width: 360px) { main { padding: 12px; } .filters-grid, .form-grid, .details-grid { grid-template-columns: 1fr; } .form-field.wide, .detail.wide { grid-column: auto; } .trip-facts { gap: 5px; } .trip-fact { padding-right: 3px; padding-left: 3px; } }
   </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
   <header class="screen-header">
@@ -402,7 +403,7 @@
         $('distanceKm').value = row.distance_km ?? ''; $('fuelConsumed').value = row.fuel_consumed ?? ''; $('fuelCost').value = row.fuel_cost ?? '';
         $('startOdometer').value = row.start_odometer ?? ''; $('endOdometer').value = row.end_odometer ?? '';
         $('startLocation').value = row.start_location || ''; $('endLocation').value = row.end_location || ''; $('tripPurpose').value = row.trip_purpose || ''; $('tripNotes').value = row.notes || '';
-      } else { $('tripDate').value = new Date().toISOString().slice(0, 10); }
+      } else { $('tripDate').value = businessDayDate(); }
       setModal('tripModal', true);
     }
     function findRow(id) { return state.rows.find(row => number(row.id) === number(id)); }

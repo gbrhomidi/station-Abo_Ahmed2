@@ -1151,6 +1151,7 @@ body {
     .modal { padding: 0; box-shadow: none; border: none; }
 }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -2365,7 +2366,7 @@ body {
                     y += 4;
                 });
 
-                const fileName = `notifications_inbox_${new Date().toISOString().substring(0, 10)}.pdf`;
+                const fileName = `notifications_inbox_${businessDayDate()}.pdf`;
                 doc.save(fileName);
                 showToast('✅ تم تصدير الإشعارات بنجاح', 'success');
                 hapticFeedback('success');

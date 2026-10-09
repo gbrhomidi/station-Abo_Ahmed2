@@ -968,7 +968,8 @@
         }
 
 </style>
- </head>
+   <script src="file:///android_asset/assets-local/js/business-day.js"></script>
+</head>
  <body>
   <!-- شريط المعلومات العلوي -->
   <div class="top-bar">
@@ -2668,7 +2669,7 @@ function exportRowsAsExcel(filename, table, title) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href=url;
-    link.download=`${filename}_${new Date().toISOString().slice(0,10)}.xls`;
+    link.download=`${filename}_${businessDayDate()}.xls`;
     document.body.appendChild(link); link.click(); link.remove();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
     showToast('تم إنشاء ملف Excel فعلي من بيانات الجدول', 'success');
@@ -2678,7 +2679,7 @@ function downloadChart(chartId) {
     const canvas = document.getElementById(chartId);
     if (!canvas) return;
     const link = document.createElement('a');
-    link.download = `${chartId}_${new Date().toISOString().slice(0,10)}.png`;
+    link.download = `${chartId}_${businessDayDate()}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
 }

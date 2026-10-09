@@ -1315,6 +1315,7 @@
         @media (max-width:420px) { .bottom-nav .nav-item { min-width:104px; flex-basis:104px; } .bottom-nav .nav-item span { font-size:1rem !important; } .report-date-row, .tab-date-row { gap:5px; } .report-date-row .form-label, .tab-date-row .form-label { font-size:.68rem; } .report-date-row .form-input, .tab-date-row .form-input { padding:9px 3px; font-size:.72rem; } }
         @media print { .screen-tooltip, .notice-card, .sidebar, .sidebar-toggle, .bottom-nav, .top-bar, .fab, .action-row, .icon-btn, .search-wrap { display:none !important; } .report-modal-overlay.show, .modal-overlay.show { position:static; display:block; background:transparent; } .report-modal-overlay.show .report-modal, .modal-overlay.show .modal { max-height:none; transform:none; border:0; box-shadow:none; width:100%; } }
 </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
     <div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> Android Bridge غير متاح؛ لن تُحفظ أو تُعرض بيانات تجارية بديلة</div>
@@ -1378,7 +1379,7 @@
         const state={rows:[],filtered:[],reportRows:[],historyRows:[],editing:null,loadedAt:null,reportGeneratedAt:null,currentTab:0};
         const $=id=>document.getElementById(id);
         const esc=value=>String(value==null?'—':value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-        const today=()=>new Date().toISOString().slice(0,10);
+        const today=()=>businessDayDate();
         const normalize=value=>String(value??'').toLocaleLowerCase('ar').normalize('NFKD').replace(/[\u064B-\u065F\u0670]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/\s+/g,' ').trim();
         const format=value=>value==null||value===''?'—':typeof value==='number'?value.toLocaleString('ar',{maximumFractionDigits:2}):typeof value==='object'?JSON.stringify(value):String(value);
         function toast(message,bad=false){const node=$('toast');node.textContent=message;node.className='toast show '+(bad?'error':'success');node.style.background=bad?'var(--error)':'#111827';clearTimeout(node._timer);node._timer=setTimeout(()=>node.classList.remove('show'),3500);}

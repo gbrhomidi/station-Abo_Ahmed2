@@ -1644,6 +1644,7 @@ select.form-input option{background:var(--bg-card); color:var(--text-primary)}
     <script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script>
     <script src="source-trace-contract.js"></script>
     <script src="file:///android_asset/assets-local/js/finance-integrity-runtime.js"></script>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -2511,8 +2512,8 @@ select.form-input option{background:var(--bg-card); color:var(--text-primary)}
         const today = new Date();
         const monthAgo = new Date();
         monthAgo.setDate(monthAgo.getDate() - 30);
-        document.getElementById('reportFrom').value = monthAgo.toISOString().split('T')[0];
-        document.getElementById('reportTo').value = today.toISOString().split('T')[0];
+        document.getElementById('reportFrom').value = businessDayDate(monthAgo);
+        document.getElementById('reportTo').value = businessDayDate(today);
 
         document.getElementById('reportModal').classList.add('show');
         document.body.style.overflow = 'hidden';
@@ -3339,7 +3340,7 @@ select.form-input option{background:var(--bg-card); color:var(--text-primary)}
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-plus-circle"></i> إضافة قيد جديد';
         document.getElementById('editId').value = '0';
         document.getElementById('entryForm').reset();
-        document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('entryDate').value = businessDayDate();
         document.getElementById('fiscalYear').value = new Date().getFullYear();
         document.getElementById('fiscalPeriod').value = new Date().getMonth() + 1;
         document.getElementById('entryStatus').value = 'draft';
@@ -3763,7 +3764,7 @@ select.form-input option{background:var(--bg-card); color:var(--text-primary)}
         sheet['!cols'] = [{wch:16},{wch:14},{wch:34},{wch:14},{wch:16},{wch:16},{wch:16}];
         const book = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(book, sheet, 'القيود');
-        XLSX.writeFile(book, `journal-entries-${new Date().toISOString().slice(0,10)}.xlsx`);
+        XLSX.writeFile(book, `journal-entries-${businessDayDate()}.xlsx`);
         showToast('✅ تم التصدير إلى Excel', 'success');
     }
 
@@ -3801,7 +3802,7 @@ select.form-input option{background:var(--bg-card); color:var(--text-primary)}
             if (y > 555) { doc.addPage(); y = 40; drawRow(headers, true); }
             drawRow([index + 1, row.number, row.date, row.description, row.type, row.debit.toFixed(2), row.credit.toFixed(2), row.status]);
         });
-        doc.save(`journal-entries-${new Date().toISOString().slice(0,10)}.pdf`);
+        doc.save(`journal-entries-${businessDayDate()}.pdf`);
         showToast('✅ تم التصدير إلى PDF', 'success');
     }
 

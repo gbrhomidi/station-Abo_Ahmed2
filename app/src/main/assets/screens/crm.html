@@ -1278,6 +1278,7 @@
             .modal { padding: 16px; }
         }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -2079,8 +2080,8 @@ let pullStartY = 0,
             const today = new Date();
             const monthAgo = new Date();
             monthAgo.setDate(monthAgo.getDate() - 30);
-            document.getElementById('reportFrom').value = monthAgo.toISOString().split('T')[0];
-            document.getElementById('reportTo').value = today.toISOString().split('T')[0];
+            document.getElementById('reportFrom').value = businessDayDate(monthAgo);
+            document.getElementById('reportTo').value = businessDayDate(today);
 
             document.getElementById('reportModal').classList.add('show');
             document.body.style.overflow = 'hidden';

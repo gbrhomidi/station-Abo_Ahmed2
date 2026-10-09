@@ -1125,6 +1125,7 @@ input:focus, select:focus, textarea:focus {
     .modal-content { padding: 18px 14px; }
 }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -1968,7 +1969,7 @@ input:focus, select:focus, textarea:focus {
                         const url = window.URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = `products_export_${new Date().toISOString().split('T')[0]}.csv`;
+                        a.download = `products_export_${businessDayDate()}.csv`;
                         document.body.appendChild(a);
                         a.click();
                         window.URL.revokeObjectURL(url);

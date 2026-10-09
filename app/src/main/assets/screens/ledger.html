@@ -1638,6 +1638,7 @@ body {
     }
 }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -2486,8 +2487,8 @@ body {
         const today = new Date();
         const monthAgo = new Date();
         monthAgo.setDate(monthAgo.getDate() - 30);
-        document.getElementById('reportFrom').value = monthAgo.toISOString().split('T')[0];
-        document.getElementById('reportTo').value = today.toISOString().split('T')[0];
+        document.getElementById('reportFrom').value = businessDayDate(monthAgo);
+        document.getElementById('reportTo').value = businessDayDate(today);
 
         document.getElementById('reportModal').classList.add('show');
         document.body.style.overflow = 'hidden';
@@ -2676,7 +2677,7 @@ body {
             const sheet = XLSX.utils.aoa_to_sheet(data);
             const book = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(book, sheet, 'تقرير الأستاذ');
-            XLSX.writeFile(book, `ledger-report-${new Date().toISOString().slice(0,10)}.xlsx`);
+            XLSX.writeFile(book, `ledger-report-${businessDayDate()}.xlsx`);
             showToast('تم تصدير التقرير إلى Excel', 'success');
             hapticFeedback('success');
         } catch (e) {
@@ -2778,8 +2779,8 @@ body {
             const today = new Date();
             const monthAgo = new Date();
             monthAgo.setDate(monthAgo.getDate() - 30);
-            document.getElementById('ledgerDateFrom').value = monthAgo.toISOString().split('T')[0];
-            document.getElementById('ledgerDateTo').value = today.toISOString().split('T')[0];
+            document.getElementById('ledgerDateFrom').value = businessDayDate(monthAgo);
+            document.getElementById('ledgerDateTo').value = businessDayDate(today);
             await loadStats();
             if (allAccounts.length > 0) {
                 document.getElementById('ledgerAccount').value = allAccounts[0].id;
@@ -3188,7 +3189,7 @@ body {
             sheet['!autofilter'] = { ref: `A1:F${data.length}` };
             const book = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(book, sheet, 'دفتر الأستاذ');
-            XLSX.writeFile(book, `ledger-${new Date().toISOString().slice(0,10)}.xlsx`);
+            XLSX.writeFile(book, `ledger-${businessDayDate()}.xlsx`);
             showToast('تم تصدير دفتر الأستاذ إلى Excel من بيانات SQLite', 'success');
             hapticFeedback('success');
         } catch (e) {
@@ -3261,7 +3262,7 @@ body {
                 if (y > 555) { doc.addPage(); y = 40; drawRow(headers, true); }
                 drawRow([index + 1, row.date, row.number, row.description, row.debit.toFixed(2), row.credit.toFixed(2), row.balance.toFixed(2)]);
             });
-            doc.save(`ledger-${new Date().toISOString().slice(0,10)}.pdf`);
+            doc.save(`ledger-${businessDayDate()}.pdf`);
             showToast('تم تصدير دفتر الأستاذ إلى PDF', 'success');
             hapticFeedback('success');
         } catch (e) {

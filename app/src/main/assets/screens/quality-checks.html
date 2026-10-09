@@ -1202,6 +1202,7 @@
             }
         }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
     <div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> Android Bridge غير متاح؛ لن تُحفظ أو تُعرض بيانات تجارية بديلة</div>
@@ -1340,7 +1341,7 @@
         const state = { rows: [], filtered: [], editing: null, filter: '0', loadedAt: null };
         const $ = (id) => document.getElementById(id);
         const esc = (value) => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-        const today = () => new Date().toISOString().slice(0,10);
+        const today = () => businessDayDate();
         const numFmt = (v) => { const n = Number(v); return Number.isFinite(n) ? n.toLocaleString('ar',{maximumFractionDigits:4}) : '—'; };
 
         // ============================================================

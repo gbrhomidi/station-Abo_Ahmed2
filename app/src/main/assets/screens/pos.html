@@ -3599,6 +3599,7 @@ body.invoice-print-mode #posInvoice {
       #posInvoice .invoice-footer{margin-top:8mm}
     }
   </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 <!-- شريط المعلومات العلوي -->
@@ -4889,7 +4890,7 @@ async function loadActivePromotions() {
     if (!select || !window.AndroidInterface) return;
     try {
         const result = await apiCall('getPriceListRecords', { limit: 500, offset: 0 });
-        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        const now = businessDayDateTime();
         const active = promotionRows(result).filter(r => {
             if (!r || Number(r.is_active) !== 1 || Number(r.is_deleted || 0) === 1) return false;
             const from = String(r.valid_from || '').replace('T', ' ');
@@ -4921,7 +4922,7 @@ async function resolveProductRowPrice(row) {
             product_id: productId,
             quantity: qty,
             customer_id: customerId > 0 ? customerId : 0,
-            transaction_time: new Date().toISOString().slice(0,19).replace('T',' '),
+            transaction_time: businessDayDateTime(),
             occasion_code: document.getElementById('occasionCode')?.value.trim() || null
         });
         const resolved = raw?.data || raw;
@@ -5098,7 +5099,7 @@ function completeSale() {
         service_fee: serviceFee,
         total_amount: total,
         amount_paid: paid,
-        transaction_time: new Date().toISOString().slice(0,19).replace('T',' '),
+        transaction_time: businessDayDateTime(),
         occasion_code: document.getElementById('occasionCode')?.value.trim() || null,
         idempotency_key: activeSaleOperationKey || (activeSaleOperationKey = newSaleOperationKey())
     };

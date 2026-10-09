@@ -1163,6 +1163,7 @@
         .modal .form-check { display: inline-flex; align-items: center; gap: 8px; width: auto; }
         .modal .form-check label { width: auto; }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -2454,7 +2455,7 @@
         function emailCustomer(id) { const row=allCustomers.find(c=>customerIdOf(c)===Number(id)); if(row?.email) window.location.href='mailto:'+encodeURIComponent(row.email); else showToast('لا يوجد بريد مسجل','warning'); }
         function whatsAppCustomer(id) { const row=allCustomers.find(c=>customerIdOf(c)===Number(id)); if(row?.phone) window.open('https://wa.me/'+String(row.phone).replace(/[^0-9+]/g,''),'_blank'); else showToast('لا يوجد هاتف مسجل','warning'); }
         async function sendSmsCustomer(id) { const row=allCustomers.find(c=>customerIdOf(c)===Number(id)); if(!row?.phone){showToast('لا يوجد هاتف مسجل','warning');return;} openCustomerMessageModal([row], 'single'); }
-        function exportSelectedCustomers() { const rows=selectedCustomers(); if(!rows.length){showToast('حدد عميلًا واحدًا على الأقل','warning');return;} const headers=['الرمز','الاسم','الهاتف','البريد','الرصيد','الديون','المتأخرات','الحالة']; const csv='\ufeff'+[headers,...rows.map(c=>[c.party_code,c.commercial_name_ar||c.commercial_name,c.phone,c.email,numberValue(c.current_balance),numberValue(c.total_due),numberValue(c.overdue_amount),c.is_active?'نشط':'مؤرشف'])].map(row=>row.map(csvCell).join(',')).join('\r\n'); downloadBlob(csv,'text/csv;charset=utf-8','selected_customers_'+new Date().toISOString().slice(0,10)+'.csv'); }
+        function exportSelectedCustomers() { const rows=selectedCustomers(); if(!rows.length){showToast('حدد عميلًا واحدًا على الأقل','warning');return;} const headers=['الرمز','الاسم','الهاتف','البريد','الرصيد','الديون','المتأخرات','الحالة']; const csv='\ufeff'+[headers,...rows.map(c=>[c.party_code,c.commercial_name_ar||c.commercial_name,c.phone,c.email,numberValue(c.current_balance),numberValue(c.total_due),numberValue(c.overdue_amount),c.is_active?'نشط':'مؤرشف'])].map(row=>row.map(csvCell).join(',')).join('\r\n'); downloadBlob(csv,'text/csv;charset=utf-8','selected_customers_'+businessDayDate()+'.csv'); }
         async function bulkArchiveCustomers() { const rows=selectedCustomers(); if(!rows.length)return; if(!await confirmCustomerAction(`سيتم أرشفة ${rows.length} عميل مع الحفاظ على التاريخ والمعاملات.`,{title:'أرشفة العملاء المحددين',confirmText:'أرشفة',danger:true}))return; try{const bridge=getBridge();if(typeof bridge.archiveParty!=='function')throw new Error('عقد أرشفة العملاء غير متاح');showLoading(true);let done=0;for(const row of rows){const result=normalizeBridgeResult(bridge.archiveParty(customerIdOf(row)));if(result.success)done++;}showToast('تمت أرشفة '+done+' من '+rows.length+' عميل فعلياً','success');clearSelection();await loadCustomers()}catch(e){showToast(e.message||'فشلت الأرشفة الجماعية','error')}finally{showLoading(false)}}
         async function bulkSmsCustomers() { const rows=selectedCustomers().filter(c=>c.phone); if(!rows.length){showToast('لا يوجد هاتف للعملاء المحددين','warning');return} openCustomerMessageModal(rows,'bulk');}
         function viewFromState() { return {search:document.getElementById('customerSearch').value,type:document.getElementById('filterType').value,status:document.getElementById('filterStatus').value,tier:document.getElementById('filterTier').value,smart:document.getElementById('smartFilter').value}; }
@@ -3071,7 +3072,7 @@
 
         function resetSalesForm() {
             document.getElementById('saleInvoiceNumber').value = '';
-            document.getElementById('saleDate').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('saleDate').value = businessDayDate();
             document.getElementById('saleLiters').value = '';
             document.getElementById('saleTotal').value = '';
             document.getElementById('saleStatus').value = 'completed';
@@ -3131,7 +3132,7 @@
             document.getElementById('contractName').value = '';
             document.getElementById('contractType').value = 'supply';
             document.getElementById('contractValue').value = '';
-            document.getElementById('contractStart').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('contractStart').value = businessDayDate();
             document.getElementById('contractEnd').value = '';
             document.getElementById('contractStatus').value = 'active';
             document.getElementById('contractNotes').value = '';
@@ -3367,7 +3368,7 @@
                 loyalty_points: loyaltyPoints,
                 risk_level: riskLevel,
                 blacklist_reason: document.getElementById('blacklistReason').value.trim(),
-                blacklist_date: isBlacklisted ? (currentCustomerBundle?.blacklist_date || new Date().toISOString().slice(0, 10)) : null,
+                blacklist_date: isBlacklisted ? (currentCustomerBundle?.blacklist_date || businessDayDate()) : null,
                 rating,
                 notes: document.getElementById('notes').value.trim(),
                 is_active: document.getElementById('isActive').checked ? 1 : 0,
@@ -3487,13 +3488,13 @@
                 c.is_active === 1 || c.is_active === true ? 'نشط' : 'غير نشط'
             ]);
             const csv = '\ufeff' + [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n');
-            downloadBlob(csv, 'text/csv;charset=utf-8', `customers_${new Date().toISOString().slice(0,10)}.csv`);
+            downloadBlob(csv, 'text/csv;charset=utf-8', `customers_${businessDayDate()}.csv`);
             showToast('تم تصدير بيانات العملاء الحالية', 'success');
         }
 
         function exportCustomersJSON() {
             if (!allCustomers.length) { showToast('لا توجد بيانات للتصدير', 'warning'); return; }
-            downloadBlob(JSON.stringify(allCustomers, null, 2), 'application/json;charset=utf-8', `customers_${new Date().toISOString().slice(0,10)}.json`);
+            downloadBlob(JSON.stringify(allCustomers, null, 2), 'application/json;charset=utf-8', `customers_${businessDayDate()}.json`);
             showToast('تم تصدير JSON من بيانات SQLite الحالية', 'success');
         }
 
@@ -3518,8 +3519,8 @@
             document.getElementById('reportViewerTitle').innerHTML = `<i class="fas fa-file-alt"></i> ${titles[type] || 'تقرير'}`;
             const today = new Date();
             const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-            document.getElementById('reportFromDate').value = firstDay.toISOString().slice(0, 10);
-            document.getElementById('reportToDate').value = today.toISOString().slice(0, 10);
+            document.getElementById('reportFromDate').value = businessDayDate(firstDay);
+            document.getElementById('reportToDate').value = businessDayDate(today);
             closeModal('reportsModal');
             openModal('reportViewerModal');
             refreshReport();
@@ -3819,7 +3820,7 @@
             loadCustomers();
 
             const saleDateInput = document.getElementById('saleDate');
-            if (saleDateInput) saleDateInput.value = new Date().toISOString().slice(0, 10);
+            if (saleDateInput) saleDateInput.value = businessDayDate();
         });
     </script>
     <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>

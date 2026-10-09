@@ -1346,6 +1346,7 @@ select.form-input option { background: var(--bg-secondary); color: var(--text-pr
     }
 }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
     <div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> Android Bridge غير متاح؛ لن تُحفظ أو تُعرض بيانات تجارية بديلة</div>
@@ -1409,7 +1410,7 @@ select.form-input option { background: var(--bg-secondary); color: var(--text-pr
         const state = { rows: [], filtered: [], editing: null, filter: 'all', loadedAt: null };
         const $ = (id) => document.getElementById(id);
         const esc = (value) => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-        const today = () => new Date().toISOString().slice(0,10);
+        const today = () => businessDayDate();
         function toast(message, bad=false) { const node=$('toast'); node.textContent=message; node.className='toast show'; node.style.background=bad?'var(--danger-token)':'var(--gold-primary)'; clearTimeout(node._timer); node._timer=setTimeout(()=>node.classList.remove('show'),3500); }
         function setLoading(value) { $('loadingIndicator').classList.toggle('show', Boolean(value)); }
         function parse(raw) { if (raw == null) throw new Error('لم يرجع الجسر نتيجة'); const value=typeof raw==='string'?JSON.parse(raw):raw; if (value && value.success === false) throw new Error(value.error || value.message || 'فشلت العملية'); return value; }

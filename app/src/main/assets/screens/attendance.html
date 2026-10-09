@@ -62,6 +62,7 @@ button,input,select,textarea{font-family:var(--font-sans)}button{cursor:pointer}
 @media(max-width:350px){.title-icon{width:39px;min-width:39px;height:39px}.icon-btn{width:40px;height:40px}.title-text h1{font-size:.9rem}}
 @media print{.topbar,.bottom-nav,.fab,.offline,.action-row,.modal-foot,.icon-btn{display:none!important}body{background:#fff;color:#111;padding:0}.panel,.attendance-card,.kpi{box-shadow:none;border:1px solid #aaa}}
 </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 <div class="offline" id="offlineBanner"><i class="fas fa-wifi"></i> لا يوجد اتصال مباشر بقاعدة البيانات. يتم استخدام القراءة المتاحة فقط.</div>
@@ -134,7 +135,7 @@ const $=id=>document.getElementById(id);
 const esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const first=(o,keys,f='')=>{for(const k of keys){if(o&&o[k]!==undefined&&o[k]!==null&&String(o[k])!=='')return o[k]}return f};
 const num=v=>{const n=Number(v);return Number.isFinite(n)?n:0};
-const today=()=>new Date().toISOString().slice(0,10);
+const today=()=>businessDayDate();
 const parse=v=>{if(v===undefined||v===null)throw new Error('لم يرجع Android Bridge نتيجة');const x=typeof v==='string'?JSON.parse(v):v;if(x&&x.success===false)throw new Error(x.error||x.message||'فشلت العملية');return x};
 const dataOf=x=>x&&Object.prototype.hasOwnProperty.call(x,'data')?x.data:x;
 const rowsOf=x=>{const d=dataOf(x);if(Array.isArray(d))return d;if(d&&Array.isArray(d.rows))return d.rows;if(d&&Array.isArray(d.data))return d.data;if(d&&typeof d==='object')return[d];return[]};

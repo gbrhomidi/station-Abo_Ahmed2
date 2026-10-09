@@ -26,6 +26,7 @@
     @media(max-width:650px){.app{padding:0 10px}.toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.toolbar-btn{grid-column:1/-1}.kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.kpi{min-height:102px}.location-list{grid-template-columns:1fr}.location-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.nav-item{min-width:55px;font-size:8px}.nav-item i{font-size:16px}}
     @media print{body{background:#fff;color:#111;padding:0}.topbar,.bottom-nav,.source-note,.bridge-error,.location-actions,.modal-overlay,.loading,.toast{display:none!important}.panel,.kpi,.location-card{box-shadow:none;border:1px solid #777}.dashboard{display:block}.fleet-panel{display:none}}
   </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
   <div id="loading" class="loading"><div class="loading-box"><i class="fas fa-spinner fa-spin"></i> جارٍ القراءة من SQLite...</div></div>
@@ -53,7 +54,7 @@
   const fmt = value => value == null || value === '' ? '—' : new Intl.NumberFormat('ar-YE',{maximumFractionDigits:2}).format(Number(value));
   const fmtDate = value => value ? String(value).slice(0,16).replace('T',' ') : '—';
   const dateOnly = value => value ? String(value).slice(0,10) : '';
-  const today = () => new Date().toISOString().slice(0,10);
+  const today = () => businessDayDate();
   const parseDate = value => { const time = Date.parse(value || ''); return Number.isFinite(time) ? time : null; };
   const vehicleId = row => row?.vehicle_id ?? row?.vehicleId ?? row?.id;
   const vehicleCode = row => row?.vehicle_code || row?.plate_number || row?.plate_number_ar || ('مركبة #' + vehicleId(row));

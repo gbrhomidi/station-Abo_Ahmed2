@@ -1499,6 +1499,7 @@ select.form-input option { background: var(--bg-secondary); color: var(--text-pr
     .party-card { padding: 14px; }
 }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -2028,8 +2029,8 @@ let pullStartY = 0,
             const today = new Date();
             const monthAgo = new Date();
             monthAgo.setDate(monthAgo.getDate() - 30);
-            document.getElementById('reportFrom').value = monthAgo.toISOString().split('T')[0];
-            document.getElementById('reportTo').value = today.toISOString().split('T')[0];
+            document.getElementById('reportFrom').value = businessDayDate(monthAgo);
+            document.getElementById('reportTo').value = businessDayDate(today);
 
             document.getElementById('reportModal').classList.add('show');
             document.body.style.overflow = 'hidden';
@@ -2563,7 +2564,7 @@ let pullStartY = 0,
             allPartyTypes.forEach(x => rows.push([x.type_code || '', x.type_name_ar || '', x.type_name || '', x.default_discount || 0, x.default_credit_limit || 0, x.payment_terms_days || 0, Number(x.is_active) === 1 ? 'نشط' : 'غير نشط']));
             const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
             const blob = new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8'});
-            const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `party-types-${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
+            const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `party-types-${businessDayDate()}.csv`; a.click(); URL.revokeObjectURL(url);
         }
 
         // ============================================================

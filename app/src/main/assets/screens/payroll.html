@@ -934,6 +934,7 @@
             }
         }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 
 <body>
@@ -1343,7 +1344,7 @@
                     maximumFractionDigits: 2
                 });
 
-            const today = () => new Date().toISOString().slice(0, 10);
+            const today = () => businessDayDate();
 
             function toast(message, bad = false) {
                 const node = $('toast');

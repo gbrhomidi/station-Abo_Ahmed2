@@ -1023,6 +1023,7 @@
             .modal { padding: 12px; }
         }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -2613,7 +2614,7 @@
                     y += 5;
                 });
 
-                const fileName = `whitelist_${new Date().toISOString().substring(0, 10)}.pdf`;
+                const fileName = `whitelist_${businessDayDate()}.pdf`;
                 doc.save(fileName);
                 showToast('✅ تم تصدير القائمة البيضاء بنجاح', 'success');
                 hapticFeedback('success');

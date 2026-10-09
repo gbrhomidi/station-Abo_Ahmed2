@@ -709,6 +709,7 @@
             .panel, .card, .kpi { box-shadow: none; border: 1px solid #aaa; }
         }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -1003,7 +1004,7 @@
         const $ = id => document.getElementById(id);
         const esc = v => String(v ?? '—').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-        const today = () => new Date().toISOString().slice(0, 10);
+        const today = () => businessDayDate();
         const now = () => { const d = new Date(); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
 
         // ===== دوال الجسر =====

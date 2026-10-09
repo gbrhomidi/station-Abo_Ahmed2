@@ -37,6 +37,7 @@
     @media(max-width:520px){.app{padding:0 10px}.page-title p{font-size:10px}.header-row{align-items:flex-start}.record-header{align-items:center}.record-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.action-button{width:100%}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.modal{padding:14px}.nav-button{min-width:54px;font-size:8px}}
     @media print{body{background:#fff;color:#111;padding:0}.page-header,.bottom-nav,.notice,.bridge-state,.record-actions,.modal-overlay{display:none!important}.section-card,.record-card,.stat-card{border:1px solid #555;box-shadow:none}}
   </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
   <div id="loadingMask" class="loading-mask"><div class="loading-box"><i class="fas fa-spinner fa-spin"></i> جارٍ تنفيذ العملية...</div></div>
@@ -74,7 +75,7 @@ const toNumber = value => { const number = Number(value); return Number.isFinite
 const formatNumber = value => new Intl.NumberFormat('ar-YE', { maximumFractionDigits: 2 }).format(toNumber(value));
 const formatMoney = value => formatNumber(value);
 const dateOnly = value => value ? String(value).slice(0, 10) : '—';
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => businessDayDate();
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 const isResolved = record => record && (record.resolved === 1 || record.resolved === true || String(record.resolved).toLowerCase() === '1' || String(record.resolved).toLowerCase() === 'true');
 const typeLabel = type => ({ overdue: 'متأخر', doubtful: 'مشكوك في تحصيله', bad: 'معدوم / شطب' }[String(type)] || type || 'غير مصنف');

@@ -1667,6 +1667,7 @@
             }
         }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -3944,7 +3945,7 @@
                     const ws = XLSX.utils.json_to_sheet(data);
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, 'النشاطات');
-                    XLSX.writeFile(wb, baseName + '_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+                    XLSX.writeFile(wb, baseName + '_' + businessDayDate() + '.xlsx');
                     showToast('✅ تم تصدير Excel بنجاح', 'success');
                 } else if (format === 'pdf') {
                     if (typeof window.jspdf === 'undefined') { showToast('❌ مكتبة PDF غير متوفرة', 'error'); return; }
@@ -3969,14 +3970,14 @@
                         });
                         y += 6;
                     });
-                    doc.save(baseName + '_' + new Date().toISOString().slice(0, 10) + '.pdf');
+                    doc.save(baseName + '_' + businessDayDate() + '.pdf');
                     showToast('✅ تم تصدير PDF بنجاح', 'success');
                 } else if (format === 'json') {
                     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = baseName + '_' + new Date().toISOString().slice(0, 10) + '.json';
+                    a.download = baseName + '_' + businessDayDate() + '.json';
                     a.click();
                     URL.revokeObjectURL(url);
                     showToast('✅ تم تصدير JSON بنجاح', 'success');
@@ -3990,7 +3991,7 @@
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = baseName + '_' + new Date().toISOString().slice(0, 10) + '.csv';
+                    a.download = baseName + '_' + businessDayDate() + '.csv';
                     a.click();
                     URL.revokeObjectURL(url);
                     showToast('✅ تم تصدير CSV بنجاح', 'success');

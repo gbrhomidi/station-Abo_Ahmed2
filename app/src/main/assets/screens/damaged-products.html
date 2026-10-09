@@ -1714,6 +1714,7 @@
             }
         }
     </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -2625,7 +2626,7 @@
                 const target = new Date();
                 target.setHours(0, 0, 0, 0);
                 target.setDate(target.getDate() - (6 - dayIndex));
-                const targetDate = target.toISOString().slice(0, 10);
+                const targetDate = businessDayDate(target);
                 return sum + (date === targetDate ? Number(item.quantity || 0) : 0);
             }, 0));
             const ctx2 = document.getElementById('trendChart').getContext('2d');
@@ -2819,7 +2820,7 @@
             const reportedBy = document.getElementById('fReportedBy').value;
             const reasonDetails = document.getElementById('fReasonDetails').value.trim();
             const notes = document.getElementById('fNotes').value.trim();
-            const reportDate = document.getElementById('fReportDate').value || new Date().toISOString().split('T')[0];
+            const reportDate = document.getElementById('fReportDate').value || businessDayDate();
 
             if (!productId) { showToast('❌ الرجاء اختيار المنتج', 'error'); return; }
             if (!Number.isFinite(quantity) || quantity <= 0) { showToast('❌ الرجاء إدخال كمية صحيحة', 'error'); return; }
@@ -2973,7 +2974,7 @@
             setFormValue('fNotes', '');
             setFormValue('fStatus', 'pending');
             document.getElementById('fStatus').disabled = false;
-            setFormValue('fReportDate', new Date().toISOString().split('T')[0]);
+            setFormValue('fReportDate', businessDayDate());
             updateFormValue();
             document.getElementById('formModal').classList.add('show');
             document.body.style.overflow = 'hidden';
@@ -2997,7 +2998,7 @@
             setFormValue('fNotes', item.notes);
             setFormValue('fStatus', item.status || 'pending');
             document.getElementById('fStatus').disabled = item.status !== 'pending';
-            setFormValue('fReportDate', item.report_date ? item.report_date.split('T')[0] : new Date().toISOString().split('T')[0]);
+            setFormValue('fReportDate', item.report_date ? item.report_date.split('T')[0] : businessDayDate());
             updateFormValue();
             document.getElementById('formModal').classList.add('show');
             document.body.style.overflow = 'hidden';
@@ -3188,8 +3189,8 @@
             const today = new Date();
             const monthAgo = new Date();
             monthAgo.setDate(monthAgo.getDate() - 30);
-            document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
-            document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
+            document.getElementById('filterDateFrom').value = businessDayDate(monthAgo);
+            document.getElementById('filterDateTo').value = businessDayDate(today);
             document.getElementById('filterProduct').value = '';
             document.getElementById('filterWarehouse').value = '';
             document.getElementById('filterStatus').value = '';
@@ -3313,10 +3314,10 @@
                 `;
 
             try {
-                const today = new Date().toISOString().split('T')[0];
+                const today = businessDayDate();
                 const monthAgo = new Date();
                 monthAgo.setDate(monthAgo.getDate() - 30);
-                const from = monthAgo.toISOString().split('T')[0];
+                const from = businessDayDate(monthAgo);
                 const params = { start_date: from, end_date: today, limit: 5 };
                 const result = await apiCall('getDamagedProducts', params);
                 if (result.success && result.data) {
@@ -3414,10 +3415,10 @@
 
             try {
                 // جلب عدد السجلات الكلي للتالف
-                const today = new Date().toISOString().split('T')[0];
+                const today = businessDayDate();
                 const monthAgo = new Date();
                 monthAgo.setDate(monthAgo.getDate() - 30);
-                const from = monthAgo.toISOString().split('T')[0];
+                const from = businessDayDate(monthAgo);
                 const countResult = await apiCall('getDamagedProducts', { start_date: from, end_date: today });
                 const reportItems = countResult.success && Array.isArray(countResult.data) ? countResult.data : [];
                 const totalCount = reportItems.length;
@@ -3714,8 +3715,8 @@
             const today = new Date();
             const monthAgo = new Date();
             monthAgo.setDate(monthAgo.getDate() - 30);
-            document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
-            document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
+            document.getElementById('filterDateFrom').value = businessDayDate(monthAgo);
+            document.getElementById('filterDateTo').value = businessDayDate(today);
 
             loadDropdowns({});
             document.getElementById('fProductId').addEventListener('change', updateFormValue);

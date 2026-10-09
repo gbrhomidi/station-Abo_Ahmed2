@@ -1031,6 +1031,7 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
     body { background: #fff; color: #111; padding: 0; }
 }
 </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 <div class="offline-banner" id="offlineBanner">
@@ -1389,7 +1390,7 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
         .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-    const today = () => new Date().toISOString().slice(0, 10);
+    const today = () => businessDayDate();
 
     function toast(message, type = 'info') {
         const node = $('toast');
@@ -2636,7 +2637,7 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
                 lines.push(keys.map(k => csvCell(r[k])).join(','));
             });
             const csv = '\uFEFF' + lines.join('\n');
-            const filename = 'pumps_report_' + new Date().toISOString().slice(0, 10) + '.csv';
+            const filename = 'pumps_report_' + businessDayDate() + '.csv';
 
             try {
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -2752,7 +2753,7 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'pumps_' + new Date().toISOString().slice(0, 10) + '.csv';
+            a.download = 'pumps_' + businessDayDate() + '.csv';
             document.body.appendChild(a);
             a.click();
             setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 500);

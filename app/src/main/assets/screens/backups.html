@@ -1296,6 +1296,7 @@
     <script src="file:///android_asset/assets-local/js/xlsx.full.min.js"></script>
     <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
     <script src="file:///android_asset/assets-local/js/chart.umd.min.js"></script>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
     <div class="pull-indicator" id="pullIndicator"><i class="fas fa-sync-alt"></i><span>اسحب للأسفل لتحديث مركز النسخ</span></div>
@@ -1360,7 +1361,7 @@
         const $=id=>document.getElementById(id);
         const first=(row,names,fallback='')=>{for(const name of names){if(row&&row[name]!==undefined&&row[name]!==null&&String(row[name])!=='')return row[name];}return fallback;};
         const esc=value=>String(value===undefined||value===null?'—':value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-        const today=()=>new Date().toISOString().slice(0,10);
+        const today=()=>businessDayDate();
         const parse=raw=>{if(raw===undefined||raw===null)throw new Error('لم يرجع Android Bridge نتيجة');const value=typeof raw==='string'?JSON.parse(raw):raw;if(value&&value.success===false)throw new Error(value.error||value.message||'فشلت العملية');return value;};
         const dataOf=value=>value&&Object.prototype.hasOwnProperty.call(value,'data')?value.data:value;
         const rowsFrom=value=>{const raw=dataOf(value);if(Array.isArray(raw))return raw;if(raw&&Array.isArray(raw.rows))return raw.rows;if(raw&&Array.isArray(raw.data))return raw.data;if(raw&&typeof raw==='object')return[raw];return[];};

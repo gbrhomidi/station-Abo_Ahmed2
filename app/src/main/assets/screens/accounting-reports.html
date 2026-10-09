@@ -895,6 +895,7 @@ select.form-input option{background:var(--bg-secondary);color:var(--text-primary
     .report-filter-collapsible.is-open { max-height:1200px; opacity:1; visibility:visible; }
     </style>
 
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -2189,7 +2190,7 @@ function applyQuickRange(range) {
             var offset = day === 0 ? 6 : day - 1;
             var w = new Date(now);
             w.setDate(now.getDate() - offset);
-            from = w.toISOString().slice(0, 10);
+            from = businessDayDate(w);
             break;
         }
         case 'month':

@@ -96,6 +96,7 @@ html[data-theme=dark] .modal .icon-btn{
 @media(max-width:600px){.page{padding:11px}.kpi-grid{grid-template-columns:repeat(2,1fr);gap:7px}.kpi{padding:10px;min-height:83px}.kpi strong{font-size:21px}.cards,.skeletons{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.profile{grid-template-columns:repeat(2,1fr)}.profile-main{grid-column:1/-1}.profile-kpi{border-right:0;border-top:1px solid var(--line);padding-top:7px}.modal{max-height:96vh}.brand h1{font-size:15px}.brand p{font-size:9px}}
 @media print{.app-header,.sidebar-toggle,.sidebar,.sidebar-overlay,.bottom-nav,.panel-tools,.bulk-bar,.card-actions,.modal-overlay,.offline{display:none!important}.page{padding:0}.panel{box-shadow:none;border:1px solid #aaa}.vehicle-card{break-inside:avoid}}
 </style>
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 <div class="loading" id="loading"><div class="loader" aria-label="جاري التحميل"></div></div><div class="toast" id="toast" role="status" aria-live="polite"></div><div class="sidebar-overlay" id="sidebarOverlay"></div>
@@ -421,7 +422,7 @@ html[data-theme=dark] .modal .icon-btn{
 
 <script>
 (() => {'use strict';
-const bridge=window.AndroidInterface||null;const state={rows:[],filtered:[],drivers:[],trips:[],locations:[],expenses:[],maintenance:[],insurance:[],selected:new Set(),archived:false,editing:null,detail:null,detailTab:'overview',view:'cards',reportRows:[],loadedAt:null,assignVehicle:null,importRows:[]};const $=id=>document.getElementById(id);const esc=v=>String(v==null?'—':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const num=v=>{const n=Number(v);return Number.isFinite(n)?n:0};const idOf=r=>num(r&&(r.id??r.vehicle_id));const today=()=>new Date().toISOString().slice(0,10);
+const bridge=window.AndroidInterface||null;const state={rows:[],filtered:[],drivers:[],trips:[],locations:[],expenses:[],maintenance:[],insurance:[],selected:new Set(),archived:false,editing:null,detail:null,detailTab:'overview',view:'cards',reportRows:[],loadedAt:null,assignVehicle:null,importRows:[]};const $=id=>document.getElementById(id);const esc=v=>String(v==null?'—':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const num=v=>{const n=Number(v);return Number.isFinite(n)?n:0};const idOf=r=>num(r&&(r.id??r.vehicle_id));const today=()=>businessDayDate();
 function toast(m,t=''){const n=$('toast');n.textContent=m;n.className='toast show '+t;clearTimeout(n._t);n._t=setTimeout(()=>n.className='toast',3500)}
 function loading(v){$('loading').classList.toggle('show',!!v)}
 function parse(raw){if(raw==null)throw Error('لم يرجع Android Bridge نتيجة');const x=typeof raw==='string'?JSON.parse(raw):raw;if(x&&x.success===false)throw Error(x.error||x.message||'فشلت العملية');return x}

@@ -1519,6 +1519,7 @@
     .report-filter-collapsible.is-open { max-height:1200px; opacity:1; visibility:visible; }
     </style>
 
+  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
 
@@ -2083,7 +2084,7 @@
             return 'fa-circle';
         }
         function today() {
-            return new Date().toISOString().slice(0, 10);
+            return businessDayDate();
         }
         function dateOnly(d) {
             return d.getFullYear() + '-' +
