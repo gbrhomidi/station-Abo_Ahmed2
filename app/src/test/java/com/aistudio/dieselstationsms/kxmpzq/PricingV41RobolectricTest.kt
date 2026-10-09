@@ -77,6 +77,78 @@ class PricingV41RobolectricTest {
     }
 
     @Test
+    fun upgradesRepresentativeV40V41AndV42SchemasToV43WithoutLosingData() {
+        for (sourceVersion in 40..42) {
+            DatabaseHelper.closeInstance()
+            context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
+            helper = DatabaseHelper.getInstance(context)
+            val oldDb = helper.writableDatabase
+
+            oldDb.execSQL("CREATE TABLE migration_probe (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
+            oldDb.execSQL("INSERT INTO migration_probe(id, value) VALUES (1, 'preserve-me')")
+
+            if (sourceVersion <= 41) {
+                oldDb.execSQL("DROP INDEX IF EXISTS idx_price_list_items_quantity_limit")
+                oldDb.execSQL("ALTER TABLE price_list_items DROP COLUMN quantity_limit")
+                oldDb.execSQL("ALTER TABLE price_list_items DROP COLUMN quantity_sold")
+                oldDb.execSQL("ALTER TABLE sale_items DROP COLUMN cost_price")
+                oldDb.execSQL("ALTER TABLE sale_items DROP COLUMN total_cost")
+                oldDb.execSQL("ALTER TABLE fuel_sales DROP COLUMN cost_per_liter")
+                oldDb.execSQL("ALTER TABLE fuel_sales DROP COLUMN cost_amount")
+            }
+            if (sourceVersion == 40) {
+                oldDb.execSQL("DROP INDEX IF EXISTS idx_price_lists_resolution")
+                oldDb.execSQL("DROP INDEX IF EXISTS idx_sales_business_day")
+                oldDb.execSQL("DROP INDEX IF EXISTS idx_sales_station_business_day_deleted_payment")
+                oldDb.execSQL("DROP INDEX IF EXISTS idx_sales_station_payment_business_day_deleted")
+                oldDb.execSQL("DROP TRIGGER IF EXISTS trg_fuel_types_sale_price_history")
+                oldDb.execSQL("DROP TRIGGER IF EXISTS trg_products_sale_price_history")
+                oldDb.execSQL("DROP TABLE IF EXISTS fuel_price_history")
+                oldDb.execSQL("ALTER TABLE sales_transactions DROP COLUMN business_day")
+                oldDb.execSQL("ALTER TABLE price_lists DROP COLUMN occasion_code")
+                oldDb.execSQL("ALTER TABLE price_lists DROP COLUMN occasion_name_ar")
+                oldDb.execSQL("ALTER TABLE price_lists DROP COLUMN applies_when")
+                oldDb.execSQL("ALTER TABLE price_lists DROP COLUMN clearance_mode")
+                oldDb.execSQL("ALTER TABLE price_lists DROP COLUMN clearance_stock_below")
+                oldDb.execSQL("ALTER TABLE price_lists DROP COLUMN priority")
+            }
+
+            // Force the real SQLiteOpenHelper upgrade dispatcher to run each step
+            // from the selected historical version rather than calling migrations
+            // directly or bypassing their version ordering.
+            oldDb.execSQL("UPDATE permissions SET is_active=0 WHERE permission_code='price_lists.read'")
+            oldDb.version = sourceVersion
+            DatabaseHelper.closeInstance()
+
+            helper = DatabaseHelper.getInstance(context)
+            val upgradedDb = helper.writableDatabase
+            assertEquals("upgrade from $sourceVersion must reach the current schema", DatabaseHelper.VERSION, upgradedDb.version)
+
+            assertTrue(upgradedDb.rawQuery("PRAGMA table_info(sales_transactions)", null).use { cursor ->
+                var found = false
+                while (cursor.moveToNext()) found = found || cursor.getString(cursor.getColumnIndexOrThrow("name")) == "business_day"
+                found
+            })
+            assertTrue(upgradedDb.rawQuery("PRAGMA table_info(price_list_items)", null).use { cursor ->
+                val columns = mutableSetOf<String>()
+                while (cursor.moveToNext()) columns += cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                columns.containsAll(setOf("quantity_limit", "quantity_sold"))
+            })
+            assertTrue(upgradedDb.rawQuery("PRAGMA table_info(sale_items)", null).use { cursor ->
+                val columns = mutableSetOf<String>()
+                while (cursor.moveToNext()) columns += cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                columns.containsAll(setOf("cost_price", "total_cost"))
+            })
+            assertTrue(upgradedDb.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fuel_price_history'", null).use { it.moveToFirst() })
+            assertTrue(upgradedDb.rawQuery("SELECT 1 FROM permissions WHERE permission_code='price_lists.read' AND is_active=1 AND module='price_lists' AND action='read'", null).use { it.moveToFirst() })
+            upgradedDb.rawQuery("SELECT value FROM migration_probe WHERE id=1", null).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("preserve-me", it.getString(0))
+            }
+        }
+    }
+
+    @Test
     fun businessDayBoundariesAreCalendarBoundaries() {
         val beforeMidnight = ZonedDateTime.parse("2026-10-06T23:59:59+03:00[Asia/Riyadh]")
         val midnight = ZonedDateTime.parse("2026-10-07T00:00:00+03:00[Asia/Riyadh]")
