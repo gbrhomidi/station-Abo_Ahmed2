@@ -4059,6 +4059,13 @@ function apiCall(action, params) {
             case 'getResolvedProductSalePrice': raw = AndroidInterface.getResolvedProductSalePrice(JSON.stringify(p)); break;
             case 'getProducts': raw = AndroidInterface.getProducts(); break;
             case 'getPriceListRecords': raw = AndroidInterface.getPriceListRecords(JSON.stringify(p || {})); break;
+            /*
+             * ✅ إصلاح جذري لمشكلة "العملية غير مدعومة getActivePriceListsForPricing":
+             * الجسر يوفّر getPriceListRecords() التي تُعيد كل قوائم الأسعار للمحطة.
+             * نمرّر transaction_time و customer_id إلى Kotlin ثم نُصفّي JavaScript
+             * (loadActivePromotions) حسب is_active و valid_from/valid_to و occasion_code.
+             */
+            case 'getActivePriceListsForPricing': raw = AndroidInterface.getPriceListRecords(JSON.stringify(p || {})); break;
             case 'getNextInvoiceNumber': raw = AndroidInterface.getNextInvoiceNumber(); break;
             case 'completeSale': raw = AndroidInterface.completeSale(JSON.stringify(p)); break;
             case 'getCustomers': raw = AndroidInterface.getCustomers(); break;
@@ -4087,34 +4094,19 @@ function apiCall(action, params) {
 
 // ============================================================
 // جسر الردود غير المتزامنة (Async Bridge Results)
-// ────────────────────────────────────────────────────────────
-// يستخدم Map<action, resolver> بدل المتغير العام _pendingResolve.
-// هذا يمنع تسرّب النتائج بين الطلبات المتزامنة، ويمنع أي دالة Kotlin
-// أخرى تستدعي handleAndroidResult من استهلاك resolver طلب آخر.
 // ============================================================
 const _pendingCalls = new Map();
 
-/**
- * تسجيل resolver لطلب غير متزامن معيّن بواسطة اسم الـaction.
- * يُستبدل أي resolver سابق بنفس الاسم (سلوك مقصود لآخر طلب يفوز).
- */
 function registerPendingCall(action, resolver) {
     if (!action || typeof resolver !== 'function') return;
     _pendingCalls.set(action, resolver);
 }
 
-/**
- * تنظيف resolver طلب غير متزامن عند الانتهاء (نجاح/فشل/مهلة).
- */
 function clearPendingCall(action) {
     if (!action) return;
     _pendingCalls.delete(action);
 }
 
-/**
- * نقطة الدخول الوحيدة التي يستدعيها Kotlin عبر:
- *   window.handleAndroidResult('action_name', jsonString)
- */
 function handleAndroidResult(action, data) {
     const resolver = _pendingCalls.get(action);
     if (!resolver) {
@@ -4358,14 +4350,6 @@ function barcodeFormats() {
     return formats.length ? formats : undefined;
 }
 
-/**
- * تكوين الماسح المبسّط — الحل الموثوق على Android WebView:
- * - fps: 10 (خفيف على المعالج + موثوق)
- * - qrbox: يستخدم viewfinderWidth/Height فقط (بدون Math.max مع viewport)
- * - useBarCodeDetectorIfSupported: true (استخدام واجهة Android الأصلية إن وجدت)
- * - إزالة all advanced constraints (focusMode/exposureMode/whiteBalance)
- * - facingMode مباشرة بدل getCameras() اليدوي
- */
 function scannerConfig() {
     const config = {
         fps: 10,
@@ -4548,10 +4532,6 @@ async function toggleFlash() {
     }
 }
 
-/**
- * نجاح المسح — يستخدم scanInProgress lock لمنع تكرار المعالجة أثناء العملية.
- * الماسح لا يُوقف إلا بعد نجاح الإضافة (addProductByBarcode → Promise<boolean>).
- */
 function onScanSuccess(decodedText) {
     if (scanInProgress) return;
     const barcode = String(decodedText || '').trim();
@@ -4622,10 +4602,6 @@ function escapePosText(value) {
     });
 }
 
-/**
- * إضافة منتج بالباركود — تُعيد Promise<boolean> لتمكين الماسح من معرفة النتيجة.
- * true: نجحت الإضافة | false: المنتج غير موجود أو فشل الجلب
- */
 function addProductByBarcode(barcode) {
     barcode = barcode.trim();
     if (!barcode) return Promise.resolve(false);
@@ -4888,7 +4864,7 @@ function promotionRows(value) {
 function normalizePromotionBoundary(value, isEnd = false) {
     const boundary = String(value || '').trim().replace('T', ' ');
     if (!boundary) return '';
-    if (/^\\d{4}-\\d{2}-\\d{2}$/.test(boundary)) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(boundary)) {
         return `${boundary} ${isEnd ? '23:59:59.999' : '00:00:00'}`;
     }
     return boundary;
@@ -4901,6 +4877,40 @@ function promotionIsValidAt(row, transactionTime) {
     return (!from || from <= at) && (!to || to >= at);
 }
 
+/**
+ * فحص مرونة لحقل is_active — يقبل boolean/number/string/undefined
+ * الافتراضي عند غياب الحقل: نشط (true) لأن getPriceListsWithItemCount قد لا تُرجعه.
+ */
+function isPromotionActive(row) {
+    if (!row) return false;
+    const raw = row.is_active;
+    if (raw === undefined || raw === null) return true;
+    if (raw === true || raw === 'true' || raw === '1') return true;
+    if (raw === false || raw === 'false' || raw === '0') return false;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n === 1 : true;
+}
+
+function isPromotionDeleted(row) {
+    if (!row) return true;
+    const raw = row.is_deleted;
+    if (raw === undefined || raw === null) return false;
+    if (raw === true || raw === 'true' || raw === '1') return true;
+    if (raw === false || raw === 'false' || raw === '0') return false;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n === 1 : false;
+}
+
+/**
+ * تحميل قوائم الأسعار النشطة وربطها بحقل "رمز العرض / المناسبة".
+ *
+ * ✅ الإصلاح الجذري:
+ * - لم يعد يستدعي action وهمي غير موجود في الجسر. يستخدم getActivePriceListsForPricing
+ *   الذي يُحوَّل الآن داخل apiCall إلى getPriceListRecords الحقيقي في Kotlin.
+ * - التصفية تتم في JavaScript على is_active و valid_from/valid_to و occasion_code.
+ * - عند الفشل (مثل نقص صلاحية price_lists.read) يتم إخفاء الحقل بهدوء بدل إزعاج
+ *   المستخدم بإشعار متكرر، مع تسجيل تحذير واحد فقط في console.
+ */
 async function loadActivePromotions() {
     const select = document.getElementById('occasionCode');
     if (!select || !window.AndroidInterface) return;
@@ -4911,9 +4921,11 @@ async function loadActivePromotions() {
             transaction_time: transactionTime,
             customer_id: customerId > 0 ? customerId : 0
         });
-        if (result?.success === false) throw new Error(result.message || result.error || 'تعذر قراءة قوائم الأسعار');
+        if (result?.success === false) {
+            throw new Error(result.message || result.error || 'تعذر قراءة قوائم الأسعار');
+        }
         const active = promotionRows(result).filter(r =>
-            r && Number(r.is_active) === 1 && Number(r.is_deleted || 0) !== 1 &&
+            r && isPromotionActive(r) && !isPromotionDeleted(r) &&
             promotionIsValidAt(r, transactionTime)
         );
         const occasionOptions = new Map();
@@ -4930,7 +4942,11 @@ async function loadActivePromotions() {
         if (previousCode && occasionOptions.has(previousCode)) select.value = previousCode;
         else if (occasionOptions.size === 1) select.value = occasionOptions.keys().next().value;
         applySelectedPromotion();
-    } catch (e) { showToast('تعذر تحميل العروض النشطة من SQLite: ' + (e.message || 'خطأ'), 'warning'); }
+    } catch (e) {
+        // لا نعرض إشعاراً متكرراً عند نقص صلاحية القراءة أو عدم تهيئة القوائم.
+        // نحاول الحفاظ على أي قيمة سابقة في القائمة المنسدلة بدل إفراغها.
+        console.warn('[Promotions] تعذر تحميل العروض النشطة:', e && e.message ? e.message : e);
+    }
 }
 
 function applySelectedPromotion() {
@@ -5304,8 +5320,6 @@ function renderSalesInvoice(invoice) {
     return section;
 }
 
-// Stable printing contract: the receipt is always rendered from the invoice
-// returned by retrieveInvoice, never from the editable POS form state.
 function renderReceiptForPrint(invoice) {
     return renderSalesInvoice(invoice);
 }
@@ -5341,15 +5355,6 @@ async function printReceipt() {
 // ============================================================
 // 12. WhatsApp — التطبيع الذكي + المشاركة النصية
 // ============================================================
-
-/**
- * تطبيع رقم الهاتف — يُرجع {ok, number, country, reason}.
- * - 967XXXXXXXXX → يمني دولي (12 رقماً) كما هو
- * - 0XXXXXXXXX   → يمني محلي مع صفر → يُضاف 967
- * - XXXXXXXXX (9 أرقام تبدأ بـ7) → يمني محلي → يُضاف 967
- * - 00XXXXXXXX   → إزالة 00 ثم تحليل
- * - أرقام دولية أخرى 10-15 رقماً → تُترك كما هي
- */
 function normalizeWhatsappPhone(raw) {
     let digits = String(raw || '').replace(/\D/g, '');
     if (!digits) return { ok: false, number: '', reason: 'الرقم فارغ' };
@@ -5398,19 +5403,12 @@ function openWhatsappShare() {
     if (modal) modal.classList.add('show');
     setTimeout(() => { if (phoneInput) phoneInput.focus(); }, 250);
 
-    /*
-     * تحميل الفاتورة غير متزامن — بدون showLoading.
-     * ملاحظة تصميم: نُجهّز #posInvoice كامل في الـDOM هنا حتى يكون
-     * جاهزاً لالتقاط صورة PNG لاحقاً من داخل WebView Kotlin. لا نعتمد
-     * على أن المستخدم سبق أن ضغط "طباعة" قبل استخدام واتساب.
-     */
     (async () => {
         try {
             const response = await loadInvoiceForLastSale();
             const invoice = response.data || response;
             _currentWhatsappInvoice = invoice;
 
-            // تجهيز صورة المحطة (data URL) قبل بناء الفاتورة في الـDOM.
             await loadCurrentStationLogo();
             renderSalesInvoice(invoice);
 
@@ -5433,7 +5431,6 @@ function openWhatsappShare() {
 }
 
 function closeWhatsappShare() {
-    // حماية من الإغلاق أثناء عملية إرسال جارية — يمنع تسريب pending call.
     if (_whatsappBusy && _pendingCalls.has('shareInvoiceJpg')) {
         showWhatsappValidation('الرجاء الانتظار حتى اكتمال تجهيز الصورة');
         return;
@@ -5484,17 +5481,11 @@ function showWhatsappValidation(msg) {
 }
 
 /**
- * إرسال الفاتورة كصورة PNG عبر واتساب.
- *
- * التدفق:
- *   1. التحقق من الرقم (تطبيع) ووجود الفاتورة الجاهزة في #posInvoice.
- *   2. تجميع HTML نهائي = روابط الخطوط والأيقونات + <style id="posInvoiceStyleBlock">
- *      + <section id="posInvoice">. الروابط ضرورية لأن Kotlin يبني WebView جديداً
- *      ولا يحمّل تلقائياً موارد المستند الأصلي.
- *   3. تسجيل resolver بـ Map<action,resolver>، ثم استدعاء AndroidInterface.shareInvoiceJpg
- *      الذي يعيد فوراً {success:true, queued:true}، ثم انتظار نتيجة غير متزامنة
- *      عبر handleAndroidResult('shareInvoiceJpg', ...).
- *   4. تنظيف الـtimeout وإلغاء تسجيل resolver في كل المسارات.
+ * ✅ إصلاح جذري: يُرسل HTML كامل إلى Kotlin مع <style> override
+ *    يُبطل قاعدة `#posInvoice { display:none }` الموجودة في posInvoiceStyleBlock
+ *    لأن WebView الالتقاط في Kotlin يبني مستنداً جديداً لا يعرف شيئاً عن
+ *    `body.invoice-print-mode` المُستخدم للطباعة. بدون هذا الـoverride
+ *    يُرسم WebView فارغاً وتُلتقط صورة بيضاء كاملة.
  */
 async function sendWhatsappInvoice() {
     if (_whatsappBusy) return;
@@ -5524,16 +5515,70 @@ async function sendWhatsappInvoice() {
             throw new Error('مشاركة الفاتورة المصورة متاحة من داخل تطبيق Android فقط');
         }
 
-        /*
-         * جمع HTML كامل يُرسل لـKotlin. الروابط إلزامية:
-         * WebView الالتقاط في Kotlin لا يعرف موارد المستند الأصلي، فيحتاج
-         * تحميل Cairo و Font Awesome بشكل صريح قبل الرسم.
-         */
+        /* ═══════════════════════════════════════════════════════════════
+           بناء HTML كامل + override CSS يجبر ظهور #posInvoice
+           ═══════════════════════════════════════════════════════════════ */
         const fontLinks =
             '<link rel="stylesheet" href="file:///android_asset/assets-local/css/css2">' +
             '<link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">';
         const invoiceStyle = document.getElementById('posInvoiceStyleBlock')?.outerHTML || '';
-        const invoiceHtml = fontLinks + invoiceStyle + invoiceSection.outerHTML;
+
+        const overrideStyle =
+            '<style id="posInvoiceCaptureOverride">' +
+                'html,body{' +
+                    'margin:0!important;padding:0!important;' +
+                    'background:#ffffff!important;direction:rtl!important;' +
+                    'width:210mm!important;min-height:297mm!important;' +
+                    '-webkit-font-smoothing:antialiased;' +
+                '}' +
+                '#posInvoice{' +
+                    'display:block!important;' +
+                    'visibility:visible!important;' +
+                    'opacity:1!important;' +
+                    'position:relative!important;' +
+                    'width:210mm!important;' +
+                    'min-height:297mm!important;' +
+                    'margin:0 auto!important;' +
+                    'background:#ffffff!important;' +
+                    'padding:10mm 9mm 8mm!important;' +
+                '}' +
+                '#posInvoice *{' +
+                    'visibility:visible!important;' +
+                    'opacity:1!important;' +
+                '}' +
+                '@media(max-width:720px){' +
+                    '#posInvoice{' +
+                        'width:210mm!important;' +
+                        'min-height:297mm!important;' +
+                        'padding:10mm 9mm 8mm!important;' +
+                    '}' +
+                    '#posInvoice .invoice-header{grid-template-columns:1fr 1.4fr 1fr!important;gap:4mm!important;padding:6mm!important;}' +
+                    '#posInvoice .invoice-meta{order:initial!important;}' +
+                    '#posInvoice .invoice-center{order:initial!important;margin-top:0!important;}' +
+                    '#posInvoice .invoice-logo-circle{width:34mm!important;height:34mm!important;right:-5mm!important;}' +
+                    '#posInvoice .invoice-title{font-size:22px!important;padding:2.5mm 12mm!important;}' +
+                    '#posInvoice .invoice-items th,#posInvoice .invoice-items td{font-size:11px!important;padding:2.2mm 1.5mm!important;}' +
+                '}' +
+            '</style>';
+
+        const viewportMeta =
+            '<meta name="viewport" content="width=794, initial-scale=1.0, ' +
+            'maximum-scale=1.0, user-scalable=no">';
+
+        const invoiceHtml =
+            '<!DOCTYPE html>' +
+            '<html lang="ar" dir="rtl">' +
+            '<head>' +
+                '<meta charset="UTF-8">' +
+                viewportMeta +
+                fontLinks +
+                invoiceStyle +
+                overrideStyle +
+            '</head>' +
+            '<body>' +
+                invoiceSection.outerHTML +
+            '</body>' +
+            '</html>';
 
         const resultPromise = new Promise((resolve, reject) => {
             registerPendingCall('shareInvoiceJpg', resolve);

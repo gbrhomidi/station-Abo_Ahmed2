@@ -1369,6 +1369,550 @@
             box-shadow: 0 0 0 1px rgba(99,199,255,.16), 0 0 18px rgba(99,199,255,.07);
         }
 
+        /* ═══════════════════════════════════════════════════════════
+           NEW 1 — مفاتيح العرض (شجرة / بطاقات / جدول)
+           ═══════════════════════════════════════════════════════════ */
+        .title-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .view-switcher {
+            display: inline-flex;
+            padding: 4px;
+            border-radius: 14px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            gap: 2px;
+        }
+        .view-btn {
+            width: 36px;
+            height: 36px;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+            touch-action: manipulation;
+        }
+        .view-btn:hover { background: var(--card-hover-bg); color: var(--primary); }
+        .view-btn.active {
+            background: linear-gradient(135deg, var(--primary-2), var(--primary));
+            color: #fff;
+            box-shadow: 0 6px 14px color-mix(in srgb, var(--primary) 40%, transparent);
+        }
+        .view-btn:active { transform: scale(0.9); }
+
+        /* ═══════════════════════════════════════════════════════════
+           NEW 2 — عرض الجدول (Table View)
+           ═══════════════════════════════════════════════════════════ */
+        .records-table-wrap {
+            width: 100%;
+            overflow-x: auto;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--surface);
+            box-shadow: var(--shadow);
+            -webkit-overflow-scrolling: touch;
+        }
+        .records-table {
+            width: 100%;
+            min-width: 760px;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+        .records-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            background: linear-gradient(135deg, var(--primary), var(--primary-2));
+            color: #fff;
+            padding: 12px 10px;
+            text-align: center;
+            font-weight: 800;
+            font-size: 0.78rem;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+            border-bottom: 1px solid var(--border);
+        }
+        .records-table tbody td {
+            padding: 11px 10px;
+            text-align: center;
+            color: var(--data-text-color);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .records-table tbody tr { transition: background 0.2s; }
+        .records-table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+        .records-table tbody tr:hover { background: var(--card-hover-bg); }
+        .records-table .cell-actions { display: flex; gap: 6px; justify-content: center; }
+        .records-table .cell-actions .btn {
+            padding: 6px 10px;
+            font-size: 0.72rem;
+            border-radius: 8px;
+        }
+        .records-table .badge-pay {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 700;
+        }
+        .badge-pay.cash { background: rgba(22,163,74,0.15); color: var(--success); }
+        .badge-pay.credit { background: rgba(217,119,6,0.15); color: var(--warning); }
+        .badge-pay.other { background: var(--primary-soft); color: var(--primary); }
+
+        /* ═══════════════════════════════════════════════════════════
+           NEW 3 — عرض الشجرة (Tree View)
+           ═══════════════════════════════════════════════════════════ */
+        .tree-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .tree-group {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            transition: box-shadow 0.25s;
+        }
+        .tree-group:hover { box-shadow: var(--shadow-lg); }
+        .tree-group-header {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 16px;
+            background: linear-gradient(135deg,
+                color-mix(in srgb, var(--primary) 12%, transparent),
+                color-mix(in srgb, var(--primary-2) 8%, transparent));
+            border: none;
+            cursor: pointer;
+            font-family: var(--font-sans);
+            color: var(--data-text-color);
+            text-align: right;
+            touch-action: manipulation;
+            transition: background 0.25s;
+        }
+        .tree-group-header:hover {
+            background: linear-gradient(135deg,
+                color-mix(in srgb, var(--primary) 18%, transparent),
+                color-mix(in srgb, var(--primary-2) 12%, transparent));
+        }
+        .tree-group-header .tree-chevron {
+            color: var(--primary);
+            font-size: 0.9rem;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .tree-group.collapsed .tree-chevron { transform: rotate(-90deg); }
+        .tree-group.collapsed .tree-group-body { max-height: 0; padding: 0; opacity: 0; }
+        .tree-group-body {
+            max-height: 5000px;
+            transition: max-height 0.45s ease, padding 0.3s ease, opacity 0.3s ease;
+            padding: 8px 14px 14px;
+            opacity: 1;
+        }
+        .tree-group-title {
+            flex: 1;
+            font-weight: 800;
+            font-size: 0.95rem;
+            color: var(--data-text-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .tree-group-title i { color: var(--primary); font-size: 1rem; }
+        .tree-group-meta {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .tree-meta-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 10px;
+            background: var(--surface-2);
+            color: var(--muted);
+            font-size: 0.7rem;
+            font-weight: 700;
+            border: 1px solid var(--border);
+        }
+        .tree-meta-item i { font-size: 0.7rem; color: var(--primary); }
+        .tree-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            margin-top: 6px;
+            border-radius: 10px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .tree-item:hover {
+            background: var(--card-hover-bg);
+            border-color: var(--primary);
+            transform: translateX(-3px);
+        }
+        .tree-item-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-2));
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            flex-shrink: 0;
+        }
+        .tree-item-body { flex: 1; min-width: 0; text-align: right; }
+        .tree-item-title {
+            font-weight: 800;
+            font-size: 0.85rem;
+            color: var(--data-text-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .tree-item-sub {
+            font-size: 0.7rem;
+            color: var(--muted);
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .tree-item-value {
+            font-weight: 900;
+            color: var(--accent);
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+        .tree-item-actions {
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .tree-item-actions button {
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            transition: all 0.2s;
+        }
+        .tree-item-actions button:hover {
+            background: var(--primary-soft);
+            color: var(--primary);
+            border-color: var(--primary);
+        }
+        .tree-item-actions button.danger:hover {
+            background: rgba(220,38,38,0.15);
+            color: var(--danger);
+            border-color: var(--danger);
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           NEW 4 — إشعار متطور (نجاح / فشل البيع)
+           ═══════════════════════════════════════════════════════════ */
+        .advanced-notification {
+            position: fixed;
+            top: 78px;
+            left: 50%;
+            transform: translate(-50%, -220%) scale(0.85);
+            z-index: 5000;
+            width: min(420px, 92vw);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.35),
+                        0 8px 20px rgba(0,0,0,0.22),
+                        inset 0 1px 0 rgba(255,255,255,0.25);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        opacity 0.35s ease;
+            direction: rtl;
+        }
+        .advanced-notification.show {
+            transform: translate(-50%, 0) scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .advanced-notification.success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #fff;
+        }
+        .advanced-notification.error {
+            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+            color: #fff;
+        }
+        .advanced-notification.warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+            color: #fff;
+        }
+        .advanced-notification-content {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 20px 18px;
+        }
+        .advanced-notification-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.22);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+            backdrop-filter: blur(6px);
+            box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35);
+        }
+        .advanced-notification.success .advanced-notification-icon i {
+            animation: advancedPopCheck 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes advancedPopCheck {
+            0% { transform: scale(0.3); opacity: 0; }
+            60% { transform: scale(1.25); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .advanced-notification-text { flex: 1; min-width: 0; text-align: right; }
+        .advanced-notification-title {
+            font-size: 1rem;
+            font-weight: 900;
+            margin-bottom: 4px;
+            letter-spacing: 0.2px;
+        }
+        .advanced-notification-message {
+            font-size: 0.82rem;
+            line-height: 1.5;
+            opacity: 0.95;
+            word-wrap: break-word;
+        }
+        .advanced-notification-close {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.22);
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+        .advanced-notification-close:hover { background: rgba(255,255,255,0.4); }
+        .advanced-notification-progress {
+            height: 4px;
+            background: rgba(255,255,255,0.25);
+            position: relative;
+            overflow: hidden;
+        }
+        .advanced-notification-progress::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: #fff;
+            opacity: 0.85;
+            transform-origin: right center;
+            animation: advancedProgress 3.2s linear forwards;
+        }
+        @keyframes advancedProgress {
+            0% { transform: scaleX(1); }
+            100% { transform: scaleX(0); }
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           NEW 5 — مودال مرتجع/تالف مبيعات الوقود المُعاد تصميمه
+           ═══════════════════════════════════════════════════════════ */
+        .fuel-adjust-modal {
+            border-radius: 24px 24px 0 0;
+        }
+        .fuel-adjust-modal .modal-header {
+            padding: 4px 4px 16px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 18px;
+            position: relative;
+        }
+        .fuel-adjust-modal .modal-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--data-text-color);
+            font-size: 1.05rem;
+            font-weight: 900;
+        }
+        .fuel-adjust-modal .modal-title i {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--warning), #b45309);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+        }
+        .fuel-adjust-modal .modal-body { padding: 0 4px; }
+        .fuel-adjust-modal .form-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .fuel-adjust-modal .form-group.full { grid-column: 1 / -1; }
+        .fuel-adjust-modal .form-input {
+            padding: 11px 12px;
+            font-size: 0.88rem;
+            border-radius: 11px;
+        }
+        .fuel-adjust-modal .form-input.readonly,
+        .fuel-adjust-modal .form-input[readonly] {
+            background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+            color: var(--muted);
+            cursor: default;
+            font-weight: 700;
+        }
+        .fuel-adjust-modal select.form-input {
+            cursor: pointer;
+            appearance: none;
+            background-image:
+                linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+                linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+            background-position:
+                calc(100% - 18px) calc(50% - 3px),
+                calc(100% - 13px) calc(50% - 3px);
+            background-size: 5px 5px, 5px 5px;
+            background-repeat: no-repeat;
+            padding-left: 30px;
+        }
+        .fuel-adjust-modal .required-mark { color: var(--danger); font-weight: 900; }
+        .fuel-adjust-modal .modal-footer {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr;
+            gap: 10px;
+            padding: 16px 4px 6px;
+            border-top: 1px solid var(--border);
+            margin-top: 8px;
+        }
+        .fuel-adjust-modal .modal-footer .btn {
+            padding: 13px 12px;
+            border-radius: 13px;
+            font-size: 0.9rem;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-family: var(--font-sans);
+            cursor: pointer;
+            transition: all 0.25s;
+        }
+        .fuel-adjust-modal .modal-footer .btn.primary {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            border: none;
+            box-shadow: 0 8px 20px rgba(16,185,129,0.35);
+        }
+        .fuel-adjust-modal .modal-footer .btn.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 26px rgba(16,185,129,0.5);
+        }
+        .fuel-adjust-modal .modal-footer .btn.primary:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .fuel-adjust-modal .modal-footer .btn:not(.primary) {
+            background: var(--surface-2);
+            color: var(--muted);
+            border: 1px solid var(--border);
+        }
+        .fuel-adjust-modal .modal-footer .btn:not(.primary):hover {
+            background: var(--card-hover-bg);
+            color: var(--text);
+        }
+        .fuel-adjust-modal .sale-preview {
+            background: linear-gradient(135deg,
+                color-mix(in srgb, var(--primary) 8%, transparent),
+                color-mix(in srgb, var(--primary-2) 5%, transparent));
+            border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            display: none;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px 14px;
+        }
+        .fuel-adjust-modal .sale-preview.show { display: grid; }
+        .fuel-adjust-modal .sale-preview .preview-item {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            text-align: right;
+        }
+        .fuel-adjust-modal .sale-preview .preview-item span {
+            font-size: 0.7rem;
+            color: var(--muted);
+            font-weight: 700;
+        }
+        .fuel-adjust-modal .sale-preview .preview-item strong {
+            font-size: 0.85rem;
+            color: var(--data-text-color);
+            font-weight: 800;
+            overflow-wrap: anywhere;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           NEW 6 — زر القائمة السفلية "مرتجع/تالف" بتصميم متطور
+           ═══════════════════════════════════════════════════════════ */
+        .bottom-nav .nav-item.nav-warning {
+            color: var(--warning);
+            position: relative;
+        }
+        .bottom-nav .nav-item.nav-warning::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(217,119,6,0.22), transparent 70%);
+            animation: warningPulse 2.4s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes warningPulse {
+            0%, 100% { transform: translateX(-50%) scale(0.9); opacity: 0.6; }
+            50% { transform: translateX(-50%) scale(1.25); opacity: 1; }
+        }
+        .bottom-nav .nav-item.nav-warning i {
+            color: var(--warning);
+            filter: drop-shadow(0 0 6px rgba(217,119,6,0.55));
+        }
+        .bottom-nav .nav-item.nav-warning span { color: var(--warning); }
     </style>
 <script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script>  <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
@@ -1398,12 +1942,23 @@
             <article class="stat-card"><div class="stat-icon purple"><i class="fas fa-clock"></i></div><div class="stat-value" id="statUpdated">—</div><div class="stat-label">آخر تحديث</div></article>
         </section>
         <section class="data-panel">
-            <div class="section-title"><h3><i class="fas fa-gas-pump"></i> مبيعات الوقود</h3><span class="count-badge" id="itemCount">0</span></div>
+            <div class="section-title">
+                <h3><i class="fas fa-gas-pump"></i> مبيعات الوقود</h3>
+                <div class="title-actions">
+                    <div class="view-switcher" id="viewSwitcher" role="group" aria-label="طريقة عرض السجلات">
+                        <button type="button" class="view-btn" data-view="tree" title="عرض شجرة" aria-label="عرض شجرة"><i class="fas fa-sitemap"></i></button>
+                        <button type="button" class="view-btn active" data-view="cards" title="عرض بطاقات" aria-label="عرض بطاقات"><i class="fas fa-th-large"></i></button>
+                        <button type="button" class="view-btn" data-view="table" title="عرض جدول" aria-label="عرض جدول"><i class="fas fa-table"></i></button>
+                    </div>
+                    <span class="count-badge" id="itemCount">0</span>
+                </div>
+            </div>
             <div class="cards-container" id="cardsContainer"></div>
         </section>
     </main>
     <nav class="bottom-nav" id="bottomNav" aria-label="عمليات مبيعات الوقود">
         <button type="button" class="nav-item primary" id="newSaleBtn"><i class="fas fa-plus"></i><span>طلب جديد</span></button>
+        <button type="button" class="nav-item nav-warning" id="fuelAdjustmentBtn" title="مرتجع / تالف مبيعات الوقود"><i class="fas fa-rotate-left"></i><span>مرتجع/تالف</span></button>
         <button type="button" class="nav-item" id="reportBtn"><i class="fas fa-chart-bar"></i><span>تقارير</span></button>
     </nav>
     <div class="modal-overlay" id="formModal" onclick="closeModal(event,'formModal')"><div class="modal" onclick="event.stopPropagation()">
@@ -1421,7 +1976,111 @@
         <div class="modal-body"><div class="form-grid"><div class="form-group"><label class="form-label">من تاريخ</label><input class="form-input" type="date" id="reportFrom"></div><div class="form-group"><label class="form-label">إلى تاريخ</label><input class="form-input" type="date" id="reportTo"></div></div><div class="action-row"><button type="button" class="btn primary" onclick="generateReport()"><i class="fas fa-cog"></i> توليد من المصدر</button><button type="button" class="btn" onclick="exportData()"><i class="fas fa-file-export"></i> Excel/CSV</button><button type="button" class="btn" onclick="window.print()"><i class="fas fa-print"></i> طباعة/PDF</button></div><div id="reportResults" style="margin-top:14px"></div></div>
     </div></div>
     <div class="modal-overlay" id="aiModal" onclick="closeModal(event,'aiModal')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-header"><h3 class="modal-title">المساعد الذكي</h3><button type="button" class="modal-close" onclick="closeModal(null,'aiModal')"><i class="fas fa-times"></i></button></div><div class="modal-body"><textarea class="form-input" id="aiPrompt" rows="4" placeholder="اكتب سؤالك..."></textarea><div class="action-row"><button class="btn primary" type="button" onclick="askAI()">إرسال</button></div><div class="ai-output" id="aiOutput"></div></div></div></div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         مودال مرتجع / تالف مبيعات الوقود — تصميم متطور مُعاد بناؤه
+         ═══════════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="fuelAdjustmentModal" onclick="closeModal(event,'fuelAdjustmentModal')">
+        <div class="modal fuel-adjust-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fas fa-rotate-left"></i>
+                    <span>مرتجع / تالف مبيعات الوقود</span>
+                </h3>
+                <button type="button" class="modal-close" onclick="closeModal(null,'fuelAdjustmentModal')" aria-label="إغلاق">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group full">
+                        <label class="form-label" for="fuelAdjustmentSaleSelect">
+                            <i class="fas fa-receipt"></i> رقم البيع <span class="required-mark">*</span>
+                        </label>
+                        <select class="form-input" id="fuelAdjustmentSaleSelect" autocomplete="off">
+                            <option value="">— اختر رقم البيع —</option>
+                        </select>
+                    </div>
+
+                    <div class="sale-preview" id="fuelAdjustmentPreview">
+                        <div class="preview-item">
+                            <span><i class="fas fa-gas-pump"></i> نوع الوقود</span>
+                            <strong id="fuelAdjustmentPreviewFuel">—</strong>
+                        </div>
+                        <div class="preview-item">
+                            <span><i class="fas fa-calendar-day"></i> تاريخ البيع</span>
+                            <strong id="fuelAdjustmentPreviewDate">—</strong>
+                        </div>
+                        <div class="preview-item">
+                            <span><i class="fas fa-user"></i> اسم العميل</span>
+                            <strong id="fuelAdjustmentPreviewCustomer">—</strong>
+                        </div>
+                        <div class="preview-item">
+                            <span><i class="fas fa-droplet"></i> الكمية المباعة</span>
+                            <strong id="fuelAdjustmentPreviewQty">—</strong>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="fuelAdjustmentType">نوع العملية</label>
+                        <select class="form-input" id="fuelAdjustmentType">
+                            <option value="return">مرتجع — يعيد الوقود للخزان</option>
+                            <option value="damage">تالف — لا يعيد الوقود للخزان</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="fuelAdjustmentAvailable">الكمية المتاحة (لتر)</label>
+                        <input class="form-input readonly" id="fuelAdjustmentAvailable" type="text" readonly placeholder="0.00">
+                    </div>
+
+                    <div class="form-group full">
+                        <label class="form-label" for="fuelAdjustmentQty">
+                            الكمية (لتر) <span class="required-mark">*</span>
+                        </label>
+                        <input class="form-input" id="fuelAdjustmentQty" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="أدخل الكمية">
+                    </div>
+
+                    <div class="form-group full">
+                        <label class="form-label" for="fuelAdjustmentReason">
+                            السبب <span class="required-mark">*</span>
+                        </label>
+                        <textarea class="form-input" id="fuelAdjustmentReason" rows="3" placeholder="اذكر سبب الإرجاع أو التلف..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn primary" id="fuelAdjustmentConfirmBtn" onclick="saveFuelAdjustment()">
+                    <i class="fas fa-check-double"></i> توثيق
+                </button>
+                <button type="button" class="btn" onclick="closeModal(null,'fuelAdjustmentModal')">
+                    <i class="fas fa-times"></i> إلغاء
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="toast" id="toast"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         إشعار متطور للنجاح / الفشل
+         ═══════════════════════════════════════════════════════════ -->
+    <div id="advancedNotification" class="advanced-notification" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="advanced-notification-content">
+            <div class="advanced-notification-icon" id="advancedNotificationIcon">
+                <i class="fas fa-check"></i>
+            </div>
+            <div class="advanced-notification-text">
+                <h4 class="advanced-notification-title" id="advancedNotificationTitle">عملية ناجحة</h4>
+                <p class="advanced-notification-message" id="advancedNotificationMessage"></p>
+            </div>
+            <button type="button" class="advanced-notification-close" id="advancedNotificationClose" aria-label="إغلاق">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="advanced-notification-progress" id="advancedNotificationProgress"></div>
+    </div>
+
     <script>
     (() => {
         'use strict';
@@ -1450,6 +2109,113 @@
             createMethod:'saveFuelSaleRecord',updateMethod:'updateFuelSaleRecord',deleteMethod:'deleteFuelSaleRecord',
             reportKind:'operational:FuelSale',reports:['الكل','مبيعات كاش','مبيعات آجل'],operationKey:null
         }
+
+        /* ============================================================
+           NEW — خريطة ترجمة الحقول إلى العربية (تظهر بدل مفاتيح DB)
+           ============================================================ */
+        const FIELD_LABELS = {
+            sale_id:'رقم البيع',
+            id:'المعرف',
+            shift_id:'الوردية',
+            pump_id:'المضخة',
+            nozzle_id:'الفوهة',
+            fuel_type_id:'نوع الوقود',
+            fuel_id:'نوع الوقود',
+            fuel_name:'نوع الوقود',
+            fuel_name_ar:'نوع الوقود',
+            quantity:'الكمية (لتر)',
+            liters:'الكمية (لتر)',
+            price_per_liter:'سعر اللتر',
+            unit_price:'سعر الوحدة',
+            total_amount:'الإجمالي',
+            total_price:'الإجمالي',
+            net_amount:'الصافي',
+            payment_method:'طريقة الدفع',
+            payment_type:'طريقة الدفع',
+            customer_id:'معرف العميل',
+            customer_name:'اسم العميل',
+            customer_party_id:'معرف العميل',
+            sale_date:'تاريخ البيع',
+            sale_time:'وقت البيع',
+            business_day:'يوم العمل',
+            occasion_code:'رمز العرض',
+            notes:'ملاحظات',
+            status:'الحالة',
+            is_active:'نشط',
+            is_deleted:'محذوف',
+            created_at:'تاريخ الإنشاء',
+            updated_at:'تاريخ التحديث',
+            original_quantity:'الكمية الأصلية',
+            returned_quantity:'المرتجع',
+            damaged_quantity:'التالف',
+            returnable_quantity:'المتاح للإرجاع',
+            shift_name:'اسم الوردية',
+            pump_name:'اسم المضخة',
+            pump_name_ar:'اسم المضخة',
+            nozzle_number:'رقم الفوهة',
+            cashier_name:'أمين الصندوق',
+            user_name:'المستخدم',
+            username:'المستخدم',
+            station_id:'المحطة',
+            branch_id:'الفرع',
+            sms_status:'حالة الرسالة',
+            delivery_status:'حالة التوصيل'
+        };
+
+        const VALUE_TRANSLATIONS = {
+            cash:'نقدي', 'cash_payment':'نقدي', 'نقداً':'نقدي', 'نقدي':'نقدي',
+            credit:'آجل', 'credit_sale':'آجل', 'credit_account':'آجل', 'آجل':'آجل',
+            credit_card:'بطاقة', 'card':'بطاقة',
+            bank_transfer:'تحويل بنكي', 'transfer':'تحويل بنكي',
+            cheque:'شيك', 'check':'شيك',
+            mobile_money:'محفظة إلكترونية', 'wallet':'محفظة إلكترونية',
+            active:'نشط', 'inactive:'inactive',
+            pending:'قيد المعالجة', 'processing:'قيد المعالجة',
+            completed:'مكتمل', 'done:'مكتمل',
+            cancelled:'ملغى', 'canceled:'ملغى',
+            failed:'فاشل', 'rejected:'مرفوض',
+            returned:'مرتجع',
+            damaged:'تالف',
+            true:'نعم', 'false':'لا',
+            '1':'نعم', '0':'لا'
+        };
+
+        function translateFieldLabel(key) {
+            if (!key) return '';
+            return FIELD_LABELS[key] || FIELD_LABELS[String(key).toLowerCase()] || String(key);
+        }
+
+        function translateFieldValue(key, value) {
+            if (value === null || value === undefined || value === '') return '—';
+            const k = String(key || '').toLowerCase();
+            const v = String(value).trim();
+            const vLower = v.toLowerCase();
+
+            if (k === 'payment_method' || k === 'payment_type') {
+                return VALUE_TRANSLATIONS[vLower] || v;
+            }
+            if (k === 'status' || k === 'delivery_status' || k === 'sms_status') {
+                return VALUE_TRANSLATIONS[vLower] || v;
+            }
+            if (k === 'is_active' || k === 'is_deleted') {
+                const n = Number(value);
+                const isOne = n === 1 || vLower === 'true' || v === '1' || v === 'نعم';
+                if (k === 'is_deleted') return isOne ? 'نعم' : 'لا';
+                return isOne ? 'نشط' : 'غير نشط';
+            }
+            if (k === 'quantity' || k === 'liters' || k === 'price_per_liter' ||
+                k === 'unit_price' || k === 'total_amount' || k === 'total_price' ||
+                k === 'net_amount' || k === 'original_quantity' ||
+                k === 'returned_quantity' || k === 'damaged_quantity' ||
+                k === 'returnable_quantity') {
+                const n = Number(value);
+                if (Number.isFinite(n)) return n.toFixed(2);
+            }
+            if (vLower === 'true') return 'نعم';
+            if (vLower === 'false') return 'لا';
+            return v;
+        }
+
         const bridge = window.AndroidInterface;
         const state = {
             rows: [],
@@ -1458,8 +2224,19 @@
             filter: 'all',
             loadedAt: null,
             pendingIdempotencyKey: null,
-            priceLookupSeq: 0
+            priceLookupSeq: 0,
+            viewMode: 'cards',            /* NEW — وضع العرض الحالي */
+            fuelAdjustmentCache: []       /* NEW — ذاكرة مؤقتة لمبيعات الوقود */
         };
+
+        /* استرجاع تفضيل طريقة العرض من localStorage */
+        try {
+            const savedView = localStorage.getItem('fuel-sales-view');
+            if (savedView === 'cards' || savedView === 'tree' || savedView === 'table') {
+                state.viewMode = savedView;
+            }
+        } catch (_) {}
+
         const $ = (id) => document.getElementById(id);
         function newIdempotencyKey(){
             if(window.crypto?.randomUUID){
@@ -1474,7 +2251,90 @@
 
         const esc = (value) => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const today = () => businessDayDate();
-        function toast(message, bad=false) { const node=$('formModal')?.classList.contains('show') ? $('formToast') : $('toast'); node.textContent=message; node.className='toast show'; node.style.background=bad?'var(--error)':'#111827'; clearTimeout(node._timer); node._timer=setTimeout(()=>node.classList.remove('show'),3500); }
+
+        /* ============================================================
+           NEW — toast يدعم context صريح (form / global / auto)
+           ============================================================ */
+        function toast(message, bad=false, context='auto') {
+            let node;
+            if (context === 'form') {
+                node = $('formToast');
+            } else if (context === 'global') {
+                node = $('toast');
+            } else {
+                node = ($('formModal')?.classList.contains('show')) ? $('formToast') : $('toast');
+            }
+            if (!node) node = $('toast');
+            if (!node) return;
+            node.textContent = message;
+            node.className = 'toast show ' + (bad ? 'error' : 'success');
+            node.style.background = bad ? 'var(--error)' : 'var(--success)';
+            node.style.color = '#fff';
+            node.style.border = 'none';
+            clearTimeout(node._timer);
+            node._timer = setTimeout(() => node.classList.remove('show'), 3500);
+        }
+
+        /* ============================================================
+           NEW — إشعار متطور للنجاح/الفشل
+           ============================================================ */
+        let _advTimeout = null;
+        function showAdvancedNotification(message, type='success', title) {
+            const el = $('advancedNotification');
+            if (!el) return;
+            const iconEl = $('advancedNotificationIcon');
+            const titleEl = $('advancedNotificationTitle');
+            const msgEl = $('advancedNotificationMessage');
+            const progressEl = $('advancedNotificationProgress');
+
+            const normalized = (type === 'error' || type === 'fail' || type === 'danger') ? 'error'
+                             : (type === 'warning' || type === 'warn') ? 'warning'
+                             : 'success';
+
+            const config = {
+                success: { icon: 'fa-check', title: title || 'عملية ناجحة', duration: 3200 },
+                error:   { icon: 'fa-exclamation-triangle', title: title || 'فشلت العملية', duration: 4200 },
+                warning: { icon: 'fa-exclamation-circle', title: title || 'تنبيه', duration: 3800 }
+            }[normalized];
+
+            el.classList.remove('show', 'success', 'error', 'warning');
+            void el.offsetWidth;
+            el.classList.add(normalized);
+            if (iconEl) iconEl.innerHTML = `<i class="fas ${config.icon}"></i>`;
+            if (titleEl) titleEl.textContent = config.title;
+            if (msgEl) msgEl.textContent = message || '';
+
+            /* إعادة تشغيل شريط التقدم */
+            if (progressEl) {
+                progressEl.innerHTML = '';
+                const bar = document.createElement('div');
+                bar.style.position = 'absolute';
+                bar.style.inset = '0';
+                bar.style.background = '#fff';
+                bar.style.opacity = '0.85';
+                bar.style.transformOrigin = 'right center';
+                bar.style.transform = 'scaleX(1)';
+                bar.style.animation = `advancedProgress ${config.duration}ms linear forwards`;
+                progressEl.appendChild(bar);
+            }
+
+            requestAnimationFrame(() => el.classList.add('show'));
+            clearTimeout(_advTimeout);
+            _advTimeout = setTimeout(() => el.classList.remove('show'), config.duration);
+        }
+
+        /* زر الإغلاق */
+        document.addEventListener('DOMContentLoaded', () => {
+            const closeBtn = $('advancedNotificationClose');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    const el = $('advancedNotification');
+                    if (el) el.classList.remove('show');
+                    clearTimeout(_advTimeout);
+                });
+            }
+        });
+
         function setLoading(value) { $('loadingIndicator').classList.toggle('show', Boolean(value)); }
         function parse(raw) { if (raw == null) throw new Error('لم يرجع الجسر نتيجة'); const value=typeof raw==='string'?JSON.parse(raw):raw; if (value && value.success === false) throw new Error(value.error || value.message || 'فشلت العملية'); return value; }
         function dataOf(value) { return value && Object.prototype.hasOwnProperty.call(value,'data') ? value.data : value; }
@@ -1505,6 +2365,27 @@
         function idOf(row) { return field(row,['id','_id','vehicle_id','pump_id','tank_id','payment_id','shift_id','sale_id','request_id','asset_id','employee_id']); }
         function numeric(v) { const n=Number(v); return Number.isFinite(n)?n:0; }
         function setDateDefaults() { $('reportFrom').value = $('reportFrom').value || today(); $('reportTo').value = $('reportTo').value || today(); }
+
+        /* ============================================================
+           NEW — تفعيل مفاتيح العرض (شجرة / بطاقات / جدول)
+           ============================================================ */
+        function setupViewSwitcher() {
+            const container = $('viewSwitcher');
+            if (!container) return;
+            const buttons = container.querySelectorAll('.view-btn');
+            buttons.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.view === state.viewMode);
+                btn.addEventListener('click', () => {
+                    const view = btn.dataset.view;
+                    if (!view || view === state.viewMode) return;
+                    state.viewMode = view;
+                    buttons.forEach(b => b.classList.toggle('active', b.dataset.view === view));
+                    try { localStorage.setItem('fuel-sales-view', view); } catch (_) {}
+                    renderCards();
+                });
+            });
+        }
+
         function renderFilters() {
                 document.querySelectorAll('#filterChips .filter-chip').forEach(btn=>btn.addEventListener('click',()=>{
                 document.querySelectorAll('#filterChips .filter-chip').forEach(x=>x.classList.remove('active'));
@@ -1533,23 +2414,196 @@
             let total=0; (CFG.valueFields||[]).forEach(k=>total += rows.reduce((sum,row)=>sum+numeric(row&&row[k]),0)); $('statTotal').textContent=total?total.toLocaleString('ar',{maximumFractionDigits:2}):'—';
             $('statUpdated').textContent=state.loadedAt?state.loadedAt.toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}):'—';
         }
+
+        /* ============================================================
+           دالة التوزيع الرئيسية على أساس viewMode
+           ============================================================ */
         function renderCards() {
-            renderStats(); const box=$('cardsContainer');
-            if (!state.filtered.length) { box.innerHTML=`<div class="empty-state"><i class="fas fa-inbox"></i><p>${CFG.mode==='unsupported'?'لا توجد عملية مدعومة لهذا المسار في العقد الحالي.':'لا توجد نتائج مطابقة أو لم تُرجع قاعدة البيانات سجلات.'}</p></div>`; return; }
-            box.innerHTML=state.filtered.map((row,index)=>{
-                const id=esc(idOf(row)||index); const fields=(CFG.subtitleFields||[]).filter(k=>row && row[k]!==undefined && row[k]!==null && row[k]!=='').slice(0,8);
+            renderStats();
+            const box = $('cardsContainer');
+            if (!box) return;
+
+            if (!state.filtered.length) {
+                box.className = 'cards-container';
+                box.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>${CFG.mode==='unsupported'?'لا توجد عملية مدعومة لهذا المسار في العقد الحالي.':'لا توجد نتائج مطابقة أو لم تُرجع قاعدة البيانات سجلات.'}</p></div>`;
+                return;
+            }
+
+            if (state.viewMode === 'table') {
+                box.className = 'cards-container view-table';
+                box.innerHTML = renderTableHtml();
+                bindRowEvents(box);
+            } else if (state.viewMode === 'tree') {
+                box.className = 'cards-container view-tree';
+                box.innerHTML = renderTreeHtml();
+                bindRowEvents(box);
+            } else {
+                box.className = 'cards-container view-cards';
+                box.innerHTML = renderCardsHtml();
+                bindRowEvents(box);
+            }
+        }
+
+        /* ---------- عرض البطاقات (Card View) ---------- */
+        function renderCardsHtml() {
+            return state.filtered.map((row,index)=>{
+                const id=esc(idOf(row)||index);
+                const fields=(CFG.subtitleFields||[]).filter(k=>row && row[k]!==undefined && row[k]!==null && row[k]!=='');
                 const value=(CFG.valueFields||[]).map(k=>numeric(row&&row[k])).filter(v=>v!==0).reduce((a,b)=>a+b,0);
                 const buttons=`<div class="action-row"><button class="btn" type="button" data-view="${id}"><i class="fas fa-eye"></i> عرض</button>${CFG.updateMethod?`<button class="btn warning" type="button" data-edit="${id}"><i class="fas fa-edit"></i> تعديل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.deleteMethod?`<button class="btn danger" type="button" data-delete="${id}"><i class="fas fa-trash"></i> حذف</button>`:''}${row.sale_id?`<button class="btn warning" type="button" data-adjust="${id}"><i class="fas fa-rotate-left"></i> مرتجع/تالف</button>`:''}</div>`;
-                return `<article class="data-card"><div class="data-card-head"><div><div class="data-card-title">${esc(titleOf(row))}</div><div class="data-card-subtitle">${esc(subtitleOf(row))}</div></div>${value?`<div class="data-card-value">${value.toLocaleString('ar',{maximumFractionDigits:2})}</div>`:''}</div><div class="data-fields">${fields.map(k=>`<div class="data-field"><span>${esc(k)}</span><strong>${esc(row[k])}</strong></div>`).join('')}</div>${buttons}</article>`;
+                const subtitleHtml = fields.map(k => `${esc(translateFieldLabel(k))}: <strong>${esc(translateFieldValue(k, row[k]))}</strong>`).join(' · ');
+                return `<article class="data-card"><div class="data-card-head"><div><div class="data-card-title">${esc(titleOf(row))}</div><div class="data-card-subtitle">${subtitleHtml}</div></div>${value?`<div class="data-card-value">${value.toLocaleString('ar',{maximumFractionDigits:2})}</div>`:''}</div><div class="data-fields">${fields.map(k=>`<div class="data-field"><span>${esc(translateFieldLabel(k))}</span><strong>${esc(translateFieldValue(k, row[k]))}</strong></div>`).join('')}</div>${buttons}</article>`;
             }).join('');
-            box.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>openDetails(b.dataset.view)));
-            box.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>openForm(findRow(b.dataset.edit))));
-            box.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>deleteRow(findRow(b.dataset.delete))));
-            box.querySelectorAll('[data-resolve]').forEach(b=>b.addEventListener('click',()=>resolveRow(findRow(b.dataset.resolve))));
-             box.querySelectorAll('[data-adjust]').forEach(b=>b.addEventListener('click',()=>openFuelAdjustment(findRow(b.dataset.adjust))));
         }
+
+        /* ---------- عرض الجدول (Table View) ---------- */
+        function renderTableHtml() {
+            const columns = [
+                { key:'sale_id',           label:'رقم البيع' },
+                { key:'sale_date',         label:'التاريخ' },
+                { key:'sale_time',         label:'الوقت' },
+                { key:'fuel_type_id',      label:'نوع الوقود' },
+                { key:'quantity',          label:'الكمية (لتر)' },
+                { key:'price_per_liter',   label:'سعر اللتر' },
+                { key:'total_amount',      label:'الإجمالي' },
+                { key:'payment_method',    label:'الدفع' }
+            ];
+            const headerHtml = columns.map(c => `<th>${esc(c.label)}</th>`).join('') + '<th>إجراءات</th>';
+            const bodyHtml = state.filtered.map((row, index) => {
+                const id = esc(idOf(row) || index);
+                const cells = columns.map(c => {
+                    const v = row[c.key];
+                    if (c.key === 'payment_method') {
+                        const kind = paymentType(row);
+                        const cls = kind === 'credit' ? 'credit' : 'cash';
+                        const label = translateFieldValue(c.key, v);
+                        return `<td><span class="badge-pay ${cls}">${esc(label)}</span></td>`;
+                    }
+                    return `<td>${esc(translateFieldValue(c.key, v))}</td>`;
+                }).join('');
+                const actions = `
+                    <td>
+                        <div class="cell-actions">
+                            <button class="btn" type="button" data-view="${id}" title="عرض"><i class="fas fa-eye"></i></button>
+                            ${CFG.updateMethod ? `<button class="btn warning" type="button" data-edit="${id}" title="تعديل"><i class="fas fa-edit"></i></button>` : ''}
+                            ${row.sale_id ? `<button class="btn warning" type="button" data-adjust="${id}" title="مرتجع/تالف"><i class="fas fa-rotate-left"></i></button>` : ''}
+                            ${CFG.deleteMethod ? `<button class="btn danger" type="button" data-delete="${id}" title="حذف"><i class="fas fa-trash"></i></button>` : ''}
+                        </div>
+                    </td>
+                `;
+                return `<tr>${cells}${actions}</tr>`;
+            }).join('');
+            return `<div class="records-table-wrap"><table class="records-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
+        }
+
+        /* ---------- عرض الشجرة (Tree View) — مجمّع حسب التاريخ ---------- */
+        function renderTreeHtml() {
+            const groups = new Map();
+            state.filtered.forEach(row => {
+                const rawDate = String(row.sale_date || '').trim() || 'غير محدد';
+                if (!groups.has(rawDate)) groups.set(rawDate, []);
+                groups.get(rawDate).push(row);
+            });
+            const sortedDates = Array.from(groups.keys()).sort((a, b) => String(b).localeCompare(String(a)));
+
+            return `<div class="tree-container">` + sortedDates.map(date => {
+                const rows = groups.get(date);
+                const totalAmount = rows.reduce((sum, r) => sum + numeric(r.total_amount), 0);
+                const totalQty = rows.reduce((sum, r) => sum + numeric(r.quantity), 0);
+                const dateLabel = date === 'غير محدد' ? 'بدون تاريخ' : date;
+                const items = rows.map((row, idx) => {
+                    const id = esc(idOf(row) || `${date}-${idx}`);
+                    const fuelName = translateFieldValue('fuel_type_id', row.fuel_name_ar || row.fuel_name || row.fuel_type_id);
+                    const time = String(row.sale_time || '').trim() || '—';
+                    const customer = row.customer_name || row.customer_name_ar || 'بيع نقدي';
+                    const payment = translateFieldValue('payment_method', row.payment_method);
+                    return `
+                        <div class="tree-item" data-view="${id}">
+                            <div class="tree-item-icon"><i class="fas fa-gas-pump"></i></div>
+                            <div class="tree-item-body">
+                                <div class="tree-item-title">
+                                    #${esc(row.sale_id || id)} — ${esc(fuelName)}
+                                </div>
+                                <div class="tree-item-sub">
+                                    <i class="fas fa-clock"></i> ${esc(time)} ·
+                                    <i class="fas fa-user"></i> ${esc(customer)} ·
+                                    ${esc(payment)} ·
+                                    ${esc(numeric(row.quantity).toFixed(2))} لتر
+                                </div>
+                            </div>
+                            <div class="tree-item-value">${numeric(row.total_amount).toLocaleString('ar', { maximumFractionDigits: 2 })}</div>
+                            <div class="tree-item-actions">
+                                <button type="button" data-view="${id}" title="عرض"><i class="fas fa-eye"></i></button>
+                                ${row.sale_id ? `<button type="button" data-adjust="${id}" title="مرتجع/تالف"><i class="fas fa-rotate-left"></i></button>` : ''}
+                                ${CFG.deleteMethod ? `<button type="button" class="danger" data-delete="${id}" title="حذف"><i class="fas fa-trash"></i></button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="tree-group" data-group>
+                        <button type="button" class="tree-group-header" data-tree-toggle>
+                            <i class="fas fa-chevron-down tree-chevron"></i>
+                            <span class="tree-group-title"><i class="fas fa-calendar-day"></i> ${esc(dateLabel)}</span>
+                            <span class="tree-group-meta">
+                                <span class="tree-meta-item"><i class="fas fa-receipt"></i> ${rows.length}</span>
+                                <span class="tree-meta-item"><i class="fas fa-droplet"></i> ${totalQty.toFixed(2)} لتر</span>
+                                <span class="tree-meta-item"><i class="fas fa-coins"></i> ${totalAmount.toLocaleString('ar', { maximumFractionDigits: 2 })}</span>
+                            </span>
+                        </button>
+                        <div class="tree-group-body">${items}</div>
+                    </div>
+                `;
+            }).join('') + `</div>`;
+        }
+
+        /* ============================================================
+           ربط الأحداث بعد الرسم (يعمل مع البطاقات والجدول والشجرة)
+           ============================================================ */
+        function bindRowEvents(box) {
+            box.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openDetails(b.dataset.view);
+            }));
+            box.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openForm(findRow(b.dataset.edit));
+            }));
+            box.querySelectorAll('[data-delete]').forEach(b => b.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteRow(findRow(b.dataset.delete));
+            }));
+            box.querySelectorAll('[data-resolve]').forEach(b => b.addEventListener('click', (e) => {
+                e.stopPropagation();
+                resolveRow(findRow(b.dataset.resolve));
+            }));
+            box.querySelectorAll('[data-adjust]').forEach(b => b.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openFuelAdjustment(findRow(b.dataset.adjust));
+            }));
+            /* طيّ/فك طيّ مجموعات الشجرة */
+            box.querySelectorAll('[data-tree-toggle]').forEach(h => h.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const group = h.closest('[data-group]');
+                if (group) group.classList.toggle('collapsed');
+            }));
+        }
+
         function findRow(id) { return state.rows.find((row,index)=>String(idOf(row)||index)===String(id)); }
-        function openDetails(id) { const row=findRow(id); if(!row)return; $('detailsBody').innerHTML=`<div class="detail-grid">${Object.entries(row).map(([k,v])=>`<div class="detail-item"><span>${esc(k)}</span><strong>${esc(typeof v==='object'?JSON.stringify(v):v)}</strong></div>`).join('')}</div><details style="margin-top:14px"><summary>JSON الخام</summary><pre class="raw-json">${esc(JSON.stringify(row,null,2))}</pre></details>`; openModal(null,'detailsModal'); }
+
+        function openDetails(id) {
+            const row = findRow(id);
+            if (!row) return;
+            const details = Object.entries(row).map(([k, v]) => {
+                const label = translateFieldLabel(k);
+                const value = translateFieldValue(k, typeof v === 'object' ? JSON.stringify(v) : v);
+                return `<div class="detail-item"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
+            }).join('');
+            $('detailsBody').innerHTML = `<div class="detail-grid">${details}</div><details style="margin-top:14px"><summary>البيانات الخام (JSON)</summary><pre class="raw-json">${esc(JSON.stringify(row,null,2))}</pre></details>`;
+            openModal(null,'detailsModal');
+        }
+
         function inputHtml(def,row) {
             const value=row&&row[def.key]!==undefined?row[def.key]:'';
             const req=def.required?'required':'';
@@ -1563,7 +2617,7 @@
         function normalizePromotionBoundary(value,isEnd=false) {
             const boundary=String(value||'').trim().replace('T',' ');
             if(!boundary)return '';
-            if(/^\\d{4}-\\d{2}-\\d{2}$/.test(boundary))return boundary+' '+(isEnd?'23:59:59.999':'00:00:00');
+            if(/^\d{4}-\d{2}-\d{2}$/.test(boundary))return boundary+' '+(isEnd?'23:59:59.999':'00:00:00');
             return boundary;
         }
         function selectedFuelSaleDateTime() {
@@ -1577,33 +2631,63 @@
             const instant=String(at||'').trim().replace('T',' ');
             return (!from||from<=instant)&&(!to||to>=instant);
         }
+
+        /* ============================================================
+           ✅ الإصلاح المُطبَّق سابقاً — getActivePriceListsForPricing
+           ============================================================ */
         async function loadActivePromotions(row=null) {
-            const select=document.querySelector('[data-key="occasion_code"]');
-            if(!select || !bridge || typeof bridge.getPriceListRecords!=='function') return;
+            const select = document.querySelector('[data-key="occasion_code"]');
+            if (!select || !bridge || typeof bridge.getPriceListRecords !== 'function') return;
             try {
-                const at=selectedFuelSaleDateTime();
-                const customerId=Number(document.querySelector('[data-key="customer_id"]')?.value||0);
-                const result=await invoke('getActivePriceListsForPricing',[JSON.stringify({
-                    transaction_time:at,
-                    customer_id:customerId>0?customerId:0
-                })]);
-                if(result?.success===false)throw new Error(result.message||result.error||'تعذر قراءة قوائم الأسعار');
-                const active=rowsFrom(result).filter(r=>
-                    r && Number(r.is_active)===1 && Number(r.is_deleted||0)!==1 && promotionIsValidAt(r,at)
+                const at = selectedFuelSaleDateTime();
+                const customerId = Number(document.querySelector('[data-key="customer_id"]')?.value || 0);
+                const result = await invoke('getPriceListRecords', [JSON.stringify({})]);
+                if (result?.success === false) {
+                    throw new Error(result.message || result.error || 'تعذر قراءة قوائم الأسعار');
+                }
+                const isActive = (r) => {
+                    if (!r) return false;
+                    const v = r.is_active;
+                    if (v === undefined || v === null) return true;
+                    if (v === true || v === 'true' || v === '1') return true;
+                    if (v === false || v === 'false' || v === '0') return false;
+                    const n = Number(v);
+                    return Number.isFinite(n) ? n === 1 : true;
+                };
+                const isDeleted = (r) => {
+                    if (!r) return true;
+                    const v = r.is_deleted;
+                    if (v === undefined || v === null) return false;
+                    if (v === true || v === 'true' || v === '1') return true;
+                    if (v === false || v === 'false' || v === '0') return false;
+                    const n = Number(v);
+                    return Number.isFinite(n) ? n === 1 : false;
+                };
+                const active = rowsFrom(result).filter(r =>
+                    r && isActive(r) && !isDeleted(r) && promotionIsValidAt(r, at)
                 );
-                const occasionOptions=new Map();
-                active.forEach(r=>{
-                    const code=String(r.occasion_code||'').trim();
-                    if(code&&!occasionOptions.has(code))occasionOptions.set(code,r.list_name_ar||r.list_name||r.list_code||code);
+                const occasionOptions = new Map();
+                active.forEach(r => {
+                    const code = String(r.occasion_code || '').trim();
+                    if (code && !occasionOptions.has(code)) {
+                        occasionOptions.set(code, r.list_name_ar || r.list_name || r.list_code || code);
+                    }
                 });
-                const previous=String(field(row,['occasion_code'])||select.value||'').trim();
-                select.innerHTML='<option value="">بدون عرض محدد</option>'+Array.from(occasionOptions.entries()).map(([code,label])=>`<option value="${esc(code)}">${esc(label)}</option>`).join('');
-                if(previous&&occasionOptions.has(previous))select.value=previous;
-                else if(occasionOptions.size===1)select.value=occasionOptions.keys().next().value;
-                const apply=()=>{if(typeof refreshResolvedFuelPrice==='function')refreshResolvedFuelPrice();};
-                select.onchange=apply; apply();
-            } catch(e) { toast('تعذر تحميل العروض النشطة من SQLite: '+e.message,true); }
+                const previous = String(field(row,['occasion_code']) || select.value || '').trim();
+                select.innerHTML = '<option value="">بدون عرض محدد</option>' +
+                    Array.from(occasionOptions.entries()).map(([code, label]) =>
+                        `<option value="${esc(code)}">${esc(label)}</option>`
+                    ).join('');
+                if (previous && occasionOptions.has(previous)) select.value = previous;
+                else if (occasionOptions.size === 1) select.value = occasionOptions.keys().next().value;
+                const apply = () => { if (typeof refreshResolvedFuelPrice === 'function') refreshResolvedFuelPrice(); };
+                select.onchange = apply;
+                apply();
+            } catch (e) {
+                console.warn('[Fuel Promotions] تعذر تحميل العروض النشطة:', e && e.message ? e.message : e);
+            }
         }
+
         async function loadSaleFormLookups(row=null) {
             const results=await Promise.all([
                 (bridge&&typeof bridge.getCurrentShift==='function')?invoke('getCurrentShift',[]).catch(()=>null):Promise.resolve(null),
@@ -1662,7 +2746,7 @@
                 const nozzles=rowsFrom(result);
                 nozzleEl.innerHTML='<option value="">اختر الفوهة...</option>'+nozzles.map(n=>'<option value="'+esc(n.id)+'">'+esc(n.nozzle_number||n.nozzle_code||n.id)+' — '+esc(n.nozzle_code||'فوهة')+'</option>').join('');
                 nozzleEl.value=String(selectedId||'');
-            }catch(e){ toast('تعذر تحميل فوهات المضخة: '+e.message,true); }
+            }catch(e){ toast('تعذر تحميل فوهات المضخة: '+e.message,true,'form'); }
         }
                 async function refreshResolvedFuelPrice(){
             const f=document.querySelector('[data-key="fuel_type_id"]');
@@ -1691,7 +2775,7 @@
                 p.dataset.priceSourceId=String(resolved?.source_id??'');
                 if(t)t.value=(numeric(q?.value)*price).toFixed(2);
             }catch(e){
-                if(seq===state.priceLookupSeq)toast('تعذر احتساب سعر الوقود الفعلي من قوائم الأسعار: '+(e.message||'خطأ غير معروف'),true);
+                if(seq===state.priceLookupSeq)toast('تعذر احتساب سعر الوقود الفعلي من قوائم الأسعار: '+(e.message||'خطأ غير معروف'),true,'form');
             }
         }
         function bindFuelCalculation(resolveDynamic=true){
@@ -1704,12 +2788,11 @@
             calc();
             if(resolveDynamic)refreshResolvedFuelPrice();
         }
-        async function openForm(row=null) { if(!CFG.createMethod&&!CFG.updateMethod){toast('لا توجد عملية كتابة مدعومة لهذه الشاشة',true);return;}state.editing=row;const deliveryBtn=$('deliveryBtn');if(deliveryBtn){deliveryBtn.disabled=true;delete deliveryBtn.dataset.saleId;deliveryBtn.title='يتاح بعد حفظ عملية البيع بنجاح';}$('formTitle').textContent=row?'تعديل مبيعات الوقود':'إضافة عملية بيع وقود';$('recordForm').innerHTML=(CFG.fields||[]).map(def=>inputHtml(def,row)).join('');$('formModal').classList.add('show');try{await loadSaleFormLookups(row);}catch(e){toast(e.message||'تعذر تحميل بيانات النموذج',true);} }
+        async function openForm(row=null) { if(!CFG.createMethod&&!CFG.updateMethod){toast('لا توجد عملية كتابة مدعومة لهذه الشاشة',true,'global');return;}state.editing=row;const deliveryBtn=$('deliveryBtn');if(deliveryBtn){deliveryBtn.disabled=true;delete deliveryBtn.dataset.saleId;deliveryBtn.title='يتاح بعد حفظ عملية البيع بنجاح';}$('formTitle').textContent=row?'تعديل مبيعات الوقود':'إضافة عملية بيع وقود';$('recordForm').innerHTML=(CFG.fields||[]).map(def=>inputHtml(def,row)).join('');$('formModal').classList.add('show');try{await loadSaleFormLookups(row);}catch(e){toast(e.message||'تعذر تحميل بيانات النموذج',true,'form');} }
         function collectForm(){const payload={};document.querySelectorAll('#recordForm [data-key]').forEach(el=>{if(el.dataset.key==='sale_id')return;let v=el.value;if(el.type==='number')v=v===''?0:Number(v);payload[el.dataset.key]=v;});payload.created_at=new Date().toISOString();return payload;}
+
         async function saveForm(){
-
             const form = $('recordForm');
-
             if(!form.reportValidity()){
                 return;
             }
@@ -1728,27 +2811,27 @@
             delete payload.vehicle_plate;
 
             if(payload.payment_method === 'credit' && customerId <= 0){
-                return toast('اختر عميلاً حقيقياً للبيع الآجل', true);
+                return toast('اختر عميلاً حقيقياً للبيع الآجل', true, 'form');
             }
 
             if(!payload.shift_id){
-                return toast('لا توجد وردية مفتوحة حالياً', true);
+                return toast('لا توجد وردية مفتوحة حالياً', true, 'form');
             }
 
             if(!payload.pump_id){
-                return toast('اختر المضخة', true);
+                return toast('اختر المضخة', true, 'form');
             }
 
             if(!payload.fuel_type_id){
-                return toast('اختر نوع الوقود', true);
+                return toast('اختر نوع الوقود', true, 'form');
             }
 
             if(!payload.nozzle_id){
-                return toast('اختر الفوهة التابعة للمضخة', true);
+                return toast('اختر الفوهة التابعة للمضخة', true, 'form');
             }
 
             if(!(numeric(payload.quantity) > 0)){
-                return toast('أدخل كمية أكبر من صفر', true);
+                return toast('أدخل كمية أكبر من صفر', true, 'form');
             }
 
             payload.total_amount =
@@ -1779,7 +2862,15 @@
 
                     parse(result);
 
-                    toast('تم تحديث عملية البيع فعلياً');
+                    showAdvancedNotification(
+                        'تم تحديث عملية البيع بنجاح في قاعدة البيانات',
+                        'success',
+                        'تم التحديث بنجاح'
+                    );
+
+                    closeModal(null,'formModal');
+                    await reloadData();
+                    return;
 
                 }else{
 
@@ -1803,29 +2894,41 @@
                     state.pendingIdempotencyKey = null;
 
                     const sms = saved.sms || {};
-                    toast(
-                        'تم حفظ عملية البيع فعلياً — رقم البيع ' +
-                        saleId +
-                        (sms.queued ? ' — تم وضع SMS في طابور الإرسال' : (payload.payment_method === 'credit' ? ' — تعذر تجهيز SMS: ' + (sms.reason || 'غير معروف') : ''))
+                    const smsNote = sms.queued
+                        ? ' — تم وضع SMS في طابور الإرسال'
+                        : (payload.payment_method === 'credit'
+                            ? ' — تعذر تجهيز SMS: ' + (sms.reason || 'غير معروف')
+                            : '');
+
+                    /* ✅ إشعار متطور للنجاح */
+                    showAdvancedNotification(
+                        `تم حفظ عملية البيع رقم ${saleId} وتحديث المخزون فعلياً${smsNote}`,
+                        'success',
+                        '✅ عملية البيع تمت بنجاح'
                     );
 
                     showDeliveryAction(saleId);
+
+                    /* إغلاق المودال بعد نجاح الحفظ */
+                    setTimeout(() => {
+                        closeModal(null, 'formModal');
+                    }, 900);
 
                     await reloadData();
 
                     return;
                 }
 
-                closeModal(null,'formModal');
-
-                await reloadData();
-
             }catch(e){
 
-                toast(
-                    e.message || 'فشل حفظ العملية',
-                    true
+                /* ✅ إشعار متطور للفشل */
+                showAdvancedNotification(
+                    e.message || 'فشل حفظ العملية، لم يتم أي تغيير في قاعدة البيانات',
+                    'error',
+                    '❌ فشل حفظ عملية البيع'
                 );
+
+                toast(e.message || 'فشل حفظ العملية', true, 'form');
 
             }finally{
 
@@ -1833,36 +2936,239 @@
             }
         }
         function showDeliveryAction(saleId){const button=$('deliveryBtn');if(!button)return;button.disabled=false;button.dataset.saleId=String(saleId);button.title='تم الحفظ؛ يمكنك الآن إنشاء التوصيل';}
-        function openDelivery(saleId){const id=Number(saleId||$('deliveryBtn')?.dataset.saleId||0);if(!id)return toast('احفظ عملية البيع أولاً',true);sessionStorage.setItem('delivery_sale_id',String(id));window.location.href='deliveries.html?sale_id='+encodeURIComponent(id);}
-        async function deleteRow(row) { const id=row&&idOf(row); if(!id||!CFG.deleteMethod)return; if(!confirm('هل تريد تنفيذ الحذف الفعلي لهذا السجل؟'))return; setLoading(true); try { const result=await invoke(CFG.deleteMethod,[Number(id)]); parse(result); toast('تم الحذف فعلياً'); await reloadData(); } catch(error) { toast(error.message||'فشل الحذف',true); } finally { setLoading(false); } }
-        async function resolveRow(row) { const id=row&&idOf(row); if(!id||!CFG.resolveMethod)return; const note=prompt('أدخل ملاحظة الاعتماد/الحل إن لزم:',''); if(note===null)return; setLoading(true); try { const result=await invoke(CFG.resolveMethod,[Number(id),String(note)]); parse(result); toast('تم تنفيذ العملية فعلياً'); await reloadData(); } catch(error) { toast(error.message||'فشل تنفيذ العملية',true); } finally { setLoading(false); } }
-        async function reloadData() { if(CFG.mode==='unsupported'||CFG.mode==='ai'){ renderCards(); return; } if(CFG.mode==='backup'){ loadBackupHistory(); return; } if(!CFG.listMethod){ renderCards(); return; } if(!bridge){ $('offlineBanner').classList.add('show'); renderCards(); return; } setLoading(true); try { const result=await invoke(CFG.listMethod,argsForLoad()); state.rows=rowsFrom(result); state.loadedAt=new Date(); $('offlineBanner').classList.remove('show'); applyFilter(); } catch(error) { state.rows=[]; state.loadedAt=new Date(); renderCards(); toast(error.message||'فشل تحميل البيانات',true); } finally { setLoading(false); } }
+        function openDelivery(saleId){const id=Number(saleId||$('deliveryBtn')?.dataset.saleId||0);if(!id)return toast('احفظ عملية البيع أولاً',true,'form');sessionStorage.setItem('delivery_sale_id',String(id));window.location.href='deliveries.html?sale_id='+encodeURIComponent(id);}
+        async function deleteRow(row) { const id=row&&idOf(row); if(!id||!CFG.deleteMethod)return; if(!confirm('هل تريد تنفيذ الحذف الفعلي لهذا السجل؟'))return; setLoading(true); try { const result=await invoke(CFG.deleteMethod,[Number(id)]); parse(result); showAdvancedNotification('تم الحذف بنجاح','success','تم الحذف'); await reloadData(); } catch(error) { showAdvancedNotification(error.message||'فشل الحذف','error','فشل الحذف'); } finally { setLoading(false); } }
+        async function resolveRow(row) { const id=row&&idOf(row); if(!id||!CFG.resolveMethod)return; const note=prompt('أدخل ملاحظة الاعتماد/الحل إن لزم:',''); if(note===null)return; setLoading(true); try { const result=await invoke(CFG.resolveMethod,[Number(id),String(note)]); parse(result); showAdvancedNotification('تم تنفيذ العملية فعلياً','success','نجاح'); await reloadData(); } catch(error) { showAdvancedNotification(error.message||'فشل تنفيذ العملية','error','فشل'); } finally { setLoading(false); } }
+        async function reloadData() { if(CFG.mode==='unsupported'||CFG.mode==='ai'){ renderCards(); return; } if(CFG.mode==='backup'){ loadBackupHistory(); return; } if(!CFG.listMethod){ renderCards(); return; } if(!bridge){ $('offlineBanner').classList.add('show'); renderCards(); return; } setLoading(true); try { const result=await invoke(CFG.listMethod,argsForLoad()); state.rows=rowsFrom(result); state.loadedAt=new Date(); $('offlineBanner').classList.remove('show'); applyFilter(); } catch(error) { state.rows=[]; state.loadedAt=new Date(); renderCards(); toast(error.message||'فشل تحميل البيانات',true,'global'); } finally { setLoading(false); } }
         function openModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.add('show'); } function closeModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.remove('show'); }
         function openReport() { setDateDefaults(); $('reportResults').innerHTML='<div class="empty-state"><i class="fas fa-file-alt"></i><p>اضغط توليد التقرير لعرض البيانات المحملة من SQLite.</p></div>'; openModal(null,'reportModal'); }
-        async function generateReport() { setLoading(true); try { let result; if(CFG.reportKind==='balanceSheet') result=await invoke('getBalanceSheet',[($('reportTo').value||today()),0]); else if(CFG.reportKind==='eod') result=await invoke('getEodReport',[]); else if(String(CFG.reportKind||'').startsWith('operational:')) { const suffix=String(CFG.reportKind).split(':')[1]; result=await invoke('generate'+suffix+'Report',[JSON.stringify({from_date:$('reportFrom').value||'',to_date:$('reportTo').value||'',search:$('searchInput').value||'',include_archived:true,limit:1000})]); } else result={data:state.filtered}; $('reportResults').innerHTML=renderReport(rowsFrom(result)); toast('تم توليد التقرير من المصدر الفعلي'); } catch(e) { toast(e.message||'فشل التقرير',true); } finally { setLoading(false); } }
-        function renderReport(rows) { if(!rows.length)return '<div class="empty-state">لا توجد بيانات للتقرير.</div>'; return `<div class="data-fields">${rows.slice(0,100).map(row=>`<div class="data-field"><span>${esc(titleOf(row))}</span><strong>${esc(subtitleOf(row)||JSON.stringify(row))}</strong></div>`).join('')}</div>`; }
-        function exportData() { const rows=state.filtered; if(!rows.length){toast('لا توجد بيانات حقيقية لتصديرها',true);return;} const keys=[...new Set(rows.flatMap(row=>Object.keys(row||{})))]; const csv='\ufeff'+[keys, ...rows.map(row=>keys.map(k=>String(row[k]??'').replace(/"/g,'""')))].map(row=>row.map(v=>`"${v}"`).join(',')).join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='{filename}.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); toast('تم إنشاء ملف CSV من البيانات المحملة فعلياً'); }
-        async function askAI() { if(CFG.aiMethod!=='sendToAI'){toast('المساعد غير متاح لهذا المسار',true);return;} const prompt=($('aiPrompt').value||'').trim(); if(!prompt){toast('اكتب السؤال أولاً',true);return;} if(!bridge||typeof bridge.sendToAI!=='function'){toast('عقد المساعد غير متاح في Android Bridge',true);return;} $('aiOutput').textContent='جاري انتظار رد Android...'; window.onAIResponse=(payload)=>{ const result=typeof payload==='string'?JSON.parse(payload):payload; if(result&&result.success){ $('aiOutput').textContent=result.response||'عاد الرد دون نص'; toast('وصل رد المساعد فعلياً'); } else { $('aiOutput').textContent=result&&result.error||'فشل رد المساعد'; toast($('aiOutput').textContent,true); } setLoading(false); }; setLoading(true); try { const started=parse(bridge.sendToAI(prompt)); if(started.status!=='processing') window.onAIResponse(started); } catch(e) { setLoading(false); $('aiOutput').textContent=e.message; toast(e.message,true); } }
-        let fuelAdjustmentRow=null;
-        function openFuelAdjustment(row){
-            fuelAdjustmentRow=row||null;
-            if(!fuelAdjustmentRow)return;
-            const available=Math.max(0,Number(fuelAdjustmentRow.original_quantity??fuelAdjustmentRow.quantity??0)-Number(fuelAdjustmentRow.returned_quantity??0)-Number(fuelAdjustmentRow.damaged_quantity??0));
-            $('fuelAdjustmentSaleId').value=String(fuelAdjustmentRow.sale_id||'');
-            $('fuelAdjustmentAvailable').value=available.toFixed(2);
-            $('fuelAdjustmentQty').value=available>0?available.toFixed(2):'';
-            $('fuelAdjustmentReason').value='';
-            $('fuelAdjustmentModal').classList.add('show');
+        async function generateReport() { setLoading(true); try { let result; if(CFG.reportKind==='balanceSheet') result=await invoke('getBalanceSheet',[($('reportTo').value||today()),0]); else if(CFG.reportKind==='eod') result=await invoke('getEodReport',[]); else if(String(CFG.reportKind||'').startsWith('operational:')) { const suffix=String(CFG.reportKind).split(':')[1]; result=await invoke('generate'+suffix+'Report',[JSON.stringify({from_date:$('reportFrom').value||'',to_date:$('reportTo').value||'',search:$('searchInput').value||'',include_archived:true,limit:1000})]); } else result={data:state.filtered}; $('reportResults').innerHTML=renderReport(rowsFrom(result)); showAdvancedNotification('تم توليد التقرير من المصدر الفعلي','success','التقرير جاهز'); } catch(e) { showAdvancedNotification(e.message||'فشل التقرير','error','فشل التقرير'); } finally { setLoading(false); } }
+        function renderReport(rows) { if(!rows.length)return '<div class="empty-state">لا توجد بيانات للتقرير.</div>'; return `<div class="data-fields">${rows.slice(0,100).map(row=>`<div class="data-field"><span>${esc(translateFieldLabel(titleOf(row)))}</span><strong>${esc(subtitleOf(row)||JSON.stringify(row))}</strong></div>`).join('')}</div>`; }
+        function exportData() { const rows=state.filtered; if(!rows.length){toast('لا توجد بيانات حقيقية لتصديرها',true,'global');return;} const keys=[...new Set(rows.flatMap(row=>Object.keys(row||{})))]; const csv='\ufeff'+[keys, ...rows.map(row=>keys.map(k=>String(row[k]??'').replace(/"/g,'""')))].map(row=>row.map(v=>`"${v}"`).join(',')).join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='{filename}.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); toast('تم إنشاء ملف CSV من البيانات المحملة فعلياً',false,'global'); }
+        async function askAI() { if(CFG.aiMethod!=='sendToAI'){toast('المساعد غير متاح لهذا المسار',true,'global');return;} const prompt=($('aiPrompt').value||'').trim(); if(!prompt){toast('اكتب السؤال أولاً',true,'global');return;} if(!bridge||typeof bridge.sendToAI!=='function'){toast('عقد المساعد غير متاح في Android Bridge',true,'global');return;} $('aiOutput').textContent='جاري انتظار رد Android...'; window.onAIResponse=(payload)=>{ const result=typeof payload==='string'?JSON.parse(payload):payload; if(result&&result.success){ $('aiOutput').textContent=result.response||'عاد الرد دون نص'; showAdvancedNotification('وصل رد المساعد فعلياً','success','رد المساعد'); } else { $('aiOutput').textContent=result&&result.error||'فشل رد المساعد'; showAdvancedNotification($('aiOutput').textContent,'error','فشل المساعد'); } setLoading(false); }; setLoading(true); try { const started=parse(bridge.sendToAI(prompt)); if(started.status!=='processing') window.onAIResponse(started); } catch(e) { setLoading(false); $('aiOutput').textContent=e.message; showAdvancedNotification(e.message,'error','فشل المساعد'); } }
+
+        /* ============================================================
+           NEW — منطق مرتجع/تالف مبيعات الوقود (مُعاد بناؤه بالكامل)
+           ============================================================ */
+        let fuelAdjustmentRow = null;
+
+        function resetFuelAdjustmentForm(options) {
+            const opts = options || {};
+            if (opts.keepDropdown !== true) {
+                const sel = $('fuelAdjustmentSaleSelect');
+                if (sel) sel.value = '';
+            }
+            const preview = $('fuelAdjustmentPreview');
+            if (preview) preview.classList.remove('show');
+            $('fuelAdjustmentAvailable').value = '';
+            $('fuelAdjustmentQty').value = '';
+            $('fuelAdjustmentReason').value = '';
+            const typeEl = $('fuelAdjustmentType');
+            if (typeEl) typeEl.value = 'return';
+            fuelAdjustmentRow = null;
         }
-        async function saveFuelAdjustment(){
-            if(!fuelAdjustmentRow)return;
-            const qty=Number($('fuelAdjustmentQty').value), available=Number($('fuelAdjustmentAvailable').value);
-            if(!Number.isFinite(qty)||qty<=0||qty>available+1e-9)return toast('كمية التصحيح غير صالحة أو تتجاوز المتاح',true);
-            const payload={sale_id:Number(fuelAdjustmentRow.sale_id),fuel_sale_id:Number(fuelAdjustmentRow.fuel_sale_id||0),adjustment_type:$('fuelAdjustmentType').value,quantity:qty,reason:$('fuelAdjustmentReason').value.trim(),idempotency_key:newIdempotencyKey()};
+
+        /**
+         * ملء النموذج من صف محدد — يستخدم في حالتين:
+         *  1) فتح المودال من زر البطاقة/الجدول/الشجرة (row مدفوع)
+         *  2) اختيار رقم بيع من القائمة المنسدلة
+         */
+        function fillFuelAdjustmentFromRow(row) {
+            if (!row) return;
+            fuelAdjustmentRow = row;
+
+            /* استخراج الحقول من الصف مع احتياطات متعددة */
+            const saleId = Number(row.sale_id || row.id || 0);
+            const fuelLabel = translateFieldValue('fuel_type_id',
+                row.fuel_name_ar || row.fuel_name || row.fuel_type_name || row.fuel_type_id);
+            const saleDate = String(row.sale_date || '').trim() || '—';
+            const saleTime = String(row.sale_time || '').trim();
+            const saleDateFull = saleTime ? `${saleDate} — ${saleTime}` : saleDate;
+            const customer = String(row.customer_name || row.customer_name_ar || row.customer_display_name || '').trim() || 'بيع نقدي';
+
+            const originalQty = numeric(row.original_quantity ?? row.quantity);
+            const alreadyReturned = numeric(row.returned_quantity);
+            const alreadyDamaged = numeric(row.damaged_quantity);
+            const available = Math.max(0, originalQty - alreadyReturned - alreadyDamaged);
+
+            /* التحديث المرئي */
+            const sel = $('fuelAdjustmentSaleSelect');
+            if (sel && !sel.value && saleId) {
+                sel.value = String(saleId);
+            }
+
+            $('fuelAdjustmentPreviewFuel').textContent = fuelLabel;
+            $('fuelAdjustmentPreviewDate').textContent = saleDateFull;
+            $('fuelAdjustmentPreviewCustomer').textContent = customer;
+            $('fuelAdjustmentPreviewQty').textContent = `${originalQty.toFixed(2)} لتر`;
+            $('fuelAdjustmentAvailable').value = available.toFixed(2);
+            $('fuelAdjustmentQty').value = available > 0 ? available.toFixed(2) : '';
+            $('fuelAdjustmentQty').max = String(available);
+            $('fuelAdjustmentReason').value = '';
+
+            const preview = $('fuelAdjustmentPreview');
+            if (preview) preview.classList.add('show');
+        }
+
+        /**
+         * جلب قائمة مبيعات الوقود وملء القائمة المنسدلة (مرتّبة تنازلياً برقم البيع).
+         */
+        async function populateFuelAdjustmentSaleSelect() {
+            const sel = $('fuelAdjustmentSaleSelect');
+            if (!sel) return;
+            sel.innerHTML = '<option value="">جارٍ تحميل القائمة...</option>';
+            try {
+                const result = await invoke('getFuelSalesPage', [JSON.stringify({ limit: 500, offset: 0 })]);
+                const rows = rowsFrom(result);
+                /* ترتيب تنازلي بأحدث رقم بيع */
+                rows.sort((a, b) => {
+                    const idA = Number(a.sale_id || a.id || 0);
+                    const idB = Number(b.sale_id || b.id || 0);
+                    return idB - idA;
+                });
+                state.fuelAdjustmentCache = rows;
+                if (!rows.length) {
+                    sel.innerHTML = '<option value="">لا توجد مبيعات وقود</option>';
+                    return;
+                }
+                const options = rows.map(r => {
+                    const saleId = Number(r.sale_id || r.id || 0);
+                    const date = String(r.sale_date || '').trim();
+                    const time = String(r.sale_time || '').trim();
+                    const fuel = r.fuel_name_ar || r.fuel_name || `وقود #${r.fuel_type_id || ''}`;
+                    const qty = numeric(r.quantity).toFixed(2);
+                    const dt = [date, time].filter(Boolean).join(' ');
+                    return `<option value="${saleId}">#${saleId} — ${esc(dt)} — ${esc(fuel)} — ${qty} لتر</option>`;
+                }).join('');
+                sel.innerHTML = '<option value="">— اختر رقم البيع —</option>' + options;
+            } catch (e) {
+                sel.innerHTML = '<option value="">تعذر تحميل القائمة</option>';
+                showAdvancedNotification('تعذر تحميل قائمة مبيعات الوقود: ' + (e.message || ''), 'error', 'خطأ في التحميل');
+            }
+        }
+
+        async function openFuelAdjustment(row) {
+            resetFuelAdjustmentForm({ keepDropdown: false });
+
+            if (row) {
+                /* فتح من زر البطاقة/الجدول/الشجرة — row مدفوع بالكامل */
+                fillFuelAdjustmentFromRow(row);
+                /* ضمان تحميل القائمة أيضاً حتى يتمكن المستخدم من تغيير الرقم */
+                openModal(null, 'fuelAdjustmentModal');
+                populateFuelAdjustmentSaleSelect().then(() => {
+                    /* إعادة التحديد بعد التحميل */
+                    const sel = $('fuelAdjustmentSaleSelect');
+                    const saleId = Number(row.sale_id || row.id || 0);
+                    if (sel && saleId) {
+                        /* نضع الخيار إذا لم يكن موجوداً */
+                        let found = false;
+                        for (let i = 0; i < sel.options.length; i++) {
+                            if (Number(sel.options[i].value) === saleId) { found = true; break; }
+                        }
+                        if (!found) {
+                            const opt = document.createElement('option');
+                            opt.value = String(saleId);
+                            opt.textContent = `#${saleId} — ${row.sale_date || ''} — ${row.fuel_name_ar || row.fuel_type_id || ''}`;
+                            sel.appendChild(opt);
+                        }
+                        sel.value = String(saleId);
+                    }
+                });
+            } else {
+                /* فتح من زر القائمة السفلية — القائمة المنسدلة فقط */
+                openModal(null, 'fuelAdjustmentModal');
+                await populateFuelAdjustmentSaleSelect();
+            }
+        }
+
+        async function saveFuelAdjustment() {
+            /* استخراج sale_id من الصف المحدد أو من القائمة */
+            const saleIdFromRow = fuelAdjustmentRow ? Number(fuelAdjustmentRow.sale_id || fuelAdjustmentRow.id || 0) : 0;
+            const saleIdFromSelect = Number($('fuelAdjustmentSaleSelect')?.value || 0);
+            const saleId = saleIdFromRow || saleIdFromSelect;
+
+            if (!saleId) {
+                showAdvancedNotification('يرجى اختيار رقم البيع أولاً', 'warning', 'تنبيه');
+                return;
+            }
+
+            /* إذا اختار المستخدم رقماً مختلفاً في القائمة، نحضّر الصف منه */
+            if (saleIdFromSelect && saleIdFromSelect !== saleIdFromRow) {
+                const cached = state.fuelAdjustmentCache.find(r => Number(r.sale_id || r.id) === saleIdFromSelect);
+                if (cached) fuelAdjustmentRow = cached;
+            }
+
+            const qty = Number($('fuelAdjustmentQty').value);
+            const available = Number($('fuelAdjustmentAvailable').value || 0);
+            const reason = ($('fuelAdjustmentReason').value || '').trim();
+
+            if (!Number.isFinite(qty) || qty <= 0) {
+                showAdvancedNotification('الكمية يجب أن تكون أكبر من صفر', 'warning', 'تنبيه');
+                return;
+            }
+            if (available > 0 && qty > available + 1e-9) {
+                showAdvancedNotification(`الكمية تتجاوز المتاح (${available.toFixed(2)} لتر)`, 'warning', 'تنبيه');
+                return;
+            }
+            if (!reason) {
+                showAdvancedNotification('يرجى إدخال سبب الإرجاع / التلف', 'warning', 'تنبيه');
+                return;
+            }
+
+            const confirmBtn = $('fuelAdjustmentConfirmBtn');
+            if (confirmBtn) confirmBtn.disabled = true;
             setLoading(true);
-            try{const result=parse(await invoke('processFuelSaleAdjustment',[JSON.stringify(payload)]));toast(result.message||'تمت معالجة العملية فعلياً');closeModal(null,'fuelAdjustmentModal');fuelAdjustmentRow=null;await reloadData();}
-            catch(e){toast(e.message||'تعذر معالجة العملية',true)}finally{setLoading(false)}
+
+            try {
+                const payload = {
+                    sale_id: saleId,
+                    fuel_sale_id: saleId,
+                    adjustment_type: $('fuelAdjustmentType').value || 'return',
+                    quantity: qty,
+                    reason: reason,
+                    idempotency_key: newIdempotencyKey()
+                };
+                const result = parse(await invoke('processFuelSaleAdjustment', [JSON.stringify(payload)]));
+                const message = result.message || result.data?.message || 'تم توثيق العملية بنجاح';
+                showAdvancedNotification(message, 'success', '✅ تم التوثيق بنجاح');
+                closeModal(null, 'fuelAdjustmentModal');
+                resetFuelAdjustmentForm();
+                await reloadData();
+            } catch (e) {
+                showAdvancedNotification(e.message || 'تعذر توثيق العملية', 'error', '❌ فشل التوثيق');
+            } finally {
+                if (confirmBtn) confirmBtn.disabled = false;
+                setLoading(false);
+            }
         }
+
+        /* ربط تغيير القائمة المنسدلة بجلب التفاصيل */
+        function setupFuelAdjustmentEvents() {
+            const sel = $('fuelAdjustmentSaleSelect');
+            if (sel) {
+                sel.addEventListener('change', function() {
+                    const saleId = Number(this.value || 0);
+                    if (!saleId) {
+                        resetFuelAdjustmentForm({ keepDropdown: true });
+                        return;
+                    }
+                    /* البحث في الذاكرة المؤقتة أولاً */
+                    let row = state.fuelAdjustmentCache.find(r => Number(r.sale_id || r.id) === saleId);
+                    if (!row) {
+                        /* احتياط: إذا لم يكن بالذاكرة، نجلبه من قاعدة البيانات مباشرة */
+                        row = { sale_id: saleId };
+                    }
+                    fillFuelAdjustmentFromRow(row);
+                });
+            }
+
+            /* زر القائمة السفلية "مرتجع/تالف" */
+            const btn = $('fuelAdjustmentBtn');
+            if (btn) {
+                btn.addEventListener('click', () => openFuelAdjustment(null));
+            }
+        }
+
         function goHome() { window.location.href='../main.html'; }
         function applyTheme() { const saved=localStorage.getItem('theme')||'light'; if(saved==='dark')document.documentElement.dataset.theme='dark'; $('themeIcon').textContent=saved==='dark'?'🌞':'🌙'; }
         function toggleTheme() { const dark=document.documentElement.dataset.theme==='dark'; if(dark)delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme='dark'; localStorage.setItem('theme',dark?'light':'dark'); $('themeIcon').textContent=dark?'🌙':'🌞'; }
@@ -1871,28 +3177,29 @@
             if(CFG.mode==='ai'){ $('newSaleBtn').classList.add('hidden'); $('cardsContainer').innerHTML='<div class="settings-wrap"><div class="settings-card"><h3>أرسل طلباً إلى المساعد</h3><p class="data-card-subtitle">لا تُحفظ الرسالة في localStorage ولا تُعرض نتيجة نجاح قبل عودة الجسر.</p><div class="action-row"><button class="btn primary" onclick="openModal(null,\'aiModal\')">فتح المساعد</button></div></div></div>'; }
             if(CFG.mode==='backup'){ $('newSaleBtn').classList.add('hidden'); $('cardsContainer').innerHTML='<div class="utility-grid"><div class="utility-card"><h3>نسخة قاعدة البيانات</h3><p>تنفيذ النسخ عبر Android ثم استقبال callback الفعلي.</p><button class="btn primary" onclick="startAsync(\'backupDatabase\',\'onBackupResult\')">إنشاء نسخة</button></div><div class="utility-card"><h3>تصدير كل البيانات</h3><p>يستخدم exportAllData ويعرض نتيجة callback.</p><button class="btn primary" onclick="startAsync(\'exportAllData\',\'onExportAllResult\')">بدء التصدير</button></div><div class="utility-card"><h3>معلومات قاعدة البيانات</h3><p id="dbInfo">اضغط لقراءة المعلومات الفعلية.</p><button class="btn" onclick="loadDbInfo()">قراءة</button></div></div>'; }
         }
-        function startAsync(method,callbackName){ if(!bridge||typeof bridge[method]!=='function'){toast('العقد '+method+' غير متاح',true);return;} window[callbackName]=(value)=>{const parsed=typeof value==='string'?JSON.parse(value):value; if(parsed.success)toast(parsed.message||'اكتملت العملية فعلياً'); else toast(parsed.error||'فشلت العملية',true);}; try{const result=parse(bridge[method]()); if(result.status==='processing')toast('بدأت العملية؛ انتظار نتيجة Android...');}catch(e){toast(e.message,true);} }
-        async function loadDbInfo(){try{const result=await invoke('getDatabaseInfo',[]); $('dbInfo').textContent=JSON.stringify(dataOf(result));}catch(e){$('dbInfo').textContent=e.message;toast(e.message,true);}}
-        async function loadBackupHistory(){if(CFG.mode!=='backup'||!bridge||typeof bridge.getBackupHistoryRecords!=='function')return;try{const result=await invoke('getBackupHistoryRecords',[JSON.stringify({limit:100})]);const rows=rowsFrom(result);$('backupHistory').innerHTML=rows.length?rows.map(row=>`<div class="data-card"><strong>${esc(row.file_name||row.backup_type||row.id)}</strong><div class="data-card-subtitle">${esc([row.status,row.started_at,row.completed_at,row.file_size_mb,row.storage_location].filter(Boolean).join(' · '))}</div></div>`).join(''):'<div class="empty-state">لا توجد سجلات نسخ في SQLite.</div>';}catch(e){$('backupHistory').textContent=e.message;toast(e.message,true);}}
-        $('searchInput').addEventListener('input',()=>CFG.listMethod==='getFuelSalesPage'?reloadData():applyFilter()); $('themeToggle').addEventListener('click',toggleTheme); $('newSaleBtn').addEventListener('click',()=>openForm()); $('reportBtn').addEventListener('click',openReport); $('saveBtn').addEventListener('click',saveForm); $('deliveryBtn').addEventListener('click',()=>openDelivery($('deliveryBtn').dataset.saleId)); document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay').forEach(x=>x.classList.remove('show'));});
-        window.addEventListener('online',()=>toast('عاد اتصال الجسر المحتمل؛ اضغط تحديث للتحقق')); window.addEventListener('offline',()=>$('offlineBanner').classList.add('show'));
+        function startAsync(method,callbackName){ if(!bridge||typeof bridge[method]!=='function'){toast('العقد '+method+' غير متاح',true,'global');return;} window[callbackName]=(value)=>{const parsed=typeof value==='string'?JSON.parse(value):value; if(parsed.success)showAdvancedNotification(parsed.message||'اكتملت العملية فعلياً','success','نجاح'); else showAdvancedNotification(parsed.error||'فشلت العملية','error','فشل');}; try{const result=parse(bridge[method]()); if(result.status==='processing')toast('بدأت العملية؛ انتظار نتيجة Android...',false,'global');}catch(e){toast(e.message,true,'global');} }
+        async function loadDbInfo(){try{const result=await invoke('getDatabaseInfo',[]); $('dbInfo').textContent=JSON.stringify(dataOf(result));}catch(e){$('dbInfo').textContent=e.message;toast(e.message,true,'global');}}
+        async function loadBackupHistory(){if(CFG.mode!=='backup'||!bridge||typeof bridge.getBackupHistoryRecords!=='function')return;try{const result=await invoke('getBackupHistoryRecords',[JSON.stringify({limit:100})]);const rows=rowsFrom(result);$('backupHistory').innerHTML=rows.length?rows.map(row=>`<div class="data-card"><strong>${esc(row.file_name||row.backup_type||row.id)}</strong><div class="data-card-subtitle">${esc([row.status,row.started_at,row.completed_at,row.file_size_mb,row.storage_location].filter(Boolean).join(' · '))}</div></div>`).join(''):'<div class="empty-state">لا توجد سجلات نسخ في SQLite.</div>';}catch(e){$('backupHistory').textContent=e.message;toast(e.message,true,'global');}}
+
+        $('searchInput').addEventListener('input',()=>CFG.listMethod==='getFuelSalesPage'?reloadData():applyFilter());
+        $('themeToggle').addEventListener('click',toggleTheme);
+        $('newSaleBtn').addEventListener('click',()=>openForm());
+        $('reportBtn').addEventListener('click',openReport);
+        $('saveBtn').addEventListener('click',saveForm);
+        $('deliveryBtn').addEventListener('click',()=>openDelivery($('deliveryBtn').dataset.saleId));
+        document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay').forEach(x=>x.classList.remove('show'));});
+        window.addEventListener('online',()=>toast('عاد اتصال الجسر المحتمل؛ اضغط تحديث للتحقق',false,'global'));
+        window.addEventListener('offline',()=>$('offlineBanner').classList.add('show'));
         Object.assign(window, {goHome, openReport, exportData, reloadData, openForm, saveForm, openModal, closeModal, startAsync, loadDbInfo, askAI, openFuelAdjustment, saveFuelAdjustment});
-        applyTheme(); renderFilters(); initSpecial(); if(CFG.mode!=='unsupported'&&CFG.mode!=='backup'&&CFG.mode!=='ai')reloadData(); else renderCards();
+
+        applyTheme();
+        renderFilters();
+        setupViewSwitcher();
+        setupFuelAdjustmentEvents();
+        initSpecial();
+        if(CFG.mode!=='unsupported'&&CFG.mode!=='backup'&&CFG.mode!=='ai')reloadData(); else renderCards();
     })();
     </script>
     <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
-<div id="fuelAdjustmentModal" class="modal">
-  <div class="modal-content">
-    <div class="modal-title">مرتجع / تالف مبيعات الوقود</div>
-    <div class="form-grid">
-      <div class="field-group"><label class="form-label">نوع العملية</label><select id="fuelAdjustmentType" class="modal-input"><option value="return">مرتجع — يعيد الوقود للخزان</option><option value="damage">تالف — لا يعيد الوقود للخزان</option></select></div>
-      <div class="field-group"><label class="form-label">رقم البيع</label><input id="fuelAdjustmentSaleId" class="modal-input" readonly></div>
-      <div class="field-group"><label class="form-label">الكمية (لتر)</label><input id="fuelAdjustmentQty" type="number" min="0.01" step="0.01" class="modal-input"></div>
-      <div class="field-group"><label class="form-label">الكمية المتاحة</label><input id="fuelAdjustmentAvailable" class="modal-input" readonly></div>
-      <div class="field-group full"><label class="form-label">السبب</label><textarea id="fuelAdjustmentReason" class="modal-input" rows="3"></textarea></div>
-    </div>
-    <div style="margin-top:15px"><button class="modal-btn modal-btn-cancel" onclick="closeModal(null,'fuelAdjustmentModal')">إلغاء</button><button id="fuelAdjustmentSave" class="modal-btn modal-btn-primary" onclick="saveFuelAdjustment()">تأكيد العملية</button></div>
-  </div>
-</div>
 </body>
 </html>
