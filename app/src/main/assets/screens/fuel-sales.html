@@ -1560,20 +1560,46 @@
             if(def.type==='select') return `<div class="form-group${def.full?' full':''}"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><select class="form-input${cls}" data-key="${esc(def.key)}" ${req} ${ro}><option value="">اختر...</option></select></div>`;
             return `<div class="form-group"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><input class="form-input${cls}" data-key="${esc(def.key)}" type="${esc(def.type)}" value="${esc(value)}" ${req} ${ro} ${placeholder}></div>`;
         }
+        function normalizePromotionBoundary(value,isEnd=false) {
+            const boundary=String(value||'').trim().replace('T',' ');
+            if(!boundary)return '';
+            if(/^\\d{4}-\\d{2}-\\d{2}$/.test(boundary))return boundary+' '+(isEnd?'23:59:59.999':'00:00:00');
+            return boundary;
+        }
+        function selectedFuelSaleDateTime() {
+            const date=document.querySelector('[data-key="sale_date"]')?.value||localDate(new Date());
+            const time=document.querySelector('[data-key="sale_time"]')?.value||localTime(new Date());
+            return date+' '+time;
+        }
+        function promotionIsValidAt(row,at) {
+            const from=normalizePromotionBoundary(row?.valid_from,false);
+            const to=normalizePromotionBoundary(row?.valid_to,true);
+            const instant=String(at||'').trim().replace('T',' ');
+            return (!from||from<=instant)&&(!to||to>=instant);
+        }
         async function loadActivePromotions(row=null) {
             const select=document.querySelector('[data-key="occasion_code"]');
             if(!select || !bridge || typeof bridge.getPriceListRecords!=='function') return;
             try {
-                const result=await invoke('getPriceListRecords',['{}']);
-                const active=rowsFrom(result).filter(r=>{
-                    if(!r || Number(r.is_active)!==1 || Number(r.is_deleted||0)===1) return false;
-                    const now=businessDayDateTime();
-                    const from=String(r.valid_from||'').replace('T',' '), to=String(r.valid_to||'').replace('T',' ');
-                    return (!from||from<=now)&&(!to||to>=now);
+                const at=selectedFuelSaleDateTime();
+                const customerId=Number(document.querySelector('[data-key="customer_id"]')?.value||0);
+                const result=await invoke('getActivePriceListsForPricing',[JSON.stringify({
+                    transaction_time:at,
+                    customer_id:customerId>0?customerId:0
+                })]);
+                if(result?.success===false)throw new Error(result.message||result.error||'تعذر قراءة قوائم الأسعار');
+                const active=rowsFrom(result).filter(r=>
+                    r && Number(r.is_active)===1 && Number(r.is_deleted||0)!==1 && promotionIsValidAt(r,at)
+                );
+                const occasionOptions=new Map();
+                active.forEach(r=>{
+                    const code=String(r.occasion_code||'').trim();
+                    if(code&&!occasionOptions.has(code))occasionOptions.set(code,r.list_name_ar||r.list_name||r.list_code||code);
                 });
-                select.innerHTML='<option value="">بدون عرض محدد</option>'+active.filter(r=>String(r.occasion_code||'').trim()).map(r=>`<option value="${esc(String(r.occasion_code).trim())}">${esc(r.list_name_ar||r.list_name||r.list_code||r.occasion_code)}</option>`).join('');
-                if(row && field(row,['occasion_code'])) select.value=String(field(row,['occasion_code']));
-                else if(active.length===1 && String(active[0].occasion_code||'').trim()) select.value=String(active[0].occasion_code).trim();
+                const previous=String(field(row,['occasion_code'])||select.value||'').trim();
+                select.innerHTML='<option value="">بدون عرض محدد</option>'+Array.from(occasionOptions.entries()).map(([code,label])=>`<option value="${esc(code)}">${esc(label)}</option>`).join('');
+                if(previous&&occasionOptions.has(previous))select.value=previous;
+                else if(occasionOptions.size===1)select.value=occasionOptions.keys().next().value;
                 const apply=()=>{if(typeof refreshResolvedFuelPrice==='function')refreshResolvedFuelPrice();};
                 select.onchange=apply; apply();
             } catch(e) { toast('تعذر تحميل العروض النشطة من SQLite: '+e.message,true); }
@@ -1673,7 +1699,7 @@
             const calc=()=>{if(t)t.value=(numeric(q?.value)*numeric(p?.value)).toFixed(2);};
             f?.addEventListener('change',()=>{const o=f.options[f.selectedIndex];if(p)p.value=o?.dataset.price||'';calc();if(resolveDynamic)refreshResolvedFuelPrice();});
             q?.addEventListener('input',()=>{calc();if(resolveDynamic)refreshResolvedFuelPrice();});
-            customer?.addEventListener('change',()=>{if(resolveDynamic)refreshResolvedFuelPrice();});
+            customer?.addEventListener('change',()=>{if(resolveDynamic){loadActivePromotions();refreshResolvedFuelPrice();}});
             document.querySelector('[data-key="occasion_code"]')?.addEventListener('change',()=>refreshResolvedFuelPrice());
             calc();
             if(resolveDynamic)refreshResolvedFuelPrice();

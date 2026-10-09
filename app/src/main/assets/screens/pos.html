@@ -4885,20 +4885,50 @@ function promotionRows(value) {
     return Array.isArray(raw) ? raw : (raw?.rows || raw?.data || []);
 }
 
+function normalizePromotionBoundary(value, isEnd = false) {
+    const boundary = String(value || '').trim().replace('T', ' ');
+    if (!boundary) return '';
+    if (/^\\d{4}-\\d{2}-\\d{2}$/.test(boundary)) {
+        return `${boundary} ${isEnd ? '23:59:59.999' : '00:00:00'}`;
+    }
+    return boundary;
+}
+
+function promotionIsValidAt(row, transactionTime) {
+    const from = normalizePromotionBoundary(row?.valid_from, false);
+    const to = normalizePromotionBoundary(row?.valid_to, true);
+    const at = String(transactionTime || '').trim().replace('T', ' ');
+    return (!from || from <= at) && (!to || to >= at);
+}
+
 async function loadActivePromotions() {
     const select = document.getElementById('occasionCode');
     if (!select || !window.AndroidInterface) return;
     try {
-        const result = await apiCall('getPriceListRecords', { limit: 500, offset: 0 });
-        const now = businessDayDateTime();
-        const active = promotionRows(result).filter(r => {
-            if (!r || Number(r.is_active) !== 1 || Number(r.is_deleted || 0) === 1) return false;
-            const from = String(r.valid_from || '').replace('T', ' ');
-            const to = String(r.valid_to || '').replace('T', ' ');
-            return (!from || from <= now) && (!to || to >= now);
+        const transactionTime = businessDayDateTime();
+        const customerId = Number(document.getElementById('customerId')?.value || 0);
+        const result = await apiCall('getActivePriceListsForPricing', {
+            transaction_time: transactionTime,
+            customer_id: customerId > 0 ? customerId : 0
         });
-        select.innerHTML = '<option value="">بدون عرض محدد</option>' + active.filter(r => String(r.occasion_code || '').trim()).map(r => `<option value="${escapePosText(String(r.occasion_code).trim())}">${escapePosText(r.list_name_ar || r.list_name || r.list_code || r.occasion_code)}</option>`).join('');
-        if (active.length === 1 && String(active[0].occasion_code || '').trim()) select.value = String(active[0].occasion_code).trim();
+        if (result?.success === false) throw new Error(result.message || result.error || 'تعذر قراءة قوائم الأسعار');
+        const active = promotionRows(result).filter(r =>
+            r && Number(r.is_active) === 1 && Number(r.is_deleted || 0) !== 1 &&
+            promotionIsValidAt(r, transactionTime)
+        );
+        const occasionOptions = new Map();
+        active.forEach(r => {
+            const code = String(r.occasion_code || '').trim();
+            if (code && !occasionOptions.has(code)) {
+                occasionOptions.set(code, r.list_name_ar || r.list_name || r.list_code || code);
+            }
+        });
+        const previousCode = String(select.value || '').trim();
+        select.innerHTML = '<option value="">بدون عرض محدد</option>' + Array.from(occasionOptions.entries()).map(([code, label]) =>
+            `<option value="${escapePosText(code)}">${escapePosText(label)}</option>`
+        ).join('');
+        if (previousCode && occasionOptions.has(previousCode)) select.value = previousCode;
+        else if (occasionOptions.size === 1) select.value = occasionOptions.keys().next().value;
         applySelectedPromotion();
     } catch (e) { showToast('تعذر تحميل العروض النشطة من SQLite: ' + (e.message || 'خطأ'), 'warning'); }
 }
@@ -6387,6 +6417,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('customerId').addEventListener('change', function() {
         loadCustomerDetails(this.value);
+        loadActivePromotions();
         document.querySelectorAll('#productsTableBody tr').forEach(row => resolveProductRowPrice(row));
     });
     document.getElementById('occasionCode').addEventListener('change', function() {

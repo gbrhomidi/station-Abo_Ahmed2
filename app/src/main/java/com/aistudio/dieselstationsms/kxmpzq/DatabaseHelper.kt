@@ -45,7 +45,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 42
+        const val VERSION = 43
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -258,6 +258,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     36 -> migrateV36ToV37(db)
                     40 -> migrateV40ToV41(db)
                     41 -> migrateV41ToV42(db)
+                    42 -> migrateV42ToV43(db)
                 }
             }
             ensureModule006Schema(db)
@@ -393,43 +394,163 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """.trimIndent())
         db.execSQL("UPDATE accounts SET is_active=1, is_deleted=0 WHERE account_code='5105' AND account_type='expense'")
 
-        // The station manager can operate the complete pricing/sales workflow,
-        // including newly-added screens, without requiring a manual repair step.
-        db.execSQL("""
-            INSERT OR IGNORE INTO role_permissions
-                (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve, is_deleted)
-            SELECT lower(hex(randomblob(16))), 3, id, 1, 1, 1, 1, 1, 1, 1, 0
-            FROM permissions
-            WHERE is_active=1 AND is_deleted=0
-        """.trimIndent())
-        db.execSQL("""
-            UPDATE role_permissions
-               SET can_create=1, can_read=1, can_update=1, can_delete=1,
-                   can_export=1, can_print=1, can_approve=1, is_deleted=0,
-                   updated_at=CURRENT_TIMESTAMP
-             WHERE role_id=3
-        """.trimIndent())
+        ensurePricingPermissions(db)
 
+        // Requirement: the station manager role must retain every active system permission.
+        // Resolve the role by its stable code rather than assuming role_id=3 in every database.
+        val stationManagerRoleId = db.rawQuery(
+            "SELECT id FROM roles WHERE role_code='STATION_MANAGER' AND is_active=1 AND is_deleted=0 LIMIT 1",
+            null
+        ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+        if (stationManagerRoleId > 0L) {
+            db.execSQL("""
+                INSERT OR IGNORE INTO role_permissions
+                    (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve, is_deleted)
+                SELECT lower(hex(randomblob(16))), ?, p.id, 1, 1, 1, 1, 1, 1, 1, 0
+                FROM permissions p
+                WHERE p.is_active=1 AND p.is_deleted=0
+                  AND NOT EXISTS (
+                    SELECT 1 FROM role_permissions rp
+                    WHERE rp.role_id=? AND rp.permission_id=p.id
+                  )
+            """.trimIndent(), arrayOf<Any>(stationManagerRoleId, stationManagerRoleId))
+            db.execSQL("""
+                UPDATE role_permissions
+                   SET can_create=1, can_read=1, can_update=1, can_delete=1,
+                       can_export=1, can_print=1, can_approve=1, is_deleted=0,
+                       updated_at=CURRENT_TIMESTAMP
+                 WHERE role_id=? AND permission_id IN (
+                    SELECT id FROM permissions WHERE is_active=1 AND is_deleted=0
+                 )
+            """.trimIndent(), arrayOf<Any>(stationManagerRoleId))
+        }
+
+        // Each screen owns a coherent module. Promotions use price-list permissions;
+        // POS and fuel sales continue to use the sales module.
         val screens = listOf(
-            Triple("price-lists", "products", "قوائم الأسعار"),
-            Triple("price-change-log", "products", "سجل تغيير الأسعار"),
-            Triple("promotions", "products", "العروض والمناسبات"),
+            Triple("price-lists", "price_lists", "قوائم الأسعار"),
+            Triple("price-change-log", "price_history", "سجل تغيير الأسعار"),
+            Triple("promotions", "price_lists", "العروض والمناسبات"),
             Triple("pos", "sales", "نقطة البيع"),
             Triple("fuel-sales", "sales", "مبيعات الوقود")
         )
         for ((name, module, description) in screens) {
             db.execSQL(
-                "INSERT OR IGNORE INTO screens (uuid, screen_name, module, description, is_active, archived) VALUES (?,?,?,?,1,0)",
+                """INSERT OR IGNORE INTO screens (uuid, screen_name, module, description, is_active, archived)
+                   VALUES (?,?,?,?,1,0)""",
                 arrayOf("SCR-" + name.uppercase() + "-UUID", name, module, description)
             )
+            // Repair legacy rows as well as new installs; INSERT OR IGNORE alone cannot fix old modules.
+            db.execSQL(
+                "UPDATE screens SET module=?, description=?, is_active=1, archived=0 WHERE screen_name=?",
+                arrayOf(module, description, name)
+            )
         }
+
+        // Remove stale broad CROSS JOIN grants and rebuild only same-module bindings.
+        db.execSQL("""
+            DELETE FROM screen_permissions
+            WHERE screen_id IN (
+                SELECT id FROM screens
+                WHERE screen_name IN ('price-lists','price-change-log','promotions','pos','fuel-sales')
+            )
+        """.trimIndent())
         db.execSQL("""
             INSERT OR IGNORE INTO screen_permissions (screen_id, permission_id, is_granted)
             SELECT s.id, p.id, 1
-            FROM screens s CROSS JOIN permissions p
+            FROM screens s
+            JOIN permissions p ON p.module = s.module
             WHERE s.screen_name IN ('price-lists','price-change-log','promotions','pos','fuel-sales')
+              AND s.is_active=1 AND s.archived=0
               AND p.is_active=1 AND p.is_deleted=0
         """.trimIndent())
+    }
+
+    /** Seed dedicated pricing permissions and a role policy without relying on hard-coded IDs. */
+    private fun ensurePricingPermissions(db: SQLiteDatabase, resetExistingRoleGrants: Boolean = false) {
+        data class PermissionSeed(
+            val code: String, val module: String, val action: String,
+            val name: String, val nameAr: String, val moduleNameAr: String
+        )
+        val seeds = listOf(
+            PermissionSeed("price_lists.read", "price_lists", "read", "Read Price Lists", "عرض قوائم الأسعار", "قوائم الأسعار"),
+            PermissionSeed("price_lists.create", "price_lists", "create", "Create Price Lists", "إنشاء قوائم الأسعار", "قوائم الأسعار"),
+            PermissionSeed("price_lists.update", "price_lists", "update", "Update Price Lists", "تعديل قوائم الأسعار", "قوائم الأسعار"),
+            PermissionSeed("price_lists.delete", "price_lists", "delete", "Delete Price Lists", "حذف قوائم الأسعار", "قوائم الأسعار"),
+            PermissionSeed("price_lists.export", "price_lists", "export", "Export Price Lists", "تصدير قوائم الأسعار", "قوائم الأسعار"),
+            PermissionSeed("price_lists.print", "price_lists", "print", "Print Price Lists", "طباعة قوائم الأسعار", "قوائم الأسعار"),
+            PermissionSeed("price_lists.approve", "price_lists", "approve", "Approve Price Lists", "اعتماد قوائم الأسعار", "قوائم الأسعار"),
+            PermissionSeed("price_history.read", "price_history", "read", "Read Price History", "عرض سجل تغيير الأسعار", "سجل تغيير الأسعار"),
+            PermissionSeed("price_history.create", "price_history", "create", "Create Price History", "تسجيل تغيير سعر", "سجل تغيير الأسعار"),
+            PermissionSeed("price_history.update", "price_history", "update", "Update Price History", "تعديل سجل تغيير الأسعار", "سجل تغيير الأسعار"),
+            PermissionSeed("price_history.delete", "price_history", "delete", "Delete Price History", "حذف سجل تغيير الأسعار", "سجل تغيير الأسعار"),
+            PermissionSeed("price_history.export", "price_history", "export", "Export Price History", "تصدير سجل تغيير الأسعار", "سجل تغيير الأسعار"),
+            PermissionSeed("price_history.print", "price_history", "print", "Print Price History", "طباعة سجل تغيير الأسعار", "سجل تغيير الأسعار"),
+            PermissionSeed("price_history.approve", "price_history", "approve", "Approve Price History", "اعتماد تغيير الأسعار", "سجل تغيير الأسعار")
+        )
+        seeds.forEach { seed ->
+            db.execSQL(
+                """INSERT OR IGNORE INTO permissions
+                   (uuid, permission_code, permission_name, permission_name_ar, module, module_name_ar, action, is_active, is_deleted)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0)""",
+                arrayOf("PER-${seed.code.uppercase().replace('.', '-')}-V43", seed.code, seed.name, seed.nameAr, seed.module, seed.moduleNameAr, seed.action)
+            )
+            // Repair old records that may exist with stale module/action metadata.
+            db.execSQL(
+                "UPDATE permissions SET permission_name=?, permission_name_ar=?, module=?, module_name_ar=?, action=?, is_active=1, is_deleted=0 WHERE permission_code=?",
+                arrayOf(seed.name, seed.nameAr, seed.module, seed.moduleNameAr, seed.action, seed.code)
+            )
+        }
+
+        val roleIds = mutableMapOf<String, Long>()
+        db.rawQuery("SELECT id, role_code FROM roles WHERE is_active=1 AND is_deleted=0", null).use { c ->
+            while (c.moveToNext()) roleIds[c.getString(1)] = c.getLong(0)
+        }
+        val fullRoles = setOf("SUPER_ADMIN", "ADMIN", "STATION_MANAGER")
+        val priceListReadRoles = fullRoles + setOf("CASHIER", "ACCOUNTANT", "SUPERVISOR", "ATTENDANT")
+        val priceHistoryReadRoles = fullRoles + setOf("ACCOUNTANT")
+        seeds.forEach { seed ->
+            val allowedRoles = when (seed.action) {
+                "read" -> if (seed.module == "price_lists") priceListReadRoles else priceHistoryReadRoles
+                "delete" -> fullRoles
+                "export", "print" -> if (seed.module == "price_lists") priceListReadRoles else priceHistoryReadRoles
+                else -> fullRoles
+            }
+            val permissionId = db.rawQuery(
+                "SELECT id FROM permissions WHERE permission_code=? AND is_active=1 AND is_deleted=0 LIMIT 1",
+                arrayOf(seed.code)
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            if (permissionId <= 0L) return@forEach
+            roleIds.forEach { (roleCode, roleId) ->
+                val granted = roleCode in allowedRoles
+                val values = ContentValues().apply {
+                    put("uuid", "RP-${seed.code.uppercase().replace('.', '-')}-${roleCode}-V43")
+                    put("role_id", roleId)
+                    put("permission_id", permissionId)
+                    put("can_create", if (granted && seed.action == "create") 1 else 0)
+                    put("can_read", if (granted && seed.action == "read") 1 else 0)
+                    put("can_update", if (granted && seed.action == "update") 1 else 0)
+                    put("can_delete", if (granted && seed.action == "delete") 1 else 0)
+                    put("can_export", if (granted && seed.action == "export") 1 else 0)
+                    put("can_print", if (granted && seed.action == "print") 1 else 0)
+                    put("can_approve", if (granted && seed.action == "approve") 1 else 0)
+                    put("is_deleted", 0)
+                }
+                val existingGlobalId = db.rawQuery(
+                    "SELECT id FROM role_permissions WHERE role_id=? AND permission_id=? AND station_id IS NULL ORDER BY id LIMIT 1",
+                    arrayOf(roleId.toString(), permissionId.toString())
+                ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+                if (existingGlobalId > 0L) {
+                    // During V43 migration, repair pre-existing pricing defaults once.
+                    // On later opens, preserve any deliberate admin customizations for other roles.
+                    if (resetExistingRoleGrants) {
+                        db.update("role_permissions", values, "id=?", arrayOf(existingGlobalId.toString()))
+                    }
+                } else {
+                    db.insertWithOnConflict("role_permissions", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+                }
+            }
+        }
     }
 
     private fun migrateV36ToV37(db: SQLiteDatabase) {
@@ -13781,7 +13902,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         """
                         SELECT screen_name, module, description
                         FROM screens
-                        WHERE is_active=1
+                        WHERE is_active=1 AND archived=0
                         ORDER BY id
                         """,
                         null
@@ -13791,13 +13912,53 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         """
                         SELECT DISTINCT s.screen_name, s.module, s.description
                         FROM screens s
-                        JOIN permissions p ON p.module=s.module
-                        JOIN role_permissions rp ON rp.permission_id=p.id
-                        JOIN users u ON u.role_id=rp.role_id
-                        WHERE u.id=? AND s.is_active=1
+                        WHERE s.is_active=1 AND s.archived=0
+                          AND (
+                            (
+                              s.screen_name IN ('price-lists','price-change-log','promotions','pos','fuel-sales')
+                              AND EXISTS (
+                                SELECT 1
+                                FROM screen_permissions sp
+                                JOIN permissions p ON p.id=sp.permission_id
+                                WHERE sp.screen_id=s.id AND sp.is_granted=1
+                                  AND p.module=s.module AND p.action='read'
+                                  AND p.is_active=1 AND p.is_deleted=0
+                                  AND (
+                                    EXISTS (
+                                      SELECT 1 FROM role_permissions rp
+                                      JOIN users u ON u.role_id=rp.role_id
+                                      WHERE u.id=? AND rp.permission_id=p.id AND rp.is_deleted=0
+                                        AND rp.can_read=1
+                                    )
+                                    OR EXISTS (
+                                      SELECT 1 FROM user_permissions up
+                                      WHERE up.user_id=? AND up.permission_id=p.id AND up.is_granted=1
+                                    )
+                                  )
+                              )
+                            )
+                            OR (
+                              s.screen_name NOT IN ('price-lists','price-change-log','promotions','pos','fuel-sales')
+                              AND EXISTS (
+                                SELECT 1 FROM permissions p
+                                WHERE p.module=s.module AND p.is_active=1 AND p.is_deleted=0
+                                  AND (
+                                    EXISTS (
+                                      SELECT 1 FROM role_permissions rp
+                                      JOIN users u ON u.role_id=rp.role_id
+                                      WHERE u.id=? AND rp.permission_id=p.id AND rp.is_deleted=0
+                                    )
+                                    OR EXISTS (
+                                      SELECT 1 FROM user_permissions up
+                                      WHERE up.user_id=? AND up.permission_id=p.id AND up.is_granted=1
+                                    )
+                                  )
+                              )
+                            )
+                          )
                         ORDER BY s.id
                         """,
-                        arrayOf(userId.toString())
+                        arrayOf(userId.toString(), userId.toString(), userId.toString(), userId.toString())
                     )
                 }
                 cursor.use {
@@ -14524,6 +14685,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 """SELECT permission_id
                    FROM screen_permissions
                    WHERE screen_id = ? AND is_granted = 1
+                     AND EXISTS (SELECT 1 FROM screens s JOIN permissions p ON p.id = screen_permissions.permission_id
+                                 WHERE s.id = screen_permissions.screen_id AND s.module = p.module
+                                   AND p.is_active = 1 AND p.is_deleted = 0)
                    ORDER BY permission_id""",
                 arrayOf(screenId.toString())
             ).use { cursor ->
@@ -14545,7 +14709,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    JOIN screens s ON s.id = sp.screen_id
                    JOIN permissions p ON p.id = sp.permission_id
                    WHERE sp.screen_id = ? AND sp.is_granted = 1
-                     AND s.archived = 0 AND p.is_deleted = 0
+                     AND s.archived = 0 AND p.is_active = 1 AND p.is_deleted = 0
+                     AND p.module = s.module
                    ORDER BY p.action, p.permission_name""",
                 arrayOf(screenId.toString())
             ).use { cursor -> cursorToJsonArray(cursor) }
@@ -28955,6 +29120,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensurePricingV41Schema(db)
         ensurePricingV42Schema(db)
         Log.d(TAG, "Migrated pricing quantity caps to V42")
+    }
+
+    /**
+     * V43 repairs pricing permission ownership and screen-to-permission bindings.
+     * It is additive/idempotent and preserves existing pricing records.
+     */
+    private fun migrateV42ToV43(db: SQLiteDatabase) {
+        ensureScreenPermissionsSchema(db)
+        ensurePricingPermissions(db, resetExistingRoleGrants = true)
+        ensureSalesPricingDefaults(db)
+        Log.d(TAG, "Migrated pricing permissions and screen bindings to V43")
     }
 
     private fun ensurePricingV42Schema(db: SQLiteDatabase) {

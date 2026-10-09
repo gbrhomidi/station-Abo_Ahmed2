@@ -659,7 +659,7 @@ async function saveForm(){
   if(state.editing){
    result=await invoke(CFG.updateMethod,[Number(state.editing.id),JSON.stringify(payload)]);
   }else if($('priceTargetType').value==='fuel'){
-   result=await invoke('changeFuelSalePrice',[JSON.stringify({fuel_type_id:Number($('fuelSelect').value),new_price:Number($('newPrice').value),reason:$('changeReason').value.trim(),price_kind:'default'})]);
+   result=await invoke('changeFuelSalePrice',[JSON.stringify({fuel_type_id:Number($('fuelSelect').value),new_price:Number($('newPrice').value),change_date:finalDate,reason:$('changeReason').value.trim(),price_kind:'default'})]);
   }else{
    result=await invoke(CFG.createMethod,[JSON.stringify(payload)]);
   }

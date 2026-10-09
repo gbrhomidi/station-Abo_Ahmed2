@@ -8242,7 +8242,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         private fun operationalList(permission: String, key: String, jsonData: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getOperationalRows(key, operationalScopedJson(jsonData))) }
+            return try {
+                requirePricingPermission(key, "read")
+                dataResponse(db.getOperationalRows(key, operationalScopedJson(jsonData)))
+            }
             catch (e: Exception) { DebugLogger.logException("OperationalList-$key", e); errorResponse(e.message) }
         }
 
@@ -8250,6 +8253,21 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return false
             val db = getDbHelper() ?: return false
             return db.hasPermission(activity.currentUserId, "$module.$action")
+        }
+
+        /** Dedicated permission gate for pricing tables; unrelated CRUD paths remain unchanged. */
+        private fun requirePricingPermission(screenKey: String, action: String) {
+            val permissionModule = when (screenKey) {
+                "price_lists", "price_list_items", "price-lists", "promotions" -> "price_lists"
+                "price_history", "price-change-log", "fuel_price_history" -> "price_history"
+                else -> return
+            }
+            val activity = getActivity() ?: throw IllegalStateException("النشاط غير متاح")
+            val db = getDbHelper() ?: throw IllegalStateException("قاعدة البيانات غير متاحة")
+            val permissionCode = "$permissionModule.$action"
+            if (!db.hasPermission(activity.currentUserId, permissionCode)) {
+                throw SecurityException("لا تملك صلاحية تنفيذ العملية: $permissionCode")
+            }
         }
 
         private fun requireUsersPermission(action: String) {
@@ -8260,7 +8278,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         private fun operationalReport(permission: String, key: String, jsonData: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponseObject(db.getOperationalReport(key, operationalScopedJson(jsonData))).toString() }
+            return try {
+                requirePricingPermission(key, "export")
+                dataResponseObject(db.getOperationalReport(key, operationalScopedJson(jsonData))).toString()
+            }
             catch (e: Exception) { DebugLogger.logException("OperationalReport-$key", e); errorResponse(e.message) }
         }
 
@@ -8268,6 +8289,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
+                requirePricingPermission(key, "create")
                 if (!SecurityValidator.isTableAllowedForGeneralCrud(key)) return errorResponse("الجدول محمي ويحتاج إلى مسار نطاقي مخصص")
                 val sanitizedJson = SecurityValidator.sanitizeOperationalJson(jsonData)
                 val data = operationalScopedJson(sanitizedJson)
@@ -8293,6 +8315,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
+                requirePricingPermission(key, "update")
                 if (!SecurityValidator.isTableAllowedForGeneralCrud(key)) return errorResponse("الجدول محمي ويحتاج إلى مسار نطاقي مخصص")
                 val sanitizedJson = SecurityValidator.sanitizeOperationalJson(jsonData)
                 val rows = db.updateOperationalRecord(key, id, operationalScopedJson(sanitizedJson), activity.currentUserId)
@@ -8305,6 +8328,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
+                requirePricingPermission(key, "delete")
                 if (!SecurityValidator.isTableAllowedForGeneralCrud(key)) return errorResponse("الجدول محمي ويحتاج إلى مسار نطاقي مخصص")
                 if (id <= 0L) return errorResponse("معرف السجل غير صالح")
                 val rows = db.deleteOperationalRecord(key, id, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId))
@@ -8317,6 +8341,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
+                requirePricingPermission(key, "update")
                 if (!SecurityValidator.isTableAllowedForGeneralCrud(key)) return errorResponse("الجدول محمي ويحتاج إلى مسار نطاقي مخصص")
                 val rows = db.restoreOperationalRecord(key, id, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(rows > 0, if (rows > 0) "تمت الاستعادة فعلياً" else "لم يتم العثور على سجل مؤرشف")
@@ -8326,7 +8351,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         private fun operationalResolve(permission: String, key: String, id: Long, note: String): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val rows = db.resolveOperationalRecord(key, id, note, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId)); successResponse(rows > 0, if (rows > 0) "تم تنفيذ العملية فعلياً" else "لم يتم العثور على السجل") }
+            return try { requirePricingPermission(key, "approve"); val rows = db.resolveOperationalRecord(key, id, note, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId)); successResponse(rows > 0, if (rows > 0) "تم تنفيذ العملية فعلياً" else "لم يتم العثور على السجل") }
             catch (e: Exception) { DebugLogger.logException("OperationalResolve-$key", e); errorResponse(e.message) }
         }
 
@@ -8739,7 +8764,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            if (!checkPermission("products", "write")) return errorResponse("لا تملك صلاحية تغيير أسعار المنتجات")
+            requirePricingPermission("price_history", "create")
             val d = JSONObject(jsonData)
             val stationId = requireCurrentStationId(db, activity.currentUserId)
             dataResponse(db.changeProductSalePrice(d.optLong("product_id"), d.optDouble("new_price", Double.NaN), stationId, activity.currentUserId, d.optString("reason")).toJson())
@@ -8751,7 +8776,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            if (!checkPermission("products", "write")) return errorResponse("لا تملك صلاحية تغيير أسعار الوقود")
+            requirePricingPermission("price_history", "create")
             val d = JSONObject(jsonData)
             val stationId = requireCurrentStationId(db, activity.currentUserId)
             dataResponse(db.changeFuelSalePrice(d.optLong("fuel_type_id"), d.optDouble("new_price", Double.NaN), stationId, activity.currentUserId, d.optString("reason"), d.optString("price_kind", "default")).toJson())
@@ -8795,7 +8820,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            if (!checkPermission("products", "write")) return errorResponse("لا تملك صلاحية تغيير أسعار القوائم")
+            requirePricingPermission("price_lists", "update")
             val d = JSONObject(jsonData)
             val stationId = requireCurrentStationId(db, activity.currentUserId)
             dataResponse(db.changePriceListItemPrice(d.optLong("id"), d.optDouble("new_price", Double.NaN), stationId, activity.currentUserId).toJson())
@@ -8805,6 +8830,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getFuelPriceHistoryRecords(jsonData: String = "{}"): String  {
             return try {
+            requirePricingPermission("fuel_price_history", "read")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             dataResponse(db.getFuelPriceHistoryRecords(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId)))
@@ -8814,6 +8840,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getPriceListRecords(jsonData: String = "{}"): String  {
             return try {
+            requirePricingPermission("price_lists", "read")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
             dataResponse(db.getPriceListsWithItemCount(stationId))
@@ -8833,6 +8860,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getNextPriceListCode(): String  {
             return try {
+            requirePricingPermission("price_lists", "create")
             val db=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity=getActivity() ?: return errorResponse("النشاط غير متاح")
             dataResponse(db.getNextPriceListCode(requireCurrentStationId(db, activity.currentUserId)))
@@ -8842,9 +8870,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addPriceListItemsBatch(jsonData: String): String  {
             return try {
+            requirePricingPermission("price_lists", "create")
             val db=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity=getActivity() ?: return errorResponse("النشاط غير متاح")
-            if (!checkPermission("products", "write")) return errorResponse("لا تملك صلاحية تعديل قوائم الأسعار")
             val stationId=requireCurrentStationId(db, activity.currentUserId)
             dataResponse(db.addPriceListItemsBatch(JSONObject(jsonData), activity.currentUserId, stationId))
         } catch(e:Exception){ errorResponse(e.message) }
@@ -8853,6 +8881,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getUnifiedPriceChangeLog(jsonData: String = "{}"): String  {
             return try {
+            requirePricingPermission("price_history", "read")
             val db=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity=getActivity() ?: return errorResponse("النشاط غير متاح")
             dataResponse(db.getUnifiedPriceChangeLog(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId)))
@@ -8862,6 +8891,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getPriceListItems(priceListId: Long): String  {
             return try {
+            requirePricingPermission("price_lists", "read")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
             dataResponse(db.getPriceListItems(priceListId, stationId))
@@ -8870,6 +8900,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addPriceListItem(jsonData: String): String  {
             return try {
+            requirePricingPermission("price_lists", "create")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
             val id = db.insertPriceListItem(JSONObject(jsonData), getActivity()?.currentUserId ?: 0L, stationId)
@@ -8879,6 +8910,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updatePriceListItem(id: Long, jsonData: String): String  {
             return try {
+            requirePricingPermission("price_lists", "update")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
             successResponse(db.updatePriceListItem(id, JSONObject(jsonData), stationId) > 0, "تم تحديث عنصر قائمة الأسعار")
@@ -8887,6 +8919,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deletePriceListItem(id: Long): String  {
             return try {
+            requirePricingPermission("price_lists", "delete")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
             successResponse(db.deletePriceListItem(id, stationId) > 0, "تم حذف عنصر قائمة الأسعار")
@@ -8895,6 +8928,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getProductPriceHistory(productId: Long, limit: Int = 50): String  {
             return try {
+            requirePricingPermission("price_history", "read")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
             dataResponse(db.getPriceHistory(productId, limit, stationId))
@@ -8922,7 +8956,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                if (!checkPermission("products", "write")) return errorResponse("لا تملك صلاحية تغيير أسعار المنتجات")
+                requirePricingPermission("price_history", "create")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val d = JSONObject(jsonData.ifBlank { "{}" })
                 val productId = d.optLong("product_id", 0L)
