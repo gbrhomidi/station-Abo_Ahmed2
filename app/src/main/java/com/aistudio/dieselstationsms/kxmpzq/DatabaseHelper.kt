@@ -6848,6 +6848,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales_transactions(customer_party_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_date ON sales_transactions(created_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_status ON sales_transactions(status)")
+        // Composite report indexes: keep station/date filtering selective while
+        // covering the soft-delete and payment dimensions used by large reports.
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_station_deleted_business_day ON sales_transactions(station_id, is_deleted, business_day)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_station_business_day_deleted_payment ON sales_transactions(station_id, business_day, is_deleted, payment_method)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_station_payment_business_day_deleted ON sales_transactions(station_id, payment_method, business_day, is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_code ON shifts(shift_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_station ON shifts(station_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_date ON shifts(shift_date)")
