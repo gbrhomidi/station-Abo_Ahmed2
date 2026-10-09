@@ -12,6 +12,12 @@ import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.*
@@ -45,7 +51,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 43
+        const val VERSION = 44
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -258,6 +264,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     40 -> migrateV40ToV41(db)
                     41 -> migrateV41ToV42(db)
                     42 -> migrateV42ToV43(db)
+                    43 -> migrateV43ToV44(db)
                 }
             }
             ensureModule006Schema(db)
@@ -29136,6 +29143,55 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         Log.d(TAG, "Migrated pricing permissions and screen bindings to V43")
     }
 
+    /**
+     * V44 aligns historical sales days with the device's local calendar day.
+     * SQLite CURRENT_TIMESTAMP is UTC; V41 previously copied only its date
+     * prefix, making a Saudi-local day appear to begin at 03:00.
+     */
+    private fun migrateV43ToV44(db: SQLiteDatabase) {
+        val localZone = ZoneId.systemDefault()
+        val fixes = mutableListOf<Triple<Long, String, String>>()
+        db.rawQuery(
+            "SELECT id, created_at, business_day FROM sales_transactions WHERE created_at IS NOT NULL AND business_day IS NOT NULL AND business_day = substr(created_at, 1, 10)",
+            null
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val createdAt = cursor.getString(1)
+                val storedDay = cursor.getString(2)
+                val localDay = databaseUtcTimestampToLocalDate(createdAt, localZone) ?: continue
+                if (localDay != storedDay) fixes += Triple(cursor.getLong(0), storedDay, localDay)
+            }
+        }
+        if (fixes.isNotEmpty()) {
+            val statement = db.compileStatement("UPDATE sales_transactions SET business_day=? WHERE id=? AND business_day=?")
+            try {
+                fixes.forEach { (id, oldDay, localDay) ->
+                    statement.clearBindings()
+                    statement.bindString(1, localDay)
+                    statement.bindLong(2, id)
+                    statement.bindString(3, oldDay)
+                    statement.executeUpdateDelete()
+                }
+            } finally {
+                statement.close()
+            }
+        }
+        Log.d(TAG, "Migrated sales business days to device-local date V43 -> V44; corrected ${fixes.size} rows")
+    }
+
+    private fun databaseUtcTimestampToLocalDate(value: String, zoneId: ZoneId): String? {
+        val text = value.trim()
+        val instant = runCatching { Instant.parse(text) }.getOrNull()
+            ?: runCatching { OffsetDateTime.parse(text.replace(' ', 'T')).toInstant() }.getOrNull()
+            ?: runCatching {
+                val localTimestamp = text.take(19).replace('T', ' ')
+                LocalDateTime.parse(localTimestamp, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                    .toInstant(ZoneOffset.UTC)
+            }.getOrNull()
+            ?: return null
+        return instant.atZone(zoneId).toLocalDate().toString()
+    }
+
     private fun ensurePricingV42Schema(db: SQLiteDatabase) {
         ensureColumn(db, "price_list_items", "quantity_limit", "REAL")
         ensureColumn(db, "price_list_items", "quantity_sold", "REAL NOT NULL DEFAULT 0")
@@ -29211,7 +29267,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payments_business_day ON payments(business_day, created_at)")
         db.execSQL("CREATE TRIGGER IF NOT EXISTS trg_products_sale_price_history AFTER UPDATE OF sale_price ON products\n            WHEN OLD.sale_price IS NOT NEW.sale_price AND NEW.is_deleted = 0\n            BEGIN\n                INSERT INTO price_history(product_id, old_price, new_price, change_date, change_reason, created_by, archived)\n                VALUES(OLD.id, OLD.sale_price, NEW.sale_price, COALESCE(NEW.updated_at, CURRENT_TIMESTAMP), 'تغيير سعر المنتج', NEW.updated_by, 0);\n            END")
         db.execSQL("CREATE TRIGGER IF NOT EXISTS trg_fuel_types_sale_price_history AFTER UPDATE OF default_sale_price ON fuel_types\n            WHEN OLD.default_sale_price IS NOT NEW.default_sale_price AND NEW.is_deleted = 0\n            BEGIN\n                INSERT INTO fuel_price_history(uuid, fuel_type_id, station_id, old_price, new_price, price_kind, change_date, change_reason, created_by, archived)\n                SELECT lower(hex(randomblob(16))), OLD.id, s.id, OLD.default_sale_price, NEW.default_sale_price, 'default', COALESCE(NEW.updated_at, CURRENT_TIMESTAMP), 'تغيير سعر الوقود', NEW.updated_by, 0\n                FROM stations s WHERE s.id IN (SELECT DISTINCT station_id FROM tanks WHERE fuel_type_id = OLD.id AND is_deleted = 0);\n            END")
-        db.execSQL("UPDATE sales_transactions SET business_day = substr(COALESCE(created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
+        db.execSQL("UPDATE sales_transactions SET business_day = date(COALESCE(created_at, CURRENT_TIMESTAMP), 'localtime') WHERE business_day IS NULL OR trim(business_day) = ''")
         db.execSQL("UPDATE fuel_sales SET business_day = substr(COALESCE(sale_date, created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
         db.execSQL("UPDATE payments SET business_day = substr(COALESCE(created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
         db.execSQL("UPDATE stock_movements SET business_day = substr(COALESCE(movement_date, created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")

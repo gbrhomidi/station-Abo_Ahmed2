@@ -16,6 +16,7 @@ import org.robolectric.annotation.Config
 import java.time.LocalDate
 import java.time.ZonedDateTime
 import java.util.UUID
+import java.util.TimeZone
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -51,8 +52,8 @@ class PricingV41RobolectricTest {
     }
 
     @Test
-    fun v43SchemaAndMigrationContractArePresent() {
-        assertEquals(43, DatabaseHelper.VERSION)
+    fun v44SchemaAndMigrationContractArePresent() {
+        assertEquals(44, DatabaseHelper.VERSION)
         val db = helper.writableDatabase
         assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fuel_price_history'", null).use { it.moveToFirst() })
         assertTrue(db.rawQuery("PRAGMA table_info(price_lists)", null).use { c ->
@@ -79,7 +80,7 @@ class PricingV41RobolectricTest {
     }
 
     @Test
-    fun upgradesRepresentativeV40V41AndV42SchemasToV43WithoutLosingData() {
+    fun upgradesRepresentativeV40V41AndV42SchemasToV44WithoutLosingData() {
         for (sourceVersion in 40..42) {
             DatabaseHelper.closeInstance()
             context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
@@ -245,10 +246,82 @@ class PricingV41RobolectricTest {
         val midnight = ZonedDateTime.parse("2026-10-07T00:00:00+03:00[Asia/Riyadh]")
         val afterMidnight = ZonedDateTime.parse("2026-10-07T00:01:00+03:00[Asia/Riyadh]")
         val twoAm = ZonedDateTime.parse("2026-10-07T02:00:00+03:00[Asia/Riyadh]")
-        assertEquals("2026-10-06", BusinessDay.currentDate(now = beforeMidnight))
-        assertEquals("2026-10-07", BusinessDay.currentDate(now = midnight))
-        assertEquals("2026-10-07", BusinessDay.currentDate(now = afterMidnight))
-        assertEquals("2026-10-07", BusinessDay.currentDate(now = twoAm))
+        assertEquals("2026-10-06", BusinessDay.currentDate(zoneId = "Asia/Riyadh", now = beforeMidnight))
+        assertEquals("2026-10-07", BusinessDay.currentDate(zoneId = "Asia/Riyadh", now = midnight))
+        assertEquals("2026-10-07", BusinessDay.currentDate(zoneId = "Asia/Riyadh", now = afterMidnight))
+        assertEquals("2026-10-07", BusinessDay.currentDate(zoneId = "Asia/Riyadh", now = twoAm))
+    }
+
+    @Test
+    fun businessDayDefaultsToDeviceTimeZoneAndRollsAtLocalMidnight() {
+        val previousTimeZone = TimeZone.getDefault()
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"))
+            val beforeMidnight = ZonedDateTime.parse("2026-10-07T23:59:59-04:00[America/New_York]")
+            val midnight = ZonedDateTime.parse("2026-10-08T00:00:00-04:00[America/New_York]")
+
+            assertEquals("America/New_York", BusinessDay.DEFAULT_ZONE_ID)
+            assertEquals("2026-10-07", BusinessDay.currentDate(now = beforeMidnight))
+            assertEquals("2026-10-08", BusinessDay.currentDate(now = midnight))
+            assertEquals("2026-10-08 00:00:00", BusinessDay.context(now = midnight).startDateTime)
+            assertEquals("America/New_York", BusinessDay.context(now = midnight).zoneId)
+        } finally {
+            TimeZone.setDefault(previousTimeZone)
+        }
+    }
+
+    @Test
+    fun v44CorrectsPreviouslyBackfilledUtcSalesDateWithoutChangingCorrectLocalDates() {
+        val previousTimeZone = TimeZone.getDefault()
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone("Asia/Riyadh"))
+            val db = helper.writableDatabase
+            val stationId = db.rawQuery("SELECT station_id FROM users WHERE id=?", arrayOf(actorId.toString())).use {
+                check(it.moveToFirst())
+                it.getLong(0)
+            }
+            val shiftId = db.insertOrThrow("shifts", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("shift_code", "V44-${UUID.randomUUID().toString().take(8)}")
+                put("station_id", stationId)
+                put("shift_date", "2026-10-07")
+                put("shift_type", "night")
+                put("start_time", "2026-10-07 18:00:00")
+                put("cashier_id", actorId)
+            })
+            fun insertSale(code: String, createdAt: String, businessDay: String): Long = db.insertOrThrow(
+                "sales_transactions", null, ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("sale_code", code)
+                    put("station_id", stationId)
+                    put("shift_id", shiftId)
+                    put("subtotal", 10.0)
+                    put("gross_amount", 10.0)
+                    put("net_amount", 10.0)
+                    put("cashier_id", actorId)
+                    put("created_at", createdAt)
+                    put("business_day", businessDay)
+                }
+            )
+
+            val utcBackfilledRow = insertSale("V44-UTC-1", "2026-10-07 21:00:00", "2026-10-07")
+            val alreadyCorrectRow = insertSale("V44-LOCAL-1", "2026-10-07 21:00:00", "2026-10-08")
+            val sameCalendarDayRow = insertSale("V44-SAME-1", "2026-10-07 20:30:00", "2026-10-07")
+            db.version = 43
+            DatabaseHelper.closeInstance()
+
+            helper = DatabaseHelper.getInstance(context)
+            val upgradedDb = helper.writableDatabase
+            assertEquals(44, upgradedDb.version)
+            fun dayFor(id: Long): String = upgradedDb.rawQuery(
+                "SELECT business_day FROM sales_transactions WHERE id=?", arrayOf(id.toString())
+            ).use { check(it.moveToFirst()); it.getString(0) }
+            assertEquals("2026-10-08", dayFor(utcBackfilledRow))
+            assertEquals("2026-10-08", dayFor(alreadyCorrectRow))
+            assertEquals("2026-10-07", dayFor(sameCalendarDayRow))
+        } finally {
+            TimeZone.setDefault(previousTimeZone)
+        }
     }
 
     @Test

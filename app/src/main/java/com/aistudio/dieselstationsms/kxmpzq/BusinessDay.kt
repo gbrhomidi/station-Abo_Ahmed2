@@ -15,11 +15,12 @@ data class BusinessDayContext(
 
 /** Business Day is independent from pricing validity. The operating day starts at 00:00. */
 object BusinessDay {
-    const val DEFAULT_ZONE_ID = "Asia/Riyadh"
+    val DEFAULT_ZONE_ID: String
+        get() = ZoneId.systemDefault().id
     private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
     private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
-    fun context(zoneId: String = DEFAULT_ZONE_ID, now: ZonedDateTime = ZonedDateTime.now(ZoneId.of(zoneId))): BusinessDayContext {
+    fun context(zoneId: String = ZoneId.systemDefault().id, now: ZonedDateTime = ZonedDateTime.now(ZoneId.of(zoneId))): BusinessDayContext {
         val zone = ZoneId.of(zoneId)
         val localDate = now.withZoneSameInstant(zone).toLocalDate()
         val start = localDate.atStartOfDay(zone)
@@ -27,13 +28,13 @@ object BusinessDay {
         return BusinessDayContext(localDate.format(dateFormatter), start.format(formatter), end.format(formatter), zone.id)
     }
 
-    fun currentDate(zoneId: String = DEFAULT_ZONE_ID, now: ZonedDateTime = ZonedDateTime.now(ZoneId.of(zoneId))): String =
+    fun currentDate(zoneId: String = ZoneId.systemDefault().id, now: ZonedDateTime = ZonedDateTime.now(ZoneId.of(zoneId))): String =
         context(zoneId, now).businessDate
 
-    fun forInstant(instant: Instant, zoneId: String = DEFAULT_ZONE_ID): String =
+    fun forInstant(instant: Instant, zoneId: String = ZoneId.systemDefault().id): String =
         context(zoneId, instant.atZone(ZoneId.of(zoneId))).businessDate
 
-    fun range(date: LocalDate, zoneId: String = DEFAULT_ZONE_ID): Pair<ZonedDateTime, ZonedDateTime> {
+    fun range(date: LocalDate, zoneId: String = ZoneId.systemDefault().id): Pair<ZonedDateTime, ZonedDateTime> {
         val zone = ZoneId.of(zoneId)
         val start = date.atStartOfDay(zone)
         return start to start.plusDays(1)

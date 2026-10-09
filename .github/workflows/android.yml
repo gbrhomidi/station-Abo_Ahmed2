@@ -312,6 +312,11 @@ jobs:
 
           python3 ./screen-smoke-test.py
 
+      - name: Verify local business-day boundary
+        run: |
+          set -e
+          node ./app/src/test/js/business-day.test.js
+
 
       # ----------------------------------------------------------------------
       # Kotlin / Robolectric regression tests
