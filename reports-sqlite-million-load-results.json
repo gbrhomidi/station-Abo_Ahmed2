@@ -2,40 +2,40 @@
   "sales_rows": 1000000,
   "journal_rows": 250000,
   "iterations_per_query": 10,
-  "setup_seconds": 3.479,
-  "rss_before_mb": 13.51,
-  "rss_after_setup_mb": 104.05,
+  "setup_seconds": 3.398,
+  "rss_before_mb": 13.52,
+  "rss_after_setup_mb": 104.06,
   "rss_delta_mb": 90.54,
   "baseline_queries": [
     {
       "query": "sales_business_day_summary",
-      "median_ms": 193.453,
-      "p95_ms": 199.455,
-      "max_ms": 263.951,
+      "median_ms": 200.471,
+      "p95_ms": 203.122,
+      "max_ms": 220.564,
       "plan": "SEARCH sales_transactions USING INDEX idx_sales_station (station_id=?)",
       "phase": "BEFORE"
     },
     {
       "query": "sales_business_day_monthly",
-      "median_ms": 670.334,
-      "p95_ms": 768.501,
-      "max_ms": 775.481,
+      "median_ms": 680.786,
+      "p95_ms": 772.616,
+      "max_ms": 822.771,
       "plan": "SCAN sales_transactions | USE TEMP B-TREE FOR GROUP BY",
       "phase": "BEFORE"
     },
     {
       "query": "sales_payment_breakdown",
-      "median_ms": 920.148,
-      "p95_ms": 975.917,
-      "max_ms": 1045.523,
+      "median_ms": 814.68,
+      "p95_ms": 859.186,
+      "max_ms": 888.033,
       "plan": "SCAN sales_transactions | USE TEMP B-TREE FOR GROUP BY",
       "phase": "BEFORE"
     },
     {
       "query": "journal_reconciliation_summary",
-      "median_ms": 117.367,
-      "p95_ms": 122.795,
-      "max_ms": 129.87,
+      "median_ms": 105.822,
+      "p95_ms": 111.655,
+      "max_ms": 115.634,
       "plan": "SEARCH journal_entries USING INDEX idx_journal_station_date_status (station_id=? AND entry_date>? AND entry_date<?)",
       "phase": "BEFORE"
     }
@@ -43,43 +43,43 @@
   "optimized_queries": [
     {
       "query": "sales_business_day_summary",
-      "median_ms": 574.11,
-      "p95_ms": 596.879,
-      "max_ms": 608.223,
+      "median_ms": 576.125,
+      "p95_ms": 590.606,
+      "max_ms": 610.249,
       "plan": "SEARCH sales_transactions USING INDEX idx_sales_station_business_day_deleted_payment (station_id=? AND business_day>? AND business_day<?)",
       "phase": "AFTER",
-      "delta_ms": 397.424,
-      "improvement_pct": -199.25
+      "delta_ms": 387.484,
+      "improvement_pct": -190.76
     },
     {
       "query": "sales_business_day_monthly",
-      "median_ms": 798.568,
-      "p95_ms": 813.777,
-      "max_ms": 826.965,
+      "median_ms": 789.536,
+      "p95_ms": 814.423,
+      "max_ms": 831.493,
       "plan": "SEARCH sales_transactions USING INDEX idx_sales_station_business_day_deleted_payment (station_id=? AND business_day>? AND business_day<?) | USE TEMP B-TREE FOR GROUP BY",
       "phase": "AFTER",
-      "delta_ms": 45.276,
-      "improvement_pct": -5.89
+      "delta_ms": 41.807,
+      "improvement_pct": -5.41
     },
     {
       "query": "sales_payment_breakdown",
-      "median_ms": 858.725,
-      "p95_ms": 881.38,
-      "max_ms": 920.112,
+      "median_ms": 827.335,
+      "p95_ms": 841.562,
+      "max_ms": 861.14,
       "plan": "SEARCH sales_transactions USING INDEX idx_sales_station_business_day_deleted_payment (station_id=? AND business_day>? AND business_day<?) | USE TEMP B-TREE FOR GROUP BY",
       "phase": "AFTER",
-      "delta_ms": -94.537,
-      "improvement_pct": 9.69
+      "delta_ms": -17.624,
+      "improvement_pct": 2.05
     },
     {
       "query": "journal_reconciliation_summary",
-      "median_ms": 106.195,
-      "p95_ms": 106.945,
-      "max_ms": 107.061,
+      "median_ms": 106.589,
+      "p95_ms": 106.98,
+      "max_ms": 107.43,
       "plan": "SEARCH journal_entries USING INDEX idx_journal_station_date_status (station_id=? AND entry_date>? AND entry_date<?)",
       "phase": "AFTER",
-      "delta_ms": -15.85,
-      "improvement_pct": 12.91
+      "delta_ms": -4.675,
+      "improvement_pct": 4.19
     }
   ],
   "composite_indexes": [
