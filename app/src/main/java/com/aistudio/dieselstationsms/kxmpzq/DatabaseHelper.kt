@@ -21331,6 +21331,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
             // Audit only journal reference types whose source table and key are known.
             // Reversal entries reference the original journal, not a business-operation row.
+            val auditJournalDateClause = buildString {
+                if (from.isNotBlank()) append(" AND date(je.entry_date)>=date(?)")
+                if (to.isNotBlank()) append(" AND date(je.entry_date)<=date(?)")
+            }
+            val reversalJournalDateClause = buildString {
+                if (from.isNotBlank()) append(" AND date(rev.entry_date)>=date(?)")
+                if (to.isNotBlank()) append(" AND date(rev.entry_date)<=date(?)")
+            }
             val orphanReferencedJournals = db.rawQuery(
                 """SELECT COUNT(*) FROM journal_entries je
                    WHERE je.station_id=? AND je.status='posted' AND je.is_deleted=0
@@ -21341,8 +21349,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        OR (je.reference_type='expense' AND EXISTS (SELECT 1 FROM expenses s WHERE s.id=je.reference_id AND s.station_id=je.station_id AND s.is_deleted=0))
                        OR (je.reference_type='employee_payment' AND EXISTS (SELECT 1 FROM employee_payments s WHERE s.id=je.reference_id AND s.station_id=je.station_id AND s.is_deleted=0))
                        OR (je.reference_type IN ('sale','sale_cogs') AND EXISTS (SELECT 1 FROM sales_transactions s WHERE s.id=je.reference_id AND s.station_id=je.station_id AND s.is_deleted=0))
-                     )""",
-                arrayOf(stationScopeId.toString())
+                     )""" + auditJournalDateClause,
+                journalArgs()
             ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
             val duplicateReferencedJournalGroups = db.rawQuery(
                 """SELECT COUNT(*) FROM (
@@ -21350,11 +21358,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                      FROM journal_entries
                      WHERE station_id=? AND status='posted' AND is_deleted=0
                        AND reference_id IS NOT NULL AND reference_id>0
-                       AND reference_type IN ('payment','receipt','expense','employee_payment','sale','sale_cogs')
+                       AND reference_type IN ('payment','receipt','expense','employee_payment','sale','sale_cogs')""" + journalDateClause + """
                      GROUP BY reference_type, reference_id
                      HAVING COUNT(*)>1
                    )""",
-                arrayOf(stationScopeId.toString())
+                journalArgs()
             ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
             val reversalEntriesWithoutOrigin = db.rawQuery(
                 """SELECT COUNT(*) FROM journal_entries rev
@@ -21363,8 +21371,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                      AND NOT EXISTS (
                        SELECT 1 FROM journal_entries orig
                        WHERE orig.id=rev.reference_id AND orig.station_id=rev.station_id
-                     )""",
-                arrayOf(stationScopeId.toString())
+                     )""" + reversalJournalDateClause,
+                journalArgs()
             ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
             val stationReconciled =
                 kotlin.math.abs(journalDebit - journalCredit) <= 0.01 &&
