@@ -21142,10 +21142,38 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             fun sum(table:String,col:String,status:String?=null):Double{val st=status?.let{" AND status = ?"}.orEmpty();return db.rawQuery("SELECT COALESCE(SUM($col),0) FROM $table WHERE station_id=? AND is_deleted=0$st$dateClause",scopedArgs(status).toTypedArray()).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0}}
             fun count(table:String,status:String?=null):Long{val st=status?.let{" AND status = ?"}.orEmpty();return db.rawQuery("SELECT COUNT(*) FROM $table WHERE station_id=? AND is_deleted=0$st$dateClause",scopedArgs(status).toTypedArray()).use{c->if(c.moveToFirst())c.getLong(0)else 0L}}
             val paymentCompleted=sum("payments","amount","completed"); val receiptActive=sum("receipts","amount","active"); val expensePaid=sum("expenses","total_amount","paid")
-            val missingPaymentJournals=db.rawQuery("SELECT COUNT(*) FROM payments WHERE station_id=? AND is_deleted=0 AND status='completed' AND COALESCE(journal_entry_id,0)=0",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
-            val missingReceiptJournals=db.rawQuery("SELECT COUNT(*) FROM receipts WHERE station_id=? AND is_deleted=0 AND status='active' AND COALESCE(journal_entry_id,0)=0",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
-            val missingExpenseJournals=db.rawQuery("SELECT COUNT(*) FROM expenses WHERE station_id=? AND is_deleted=0 AND status='paid' AND COALESCE(journal_entry_id,0)=0",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
-            val missingEmployeePaymentJournals=db.rawQuery("SELECT COUNT(*) FROM employee_payments WHERE station_id=? AND is_deleted=0 AND status='completed' AND COALESCE(journal_entry_id,0)=0",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
+            val missingPaymentJournals = db.rawQuery(
+                """SELECT COUNT(*) FROM payments p
+                   LEFT JOIN journal_entries je ON je.id=p.journal_entry_id
+                       AND je.station_id=p.station_id AND je.is_deleted=0 AND je.status='posted'
+                   WHERE p.station_id=? AND p.is_deleted=0 AND p.status='completed'
+                       AND je.id IS NULL""",
+                arrayOf(stationScopeId.toString())
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            val missingReceiptJournals = db.rawQuery(
+                """SELECT COUNT(*) FROM receipts r
+                   LEFT JOIN journal_entries je ON je.id=r.journal_entry_id
+                       AND je.station_id=r.station_id AND je.is_deleted=0 AND je.status='posted'
+                   WHERE r.station_id=? AND r.is_deleted=0 AND r.status='active'
+                       AND je.id IS NULL""",
+                arrayOf(stationScopeId.toString())
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            val missingExpenseJournals = db.rawQuery(
+                """SELECT COUNT(*) FROM expenses e
+                   LEFT JOIN journal_entries je ON je.id=e.journal_entry_id
+                       AND je.station_id=e.station_id AND je.is_deleted=0 AND je.status='posted'
+                   WHERE e.station_id=? AND e.is_deleted=0 AND e.status='paid'
+                       AND je.id IS NULL""",
+                arrayOf(stationScopeId.toString())
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            val missingEmployeePaymentJournals = db.rawQuery(
+                """SELECT COUNT(*) FROM employee_payments ep
+                   LEFT JOIN journal_entries je ON je.id=ep.journal_entry_id
+                       AND je.station_id=ep.station_id AND je.is_deleted=0 AND je.status='posted'
+                   WHERE ep.station_id=? AND ep.is_deleted=0 AND ep.status='completed'
+                       AND je.id IS NULL""",
+                arrayOf(stationScopeId.toString())
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
             val journalDateClause = buildString {
                 if (from.isNotBlank()) append(" AND date(entry_date)>=date(?)")
                 if (to.isNotBlank()) append(" AND date(entry_date)<=date(?)")
