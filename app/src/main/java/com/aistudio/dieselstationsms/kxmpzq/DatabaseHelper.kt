@@ -51,7 +51,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 44
+        const val VERSION = 45
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -214,6 +214,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureFuelCommerceSchema(db)
             ensureFuelStocktakeSchema(db)
             ensureFinanceIntegritySchema(db)
+            ensureFiscalPeriodSchema(db)
             ensurePricingV42Schema(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
@@ -265,6 +266,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     41 -> migrateV41ToV42(db)
                     42 -> migrateV42ToV43(db)
                     43 -> migrateV43ToV44(db)
+                    44 -> ensureFiscalPeriodSchema(db)
                 }
             }
             ensureModule006Schema(db)
@@ -279,6 +281,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureVehicleArchiveSchema(db)
             ensureVehicleTripLifecycleSchema(db)
             ensureFinanceIntegritySchema(db)
+            ensureFiscalPeriodSchema(db)
             ensurePricingV41Schema(db)
             ensurePricingV42Schema(db)
             db.setTransactionSuccessful()
@@ -4003,6 +4006,73 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 FOREIGN KEY (nozzle_id) REFERENCES pump_nozzles(id)
             )
         """)
+    }
+
+    /**
+     * Additive fiscal-period foundation. Closed/closing periods block journal writes
+     * at the SQLite boundary so callers cannot bypass the rule through another path.
+     */
+    private fun ensureFiscalPeriodSchema(db: SQLiteDatabase) {
+        db.execSQL("""CREATE TABLE IF NOT EXISTS fiscal_periods (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            station_id INTEGER NOT NULL,
+            fiscal_year INTEGER NOT NULL,
+            fiscal_month INTEGER NOT NULL CHECK(fiscal_month BETWEEN 1 AND 12),
+            period_start TEXT NOT NULL,
+            period_end TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closing','closed','reopened')),
+            closed_at TEXT,
+            closed_by INTEGER,
+            reopened_at TEXT,
+            reopened_by INTEGER,
+            reopen_reason TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(station_id, fiscal_year, fiscal_month),
+            CHECK(date(period_start) IS NOT NULL AND date(period_end) IS NOT NULL AND date(period_start)<=date(period_end))
+        )""")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS period_closing_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            period_id INTEGER NOT NULL,
+            journal_entry_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(period_id, journal_entry_id),
+            FOREIGN KEY(period_id) REFERENCES fiscal_periods(id),
+            FOREIGN KEY(journal_entry_id) REFERENCES journal_entries(id)
+        )""")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fiscal_periods_station_dates ON fiscal_periods(station_id, period_start, period_end, status)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_period_closing_entries_period ON period_closing_entries(period_id)")
+        db.execSQL("DROP TRIGGER IF EXISTS trg_journal_period_guard_insert")
+        db.execSQL("DROP TRIGGER IF EXISTS trg_journal_period_guard_update")
+        db.execSQL("DROP TRIGGER IF EXISTS trg_journal_period_guard_delete")
+        db.execSQL("""CREATE TRIGGER trg_journal_period_guard_insert
+            BEFORE INSERT ON journal_entries
+            WHEN EXISTS (
+                SELECT 1 FROM fiscal_periods p
+                WHERE p.station_id=NEW.station_id
+                  AND date(NEW.entry_date) BETWEEN date(p.period_start) AND date(p.period_end)
+                  AND p.status IN ('closing','closed')
+            )
+            BEGIN SELECT RAISE(ABORT, 'FISCAL_PERIOD_CLOSED'); END""")
+        db.execSQL("""CREATE TRIGGER trg_journal_period_guard_update
+            BEFORE UPDATE ON journal_entries
+            WHEN EXISTS (
+                SELECT 1 FROM fiscal_periods p
+                WHERE p.status IN ('closing','closed') AND (
+                    (p.station_id=OLD.station_id AND date(OLD.entry_date) BETWEEN date(p.period_start) AND date(p.period_end))
+                    OR
+                    (p.station_id=NEW.station_id AND date(NEW.entry_date) BETWEEN date(p.period_start) AND date(p.period_end))
+                )
+            )
+            BEGIN SELECT RAISE(ABORT, 'FISCAL_PERIOD_CLOSED'); END""")
+        db.execSQL("""CREATE TRIGGER trg_journal_period_guard_delete
+            BEFORE DELETE ON journal_entries
+            WHEN EXISTS (
+                SELECT 1 FROM fiscal_periods p
+                WHERE p.station_id=OLD.station_id
+                  AND date(OLD.entry_date) BETWEEN date(p.period_start) AND date(p.period_end)
+                  AND p.status IN ('closing','closed')
+            )
+            BEGIN SELECT RAISE(ABORT, 'FISCAL_PERIOD_CLOSED'); END""")
     }
 
     private fun ensureFinanceIntegritySchema(db: SQLiteDatabase) {
