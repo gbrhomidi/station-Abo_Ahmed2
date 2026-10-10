@@ -175,6 +175,47 @@ class JournalStationIsolationRobolectricTest {
 
 
     @Test
+    fun `payment journal must match exact source id and amount`() {
+        val db = helper.writableDatabase
+        insertStation(db, 24, "TEST-FIN-MISMATCH", "محطة اختبار مطابقة القيد")
+        val debitAccount = insertAccount(db, "T-FIN-MISMATCH-DR", "حساب مدين اختبار المطابقة")
+        val creditAccount = insertAccount(db, "T-FIN-MISMATCH-CR", "حساب دائن اختبار المطابقة")
+        val journalId = helper.saveJournalEntry(
+            JSONObject()
+                .put("entry_date", "2026-08-25")
+                .put("description", "قيد مرجعه لا يطابق العملية")
+                .put("entry_type", "general")
+                .put("items", JSONArray()
+                    .put(JSONObject().put("account_id", debitAccount).put("debit", 12.0).put("credit", 0.0))
+                    .put(JSONObject().put("account_id", creditAccount).put("debit", 0.0).put("credit", 12.0))),
+            0L,
+            24
+        )
+        assertEquals(1, helper.postJournalEntry(journalId, 0L, 24))
+        db.update("journal_entries", ContentValues().apply {
+            put("reference_type", "receipt")
+            put("reference_id", 999L)
+        }, "id=?", arrayOf(journalId.toString()))
+        db.insertOrThrow("payments", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("payment_code", "TEST-FIN-MISMATCH-001")
+            put("station_id", 24)
+            put("journal_entry_id", journalId)
+            put("payment_type", "cash")
+            put("payment_method", "cash")
+            put("amount", 12.0)
+            put("status", "completed")
+            put("is_deleted", 0)
+        })
+
+        val snapshot = helper.getFinanceIntegritySnapshot(24, null, null)
+        assertEquals(1L, snapshot.getLong("missing_payment_journals"))
+        assertEquals(0.0, snapshot.getDouble("payment_journal_total"), 0.000001)
+        assertEquals(false, snapshot.getBoolean("is_station_reconciled"))
+    }
+
+
+    @Test
     fun `orphan payment is reported globally without falsely failing an unrelated station`() {
         val db = helper.writableDatabase
         insertStation(db, 23, "TEST-FIN-ORPHAN", "محطة اختبار السجلات اليتيمة")
