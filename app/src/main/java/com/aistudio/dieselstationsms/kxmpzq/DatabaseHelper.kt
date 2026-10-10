@@ -21249,14 +21249,29 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val orphanReceiptJournals = orphanFinancialJournalCount("receipt", "receipts", "src", "src.status='active'")
             val orphanExpenseJournals = orphanFinancialJournalCount("expense", "expenses", "src", "src.status IN ('paid','approved')")
             val orphanEmployeePaymentJournals = orphanFinancialJournalCount("employee_payment", "employee_payments", "src", "src.status='completed'")
-            val orphanFinancialJournals = orphanPaymentJournals + orphanReceiptJournals + orphanExpenseJournals + orphanEmployeePaymentJournals
+            val orphanSaleJournals = orphanFinancialJournalCount("sale", "sales_transactions", "src", "1=1")
+            val orphanSaleCogsJournals = orphanFinancialJournalCount("sale_cogs", "sales_transactions", "src", "1=1")
+            val orphanSaleAdjustmentJournals = db.rawQuery(
+                """SELECT COUNT(*) FROM journal_entries je
+                    WHERE je.station_id=? AND je.status='posted' AND je.is_deleted=0
+                        AND substr(je.reference_type,1,5)='sale_'
+                        AND je.reference_type<>'sale_cogs'
+                        AND (je.reference_id IS NULL OR NOT EXISTS (
+                            SELECT 1 FROM sales_transactions src
+                            WHERE src.id=je.reference_id AND src.station_id=je.station_id AND src.is_deleted=0
+                        ))""" + journalDateClause,
+                journalArgs()
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            val orphanFinancialJournals = orphanPaymentJournals + orphanReceiptJournals +
+                orphanExpenseJournals + orphanEmployeePaymentJournals + orphanSaleJournals +
+                orphanSaleCogsJournals + orphanSaleAdjustmentJournals
 
             val duplicateFinanceReferences = db.rawQuery(
                 """SELECT COALESCE(SUM(duplicate_count),0) FROM (
                     SELECT COUNT(*) - 1 AS duplicate_count
                     FROM journal_entries
                     WHERE station_id=? AND status='posted' AND is_deleted=0
-                        AND reference_type IN ('payment','receipt','expense','employee_payment')
+                        AND reference_type IN ('payment','receipt','expense','employee_payment','sale','sale_cogs')
                         AND reference_id IS NOT NULL""" + journalDateClause + """
                     GROUP BY station_id,reference_type,reference_id
                     HAVING COUNT(*)>1
@@ -21338,6 +21353,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("orphan_receipt_journals", orphanReceiptJournals)
                 put("orphan_expense_journals", orphanExpenseJournals)
                 put("orphan_employee_payment_journals", orphanEmployeePaymentJournals)
+                put("orphan_sale_journals", orphanSaleJournals)
+                put("orphan_sale_cogs_journals", orphanSaleCogsJournals)
+                put("orphan_sale_adjustment_journals", orphanSaleAdjustmentJournals)
                 put("orphan_finance_journals", orphanFinancialJournals)
                 put("duplicate_finance_references", duplicateFinanceReferences)
                 put("invalid_posted_reversal_links", invalidPostedReversalLinks)
