@@ -336,6 +336,85 @@ class JournalStationIsolationRobolectricTest {
 
 
     @Test
+    fun `finance integrity reports orphan and duplicate posted operation references`() {
+        val db = helper.writableDatabase
+        insertStation(db, 25, "TEST-FIN-ORPHAN-DUP", "محطة اختبار القيود اليتيمة والمكررة")
+        val debitAccount = insertAccount(db, "T-FIN-ORPHAN-DUP-DR", "حساب مدين اليتيم والمكرر")
+        val creditAccount = insertAccount(db, "T-FIN-ORPHAN-DUP-CR", "حساب دائن اليتيم والمكرر")
+
+        fun postedPaymentReference(description: String): Long {
+            val id = helper.saveJournalEntry(
+                JSONObject()
+                    .put("entry_date", "2026-08-25")
+                    .put("description", description)
+                    .put("entry_type", "general")
+                    .put("items", JSONArray()
+                        .put(JSONObject().put("account_id", debitAccount).put("debit", 7.0).put("credit", 0.0))
+                        .put(JSONObject().put("account_id", creditAccount).put("debit", 0.0).put("credit", 7.0))),
+                0L,
+                25
+            )
+            assertEquals(1, helper.postJournalEntry(id, 0L, 25))
+            db.update("journal_entries", ContentValues().apply {
+                put("reference_type", "payment")
+                put("reference_id", 700L)
+            }, "id=?", arrayOf(id.toString()))
+            return id
+        }
+
+        val first = postedPaymentReference("القيد الأول للعملية")
+        postedPaymentReference("قيد مكرر للمرجع نفسه")
+        db.insertOrThrow("payments", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("payment_code", "TEST-FIN-ORPHAN-DUP-001")
+            put("station_id", 25)
+            put("journal_entry_id", first)
+            put("payment_type", "cash")
+            put("payment_method", "cash")
+            put("amount", 7.0)
+            put("status", "completed")
+            put("is_deleted", 0)
+        })
+        val orphan = postedPaymentReference("قيد بمرجع لا توجد له عملية")
+        db.update("journal_entries", ContentValues().apply {
+            put("reference_id", 99999L)
+        }, "id=?", arrayOf(orphan.toString()))
+
+        val snapshot = helper.getFinanceIntegritySnapshot(25, null, null)
+        assertEquals(1L, snapshot.getLong("orphan_referenced_journals"))
+        assertEquals(1L, snapshot.getLong("duplicate_referenced_journal_groups"))
+        assertEquals(false, snapshot.getBoolean("is_station_reconciled"))
+    }
+
+    @Test
+    fun `valid posted reversal pair is not counted as orphan or duplicate operation journals`() {
+        val db = helper.writableDatabase
+        insertStation(db, 26, "TEST-FIN-REVERSAL", "محطة اختبار عكس القيود")
+        val debitAccount = insertAccount(db, "T-FIN-REV-DR", "حساب مدين اختبار العكس")
+        val creditAccount = insertAccount(db, "T-FIN-REV-CR", "حساب دائن اختبار العكس")
+        val originalId = helper.saveJournalEntry(
+            JSONObject()
+                .put("entry_date", "2026-08-25")
+                .put("description", "قيد أصلي لعكس صحيح")
+                .put("entry_type", "general")
+                .put("items", JSONArray()
+                    .put(JSONObject().put("account_id", debitAccount).put("debit", 18.0).put("credit", 0.0))
+                    .put(JSONObject().put("account_id", creditAccount).put("debit", 0.0).put("credit", 18.0))),
+            0L,
+            26
+        )
+        assertEquals(1, helper.postJournalEntry(originalId, 0L, 26))
+        val reversalId = helper.reverseJournalEntry(originalId, "اختبار عكس صحيح", 0L, 26)
+        assertTrue(reversalId > 0L)
+
+        val snapshot = helper.getFinanceIntegritySnapshot(26, null, null)
+        assertEquals(0L, snapshot.getLong("orphan_referenced_journals"))
+        assertEquals(0L, snapshot.getLong("duplicate_referenced_journal_groups"))
+        assertEquals(0L, snapshot.getLong("reversal_entries_without_origin"))
+    }
+
+
+    @Test
     fun `orphan payment is reported globally without falsely failing an unrelated station`() {
         val db = helper.writableDatabase
         insertStation(db, 23, "TEST-FIN-ORPHAN", "محطة اختبار السجلات اليتيمة")
