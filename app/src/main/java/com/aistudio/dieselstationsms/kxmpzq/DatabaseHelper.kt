@@ -21295,7 +21295,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val reversedFinanceEntriesWithoutValidReversal = db.rawQuery(
                 """SELECT COUNT(*) FROM journal_entries original
                     WHERE original.station_id=? AND original.status='reversed' AND original.is_deleted=0
-                        AND original.reference_type IN ('payment','receipt','expense','employee_payment')
+                        AND original.reference_type IN ('payment','receipt','expense','employee_payment','sale','sale_cogs')
                         AND NOT EXISTS (
                             SELECT 1 FROM journal_entries reversal
                             WHERE reversal.id=original.reversed_entry_id
