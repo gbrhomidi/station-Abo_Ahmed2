@@ -140,6 +140,79 @@ class JournalStationIsolationRobolectricTest {
 
 
     @Test
+    fun `closed fiscal period blocks journal insert update and delete but permits other periods`() {
+        val db = helper.writableDatabase
+        insertStation(db, 31, "TEST-PERIOD-GUARD", "محطة اختبار حارس الفترة")
+        val debitAccount = insertAccount(db, "T-PERIOD-DR", "حساب مدين اختبار الإقفال")
+        val creditAccount = insertAccount(db, "T-PERIOD-CR", "حساب دائن اختبار الإقفال")
+
+        fun createPosted(date: String, description: String): Long {
+            val id = helper.saveJournalEntry(
+                JSONObject()
+                    .put("entry_date", date)
+                    .put("description", description)
+                    .put("entry_type", "general")
+                    .put("items", JSONArray()
+                        .put(JSONObject().put("account_id", debitAccount).put("debit", 10.0).put("credit", 0.0))
+                        .put(JSONObject().put("account_id", creditAccount).put("debit", 0.0).put("credit", 10.0))),
+                0L,
+                31
+            )
+            assertEquals(1, helper.postJournalEntry(id, 0L, 31))
+            return id
+        }
+
+        val closedEntry = createPosted("2026-08-25", "قيد داخل فترة ستغلق")
+        val openEntry = createPosted("2026-09-02", "قيد داخل فترة مفتوحة")
+        db.insertOrThrow("fiscal_periods", null, ContentValues().apply {
+            put("station_id", 31)
+            put("fiscal_year", 2026)
+            put("fiscal_month", 8)
+            put("period_start", "2026-08-01")
+            put("period_end", "2026-08-31")
+            put("status", "closed")
+            put("closed_by", 1L)
+            put("closed_at", "2026-09-01 00:00:00")
+        })
+
+        try {
+            db.insertOrThrow("journal_entries", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("entry_number", "JE-CLOSED-INSERT")
+                put("entry_date", "2026-08-20")
+                put("entry_type", "general")
+                put("description", "يجب رفض الإدراج")
+                put("total_debit", 0.0)
+                put("total_credit", 0.0)
+                put("station_id", 31)
+                put("status", "draft")
+                put("is_deleted", 0)
+            })
+            throw AssertionError("يجب أن يمنع trigger إدراج قيد في فترة مغلقة")
+        } catch (expected: android.database.sqlite.SQLiteException) {
+            assertTrue(expected.message.orEmpty().contains("FISCAL_PERIOD_CLOSED"))
+        }
+
+        try {
+            db.update("journal_entries", ContentValues().apply { put("description", "محاولة تعديل مرفوضة") },
+                "id=?", arrayOf(closedEntry.toString()))
+            throw AssertionError("يجب أن يمنع trigger تعديل قيد في فترة مغلقة")
+        } catch (expected: android.database.sqlite.SQLiteException) {
+            assertTrue(expected.message.orEmpty().contains("FISCAL_PERIOD_CLOSED"))
+        }
+
+        try {
+            db.delete("journal_entries", "id=?", arrayOf(closedEntry.toString()))
+            throw AssertionError("يجب أن يمنع trigger حذف قيد في فترة مغلقة")
+        } catch (expected: android.database.sqlite.SQLiteException) {
+            assertTrue(expected.message.orEmpty().contains("FISCAL_PERIOD_CLOSED"))
+        }
+
+        assertEquals(1, db.update("journal_entries", ContentValues().apply { put("description", "تعديل مسموح") },
+            "id=?", arrayOf(openEntry.toString())))
+    }
+
+    @Test
     fun `completed payment linked to a draft journal is flagged as unreconciled`() {
         val db = helper.writableDatabase
         insertStation(db, 22, "TEST-FIN-LINK", "محطة اختبار ربط الدفعات")
