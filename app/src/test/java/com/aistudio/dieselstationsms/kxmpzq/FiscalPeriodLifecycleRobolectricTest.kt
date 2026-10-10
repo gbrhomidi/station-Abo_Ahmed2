@@ -73,12 +73,20 @@ class FiscalPeriodLifecycleRobolectricTest {
         }
 
         assertEquals(1, helper.deleteJournalEntry(draftId, userId, 11))
+        val postedId = saveDraft("2026-08-12", "قيد مرحل قبل الإقفال")
+        assertEquals(1, helper.postJournalEntry(postedId, userId, 11))
         val periodId = helper.closeFiscalPeriod(11, 2026, 8, userId, "مطابقة ومراجعة مكتملة")
         assertTrue(helper.isDateInClosedPeriod(11, "2026-08-15"))
         assertFalse(helper.isDateInClosedPeriod(12, "2026-08-15"))
         try {
             saveDraft("2026-08-15", "محاولة كتابة في فترة مغلقة")
             throw AssertionError("كان يجب أن يمنع SQLite الكتابة في الفترة المغلقة")
+        } catch (expected: android.database.sqlite.SQLiteException) {
+            assertTrue(expected.message.orEmpty().contains("FISCAL_PERIOD_CLOSED"))
+        }
+        try {
+            helper.writableDatabase.delete("journal_entry_items", "journal_entry_id=?", arrayOf(postedId.toString()))
+            throw AssertionError("كان يجب أن يمنع SQLite حذف بنود قيد مرحل في فترة مغلقة")
         } catch (expected: android.database.sqlite.SQLiteException) {
             assertTrue(expected.message.orEmpty().contains("FISCAL_PERIOD_CLOSED"))
         }
