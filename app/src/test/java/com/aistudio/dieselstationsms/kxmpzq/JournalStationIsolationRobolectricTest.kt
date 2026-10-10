@@ -112,6 +112,32 @@ class JournalStationIsolationRobolectricTest {
         assertEquals(0, helper.getJournalEntries(JSONObject(), 12).getInt("total"))
     }
 
+
+    @Test
+    fun `finance integrity snapshot supports both date boundaries`() {
+        val db = helper.writableDatabase
+        insertStation(db, 21, "TEST-FIN-RANGE", "محطة اختبار نطاق التقرير")
+        val debitAccount = insertAccount(db, "T-FIN-RANGE-DR", "حساب اختبار مدين النطاق")
+        val creditAccount = insertAccount(db, "T-FIN-RANGE-CR", "حساب اختبار دائن النطاق")
+        val entryId = helper.saveJournalEntry(
+            JSONObject()
+                .put("entry_date", "2026-08-25")
+                .put("description", "اختبار سلامة النطاق الزمني")
+                .put("entry_type", "general")
+                .put("items", JSONArray()
+                    .put(JSONObject().put("account_id", debitAccount).put("debit", 35.0).put("credit", 0.0))
+                    .put(JSONObject().put("account_id", creditAccount).put("debit", 0.0).put("credit", 35.0))),
+            0L,
+            21
+        )
+        assertEquals(1, helper.postJournalEntry(entryId, 0L, 21))
+
+        val snapshot = helper.getFinanceIntegritySnapshot(21, "2026-08-25", "2026-08-25")
+        assertEquals(35.0, snapshot.getDouble("journal_debit"), 0.000001)
+        assertEquals(35.0, snapshot.getDouble("journal_credit"), 0.000001)
+        assertEquals(0.0, snapshot.getDouble("journal_difference"), 0.000001)
+    }
+
     private fun insertUser(db: android.database.sqlite.SQLiteDatabase, username: String, roleId: Long, stationId: Int): Long =
         db.insertOrThrow("users", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString())
