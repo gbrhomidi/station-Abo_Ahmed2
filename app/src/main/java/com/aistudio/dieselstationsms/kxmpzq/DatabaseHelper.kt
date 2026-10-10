@@ -21231,6 +21231,68 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0 AND ABS(total_debit-total_credit)>0.000001" + journalDateClause,
                 journalArgs()
             ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            fun orphanFinancialJournalCount(referenceType: String, sourceTable: String, sourceAlias: String, validStatusSql: String): Long {
+                val sql = """SELECT COUNT(*) FROM journal_entries je
+                    WHERE je.station_id=? AND je.status='posted' AND je.is_deleted=0
+                        AND je.reference_type=? AND (je.reference_id IS NULL OR NOT EXISTS (
+                            SELECT 1 FROM $sourceTable $sourceAlias
+                            WHERE $sourceAlias.id=je.reference_id
+                                AND $sourceAlias.station_id=je.station_id
+                                AND $sourceAlias.is_deleted=0
+                                AND $validStatusSql
+                        ))""" + journalDateClause
+                return db.rawQuery(sql, journalArgs(referenceType)).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            }
+            // A posted source journal is orphaned when its original financial operation
+            // no longer exists in the same station in a valid, non-reversed state.
+            val orphanPaymentJournals = orphanFinancialJournalCount("payment", "payments", "src", "src.status='completed'")
+            val orphanReceiptJournals = orphanFinancialJournalCount("receipt", "receipts", "src", "src.status='active'")
+            val orphanExpenseJournals = orphanFinancialJournalCount("expense", "expenses", "src", "src.status IN ('paid','approved')")
+            val orphanEmployeePaymentJournals = orphanFinancialJournalCount("employee_payment", "employee_payments", "src", "src.status='completed'")
+            val orphanFinancialJournals = orphanPaymentJournals + orphanReceiptJournals + orphanExpenseJournals + orphanEmployeePaymentJournals
+
+            val duplicateFinanceReferences = db.rawQuery(
+                """SELECT COALESCE(SUM(duplicate_count),0) FROM (
+                    SELECT COUNT(*) - 1 AS duplicate_count
+                    FROM journal_entries
+                    WHERE station_id=? AND status='posted' AND is_deleted=0
+                        AND reference_type IN ('payment','receipt','expense','employee_payment')
+                        AND reference_id IS NOT NULL""" + journalDateClause + """
+                    GROUP BY station_id,reference_type,reference_id
+                    HAVING COUNT(*)>1
+                ) duplicate_refs""",
+                journalArgs()
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+
+            val invalidPostedReversalLinks = db.rawQuery(
+                """SELECT COUNT(*) FROM journal_entries reversal
+                    WHERE reversal.station_id=? AND reversal.status='posted' AND reversal.is_deleted=0
+                        AND reversal.reference_type='reversal'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM journal_entries original
+                            WHERE original.id=reversal.reference_id
+                                AND original.station_id=reversal.station_id
+                                AND original.is_deleted=0 AND original.status='reversed'
+                                AND original.reversed_entry_id=reversal.id
+                        )""" + journalDateClause,
+                journalArgs()
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            val reversedFinanceEntriesWithoutValidReversal = db.rawQuery(
+                """SELECT COUNT(*) FROM journal_entries original
+                    WHERE original.station_id=? AND original.status='reversed' AND original.is_deleted=0
+                        AND original.reference_type IN ('payment','receipt','expense','employee_payment')
+                        AND NOT EXISTS (
+                            SELECT 1 FROM journal_entries reversal
+                            WHERE reversal.id=original.reversed_entry_id
+                                AND reversal.station_id=original.station_id
+                                AND reversal.is_deleted=0 AND reversal.status='posted'
+                                AND reversal.reference_type='reversal'
+                                AND reversal.reference_id=original.id
+                        )""" + journalDateClause,
+                journalArgs()
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            val invalidReversalLinks = invalidPostedReversalLinks + reversedFinanceEntriesWithoutValidReversal
+
             // These rows have no station_id, so they are a database-wide integrity signal,
             // not a defect that can be attributed to every individual station.
             val orphanPayments = db.rawQuery(
@@ -21249,7 +21311,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 kotlin.math.abs(employeePaymentsCompleted - employeePaymentJournalTotal) <= 0.01 &&
                 unbalanced == 0L && missingPaymentJournals == 0L &&
                 missingReceiptJournals == 0L && missingExpenseJournals == 0L &&
-                missingEmployeePaymentJournals == 0L
+                missingEmployeePaymentJournals == 0L && orphanFinancialJournals == 0L &&
+                duplicateFinanceReferences == 0L && invalidReversalLinks == 0L
             val globalIntegrityClean = orphanPayments == 0L && orphanReceipts == 0L
             JSONObject().apply {
                 put("station_id", stationScopeId)
@@ -21271,6 +21334,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("missing_receipt_journals", missingReceiptJournals)
                 put("missing_expense_journals", missingExpenseJournals)
                 put("missing_employee_payment_journals", missingEmployeePaymentJournals)
+                put("orphan_payment_journals", orphanPaymentJournals)
+                put("orphan_receipt_journals", orphanReceiptJournals)
+                put("orphan_expense_journals", orphanExpenseJournals)
+                put("orphan_employee_payment_journals", orphanEmployeePaymentJournals)
+                put("orphan_finance_journals", orphanFinancialJournals)
+                put("duplicate_finance_references", duplicateFinanceReferences)
+                put("invalid_posted_reversal_links", invalidPostedReversalLinks)
+                put("reversed_finance_entries_without_valid_reversal", reversedFinanceEntriesWithoutValidReversal)
+                put("invalid_reversal_links", invalidReversalLinks)
                 put("journal_debit", journalDebit)
                 put("journal_credit", journalCredit)
                 put("journal_difference", journalDebit - journalCredit)
