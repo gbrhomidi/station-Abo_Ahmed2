@@ -34,6 +34,13 @@ class FiscalPeriodLifecycleRobolectricTest {
         val roleId = db.rawQuery("SELECT id FROM roles ORDER BY id LIMIT 1", null).use { c ->
             check(c.moveToFirst()) { "لا يوجد دور افتراضي للاختبار" }; c.getLong(0)
         }
+        db.rawQuery("SELECT id FROM stations WHERE id=11", null).use { c ->
+            if (!c.moveToFirst()) db.insertOrThrow("stations", null, ContentValues().apply {
+                put("id", 11); put("uuid", UUID.randomUUID().toString())
+                put("station_code", "TEST-FISCAL-11"); put("station_name", "محطة اختبار الإقفال")
+                put("status", "active"); put("is_deleted", 0)
+            })
+        }
         userId = db.insertOrThrow("users", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString())
             put("username", "fiscal-period-${UUID.randomUUID().toString().take(8)}")
@@ -49,9 +56,27 @@ class FiscalPeriodLifecycleRobolectricTest {
             while (c.moveToNext()) values.add(c.getLong(0))
             values
         }
-        check(accounts.isNotEmpty()) { "لا يوجد حساب لاختبار القيد" }
-        debitAccountId = accounts[0]
-        creditAccountId = accounts.getOrElse(1) { accounts[0] }
+        val mutableAccounts = accounts.toMutableList()
+        if (mutableAccounts.isEmpty()) {
+            mutableAccounts += db.insertOrThrow("accounts", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("account_code", "FISCAL-DR-" + UUID.randomUUID().toString().take(6))
+                put("account_name", "Fiscal debit test"); put("level", 1)
+                put("account_type", "asset"); put("normal_balance", "debit")
+                put("is_active", 1); put("is_deleted", 0)
+            })
+        }
+        if (mutableAccounts.size == 1) {
+            mutableAccounts += db.insertOrThrow("accounts", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("account_code", "FISCAL-CR-" + UUID.randomUUID().toString().take(6))
+                put("account_name", "Fiscal credit test"); put("level", 1)
+                put("account_type", "liability"); put("normal_balance", "credit")
+                put("is_active", 1); put("is_deleted", 0)
+            })
+        }
+        debitAccountId = mutableAccounts[0]
+        creditAccountId = mutableAccounts[1]
     }
 
     @After
