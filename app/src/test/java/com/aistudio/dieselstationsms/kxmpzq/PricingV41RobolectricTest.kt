@@ -80,7 +80,7 @@ class PricingV41RobolectricTest {
     }
 
     @Test
-    fun upgradesRepresentativeV40V41AndV42SchemasToV44WithoutLosingData() {
+    fun upgradesRepresentativeV40V41AndV42SchemasToCurrentVersionWithoutLosingData() {
         for (sourceVersion in 40..42) {
             DatabaseHelper.closeInstance()
             context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
@@ -125,7 +125,7 @@ class PricingV41RobolectricTest {
 
             helper = DatabaseHelper.getInstance(context)
             val upgradedDb = helper.writableDatabase
-            assertEquals("upgrade from $sourceVersion must reach the current schema", DatabaseHelper.VERSION, upgradedDb.version)
+            assertEquals("upgrade from $sourceVersion must reach the current schema version", DatabaseHelper.VERSION, upgradedDb.version)
 
             assertTrue(upgradedDb.rawQuery("PRAGMA table_info(sales_transactions)", null).use { cursor ->
                 var found = false
