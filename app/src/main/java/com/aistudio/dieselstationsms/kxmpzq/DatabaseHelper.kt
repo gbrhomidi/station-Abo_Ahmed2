@@ -21146,10 +21146,33 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val missingReceiptJournals=db.rawQuery("SELECT COUNT(*) FROM receipts WHERE station_id=? AND is_deleted=0 AND status='active' AND COALESCE(journal_entry_id,0)=0",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
             val missingExpenseJournals=db.rawQuery("SELECT COUNT(*) FROM expenses WHERE station_id=? AND is_deleted=0 AND status='paid' AND COALESCE(journal_entry_id,0)=0",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
             val missingEmployeePaymentJournals=db.rawQuery("SELECT COUNT(*) FROM employee_payments WHERE station_id=? AND is_deleted=0 AND status='completed' AND COALESCE(journal_entry_id,0)=0",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
-            fun journalReferenceTotal(reference:String):Double{ val args=mutableListOf(stationScopeId.toString(),reference);if(from.isNotBlank())args+=from;if(to.isNotBlank())args+=to;return db.rawQuery("SELECT COALESCE(SUM(total_debit),0) FROM journal_entries WHERE station_id=? AND reference_type=? AND status='posted' AND is_deleted=0" + if(from.isNotBlank())" AND date(entry_date)>=date(?)" else "" + if(to.isNotBlank())" AND date(entry_date)<=date(?)" else "",args.toTypedArray()).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0} }
-            val paymentJournalTotal=journalReferenceTotal("payment"); val receiptJournalTotal=journalReferenceTotal("receipt"); val expenseJournalTotal=journalReferenceTotal("expense")
-            val journalDebit=db.rawQuery("SELECT COALESCE(SUM(total_debit),0) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0" + if(from.isNotBlank())" AND date(entry_date)>=date(?)" else "" + if(to.isNotBlank())" AND date(entry_date)<=date(?)" else "", (listOf(stationScopeId.toString()) + listOfNotNull(from.takeIf{it.isNotBlank()},to.takeIf{it.isNotBlank()})).toTypedArray()).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0}
-            val journalCredit=db.rawQuery("SELECT COALESCE(SUM(total_credit),0) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0" + if(from.isNotBlank())" AND date(entry_date)>=date(?)" else "" + if(to.isNotBlank())" AND date(entry_date)<=date(?)" else "", (listOf(stationScopeId.toString()) + listOfNotNull(from.takeIf{it.isNotBlank()},to.takeIf{it.isNotBlank()})).toTypedArray()).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0}
+            val journalDateClause = buildString {
+                if (from.isNotBlank()) append(" AND date(entry_date)>=date(?)")
+                if (to.isNotBlank()) append(" AND date(entry_date)<=date(?)")
+            }
+            fun journalArgs(reference: String? = null): Array<String> {
+                val args = mutableListOf(stationScopeId.toString())
+                if (reference != null) args += reference
+                if (from.isNotBlank()) args += from
+                if (to.isNotBlank()) args += to
+                return args.toTypedArray()
+            }
+            fun journalReferenceTotal(reference: String): Double =
+                db.rawQuery(
+                    "SELECT COALESCE(SUM(total_debit),0) FROM journal_entries WHERE station_id=? AND reference_type=? AND status='posted' AND is_deleted=0" + journalDateClause,
+                    journalArgs(reference)
+                ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+            val paymentJournalTotal = journalReferenceTotal("payment")
+            val receiptJournalTotal = journalReferenceTotal("receipt")
+            val expenseJournalTotal = journalReferenceTotal("expense")
+            val journalDebit = db.rawQuery(
+                "SELECT COALESCE(SUM(total_debit),0) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0" + journalDateClause,
+                journalArgs()
+            ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+            val journalCredit = db.rawQuery(
+                "SELECT COALESCE(SUM(total_credit),0) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0" + journalDateClause,
+                journalArgs()
+            ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
             val unbalanced=db.rawQuery("SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0 AND ABS(total_debit-total_credit)>0.000001",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
             val orphanPayments=db.rawQuery("SELECT COUNT(*) FROM payments WHERE station_id IS NULL AND is_deleted=0",null).use{c->if(c.moveToFirst())c.getLong(0)else 0L}; val orphanReceipts=db.rawQuery("SELECT COUNT(*) FROM receipts WHERE station_id IS NULL AND is_deleted=0",null).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
             JSONObject().apply{put("station_id",stationScopeId);put("from_date",if(from.isBlank())JSONObject.NULL else from);put("to_date",if(to.isBlank())JSONObject.NULL else to);put("payments_completed",paymentCompleted);put("receipts_active",receiptActive);put("expenses_paid",expensePaid);put("payment_journal_total",paymentJournalTotal);put("receipt_journal_total",receiptJournalTotal);put("expense_journal_total",expenseJournalTotal);put("payment_reconciliation_delta",paymentCompleted-paymentJournalTotal);put("receipt_reconciliation_delta",receiptActive-receiptJournalTotal);put("expense_reconciliation_delta",expensePaid-expenseJournalTotal);put("missing_payment_journals",missingPaymentJournals);put("missing_receipt_journals",missingReceiptJournals);put("missing_expense_journals",missingExpenseJournals);put("missing_employee_payment_journals",missingEmployeePaymentJournals);put("journal_debit",journalDebit);put("journal_credit",journalCredit);put("journal_difference",journalDebit-journalCredit);put("unbalanced_posted_entries",unbalanced);put("orphan_payments",orphanPayments);put("orphan_receipts",orphanReceipts);put("is_reconciled",kotlin.math.abs(journalDebit-journalCredit)<=0.01 && kotlin.math.abs(paymentCompleted-paymentJournalTotal)<=0.01 && kotlin.math.abs(receiptActive-receiptJournalTotal)<=0.01 && kotlin.math.abs(expensePaid-expenseJournalTotal)<=0.01 && unbalanced==0L && missingPaymentJournals==0L && missingReceiptJournals==0L && missingExpenseJournals==0L && missingEmployeePaymentJournals==0L && orphanPayments==0L && orphanReceipts==0L);put("verified_at",getCurrentDateTime())}
