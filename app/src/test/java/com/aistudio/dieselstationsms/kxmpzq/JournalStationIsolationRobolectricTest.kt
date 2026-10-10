@@ -331,6 +331,8 @@ class JournalStationIsolationRobolectricTest {
         val snapshot = helper.getFinanceIntegritySnapshot(27, null, null)
         assertEquals(0L, snapshot.getLong("orphan_finance_journals"))
         assertEquals(0L, snapshot.getLong("duplicate_finance_references"))
+        assertEquals(0L, snapshot.getLong("orphan_referenced_journals"))
+        assertEquals(0L, snapshot.getLong("duplicate_referenced_journal_groups"))
         assertEquals(0L, snapshot.getLong("invalid_reversal_links"))
     }
 
