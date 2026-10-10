@@ -4087,6 +4087,41 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                   AND p.status IN ('closing','closed')
             )
             BEGIN SELECT RAISE(ABORT, 'FISCAL_PERIOD_CLOSED'); END""")
+        db.execSQL("DROP TRIGGER IF EXISTS trg_journal_item_period_guard_insert")
+        db.execSQL("DROP TRIGGER IF EXISTS trg_journal_item_period_guard_update")
+        db.execSQL("DROP TRIGGER IF EXISTS trg_journal_item_period_guard_delete")
+        db.execSQL("""CREATE TRIGGER trg_journal_item_period_guard_insert
+            BEFORE INSERT ON journal_entry_items
+            WHEN EXISTS (
+                SELECT 1 FROM journal_entries je JOIN fiscal_periods p
+                  ON p.station_id=je.station_id
+                 AND date(je.entry_date) BETWEEN date(p.period_start) AND date(p.period_end)
+                WHERE je.id=NEW.journal_entry_id AND p.status IN ('closing','closed')
+            )
+            BEGIN SELECT RAISE(ABORT, 'FISCAL_PERIOD_CLOSED'); END""")
+        db.execSQL("""CREATE TRIGGER trg_journal_item_period_guard_update
+            BEFORE UPDATE ON journal_entry_items
+            WHEN EXISTS (
+                SELECT 1 FROM journal_entries je JOIN fiscal_periods p
+                  ON p.station_id=je.station_id
+                 AND date(je.entry_date) BETWEEN date(p.period_start) AND date(p.period_end)
+                WHERE je.id=OLD.journal_entry_id AND p.status IN ('closing','closed')
+            ) OR EXISTS (
+                SELECT 1 FROM journal_entries je JOIN fiscal_periods p
+                  ON p.station_id=je.station_id
+                 AND date(je.entry_date) BETWEEN date(p.period_start) AND date(p.period_end)
+                WHERE je.id=NEW.journal_entry_id AND p.status IN ('closing','closed')
+            )
+            BEGIN SELECT RAISE(ABORT, 'FISCAL_PERIOD_CLOSED'); END""")
+        db.execSQL("""CREATE TRIGGER trg_journal_item_period_guard_delete
+            BEFORE DELETE ON journal_entry_items
+            WHEN EXISTS (
+                SELECT 1 FROM journal_entries je JOIN fiscal_periods p
+                  ON p.station_id=je.station_id
+                 AND date(je.entry_date) BETWEEN date(p.period_start) AND date(p.period_end)
+                WHERE je.id=OLD.journal_entry_id AND p.status IN ('closing','closed')
+            )
+            BEGIN SELECT RAISE(ABORT, 'FISCAL_PERIOD_CLOSED'); END""")
     }
 
     private fun ensureFinanceIntegritySchema(db: SQLiteDatabase) {
