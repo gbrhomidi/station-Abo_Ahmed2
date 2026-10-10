@@ -21282,11 +21282,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     FROM journal_entries
                     WHERE station_id=? AND status='posted' AND is_deleted=0
                         AND reference_type IN ('payment','receipt','expense','employee_payment','sale','sale_cogs')
-                        AND reference_id IS NOT NULL
+                        AND reference_id IS NOT NULL""" + journalDateClause + """
                     GROUP BY station_id,reference_type,reference_id
                     HAVING COUNT(*)>1
                 ) duplicate_refs""",
-                arrayOf(stationScopeId.toString())
+                journalArgs()
             ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
 
             val invalidPostedReversalLinks = db.rawQuery(
