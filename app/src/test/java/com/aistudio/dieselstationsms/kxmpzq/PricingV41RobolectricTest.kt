@@ -53,7 +53,7 @@ class PricingV41RobolectricTest {
 
     @Test
     fun v44SchemaAndMigrationContractArePresent() {
-        assertEquals(44, DatabaseHelper.VERSION)
+        assertTrue("V44 migration must remain part of the current schema", DatabaseHelper.VERSION >= 44)
         val db = helper.writableDatabase
         assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fuel_price_history'", null).use { it.moveToFirst() })
         assertTrue(db.rawQuery("PRAGMA table_info(price_lists)", null).use { c ->
@@ -375,7 +375,7 @@ class PricingV41RobolectricTest {
 
             helper = DatabaseHelper.getInstance(context)
             val upgradedDb = helper.writableDatabase
-            assertEquals(44, upgradedDb.version)
+            assertEquals(DatabaseHelper.VERSION, upgradedDb.version)
             fun dayFor(id: Long): String = upgradedDb.rawQuery(
                 "SELECT business_day FROM sales_transactions WHERE id=?", arrayOf(id.toString())
             ).use { check(it.moveToFirst()); it.getString(0) }
