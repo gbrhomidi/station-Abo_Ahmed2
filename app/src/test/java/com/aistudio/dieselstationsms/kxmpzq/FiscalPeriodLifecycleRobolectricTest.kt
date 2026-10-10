@@ -1,5 +1,6 @@
 package com.aistudio.dieselstationsms.kxmpzq
 
+import android.content.ContentValues
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import org.json.JSONArray
@@ -30,9 +31,19 @@ class FiscalPeriodLifecycleRobolectricTest {
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
         helper = DatabaseHelper.getInstance(context)
         val db = helper.writableDatabase
-        userId = db.rawQuery("SELECT id FROM users ORDER BY id LIMIT 1", null).use { c ->
-            check(c.moveToFirst()) { "لا يوجد مستخدم افتراضي للاختبار" }; c.getLong(0)
+        val roleId = db.rawQuery("SELECT id FROM roles ORDER BY id LIMIT 1", null).use { c ->
+            check(c.moveToFirst()) { "لا يوجد دور افتراضي للاختبار" }; c.getLong(0)
         }
+        userId = db.insertOrThrow("users", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("username", "fiscal-period-${UUID.randomUUID().toString().take(8)}")
+            put("password_hash", "test-only")
+            put("full_name", "اختبار إقفال الفترات")
+            put("role_id", roleId)
+            put("station_id", 11)
+            put("is_deleted", 0)
+            put("status", "active")
+        })
         val accounts = db.rawQuery("SELECT id FROM accounts WHERE COALESCE(is_deleted,0)=0 ORDER BY id LIMIT 2", null).use { c ->
             val values = mutableListOf<Long>()
             while (c.moveToNext()) values.add(c.getLong(0))
