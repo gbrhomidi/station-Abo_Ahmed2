@@ -51,7 +51,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 45
+        const val VERSION = 46
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -267,6 +267,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     42 -> migrateV42ToV43(db)
                     43 -> migrateV43ToV44(db)
                     44 -> ensureFiscalPeriodSchema(db)
+                    45 -> ensureFiscalPeriodSchema(db)
                 }
             }
             ensureModule006Schema(db)
@@ -4041,6 +4042,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         )""")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_fiscal_periods_station_dates ON fiscal_periods(station_id, period_start, period_end, status)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_period_closing_entries_period ON period_closing_entries(period_id)")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS fiscal_period_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            station_id INTEGER NOT NULL,
+            period_id INTEGER NOT NULL,
+            action TEXT NOT NULL CHECK(action IN ('closed','reopened')),
+            previous_status TEXT NOT NULL,
+            new_status TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            actor_user_id INTEGER NOT NULL,
+            occurred_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(period_id) REFERENCES fiscal_periods(id)
+        )""")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fiscal_period_audit_station_period ON fiscal_period_audit(station_id, period_id, occurred_at)")
         db.execSQL("DROP TRIGGER IF EXISTS trg_journal_period_guard_insert")
         db.execSQL("DROP TRIGGER IF EXISTS trg_journal_period_guard_update")
         db.execSQL("DROP TRIGGER IF EXISTS trg_journal_period_guard_delete")
@@ -27395,6 +27409,115 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 """.trimIndent(), arrayOf(stationScopeId.toString())
             ).use { cursorToJsonArray(it) }
         } finally { dbLock.unlock() }
+    }
+
+    /**
+     * Closes a monthly fiscal period atomically after validating all journals in scope.
+     */
+    fun closeFiscalPeriod(stationId: Int, year: Int, month: Int, userId: Long, reason: String): Long {
+        require(stationId > 0) { "نطاق المحطة غير صالح" }
+        require(year in 2000..2200 && month in 1..12) { "السنة أو الشهر المالي غير صالح" }
+        require(userId > 0) { "مستخدم الإقفال مطلوب" }
+        val normalizedReason = reason.trim()
+        require(normalizedReason.isNotEmpty()) { "سبب الإقفال مطلوب" }
+        val start = String.format(Locale.US, "%04d-%02d-01", year, month)
+        val calendar = Calendar.getInstance().apply { set(year, month - 1, 1); set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH)) }
+        val end = String.format(Locale.US, "%04d-%02d-%02d", year, month, calendar.get(Calendar.DAY_OF_MONTH))
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            var periodId = 0L
+            var previousStatus = "open"
+            db.rawQuery("SELECT id,status FROM fiscal_periods WHERE station_id=? AND fiscal_year=? AND fiscal_month=?", arrayOf(stationId.toString(), year.toString(), month.toString())).use { c ->
+                if (c.moveToFirst()) {
+                    periodId = c.getLong(0)
+                    previousStatus = c.getString(1)
+                    require(previousStatus == "open" || previousStatus == "reopened") { "الفترة ليست مفتوحة للإقفال" }
+                }
+            }
+            if (periodId == 0L) {
+                periodId = db.insertOrThrow("fiscal_periods", null, ContentValues().apply {
+                    put("station_id", stationId); put("fiscal_year", year); put("fiscal_month", month)
+                    put("period_start", start); put("period_end", end); put("status", "open")
+                })
+            }
+            val badPosted = db.rawQuery("""
+                SELECT COUNT(*) FROM journal_entries je
+                WHERE je.station_id=? AND je.is_deleted=0 AND je.status='posted'
+                  AND date(je.entry_date) BETWEEN date(?) AND date(?)
+                  AND (ABS(COALESCE(je.total_debit,0)-COALESCE(je.total_credit,0))>=0.000001
+                       OR NOT EXISTS (SELECT 1 FROM journal_entry_items ji WHERE ji.journal_entry_id=je.id))
+            """.trimIndent(), arrayOf(stationId.toString(), start, end)).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+            require(badPosted == 0) { "تعذر الإقفال: توجد قيود مرحلة غير متوازنة أو بلا بنود ($badPosted)" }
+            val drafts = db.rawQuery("""
+                SELECT COUNT(*) FROM journal_entries
+                WHERE station_id=? AND is_deleted=0 AND status='draft'
+                  AND date(entry_date) BETWEEN date(?) AND date(?)
+            """.trimIndent(), arrayOf(stationId.toString(), start, end)).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+            require(drafts == 0) { "تعذر الإقفال: توجد قيود مسودة غير محسومة ($drafts)" }
+            val now = getCurrentDateTime()
+            val updated = db.update("fiscal_periods", ContentValues().apply {
+                put("status", "closed"); put("closed_at", now); put("closed_by", userId)
+                put("period_start", start); put("period_end", end)
+            }, "id=? AND station_id=? AND status IN ('open','reopened')", arrayOf(periodId.toString(), stationId.toString()))
+            require(updated == 1) { "تغيرت حالة الفترة أثناء الإقفال؛ أعد المحاولة" }
+            db.insertOrThrow("fiscal_period_audit", null, ContentValues().apply {
+                put("station_id", stationId); put("period_id", periodId); put("action", "closed")
+                put("previous_status", previousStatus); put("new_status", "closed")
+                put("reason", normalizedReason); put("actor_user_id", userId); put("occurred_at", now)
+            })
+            db.setTransactionSuccessful()
+            return periodId
+        } finally { db.endTransaction() }
+    }
+
+    fun reopenFiscalPeriod(periodId: Long, stationId: Int, userId: Long, reason: String): Boolean {
+        require(periodId > 0 && stationId > 0) { "الفترة أو نطاق المحطة غير صالح" }
+        require(userId > 0) { "مستخدم إعادة الفتح مطلوب" }
+        val normalizedReason = reason.trim()
+        require(normalizedReason.isNotEmpty()) { "سبب إعادة الفتح مطلوب" }
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            var previous = ""
+            db.rawQuery("SELECT status FROM fiscal_periods WHERE id=? AND station_id=?", arrayOf(periodId.toString(), stationId.toString())).use { c ->
+                require(c.moveToFirst()) { "الفترة غير موجودة ضمن نطاق المحطة" }
+                previous = c.getString(0)
+            }
+            require(previous == "closed") { "يمكن إعادة فتح الفترة المغلقة فقط" }
+            val now = getCurrentDateTime()
+            val rows = db.update("fiscal_periods", ContentValues().apply {
+                put("status", "reopened"); put("reopened_at", now); put("reopened_by", userId); put("reopen_reason", normalizedReason)
+            }, "id=? AND station_id=? AND status='closed'", arrayOf(periodId.toString(), stationId.toString()))
+            require(rows == 1) { "تغيرت حالة الفترة أثناء إعادة الفتح؛ أعد المحاولة" }
+            db.insertOrThrow("fiscal_period_audit", null, ContentValues().apply {
+                put("station_id", stationId); put("period_id", periodId); put("action", "reopened")
+                put("previous_status", previous); put("new_status", "reopened")
+                put("reason", normalizedReason); put("actor_user_id", userId); put("occurred_at", now)
+            })
+            db.setTransactionSuccessful()
+            return true
+        } finally { db.endTransaction() }
+    }
+
+    fun isDateInClosedPeriod(stationId: Int, date: String): Boolean {
+        require(stationId > 0 && date.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) { "نطاق المحطة أو التاريخ غير صالح" }
+        return readableDatabase.rawQuery("""
+            SELECT 1 FROM fiscal_periods
+            WHERE station_id=? AND status IN ('closing','closed')
+              AND date(?) BETWEEN date(period_start) AND date(period_end) LIMIT 1
+        """.trimIndent(), arrayOf(stationId.toString(), date)).use { it.moveToFirst() }
+    }
+
+    fun getFiscalPeriods(stationId: Int, year: Int): JSONArray {
+        require(stationId > 0 && year in 2000..2200) { "نطاق المحطة أو السنة غير صالح" }
+        return readableDatabase.rawQuery("""
+            SELECT p.id,p.station_id,p.fiscal_year,p.fiscal_month,p.period_start,p.period_end,p.status,
+                   p.closed_at,p.closed_by,p.reopened_at,p.reopened_by,p.reopen_reason,
+                   (SELECT COUNT(*) FROM fiscal_period_audit a WHERE a.period_id=p.id AND a.station_id=p.station_id) AS audit_count
+            FROM fiscal_periods p WHERE p.station_id=? AND p.fiscal_year=?
+            ORDER BY p.fiscal_month
+        """.trimIndent(), arrayOf(stationId.toString(), year.toString())).use { cursorToJsonArray(it) }
     }
 
     fun saveJournalEntry(data: JSONObject, userId: Long, stationScopeId: Int): Long {
