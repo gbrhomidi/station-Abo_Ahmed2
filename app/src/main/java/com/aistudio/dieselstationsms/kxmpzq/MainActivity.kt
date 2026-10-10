@@ -7829,6 +7829,70 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun requiresApproval(entityType: String, operation: String, amount: Double): String {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val stationId = requireCurrentStationId(helper, activity.currentUserId)
+                successResponse(helper.requiresApproval(stationId, entityType, operation, amount), "تم فحص قاعدة الاعتماد")
+            } catch (e: Exception) { DebugLogger.logException("RequiresApproval", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun createPendingApproval(entityType: String, entityId: Long, operation: String, amount: Double): String {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val stationId = requireCurrentStationId(helper, activity.currentUserId)
+                val id = helper.createPendingApproval(stationId, entityType, entityId, operation, amount, activity.currentUserId)
+                successResponse(id, "تم تسجيل طلب الاعتماد")
+            } catch (e: Exception) { DebugLogger.logException("CreatePendingApproval", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getPendingApprovals(status: String): String {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val stationId = requireCurrentStationId(helper, activity.currentUserId)
+                JSONObject().put("success", true).put("data", helper.getPendingApprovals(stationId, status)).toString()
+            } catch (e: Exception) { DebugLogger.logException("GetPendingApprovals", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun approvePendingApproval(approvalId: Long, note: String): String {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val stationId = requireCurrentStationId(helper, activity.currentUserId)
+                helper.approveTransaction(approvalId, activity.currentUserId, stationId, note)
+                successResponse(true, "تم تسجيل قرار الاعتماد")
+            } catch (e: Exception) { DebugLogger.logException("ApprovePendingApproval", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun rejectPendingApproval(approvalId: Long, reason: String): String {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val stationId = requireCurrentStationId(helper, activity.currentUserId)
+                helper.rejectTransaction(approvalId, activity.currentUserId, stationId, reason)
+                successResponse(true, "تم رفض طلب الاعتماد مع حفظ السبب")
+            } catch (e: Exception) { DebugLogger.logException("RejectPendingApproval", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun checkSoDViolation(permissionCodeA: String, permissionCodeB: String): String {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val stationId = requireCurrentStationId(helper, activity.currentUserId)
+                successResponse(helper.checkSoDViolation(activity.currentUserId, permissionCodeA, permissionCodeB, stationId),
+                    "تم فحص تعارض الصلاحيات")
+            } catch (e: Exception) { DebugLogger.logException("CheckSoDViolation", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
         fun getJournalEntryDetails(id: Long): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val params = JSONObject().put("id", id)
