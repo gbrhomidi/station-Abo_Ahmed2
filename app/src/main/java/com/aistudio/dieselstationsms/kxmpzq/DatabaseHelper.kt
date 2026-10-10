@@ -51,7 +51,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 46
+        const val VERSION = 47
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -215,6 +215,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureFuelStocktakeSchema(db)
             ensureFinanceIntegritySchema(db)
             ensureFiscalPeriodSchema(db)
+            ensureApprovalControlSchema(db)
             ensurePricingV42Schema(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
@@ -268,6 +269,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     43 -> migrateV43ToV44(db)
                     44 -> ensureFiscalPeriodSchema(db)
                     45 -> ensureFiscalPeriodSchema(db)
+                    46 -> ensureApprovalControlSchema(db)
                 }
             }
             ensureModule006Schema(db)
@@ -4122,6 +4124,88 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 WHERE je.id=OLD.journal_entry_id AND p.status IN ('closing','closed')
             )
             BEGIN SELECT RAISE(ABORT, 'FISCAL_PERIOD_CLOSED'); END""")
+    }
+
+    /**
+     * Maker-checker foundation. Approval requests and decisions are stored separately
+     * from the business operation; no request can silently mutate a posted journal.
+     */
+    private fun ensureApprovalControlSchema(db: SQLiteDatabase) {
+        db.execSQL("""CREATE TABLE IF NOT EXISTS approval_thresholds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            station_id INTEGER NOT NULL,
+            entity_type TEXT NOT NULL,
+            operation TEXT NOT NULL,
+            amount_threshold REAL CHECK(amount_threshold IS NULL OR amount_threshold >= 0),
+            required_approvals INTEGER NOT NULL DEFAULT 1 CHECK(required_approvals >= 1),
+            approver_role_id INTEGER NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(station_id, entity_type, operation),
+            FOREIGN KEY(station_id) REFERENCES stations(id),
+            FOREIGN KEY(approver_role_id) REFERENCES roles(id)
+        )""")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS pending_approvals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid TEXT NOT NULL UNIQUE,
+            station_id INTEGER NOT NULL,
+            entity_type TEXT NOT NULL,
+            entity_id INTEGER NOT NULL,
+            operation TEXT NOT NULL,
+            amount REAL CHECK(amount IS NULL OR amount >= 0),
+            requested_by INTEGER NOT NULL,
+            requested_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            status TEXT NOT NULL DEFAULT 'pending'
+                CHECK(status IN ('pending','approved','rejected','expired')),
+            approved_by INTEGER,
+            approved_at TEXT,
+            rejection_reason TEXT,
+            expires_at TEXT,
+            FOREIGN KEY(station_id) REFERENCES stations(id),
+            FOREIGN KEY(requested_by) REFERENCES users(id),
+            FOREIGN KEY(approved_by) REFERENCES users(id)
+        )""")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS approval_decisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            approval_id INTEGER NOT NULL,
+            station_id INTEGER NOT NULL,
+            approver_user_id INTEGER NOT NULL,
+            decision TEXT NOT NULL CHECK(decision IN ('approved','rejected')),
+            note TEXT,
+            decided_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(approval_id, approver_user_id),
+            FOREIGN KEY(approval_id) REFERENCES pending_approvals(id),
+            FOREIGN KEY(station_id) REFERENCES stations(id),
+            FOREIGN KEY(approver_user_id) REFERENCES users(id)
+        )""")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS sod_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rule_name TEXT NOT NULL UNIQUE,
+            permission_a_code TEXT NOT NULL,
+            permission_b_code TEXT NOT NULL,
+            is_blocking INTEGER NOT NULL DEFAULT 1 CHECK(is_blocking IN (0,1)),
+            description TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1))
+        )""")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_approval_queue_station_status ON pending_approvals(station_id,status,requested_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_approval_entity ON pending_approvals(station_id,entity_type,entity_id,operation,status)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_approval_decisions_request ON approval_decisions(approval_id,decision)")
+        db.execSQL("""CREATE UNIQUE INDEX IF NOT EXISTS idx_one_pending_approval_per_operation
+            ON pending_approvals(station_id,entity_type,entity_id,operation) WHERE status='pending'""")
+        val defaults = arrayOf(
+            arrayOf("sales_create_cancel", "sales.create", "sales.cancel", "إنشاء البيع وإلغاءه"),
+            arrayOf("payments_create_reverse", "payments.create", "payments.reverse", "إنشاء الدفعة وعكسها"),
+            arrayOf("journal_create_post", "journal.create", "journal.post", "إنشاء القيد وترحيله"),
+            arrayOf("expenses_create_approve", "expenses.create", "expenses.approve", "إنشاء المصروف واعتماده"),
+            arrayOf("users_create_delete", "users.create", "users.delete", "إنشاء المستخدم وحذفه")
+        )
+        defaults.forEach { rule ->
+            db.execSQL(
+                "INSERT OR IGNORE INTO sod_rules(rule_name,permission_a_code,permission_b_code,description) VALUES(?,?,?,?)",
+                rule
+            )
+        }
     }
 
     private fun ensureFinanceIntegritySchema(db: SQLiteDatabase) {
