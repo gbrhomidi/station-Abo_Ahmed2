@@ -173,6 +173,29 @@ class JournalStationIsolationRobolectricTest {
         assertEquals(false, snapshot.getBoolean("is_reconciled"))
     }
 
+
+    @Test
+    fun `orphan payment is reported globally without falsely failing an unrelated station`() {
+        val db = helper.writableDatabase
+        insertStation(db, 23, "TEST-FIN-ORPHAN", "محطة اختبار السجلات اليتيمة")
+        db.insertOrThrow("payments", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("payment_code", "TEST-FIN-ORPHAN-001")
+            putNull("station_id")
+            put("payment_type", "cash")
+            put("payment_method", "cash")
+            put("amount", 9.0)
+            put("status", "completed")
+            put("is_deleted", 0)
+        })
+
+        val snapshot = helper.getFinanceIntegritySnapshot(23, null, null)
+        assertEquals(true, snapshot.getBoolean("is_station_reconciled"))
+        assertEquals(true, snapshot.getBoolean("is_reconciled"))
+        assertEquals(false, snapshot.getBoolean("is_global_integrity_clean"))
+        assertEquals(1L, snapshot.getLong("orphan_payments"))
+    }
+
     private fun insertUser(db: android.database.sqlite.SQLiteDatabase, username: String, roleId: Long, stationId: Int): Long =
         db.insertOrThrow("users", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString())
