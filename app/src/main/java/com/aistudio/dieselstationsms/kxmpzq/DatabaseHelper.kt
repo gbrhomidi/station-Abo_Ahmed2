@@ -21276,7 +21276,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     GROUP BY station_id,reference_type,reference_id
                     HAVING COUNT(*)>1
                 ) duplicate_refs""",
-                journalArgs()
+                arrayOf(stationScopeId.toString())
             ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
 
             val invalidPostedReversalLinks = db.rawQuery(
