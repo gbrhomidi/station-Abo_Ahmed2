@@ -138,6 +138,41 @@ class JournalStationIsolationRobolectricTest {
         assertEquals(0.0, snapshot.getDouble("journal_difference"), 0.000001)
     }
 
+
+    @Test
+    fun `completed payment linked to a draft journal is flagged as unreconciled`() {
+        val db = helper.writableDatabase
+        insertStation(db, 22, "TEST-FIN-LINK", "محطة اختبار ربط الدفعات")
+        val debitAccount = insertAccount(db, "T-FIN-LINK-DR", "حساب اختبار مدين الربط")
+        val creditAccount = insertAccount(db, "T-FIN-LINK-CR", "حساب اختبار دائن الربط")
+        val draftJournalId = helper.saveJournalEntry(
+            JSONObject()
+                .put("entry_date", "2026-08-25")
+                .put("description", "قيد مسودة لا يصلح لتسوية دفعة")
+                .put("entry_type", "general")
+                .put("items", JSONArray()
+                    .put(JSONObject().put("account_id", debitAccount).put("debit", 12.0).put("credit", 0.0))
+                    .put(JSONObject().put("account_id", creditAccount).put("debit", 0.0).put("credit", 12.0))),
+            0L,
+            22
+        )
+        db.insertOrThrow("payments", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("payment_code", "TEST-FIN-LINK-001")
+            put("station_id", 22)
+            put("journal_entry_id", draftJournalId)
+            put("payment_type", "cash")
+            put("payment_method", "cash")
+            put("amount", 12.0)
+            put("status", "completed")
+            put("is_deleted", 0)
+        })
+
+        val snapshot = helper.getFinanceIntegritySnapshot(22, null, null)
+        assertEquals(1L, snapshot.getLong("missing_payment_journals"))
+        assertEquals(false, snapshot.getBoolean("is_reconciled"))
+    }
+
     private fun insertUser(db: android.database.sqlite.SQLiteDatabase, username: String, roleId: Long, stationId: Int): Long =
         db.insertOrThrow("users", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString())
