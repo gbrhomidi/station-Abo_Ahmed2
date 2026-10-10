@@ -412,6 +412,11 @@ class JournalStationIsolationRobolectricTest {
         assertEquals(0L, snapshot.getLong("orphan_referenced_journals"))
         assertEquals(0L, snapshot.getLong("duplicate_referenced_journal_groups"))
         assertEquals(0L, snapshot.getLong("reversal_entries_without_origin"))
+
+        // Exercise date-scoped self-join checks: both original and reversal are in range.
+        val rangedSnapshot = helper.getFinanceIntegritySnapshot(26, "2026-01-01", "2027-01-01")
+        assertEquals(0L, rangedSnapshot.getLong("invalid_posted_reversal_links"))
+        assertEquals(0L, rangedSnapshot.getLong("reversed_finance_entries_without_valid_reversal"))
     }
 
 
