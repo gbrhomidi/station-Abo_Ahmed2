@@ -27380,6 +27380,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("entry_number", journalEntryNumber(db, stationScopeId) + "-R")
                 put("entry_date", getDateOnlyFormat().format(Date()))
                 put("entry_type", original.optString("entry_type", "general"))
+                // Make the reversal relationship explicit and auditable. Integrity checks
+                // must be able to distinguish a legitimate reversal from an orphan journal.
+                put("reference_type", "reversal")
+                put("reference_id", id)
                 put("reference_code", original.optString("entry_number"))
                 put("description", "عكس: " + original.optString("description"))
                 put("description_ar", "قيد عكسي: " + original.optString("description_ar", original.optString("description")))
