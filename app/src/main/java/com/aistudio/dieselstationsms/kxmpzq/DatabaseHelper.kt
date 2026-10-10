@@ -21150,7 +21150,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }.toTypedArray()
             fun sum(table:String,col:String,status:String?=null):Double{val st=status?.let{" AND status = ?"}.orEmpty();return db.rawQuery("SELECT COALESCE(SUM($col),0) FROM $table WHERE station_id=? AND is_deleted=0$st$dateClause",scopedArgs(status).toTypedArray()).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0}}
             fun count(table:String,status:String?=null):Long{val st=status?.let{" AND status = ?"}.orEmpty();return db.rawQuery("SELECT COUNT(*) FROM $table WHERE station_id=? AND is_deleted=0$st$dateClause",scopedArgs(status).toTypedArray()).use{c->if(c.moveToFirst())c.getLong(0)else 0L}}
-            val paymentCompleted=sum("payments","amount","completed"); val receiptActive=sum("receipts","amount","active"); val expensePaid=sum("expenses","total_amount","paid")
+            val paymentCompleted=sum("payments","amount","completed"); val receiptActive=sum("receipts","amount","active"); val expensePaid=sum("expenses","total_amount","paid"); val employeePaymentsCompleted=sum("employee_payments","amount","completed")
             val missingPaymentJournals = db.rawQuery(
                 """SELECT COUNT(*) FROM payments p
                    LEFT JOIN journal_entries je ON je.id=p.journal_entry_id
@@ -21210,7 +21210,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     WHERE $alias.station_id=? AND $alias.is_deleted=0 AND $alias.status=?
                         AND je.reference_type=? AND je.reference_id=$alias.id
                         AND ABS(je.total_debit-$alias.$sourceAmount)<=0.01""" + sourceDateClause(alias)
-                val args = mutableListOf(stationScopeId.toString(), sourceStatus, when (table) { "payments" -> "payment"; "receipts" -> "receipt"; "expenses" -> "expense"; else -> throw IllegalArgumentException("Unsupported finance source: $table") })
+                val args = mutableListOf(stationScopeId.toString(), sourceStatus, when (table) { "payments" -> "payment"; "receipts" -> "receipt"; "expenses" -> "expense"; "employee_payments" -> "employee_payment"; else -> throw IllegalArgumentException("Unsupported finance source: $table") })
                 if (from.isNotBlank()) args += from
                 if (to.isNotBlank()) args += to
                 return db.rawQuery(sql, args.toTypedArray()).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
@@ -21218,6 +21218,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val paymentJournalTotal = linkedJournalTotal("payments", "p", "amount", "completed")
             val receiptJournalTotal = linkedJournalTotal("receipts", "r", "amount", "active")
             val expenseJournalTotal = linkedJournalTotal("expenses", "e", "total_amount", "paid")
+            val employeePaymentJournalTotal = linkedJournalTotal("employee_payments", "ep", "amount", "completed")
             val journalDebit = db.rawQuery(
                 "SELECT COALESCE(SUM(total_debit),0) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0" + journalDateClause,
                 journalArgs()
@@ -21245,6 +21246,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 kotlin.math.abs(paymentCompleted - paymentJournalTotal) <= 0.01 &&
                 kotlin.math.abs(receiptActive - receiptJournalTotal) <= 0.01 &&
                 kotlin.math.abs(expensePaid - expenseJournalTotal) <= 0.01 &&
+                kotlin.math.abs(employeePaymentsCompleted - employeePaymentJournalTotal) <= 0.01 &&
                 unbalanced == 0L && missingPaymentJournals == 0L &&
                 missingReceiptJournals == 0L && missingExpenseJournals == 0L &&
                 missingEmployeePaymentJournals == 0L
@@ -21259,6 +21261,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("payment_journal_total", paymentJournalTotal)
                 put("receipt_journal_total", receiptJournalTotal)
                 put("expense_journal_total", expenseJournalTotal)
+                put("employee_payments_completed", employeePaymentsCompleted)
+                put("employee_payment_journal_total", employeePaymentJournalTotal)
+                put("employee_payment_reconciliation_delta", employeePaymentsCompleted - employeePaymentJournalTotal)
                 put("payment_reconciliation_delta", paymentCompleted - paymentJournalTotal)
                 put("receipt_reconciliation_delta", receiptActive - receiptJournalTotal)
                 put("expense_reconciliation_delta", expensePaid - expenseJournalTotal)
