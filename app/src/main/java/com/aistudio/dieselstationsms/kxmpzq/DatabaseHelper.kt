@@ -21201,9 +21201,58 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "SELECT COALESCE(SUM(total_credit),0) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0" + journalDateClause,
                 journalArgs()
             ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
-            val unbalanced=db.rawQuery("SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0 AND ABS(total_debit-total_credit)>0.000001",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
-            val orphanPayments=db.rawQuery("SELECT COUNT(*) FROM payments WHERE station_id IS NULL AND is_deleted=0",null).use{c->if(c.moveToFirst())c.getLong(0)else 0L}; val orphanReceipts=db.rawQuery("SELECT COUNT(*) FROM receipts WHERE station_id IS NULL AND is_deleted=0",null).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
-            JSONObject().apply{put("station_id",stationScopeId);put("from_date",if(from.isBlank())JSONObject.NULL else from);put("to_date",if(to.isBlank())JSONObject.NULL else to);put("payments_completed",paymentCompleted);put("receipts_active",receiptActive);put("expenses_paid",expensePaid);put("payment_journal_total",paymentJournalTotal);put("receipt_journal_total",receiptJournalTotal);put("expense_journal_total",expenseJournalTotal);put("payment_reconciliation_delta",paymentCompleted-paymentJournalTotal);put("receipt_reconciliation_delta",receiptActive-receiptJournalTotal);put("expense_reconciliation_delta",expensePaid-expenseJournalTotal);put("missing_payment_journals",missingPaymentJournals);put("missing_receipt_journals",missingReceiptJournals);put("missing_expense_journals",missingExpenseJournals);put("missing_employee_payment_journals",missingEmployeePaymentJournals);put("journal_debit",journalDebit);put("journal_credit",journalCredit);put("journal_difference",journalDebit-journalCredit);put("unbalanced_posted_entries",unbalanced);put("orphan_payments",orphanPayments);put("orphan_receipts",orphanReceipts);put("is_reconciled",kotlin.math.abs(journalDebit-journalCredit)<=0.01 && kotlin.math.abs(paymentCompleted-paymentJournalTotal)<=0.01 && kotlin.math.abs(receiptActive-receiptJournalTotal)<=0.01 && kotlin.math.abs(expensePaid-expenseJournalTotal)<=0.01 && unbalanced==0L && missingPaymentJournals==0L && missingReceiptJournals==0L && missingExpenseJournals==0L && missingEmployeePaymentJournals==0L && orphanPayments==0L && orphanReceipts==0L);put("verified_at",getCurrentDateTime())}
+            val unbalanced = db.rawQuery(
+                "SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0 AND ABS(total_debit-total_credit)>0.000001" + journalDateClause,
+                journalArgs()
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            // These rows have no station_id, so they are a database-wide integrity signal,
+            // not a defect that can be attributed to every individual station.
+            val orphanPayments = db.rawQuery(
+                "SELECT COUNT(*) FROM payments WHERE station_id IS NULL AND is_deleted=0",
+                null
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            val orphanReceipts = db.rawQuery(
+                "SELECT COUNT(*) FROM receipts WHERE station_id IS NULL AND is_deleted=0",
+                null
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            val stationReconciled =
+                kotlin.math.abs(journalDebit - journalCredit) <= 0.01 &&
+                kotlin.math.abs(paymentCompleted - paymentJournalTotal) <= 0.01 &&
+                kotlin.math.abs(receiptActive - receiptJournalTotal) <= 0.01 &&
+                kotlin.math.abs(expensePaid - expenseJournalTotal) <= 0.01 &&
+                unbalanced == 0L && missingPaymentJournals == 0L &&
+                missingReceiptJournals == 0L && missingExpenseJournals == 0L &&
+                missingEmployeePaymentJournals == 0L
+            val globalIntegrityClean = orphanPayments == 0L && orphanReceipts == 0L
+            JSONObject().apply {
+                put("station_id", stationScopeId)
+                put("from_date", if (from.isBlank()) JSONObject.NULL else from)
+                put("to_date", if (to.isBlank()) JSONObject.NULL else to)
+                put("payments_completed", paymentCompleted)
+                put("receipts_active", receiptActive)
+                put("expenses_paid", expensePaid)
+                put("payment_journal_total", paymentJournalTotal)
+                put("receipt_journal_total", receiptJournalTotal)
+                put("expense_journal_total", expenseJournalTotal)
+                put("payment_reconciliation_delta", paymentCompleted - paymentJournalTotal)
+                put("receipt_reconciliation_delta", receiptActive - receiptJournalTotal)
+                put("expense_reconciliation_delta", expensePaid - expenseJournalTotal)
+                put("missing_payment_journals", missingPaymentJournals)
+                put("missing_receipt_journals", missingReceiptJournals)
+                put("missing_expense_journals", missingExpenseJournals)
+                put("missing_employee_payment_journals", missingEmployeePaymentJournals)
+                put("journal_debit", journalDebit)
+                put("journal_credit", journalCredit)
+                put("journal_difference", journalDebit - journalCredit)
+                put("unbalanced_posted_entries", unbalanced)
+                put("orphan_payments", orphanPayments)
+                put("orphan_receipts", orphanReceipts)
+                put("is_station_reconciled", stationReconciled)
+                put("is_global_integrity_clean", globalIntegrityClean)
+                // Preserve the legacy key with station-scoped semantics.
+                put("is_reconciled", stationReconciled)
+                put("verified_at", getCurrentDateTime())
+            }
         } finally{dbLock.unlock()}
     }
 
