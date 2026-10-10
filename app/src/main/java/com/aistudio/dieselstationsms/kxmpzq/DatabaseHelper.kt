@@ -21329,13 +21329,52 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "SELECT COUNT(*) FROM receipts WHERE station_id IS NULL AND is_deleted=0",
                 null
             ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            // Audit only journal reference types whose source table and key are known.
+            // Reversal entries reference the original journal, not a business-operation row.
+            val orphanReferencedJournals = db.rawQuery(
+                """SELECT COUNT(*) FROM journal_entries je
+                   WHERE je.station_id=? AND je.status='posted' AND je.is_deleted=0
+                     AND je.reference_type IN ('payment','receipt','expense','employee_payment','sale','sale_cogs')
+                     AND NOT (
+                       (je.reference_type='payment' AND EXISTS (SELECT 1 FROM payments s WHERE s.id=je.reference_id AND s.station_id=je.station_id AND s.is_deleted=0))
+                       OR (je.reference_type='receipt' AND EXISTS (SELECT 1 FROM receipts s WHERE s.id=je.reference_id AND s.station_id=je.station_id AND s.is_deleted=0))
+                       OR (je.reference_type='expense' AND EXISTS (SELECT 1 FROM expenses s WHERE s.id=je.reference_id AND s.station_id=je.station_id AND s.is_deleted=0))
+                       OR (je.reference_type='employee_payment' AND EXISTS (SELECT 1 FROM employee_payments s WHERE s.id=je.reference_id AND s.station_id=je.station_id AND s.is_deleted=0))
+                       OR (je.reference_type IN ('sale','sale_cogs') AND EXISTS (SELECT 1 FROM sales_transactions s WHERE s.id=je.reference_id AND s.station_id=je.station_id AND s.is_deleted=0))
+                     )""",
+                arrayOf(stationScopeId.toString())
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            val duplicateReferencedJournalGroups = db.rawQuery(
+                """SELECT COUNT(*) FROM (
+                     SELECT reference_type, reference_id
+                     FROM journal_entries
+                     WHERE station_id=? AND status='posted' AND is_deleted=0
+                       AND reference_id IS NOT NULL AND reference_id>0
+                       AND reference_type IN ('payment','receipt','expense','employee_payment','sale','sale_cogs')
+                     GROUP BY reference_type, reference_id
+                     HAVING COUNT(*)>1
+                   )""",
+                arrayOf(stationScopeId.toString())
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            val reversalEntriesWithoutOrigin = db.rawQuery(
+                """SELECT COUNT(*) FROM journal_entries rev
+                   WHERE rev.station_id=? AND rev.status='posted' AND rev.is_deleted=0
+                     AND rev.reference_type='reversal'
+                     AND NOT EXISTS (
+                       SELECT 1 FROM journal_entries orig
+                       WHERE orig.id=rev.reference_id AND orig.station_id=rev.station_id
+                     )""",
+                arrayOf(stationScopeId.toString())
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
             val stationReconciled =
                 kotlin.math.abs(journalDebit - journalCredit) <= 0.01 &&
                 kotlin.math.abs(paymentCompleted - paymentJournalTotal) <= 0.01 &&
                 kotlin.math.abs(receiptActive - receiptJournalTotal) <= 0.01 &&
                 kotlin.math.abs(expensePaid - expenseJournalTotal) <= 0.01 &&
                 kotlin.math.abs(employeePaymentsCompleted - employeePaymentJournalTotal) <= 0.01 &&
-                unbalanced == 0L && missingPaymentJournals == 0L &&
+                unbalanced == 0L && orphanReferencedJournals == 0L &&
+                duplicateReferencedJournalGroups == 0L && reversalEntriesWithoutOrigin == 0L &&
+                missingPaymentJournals == 0L &&
                 missingReceiptJournals == 0L && missingExpenseJournals == 0L &&
                 missingEmployeePaymentJournals == 0L && orphanFinancialJournals == 0L &&
                 duplicateFinanceReferences == 0L && invalidReversalLinks == 0L
@@ -21376,6 +21415,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("journal_credit", journalCredit)
                 put("journal_difference", journalDebit - journalCredit)
                 put("unbalanced_posted_entries", unbalanced)
+                put("orphan_referenced_journals", orphanReferencedJournals)
+                put("duplicate_referenced_journal_groups", duplicateReferencedJournalGroups)
+                put("reversal_entries_without_origin", reversalEntriesWithoutOrigin)
+                put("journal_reference_audit_scope", org.json.JSONArray(listOf("payment", "receipt", "expense", "employee_payment", "sale", "sale_cogs")))
                 put("orphan_payments", orphanPayments)
                 put("orphan_receipts", orphanReceipts)
                 put("is_station_reconciled", stationReconciled)
