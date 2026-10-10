@@ -216,6 +216,126 @@ class JournalStationIsolationRobolectricTest {
 
 
     @Test
+    fun `posted finance journal without a valid source is reported as orphan`() {
+        val db = helper.writableDatabase
+        insertStation(db, 25, "TEST-FIN-ORPHAN-JRN", "محطة اختبار القيد اليتيم")
+        val debitAccount = insertAccount(db, "T-FIN-ORPHAN-DR", "حساب مدين القيد اليتيم")
+        val creditAccount = insertAccount(db, "T-FIN-ORPHAN-CR", "حساب دائن القيد اليتيم")
+        val journalId = helper.saveJournalEntry(
+            JSONObject()
+                .put("entry_date", "2026-08-25")
+                .put("description", "قيد دفع بلا عملية أصلية")
+                .put("entry_type", "general")
+                .put("items", JSONArray()
+                    .put(JSONObject().put("account_id", debitAccount).put("debit", 19.0).put("credit", 0.0))
+                    .put(JSONObject().put("account_id", creditAccount).put("debit", 0.0).put("credit", 19.0))),
+            0L,
+            25
+        )
+        assertEquals(1, helper.postJournalEntry(journalId, 0L, 25))
+        db.update("journal_entries", ContentValues().apply {
+            put("reference_type", "payment")
+            put("reference_id", 999999L)
+        }, "id=?", arrayOf(journalId.toString()))
+
+        val snapshot = helper.getFinanceIntegritySnapshot(25, null, null)
+        assertEquals(1L, snapshot.getLong("orphan_payment_journals"))
+        assertEquals(1L, snapshot.getLong("orphan_finance_journals"))
+        assertEquals(false, snapshot.getBoolean("is_station_reconciled"))
+    }
+
+    @Test
+    fun `duplicate posted journals for one payment reference are reported`() {
+        val db = helper.writableDatabase
+        insertStation(db, 26, "TEST-FIN-DUP-JRN", "محطة اختبار القيود المكررة")
+        val debitAccount = insertAccount(db, "T-FIN-DUP-DR", "حساب مدين القيود المكررة")
+        val creditAccount = insertAccount(db, "T-FIN-DUP-CR", "حساب دائن القيود المكررة")
+
+        fun createPostedJournal(description: String): Long {
+            val id = helper.saveJournalEntry(
+                JSONObject()
+                    .put("entry_date", "2026-08-25")
+                    .put("description", description)
+                    .put("entry_type", "general")
+                    .put("items", JSONArray()
+                        .put(JSONObject().put("account_id", debitAccount).put("debit", 15.0).put("credit", 0.0))
+                        .put(JSONObject().put("account_id", creditAccount).put("debit", 0.0).put("credit", 15.0))),
+                0L,
+                26
+            )
+            assertEquals(1, helper.postJournalEntry(id, 0L, 26))
+            db.update("journal_entries", ContentValues().apply {
+                put("reference_type", "payment")
+                put("reference_id", 26001L)
+            }, "id=?", arrayOf(id.toString()))
+            return id
+        }
+
+        val linkedJournalId = createPostedJournal("القيد الصحيح للدفعة")
+        createPostedJournal("قيد مكرر للدفعة")
+        db.insertOrThrow("payments", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("payment_code", "TEST-FIN-DUP-001")
+            put("station_id", 26)
+            put("journal_entry_id", linkedJournalId)
+            put("payment_type", "cash")
+            put("payment_method", "cash")
+            put("amount", 15.0)
+            put("status", "completed")
+            put("is_deleted", 0)
+        })
+
+        val snapshot = helper.getFinanceIntegritySnapshot(26, null, null)
+        assertEquals(1L, snapshot.getLong("duplicate_finance_references"))
+        assertEquals(false, snapshot.getBoolean("is_station_reconciled"))
+    }
+
+    @Test
+    fun `valid posted reversal is not counted as orphan or duplicate finance journal`() {
+        val db = helper.writableDatabase
+        insertStation(db, 27, "TEST-FIN-REVERSAL", "محطة اختبار عكس القيود")
+        val debitAccount = insertAccount(db, "T-FIN-REV-DR", "حساب مدين اختبار العكس")
+        val creditAccount = insertAccount(db, "T-FIN-REV-CR", "حساب دائن اختبار العكس")
+        val journalId = helper.saveJournalEntry(
+            JSONObject()
+                .put("entry_date", "2026-08-25")
+                .put("description", "قيد دفعة سيجري عكسها")
+                .put("entry_type", "general")
+                .put("items", JSONArray()
+                    .put(JSONObject().put("account_id", debitAccount).put("debit", 8.0).put("credit", 0.0))
+                    .put(JSONObject().put("account_id", creditAccount).put("debit", 0.0).put("credit", 8.0))),
+            0L,
+            27
+        )
+        assertEquals(1, helper.postJournalEntry(journalId, 0L, 27))
+        db.update("journal_entries", ContentValues().apply {
+            put("reference_type", "payment")
+            put("reference_id", 27001L)
+        }, "id=?", arrayOf(journalId.toString()))
+        db.insertOrThrow("payments", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("payment_code", "TEST-FIN-REV-001")
+            put("station_id", 27)
+            put("journal_entry_id", journalId)
+            put("payment_type", "cash")
+            put("payment_method", "cash")
+            put("amount", 8.0)
+            put("status", "completed")
+            put("is_deleted", 0)
+        })
+
+        helper.reverseJournalEntry(journalId, "اختبار عكس مشروع", 0L, 27)
+        db.update("payments", ContentValues().apply { put("status", "refunded") },
+            "id=27001 AND station_id=27", null)
+
+        val snapshot = helper.getFinanceIntegritySnapshot(27, null, null)
+        assertEquals(0L, snapshot.getLong("orphan_finance_journals"))
+        assertEquals(0L, snapshot.getLong("duplicate_finance_references"))
+        assertEquals(0L, snapshot.getLong("invalid_reversal_links"))
+    }
+
+
+    @Test
     fun `orphan payment is reported globally without falsely failing an unrelated station`() {
         val db = helper.writableDatabase
         insertStation(db, 23, "TEST-FIN-ORPHAN", "محطة اختبار السجلات اليتيمة")
