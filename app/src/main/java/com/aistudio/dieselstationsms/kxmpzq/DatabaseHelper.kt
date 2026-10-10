@@ -21155,6 +21155,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 """SELECT COUNT(*) FROM payments p
                    LEFT JOIN journal_entries je ON je.id=p.journal_entry_id
                        AND je.station_id=p.station_id AND je.is_deleted=0 AND je.status='posted'
+                       AND je.reference_type='payment' AND je.reference_id=p.id
+                       AND ABS(je.total_debit-p.amount)<=0.01
                    WHERE p.station_id=? AND p.is_deleted=0 AND p.status='completed'
                        AND je.id IS NULL""" + sourceDateClause("p"),
                 sourceDateArgs()
@@ -21163,6 +21165,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 """SELECT COUNT(*) FROM receipts r
                    LEFT JOIN journal_entries je ON je.id=r.journal_entry_id
                        AND je.station_id=r.station_id AND je.is_deleted=0 AND je.status='posted'
+                       AND je.reference_type='receipt' AND je.reference_id=r.id
+                       AND ABS(je.total_debit-r.amount)<=0.01
                    WHERE r.station_id=? AND r.is_deleted=0 AND r.status='active'
                        AND je.id IS NULL""" + sourceDateClause("r"),
                 sourceDateArgs()
@@ -21171,6 +21175,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 """SELECT COUNT(*) FROM expenses e
                    LEFT JOIN journal_entries je ON je.id=e.journal_entry_id
                        AND je.station_id=e.station_id AND je.is_deleted=0 AND je.status='posted'
+                       AND je.reference_type='expense' AND je.reference_id=e.id
+                       AND ABS(je.total_debit-e.total_amount)<=0.01
                    WHERE e.station_id=? AND e.is_deleted=0 AND e.status='paid'
                        AND je.id IS NULL""" + sourceDateClause("e"),
                 sourceDateArgs()
@@ -21179,6 +21185,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 """SELECT COUNT(*) FROM employee_payments ep
                    LEFT JOIN journal_entries je ON je.id=ep.journal_entry_id
                        AND je.station_id=ep.station_id AND je.is_deleted=0 AND je.status='posted'
+                       AND je.reference_type='employee_payment' AND je.reference_id=ep.id
+                       AND ABS(je.total_debit-ep.amount)<=0.01
                    WHERE ep.station_id=? AND ep.is_deleted=0 AND ep.status='completed'
                        AND je.id IS NULL""" + sourceDateClause("ep"),
                 sourceDateArgs()
@@ -21194,14 +21202,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 if (to.isNotBlank()) args += to
                 return args.toTypedArray()
             }
-            fun journalReferenceTotal(reference: String): Double =
-                db.rawQuery(
-                    "SELECT COALESCE(SUM(total_debit),0) FROM journal_entries WHERE station_id=? AND reference_type=? AND status='posted' AND is_deleted=0" + journalDateClause,
-                    journalArgs(reference)
-                ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
-            val paymentJournalTotal = journalReferenceTotal("payment")
-            val receiptJournalTotal = journalReferenceTotal("receipt")
-            val expenseJournalTotal = journalReferenceTotal("expense")
+            fun linkedJournalTotal(table: String, alias: String, sourceAmount: String, sourceStatus: String): Double {
+                val sql = """SELECT COALESCE(SUM(je.total_debit),0)
+                    FROM $table $alias
+                    INNER JOIN journal_entries je ON je.id=$alias.journal_entry_id
+                        AND je.station_id=$alias.station_id AND je.status='posted' AND je.is_deleted=0
+                    WHERE $alias.station_id=? AND $alias.is_deleted=0 AND $alias.status=?
+                        AND je.reference_type=? AND je.reference_id=$alias.id
+                        AND ABS(je.total_debit-$alias.$sourceAmount)<=0.01""" + sourceDateClause(alias)
+                val args = mutableListOf(stationScopeId.toString(), sourceStatus, when (table) { "payments" -> "payment"; "receipts" -> "receipt"; "expenses" -> "expense"; else -> throw IllegalArgumentException("Unsupported finance source: $table") })
+                if (from.isNotBlank()) args += from
+                if (to.isNotBlank()) args += to
+                return db.rawQuery(sql, args.toTypedArray()).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+            }
+            val paymentJournalTotal = linkedJournalTotal("payments", "p", "amount", "completed")
+            val receiptJournalTotal = linkedJournalTotal("receipts", "r", "amount", "active")
+            val expenseJournalTotal = linkedJournalTotal("expenses", "e", "total_amount", "paid")
             val journalDebit = db.rawQuery(
                 "SELECT COALESCE(SUM(total_debit),0) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0" + journalDateClause,
                 journalArgs()
