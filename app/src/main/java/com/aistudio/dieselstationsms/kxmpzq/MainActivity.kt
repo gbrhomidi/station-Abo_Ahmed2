@@ -7795,6 +7795,40 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun getFiscalPeriods(year: Int): String {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val userId = getActivity()?.currentUserId ?: 0L
+            return try {
+                val stationId = requireCurrentStationId(helper, userId)
+                JSONObject().put("success", true).put("data", helper.getFiscalPeriods(stationId, year)).toString()
+            } catch (e: Exception) { DebugLogger.logException("FiscalPeriods", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun closeFiscalPeriod(year: Int, month: Int, reason: String): String {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val stationId = requireCurrentStationId(helper, activity.currentUserId)
+                val periodId = helper.closeFiscalPeriod(stationId, year, month, activity.currentUserId, reason)
+                invalidateCurrentReportCache(helper, activity.currentUserId)
+                successResponse(periodId, "تم إقفال الفترة المحاسبية بعد اجتياز فحوص السلامة")
+            } catch (e: Exception) { DebugLogger.logException("FiscalPeriodClose", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun reopenFiscalPeriod(periodId: Long, reason: String): String {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val stationId = requireCurrentStationId(helper, activity.currentUserId)
+                helper.reopenFiscalPeriod(periodId, stationId, activity.currentUserId, reason)
+                invalidateCurrentReportCache(helper, activity.currentUserId)
+                successResponse(true, "تمت إعادة فتح الفترة مع تسجيل السبب")
+            } catch (e: Exception) { DebugLogger.logException("FiscalPeriodReopen", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
         fun getJournalEntryDetails(id: Long): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val params = JSONObject().put("id", id)
