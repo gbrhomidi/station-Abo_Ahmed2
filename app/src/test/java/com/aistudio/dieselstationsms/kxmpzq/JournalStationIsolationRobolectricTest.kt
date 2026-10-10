@@ -387,6 +387,11 @@ class JournalStationIsolationRobolectricTest {
         assertEquals(1L, snapshot.getLong("orphan_referenced_journals"))
         assertEquals(1L, snapshot.getLong("duplicate_referenced_journal_groups"))
         assertEquals(false, snapshot.getBoolean("is_station_reconciled"))
+
+        // Duplicate finance-reference counts must respect the requested journal date range.
+        val outsideRange = helper.getFinanceIntegritySnapshot(25, "2026-09-01", "2026-09-30")
+        assertEquals(0L, outsideRange.getLong("duplicate_finance_references"))
+        assertEquals(0L, outsideRange.getLong("duplicate_referenced_journal_groups"))
     }
 
     @Test
