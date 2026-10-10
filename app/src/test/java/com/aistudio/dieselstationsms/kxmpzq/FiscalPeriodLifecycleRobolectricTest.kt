@@ -89,6 +89,7 @@ class FiscalPeriodLifecycleRobolectricTest {
     private fun saveDraft(date: String, description: String): Long =
         helper.saveJournalEntry(
             JSONObject()
+                .put("entry_number", "TEST-FISCAL-" + UUID.randomUUID().toString())
                 .put("entry_date", date)
                 .put("description", description)
                 .put("entry_type", "general")
