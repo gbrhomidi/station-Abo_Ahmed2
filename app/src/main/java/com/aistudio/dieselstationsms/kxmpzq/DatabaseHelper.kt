@@ -21300,7 +21300,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                                 AND original.station_id=reversal.station_id
                                 AND original.is_deleted=0 AND original.status='reversed'
                                 AND original.reversed_entry_id=reversal.id
-                        )""" + reversalJournalDateClause,
+                        )""" + journalDateClause.replace("entry_date", "reversal.entry_date"),
                 journalArgs()
             ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
             val reversedFinanceEntriesWithoutValidReversal = db.rawQuery(
@@ -21314,7 +21314,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                                 AND reversal.is_deleted=0 AND reversal.status='posted'
                                 AND reversal.reference_type='reversal'
                                 AND reversal.reference_id=original.id
-                        )""" + auditJournalDateClause.replace("je.entry_date","original.entry_date"),
+                        )""" + journalDateClause.replace("entry_date", "original.entry_date"),
                 journalArgs()
             ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
             val invalidReversalLinks = invalidPostedReversalLinks + reversedFinanceEntriesWithoutValidReversal
