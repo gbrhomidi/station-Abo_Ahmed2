@@ -21256,10 +21256,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     WHERE je.station_id=? AND je.status='posted' AND je.is_deleted=0
                         AND substr(je.reference_type,1,5)='sale_'
                         AND je.reference_type<>'sale_cogs'
-                        AND (je.reference_id IS NULL OR NOT EXISTS (
-                            SELECT 1 FROM sales_transactions src
-                            WHERE src.id=je.reference_id AND src.station_id=je.station_id AND src.is_deleted=0
-                        ))""" + journalDateClause,
+                        AND (
+                            (je.reference_type IN ('sale_return','sale_damage') AND NOT EXISTS (
+                                SELECT 1 FROM sale_item_adjustments adj
+                                WHERE adj.journal_entry_id=je.id AND adj.sale_id=je.reference_id
+                                    AND adj.station_id=je.station_id AND adj.adjustment_type=substr(je.reference_type,6)
+                                    AND adj.status='posted'
+                            ))
+                            OR
+                            (je.reference_type NOT IN ('sale_return','sale_damage') AND
+                                (je.reference_id IS NULL OR NOT EXISTS (
+                                    SELECT 1 FROM sales_transactions src
+                                    WHERE src.id=je.reference_id AND src.station_id=je.station_id AND src.is_deleted=0
+                                )))
+                        )""" + journalDateClause,
                 journalArgs()
             ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
             val orphanFinancialJournals = orphanPaymentJournals + orphanReceiptJournals +
