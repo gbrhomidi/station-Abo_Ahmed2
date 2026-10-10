@@ -312,7 +312,7 @@ class JournalStationIsolationRobolectricTest {
             put("reference_type", "payment")
             put("reference_id", 27001L)
         }, "id=?", arrayOf(journalId.toString()))
-        db.insertOrThrow("payments", null, ContentValues().apply {
+        val paymentId = db.insertOrThrow("payments", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString())
             put("payment_code", "TEST-FIN-REV-001")
             put("station_id", 27)
@@ -326,7 +326,7 @@ class JournalStationIsolationRobolectricTest {
 
         helper.reverseJournalEntry(journalId, "اختبار عكس مشروع", 0L, 27)
         db.update("payments", ContentValues().apply { put("status", "refunded") },
-            "id=27001 AND station_id=27", null)
+            "id=? AND station_id=27", arrayOf(paymentId.toString()))
 
         val snapshot = helper.getFinanceIntegritySnapshot(27, null, null)
         assertEquals(0L, snapshot.getLong("orphan_finance_journals"))
