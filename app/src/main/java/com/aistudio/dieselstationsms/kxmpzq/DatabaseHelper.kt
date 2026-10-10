@@ -27639,6 +27639,212 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """.trimIndent(), arrayOf(stationId.toString(), year.toString())).use { cursorToJsonArray(it) }
     }
 
+    private fun userCanAccessApprovalStation(db: SQLiteDatabase, userId: Long, stationId: Int): Boolean {
+        if (userId <= 0 || stationId <= 0) return false
+        return db.rawQuery("""
+            SELECT 1 FROM users u
+            WHERE u.id=? AND (
+                u.station_id=? OR EXISTS (
+                    SELECT 1 FROM role_permissions rp
+                    WHERE rp.role_id=u.role_id AND rp.station_id=?
+                      AND rp.is_deleted=0
+                      AND (COALESCE(rp.can_read,0)=1 OR COALESCE(rp.can_create,0)=1 OR COALESCE(rp.can_approve,0)=1)
+                )
+            ) LIMIT 1
+        """.trimIndent(), arrayOf(userId.toString(), stationId.toString(), stationId.toString())).use { it.moveToFirst() }
+    }
+
+    private fun userHasPermissionCode(db: SQLiteDatabase, userId: Long, stationId: Int, code: String): Boolean {
+        return db.rawQuery("""
+            SELECT 1
+            FROM users u JOIN permissions p ON p.permission_code=? AND p.is_active=1 AND p.is_deleted=0
+            LEFT JOIN role_permissions rp ON rp.role_id=u.role_id AND rp.permission_id=p.id
+                AND rp.is_deleted=0 AND (rp.station_id IS NULL OR rp.station_id=?)
+            LEFT JOIN user_permissions up ON up.user_id=u.id AND up.permission_id=p.id
+            WHERE u.id=? AND COALESCE(up.is_granted,
+                CASE WHEN COALESCE(rp.can_create,0)+COALESCE(rp.can_read,0)+COALESCE(rp.can_update,0)
+                    +COALESCE(rp.can_delete,0)+COALESCE(rp.can_export,0)+COALESCE(rp.can_print,0)
+                    +COALESCE(rp.can_approve,0)>0 THEN 1 ELSE 0 END)=1
+            LIMIT 1
+        """.trimIndent(), arrayOf(code, stationId.toString(), userId.toString())).use { it.moveToFirst() }
+    }
+
+    fun checkSoDViolation(userId: Long, permissionCodeA: String, permissionCodeB: String, stationId: Int): Boolean {
+        require(userId > 0 && stationId > 0) { "المستخدم أو نطاق المحطة غير صالح" }
+        val a = permissionCodeA.trim()
+        val b = permissionCodeB.trim()
+        require(a.isNotEmpty() && b.isNotEmpty() && a != b) { "رموز الصلاحيات غير صالحة" }
+        val db = readableDatabase
+        val blockingRule = db.rawQuery("""
+            SELECT 1 FROM sod_rules
+            WHERE is_active=1 AND is_blocking=1 AND (
+                (permission_a_code=? AND permission_b_code=?) OR
+                (permission_a_code=? AND permission_b_code=?)
+            ) LIMIT 1
+        """.trimIndent(), arrayOf(a, b, b, a)).use { it.moveToFirst() }
+        return blockingRule && userHasPermissionCode(db, userId, stationId, a) &&
+            userHasPermissionCode(db, userId, stationId, b)
+    }
+
+    fun requiresApproval(stationId: Int, entityType: String, operation: String, amount: Double): Boolean {
+        require(stationId > 0 && amount.isFinite() && amount >= 0.0) { "نطاق المحطة أو المبلغ غير صالح" }
+        val entity = entityType.trim()
+        val action = operation.trim()
+        require(entity.matches(Regex("[a-z][a-z0-9_]{1,39}")) && action.matches(Regex("[a-z][a-z0-9_]{1,39}"))) {
+            "نوع العملية أو الإجراء غير صالح"
+        }
+        return readableDatabase.rawQuery("""
+            SELECT 1 FROM approval_thresholds
+            WHERE station_id=? AND entity_type=? AND operation=? AND is_active=1
+              AND (amount_threshold IS NULL OR ? >= amount_threshold)
+            LIMIT 1
+        """.trimIndent(), arrayOf(stationId.toString(), entity, action, amount.toString())).use { it.moveToFirst() }
+    }
+
+    fun createPendingApproval(
+        stationId: Int, entityType: String, entityId: Long, operation: String,
+        amount: Double?, requestedBy: Long, expiresAt: String? = null
+    ): Long {
+        require(stationId > 0 && entityId > 0 && requestedBy > 0) { "مرجع العملية أو المستخدم غير صالح" }
+        require(amount == null || (amount.isFinite() && amount >= 0.0)) { "مبلغ الاعتماد غير صالح" }
+        val entity = entityType.trim()
+        val action = operation.trim()
+        require(entity.matches(Regex("[a-z][a-z0-9_]{1,39}")) && action.matches(Regex("[a-z][a-z0-9_]{1,39}"))) {
+            "نوع العملية أو الإجراء غير صالح"
+        }
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            require(userCanAccessApprovalStation(db, requestedBy, stationId)) { "المستخدم لا يملك نطاق المحطة المطلوبة" }
+            val configured = db.rawQuery("""
+                SELECT amount_threshold FROM approval_thresholds
+                WHERE station_id=? AND entity_type=? AND operation=? AND is_active=1
+            """.trimIndent(), arrayOf(stationId.toString(), entity, action)).use { cur ->
+                if (!cur.moveToFirst()) false
+                else cur.isNull(0) || (amount != null && amount >= cur.getDouble(0))
+            }
+            require(configured) { "لا توجد قاعدة اعتماد فعالة تنطبق على هذه العملية والمبلغ" }
+            db.rawQuery("""
+                SELECT id FROM pending_approvals
+                WHERE station_id=? AND entity_type=? AND entity_id=? AND operation=? AND status='pending'
+                LIMIT 1
+            """.trimIndent(), arrayOf(stationId.toString(), entity, entityId.toString(), action)).use { cur ->
+                if (cur.moveToFirst()) {
+                    db.setTransactionSuccessful()
+                    return cur.getLong(0)
+                }
+            }
+            val values = ContentValues().apply {
+                put("uuid", java.util.UUID.randomUUID().toString())
+                put("station_id", stationId); put("entity_type", entity); put("entity_id", entityId)
+                put("operation", action); if (amount == null) putNull("amount") else put("amount", amount)
+                put("requested_by", requestedBy); put("status", "pending")
+                if (expiresAt.isNullOrBlank()) putNull("expires_at") else put("expires_at", expiresAt.trim())
+            }
+            val id = db.insertOrThrow("pending_approvals", null, values)
+            db.setTransactionSuccessful()
+            return id
+        } finally { db.endTransaction() }
+    }
+
+    private fun approvalRoleAndCount(db: SQLiteDatabase, approvalId: Long, stationId: Int): Pair<Int, Int> {
+        return db.rawQuery("""
+            SELECT t.approver_role_id,t.required_approvals
+            FROM pending_approvals p
+            JOIN approval_thresholds t ON t.station_id=p.station_id
+                AND t.entity_type=p.entity_type AND t.operation=p.operation AND t.is_active=1
+            WHERE p.id=? AND p.station_id=? AND p.status='pending'
+        """.trimIndent(), arrayOf(approvalId.toString(), stationId.toString())).use { cur ->
+            require(cur.moveToFirst()) { "طلب الاعتماد غير موجود أو لم يعد معلقاً" }
+            cur.getInt(0) to cur.getInt(1)
+        }
+    }
+
+    fun approveTransaction(approvalId: Long, userId: Long, stationId: Int, note: String? = null): Boolean {
+        require(approvalId > 0 && userId > 0 && stationId > 0) { "بيانات الاعتماد غير صالحة" }
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            var requestedBy = 0L
+            db.rawQuery("SELECT requested_by FROM pending_approvals WHERE id=? AND station_id=? AND status='pending'",
+                arrayOf(approvalId.toString(), stationId.toString())).use { cur ->
+                require(cur.moveToFirst()) { "طلب الاعتماد غير موجود أو لم يعد معلقاً" }
+                requestedBy = cur.getLong(0)
+            }
+            require(requestedBy != userId) { "لا يجوز لمُنشئ العملية اعتماد طلبه بنفسه" }
+            require(userCanAccessApprovalStation(db, userId, stationId)) { "المعتمِد لا يملك نطاق المحطة المطلوبة" }
+            val (requiredRole, requiredCount) = approvalRoleAndCount(db, approvalId, stationId)
+            val actualRole = db.rawQuery("SELECT role_id FROM users WHERE id=?", arrayOf(userId.toString())).use { cur ->
+                require(cur.moveToFirst()) { "المستخدم المعتمِد غير موجود" }; cur.getInt(0)
+            }
+            require(actualRole == requiredRole) { "دور المستخدم غير مخوّل لاعتماد هذه العملية" }
+            db.insertOrThrow("approval_decisions", null, ContentValues().apply {
+                put("approval_id", approvalId); put("station_id", stationId); put("approver_user_id", userId)
+                put("decision", "approved"); put("note", note?.trim()?.takeIf { it.isNotEmpty() })
+            })
+            val approvedCount = db.rawQuery(
+                "SELECT COUNT(*) FROM approval_decisions WHERE approval_id=? AND decision='approved'",
+                arrayOf(approvalId.toString())
+            ).use { cur -> cur.moveToFirst(); cur.getInt(0) }
+            if (approvedCount >= requiredCount) {
+                val updated = db.update("pending_approvals", ContentValues().apply {
+                    put("status", "approved"); put("approved_by", userId); put("approved_at", getCurrentDateTime())
+                }, "id=? AND station_id=? AND status='pending'", arrayOf(approvalId.toString(), stationId.toString()))
+                require(updated == 1) { "تغيرت حالة طلب الاعتماد أثناء المعالجة" }
+            }
+            db.setTransactionSuccessful()
+            return true
+        } finally { db.endTransaction() }
+    }
+
+    fun rejectTransaction(approvalId: Long, userId: Long, stationId: Int, reason: String): Boolean {
+        require(approvalId > 0 && userId > 0 && stationId > 0) { "بيانات الرفض غير صالحة" }
+        val normalizedReason = reason.trim()
+        require(normalizedReason.isNotEmpty()) { "سبب الرفض مطلوب" }
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            var requestedBy = 0L
+            db.rawQuery("SELECT requested_by FROM pending_approvals WHERE id=? AND station_id=? AND status='pending'",
+                arrayOf(approvalId.toString(), stationId.toString())).use { cur ->
+                require(cur.moveToFirst()) { "طلب الاعتماد غير موجود أو لم يعد معلقاً" }
+                requestedBy = cur.getLong(0)
+            }
+            require(requestedBy != userId) { "لا يجوز لمُنشئ العملية رفض طلبه بنفسه" }
+            require(userCanAccessApprovalStation(db, userId, stationId)) { "المستخدم لا يملك نطاق المحطة المطلوبة" }
+            val (requiredRole, _) = approvalRoleAndCount(db, approvalId, stationId)
+            val actualRole = db.rawQuery("SELECT role_id FROM users WHERE id=?", arrayOf(userId.toString())).use { cur ->
+                require(cur.moveToFirst()) { "المستخدم الرافض غير موجود" }; cur.getInt(0)
+            }
+            require(actualRole == requiredRole) { "دور المستخدم غير مخوّل لرفض هذه العملية" }
+            db.insertOrThrow("approval_decisions", null, ContentValues().apply {
+                put("approval_id", approvalId); put("station_id", stationId); put("approver_user_id", userId)
+                put("decision", "rejected"); put("note", normalizedReason)
+            })
+            val updated = db.update("pending_approvals", ContentValues().apply {
+                put("status", "rejected"); put("rejection_reason", normalizedReason)
+            }, "id=? AND station_id=? AND status='pending'", arrayOf(approvalId.toString(), stationId.toString()))
+            require(updated == 1) { "تغيرت حالة طلب الاعتماد أثناء المعالجة" }
+            db.setTransactionSuccessful()
+            return true
+        } finally { db.endTransaction() }
+    }
+
+    fun getPendingApprovals(stationId: Int, status: String = "pending"): JSONArray {
+        require(stationId > 0) { "نطاق المحطة غير صالح" }
+        require(status in setOf("pending", "approved", "rejected", "expired", "all")) { "حالة الاعتماد غير صالحة" }
+        val where = if (status == "all") "" else " AND p.status=?"
+        val args = if (status == "all") arrayOf(stationId.toString()) else arrayOf(stationId.toString(), status)
+        return readableDatabase.rawQuery("""
+            SELECT p.id,p.uuid,p.station_id,p.entity_type,p.entity_id,p.operation,p.amount,
+                   p.requested_by,p.requested_at,p.status,p.approved_by,p.approved_at,p.rejection_reason,p.expires_at,
+                   (SELECT COUNT(*) FROM approval_decisions d WHERE d.approval_id=p.id AND d.decision='approved') AS approvals_count,
+                   u.full_name AS requested_by_name
+            FROM pending_approvals p JOIN users u ON u.id=p.requested_by
+            WHERE p.station_id=?$where ORDER BY p.requested_at DESC,p.id DESC
+        """.trimIndent(), args).use { cursorToJsonArray(it) }
+    }
+
     fun saveJournalEntry(data: JSONObject, userId: Long, stationScopeId: Int): Long {
         require(stationScopeId > 0) { "نطاق المحطة غير صالح" }
         val db = writableDatabase
