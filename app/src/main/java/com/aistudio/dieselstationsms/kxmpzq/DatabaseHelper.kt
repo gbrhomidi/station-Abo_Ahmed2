@@ -21271,11 +21271,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     SELECT COUNT(*) - 1 AS duplicate_count
                     FROM journal_entries
                     WHERE station_id=? AND status='posted' AND is_deleted=0
-                        AND (
-                            reference_type IN ('payment','receipt','expense','employee_payment','sale','sale_cogs')
-                            OR substr(reference_type,1,5)='sale_'
-                        )
-                        AND reference_id IS NOT NULL""" + journalDateClause + """
+                        AND reference_type IN ('payment','receipt','expense','employee_payment','sale','sale_cogs')
+                        AND reference_id IS NOT NULL
                     GROUP BY station_id,reference_type,reference_id
                     HAVING COUNT(*)>1
                 ) duplicate_refs""",
@@ -21289,6 +21286,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         AND NOT EXISTS (
                             SELECT 1 FROM journal_entries original
                             WHERE original.id=reversal.reference_id
+                                AND reversal.reversed_entry_id=original.id
                                 AND original.station_id=reversal.station_id
                                 AND original.is_deleted=0 AND original.status='reversed'
                                 AND original.reversed_entry_id=reversal.id
