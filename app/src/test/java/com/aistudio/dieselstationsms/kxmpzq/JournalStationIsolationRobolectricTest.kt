@@ -365,6 +365,7 @@ class JournalStationIsolationRobolectricTest {
         val first = postedPaymentReference("القيد الأول للعملية")
         postedPaymentReference("قيد مكرر للمرجع نفسه")
         db.insertOrThrow("payments", null, ContentValues().apply {
+            put("id", 700L)
             put("uuid", UUID.randomUUID().toString())
             put("payment_code", "TEST-FIN-ORPHAN-DUP-001")
             put("station_id", 25)
