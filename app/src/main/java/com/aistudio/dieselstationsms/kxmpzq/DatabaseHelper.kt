@@ -27701,6 +27701,56 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """.trimIndent(), arrayOf(stationId.toString(), entity, action, amount.toString())).use { it.moveToFirst() }
     }
 
+    private fun validateApprovalTarget(
+        db: SQLiteDatabase,
+        stationId: Int,
+        entityType: String,
+        entityId: Long,
+        operation: String,
+        amount: Double?
+    ) {
+        val entity = entityType.trim().lowercase(Locale.ROOT)
+        val action = operation.trim().lowercase(Locale.ROOT)
+        when {
+            entity in setOf("journal", "journal_entry", "journal_entries") && action == "post" -> {
+                val actualAmount = db.rawQuery(
+                    "SELECT status,total_debit,total_credit,is_balanced FROM journal_entries WHERE id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(entityId.toString(), stationId.toString())
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) { "القيد المطلوب اعتماده غير موجود ضمن المحطة" }
+                    require(cursor.getString(0) == "draft") { "لا يمكن طلب اعتماد قيد مرحل أو ملغى" }
+                    val debit = cursor.getDouble(1)
+                    val credit = cursor.getDouble(2)
+                    require(cursor.getInt(3) == 1 && kotlin.math.abs(debit - credit) < 0.000001 && debit > 0.0) {
+                        "لا يمكن طلب اعتماد قيد غير متوازن"
+                    }
+                    debit
+                }
+                require(amount != null && kotlin.math.abs(amount - actualAmount) < 0.000001) {
+                    "مبلغ طلب الاعتماد لا يطابق مبلغ القيد الفعلي"
+                }
+            }
+
+            entity in setOf("payment", "payments") && action in setOf("reverse", "refund") -> {
+                val actualAmount = db.rawQuery(
+                    "SELECT status,amount FROM payments WHERE id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(entityId.toString(), stationId.toString())
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) { "الدفعة المطلوبة لعكسها غير موجودة ضمن المحطة" }
+                    require(cursor.getString(0) == "completed") { "لا يمكن طلب اعتماد عكس دفعة غير مكتملة" }
+                    cursor.getDouble(1)
+                }
+                require(amount != null && kotlin.math.abs(amount - actualAmount) < 0.000001) {
+                    "مبلغ طلب الاعتماد لا يطابق مبلغ الدفعة الفعلي"
+                }
+            }
+
+            else -> throw IllegalArgumentException(
+                "لا يوجد مسار مالي مدعوم للاعتماد: $entity/$action"
+            )
+        }
+    }
+
     fun createPendingApproval(
         stationId: Int, entityType: String, entityId: Long, operation: String,
         amount: Double?, requestedBy: Long, expiresAt: String? = null
@@ -27724,6 +27774,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 else cur.isNull(0) || (amount != null && amount >= cur.getDouble(0))
             }
             require(configured) { "لا توجد قاعدة اعتماد فعالة تنطبق على هذه العملية والمبلغ" }
+            validateApprovalTarget(db, stationId, entity, entityId, action, amount)
             db.rawQuery("""
                 SELECT id FROM pending_approvals
                 WHERE station_id=? AND entity_type=? AND entity_id=? AND operation=? AND status='pending'
@@ -27930,6 +27981,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             val savedId: Long
             if (id > 0) {
+                val hasPendingApproval = db.rawQuery(
+                    "SELECT 1 FROM pending_approvals WHERE station_id=? AND entity_type IN ('journal','journal_entry','journal_entries') AND entity_id=? AND operation='post' AND status='pending' LIMIT 1",
+                    arrayOf(stationScopeId.toString(), id.toString())
+                ).use { it.moveToFirst() }
+                require(!hasPendingApproval) { "لا يمكن تعديل قيد له طلب اعتماد ترحيل معلق؛ ألغِ الطلب أولاً" }
                 val old = journalEntryRow(db, id, stationScopeId) ?: throw IllegalArgumentException("القيد غير موجود")
                 require(old.optString("status") == "draft") { "لا يمكن تعديل قيد مرحل أو ملغى" }
                 val rows = db.update("journal_entries", values, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString()))
@@ -27973,6 +28029,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val db = writableDatabase
         db.beginTransaction()
         try {
+            val hasPendingApproval = db.rawQuery(
+                "SELECT 1 FROM pending_approvals WHERE station_id=? AND entity_type IN ('journal','journal_entry','journal_entries') AND entity_id=? AND operation='post' AND status='pending' LIMIT 1",
+                arrayOf(stationScopeId.toString(), id.toString())
+            ).use { it.moveToFirst() }
+            require(!hasPendingApproval) { "لا يمكن حذف قيد له طلب اعتماد ترحيل معلق؛ ألغِ الطلب أولاً" }
             val old = journalEntryRow(db, id, stationScopeId) ?: throw IllegalArgumentException("القيد غير موجود")
             require(old.optString("status") != "posted") { "لا يمكن حذف قيد مرحل؛ استخدم الإلغاء" }
             val values = ContentValues().apply {
@@ -27983,6 +28044,48 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (rows > 0) writeJournalAudit(db, userId, "delete", id, old, journalEntryRow(db, id, stationScopeId, true))
             db.setTransactionSuccessful(); return rows
         } finally { db.endTransaction() }
+    }
+
+    /**
+     * Single entry point for the UI: either queue a threshold-controlled approval
+     * or post the draft immediately, without a check/use race between the two paths.
+     */
+    fun requestOrPostJournalEntry(id: Long, userId: Long, stationScopeId: Int): JSONObject {
+        require(id > 0 && userId > 0 && stationScopeId > 0) { "بيانات ترحيل القيد غير صالحة" }
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val entry = journalEntryRow(db, id, stationScopeId) ?: throw IllegalArgumentException("القيد غير موجود ضمن المحطة الحالية")
+            require(entry.optString("status") == "draft") { "القيد مرحل أو ملغى مسبقاً" }
+            val amount = entry.optDouble("total_debit", 0.0)
+            require(amount.isFinite() && amount > 0.0 &&
+                entry.optInt("is_balanced", 0) == 1 &&
+                kotlin.math.abs(amount - entry.optDouble("total_credit", 0.0)) < 0.000001) {
+                "لا يمكن ترحيل قيد غير متوازن"
+            }
+
+            val result = if (requiresApproval(stationScopeId, "journal", "post", amount)) {
+                val approvalId = createPendingApproval(
+                    stationScopeId, "journal", id, "post", amount, userId
+                )
+                JSONObject()
+                    .put("requires_approval", true)
+                    .put("approval_id", approvalId)
+                    .put("journal_id", id)
+                    .put("status", "pending_approval")
+            } else {
+                val rows = postJournalEntry(id, userId, stationScopeId)
+                require(rows == 1) { "لم يتم ترحيل القيد" }
+                JSONObject()
+                    .put("requires_approval", false)
+                    .put("journal_id", id)
+                    .put("status", "posted")
+            }
+            db.setTransactionSuccessful()
+            return result
+        } finally {
+            db.endTransaction()
+        }
     }
 
     fun postJournalEntry(id: Long, userId: Long, stationScopeId: Int): Int {
