@@ -9,6 +9,8 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -23,6 +25,7 @@ class ApprovalControlRobolectricTest {
     private var makerId = 0L
     private var checkerId = 0L
     private var otherStationUserId = 0L
+    private var journalId = 0L
 
     @Before
     fun setUp() {
@@ -42,8 +45,8 @@ class ApprovalControlRobolectricTest {
         otherStationUserId = createUser(12, "other-station")
         db.insertOrThrow("approval_thresholds", null, ContentValues().apply {
             put("station_id", 11)
-            put("entity_type", "payment")
-            put("operation", "complete")
+            put("entity_type", "journal")
+            put("operation", "post")
             put("amount_threshold", 5000.0)
             put("required_approvals", 1)
             put("approver_role_id", roleId)
@@ -84,13 +87,45 @@ class ApprovalControlRobolectricTest {
             put("status", "active")
         })
 
-    private fun createRequest(): Long =
-        helper.createPendingApproval(11, "payment", 901, "complete", 6000.0, makerId)
+    private fun createRequest(): Long {
+        if (journalId <= 0L) {
+            val db = helper.writableDatabase
+            val accountIds = mutableListOf<Long>()
+            db.rawQuery("SELECT id FROM accounts WHERE is_deleted=0 ORDER BY id LIMIT 2", null).use { cursor ->
+                while (cursor.moveToNext()) accountIds.add(cursor.getLong(0))
+            }
+            while (accountIds.size < 2) {
+                val index = accountIds.size + 1
+                accountIds.add(db.insertOrThrow("accounts", null, ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("account_code", "TEST-MC-${UUID.randomUUID().toString().take(8)}")
+                    put("account_name", "Maker checker test account $index")
+                    put("account_name_ar", "حساب اختبار الاعتماد $index")
+                    put("level", 1)
+                    put("account_type", if (index == 1) "asset" else "equity")
+                    put("normal_balance", if (index == 1) "debit" else "credit")
+                    put("is_deleted", 0)
+                    put("is_active", 1)
+                }))
+            }
+            val journal = JSONObject().apply {
+                put("entry_date", "2026-10-12")
+                put("description", "Maker-checker approval integration test")
+                put("entry_type", "general")
+                put("status", "draft")
+                put("items", JSONArray()
+                    .put(JSONObject().put("account_id", accountIds[0]).put("debit", 6000.0).put("credit", 0.0))
+                    .put(JSONObject().put("account_id", accountIds[1]).put("debit", 0.0).put("credit", 6000.0)))
+            }
+            journalId = helper.saveJournalEntry(journal, makerId, 11)
+        }
+        return helper.createPendingApproval(11, "journal", journalId, "post", 6000.0, makerId)
+    }
 
     @Test
     fun amountThresholdAndPendingRequestAreEnforcedAndIdempotent() {
-        assertTrue(helper.requiresApproval(11, "payment", "complete", 6000.0))
-        assertTrue(!helper.requiresApproval(11, "payment", "complete", 1000.0))
+        assertTrue(helper.requiresApproval(11, "journal", "post", 6000.0))
+        assertTrue(!helper.requiresApproval(11, "journal", "post", 1000.0))
         val first = createRequest()
         val second = createRequest()
         assertEquals(first, second)
@@ -103,13 +138,26 @@ class ApprovalControlRobolectricTest {
     }
 
     @Test
-    fun separateAuthorizedCheckerCanApproveAndQueueLeavesPendingState() {
+    fun separateAuthorizedCheckerApprovesAndPostsTheUnderlyingJournalAtomically() {
         val requestId = createRequest()
         assertTrue(helper.approveTransaction(requestId, checkerId, 11, "reviewed"))
         val row = helper.getPendingApprovals(11, "approved").getJSONObject(0)
         assertEquals(requestId, row.getLong("id"))
         assertEquals("approved", row.getString("status"))
         assertEquals(1, row.getInt("approvals_count"))
+        helper.writableDatabase.rawQuery(
+            "SELECT status FROM journal_entries WHERE id=? AND station_id=11",
+            arrayOf(journalId.toString())
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("posted", cursor.getString(0))
+        }
+        try {
+            helper.approveTransaction(requestId, checkerId, 11, "duplicate retry")
+            throw AssertionError("يجب رفض إعادة تنفيذ طلب اعتماد مكتمل")
+        } catch (_: IllegalArgumentException) {
+            // The completed request is no longer eligible for execution.
+        }
     }
 
     @Test(expected = IllegalArgumentException::class)
@@ -125,5 +173,12 @@ class ApprovalControlRobolectricTest {
         assertEquals("rejected", row.getString("status"))
         assertEquals("مستندات غير مكتملة", row.getString("rejection_reason"))
         assertNotEquals(makerId, checkerId)
+        helper.writableDatabase.rawQuery(
+            "SELECT status FROM journal_entries WHERE id=? AND station_id=11",
+            arrayOf(journalId.toString())
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("draft", cursor.getString(0))
+        }
     }
 }
