@@ -27760,6 +27760,42 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    /**
+     * Executes the approved financial action in the same SQLite transaction as the
+     * approval decision. Unsupported actions fail closed instead of being marked approved.
+     */
+    private fun executeApprovedFinancialOperation(
+        db: SQLiteDatabase,
+        approvalId: Long,
+        userId: Long,
+        stationId: Int,
+        note: String?
+    ) {
+        val target = db.rawQuery(
+            "SELECT entity_type, entity_id, operation FROM pending_approvals WHERE id=? AND station_id=? AND status='pending'",
+            arrayOf(approvalId.toString(), stationId.toString())
+        ).use { cursor ->
+            require(cursor.moveToFirst()) { "طلب الاعتماد غير موجود أو لم يعد معلقاً" }
+            Triple(cursor.getString(0).trim().lowercase(Locale.ROOT), cursor.getLong(1), cursor.getString(2).trim().lowercase(Locale.ROOT))
+        }
+
+        val affectedRows = when {
+            target.first in setOf("journal", "journal_entry", "journal_entries") && target.third == "post" ->
+                postJournalEntry(target.second, userId, stationId)
+
+            target.first in setOf("payment", "payments") && target.third in setOf("reverse", "refund") -> {
+                val reason = note?.trim().orEmpty()
+                require(reason.isNotEmpty()) { "سبب عكس الدفعة مطلوب في ملاحظة الاعتماد" }
+                reversePaymentRecord(target.second, reason, stationId, userId)
+            }
+
+            else -> throw IllegalArgumentException(
+                "لا يوجد مسار تنفيذ مالي معتمد لهذا النوع والإجراء: ${target.first}/${target.third}"
+            )
+        }
+        require(affectedRows == 1) { "لم تُنفذ العملية المالية المعتمدة؛ تم إلغاء قرار الاعتماد" }
+    }
+
     fun approveTransaction(approvalId: Long, userId: Long, stationId: Int, note: String? = null): Boolean {
         require(approvalId > 0 && userId > 0 && stationId > 0) { "بيانات الاعتماد غير صالحة" }
         val db = writableDatabase
@@ -27787,6 +27823,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 arrayOf(approvalId.toString())
             ).use { cur -> cur.moveToFirst(); cur.getInt(0) }
             if (approvedCount >= requiredCount) {
+                executeApprovedFinancialOperation(db, approvalId, userId, stationId, note)
                 val updated = db.update("pending_approvals", ContentValues().apply {
                     put("status", "approved"); put("approved_by", userId); put("approved_at", getCurrentDateTime())
                 }, "id=? AND station_id=? AND status='pending'", arrayOf(approvalId.toString(), stationId.toString()))
