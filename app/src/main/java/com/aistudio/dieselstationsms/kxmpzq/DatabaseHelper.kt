@@ -21818,7 +21818,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("expense_category_id", categoryId)
                     put("station_id", stationScopeId)
                     put("cash_box_id", cashBoxId)
-                    put("payee_name", data.optString("payee_name", "" )
+                    put("payee_name", data.optString("payee_name", ""))
                     put("amount", amount)
                     put("total_amount", amount)
                     put("description", data.optString("description", ""))
