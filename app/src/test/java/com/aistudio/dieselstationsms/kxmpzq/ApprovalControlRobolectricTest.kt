@@ -221,6 +221,30 @@ class ApprovalControlRobolectricTest {
     }
 
     @Test
+    fun saveJournalEntryCannotBypassMakerCheckerWithPostedStatus() {
+        createRequest()
+        val entry = helper.getJournalEntryDetails(journalId, 11)
+            ?: throw AssertionError("لم يتم العثور على قيد الاختبار")
+        entry.put("status", "posted")
+
+        try {
+            helper.saveJournalEntry(entry, makerId, 11)
+            throw AssertionError("يجب منع ترحيل القيد عبر مسار الحفظ")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message.orEmpty().contains("ترحيل القيد"))
+        }
+
+        helper.writableDatabase.rawQuery(
+            "SELECT status FROM journal_entries WHERE id=? AND station_id=11",
+            arrayOf(journalId.toString())
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("draft", cursor.getString(0))
+        }
+        assertEquals(1, helper.getPendingApprovals(11, "pending").length())
+    }
+
+    @Test
     fun amountThresholdAndPendingRequestAreEnforcedAndIdempotent() {
         assertTrue(helper.requiresApproval(11, "journal", "post", 6000.0))
         assertTrue(!helper.requiresApproval(11, "journal", "post", 1000.0))
