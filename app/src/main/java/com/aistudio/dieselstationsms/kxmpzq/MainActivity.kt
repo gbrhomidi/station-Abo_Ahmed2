@@ -7784,7 +7784,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun postJournalEntry(id: Long): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            return try { val rows = db.postJournalEntry(id, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId)); if (rows > 0) invalidateCurrentReportCache(db, activity.currentUserId); if (rows > 0) successResponse(true, "تم ترحيل القيد في SQLite") else errorResponse("لم يتم ترحيل القيد") } catch (e: Exception) { DebugLogger.logException("JournalPost", e); errorResponse(e.message) }
+            return try {
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val result = db.requestOrPostJournalEntry(id, activity.currentUserId, stationId)
+                if (!result.optBoolean("requires_approval")) {
+                    invalidateCurrentReportCache(db, activity.currentUserId)
+                    successResponse(true, "تم ترحيل القيد في SQLite")
+                } else {
+                    successResponse(result, "تم إرسال القيد إلى قائمة الاعتماد؛ لن يُرحّل قبل موافقة مستخدم مخوّل")
+                }
+            } catch (e: Exception) {
+                DebugLogger.logException("JournalPost", e)
+                errorResponse(e.message)
+            }
         }
 
         @JavascriptInterface
