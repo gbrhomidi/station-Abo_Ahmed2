@@ -28008,7 +28008,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(entryDate.isNotEmpty()) { "تاريخ القيد مطلوب" }
             require(description.isNotEmpty()) { "وصف القيد مطلوب" }
             require(entryType in setOf("general", "sales", "purchase", "payroll", "adjustment", "closing")) { "نوع القيد غير صالح" }
-            require(status in setOf("draft", "posted")) { "لا يمكن إنشاء القيد بهذه الحالة" }
+            require(status == "draft") { "لا يجوز ترحيل القيد عبر الحفظ؛ استخدم مسار الترحيل والاعتماد المعتمد" }
             require(items.length() > 0) { "يجب أن يحتوي القيد على بند واحد على الأقل" }
             var debit = 0.0
             var credit = 0.0
