@@ -7791,7 +7791,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     invalidateCurrentReportCache(db, activity.currentUserId)
                     successResponse(true, "تم ترحيل القيد في SQLite")
                 } else {
-                    successResponse(result, "تم إرسال القيد إلى قائمة الاعتماد؛ لن يُرحّل قبل موافقة مستخدم مخوّل")
+                    JSONObject().apply {
+                        put("success", true)
+                        put("data", result)
+                        put("message", "تم إرسال القيد إلى قائمة الاعتماد؛ لن يُرحّل قبل موافقة مستخدم مخوّل")
+                    }.toString()
                 }
             } catch (e: Exception) {
                 DebugLogger.logException("JournalPost", e)
