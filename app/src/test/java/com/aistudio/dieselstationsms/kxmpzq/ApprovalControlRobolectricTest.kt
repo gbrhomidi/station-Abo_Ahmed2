@@ -52,6 +52,15 @@ class ApprovalControlRobolectricTest {
             put("approver_role_id", roleId)
             put("is_active", 1)
         })
+        db.insertOrThrow("approval_thresholds", null, ContentValues().apply {
+            put("station_id", 11)
+            put("entity_type", "journal")
+            put("operation", "reverse")
+            put("amount_threshold", 5000.0)
+            put("required_approvals", 1)
+            put("approver_role_id", roleId)
+            put("is_active", 1)
+        })
     }
 
     @After
@@ -163,6 +172,37 @@ class ApprovalControlRobolectricTest {
     @Test(expected = IllegalArgumentException::class)
     fun userFromAnotherStationCannotApproveRequest() {
         helper.approveTransaction(createRequest(), otherStationUserId, 11, "wrong station")
+    }
+
+    @Test
+    fun approvedJournalReversalCreatesTheReversalEntryAndUpdatesOriginal() {
+        val postApprovalId = createRequest()
+        assertTrue(helper.rejectTransaction(postApprovalId, checkerId, 11, "تهيئة قيد مرحل للاختبار"))
+        assertEquals(1, helper.postJournalEntry(journalId, makerId, 11))
+
+        val reverseApprovalId = helper.createPendingApproval(
+            11, "journal", journalId, "reverse", 6000.0, makerId
+        )
+        assertTrue(helper.approveTransaction(reverseApprovalId, checkerId, 11, "عكس معتمد للاختبار"))
+
+        helper.writableDatabase.rawQuery(
+            "SELECT status,reversed_entry_id FROM journal_entries WHERE id=? AND station_id=11",
+            arrayOf(journalId.toString())
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("reversed", cursor.getString(0))
+            val reversalId = cursor.getLong(1)
+            assertTrue(reversalId > 0L)
+            helper.writableDatabase.rawQuery(
+                "SELECT status,reference_type,reference_id FROM journal_entries WHERE id=? AND station_id=11",
+                arrayOf(reversalId.toString())
+            ).use { reversal ->
+                assertTrue(reversal.moveToFirst())
+                assertEquals("posted", reversal.getString(0))
+                assertEquals("reversal", reversal.getString(1))
+                assertEquals(journalId, reversal.getLong(2))
+            }
+        }
     }
 
     @Test
