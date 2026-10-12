@@ -282,6 +282,51 @@ class ApprovalControlRobolectricTest {
         }
     }
 
+    @Test
+    fun inactiveOrDeletedCheckerCannotApproveAndDecisionIsRolledBack() {
+        val requestId = createRequest()
+        helper.writableDatabase.update(
+            "users",
+            ContentValues().apply { put("status", "inactive") },
+            "id=?",
+            arrayOf(checkerId.toString())
+        )
+
+        try {
+            helper.approveTransaction(requestId, checkerId, 11, "inactive checker")
+            throw AssertionError("يجب منع المستخدم غير النشط من الاعتماد")
+        } catch (_: IllegalArgumentException) {
+            // Inactive users must not create an approval decision.
+        }
+
+        assertEquals(1, helper.getPendingApprovals(11, "pending").length())
+        assertEquals(0, countRows(
+            "SELECT COUNT(*) FROM approval_decisions WHERE approval_id=?",
+            arrayOf(requestId.toString())
+        ))
+
+        helper.writableDatabase.update(
+            "users",
+            ContentValues().apply {
+                put("status", "active")
+                put("is_deleted", 1)
+            },
+            "id=?",
+            arrayOf(checkerId.toString())
+        )
+        try {
+            helper.approveTransaction(requestId, checkerId, 11, "deleted checker")
+            throw AssertionError("يجب منع المستخدم المحذوف من الاعتماد")
+        } catch (_: IllegalArgumentException) {
+            // Deleted users must remain unable to approve.
+        }
+        assertEquals(1, helper.getPendingApprovals(11, "pending").length())
+        assertEquals(0, countRows(
+            "SELECT COUNT(*) FROM approval_decisions WHERE approval_id=?",
+            arrayOf(requestId.toString())
+        ))
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun userFromAnotherStationCannotApproveRequest() {
         helper.approveTransaction(createRequest(), otherStationUserId, 11, "wrong station")
