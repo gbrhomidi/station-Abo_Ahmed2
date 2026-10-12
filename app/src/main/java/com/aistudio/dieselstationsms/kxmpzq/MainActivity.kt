@@ -7882,7 +7882,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val stationId = requireCurrentStationId(helper, activity.currentUserId)
                 helper.approveTransaction(approvalId, activity.currentUserId, stationId, note)
-                successResponse(true, "تم تسجيل قرار الاعتماد")
+                invalidateCurrentReportCache(helper, activity.currentUserId)
+                successResponse(true, "تم تسجيل قرار الاعتماد ومعالجة العملية المالية إن اكتملت الموافقات المطلوبة")
             } catch (e: Exception) { DebugLogger.logException("ApprovePendingApproval", e); errorResponse(e.message) }
         }
 
