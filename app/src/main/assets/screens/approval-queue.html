@@ -86,14 +86,14 @@ button:disabled{opacity:.55;cursor:wait}
   function addMeta(parent,label,value){
     const cell=document.createElement("div"),small=document.createElement("small"),strong=document.createElement("strong");
     small.textContent=label;strong.textContent=value===null||value===undefined||value===""?"—":String(value);
-    cell.append(small,strong);parent.appendChild(cell);
+    cell.appendChild(small);cell.appendChild(strong);parent.appendChild(cell);
   }
   function makeButton(label,className,handler){
     const button=document.createElement("button");button.type="button";button.className=className;button.textContent=label;
     button.addEventListener("click",handler);return button;
   }
   function render(rows){
-    cards.replaceChildren();
+    while(cards.firstChild) cards.removeChild(cards.firstChild);
     if(!rows.length){notice.className="empty";notice.textContent="لا توجد طلبات في هذه الحالة ضمن نطاق المحطة الحالية.";notice.hidden=false;return;}
     notice.hidden=true;
     rows.forEach(row=>{
@@ -101,7 +101,7 @@ button:disabled{opacity:.55;cursor:wait}
       const head=document.createElement("div");head.className="card-head";
       const title=document.createElement("h2");title.textContent=(entityLabels[row.entity_type]||row.entity_type)+" · "+(operationLabels[row.operation]||row.operation)+" #"+row.entity_id;
       const badge=document.createElement("span");badge.className="badge "+(row.status||"");badge.textContent=statusLabels[row.status]||row.status;
-      head.append(title,badge);card.appendChild(head);
+      head.appendChild(title);head.appendChild(badge);card.appendChild(head);
       const meta=document.createElement("div");meta.className="meta";
       addMeta(meta,"رقم الطلب",row.id);addMeta(meta,"المبلغ",row.amount===null?"غير محدد":Number(row.amount).toLocaleString("ar-EG"));
       addMeta(meta,"مقدم الطلب",row.requested_by_name);addMeta(meta,"تاريخ الطلب",row.requested_at);
@@ -110,28 +110,26 @@ button:disabled{opacity:.55;cursor:wait}
       if(row.rejection_reason){const note=document.createElement("p");note.className="note";note.textContent="سبب الرفض: "+row.rejection_reason;card.appendChild(note);}
       if(row.status==="pending"){
         const actions=document.createElement("div");actions.className="actions";
-        actions.append(
-          makeButton("اعتماد وتنفيذ","approve",()=>{
-            const note=window.prompt("ملاحظة الاعتماد. عند عكس قيد أو دفعة أو مصروف، اكتب سبب العكس:", "");
-            if(note===null)return;
-            if(["reverse","refund"].includes(String(row.operation).toLowerCase())&&!note.trim()){toast("سبب العكس مطلوب.");return;}
-            try{
-              const result=callBridge("approvePendingApproval",[Number(row.id),note.trim()]);
-              toast(result.message||"تم تسجيل قرار الاعتماد.");
-              load();
-            }catch(e){toast(e.message||"تعذر اعتماد الطلب.");}
-          }),
-          makeButton("رفض الطلب","reject",()=>{
-            const reason=window.prompt("أدخل سبب رفض طلب الاعتماد:");
-            if(reason===null)return;
-            if(!reason.trim()){toast("سبب الرفض مطلوب.");return;}
-            try{
-              const result=callBridge("rejectPendingApproval",[Number(row.id),reason.trim()]);
-              toast(result.message||"تم رفض الطلب.");
-              load();
-            }catch(e){toast(e.message||"تعذر رفض الطلب.");}
-          })
-        );
+        actions.appendChild(makeButton("اعتماد وتنفيذ","approve",()=>{
+          const note=window.prompt("ملاحظة الاعتماد. عند عكس قيد أو دفعة أو مصروف، اكتب سبب العكس:", "");
+          if(note===null)return;
+          if(["reverse","refund"].includes(String(row.operation).toLowerCase())&&!note.trim()){toast("سبب العكس مطلوب.");return;}
+          try{
+            const result=callBridge("approvePendingApproval",[Number(row.id),note.trim()]);
+            toast(result.message||"تم تسجيل قرار الاعتماد.");
+            load();
+          }catch(e){toast(e.message||"تعذر اعتماد الطلب.");}
+        }));
+        actions.appendChild(makeButton("رفض الطلب","reject",()=>{
+          const reason=window.prompt("أدخل سبب رفض طلب الاعتماد:");
+          if(reason===null)return;
+          if(!reason.trim()){toast("سبب الرفض مطلوب.");return;}
+          try{
+            const result=callBridge("rejectPendingApproval",[Number(row.id),reason.trim()]);
+            toast(result.message||"تم رفض الطلب.");
+            load();
+          }catch(e){toast(e.message||"تعذر رفض الطلب.");}
+        }));
         card.appendChild(actions);
       }
       cards.appendChild(card);
@@ -139,7 +137,7 @@ button:disabled{opacity:.55;cursor:wait}
   }
   function load(){
     if(busy)return;
-    busy=true;refreshButton.disabled=true;notice.hidden=false;notice.className="loading";notice.textContent="جارٍ تحميل طلبات الاعتماد…";cards.replaceChildren();
+    busy=true;refreshButton.disabled=true;notice.hidden=false;notice.className="loading";notice.textContent="جارٍ تحميل طلبات الاعتماد…";while(cards.firstChild) cards.removeChild(cards.firstChild);
     try{
       const result=callBridge("getPendingApprovals",[filter.value]);
       const rows=Array.isArray(result.data)?result.data:[];
