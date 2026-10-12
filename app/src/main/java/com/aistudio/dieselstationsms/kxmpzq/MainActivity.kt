@@ -9953,7 +9953,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deletePaymentRecord(id: Long): String {
             val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); val activity=getActivity()?:return errorResponse("النشاط غير متاح")
-            return try { val rows=db.reversePaymentRecord(id,"عكس من شاشة المدفوعات",requireCurrentStationId(db,activity.currentUserId),activity.currentUserId); successResponse(rows>0,"تم عكس الدفعة مالياً وتسجيل الأثر العكسي") } catch(e:Exception){ DebugLogger.logException("PaymentReverse",e);errorResponse(e.message)}
+            return try {
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val result = db.requestOrReversePaymentRecord(id, "عكس من شاشة المدفوعات", stationId, activity.currentUserId)
+                if (result.optBoolean("requires_approval")) {
+                    JSONObject().apply {
+                        put("success", true); put("data", result)
+                        put("message", "تم إرسال طلب عكس الدفعة إلى قائمة الاعتماد")
+                    }.toString()
+                } else {
+                    invalidateCurrentReportCache(db, activity.currentUserId)
+                    successResponse(true, "تم عكس الدفعة مالياً وتسجيل الأثر العكسي")
+                }
+            } catch(e:Exception){ DebugLogger.logException("PaymentReverse",e);errorResponse(e.message)}
         }
         @JavascriptInterface
         fun resolvePaymentRecord(id: Long, note: String = "") = operationalResolve("finance", "payments", id, note)
@@ -10052,7 +10064,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteExpenseRecord(id: Long): String {
             val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); val activity=getActivity()?:return errorResponse("النشاط غير متاح")
-            return try { val rows=db.reverseExpenseRecord(id,"عكس من شاشة المصروفات",requireCurrentStationId(db,activity.currentUserId),activity.currentUserId); successResponse(rows>0,"تم عكس المصروف مالياً وتسجيل الأثر العكسي") } catch(e:Exception){ DebugLogger.logException("ExpenseReverse",e);errorResponse(e.message)}
+            return try {
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val result = db.requestOrReverseExpenseRecord(id, "عكس من شاشة المصروفات", stationId, activity.currentUserId)
+                if (result.optBoolean("requires_approval")) {
+                    JSONObject().apply {
+                        put("success", true); put("data", result)
+                        put("message", "تم إرسال طلب عكس المصروف إلى قائمة الاعتماد")
+                    }.toString()
+                } else {
+                    invalidateCurrentReportCache(db, activity.currentUserId)
+                    successResponse(true, "تم عكس المصروف مالياً وتسجيل الأثر العكسي")
+                }
+            } catch(e:Exception){ DebugLogger.logException("ExpenseReverse",e);errorResponse(e.message)}
         }
         @JavascriptInterface
         fun resolveExpenseRecord(id: Long, note: String = "") = operationalResolve("finance", "expenses", id, note)
