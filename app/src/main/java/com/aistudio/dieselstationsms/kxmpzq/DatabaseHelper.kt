@@ -304,6 +304,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureMaintenanceScheduleStationScopeSchema(db)
         ensureProductReferenceData(db)
         ensureFinancialIdempotencySchema(db)
+        // Repair already-installed databases that did not receive the source column in an upgrade.
+        ensureColumn(db, "expenses", "cash_box_id", "INTEGER")
         ensureSalesAdjustmentSchema(db)
         ensureReportCacheTable(db)
         // A database created by an earlier V43 build may not contain this column:
@@ -4209,6 +4211,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     private fun ensureFinanceIntegritySchema(db: SQLiteDatabase) {
+        ensureColumn(db, "expenses", "cash_box_id", "INTEGER")
         ensureColumn(db, "payments", "station_id", "INTEGER")
         ensureColumn(db, "payments", "journal_entry_id", "INTEGER")
         ensureColumn(db, "receipts", "station_id", "INTEGER")
