@@ -27719,6 +27719,26 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val entity = entityType.trim().lowercase(Locale.ROOT)
         val action = operation.trim().lowercase(Locale.ROOT)
         when {
+            entity in setOf("journal", "journal_entry", "journal_entries") && action == "reverse" -> {
+                val actualAmount = db.rawQuery(
+                    "SELECT status,total_debit,total_credit,is_balanced,reversed_entry_id FROM journal_entries WHERE id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(entityId.toString(), stationId.toString())
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) { "القيد المطلوب لعكسه غير موجود ضمن المحطة" }
+                    require(cursor.getString(0) == "posted") { "لا يمكن طلب اعتماد عكس قيد غير مرحل" }
+                    require(cursor.isNull(4) || cursor.getLong(4) <= 0L) { "تم عكس القيد مسبقاً" }
+                    val debit = cursor.getDouble(1)
+                    val credit = cursor.getDouble(2)
+                    require(cursor.getInt(3) == 1 && kotlin.math.abs(debit - credit) < 0.000001 && debit > 0.0) {
+                        "لا يمكن طلب اعتماد عكس قيد غير متوازن"
+                    }
+                    debit
+                }
+                require(amount != null && kotlin.math.abs(amount - actualAmount) < 0.000001) {
+                    "مبلغ طلب الاعتماد لا يطابق مبلغ القيد الفعلي"
+                }
+            }
+
             entity in setOf("journal", "journal_entry", "journal_entries") && action == "post" -> {
                 val actualAmount = db.rawQuery(
                     "SELECT status,total_debit,total_credit,is_balanced FROM journal_entries WHERE id=? AND station_id=? AND is_deleted=0",
@@ -27856,27 +27876,33 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             Triple(cursor.getString(0).trim().lowercase(Locale.ROOT), cursor.getLong(1), cursor.getString(2).trim().lowercase(Locale.ROOT))
         }
 
-        val affectedRows = when {
+        val executed = when {
             target.first in setOf("journal", "journal_entry", "journal_entries") && target.third == "post" ->
-                postJournalEntry(target.second, userId, stationId)
+                postJournalEntry(target.second, userId, stationId) == 1
+
+            target.first in setOf("journal", "journal_entry", "journal_entries") && target.third == "reverse" -> {
+                val reason = note?.trim().orEmpty()
+                require(reason.isNotEmpty()) { "سبب عكس القيد مطلوب في ملاحظة الاعتماد" }
+                reverseJournalEntry(target.second, reason, userId, stationId) > 0L
+            }
 
             target.first in setOf("payment", "payments") && target.third in setOf("reverse", "refund") -> {
                 val reason = note?.trim().orEmpty()
                 require(reason.isNotEmpty()) { "سبب عكس الدفعة مطلوب في ملاحظة الاعتماد" }
-                reversePaymentRecord(target.second, reason, stationId, userId)
+                reversePaymentRecord(target.second, reason, stationId, userId) == 1
             }
 
             target.first in setOf("expense", "expenses") && target.third == "reverse" -> {
                 val reason = note?.trim().orEmpty()
                 require(reason.isNotEmpty()) { "سبب عكس المصروف مطلوب في ملاحظة الاعتماد" }
-                reverseExpenseRecord(target.second, reason, stationId, userId)
+                reverseExpenseRecord(target.second, reason, stationId, userId) == 1
             }
 
             else -> throw IllegalArgumentException(
                 "لا يوجد مسار تنفيذ مالي معتمد لهذا النوع والإجراء: ${target.first}/${target.third}"
             )
         }
-        require(affectedRows == 1) { "لم تُنفذ العملية المالية المعتمدة؛ تم إلغاء قرار الاعتماد" }
+        require(executed) { "لم تُنفذ العملية المالية المعتمدة؛ تم إلغاء قرار الاعتماد" }
     }
 
     fun approveTransaction(approvalId: Long, userId: Long, stationId: Int, note: String? = null): Boolean {
@@ -28082,6 +28108,48 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      * Single entry point for the UI: either queue a threshold-controlled approval
      * or post the draft immediately, without a check/use race between the two paths.
      */
+    fun requestOrReverseJournalEntry(
+        id: Long, reason: String, stationScopeId: Int, actorId: Long
+    ): JSONObject {
+        require(id > 0 && stationScopeId > 0 && actorId > 0) { "بيانات عكس القيد غير صالحة" }
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val entry = journalEntryRow(db, id, stationScopeId)
+                ?: throw IllegalArgumentException("القيد غير موجود ضمن المحطة الحالية")
+            require(entry.optString("status") == "posted") { "لا يمكن عكس قيد غير مرحل" }
+            require(entry.optLong("reversed_entry_id", 0L) <= 0L) { "تم عكس القيد مسبقاً" }
+            val amount = entry.optDouble("total_debit", 0.0)
+            require(amount.isFinite() && amount > 0.0 &&
+                entry.optInt("is_balanced", 0) == 1 &&
+                kotlin.math.abs(amount - entry.optDouble("total_credit", 0.0)) < 0.000001) {
+                "لا يمكن عكس قيد غير متوازن"
+            }
+            val existingApproval = db.rawQuery(
+                """SELECT id FROM pending_approvals
+                   WHERE station_id=? AND entity_type='journal' AND entity_id=? AND operation='reverse' AND status='pending'
+                   LIMIT 1""",
+                arrayOf(stationScopeId.toString(), id.toString())
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+            val result = if (existingApproval > 0L ||
+                requiresApproval(stationScopeId, "journal", "reverse", amount)) {
+                val approvalId = if (existingApproval > 0L) existingApproval else
+                    createPendingApproval(stationScopeId, "journal", id, "reverse", amount, actorId)
+                JSONObject().put("requires_approval", true).put("approval_id", approvalId)
+                    .put("journal_id", id).put("status", "pending_approval")
+            } else {
+                val reversalId = reverseJournalEntry(id, reason, actorId, stationScopeId)
+                require(reversalId > 0L) { "لم يتم إنشاء القيد العكسي" }
+                JSONObject().put("requires_approval", false).put("journal_id", id)
+                    .put("reversal_journal_id", reversalId).put("status", "reversed")
+            }
+            db.setTransactionSuccessful()
+            return result
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     fun requestOrReversePaymentRecord(
         id: Long, reason: String, stationScopeId: Int, actorId: Long
     ): JSONObject = requestOrExecuteReversal("payment", id, reason, stationScopeId, actorId)
