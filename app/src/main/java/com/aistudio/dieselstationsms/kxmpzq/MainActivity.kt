@@ -7807,7 +7807,22 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun reverseJournalEntry(id: Long, reason: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            return try { val reversed = db.reverseJournalEntry(id, reason, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId)); invalidateCurrentReportCache(db, activity.currentUserId); successResponse(reversed, "تم إنشاء القيد العكسي وتحديث القيد الأصلي") } catch (e: Exception) { DebugLogger.logException("JournalReverse", e); errorResponse(e.message) }
+            return try {
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val result = db.requestOrReverseJournalEntry(id, reason, stationId, activity.currentUserId)
+                if (result.optBoolean("requires_approval")) {
+                    JSONObject().apply {
+                        put("success", true); put("data", result)
+                        put("message", "تم إرسال طلب عكس القيد إلى قائمة الاعتماد")
+                    }.toString()
+                } else {
+                    invalidateCurrentReportCache(db, activity.currentUserId)
+                    successResponse(result.optLong("reversal_journal_id"), "تم إنشاء القيد العكسي وتحديث القيد الأصلي")
+                }
+            } catch (e: Exception) {
+                DebugLogger.logException("JournalReverse", e)
+                errorResponse(e.message)
+            }
         }
 
         @JavascriptInterface
