@@ -21324,7 +21324,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun reverseExpenseRecord(id: Long, reason: String, stationScopeId: Int, actorId: Long): Int {
         require(stationScopeId > 0){"معرف المحطة مطلوب"}; val db=writableDatabase; db.beginTransaction()
         try {
-            val row=db.rawQuery("SELECT total_amount,cash_box_id,journal_entry_id,expense_code,status FROM expenses WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "المصروف غير موجود" };JSONObject().apply{put("amount",c.getDouble(0));put("cash_box_id",c.getLong(1));put("journal_entry_id",c.getLong(2));put("expense_code",c.getString(3));put("status",c.getString(4))}}
+            val row=db.rawQuery("""SELECT total_amount,
+                COALESCE(cash_box_id,(SELECT cm.cash_box_id FROM cash_movements cm
+                    WHERE cm.reference_type='expense' AND cm.reference_id=expenses.id
+                    ORDER BY cm.id DESC LIMIT 1),0),
+                journal_entry_id,expense_code,status
+                FROM expenses WHERE id=? AND station_id=? AND is_deleted=0""",
+                arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "المصروف غير موجود" };JSONObject().apply{put("amount",c.getDouble(0));put("cash_box_id",c.getLong(1));put("journal_entry_id",c.getLong(2));put("expense_code",c.getString(3));put("status",c.getString(4))}}
             require(row.optString("status") in setOf("paid","approved")){"لا يمكن عكس المصروف قبل تسجيله كمصروف مدفوع أو معتمد"}
             val amount=row.optDouble("amount");val cashBoxId=row.optLong("cash_box_id")
             require(cashBoxId>0){"لا يمكن عكس مصروف قديم بلا صندوق مرتبط؛ يمنع النظام تعديل الأثر المالي دون مصدر مثبت"}
@@ -21811,7 +21817,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("expense_code", expCode)
                     put("expense_category_id", categoryId)
                     put("station_id", stationScopeId)
-                    put("payee_name", data.optString("payee_name", ""))
+                    put("cash_box_id", cashBoxId)
+                    put("payee_name", data.optString("payee_name", "" )
                     put("amount", amount)
                     put("total_amount", amount)
                     put("description", data.optString("description", ""))
@@ -27745,6 +27752,25 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
             }
 
+            entity in setOf("expense", "expenses") && action == "reverse" -> {
+                val actualAmount = db.rawQuery(
+                    """SELECT status,total_amount,
+                              COALESCE(cash_box_id,(SELECT cm.cash_box_id FROM cash_movements cm
+                                  WHERE cm.reference_type='expense' AND cm.reference_id=expenses.id
+                                  ORDER BY cm.id DESC LIMIT 1),0)
+                       FROM expenses WHERE id=? AND station_id=? AND is_deleted=0""",
+                    arrayOf(entityId.toString(), stationId.toString())
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) { "المصروف المطلوب لعكسه غير موجود ضمن المحطة" }
+                    require(cursor.getString(0) in setOf("paid", "approved")) { "لا يمكن طلب اعتماد عكس مصروف غير مدفوع أو معتمد" }
+                    require(cursor.getLong(2) > 0L) { "لا يمكن عكس المصروف دون صندوق نقدي مثبت" }
+                    cursor.getDouble(1)
+                }
+                require(amount != null && kotlin.math.abs(amount - actualAmount) < 0.000001) {
+                    "مبلغ طلب الاعتماد لا يطابق مبلغ المصروف الفعلي"
+                }
+            }
+
             else -> throw IllegalArgumentException(
                 "لا يوجد مسار مالي مدعوم للاعتماد: $entity/$action"
             )
@@ -27838,6 +27864,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val reason = note?.trim().orEmpty()
                 require(reason.isNotEmpty()) { "سبب عكس الدفعة مطلوب في ملاحظة الاعتماد" }
                 reversePaymentRecord(target.second, reason, stationId, userId)
+            }
+
+            target.first in setOf("expense", "expenses") && target.third == "reverse" -> {
+                val reason = note?.trim().orEmpty()
+                require(reason.isNotEmpty()) { "سبب عكس المصروف مطلوب في ملاحظة الاعتماد" }
+                reverseExpenseRecord(target.second, reason, stationId, userId)
             }
 
             else -> throw IllegalArgumentException(
@@ -28050,6 +28082,70 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      * Single entry point for the UI: either queue a threshold-controlled approval
      * or post the draft immediately, without a check/use race between the two paths.
      */
+    fun requestOrReversePaymentRecord(
+        id: Long, reason: String, stationScopeId: Int, actorId: Long
+    ): JSONObject = requestOrExecuteReversal("payment", id, reason, stationScopeId, actorId)
+
+    fun requestOrReverseExpenseRecord(
+        id: Long, reason: String, stationScopeId: Int, actorId: Long
+    ): JSONObject = requestOrExecuteReversal("expense", id, reason, stationScopeId, actorId)
+
+    private fun requestOrExecuteReversal(
+        entityType: String, id: Long, reason: String, stationScopeId: Int, actorId: Long
+    ): JSONObject {
+        require(id > 0 && stationScopeId > 0 && actorId > 0) { "بيانات العكس المالي غير صالحة" }
+        val entity = entityType.lowercase(Locale.ROOT)
+        val operation = "reverse"
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val amount = if (entity == "payment") {
+                db.rawQuery(
+                    "SELECT amount FROM payments WHERE id=? AND station_id=? AND status='completed' AND is_deleted=0",
+                    arrayOf(id.toString(), stationScopeId.toString())
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) { "الدفعة غير موجودة أو غير مكتملة ضمن المحطة" }
+                    cursor.getDouble(0)
+                }
+            } else {
+                db.rawQuery(
+                    """SELECT total_amount FROM expenses
+                       WHERE id=? AND station_id=? AND status IN ('paid','approved') AND is_deleted=0""",
+                    arrayOf(id.toString(), stationScopeId.toString())
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) { "المصروف غير موجود أو غير مدفوع ضمن المحطة" }
+                    cursor.getDouble(0)
+                }
+            }
+            val existingApproval = db.rawQuery(
+                """SELECT id FROM pending_approvals
+                   WHERE station_id=? AND entity_type=? AND entity_id=? AND operation=? AND status='pending'
+                   LIMIT 1""",
+                arrayOf(stationScopeId.toString(), entity, id.toString(), operation)
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+
+            val result = if (existingApproval > 0L ||
+                requiresApproval(stationScopeId, entity, operation, amount)) {
+                val approvalId = if (existingApproval > 0L) existingApproval else
+                    createPendingApproval(stationScopeId, entity, id, operation, amount, actorId)
+                JSONObject().put("requires_approval", true)
+                    .put("approval_id", approvalId).put("entity_id", id)
+                    .put("entity_type", entity).put("status", "pending_approval")
+            } else {
+                val rows = if (entity == "payment")
+                    reversePaymentRecord(id, reason, stationScopeId, actorId)
+                else reverseExpenseRecord(id, reason, stationScopeId, actorId)
+                require(rows == 1) { "لم يتم تنفيذ العكس المالي" }
+                JSONObject().put("requires_approval", false)
+                    .put("entity_id", id).put("entity_type", entity).put("status", "reversed")
+            }
+            db.setTransactionSuccessful()
+            return result
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     fun requestOrPostJournalEntry(id: Long, userId: Long, stationScopeId: Int): JSONObject {
         require(id > 0 && userId > 0 && stationScopeId > 0) { "بيانات ترحيل القيد غير صالحة" }
         val db = writableDatabase
@@ -28064,10 +28160,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "لا يمكن ترحيل قيد غير متوازن"
             }
 
-            val result = if (requiresApproval(stationScopeId, "journal", "post", amount)) {
-                val approvalId = createPendingApproval(
-                    stationScopeId, "journal", id, "post", amount, userId
-                )
+            val existingApproval = db.rawQuery(
+                """SELECT id FROM pending_approvals
+                   WHERE station_id=? AND entity_type='journal' AND entity_id=? AND operation='post' AND status='pending'
+                   LIMIT 1""",
+                arrayOf(stationScopeId.toString(), id.toString())
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+
+            val result = if (existingApproval > 0L ||
+                requiresApproval(stationScopeId, "journal", "post", amount)) {
+                val approvalId = if (existingApproval > 0L) existingApproval else
+                    createPendingApproval(stationScopeId, "journal", id, "post", amount, userId)
                 JSONObject()
                     .put("requires_approval", true)
                     .put("approval_id", approvalId)
