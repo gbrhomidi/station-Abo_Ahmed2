@@ -27653,7 +27653,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         if (userId <= 0 || stationId <= 0) return false
         return db.rawQuery("""
             SELECT 1 FROM users u
-            WHERE u.id=? AND (
+            WHERE u.id=?
+              AND COALESCE(u.is_deleted,0)=0
+              AND LOWER(TRIM(COALESCE(u.status,'active'))) IN ('active','enabled')
+              AND (
                 u.station_id=? OR EXISTS (
                     SELECT 1 FROM role_permissions rp
                     WHERE rp.role_id=u.role_id AND rp.station_id=?
