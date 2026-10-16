@@ -489,6 +489,40 @@ class ApprovalControlRobolectricTest {
     }
 
     @Test
+    fun refundThresholdQueuesAndExecutesPaymentReversal() {
+        ensureFinancialFixtures()
+        helper.writableDatabase.update(
+            "approval_thresholds",
+            ContentValues().apply { put("operation", "refund") },
+            "station_id=11 AND entity_type='payment' AND operation='reverse'",
+            null
+        )
+        val paymentId = helper.addPayment(
+            JSONObject().put("amount", 6000.0).put("cash_box_id", cashBoxId)
+                .put("payment_type", "cash").put("payment_method", "cash").put("notes", "refund threshold test"),
+            11, makerId
+        )
+        assertEquals(4000.0, cashBalance(), 0.001)
+
+        val queued = helper.requestOrReversePaymentRecord(paymentId, "سبب استرداد للاختبار", 11, makerId)
+        assertTrue("يجب أن ينتج حد refund طلب اعتماد", queued.optBoolean("requires_approval"))
+        val approvalId = queued.getLong("approval_id")
+        val pending = helper.getPendingApprovals(11, "pending").getJSONObject(0)
+        assertEquals("refund", pending.getString("operation"))
+
+        assertTrue(helper.approveTransaction(approvalId, checkerId, 11, "اعتماد استرداد الدفعة"))
+        assertEquals(10000.0, cashBalance(), 0.001)
+        assertEquals(1, countRows(
+            "SELECT COUNT(*) FROM cash_movements WHERE reference_type='payment_reversal' AND reference_id=? AND is_deleted=0",
+            arrayOf(paymentId.toString())
+        ))
+        val status = helper.writableDatabase.rawQuery(
+            "SELECT status FROM payments WHERE id=? AND station_id=11", arrayOf(paymentId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getString(0) }
+        assertEquals("refunded", status)
+    }
+
+    @Test
     fun approvedExpenseReversalRestoresCashAndReversesJournalExactlyOnce() {
         ensureFinancialFixtures()
         val expenseId = helper.addExpense(
