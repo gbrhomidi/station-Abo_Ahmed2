@@ -522,8 +522,10 @@ class ApprovalControlRobolectricTest {
         val status = helper.writableDatabase.rawQuery(
             "SELECT status,payment_status FROM expenses WHERE id=? AND station_id=11", arrayOf(expenseId.toString())
         ).use { c -> check(c.moveToFirst()); c.getString(0) to c.getString(1) }
-        assertEquals("reversed", status.first)
-        assertEquals("reversed", status.second)
+        // The expenses CHECK constraint allows only declared lifecycle states.
+        // Reversal is recorded by the reversal journal and cash movement.
+        assertEquals("cancelled", status.first)
+        assertEquals("cancelled", status.second)
         assertEquals(1, countRows(
             "SELECT COUNT(*) FROM journal_entries WHERE reference_type='reversal' AND reference_id=? AND station_id=11 AND is_deleted=0",
             arrayOf(journalId.toString())
