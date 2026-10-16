@@ -547,4 +547,53 @@ class ApprovalControlRobolectricTest {
         ))
     }
 
+
+    @Test
+    fun multipleRequiredApprovalsRequireDistinctCheckersAndExecuteOnce() {
+        val requestId = createRequest()
+        helper.writableDatabase.update(
+            "approval_thresholds",
+            ContentValues().apply { put("required_approvals", 2) },
+            "station_id=? AND entity_type='journal' AND operation='post'",
+            arrayOf("11")
+        )
+        val secondCheckerId = createUser(11, "second-checker")
+
+        assertTrue(helper.approveTransaction(requestId, checkerId, 11, "الموافقة الأولى"))
+        var pending = helper.getPendingApprovals(11, "pending").getJSONObject(0)
+        assertEquals(requestId, pending.getLong("id"))
+        assertEquals(1, pending.getInt("approvals_count"))
+        helper.writableDatabase.rawQuery(
+            "SELECT status FROM journal_entries WHERE id=? AND station_id=11",
+            arrayOf(journalId.toString())
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("draft", cursor.getString(0))
+        }
+
+        try {
+            helper.approveTransaction(requestId, checkerId, 11, "محاولة تكرار المعتمد نفسه")
+            throw AssertionError("لا يجوز احتساب موافقتين للمستخدم نفسه")
+        } catch (_: Exception) {
+            // UNIQUE(approval_id, approver_user_id) must reject a duplicate checker decision.
+        }
+        pending = helper.getPendingApprovals(11, "pending").getJSONObject(0)
+        assertEquals(1, pending.getInt("approvals_count"))
+        assertEquals(1, countRows(
+            "SELECT COUNT(*) FROM approval_decisions WHERE approval_id=? AND decision='approved'",
+            arrayOf(requestId.toString())
+        ))
+
+        assertTrue(helper.approveTransaction(requestId, secondCheckerId, 11, "الموافقة الثانية"))
+        val approved = helper.getPendingApprovals(11, "approved").getJSONObject(0)
+        assertEquals(requestId, approved.getLong("id"))
+        assertEquals(2, approved.getInt("approvals_count"))
+        helper.writableDatabase.rawQuery(
+            "SELECT status FROM journal_entries WHERE id=? AND station_id=11",
+            arrayOf(journalId.toString())
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("posted", cursor.getString(0))
+        }
+    }
 }
