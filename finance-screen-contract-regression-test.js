@@ -25,13 +25,20 @@ const db = fs.readFileSync(path.join(__dirname,'app','src','main','java','com','
 const main = fs.readFileSync(path.join(__dirname,'app','src','main','java','com','aistudio','dieselstationsms','kxmpzq','MainActivity.kt'),'utf8');
 for (const required of [
   'ensureFinanceIntegritySchema', 'getFinanceIntegritySnapshot', 'reversePaymentRecord',
-  'voidReceiptRecord', 'reverseExpenseRecord', 'reverseCashMovementRecord',
+  'requestOrReversePaymentRecord', 'voidReceiptRecord', 'reverseExpenseRecord',
+  'requestOrReverseExpenseRecord', 'reverseCashMovementRecord',
   'reverseEmployeePaymentRecord', 'postFinanceJournal', 'journal_entry_id'
 ]) if (!db.includes(required)) throw new Error(`DatabaseHelper missing: ${required}`);
 for (const required of [
-  'getFinanceIntegritySnapshot', 'reversePaymentRecord', 'voidReceiptRecord',
-  'reverseExpenseRecord', 'reverseCashMovementRecord', 'reverseEmployeePaymentRecord'
+  'getFinanceIntegritySnapshot', 'requestOrReversePaymentRecord', 'voidReceiptRecord',
+  'requestOrReverseExpenseRecord', 'reverseCashMovementRecord', 'reverseEmployeePaymentRecord'
 ]) if (!main.includes(required)) throw new Error(`MainActivity missing: ${required}`);
+
+// Reversal entry points exposed to JavaScript must go through approval-aware wrappers.
+// Direct core methods remain internal to DatabaseHelper and must not be exposed by MainActivity.
+for (const forbidden of ['fun reversePaymentRecord(', 'fun reverseExpenseRecord(']) {
+  if (main.includes(forbidden)) throw new Error(`MainActivity exposes an unguarded reversal API: ${forbidden}`);
+}
 if (!db.includes('p.station_id = ?')) throw new Error('Payments are not directly station scoped');
 if (!db.includes('r.station_id = ?')) throw new Error('Receipts are not directly station scoped');
 if (!db.includes('je.station_id=?')) throw new Error('Trial-balance station scope is missing');
