@@ -536,6 +536,15 @@ class ApprovalControlRobolectricTest {
         } catch (_: IllegalArgumentException) {
             // The completed request must not execute again.
         }
+        assertEquals(10000.0, cashBalance(), 0.001)
+        assertEquals(1, countRows(
+            "SELECT COUNT(*) FROM cash_movements WHERE reference_type='expense_reversal' AND reference_id=? AND is_deleted=0",
+            arrayOf(expenseId.toString())
+        ))
+        assertEquals(1, countRows(
+            "SELECT COUNT(*) FROM journal_entries WHERE reference_type='reversal' AND reference_id=? AND station_id=11 AND is_deleted=0",
+            arrayOf(journalId.toString())
+        ))
     }
 
 }
