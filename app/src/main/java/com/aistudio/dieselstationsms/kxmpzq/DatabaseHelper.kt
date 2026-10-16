@@ -28206,7 +28206,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     ): JSONObject {
         require(id > 0 && stationScopeId > 0 && actorId > 0) { "بيانات العكس المالي غير صالحة" }
         val entity = entityType.lowercase(Locale.ROOT)
-        val operation = "reverse"
         val db = writableDatabase
         db.beginTransaction()
         try {
@@ -28228,17 +28227,31 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     cursor.getDouble(0)
                 }
             }
+            // A payment may be configured under either legacy "reverse" or explicit "refund".
+            // Reuse an existing request first so retries cannot create a parallel request under
+            // the alias operation, then select the configured operation that actually requires approval.
             val existingApproval = db.rawQuery(
-                """SELECT id FROM pending_approvals
-                   WHERE station_id=? AND entity_type=? AND entity_id=? AND operation=? AND status='pending'
+                """SELECT id,operation FROM pending_approvals
+                   WHERE station_id=? AND entity_type=? AND entity_id=?
+                     AND operation IN ('reverse','refund') AND status='pending'
+                   ORDER BY CASE operation WHEN 'reverse' THEN 0 ELSE 1 END
                    LIMIT 1""",
-                arrayOf(stationScopeId.toString(), entity, id.toString(), operation)
-            ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+                arrayOf(stationScopeId.toString(), entity, id.toString())
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getLong(0) to cursor.getString(1) else null
+            }
+            val operation = existingApproval?.second ?: run {
+                val reverseRequiresApproval = requiresApproval(stationScopeId, entity, "reverse", amount)
+                val refundRequiresApproval = entity == "payment" &&
+                    requiresApproval(stationScopeId, entity, "refund", amount)
+                if (!reverseRequiresApproval && refundRequiresApproval) "refund" else "reverse"
+            }
+            val approvalRequired = requiresApproval(stationScopeId, entity, operation, amount)
 
-            val result = if (existingApproval > 0L ||
-                requiresApproval(stationScopeId, entity, operation, amount)) {
-                val approvalId = if (existingApproval > 0L) existingApproval else
-                    createPendingApproval(stationScopeId, entity, id, operation, amount, actorId)
+            val result = if (existingApproval != null || approvalRequired) {
+                val approvalId = existingApproval?.first ?: createPendingApproval(
+                    stationScopeId, entity, id, operation, amount, actorId
+                )
                 JSONObject().put("requires_approval", true)
                     .put("approval_id", approvalId).put("entity_id", id)
                     .put("entity_type", entity).put("status", "pending_approval")
