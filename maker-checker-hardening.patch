@@ -1,0 +1,303 @@
+--- a/app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
++++ b/app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt
+@@ -21256,7 +21256,10 @@
+         } finally { db.endTransaction() }
+     }
+ 
+-    fun reversePaymentRecord(id: Long, reason: String, stationScopeId: Int, actorId: Long): Int {
++    fun reversePaymentRecord(id: Long, reason: String, stationScopeId: Int, actorId: Long): Int =
++        reversePaymentRecordCore(id, reason, stationScopeId, actorId, approvedExecution = false)
++
++    private fun reversePaymentRecordCore(id: Long, reason: String, stationScopeId: Int, actorId: Long, approvedExecution: Boolean): Int {
+         require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+         val db = writableDatabase
+         db.beginTransaction()
+@@ -21265,7 +21268,18 @@
+                 if (!c.moveToFirst()) null else LongArray(0).let { JSONObject().apply { put("amount",c.getDouble(0)); put("status",c.getString(1)); put("cash_box_id",c.getLong(2)); put("bank_account_id",c.getLong(3)); put("journal_entry_id",c.getLong(4)); put("payment_code",c.getString(5)) } }
+             } ?: throw IllegalArgumentException("الدفعة غير موجودة ضمن المحطة الحالية")
+             require(row.optString("status") == "completed") { "لا يمكن عكس دفعة إلا إذا كانت مكتملة" }
++            if (actorId > 0) require(userCanAccessApprovalStation(db, actorId, stationScopeId)) { "المستخدم لا يملك نطاق المحطة المطلوبة" }
+             val amount = row.optDouble("amount")
++            val hasPendingApproval = db.rawQuery(
++                """SELECT 1 FROM pending_approvals WHERE station_id=? AND entity_type IN ('payment','payments')
++                   AND entity_id=? AND operation IN ('reverse','refund') AND status='pending' LIMIT 1""",
++                arrayOf(stationScopeId.toString(), id.toString())
++            ).use { it.moveToFirst() }
++            require(approvedExecution || (!hasPendingApproval &&
++                !requiresApproval(stationScopeId, "payment", "reverse", amount) &&
++                !requiresApproval(stationScopeId, "payment", "refund", amount))) {
++                "يجب عكس الدفعة عبر مسار Maker-Checker؛ لا يجوز تجاوز طلب الاعتماد"
++            }
+             val cashBoxId = row.optLong("cash_box_id")
+             val bankAccountId = row.optLong("bank_account_id")
+             if (cashBoxId > 0) {
+@@ -21324,7 +21338,10 @@
+         } finally { db.endTransaction() }
+     }
+ 
+-    fun reverseExpenseRecord(id: Long, reason: String, stationScopeId: Int, actorId: Long): Int {
++    fun reverseExpenseRecord(id: Long, reason: String, stationScopeId: Int, actorId: Long): Int =
++        reverseExpenseRecordCore(id, reason, stationScopeId, actorId, approvedExecution = false)
++
++    private fun reverseExpenseRecordCore(id: Long, reason: String, stationScopeId: Int, actorId: Long, approvedExecution: Boolean): Int {
+         require(stationScopeId > 0){"معرف المحطة مطلوب"}; val db=writableDatabase; db.beginTransaction()
+         try {
+             val row=db.rawQuery("""SELECT total_amount,
+@@ -21335,7 +21352,17 @@
+                 FROM expenses WHERE id=? AND station_id=? AND is_deleted=0""",
+                 arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "المصروف غير موجود" };JSONObject().apply{put("amount",c.getDouble(0));put("cash_box_id",c.getLong(1));put("journal_entry_id",c.getLong(2));put("expense_code",c.getString(3));put("status",c.getString(4))}}
+             require(row.optString("status") in setOf("paid","approved")){"لا يمكن عكس المصروف قبل تسجيله كمصروف مدفوع أو معتمد"}
+-            val amount=row.optDouble("amount");val cashBoxId=row.optLong("cash_box_id")
++            if (actorId > 0) require(userCanAccessApprovalStation(db, actorId, stationScopeId)) { "المستخدم لا يملك نطاق المحطة المطلوبة" }
++            val amount=row.optDouble("amount")
++            val hasPendingApproval = db.rawQuery(
++                """SELECT 1 FROM pending_approvals WHERE station_id=? AND entity_type IN ('expense','expenses')
++                   AND entity_id=? AND operation='reverse' AND status='pending' LIMIT 1""",
++                arrayOf(stationScopeId.toString(), id.toString())
++            ).use { it.moveToFirst() }
++            require(approvedExecution || (!hasPendingApproval && !requiresApproval(stationScopeId, "expense", "reverse", amount))) {
++                "يجب عكس المصروف عبر مسار Maker-Checker؛ لا يجوز تجاوز طلب الاعتماد"
++            }
++            val cashBoxId=row.optLong("cash_box_id")
+             require(cashBoxId>0){"لا يمكن عكس مصروف قديم بلا صندوق مرتبط؛ يمنع النظام تعديل الأثر المالي دون مصدر مثبت"}
+             val before=db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(cashBoxId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "الصندوق غير موجود" };c.getDouble(0)}
+             val after=before+amount; require(db.update("cash_boxes",ContentValues().apply{put("current_balance",after)},"id=? AND station_id=? AND is_deleted=0",arrayOf(cashBoxId.toString(),stationScopeId.toString()))==1){"فشل استعادة رصيد الصندوق"}
+@@ -27875,37 +27902,46 @@
+         note: String?
+     ) {
+         val target = db.rawQuery(
+-            "SELECT entity_type, entity_id, operation FROM pending_approvals WHERE id=? AND station_id=? AND status='pending'",
++            "SELECT entity_type, entity_id, operation, amount FROM pending_approvals WHERE id=? AND station_id=? AND status='pending'",
+             arrayOf(approvalId.toString(), stationId.toString())
+         ).use { cursor ->
+             require(cursor.moveToFirst()) { "طلب الاعتماد غير موجود أو لم يعد معلقاً" }
+-            Triple(cursor.getString(0).trim().lowercase(Locale.ROOT), cursor.getLong(1), cursor.getString(2).trim().lowercase(Locale.ROOT))
+-        }
++            val key = Triple(
++                cursor.getString(0).trim().lowercase(Locale.ROOT),
++                cursor.getLong(1),
++                cursor.getString(2).trim().lowercase(Locale.ROOT)
++            )
++            key to if (cursor.isNull(3)) null else cursor.getDouble(3)
++        }
++        val targetKey = target.first
++        // Revalidate the immutable approval amount and current target state at execution time.
++        // A draft or financial record may have changed while the request was waiting for review.
++        validateApprovalTarget(db, stationId, targetKey.first, targetKey.second, targetKey.third, target.second)
+ 
+         val executed = when {
+-            target.first in setOf("journal", "journal_entry", "journal_entries") && target.third == "post" ->
+-                postJournalEntry(target.second, userId, stationId) == 1
+-
+-            target.first in setOf("journal", "journal_entry", "journal_entries") && target.third == "reverse" -> {
++            targetKey.first in setOf("journal", "journal_entry", "journal_entries") && targetKey.third == "post" ->
++                postJournalEntryCore(targetKey.second, userId, stationId, approvedExecution = true) == 1
++
++            targetKey.first in setOf("journal", "journal_entry", "journal_entries") && targetKey.third == "reverse" -> {
+                 val reason = note?.trim().orEmpty()
+                 require(reason.isNotEmpty()) { "سبب عكس القيد مطلوب في ملاحظة الاعتماد" }
+-                reverseJournalEntry(target.second, reason, userId, stationId) > 0L
+-            }
+-
+-            target.first in setOf("payment", "payments") && target.third in setOf("reverse", "refund") -> {
++                reverseJournalEntryCore(targetKey.second, reason, userId, stationId, approvedExecution = true) > 0L
++            }
++
++            targetKey.first in setOf("payment", "payments") && targetKey.third in setOf("reverse", "refund") -> {
+                 val reason = note?.trim().orEmpty()
+                 require(reason.isNotEmpty()) { "سبب عكس الدفعة مطلوب في ملاحظة الاعتماد" }
+-                reversePaymentRecord(target.second, reason, stationId, userId) == 1
+-            }
+-
+-            target.first in setOf("expense", "expenses") && target.third == "reverse" -> {
++                reversePaymentRecordCore(targetKey.second, reason, stationId, userId, approvedExecution = true) == 1
++            }
++
++            targetKey.first in setOf("expense", "expenses") && targetKey.third == "reverse" -> {
+                 val reason = note?.trim().orEmpty()
+                 require(reason.isNotEmpty()) { "سبب عكس المصروف مطلوب في ملاحظة الاعتماد" }
+-                reverseExpenseRecord(target.second, reason, stationId, userId) == 1
++                reverseExpenseRecordCore(targetKey.second, reason, stationId, userId, approvedExecution = true) == 1
+             }
+ 
+             else -> throw IllegalArgumentException(
+-                "لا يوجد مسار تنفيذ مالي معتمد لهذا النوع والإجراء: ${target.first}/${target.third}"
++                "لا يوجد مسار تنفيذ مالي معتمد لهذا النوع والإجراء: ${targetKey.first}/${targetKey.third}"
+             )
+         }
+         require(executed) { "لم تُنفذ العملية المالية المعتمدة؛ تم إلغاء قرار الاعتماد" }
+@@ -28121,6 +28157,7 @@
+         val db = writableDatabase
+         db.beginTransaction()
+         try {
++            require(userCanAccessApprovalStation(db, actorId, stationScopeId)) { "المستخدم لا يملك نطاق المحطة المطلوبة" }
+             val entry = journalEntryRow(db, id, stationScopeId)
+                 ?: throw IllegalArgumentException("القيد غير موجود ضمن المحطة الحالية")
+             require(entry.optString("status") == "posted") { "لا يمكن عكس قيد غير مرحل" }
+@@ -28265,13 +28302,27 @@
+         }
+     }
+ 
+-    fun postJournalEntry(id: Long, userId: Long, stationScopeId: Int): Int {
++    fun postJournalEntry(id: Long, userId: Long, stationScopeId: Int): Int =
++        postJournalEntryCore(id, userId, stationScopeId, approvedExecution = false)
++
++    private fun postJournalEntryCore(id: Long, userId: Long, stationScopeId: Int, approvedExecution: Boolean): Int {
+         require(stationScopeId > 0) { "نطاق المحطة غير صالح" }
+         val db = writableDatabase
+         db.beginTransaction()
+         try {
++            if (userId > 0) require(userCanAccessApprovalStation(db, userId, stationScopeId)) { "المستخدم لا يملك نطاق المحطة المطلوبة" }
+             val old = journalEntryRow(db, id, stationScopeId) ?: throw IllegalArgumentException("القيد غير موجود")
+             require(old.optString("status") == "draft") { "القيد مرحل أو ملغى مسبقاً" }
++            val amount = old.optDouble("total_debit", 0.0)
++            val hasPendingApproval = db.rawQuery(
++                """SELECT 1 FROM pending_approvals WHERE station_id=?
++                   AND entity_type IN ('journal','journal_entry','journal_entries')
++                   AND entity_id=? AND operation='post' AND status='pending' LIMIT 1""",
++                arrayOf(stationScopeId.toString(), id.toString())
++            ).use { it.moveToFirst() }
++            require(approvedExecution || (!hasPendingApproval && !requiresApproval(stationScopeId, "journal", "post", amount))) {
++                "يجب ترحيل القيد عبر مسار Maker-Checker؛ لا يجوز تجاوز طلب الاعتماد"
++            }
+             require(old.optInt("is_balanced", 0) == 1 && kotlin.math.abs(old.optDouble("total_debit") - old.optDouble("total_credit")) < 0.000001) { "لا يمكن ترحيل قيد غير متوازن" }
+             val values = ContentValues().apply { put("status", "posted"); put("posted_at", getCurrentDateTime()); if (userId > 0) put("posted_by", userId); put("updated_at", getCurrentDateTime()); if (userId > 0) put("updated_by", userId) }
+             val rows = db.update("journal_entries", values, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString()))
+@@ -28280,14 +28331,28 @@
+         } finally { db.endTransaction() }
+     }
+ 
+-    fun reverseJournalEntry(id: Long, reason: String, userId: Long, stationScopeId: Int): Long {
++    fun reverseJournalEntry(id: Long, reason: String, userId: Long, stationScopeId: Int): Long =
++        reverseJournalEntryCore(id, reason, userId, stationScopeId, approvedExecution = false)
++
++    private fun reverseJournalEntryCore(id: Long, reason: String, userId: Long, stationScopeId: Int, approvedExecution: Boolean): Long {
+         require(stationScopeId > 0) { "نطاق المحطة غير صالح" }
+         val db = writableDatabase
+         db.beginTransaction()
+         try {
++            if (userId > 0) require(userCanAccessApprovalStation(db, userId, stationScopeId)) { "المستخدم لا يملك نطاق المحطة المطلوبة" }
+             val original = journalEntryRow(db, id, stationScopeId) ?: throw IllegalArgumentException("القيد غير موجود")
+             require(original.optString("status") == "posted") { "يمكن إلغاء القيود المرحّلة فقط" }
+             require(original.optLong("reversed_entry_id", 0L) <= 0L) { "تم إلغاء القيد مسبقاً" }
++            val amount = original.optDouble("total_debit", 0.0)
++            val hasPendingApproval = db.rawQuery(
++                """SELECT 1 FROM pending_approvals WHERE station_id=?
++                   AND entity_type IN ('journal','journal_entry','journal_entries')
++                   AND entity_id=? AND operation='reverse' AND status='pending' LIMIT 1""",
++                arrayOf(stationScopeId.toString(), id.toString())
++            ).use { it.moveToFirst() }
++            require(approvedExecution || (!hasPendingApproval && !requiresApproval(stationScopeId, "journal", "reverse", amount))) {
++                "يجب عكس القيد عبر مسار Maker-Checker؛ لا يجوز تجاوز طلب الاعتماد"
++            }
+             val items = journalItemsForEntry(db, id)
+             require(items.length() > 0) { "لا توجد بنود لإنشاء القيد العكسي" }
+             val reverseValues = ContentValues().apply {
+--- a/app/src/test/java/com/aistudio/dieselstationsms/kxmpzq/ApprovalControlRobolectricTest.kt
++++ b/app/src/test/java/com/aistudio/dieselstationsms/kxmpzq/ApprovalControlRobolectricTest.kt
+@@ -245,6 +245,58 @@
+     }
+ 
+     @Test
++    fun approvalCannotExecuteAfterTheJournalAmountChanges() {
++        val requestId = createRequest()
++        helper.writableDatabase.update(
++            "journal_entries",
++            ContentValues().apply {
++                put("total_debit", 7000.0)
++                put("total_credit", 7000.0)
++                put("is_balanced", 1)
++            },
++            "id=? AND station_id=11",
++            arrayOf(journalId.toString())
++        )
++        try {
++            helper.approveTransaction(requestId, checkerId, 11, "اعتماد قيد تغير مبلغه")
++            throw AssertionError("يجب رفض اعتماد مبلغ لم تتم مراجعته")
++        } catch (e: IllegalArgumentException) {
++            assertTrue(e.message.orEmpty().contains("مبلغ طلب الاعتماد"))
++        }
++        assertEquals(1, helper.getPendingApprovals(11, "pending").length())
++        assertEquals(0, countRows(
++            "SELECT COUNT(*) FROM approval_decisions WHERE approval_id=?",
++            arrayOf(requestId.toString())
++        ))
++        helper.writableDatabase.rawQuery(
++            "SELECT status FROM journal_entries WHERE id=? AND station_id=11",
++            arrayOf(journalId.toString())
++        ).use { cursor ->
++            assertTrue(cursor.moveToFirst())
++            assertEquals("draft", cursor.getString(0))
++        }
++    }
++
++    @Test
++    fun directJournalPostingCannotBypassMakerCheckerThreshold() {
++        createRequest()
++        try {
++            helper.postJournalEntry(journalId, makerId, 11)
++            throw AssertionError("يجب منع الترحيل المباشر عند وجود حد اعتماد")
++        } catch (e: IllegalArgumentException) {
++            assertTrue(e.message.orEmpty().contains("Maker-Checker"))
++        }
++        helper.writableDatabase.rawQuery(
++            "SELECT status FROM journal_entries WHERE id=? AND station_id=11",
++            arrayOf(journalId.toString())
++        ).use { cursor ->
++            assertTrue(cursor.moveToFirst())
++            assertEquals("draft", cursor.getString(0))
++        }
++        assertEquals(1, helper.getPendingApprovals(11, "pending").length())
++    }
++
++    @Test
+     fun amountThresholdAndPendingRequestAreEnforcedAndIdempotent() {
+         assertTrue(helper.requiresApproval(11, "journal", "post", 6000.0))
+         assertTrue(!helper.requiresApproval(11, "journal", "post", 1000.0))
+@@ -336,7 +388,17 @@
+     fun approvedJournalReversalCreatesTheReversalEntryAndUpdatesOriginal() {
+         val postApprovalId = createRequest()
+         assertTrue(helper.rejectTransaction(postApprovalId, checkerId, 11, "تهيئة قيد مرحل للاختبار"))
+-        assertEquals(1, helper.postJournalEntry(journalId, makerId, 11))
++        val repost = helper.requestOrPostJournalEntry(journalId, makerId, 11)
++        assertTrue(repost.optBoolean("requires_approval"))
++        assertTrue(helper.approveTransaction(
++            repost.getLong("approval_id"), checkerId, 11, "اعتماد ترحيل للاختبار"
++        ))
++        try {
++            helper.reverseJournalEntry(journalId, "تجاوز الاعتماد", makerId, 11)
++            throw AssertionError("يجب منع عكس القيد مباشرة عند وجود حد اعتماد")
++        } catch (e: IllegalArgumentException) {
++            assertTrue(e.message.orEmpty().contains("Maker-Checker"))
++        }
+ 
+         val reverseApprovalId = helper.createPendingApproval(
+             11, "journal", journalId, "reverse", 6000.0, makerId
+@@ -393,6 +455,13 @@
+             "SELECT journal_entry_id FROM payments WHERE id=? AND station_id=11", arrayOf(paymentId.toString())
+         ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+         assertTrue(journalId > 0L)
++        try {
++            helper.reversePaymentRecord(paymentId, "تجاوز الاعتماد", 11, makerId)
++            throw AssertionError("يجب منع عكس الدفعة مباشرة عند وجود حد اعتماد")
++        } catch (e: IllegalArgumentException) {
++            assertTrue(e.message.orEmpty().contains("Maker-Checker"))
++        }
++        assertEquals(4000.0, cashBalance(), 0.001)
+         val queued = helper.requestOrReversePaymentRecord(paymentId, "سبب العكس للاختبار", 11, makerId)
+         assertTrue(queued.optBoolean("requires_approval"))
+         val approvalId = queued.getLong("approval_id")
+@@ -433,6 +502,13 @@
+             "SELECT journal_entry_id FROM expenses WHERE id=? AND station_id=11", arrayOf(expenseId.toString())
+         ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+         assertTrue(journalId > 0L)
++        try {
++            helper.reverseExpenseRecord(expenseId, "تجاوز الاعتماد", 11, makerId)
++            throw AssertionError("يجب منع عكس المصروف مباشرة عند وجود حد اعتماد")
++        } catch (e: IllegalArgumentException) {
++            assertTrue(e.message.orEmpty().contains("Maker-Checker"))
++        }
++        assertEquals(4000.0, cashBalance(), 0.001)
+         val queued = helper.requestOrReverseExpenseRecord(expenseId, "سبب العكس للاختبار", 11, makerId)
+         assertTrue(queued.optBoolean("requires_approval"))
+         val approvalId = queued.getLong("approval_id")

@@ -245,6 +245,58 @@ class ApprovalControlRobolectricTest {
     }
 
     @Test
+    fun approvalCannotExecuteAfterTheJournalAmountChanges() {
+        val requestId = createRequest()
+        helper.writableDatabase.update(
+            "journal_entries",
+            ContentValues().apply {
+                put("total_debit", 7000.0)
+                put("total_credit", 7000.0)
+                put("is_balanced", 1)
+            },
+            "id=? AND station_id=11",
+            arrayOf(journalId.toString())
+        )
+        try {
+            helper.approveTransaction(requestId, checkerId, 11, "اعتماد قيد تغير مبلغه")
+            throw AssertionError("يجب رفض اعتماد مبلغ لم تتم مراجعته")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message.orEmpty().contains("مبلغ طلب الاعتماد"))
+        }
+        assertEquals(1, helper.getPendingApprovals(11, "pending").length())
+        assertEquals(0, countRows(
+            "SELECT COUNT(*) FROM approval_decisions WHERE approval_id=?",
+            arrayOf(requestId.toString())
+        ))
+        helper.writableDatabase.rawQuery(
+            "SELECT status FROM journal_entries WHERE id=? AND station_id=11",
+            arrayOf(journalId.toString())
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("draft", cursor.getString(0))
+        }
+    }
+
+    @Test
+    fun directJournalPostingCannotBypassMakerCheckerThreshold() {
+        createRequest()
+        try {
+            helper.postJournalEntry(journalId, makerId, 11)
+            throw AssertionError("يجب منع الترحيل المباشر عند وجود حد اعتماد")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message.orEmpty().contains("Maker-Checker"))
+        }
+        helper.writableDatabase.rawQuery(
+            "SELECT status FROM journal_entries WHERE id=? AND station_id=11",
+            arrayOf(journalId.toString())
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("draft", cursor.getString(0))
+        }
+        assertEquals(1, helper.getPendingApprovals(11, "pending").length())
+    }
+
+    @Test
     fun amountThresholdAndPendingRequestAreEnforcedAndIdempotent() {
         assertTrue(helper.requiresApproval(11, "journal", "post", 6000.0))
         assertTrue(!helper.requiresApproval(11, "journal", "post", 1000.0))
@@ -336,7 +388,17 @@ class ApprovalControlRobolectricTest {
     fun approvedJournalReversalCreatesTheReversalEntryAndUpdatesOriginal() {
         val postApprovalId = createRequest()
         assertTrue(helper.rejectTransaction(postApprovalId, checkerId, 11, "تهيئة قيد مرحل للاختبار"))
-        assertEquals(1, helper.postJournalEntry(journalId, makerId, 11))
+        val repost = helper.requestOrPostJournalEntry(journalId, makerId, 11)
+        assertTrue(repost.optBoolean("requires_approval"))
+        assertTrue(helper.approveTransaction(
+            repost.getLong("approval_id"), checkerId, 11, "اعتماد ترحيل للاختبار"
+        ))
+        try {
+            helper.reverseJournalEntry(journalId, "تجاوز الاعتماد", makerId, 11)
+            throw AssertionError("يجب منع عكس القيد مباشرة عند وجود حد اعتماد")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message.orEmpty().contains("Maker-Checker"))
+        }
 
         val reverseApprovalId = helper.createPendingApproval(
             11, "journal", journalId, "reverse", 6000.0, makerId
@@ -393,6 +455,13 @@ class ApprovalControlRobolectricTest {
             "SELECT journal_entry_id FROM payments WHERE id=? AND station_id=11", arrayOf(paymentId.toString())
         ).use { c -> check(c.moveToFirst()); c.getLong(0) }
         assertTrue(journalId > 0L)
+        try {
+            helper.reversePaymentRecord(paymentId, "تجاوز الاعتماد", 11, makerId)
+            throw AssertionError("يجب منع عكس الدفعة مباشرة عند وجود حد اعتماد")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message.orEmpty().contains("Maker-Checker"))
+        }
+        assertEquals(4000.0, cashBalance(), 0.001)
         val queued = helper.requestOrReversePaymentRecord(paymentId, "سبب العكس للاختبار", 11, makerId)
         assertTrue(queued.optBoolean("requires_approval"))
         val approvalId = queued.getLong("approval_id")
@@ -433,6 +502,13 @@ class ApprovalControlRobolectricTest {
             "SELECT journal_entry_id FROM expenses WHERE id=? AND station_id=11", arrayOf(expenseId.toString())
         ).use { c -> check(c.moveToFirst()); c.getLong(0) }
         assertTrue(journalId > 0L)
+        try {
+            helper.reverseExpenseRecord(expenseId, "تجاوز الاعتماد", 11, makerId)
+            throw AssertionError("يجب منع عكس المصروف مباشرة عند وجود حد اعتماد")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message.orEmpty().contains("Maker-Checker"))
+        }
+        assertEquals(4000.0, cashBalance(), 0.001)
         val queued = helper.requestOrReverseExpenseRecord(expenseId, "سبب العكس للاختبار", 11, makerId)
         assertTrue(queued.optBoolean("requires_approval"))
         val approvalId = queued.getLong("approval_id")
