@@ -61,6 +61,26 @@ class FinancialIntegrityContractTest {
     }
 
     @Test
+    fun financeIntegritySnapshotAuditsCashBalancesAndReversalLinks() {
+        val source = locateDatabaseHelper().readText()
+        val snapshot = functionBody(source, "fun getFinanceIntegritySnapshot")
+        val reverse = functionBody(source, "private fun reverseJournalEntryWithinTransaction")
+        assertTrue("Finance snapshot must expose cash reconciliation diagnostics",
+            snapshot.contains("cash_box") && snapshot.contains("cash_movements") &&
+                snapshot.contains("opening_balance") && snapshot.contains("current_balance"))
+        assertTrue("Reversal must verify original status and prevent duplicate reversal",
+            reverse.contains("status") && reverse.contains("تم عكس القيد المرتبط مسبقاً"))
+        assertTrue("Reversal must verify the original journal is in the requested station",
+            reverse.contains("journalEntryRow(db, id, stationScopeId)"))
+        assertTrue("Snapshot must validate reciprocal reversal links",
+            snapshot.contains("invalidReversalLinks") &&
+                snapshot.contains("reversed_entry_id=rev.id"))
+        assertTrue("Snapshot must reconcile journal headers to journal items",
+            snapshot.contains("journal_entry_items") &&
+                snapshot.contains("item_debit") && snapshot.contains("item_credit"))
+    }
+
+    @Test
     fun financialIntegrityAuditorIsReadOnlyAndStationScoped() {
         val auditorCandidates = listOf(
             File("app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/FinancialIntegrityAuditor.kt"),
