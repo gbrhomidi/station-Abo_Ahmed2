@@ -5296,6 +5296,23 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         // ============================================================
 
         /** Current station scope exposed read-only to report context persistence. */
+        /** Read-only, station-scoped audit. Findings are reported; posted financial data is never auto-repaired. */
+        @JavascriptInterface
+        fun runFinancialIntegrityAudit(): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+                if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية تدقيق السجلات المالية")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                FinancialIntegrityAuditor(db.readableDatabase).audit(stationId).toString()
+            } catch (e: SecurityException) {
+                errorResponse("تعذر التحقق من نطاق المحطة")
+            } catch (e: Exception) {
+                DebugLogger.logException("FinancialIntegrityAudit", e)
+                errorResponse("تعذر إكمال تدقيق النزاهة المالية")
+            }
+        }
+
         @JavascriptInterface
         fun getCurrentStationIdForReports(): Int {
             return try {

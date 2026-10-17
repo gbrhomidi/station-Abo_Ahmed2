@@ -61,6 +61,20 @@ class FinancialIntegrityContractTest {
     }
 
     @Test
+    fun financialIntegrityAuditorIsReadOnlyAndStationScoped() {
+        val source = File("app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/FinancialIntegrityAuditor.kt").readText()
+        assertTrue(source.contains("stationId <= 0"))
+        assertTrue(source.contains("total_debit") && source.contains("total_credit"))
+        assertTrue(source.contains("journal_entry_items"))
+        assertTrue(source.contains("duplicate_posted_source_journals"))
+        assertTrue(!source.contains("UPDATE journal_entries") && !source.contains("DELETE FROM journal_entries"))
+        val mainSource = locateMainActivity().readText()
+        assertTrue(mainSource.contains("fun runFinancialIntegrityAudit") &&
+            mainSource.contains("requireCurrentStationId(db, activity.currentUserId)") &&
+            mainSource.contains("checkPermission(\"accounting\", \"read\")"))
+    }
+
+    @Test
     fun paymentReversalRequiresMatchingPostedJournalAndStationScopedSettlement() {
         val source = locateDatabaseHelper().readText()
         val reversal = functionBody(source, "private fun reversePaymentRecordCore")
