@@ -62,7 +62,13 @@ class FinancialIntegrityContractTest {
 
     @Test
     fun financialIntegrityAuditorIsReadOnlyAndStationScoped() {
-        val source = File("app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/FinancialIntegrityAuditor.kt").readText()
+        val auditorCandidates = listOf(
+            File("app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/FinancialIntegrityAuditor.kt"),
+            File("../app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/FinancialIntegrityAuditor.kt")
+        )
+        val auditorFile = auditorCandidates.firstOrNull { it.isFile }
+            ?: error("FinancialIntegrityAuditor.kt was not found from " + System.getProperty("user.dir"))
+        val source = auditorFile.readText()
         assertTrue(source.contains("stationId <= 0"))
         assertTrue(source.contains("total_debit") && source.contains("total_credit"))
         assertTrue(source.contains("journal_entry_items"))
