@@ -21278,9 +21278,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val db = writableDatabase
         db.beginTransaction()
         try {
-            val row = db.rawQuery("SELECT amount,status,cash_box_id,bank_account_id,journal_entry_id,payment_code FROM payments WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(), stationScopeId.toString())).use { c ->
-                if (!c.moveToFirst()) null else LongArray(0).let { JSONObject().apply { put("amount",c.getDouble(0)); put("status",c.getString(1)); put("cash_box_id",c.getLong(2)); put("bank_account_id",c.getLong(3)); put("journal_entry_id",c.getLong(4)); put("payment_code",c.getString(5)) } }
-            } ?: throw IllegalArgumentException("الدفعة غير موجودة ضمن المحطة الحالية")
+            val row = db.rawQuery(
+                "SELECT amount,status,cash_box_id,bank_account_id,journal_entry_id,payment_code FROM payments WHERE id=? AND station_id=? AND is_deleted=0",
+                arrayOf(id.toString(), stationScopeId.toString())
+            ).use { c ->
+                require(c.moveToFirst()) { "الدفعة غير موجودة ضمن المحطة الحالية" }
+                JSONObject().apply {
+                    put("amount", c.getDouble(0)); put("status", c.getString(1))
+                    put("cash_box_id", c.getLong(2)); put("bank_account_id", c.getLong(3))
+                    put("journal_entry_id", c.getLong(4)); put("payment_code", c.getString(5))
+                }
+            }
             require(row.optString("status") == "completed") { "لا يمكن عكس دفعة إلا إذا كانت مكتملة" }
             if (actorId > 0) require(userCanAccessApprovalStation(db, actorId, stationScopeId)) { "المستخدم لا يملك نطاق المحطة المطلوبة" }
             val amount = row.optDouble("amount")
@@ -21294,24 +21302,78 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 !requiresApproval(stationScopeId, "payment", "refund", amount))) {
                 "يجب عكس الدفعة عبر مسار Maker-Checker؛ لا يجوز تجاوز طلب الاعتماد"
             }
+
+            // Validate the original posted journal before changing cash/bank balances.
+            val journalId = row.optLong("journal_entry_id")
+            require(journalId > 0L) { "لا يمكن عكس الدفعة دون قيد محاسبي أصلي؛ يجب تسوية السجل أولاً" }
+            val originalJournal = db.rawQuery(
+                """SELECT reference_type,reference_id,status,total_debit
+                   FROM journal_entries WHERE id=? AND station_id=? AND is_deleted=0""",
+                arrayOf(journalId.toString(), stationScopeId.toString())
+            ).use { c ->
+                require(c.moveToFirst()) { "القيد المحاسبي الأصلي غير موجود ضمن المحطة" }
+                arrayOf(c.getString(0), c.getLong(1).toString(), c.getString(2), c.getDouble(3).toString())
+            }
+            require(
+                originalJournal[0] == "payment" &&
+                    originalJournal[1].toLongOrNull() == id &&
+                    originalJournal[2] == "posted" &&
+                    kotlin.math.abs((originalJournal[3].toDoubleOrNull() ?: Double.NaN) - amount) <= 0.01
+            ) { "القيد المرتبط لا يطابق الدفعة أو ليس مرحلاً أو لا يطابق قيمتها" }
+
             val cashBoxId = row.optLong("cash_box_id")
             val bankAccountId = row.optLong("bank_account_id")
-            if (cashBoxId > 0) {
-                val before = db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(cashBoxId.toString(),stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "الصندوق غير موجود" }; c.getDouble(0) }
-                val after = before + amount
-                require(db.update("cash_boxes", ContentValues().apply { put("current_balance",after) }, "id=? AND station_id=? AND is_deleted=0", arrayOf(cashBoxId.toString(),stationScopeId.toString())) == 1) { "فشل استعادة رصيد الصندوق" }
-                db.insertOrThrow("cash_movements", null, ContentValues().apply { put("uuid",UUID.randomUUID().toString()); put("cash_box_id",cashBoxId); put("movement_type","in"); put("amount",amount); put("balance_before",before); put("balance_after",after); put("description", "عكس دفعة ${row.optString("payment_code")}: ${reason.trim()}"); put("reference_type","payment_reversal"); put("reference_id",id); put("created_by",actorId); put("created_at",getCurrentDateTime()) })
-            } else {
-                val before = db.rawQuery("SELECT current_balance FROM bank_accounts WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(bankAccountId.toString(),stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "الحساب البنكي غير موجود" }; c.getDouble(0) }
-                val after = before + amount
-                require(db.update("bank_accounts", ContentValues().apply { put("current_balance",after) }, "id=? AND station_id=? AND is_deleted=0", arrayOf(bankAccountId.toString(),stationScopeId.toString())) == 1) { "فشل استعادة رصيد الحساب البنكي" }
-                insertBankLedgerEntry(db,bankAccountId,"payment_reversal",id,row.optString("payment_code"),amount,0.0,"عكس دفعة",actorId)
+            require((cashBoxId > 0L) xor (bankAccountId > 0L)) {
+                "لا يمكن عكس الدفعة دون وسيلة تسوية أصلية واحدة محددة"
             }
-            val journalId = row.optLong("journal_entry_id")
-            if (journalId > 0) reverseJournalEntryWithinTransaction(db, journalId, reason.ifBlank { "عكس الدفعة" }, actorId, stationScopeId)
-            val rows = db.update("payments", ContentValues().apply { put("status","refunded"); put("is_refund",1); put("refund_reason",reason.trim()); put("updated_at",getCurrentDateTime()); put("updated_by",actorId) }, "id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(),stationScopeId.toString()))
-            db.setTransactionSuccessful(); return rows
-        } finally { db.endTransaction() }
+            if (cashBoxId > 0L) {
+                val before = db.rawQuery(
+                    "SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(cashBoxId.toString(), stationScopeId.toString())
+                ).use { c -> require(c.moveToFirst()) { "الصندوق غير موجود ضمن المحطة" }; c.getDouble(0) }
+                val after = before + amount
+                require(db.update(
+                    "cash_boxes", ContentValues().apply { put("current_balance", after) },
+                    "id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(cashBoxId.toString(), stationScopeId.toString())
+                ) == 1) { "فشل استعادة رصيد الصندوق" }
+                db.insertOrThrow("cash_movements", null, ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString()); put("cash_box_id", cashBoxId)
+                    put("movement_type", "in"); put("amount", amount); put("balance_before", before); put("balance_after", after)
+                    put("description", "عكس دفعة ${row.optString("payment_code")}: ${reason.trim()}")
+                    put("reference_type", "payment_reversal"); put("reference_id", id)
+                    put("created_by", actorId); put("created_at", getCurrentDateTime())
+                })
+            } else {
+                val before = db.rawQuery(
+                    "SELECT current_balance FROM bank_accounts WHERE id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(bankAccountId.toString(), stationScopeId.toString())
+                ).use { c -> require(c.moveToFirst()) { "الحساب البنكي غير موجود ضمن المحطة" }; c.getDouble(0) }
+                val after = before + amount
+                require(db.update(
+                    "bank_accounts", ContentValues().apply { put("current_balance", after) },
+                    "id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(bankAccountId.toString(), stationScopeId.toString())
+                ) == 1) { "فشل استعادة رصيد الحساب البنكي" }
+                insertBankLedgerEntry(db, bankAccountId, "payment_reversal", id, row.optString("payment_code"), amount, 0.0, "عكس دفعة", actorId)
+            }
+
+            reverseJournalEntryWithinTransaction(db, journalId, reason.ifBlank { "عكس الدفعة" }, actorId, stationScopeId)
+            val rows = db.update(
+                "payments",
+                ContentValues().apply {
+                    put("status", "refunded"); put("is_refund", 1); put("refund_reason", reason.trim())
+                    put("updated_at", getCurrentDateTime()); put("updated_by", actorId)
+                },
+                "id=? AND station_id=? AND is_deleted=0",
+                arrayOf(id.toString(), stationScopeId.toString())
+            )
+            require(rows == 1) { "فشل تحديث حالة الدفعة بعد عكسها" }
+            db.setTransactionSuccessful()
+            return rows
+        } finally {
+            db.endTransaction()
+        }
     }
 
     fun updateReceiptRecord(id: Long, data: JSONObject, stationScopeId: Int, actorId: Long): Int {

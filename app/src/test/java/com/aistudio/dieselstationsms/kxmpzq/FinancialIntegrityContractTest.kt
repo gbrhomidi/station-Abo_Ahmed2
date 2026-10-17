@@ -61,6 +61,26 @@ class FinancialIntegrityContractTest {
     }
 
     @Test
+    fun paymentReversalRequiresMatchingPostedJournalAndStationScopedSettlement() {
+        val source = locateDatabaseHelper().readText()
+        val reversal = functionBody(source, "private fun reversePaymentRecordCore")
+        assertTrue("Payment reversal must require a source journal", reversal.contains("require(journalId > 0L)"))
+        assertTrue("Payment journal must match payment reference, station and posted status",
+            reversal.contains("SELECT reference_type,reference_id,status,total_debit") &&
+                reversal.contains("originalJournal[0] == \"payment\"") &&
+                reversal.contains("originalJournal[1].toLongOrNull() == id") &&
+                reversal.contains("originalJournal[2] == \"posted\""))
+        assertTrue("Payment journal amount must match source amount",
+            reversal.contains("kotlin.math.abs((originalJournal[3].toDoubleOrNull() ?: Double.NaN) - amount) <= 0.01"))
+        assertTrue("Payment reversal must require exactly one original settlement account",
+            reversal.contains("(cashBoxId > 0L) xor (bankAccountId > 0L)"))
+        assertTrue("Cash balance update must be station scoped",
+            reversal.contains("\"id=? AND station_id=? AND is_deleted=0\""))
+        assertTrue("Payment reversal must reverse its original journal before committing",
+            reversal.contains("reverseJournalEntryWithinTransaction(db, journalId"))
+    }
+
+    @Test
     fun expenseReversalRequiresPaidSourceJournalAndRestoresCashOnlyForCashExpenses() {
         val source = locateDatabaseHelper().readText()
         val reversal = functionBody(source, "private fun reverseExpenseRecordCore")
