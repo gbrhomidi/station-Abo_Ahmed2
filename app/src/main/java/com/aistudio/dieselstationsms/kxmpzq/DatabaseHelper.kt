@@ -55,6 +55,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
+        // Must stay aligned with payments.payment_type CHECK in createFinanceTables().
+        private val VALID_PAYMENT_TYPES = setOf(
+            "cash", "cheque", "bank_transfer", "credit_card", "mobile_money", "loyalty_points"
+        )
 
         // ThreadLocal لتنسيقات التاريخ (آمن للخيوط)
         private val dateFormatThreadLocal = ThreadLocal<SimpleDateFormat>()
@@ -175,6 +179,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         var debitTotal: Double = 0.0,
         var creditTotal: Double = 0.0,
         var openingInitialized: Boolean = false
+    )
+
+    private data class OriginalPaymentForRefund(
+        val id: Long,
+        val paymentType: String,
+        val paymentMethod: String,
+        val amount: Double,
+        val cashBoxId: Long
     )
 
     private fun getCurrentDateTime(): String = getDateFormat().format(Date())
@@ -15924,6 +15936,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun processPayment(customerId: Int, amount: Double, method: String, operator: String = "System", notes: String = "", stationScopeId: Int? = null, idempotencyKey: String? = null): Long {
         require(customerId > 0) { "معرف العميل غير صالح" }
         require(amount > 0.0 && amount.isFinite()) { "مبلغ التسديد غير صالح" }
+        val normalizedMethod = method.trim().lowercase(Locale.ROOT)
+        require(normalizedMethod in VALID_PAYMENT_TYPES) { "نوع الدفع غير صالح: $method" }
         if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
         val partyScopeClause = if (stationScopeId != null) " AND station_id = ?" else ""
         val salesScopeClause = if (stationScopeId != null) " AND station_id = ?" else ""
@@ -15993,8 +16007,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("uuid", UUID.randomUUID().toString())
                 put("payment_code", "PAY-${System.currentTimeMillis()}")
                 put("customer_party_id", customerId)
-                put("payment_type", method)
-                put("payment_method", method)
+                put("payment_type", normalizedMethod)
+                put("payment_method", normalizedMethod)
                 put("amount", amount)
                 put("status", "completed")
                 put("operator", operator)
@@ -24868,22 +24882,33 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db: SQLiteDatabase, saleId: Long, stationId: Int, actorId: Long, refundAmount: Double, reason: String
     ): Pair<Long?, Double> {
         if (refundAmount <= 0.0) return null to 0.0
-        val payment = db.rawQuery("""SELECT id, payment_method, payment_type, amount, COALESCE(cash_box_id,0)
+        val payment = db.rawQuery("""SELECT id, payment_type, payment_method, amount, COALESCE(cash_box_id,0)
                                      FROM payments WHERE sale_id=? AND status IN ('completed','refunded')
                                      AND is_refund=0 AND is_deleted=0 ORDER BY id LIMIT 1""", arrayOf(saleId.toString())).use { c ->
             if (!c.moveToFirst()) return null to 0.0
-            longArrayOf(c.getLong(0), c.getString(1)?.hashCode()?.toLong() ?: 0L, c.getDouble(3).toBits(), c.getLong(4))
+            OriginalPaymentForRefund(
+                id = c.getLong(0),
+                paymentType = c.getString(1),
+                paymentMethod = c.getString(2),
+                amount = c.getDouble(3),
+                cashBoxId = c.getLong(4)
+            )
         }
-        val paymentId = payment[0]
-        val originalAmount = Double.fromBits(payment[2])
+        val paymentId = payment.id
+        val originalAmount = payment.amount
         val refunded = db.rawQuery("SELECT COALESCE(SUM(amount),0) FROM payments WHERE original_payment_id=? AND is_refund=1 AND is_deleted=0", arrayOf(paymentId.toString())).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
         val available = (originalAmount - refunded).coerceAtLeast(0.0)
         val actual = minOf(refundAmount, available)
         if (actual <= 0.0) return null to 0.0
-        val method = db.rawQuery("SELECT payment_method FROM payments WHERE id=?", arrayOf(paymentId.toString())).use { c -> if(c.moveToFirst()) c.getString(0) else "cash" }
+        val paymentType = payment.paymentType.trim().lowercase(Locale.ROOT)
+        val method = payment.paymentMethod.trim().lowercase(Locale.ROOT)
+        require(paymentType in VALID_PAYMENT_TYPES) { "نوع الدفع الأصلي غير صالح للاسترداد: ${payment.paymentType}" }
+        require(method.isNotBlank()) { "وسيلة الدفع الأصلية فارغة" }
         val refundId = db.insertOrThrow("payments", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString()); put("payment_code", "REF-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}")
-            put("sale_id", saleId); put("payment_type", method); put("payment_method", method); put("amount", actual)
+            put("station_id", stationId)
+            put("sale_id", saleId); put("payment_type", paymentType); put("payment_method", method); put("amount", actual)
+            if (payment.cashBoxId > 0L) put("cash_box_id", payment.cashBoxId)
             put("status", "refunded"); put("is_refund", 1); put("original_payment_id", paymentId)
             put("refund_reason", reason); put("operator", "user_$actorId"); put("created_by", actorId); put("created_at", getCurrentDateTime()); put("updated_at", getCurrentDateTime())
         })
