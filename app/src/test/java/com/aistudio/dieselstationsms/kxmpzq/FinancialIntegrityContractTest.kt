@@ -69,7 +69,7 @@ class FinancialIntegrityContractTest {
         val auditorFile = auditorCandidates.firstOrNull { it.isFile }
             ?: error("FinancialIntegrityAuditor.kt was not found from " + System.getProperty("user.dir"))
         val source = auditorFile.readText()
-        assertTrue(source.contains("stationId <= 0"))
+        assertTrue(source.contains("require(stationId > 0)"))
         assertTrue(source.contains("total_debit") && source.contains("total_credit"))
         assertTrue(source.contains("journal_entry_items"))
         assertTrue(source.contains("duplicate_posted_source_journals"))
