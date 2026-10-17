@@ -21362,10 +21362,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 COALESCE(cash_box_id,(SELECT cm.cash_box_id FROM cash_movements cm
                     WHERE cm.reference_type='expense' AND cm.reference_id=expenses.id
                     ORDER BY cm.id DESC LIMIT 1),0),
-                journal_entry_id,expense_code,status
+                journal_entry_id,expense_code,status,payment_status,payment_method
                 FROM expenses WHERE id=? AND station_id=? AND is_deleted=0""",
-                arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "المصروف غير موجود" };JSONObject().apply{put("amount",c.getDouble(0));put("cash_box_id",c.getLong(1));put("journal_entry_id",c.getLong(2));put("expense_code",c.getString(3));put("status",c.getString(4))}}
-            require(row.optString("status") in setOf("paid","approved")){"لا يمكن عكس المصروف قبل تسجيله كمصروف مدفوع أو معتمد"}
+                arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "المصروف غير موجود" };JSONObject().apply{put("amount",c.getDouble(0));put("cash_box_id",c.getLong(1));put("journal_entry_id",c.getLong(2));put("expense_code",c.getString(3));put("status",c.getString(4));put("payment_status",c.getString(5));put("payment_method",c.getString(6))}}
+            require(row.optString("status") == "paid" && row.optString("payment_status") == "paid") {"لا يمكن عكس المصروف قبل تسجيل سداده فعلياً"}
             if (actorId > 0) require(userCanAccessApprovalStation(db, actorId, stationScopeId)) { "المستخدم لا يملك نطاق المحطة المطلوبة" }
             val amount=row.optDouble("amount")
             val hasPendingApproval = db.rawQuery(
@@ -21376,12 +21376,26 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(approvedExecution || (!hasPendingApproval && !requiresApproval(stationScopeId, "expense", "reverse", amount))) {
                 "يجب عكس المصروف عبر مسار Maker-Checker؛ لا يجوز تجاوز طلب الاعتماد"
             }
-            val cashBoxId=row.optLong("cash_box_id")
-            require(cashBoxId>0){"لا يمكن عكس مصروف قديم بلا صندوق مرتبط؛ يمنع النظام تعديل الأثر المالي دون مصدر مثبت"}
-            val before=db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(cashBoxId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "الصندوق غير موجود" };c.getDouble(0)}
-            val after=before+amount; require(db.update("cash_boxes",ContentValues().apply{put("current_balance",after)},"id=? AND station_id=? AND is_deleted=0",arrayOf(cashBoxId.toString(),stationScopeId.toString()))==1){"فشل استعادة رصيد الصندوق"}
-            db.insertOrThrow("cash_movements",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("cash_box_id",cashBoxId);put("movement_type","in");put("amount",amount);put("balance_before",before);put("balance_after",after);put("description","عكس مصروف ${row.optString("expense_code")}: ${reason.trim()}");put("reference_type","expense_reversal");put("reference_id",id);put("created_by",actorId);put("created_at",getCurrentDateTime())})
-            val journalId=row.optLong("journal_entry_id");if(journalId>0)reverseJournalEntryWithinTransaction(db,journalId,reason.ifBlank{"عكس المصروف"},actorId,stationScopeId)
+            val journalId=row.optLong("journal_entry_id")
+            require(journalId>0) {"لا يمكن عكس المصروف دون قيد محاسبي أصلي؛ يجب تسوية السجل أولاً"}
+            val originalJournal=db.rawQuery(
+                "SELECT reference_type,reference_id,status FROM journal_entries WHERE id=? AND station_id=? AND is_deleted=0",
+                arrayOf(journalId.toString(),stationScopeId.toString())
+            ).use { c ->
+                require(c.moveToFirst()) {"القيد المحاسبي الأصلي غير موجود ضمن المحطة"}
+                Triple(c.getString(0),c.getLong(1),c.getString(2))
+            }
+            require(originalJournal.first=="expense" && originalJournal.second==id && originalJournal.third=="posted") {
+                "القيد المرتبط لا يطابق المصروف أو ليس مرحلاً"
+            }
+            if (row.optString("payment_method") == "cash") {
+                val cashBoxId=row.optLong("cash_box_id")
+                require(cashBoxId>0) {"لا يمكن عكس مصروف نقدي بلا صندوق مرتبط؛ يمنع النظام تعديل الأثر المالي دون مصدر مثبت"}
+                val before=db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(cashBoxId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "الصندوق غير موجود" };c.getDouble(0)}
+                val after=before+amount; require(db.update("cash_boxes",ContentValues().apply{put("current_balance",after)},"id=? AND station_id=? AND is_deleted=0",arrayOf(cashBoxId.toString(),stationScopeId.toString()))==1){"فشل استعادة رصيد الصندوق"}
+                db.insertOrThrow("cash_movements",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("cash_box_id",cashBoxId);put("movement_type","in");put("amount",amount);put("balance_before",before);put("balance_after",after);put("description","عكس مصروف ${row.optString("expense_code")}: ${reason.trim()}");put("reference_type","expense_reversal");put("reference_id",id);put("created_by",actorId);put("created_at",getCurrentDateTime())})
+            }
+            reverseJournalEntryWithinTransaction(db,journalId,reason.ifBlank{"عكس المصروف"},actorId,stationScopeId)
             val rows=db.update("expenses",ContentValues().apply{put("status","cancelled");put("payment_status","cancelled");put("updated_at",getCurrentDateTime());put("updated_by",actorId);put("remarks",(reason.trim()+" "+row.optString("expense_code")).trim())},"id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString()))
             db.setTransactionSuccessful();return rows
         } finally { db.endTransaction() }
