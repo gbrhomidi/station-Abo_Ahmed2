@@ -67,6 +67,7 @@ internal class FinancialIntegrityAuditor(private val database: SQLiteDatabase) {
         auditBankAccounts(stationId, issues, checked)
         auditReversalLinks(stationId, issues, checked)
         auditLedgerTrialBalance(stationId, issues, checked)
+        auditPostedJournalLineValidity(stationId, issues, checked)
         return output(stationId, issues, checked)
     }
 
@@ -454,6 +455,63 @@ internal class FinancialIntegrityAuditor(private val database: SQLiteDatabase) {
                 .put("debit_credit_delta", delta).put("unbalanced_journal_count", unbalancedPosted.length()))
             issue(issues, "ledger_trial_balance_mismatch",
                 "إجماليات دفتر الأستاذ لا تتطابق مع ميزان مراجعة متوازن للقيود المرحلة", 1, records)
+        }
+    }
+
+
+    /**
+     * Checks line-level invariants that a balanced header cannot prove:
+     * negative amounts, simultaneous debit and credit on one line, zero-value
+     * lines, and posted journals with no lines. Scope is strictly station + posted
+     * + non-deleted journals. This method is diagnostic-only.
+     */
+    private fun auditPostedJournalLineValidity(stationId: Int, issues: JSONArray, checked: JSONObject) {
+        val requiredItems = listOf("journal_entry_id", "debit", "credit")
+        if (!tableExists("journal_entry_items") ||
+            !columns("journal_entry_items").containsAll(requiredItems)) {
+            issue(issues, "journal_line_validity_schema_unavailable",
+                "حقول التحقق من سلامة بنود القيود غير مكتملة", 1)
+            return
+        }
+        val jcols = columns("journal_entries")
+        val deleted = if (jcols.contains("is_deleted")) " AND je.is_deleted=0" else ""
+        val scope = "je.station_id=? AND je.status='posted'" + deleted
+        val args = arrayOf(stationId.toString())
+        val invalidLines = rows(
+            """SELECT je.id,ji.rowid,COALESCE(ji.debit,0),COALESCE(ji.credit,0)
+               FROM journal_entry_items ji
+               JOIN journal_entries je ON je.id=ji.journal_entry_id
+               WHERE $scope AND (
+                 COALESCE(ji.debit,0)<-0.01 OR COALESCE(ji.credit,0)<-0.01 OR
+                 (COALESCE(ji.debit,0)>0.01 AND COALESCE(ji.credit,0)>0.01) OR
+                 (ABS(COALESCE(ji.debit,0))<=0.01 AND ABS(COALESCE(ji.credit,0))<=0.01)
+               )
+               ORDER BY je.id,ji.rowid""",
+            args
+        ) { c -> JSONObject().put("journal_id", c.getLong(0)).put("line_rowid", c.getLong(1))
+            .put("debit", c.getDouble(2)).put("credit", c.getDouble(3)) }
+        val emptyPostedJournals = rows(
+            """SELECT je.id,COALESCE(je.total_debit,0),COALESCE(je.total_credit,0)
+               FROM journal_entries je
+               WHERE $scope AND NOT EXISTS (
+                 SELECT 1 FROM journal_entry_items ji WHERE ji.journal_entry_id=je.id
+               )
+               ORDER BY je.id""",
+            args
+        ) { c -> JSONObject().put("journal_id", c.getLong(0))
+            .put("header_debit", c.getDouble(1)).put("header_credit", c.getDouble(2)) }
+        checked.put("invalid_posted_journal_lines", invalidLines)
+        checked.put("posted_journals_without_lines", emptyPostedJournals)
+        val count = invalidLines.length() + emptyPostedJournals.length()
+        checked.put("invalid_posted_journal_line_count", count)
+        if (count > 0) {
+            val records = JSONArray()
+            for (i in 0 until invalidLines.length()) records.put(
+                JSONObject().put("kind", "invalid_line").put("record", invalidLines.getJSONObject(i)))
+            for (i in 0 until emptyPostedJournals.length()) records.put(
+                JSONObject().put("kind", "journal_without_lines").put("record", emptyPostedJournals.getJSONObject(i)))
+            issue(issues, "invalid_posted_journal_lines",
+                "توجد بنود قيود مرحلة غير صالحة أو قيود مرحلة بلا بنود", count, records)
         }
     }
 

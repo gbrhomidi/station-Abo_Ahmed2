@@ -248,4 +248,25 @@ class FinancialIntegrityAuditorTest {
         assertEquals(10.0, trialBalance.getDouble("debit_credit_delta"), 0.001)
         assertTrue(result.getJSONArray("issues").toString().contains("ledger_trial_balance_mismatch"))
     }
+
+    @Test
+    fun detectsInvalidPostedLinesAndPostedJournalsWithoutLinesStationScoped() {
+        db.execSQL("""INSERT INTO journal_entries(id,station_id,status,total_debit,total_credit,is_deleted,entry_date)
+            VALUES(1,1,'posted',10,10,0,'2026-10-01')""")
+        db.execSQL("""INSERT INTO journal_entries(id,station_id,status,total_debit,total_credit,is_deleted,entry_date)
+            VALUES(2,1,'posted',0,0,0,'2026-10-01')""")
+        db.execSQL("""INSERT INTO journal_entries(id,station_id,status,total_debit,total_credit,is_deleted,entry_date)
+            VALUES(3,2,'posted',10,10,0,'2026-10-01')""")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(1,1,100,5,5)")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(2,1,200,-1,0)")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(3,3,300,10,0)")
+
+        val result = auditor.audit(1)
+        val checked = result.getJSONObject("checked")
+        assertEquals(2, checked.getJSONArray("invalid_posted_journal_lines").length())
+        assertEquals(1, checked.getJSONArray("posted_journals_without_lines").length())
+        assertEquals(3, checked.getInt("invalid_posted_journal_line_count"))
+        assertTrue(result.getJSONArray("issues").toString().contains("invalid_posted_journal_lines"))
+    }
+
 }
