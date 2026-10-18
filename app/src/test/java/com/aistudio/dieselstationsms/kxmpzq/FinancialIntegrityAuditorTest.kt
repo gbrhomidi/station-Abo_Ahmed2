@@ -207,4 +207,45 @@ class FinancialIntegrityAuditorTest {
             assertEquals(130.0, c.getDouble(0), 0.001)
         }
     }
+
+    @Test
+    fun trialBalanceIncludesOnlyPostedEntriesAndIsStationScoped() {
+        // A reversed original must not be counted with its posted reversal.
+        db.execSQL("""INSERT INTO journal_entries(id,station_id,status,total_debit,total_credit,reference_type,reference_id,reversed_entry_id,is_deleted,entry_date)
+            VALUES(1,1,'reversed',40,40,'sale',101,2,0,'2026-10-01')""")
+        db.execSQL("""INSERT INTO journal_entries(id,station_id,status,total_debit,total_credit,reference_type,reference_id,reversed_entry_id,is_deleted,entry_date)
+            VALUES(2,1,'posted',40,40,'reversal',1,1,0,'2026-10-02')""")
+        db.execSQL("""INSERT INTO journal_entries(id,station_id,status,total_debit,total_credit,is_deleted,entry_date)
+            VALUES(3,1,'posted',70,70,0,'2026-10-03')""")
+        db.execSQL("""INSERT INTO journal_entries(id,station_id,status,total_debit,total_credit,is_deleted,entry_date)
+            VALUES(4,2,'posted',900,900,0,'2026-10-03')""")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(1,1,100,40,0)")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(2,1,200,0,40)")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(3,2,100,0,40)")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(4,2,200,40,0)")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(5,3,300,70,0)")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(6,3,400,0,70)")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(7,4,500,900,0)")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(8,4,600,0,900)")
+
+        val result = auditor.audit(1)
+        val trialBalance = result.getJSONObject("checked").getJSONObject("ledger_trial_balance")
+        assertEquals(2, trialBalance.getInt("posted_journal_count"))
+        assertEquals(110.0, trialBalance.getDouble("ledger_debit_total"), 0.001)
+        assertEquals(110.0, trialBalance.getDouble("ledger_credit_total"), 0.001)
+        assertTrue(trialBalance.getBoolean("balanced"))
+        assertEquals(0, trialBalance.getJSONArray("unbalanced_posted_journals_by_lines").length())
+    }
+
+    @Test
+    fun trialBalanceFlagsPostedJournalWithUnbalancedLines() {
+        db.execSQL("""INSERT INTO journal_entries(id,station_id,status,total_debit,total_credit,is_deleted,entry_date)
+            VALUES(1,1,'posted',10,10,0,'2026-10-01')""")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(1,1,100,10,0)")
+        val result = auditor.audit(1)
+        val trialBalance = result.getJSONObject("checked").getJSONObject("ledger_trial_balance")
+        assertFalse(trialBalance.getBoolean("balanced"))
+        assertEquals(10.0, trialBalance.getDouble("debit_credit_delta"), 0.001)
+        assertTrue(result.getJSONArray("issues").toString().contains("ledger_trial_balance_mismatch"))
+    }
 }
