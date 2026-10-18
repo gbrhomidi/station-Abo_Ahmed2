@@ -5256,7 +5256,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getOverduePayments called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val payments = db.getOverduePayments()
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val payments = db.getOverduePayments(stationId)
                 dataResponse(payments)
             } catch (e: Exception) {
                 DebugLogger.logException("Payments", e)

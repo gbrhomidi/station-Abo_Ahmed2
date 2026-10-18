@@ -22753,14 +22753,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      * يعيد الفواتير الآجلة المتأخرة مع حقول كاملة للتصنيف الدقيق وعرضها في شاشة تذكيرات الديون.
      * يعيد نفس أسماء الحقول التي يعيدها getCustomerDebts لتوحيد منطق الواجهة.
      */
-    fun getOverduePayments(): JSONArray {
+    fun getOverduePayments(stationScopeId: Int): JSONArray {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب لتقرير الديون المتأخرة" }
         dbLock.lock()
         return try {
             readableDatabase.rawQuery(
                 """
-                 SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.station_id, s.liters, s.quantity, s.product_id, s.fuel_type_id, s.order_type, s.net_amount, s.gross_amount, s.paid_amount, s.remaining_amount, s.due_date, s.payment_status, s.payment_method, s.is_credit, s.invoice_number, s.created_at, p.commercial_name AS customer_name, p.commercial_name_ar AS customer_name_ar, p.legal_name AS customer_legal_name, ${primaryPartyContactSql("p", "phone")} AS customer_phone, f.fuel_code, f.fuel_name, f.fuel_name_ar, pr.product_name, pr.product_name_ar, pr.product_code FROM sales_transactions s LEFT JOIN parties p ON s.customer_party_id = p.id LEFT JOIN fuel_types f ON s.fuel_type_id = f.id AND f.is_deleted = 0 LEFT JOIN products pr ON s.product_id = pr.id AND pr.is_deleted = 0 WHERE s.remaining_amount > 0 AND date(s.due_date) < date('now') AND s.is_deleted = 0 ORDER BY s.due_date ASC, s.id ASC
+                 SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.station_id, s.liters, s.quantity, s.product_id, s.fuel_type_id, s.order_type, s.net_amount, s.gross_amount, s.paid_amount, s.remaining_amount, s.due_date, s.payment_status, s.payment_method, s.is_credit, s.invoice_number, s.created_at, p.commercial_name AS customer_name, p.commercial_name_ar AS customer_name_ar, p.legal_name AS customer_legal_name, ${primaryPartyContactSql("p", "phone")} AS customer_phone, f.fuel_code, f.fuel_name, f.fuel_name_ar, pr.product_name, pr.product_name_ar, pr.product_code FROM sales_transactions s LEFT JOIN parties p ON s.customer_party_id = p.id LEFT JOIN fuel_types f ON s.fuel_type_id = f.id AND f.is_deleted = 0 LEFT JOIN products pr ON s.product_id = pr.id AND pr.is_deleted = 0 WHERE s.remaining_amount > 0 AND date(s.due_date) < date('now') AND s.is_deleted = 0 AND s.station_id = ? AND p.station_id = s.station_id AND p.is_deleted = 0 ORDER BY s.due_date ASC, s.id ASC
                  """.trimIndent(),
-                null
+                arrayOf(stationScopeId.toString())
             ).use { cursor ->
                 cursorToJsonArray(cursor)
             }
