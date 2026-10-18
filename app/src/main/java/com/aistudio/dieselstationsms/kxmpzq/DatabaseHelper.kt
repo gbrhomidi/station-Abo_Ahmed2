@@ -27702,8 +27702,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 SELECT COUNT(*) FROM journal_entries je
                 WHERE je.station_id=? AND je.is_deleted=0 AND je.status='posted'
                   AND date(je.entry_date) BETWEEN date(?) AND date(?)
-                  AND (ABS(COALESCE(je.total_debit,0)-COALESCE(je.total_credit,0))>=0.000001
-                       OR NOT EXISTS (SELECT 1 FROM journal_entry_items ji WHERE ji.journal_entry_id=je.id))
+                  AND (
+                    ABS(COALESCE(je.total_debit,0)-COALESCE(je.total_credit,0))>=0.000001
+                    OR NOT EXISTS (SELECT 1 FROM journal_entry_items ji WHERE ji.journal_entry_id=je.id)
+                    OR EXISTS (
+                        SELECT 1 FROM journal_entry_items ji
+                        WHERE ji.journal_entry_id=je.id
+                        GROUP BY ji.journal_entry_id
+                        HAVING ABS(COALESCE(je.total_debit,0)-SUM(COALESCE(ji.debit,0)))>=0.000001
+                            OR ABS(COALESCE(je.total_credit,0)-SUM(COALESCE(ji.credit,0)))>=0.000001
+                            OR SUM(CASE WHEN COALESCE(ji.debit,0)<0 OR COALESCE(ji.credit,0)<0
+                                OR (COALESCE(ji.debit,0)>0 AND COALESCE(ji.credit,0)>0)
+                                THEN 1 ELSE 0 END)>0
+                    )
+                  )
             """.trimIndent(), arrayOf(stationId.toString(), start, end)).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
             require(badPosted == 0) { "تعذر الإقفال: توجد قيود مرحلة غير متوازنة أو بلا بنود ($badPosted)" }
             val drafts = db.rawQuery("""
