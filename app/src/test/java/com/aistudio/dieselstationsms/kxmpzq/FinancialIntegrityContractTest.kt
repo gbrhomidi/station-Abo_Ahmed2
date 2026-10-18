@@ -61,23 +61,24 @@ class FinancialIntegrityContractTest {
     }
 
     @Test
-    fun financeIntegritySnapshotAuditsCashBalancesAndReversalLinks() {
-        val source = locateDatabaseHelper().readText()
-        val snapshot = functionBody(source, "fun getFinanceIntegritySnapshot")
-        val reverse = functionBody(source, "private fun reverseJournalEntryWithinTransaction")
-        assertTrue("Finance snapshot must expose cash reconciliation diagnostics",
-            snapshot.contains("cash_box") && snapshot.contains("cash_movements") &&
-                snapshot.contains("opening_balance") && snapshot.contains("current_balance"))
-        assertTrue("Reversal must verify original status and prevent duplicate reversal",
-            reverse.contains("status") && reverse.contains("تم عكس القيد المرتبط مسبقاً"))
-        assertTrue("Reversal must verify the original journal is in the requested station",
-            reverse.contains("journalEntryRow(db, id, stationScopeId)"))
-        assertTrue("Snapshot must validate reciprocal reversal links",
-            snapshot.contains("invalidReversalLinks") &&
-                snapshot.contains("reversed_entry_id=rev.id"))
-        assertTrue("Snapshot must reconcile journal headers to journal items",
-            snapshot.contains("journal_entry_items") &&
-                snapshot.contains("item_debit") && snapshot.contains("item_credit"))
+    fun financialIntegrityAuditCoversPostedJournalAndSourceIntegrity() {
+        val candidates = listOf(
+            File("app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/FinancialIntegrityAuditor.kt"),
+            File("../app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/FinancialIntegrityAuditor.kt")
+        )
+        val auditor = candidates.firstOrNull { it.isFile }
+            ?: error("FinancialIntegrityAuditor.kt was not found from " + System.getProperty("user.dir"))
+        val source = auditor.readText()
+        assertTrue("Audit must inspect posted journal balance totals",
+            source.contains("unbalanced_posted_journals") && source.contains("total_debit") && source.contains("total_credit"))
+        assertTrue("Audit must reconcile journal headers to their lines",
+            source.contains("journal_entry_items") && source.contains("journal_item_mismatches"))
+        assertTrue("Audit must detect duplicate posted source journals",
+            source.contains("duplicate_posted_source_journals"))
+        assertTrue("Audit must detect missing journals for financial source records",
+            source.contains("missing_") && source.contains("NOT EXISTS (SELECT 1 FROM journal_entries"))
+        assertTrue("Audit must remain read-only",
+            !source.contains("UPDATE journal_entries") && !source.contains("DELETE FROM journal_entries"))
     }
 
     @Test
