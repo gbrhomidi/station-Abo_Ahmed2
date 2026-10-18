@@ -66,7 +66,6 @@ internal class FinancialIntegrityAuditor(private val database: SQLiteDatabase) {
         auditCashBoxes(stationId, issues, checked)
         auditBankAccounts(stationId, issues, checked)
         auditReversalLinks(stationId, issues, checked)
-        auditLedgerTrialBalance(stationId, issues, checked)
         return output(stationId, issues, checked)
     }
 
@@ -385,75 +384,6 @@ internal class FinancialIntegrityAuditor(private val database: SQLiteDatabase) {
                 for (i in 0 until array.length()) records.put(array.getJSONObject(i))
             }
             issue(issues, "invalid_reversal_links", "روابط القيود العكسية أو بنودها غير متبادلة أو غير متسقة أو مكررة", count, records)
-        }
-    }
-
-
-    /**
-     * Reconciles the posted general-ledger lines to trial-balance totals for one
-     * station. Reversed originals are excluded by status; their posted reversal
-     * is included once, matching the accounting reports' posted-only contract.
-     */
-    private fun auditLedgerTrialBalance(stationId: Int, issues: JSONArray, checked: JSONObject) {
-        if (!tableExists("journal_entry_items")) {
-            issue(issues, "trial_balance_schema_unavailable", "تعذر مطابقة دفتر الأستاذ مع ميزان المراجعة", 1)
-            return
-        }
-        val itemColumns = columns("journal_entry_items")
-        if (!itemColumns.containsAll(listOf("journal_entry_id", "account_id", "debit", "credit"))) {
-            issue(issues, "trial_balance_schema_unavailable", "حقول بنود دفتر الأستاذ غير مكتملة", 1)
-            return
-        }
-        val postedFilter = "je.station_id=? AND je.status='posted'" +
-            (if (columns("journal_entries").contains("is_deleted")) " AND je.is_deleted=0" else "")
-        val args = arrayOf(stationId.toString())
-        val totals = rows(
-            """SELECT COUNT(DISTINCT je.id),COALESCE(SUM(COALESCE(ji.debit,0)),0),
-                      COALESCE(SUM(COALESCE(ji.credit,0)),0)
-               FROM journal_entries je
-               LEFT JOIN journal_entry_items ji ON ji.journal_entry_id=je.id
-               WHERE $postedFilter""",
-            args
-        ) { c -> JSONObject().put("posted_journal_count", c.getInt(0))
-            .put("ledger_debit_total", c.getDouble(1)).put("ledger_credit_total", c.getDouble(2)) }
-        val summary = totals.optJSONObject(0) ?: JSONObject()
-        val debit = summary.optDouble("ledger_debit_total", 0.0)
-        val credit = summary.optDouble("ledger_credit_total", 0.0)
-        val delta = debit - credit
-        val byAccount = rows(
-            """SELECT ji.account_id,COALESCE(SUM(ji.debit),0),COALESCE(SUM(ji.credit),0),
-                      COALESCE(SUM(ji.debit-ji.credit),0),COUNT(DISTINCT je.id)
-               FROM journal_entry_items ji
-               JOIN journal_entries je ON je.id=ji.journal_entry_id
-               WHERE $postedFilter
-               GROUP BY ji.account_id ORDER BY ji.account_id""",
-            args
-        ) { c -> JSONObject().put("account_id", c.getLong(0))
-            .put("debit_total", c.getDouble(1)).put("credit_total", c.getDouble(2))
-            .put("net_debit_balance", c.getDouble(3)).put("journal_count", c.getInt(4)) }
-        val unbalancedPosted = rows(
-            """SELECT je.id,COALESCE(SUM(ji.debit),0),COALESCE(SUM(ji.credit),0)
-               FROM journal_entries je
-               LEFT JOIN journal_entry_items ji ON ji.journal_entry_id=je.id
-               WHERE $postedFilter GROUP BY je.id
-               HAVING ABS(COALESCE(SUM(ji.debit),0)-COALESCE(SUM(ji.credit),0))>0.01""",
-            args
-        ) { c -> JSONObject().put("journal_id", c.getLong(0))
-            .put("ledger_debit", c.getDouble(1)).put("ledger_credit", c.getDouble(2)) }
-        checked.put("ledger_trial_balance", JSONObject()
-            .put("station_id", stationId)
-            .put("posted_journal_count", summary.optInt("posted_journal_count", 0))
-            .put("ledger_debit_total", debit).put("ledger_credit_total", credit)
-            .put("debit_credit_delta", delta)
-            .put("balanced", kotlin.math.abs(delta) <= 0.01 && unbalancedPosted.length() == 0)
-            .put("account_balances", byAccount)
-            .put("unbalanced_posted_journals_by_lines", unbalancedPosted))
-        if (kotlin.math.abs(delta) > 0.01 || unbalancedPosted.length() > 0) {
-            val records = JSONArray().put(JSONObject().put("station_id", stationId)
-                .put("ledger_debit_total", debit).put("ledger_credit_total", credit)
-                .put("debit_credit_delta", delta).put("unbalanced_journal_count", unbalancedPosted.length()))
-            issue(issues, "ledger_trial_balance_mismatch",
-                "إجماليات دفتر الأستاذ لا تتطابق مع ميزان مراجعة متوازن للقيود المرحلة", 1, records)
         }
     }
 

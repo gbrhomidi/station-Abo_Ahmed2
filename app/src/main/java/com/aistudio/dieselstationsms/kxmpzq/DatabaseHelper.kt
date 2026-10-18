@@ -22753,15 +22753,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      * يعيد الفواتير الآجلة المتأخرة مع حقول كاملة للتصنيف الدقيق وعرضها في شاشة تذكيرات الديون.
      * يعيد نفس أسماء الحقول التي يعيدها getCustomerDebts لتوحيد منطق الواجهة.
      */
-    fun getOverduePayments(stationScopeId: Int): JSONArray {
-        require(stationScopeId > 0) { "معرف المحطة مطلوب لتقرير الديون المتأخرة" }
+    fun getOverduePayments(): JSONArray {
         dbLock.lock()
         return try {
             readableDatabase.rawQuery(
                 """
-                 SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.station_id, s.liters, s.quantity, s.product_id, s.fuel_type_id, s.order_type, s.net_amount, s.gross_amount, s.paid_amount, s.remaining_amount, s.due_date, s.payment_status, s.payment_method, s.is_credit, s.invoice_number, s.created_at, p.commercial_name AS customer_name, p.commercial_name_ar AS customer_name_ar, p.legal_name AS customer_legal_name, ${primaryPartyContactSql("p", "phone")} AS customer_phone, f.fuel_code, f.fuel_name, f.fuel_name_ar, pr.product_name, pr.product_name_ar, pr.product_code FROM sales_transactions s LEFT JOIN parties p ON s.customer_party_id = p.id LEFT JOIN fuel_types f ON s.fuel_type_id = f.id AND f.is_deleted = 0 LEFT JOIN products pr ON s.product_id = pr.id AND pr.is_deleted = 0 WHERE s.remaining_amount > 0 AND date(s.due_date) < date('now') AND s.is_deleted = 0 AND s.station_id = ? AND p.station_id = s.station_id AND p.is_deleted = 0 ORDER BY s.due_date ASC, s.id ASC
+                 SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.station_id, s.liters, s.quantity, s.product_id, s.fuel_type_id, s.order_type, s.net_amount, s.gross_amount, s.paid_amount, s.remaining_amount, s.due_date, s.payment_status, s.payment_method, s.is_credit, s.invoice_number, s.created_at, p.commercial_name AS customer_name, p.commercial_name_ar AS customer_name_ar, p.legal_name AS customer_legal_name, ${primaryPartyContactSql("p", "phone")} AS customer_phone, f.fuel_code, f.fuel_name, f.fuel_name_ar, pr.product_name, pr.product_name_ar, pr.product_code FROM sales_transactions s LEFT JOIN parties p ON s.customer_party_id = p.id LEFT JOIN fuel_types f ON s.fuel_type_id = f.id AND f.is_deleted = 0 LEFT JOIN products pr ON s.product_id = pr.id AND pr.is_deleted = 0 WHERE s.remaining_amount > 0 AND date(s.due_date) < date('now') AND s.is_deleted = 0 ORDER BY s.due_date ASC, s.id ASC
                  """.trimIndent(),
-                arrayOf(stationScopeId.toString())
+                null
             ).use { cursor ->
                 cursorToJsonArray(cursor)
             }
@@ -28571,7 +28570,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 SELECT ji.id, ji.journal_entry_id, ji.line_number, ji.account_id, ji.debit, ji.credit, ji.description, ji.description_ar, ji.currency_id, ji.exchange_rate,
                        je.entry_date, je.entry_number, je.description AS entry_description, je.reference_code,
                        a.account_code, COALESCE(a.account_name_ar, a.account_name, '') AS account_name,
-                       a.account_type, 0.0 AS opening_balance, c.currency_code
+                       a.account_type, COALESCE(a.opening_balance, 0) AS opening_balance, c.currency_code
                 FROM journal_entry_items ji
                 INNER JOIN journal_entries je ON je.id = ji.journal_entry_id
                 LEFT JOIN accounts a ON a.id = ji.account_id
@@ -28585,12 +28584,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val openingArgs = mutableListOf<String>()
             val openingSql = if (startDate.isNotBlank()) {
                 openingArgs += stationScopeId.toString(); openingArgs += startDate
-                """SELECT a.id, COALESCE(SUM(CASE WHEN je.id IS NOT NULL THEN ji.debit-ji.credit ELSE 0 END),0)
+                """SELECT a.id, COALESCE(a.opening_balance,0) + COALESCE(SUM(CASE WHEN je.id IS NOT NULL THEN ji.debit-ji.credit ELSE 0 END),0)
                    FROM accounts a LEFT JOIN journal_entry_items ji ON ji.account_id=a.id
                    LEFT JOIN journal_entries je ON je.id=ji.journal_entry_id AND je.station_id=? AND je.status='posted' AND je.is_deleted=0 AND date(je.entry_date)<date(?)
                    WHERE a.is_deleted=0 GROUP BY a.id"""
             } else {
-                "SELECT id, 0.0 FROM accounts WHERE is_deleted=0"
+                "SELECT id, COALESCE(opening_balance,0) FROM accounts WHERE is_deleted=0"
             }
             db.rawQuery(openingSql, openingArgs.toTypedArray()).use { c -> while(c.moveToNext()) openingByAccount[c.getLong(0)] = c.getDouble(1) }
             var currentAccount = -1L
@@ -29033,7 +29032,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val sql = """
                 SELECT a.id, a.account_code, a.account_name, a.account_name_ar,
                        a.account_type, a.level, a.normal_balance,
-                       $priorExpr AS opening_balance,
+                       COALESCE(a.opening_balance,0) + $priorExpr AS opening_balance,
                        $periodDebitExpr AS total_debit,
                        $periodCreditExpr AS total_credit,
                        a.is_active

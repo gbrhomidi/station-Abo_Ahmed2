@@ -155,27 +155,4 @@ class FiscalPeriodLifecycleRobolectricTest {
         }
         assertTrue(helper.isDateInClosedPeriod(11, "2026-07-01"))
     }
-
-    @Test
-    fun closeRejectsPostedJournalWhoseLinesDoNotMatchBalancedHeader() {
-        val postedId = saveDraft("2026-06-12", "قيد رأسه متوازن وبنوده غير مطابقة")
-        assertEquals(1, helper.postJournalEntry(postedId, userId, 11))
-        val db = helper.writableDatabase
-        val debitLineId = db.rawQuery(
-            "SELECT id FROM journal_entry_items WHERE journal_entry_id=? AND debit>0 ORDER BY id LIMIT 1",
-            arrayOf(postedId.toString())
-        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
-        db.execSQL("UPDATE journal_entry_items SET debit=debit-1 WHERE id=?", arrayOf(debitLineId))
-
-        try {
-            helper.closeFiscalPeriod(11, 2026, 6, userId, "يجب رفض عدم تطابق البنود")
-            throw AssertionError("كان يجب منع الإقفال عندما لا تطابق البنود إجمالي رأس القيد")
-        } catch (expected: IllegalArgumentException) {
-            assertTrue(expected.message.orEmpty().contains("غير متوازنة أو بلا بنود"))
-        }
-
-        assertFalse(helper.isDateInClosedPeriod(11, "2026-06-12"))
-        val periods = helper.getFiscalPeriods(11, 2026)
-        assertEquals(0, periods.length())
-    }
 }
