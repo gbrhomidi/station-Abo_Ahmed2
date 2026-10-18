@@ -155,4 +155,70 @@ class FiscalPeriodLifecycleRobolectricTest {
         }
         assertTrue(helper.isDateInClosedPeriod(11, "2026-07-01"))
     }
+
+    @Test
+    fun closeRejectsPostedJournalWhenLedgerLinesDoNotMatchHeader() {
+        val db = helper.writableDatabase
+        val journalId = db.insertOrThrow("journal_entries", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("entry_number", "TEST-LINE-MISMATCH-" + UUID.randomUUID().toString())
+            put("entry_date", "2026-06-12")
+            put("entry_type", "general")
+            put("description", "اختبار عدم تطابق بنود الأستاذ")
+            put("total_debit", 10.0)
+            put("total_credit", 10.0)
+            put("status", "posted")
+            put("station_id", 11)
+            put("is_deleted", 0)
+        })
+        db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("journal_entry_id", journalId); put("line_number", 1)
+            put("account_id", debitAccountId); put("debit", 10.0); put("credit", 0.0)
+        })
+        db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("journal_entry_id", journalId); put("line_number", 2)
+            put("account_id", creditAccountId); put("debit", 0.0); put("credit", 9.0)
+        })
+        try {
+            helper.closeFiscalPeriod(11, 2026, 6, userId, "يجب رفض قيد لا تتطابق بنوده")
+            throw AssertionError("إقفال الفترة يجب أن يرفض عدم تطابق بنود الأستاذ")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message.orEmpty().contains("بنود دفتر الأستاذ"))
+        }
+        assertFalse(helper.isDateInClosedPeriod(11, "2026-06-12"))
+    }
+
+    @Test
+    fun closeRejectsReversedOriginalWithoutReciprocalPostedReversal() {
+        val db = helper.writableDatabase
+        val originalId = db.insertOrThrow("journal_entries", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("entry_number", "TEST-REV-ORIG-" + UUID.randomUUID().toString())
+            put("entry_date", "2026-05-11")
+            put("entry_type", "general")
+            put("description", "قيد أصل معكوس بلا قيد عكسي")
+            put("total_debit", 10.0); put("total_credit", 10.0)
+            put("status", "reversed"); put("station_id", 11); put("is_deleted", 0)
+            putNull("reversed_entry_id")
+        })
+        db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("journal_entry_id", originalId); put("line_number", 1)
+            put("account_id", debitAccountId); put("debit", 10.0); put("credit", 0.0)
+        })
+        db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("journal_entry_id", originalId); put("line_number", 2)
+            put("account_id", creditAccountId); put("debit", 0.0); put("credit", 10.0)
+        })
+        try {
+            helper.closeFiscalPeriod(11, 2026, 5, userId, "يجب رفض رابط عكسي مكسور")
+            throw AssertionError("إقفال الفترة يجب أن يرفض الرابط العكسي المكسور")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message.orEmpty().contains("روابط قيود عكسية"))
+        }
+        assertFalse(helper.isDateInClosedPeriod(11, "2026-05-11"))
+    }
 }

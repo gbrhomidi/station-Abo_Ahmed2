@@ -27707,6 +27707,97 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        OR NOT EXISTS (SELECT 1 FROM journal_entry_items ji WHERE ji.journal_entry_id=je.id))
             """.trimIndent(), arrayOf(stationId.toString(), start, end)).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
             require(badPosted == 0) { "تعذر الإقفال: توجد قيود مرحلة غير متوازنة أو بلا بنود ($badPosted)" }
+
+            // Reconcile journal headers against actual account lines before closing.
+            val badPostedLines = db.rawQuery("""
+                SELECT COUNT(*) FROM journal_entries je
+                WHERE je.station_id=? AND je.is_deleted=0 AND je.status='posted'
+                  AND date(je.entry_date) BETWEEN date(?) AND date(?)
+                  AND (
+                    ABS(COALESCE(je.total_debit,0)-COALESCE((
+                        SELECT SUM(COALESCE(ji.debit,0)) FROM journal_entry_items ji
+                        WHERE ji.journal_entry_id=je.id
+                    ),0))>0.01
+                    OR ABS(COALESCE(je.total_credit,0)-COALESCE((
+                        SELECT SUM(COALESCE(ji.credit,0)) FROM journal_entry_items ji
+                        WHERE ji.journal_entry_id=je.id
+                    ),0))>0.01
+                    OR ABS(COALESCE((
+                        SELECT SUM(COALESCE(ji.debit,0)-COALESCE(ji.credit,0))
+                        FROM journal_entry_items ji WHERE ji.journal_entry_id=je.id
+                    ),0))>0.01
+                  )
+            """.trimIndent(), arrayOf(stationId.toString(), start, end)).use { c ->
+                if (c.moveToFirst()) c.getInt(0) else 0
+            }
+            require(badPostedLines == 0) {
+                "تعذر الإقفال: إجماليات بنود دفتر الأستاذ لا تطابق رؤوس القيود أو أن البنود غير متوازنة ($badPostedLines)"
+            }
+
+            // Require reciprocal, station-local reversal links for any reversal pair
+            // whose original or reversal is inside the period being closed.
+            val badReversalLinks = db.rawQuery("""
+                SELECT COUNT(*) FROM journal_entries rev
+                WHERE rev.station_id=? AND rev.is_deleted=0 AND rev.status='posted'
+                  AND rev.reference_type='reversal'
+                  AND (
+                    date(rev.entry_date) BETWEEN date(?) AND date(?)
+                    OR EXISTS (
+                      SELECT 1 FROM journal_entries orig_scope
+                      WHERE orig_scope.id=rev.reference_id AND orig_scope.station_id=rev.station_id
+                        AND date(orig_scope.entry_date) BETWEEN date(?) AND date(?)
+                    )
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1 FROM journal_entries orig
+                    WHERE orig.id=rev.reference_id AND orig.station_id=rev.station_id
+                      AND orig.is_deleted=0 AND orig.status='reversed'
+                      AND orig.reversed_entry_id=rev.id AND rev.reversed_entry_id=orig.id
+                      AND ABS(COALESCE(rev.total_debit,0)-COALESCE(orig.total_credit,0))<=0.01
+                      AND ABS(COALESCE(rev.total_credit,0)-COALESCE(orig.total_debit,0))<=0.01
+                  )
+                UNION ALL
+                SELECT COUNT(*) FROM journal_entries orig
+                WHERE orig.station_id=? AND orig.is_deleted=0 AND orig.status='reversed'
+                  AND date(orig.entry_date) BETWEEN date(?) AND date(?)
+                  AND NOT EXISTS (
+                    SELECT 1 FROM journal_entries rev
+                    WHERE rev.id=orig.reversed_entry_id AND rev.station_id=orig.station_id
+                      AND rev.is_deleted=0 AND rev.status='posted' AND rev.reference_type='reversal'
+                      AND rev.reference_id=orig.id AND rev.reversed_entry_id=orig.id
+                      AND ABS(COALESCE(rev.total_debit,0)-COALESCE(orig.total_credit,0))<=0.01
+                      AND ABS(COALESCE(rev.total_credit,0)-COALESCE(orig.total_debit,0))<=0.01
+                  )
+            """.trimIndent(), arrayOf(
+                stationId.toString(), start, end, start, end,
+                stationId.toString(), start, end
+            )).use { c ->
+                var count = 0
+                while (c.moveToNext()) count += c.getInt(0)
+                count
+            }
+            require(badReversalLinks == 0) {
+                "تعذر الإقفال: توجد روابط قيود عكسية غير مكتملة أو غير متبادلة ($badReversalLinks)"
+            }
+            val duplicateReversals = db.rawQuery("""
+                SELECT COUNT(*) FROM (
+                    SELECT orig.id
+                    FROM journal_entries orig
+                    JOIN journal_entries rev ON rev.reference_id=orig.id
+                        AND rev.station_id=orig.station_id AND rev.is_deleted=0
+                        AND rev.status='posted' AND rev.reference_type='reversal'
+                    WHERE orig.station_id=? AND orig.is_deleted=0
+                      AND (date(orig.entry_date) BETWEEN date(?) AND date(?)
+                           OR date(rev.entry_date) BETWEEN date(?) AND date(?))
+                    GROUP BY orig.id HAVING COUNT(rev.id)>1
+                )
+            """.trimIndent(), arrayOf(stationId.toString(), start, end, start, end)).use { c ->
+                if (c.moveToFirst()) c.getInt(0) else 0
+            }
+            require(duplicateReversals == 0) {
+                "تعذر الإقفال: يوجد أكثر من قيد عكسي مرحل للأصل نفسه ($duplicateReversals)"
+            }
+
             val drafts = db.rawQuery("""
                 SELECT COUNT(*) FROM journal_entries
                 WHERE station_id=? AND is_deleted=0 AND status='draft'
