@@ -63,6 +63,8 @@ internal class FinancialIntegrityAuditor(private val database: SQLiteDatabase) {
         auditSource("payments", "payment", listOf("completed", "paid"), stationId, issues, checked)
         auditSource("expenses", "expense", listOf("paid"), stationId, issues, checked)
         auditSource("receipts", "receipt", listOf("active", "paid", "completed"), stationId, issues, checked)
+        auditCashBoxes(stationId, issues, checked)
+        auditReversalLinks(stationId, issues, checked)
         return output(stationId, issues, checked)
     }
 
@@ -81,6 +83,225 @@ internal class FinancialIntegrityAuditor(private val database: SQLiteDatabase) {
         val key = "missing_" + table + "_journals"
         checked.put(key, missing)
         if (missing.length() > 0) issue(issues, key, "سجلات مصدر فعالة بلا قيد يومية مرحل مطابق", missing.length(), missing)
+    }
+
+
+    /**
+     * Reconciles the cached cash-box balance against the opening balance and the
+     * immutable, non-deleted movement ledger. Also verifies every movement's
+     * before/after chain. This is diagnostic only: it never repairs money values.
+     */
+    private fun auditCashBoxes(stationId: Int, issues: JSONArray, checked: JSONObject) {
+        if (!tableExists("cash_boxes") || !tableExists("cash_movements")) {
+            issue(issues, "cash_reconciliation_schema_unavailable", "تعذر مطابقة أرصدة الصناديق مع سجل الحركات", 1)
+            return
+        }
+        val boxColumns = columns("cash_boxes")
+        val movementColumns = columns("cash_movements")
+        if (!boxColumns.containsAll(listOf("id", "station_id", "opening_balance", "current_balance", "is_deleted")) ||
+            !movementColumns.containsAll(listOf("id", "cash_box_id", "movement_type", "amount", "balance_before", "balance_after", "is_deleted"))) {
+            issue(issues, "cash_reconciliation_schema_unavailable", "حقول مطابقة الصناديق والحركات غير مكتملة", 1)
+            return
+        }
+
+        val boxes = rows(
+            "SELECT id,COALESCE(opening_balance,0),COALESCE(current_balance,0) FROM cash_boxes WHERE station_id=? AND is_deleted=0 ORDER BY id",
+            arrayOf(stationId.toString())
+        ) { c -> JSONObject().put("cash_box_id", c.getLong(0)).put("opening_balance", c.getDouble(1)).put("current_balance", c.getDouble(2)) }
+        val diagnostics = JSONArray()
+        var issueCount = 0
+        for (i in 0 until boxes.length()) {
+            val box = boxes.getJSONObject(i)
+            val boxId = box.getLong("cash_box_id")
+            val opening = box.getDouble("opening_balance")
+            val current = box.getDouble("current_balance")
+            var expected = opening
+            var previousAfter = opening
+            var movementCount = 0
+            var unknownTypes = 0
+            var brokenChain = 0
+            var inbound = 0.0
+            var outbound = 0.0
+            val movementDetails = rows(
+                "SELECT id,movement_type,COALESCE(amount,0),balance_before,balance_after FROM cash_movements WHERE cash_box_id=? AND is_deleted=0 ORDER BY id",
+                arrayOf(boxId.toString())
+            ) { c ->
+                JSONObject().put("movement_id", c.getLong(0)).put("movement_type", c.getString(1))
+                    .put("amount", c.getDouble(2))
+                    .put("balance_before", if (c.isNull(3)) JSONObject.NULL else c.getDouble(3))
+                    .put("balance_after", if (c.isNull(4)) JSONObject.NULL else c.getDouble(4))
+            }
+            var lastAfter: Double? = null
+            for (m in 0 until movementDetails.length()) {
+                val movement = movementDetails.getJSONObject(m)
+                val type = movement.optString("movement_type").lowercase(Locale.ROOT)
+                val amount = movement.optDouble("amount", Double.NaN)
+                val before = if (movement.isNull("balance_before")) Double.NaN else movement.optDouble("balance_before", Double.NaN)
+                val after = if (movement.isNull("balance_after")) Double.NaN else movement.optDouble("balance_after", Double.NaN)
+                movementCount++
+                if (!amount.isFinite() || amount < 0.0 || !before.isFinite() || !after.isFinite()) {
+                    brokenChain++
+                    continue
+                }
+                if (kotlin.math.abs(before - previousAfter) > 0.01) brokenChain++
+                val delta = when (type) {
+                    "in" -> amount.also { inbound += it }
+                    "out", "refund" -> (-amount).also { outbound += amount }
+                    else -> {
+                        unknownTypes++
+                        0.0
+                    }
+                }
+                if (type in setOf("in", "out", "refund") && kotlin.math.abs((before + delta) - after) > 0.01) brokenChain++
+                if (type in setOf("in", "out", "refund")) expected += delta
+                previousAfter = after
+                lastAfter = after
+            }
+            val expectedDelta = current - expected
+            val lastDelta = lastAfter?.let { current - it } ?: current - opening
+            val mismatch = kotlin.math.abs(expectedDelta) > 0.01 ||
+                kotlin.math.abs(lastDelta) > 0.01 || unknownTypes > 0 || brokenChain > 0
+            val result = JSONObject().put("cash_box_id", boxId)
+                .put("opening_balance", opening).put("current_balance", current)
+                .put("expected_balance_from_movements", expected)
+                .put("current_vs_expected_delta", expectedDelta)
+                .put("current_vs_last_movement_delta", lastDelta)
+                .put("inbound_total", inbound).put("outbound_total", outbound)
+                .put("movement_count", movementCount).put("unknown_movement_types", unknownTypes)
+                .put("broken_movement_chain_count", brokenChain)
+                .put("reconciled", !mismatch)
+            diagnostics.put(result)
+            if (mismatch) {
+                issueCount++
+                issues.put(JSONObject().put("code", "cash_box_reconciliation_mismatch")
+                    .put("message", "رصيد الصندوق لا يطابق الرصيد الافتتاحي والحركات الفعلية")
+                    .put("count", 1).put("records", JSONArray().put(result)))
+            }
+        }
+        checked.put("cash_box_reconciliation", diagnostics)
+        checked.put("cash_box_count", boxes.length())
+        checked.put("cash_box_reconciliation_issue_count", issueCount)
+    }
+
+    /**
+     * Audits both directions of every journal reversal relationship. A valid pair
+     * must be in the same station, point to one another, have the expected statuses,
+     * and reverse the debit/credit header totals. No journal is modified here.
+     */
+    private fun auditReversalLinks(stationId: Int, issues: JSONArray, checked: JSONObject) {
+        val required = listOf("id", "station_id", "status", "reference_type", "reference_id",
+            "reversed_entry_id", "total_debit", "total_credit", "is_deleted")
+        if (!tableExists("journal_entries") || !columns("journal_entries").containsAll(required)) {
+            issue(issues, "reversal_audit_schema_unavailable", "حقول التحقق من روابط القيود العكسية غير مكتملة", 1)
+            return
+        }
+        val args = arrayOf(stationId.toString())
+        val invalidPostedReversals = rows(
+            """SELECT rev.id,COALESCE(rev.reference_id,0),COALESCE(rev.reversed_entry_id,0)
+               FROM journal_entries rev
+               WHERE rev.station_id=? AND rev.status='posted' AND rev.is_deleted=0 AND rev.reference_type='reversal'
+                 AND NOT EXISTS (
+                   SELECT 1 FROM journal_entries orig
+                   WHERE orig.id=rev.reference_id AND orig.station_id=rev.station_id AND orig.is_deleted=0
+                     AND orig.status='reversed' AND orig.reversed_entry_id=rev.id
+                     AND rev.reversed_entry_id=orig.id
+                     AND ABS(COALESCE(rev.total_debit,0)-COALESCE(orig.total_credit,0))<=0.01
+                     AND ABS(COALESCE(rev.total_credit,0)-COALESCE(orig.total_debit,0))<=0.01
+                 )""",
+            args
+        ) { c -> JSONObject().put("reversal_journal_id", c.getLong(0)).put("reference_id", c.getLong(1)).put("reversed_entry_id", c.getLong(2)) }
+        val invalidReversedOriginals = rows(
+            """SELECT orig.id,COALESCE(orig.reversed_entry_id,0)
+               FROM journal_entries orig
+               WHERE orig.station_id=? AND orig.status='reversed' AND orig.is_deleted=0
+                 AND NOT EXISTS (
+                   SELECT 1 FROM journal_entries rev
+                   WHERE rev.id=orig.reversed_entry_id AND rev.station_id=orig.station_id
+                     AND rev.is_deleted=0 AND rev.status='posted' AND rev.reference_type='reversal'
+                     AND rev.reference_id=orig.id AND rev.reversed_entry_id=orig.id
+                     AND ABS(COALESCE(rev.total_debit,0)-COALESCE(orig.total_credit,0))<=0.01
+                     AND ABS(COALESCE(rev.total_credit,0)-COALESCE(orig.total_debit,0))<=0.01
+                 )""",
+            args
+        ) { c -> JSONObject().put("original_journal_id", c.getLong(0)).put("reversed_entry_id", c.getLong(1)) }
+        val unexpectedLinks = rows(
+            """SELECT entry.id,entry.status,entry.reference_type,COALESCE(entry.reversed_entry_id,0)
+               FROM journal_entries entry
+               WHERE entry.station_id=? AND entry.is_deleted=0 AND entry.reversed_entry_id IS NOT NULL
+                 AND entry.reference_type<>'reversal' AND entry.status<>'reversed'
+                 AND NOT EXISTS (
+                   SELECT 1 FROM journal_entries rev
+                   WHERE rev.id=entry.reversed_entry_id AND rev.station_id=entry.station_id
+                     AND rev.is_deleted=0 AND rev.status='posted' AND rev.reference_type='reversal'
+                     AND rev.reference_id=entry.id AND rev.reversed_entry_id=entry.id
+                 )""",
+            args
+        ) { c -> JSONObject().put("journal_id", c.getLong(0)).put("status", c.getString(1)).put("reference_type", c.getString(2)).put("reversed_entry_id", c.getLong(3)) }
+        val duplicateReversals = rows(
+            """SELECT reference_id,COUNT(*) FROM journal_entries
+               WHERE station_id=? AND is_deleted=0 AND status='posted' AND reference_type='reversal'
+                 AND reference_id IS NOT NULL GROUP BY reference_id HAVING COUNT(*)>1""",
+            args
+        ) { c -> JSONObject().put("original_journal_id", c.getLong(0)).put("posted_reversal_count", c.getInt(1)) }
+        val reversalItemMismatches = JSONArray()
+        if (tableExists("journal_entry_items") &&
+            columns("journal_entry_items").containsAll(listOf("journal_entry_id", "account_id", "debit", "credit"))) {
+            val validPairs = rows(
+                """SELECT rev.id,orig.id FROM journal_entries rev
+                   JOIN journal_entries orig ON orig.id=rev.reference_id AND orig.station_id=rev.station_id
+                   WHERE rev.station_id=? AND rev.status='posted' AND rev.is_deleted=0
+                     AND rev.reference_type='reversal' AND orig.status='reversed' AND orig.is_deleted=0
+                     AND orig.reversed_entry_id=rev.id AND rev.reversed_entry_id=orig.id""",
+                args
+            ) { c -> JSONObject().put("reversal_id", c.getLong(0)).put("original_id", c.getLong(1)) }
+            for (i in 0 until validPairs.length()) {
+                val pair = validPairs.getJSONObject(i)
+                val reversalId = pair.getLong("reversal_id")
+                val originalId = pair.getLong("original_id")
+                fun lineTotals(journalId: Long): Map<Long, Pair<Double, Double>> {
+                    val totals = linkedMapOf<Long, Pair<Double, Double>>()
+                    rows(
+                        """SELECT account_id,COALESCE(SUM(debit),0),COALESCE(SUM(credit),0)
+                           FROM journal_entry_items WHERE journal_entry_id=? GROUP BY account_id""",
+                        arrayOf(journalId.toString())
+                    ) { c ->
+                        totals[c.getLong(0)] = c.getDouble(1) to c.getDouble(2)
+                        JSONObject()
+                    }
+                    return totals
+                }
+                val originalLines = lineTotals(originalId)
+                val reversalLines = lineTotals(reversalId)
+                for (accountId in (originalLines.keys + reversalLines.keys).toSet()) {
+                    val originalLine = originalLines[accountId] ?: (0.0 to 0.0)
+                    val reversalLine = reversalLines[accountId] ?: (0.0 to 0.0)
+                    if (kotlin.math.abs(reversalLine.first - originalLine.second) > 0.01 ||
+                        kotlin.math.abs(reversalLine.second - originalLine.first) > 0.01) {
+                        reversalItemMismatches.put(JSONObject().put("original_journal_id", originalId)
+                            .put("reversal_journal_id", reversalId).put("account_id", accountId)
+                            .put("original_debit", originalLine.first).put("original_credit", originalLine.second)
+                            .put("reversal_debit", reversalLine.first).put("reversal_credit", reversalLine.second))
+                    }
+                }
+            }
+        } else {
+            issue(issues, "reversal_items_schema_unavailable", "تعذر التحقق من انعكاس بنود الحسابات في القيد العكسي", 1)
+        }
+        checked.put("invalid_posted_reversal_links", invalidPostedReversals)
+        checked.put("reversed_originals_without_valid_reversal", invalidReversedOriginals)
+        checked.put("unexpected_reversed_entry_links", unexpectedLinks)
+        checked.put("duplicate_posted_reversals", duplicateReversals)
+        checked.put("reversal_item_mismatches", reversalItemMismatches)
+        val count = invalidPostedReversals.length() + invalidReversedOriginals.length() +
+            unexpectedLinks.length() + duplicateReversals.length() + reversalItemMismatches.length()
+        checked.put("invalid_reversal_link_count", count)
+        if (count > 0) {
+            val records = JSONArray()
+            for (array in listOf(invalidPostedReversals, invalidReversedOriginals, unexpectedLinks, duplicateReversals, reversalItemMismatches)) {
+                for (i in 0 until array.length()) records.put(array.getJSONObject(i))
+            }
+            issue(issues, "invalid_reversal_links", "روابط القيود العكسية أو بنودها غير متبادلة أو غير متسقة أو مكررة", count, records)
+        }
     }
 
     private fun output(stationId: Int, issues: JSONArray, checked: JSONObject) = JSONObject()
