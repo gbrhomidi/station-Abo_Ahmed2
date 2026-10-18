@@ -64,6 +64,7 @@ internal class FinancialIntegrityAuditor(private val database: SQLiteDatabase) {
         auditSource("expenses", "expense", listOf("paid"), stationId, issues, checked)
         auditSource("receipts", "receipt", listOf("active", "paid", "completed"), stationId, issues, checked)
         auditCashBoxes(stationId, issues, checked)
+        auditBankAccounts(stationId, issues, checked)
         auditReversalLinks(stationId, issues, checked)
         return output(stationId, issues, checked)
     }
@@ -181,6 +182,88 @@ internal class FinancialIntegrityAuditor(private val database: SQLiteDatabase) {
         checked.put("cash_box_reconciliation", diagnostics)
         checked.put("cash_box_count", boxes.length())
         checked.put("cash_box_reconciliation_issue_count", issueCount)
+    }
+
+
+    /**
+     * Reconciles station-scoped bank account balances against the bank ledger.
+     * The ledger convention used by the writer is debit increases the bank asset
+     * and credit decreases it. This is read-only and never repairs balances.
+     */
+    private fun auditBankAccounts(stationId: Int, issues: JSONArray, checked: JSONObject) {
+        if (!tableExists("bank_accounts") || !tableExists("bank_ledger")) {
+            issue(issues, "bank_reconciliation_schema_unavailable", "تعذر مطابقة أرصدة الحسابات البنكية مع دفتر البنك", 1)
+            return
+        }
+        val accountColumns = columns("bank_accounts")
+        val ledgerColumns = columns("bank_ledger")
+        if (!accountColumns.containsAll(listOf("id", "station_id", "opening_balance", "current_balance", "is_deleted")) ||
+            !ledgerColumns.containsAll(listOf("id", "bank_account_id", "debit", "credit", "balance"))) {
+            issue(issues, "bank_reconciliation_schema_unavailable", "حقول مطابقة الحسابات البنكية ودفتر البنك غير مكتملة", 1)
+            return
+        }
+
+        val accounts = rows(
+            "SELECT id,COALESCE(opening_balance,0),COALESCE(current_balance,0) FROM bank_accounts WHERE station_id=? AND is_deleted=0 ORDER BY id",
+            arrayOf(stationId.toString())
+        ) { c -> JSONObject().put("bank_account_id", c.getLong(0))
+            .put("opening_balance", c.getDouble(1)).put("current_balance", c.getDouble(2)) }
+        val diagnostics = JSONArray()
+        var issueCount = 0
+        for (i in 0 until accounts.length()) {
+            val account = accounts.getJSONObject(i)
+            val accountId = account.getLong("bank_account_id")
+            val opening = account.getDouble("opening_balance")
+            val current = account.getDouble("current_balance")
+            var expected = opening
+            var previousBalance = opening
+            var brokenChain = 0
+            var invalidAmounts = 0
+            var debitTotal = 0.0
+            var creditTotal = 0.0
+            var lastBalance: Double? = null
+            val ledger = rows(
+                "SELECT id,COALESCE(debit,0),COALESCE(credit,0),balance FROM bank_ledger WHERE bank_account_id=? ORDER BY id",
+                arrayOf(accountId.toString())
+            ) { c -> JSONObject().put("ledger_id", c.getLong(0)).put("debit", c.getDouble(1))
+                .put("credit", c.getDouble(2)).put("balance", c.getDouble(3)) }
+            for (j in 0 until ledger.length()) {
+                val row = ledger.getJSONObject(j)
+                val debit = row.getDouble("debit")
+                val credit = row.getDouble("credit")
+                val balance = row.getDouble("balance")
+                if (debit < -0.01 || credit < -0.01 || (debit > 0.01 && credit > 0.01)) invalidAmounts++
+                val calculated = previousBalance + debit - credit
+                if (kotlin.math.abs(calculated - balance) > 0.01) brokenChain++
+                debitTotal += debit
+                creditTotal += credit
+                expected += debit - credit
+                previousBalance = balance
+                lastBalance = balance
+            }
+            val expectedDelta = current - expected
+            val lastDelta = lastBalance?.let { current - it } ?: current - opening
+            val mismatch = kotlin.math.abs(expectedDelta) > 0.01 ||
+                kotlin.math.abs(lastDelta) > 0.01 || brokenChain > 0 || invalidAmounts > 0
+            val result = JSONObject().put("bank_account_id", accountId)
+                .put("opening_balance", opening).put("current_balance", current)
+                .put("expected_balance_from_ledger", expected)
+                .put("current_vs_expected_delta", expectedDelta)
+                .put("current_vs_last_ledger_delta", lastDelta)
+                .put("debit_total", debitTotal).put("credit_total", creditTotal)
+                .put("ledger_entry_count", ledger.length()).put("broken_ledger_chain_count", brokenChain)
+                .put("invalid_ledger_amount_count", invalidAmounts).put("reconciled", !mismatch)
+            diagnostics.put(result)
+            if (mismatch) {
+                issueCount++
+                issues.put(JSONObject().put("code", "bank_account_reconciliation_mismatch")
+                    .put("message", "رصيد الحساب البنكي لا يطابق الرصيد الافتتاحي ودفتر البنك")
+                    .put("count", 1).put("records", JSONArray().put(result)))
+            }
+        }
+        checked.put("bank_account_reconciliation", diagnostics)
+        checked.put("bank_account_count", accounts.length())
+        checked.put("bank_account_reconciliation_issue_count", issueCount)
     }
 
     /**

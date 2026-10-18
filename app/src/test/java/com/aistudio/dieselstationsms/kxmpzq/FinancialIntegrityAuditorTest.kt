@@ -40,6 +40,14 @@ class FinancialIntegrityAuditorTest {
             amount REAL NOT NULL, balance_before REAL, balance_after REAL,
             is_deleted INTEGER NOT NULL DEFAULT 0
         )""")
+        db.execSQL("""CREATE TABLE bank_accounts (
+            id INTEGER PRIMARY KEY, station_id INTEGER NOT NULL, opening_balance REAL NOT NULL,
+            current_balance REAL NOT NULL, is_deleted INTEGER NOT NULL DEFAULT 0
+        )""")
+        db.execSQL("""CREATE TABLE bank_ledger (
+            id INTEGER PRIMARY KEY, bank_account_id INTEGER NOT NULL, debit REAL NOT NULL DEFAULT 0,
+            credit REAL NOT NULL DEFAULT 0, balance REAL NOT NULL
+        )""")
         auditor = FinancialIntegrityAuditor(db)
     }
 
@@ -159,6 +167,44 @@ class FinancialIntegrityAuditorTest {
             assertTrue(c.moveToFirst())
             assertEquals("reversed", c.getString(0))
             assertEquals(11L, c.getLong(1))
+        }
+    }
+
+    @Test
+    fun reconcilesBankAccountAgainstOpeningBalanceAndBankLedger() {
+        db.execSQL("INSERT INTO bank_accounts(id,station_id,opening_balance,current_balance) VALUES(1,1,100,115)")
+        db.execSQL("INSERT INTO bank_ledger(id,bank_account_id,debit,credit,balance) VALUES(1,1,20,0,120)")
+        db.execSQL("INSERT INTO bank_ledger(id,bank_account_id,debit,credit,balance) VALUES(2,1,0,5,115)")
+
+        val result = auditor.audit(1)
+        val checked = result.getJSONObject("checked")
+        val accounts = checked.getJSONArray("bank_account_reconciliation")
+        assertEquals(1, accounts.length())
+        assertTrue(accounts.getJSONObject(0).getBoolean("reconciled"))
+        assertEquals(115.0, accounts.getJSONObject(0).getDouble("expected_balance_from_ledger"), 0.001)
+        assertEquals(0, checked.getInt("bank_account_reconciliation_issue_count"))
+    }
+
+    @Test
+    fun detectsBankLedgerDriftAndBrokenChainButIgnoresOtherStations() {
+        db.execSQL("INSERT INTO bank_accounts(id,station_id,opening_balance,current_balance) VALUES(1,1,100,130)")
+        db.execSQL("INSERT INTO bank_accounts(id,station_id,opening_balance,current_balance) VALUES(2,2,100,999)")
+        db.execSQL("INSERT INTO bank_ledger(id,bank_account_id,debit,credit,balance) VALUES(1,1,20,0,120)")
+        db.execSQL("INSERT INTO bank_ledger(id,bank_account_id,debit,credit,balance) VALUES(2,1,0,5,114)")
+        db.execSQL("INSERT INTO bank_ledger(id,bank_account_id,debit,credit,balance) VALUES(3,2,50,0,150)")
+
+        val result = auditor.audit(1)
+        val checked = result.getJSONObject("checked")
+        val accounts = checked.getJSONArray("bank_account_reconciliation")
+        assertEquals(1, accounts.length())
+        assertFalse(accounts.getJSONObject(0).getBoolean("reconciled"))
+        assertEquals(115.0, accounts.getJSONObject(0).getDouble("expected_balance_from_ledger"), 0.001)
+        assertTrue(accounts.getJSONObject(0).getInt("broken_ledger_chain_count") > 0)
+        assertTrue(result.getJSONArray("issues").toString().contains("bank_account_reconciliation_mismatch"))
+
+        db.rawQuery("SELECT current_balance FROM bank_accounts WHERE id=1", null).use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(130.0, c.getDouble(0), 0.001)
         }
     }
 }
