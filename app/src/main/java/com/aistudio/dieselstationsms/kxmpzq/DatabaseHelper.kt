@@ -28684,15 +28684,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "SELECT id, 0.0 FROM accounts WHERE is_deleted=0"
             }
             db.rawQuery(openingSql, openingArgs.toTypedArray()).use { c -> while(c.moveToNext()) openingByAccount[c.getLong(0)] = c.getDouble(1) }
-            var currentAccount = -1L
-            var balance = 0.0
+            // Rows are chronological across all accounts when include_all=true. Keep
+            // independent running balances per account instead of resetting whenever
+            // the chronological stream switches to another account.
+            val runningBalances = mutableMapOf<Long, Double>()
             for (i in 0 until rows.length()) {
                 val row = rows.optJSONObject(i) ?: continue
                 val accountIdForRow = row.optLong("account_id",0L)
-                if (accountIdForRow != currentAccount) { currentAccount = accountIdForRow; balance = openingByAccount[accountIdForRow] ?: row.optDouble("opening_balance",0.0) }
-                balance += row.optDouble("debit", 0.0) - row.optDouble("credit", 0.0)
+                val opening = openingByAccount[accountIdForRow] ?: row.optDouble("opening_balance",0.0)
+                val balance = (runningBalances[accountIdForRow] ?: opening) +
+                    row.optDouble("debit", 0.0) - row.optDouble("credit", 0.0)
+                runningBalances[accountIdForRow] = balance
                 row.put("balance", balance)
-                row.put("opening_balance", openingByAccount[accountIdForRow] ?: row.optDouble("opening_balance",0.0))
+                row.put("opening_balance", opening)
                 row.put("description", row.optString("description", row.optString("entry_description", "")))
             }
             rows
@@ -29129,9 +29133,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        $periodCreditExpr AS total_credit,
                        a.is_active
                 FROM accounts a
-                LEFT JOIN journal_entry_items jei ON jei.account_id = a.id
-                LEFT JOIN journal_entries je ON je.id = jei.journal_entry_id
-                    AND je.status='posted' AND je.is_deleted=0 AND je.station_id=?
+                LEFT JOIN journal_entries je ON je.status='posted'
+                    AND je.is_deleted=0 AND je.station_id=?
+                LEFT JOIN journal_entry_items jei ON jei.journal_entry_id = je.id
+                    AND jei.account_id = a.id
                 WHERE a.is_deleted=0
                 GROUP BY a.id
                 ORDER BY a.account_code COLLATE NOCASE, a.id

@@ -221,4 +221,81 @@ class FiscalPeriodLifecycleRobolectricTest {
         }
         assertFalse(helper.isDateInClosedPeriod(11, "2026-05-11"))
     }
+
+    @Test
+    fun trialBalanceWithoutDatesMustExcludeOtherStations() {
+        val db = helper.writableDatabase
+        db.rawQuery("SELECT id FROM stations WHERE id=12", null).use { c ->
+            if (!c.moveToFirst()) db.insertOrThrow("stations", null, ContentValues().apply {
+                put("id", 12); put("uuid", UUID.randomUUID().toString())
+                put("station_code", "TEST-FISCAL-12"); put("station_name", "محطة اختبار ثانية")
+                put("status", "active"); put("is_deleted", 0)
+            })
+        }
+        fun journal(stationId: Int, date: String, number: String, debit: Double, credit: Double): Long {
+            val id = db.insertOrThrow("journal_entries", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString()); put("entry_number", number + UUID.randomUUID())
+                put("entry_date", date); put("entry_type", "general"); put("description", "اختبار نطاق ميزان المراجعة")
+                put("total_debit", debit); put("total_credit", credit); put("status", "posted")
+                put("station_id", stationId); put("is_deleted", 0)
+            })
+            db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString()); put("journal_entry_id", id); put("line_number", 1)
+                put("account_id", debitAccountId); put("debit", debit); put("credit", 0.0)
+            })
+            db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString()); put("journal_entry_id", id); put("line_number", 2)
+                put("account_id", creditAccountId); put("debit", 0.0); put("credit", credit)
+            })
+            return id
+        }
+        journal(11, "2026-10-01", "TB-ST11-", 30.0, 30.0)
+        journal(12, "2026-10-01", "TB-ST12-", 900.0, 900.0)
+
+        val rows = helper.getChartTrialBalance(null, null, 11)
+        val debit = (0 until rows.length()).map { rows.getJSONObject(it) }
+            .first { it.getLong("id") == debitAccountId }
+        val credit = (0 until rows.length()).map { rows.getJSONObject(it) }
+            .first { it.getLong("id") == creditAccountId }
+        assertEquals(30.0, debit.getDouble("total_debit"), 0.001)
+        assertEquals(0.0, debit.getDouble("total_credit"), 0.001)
+        assertEquals(0.0, credit.getDouble("total_debit"), 0.001)
+        assertEquals(30.0, credit.getDouble("total_credit"), 0.001)
+    }
+
+    @Test
+    fun generalLedgerRunningBalancesRemainIndependentAcrossInterleavedAccounts() {
+        val db = helper.writableDatabase
+        fun addJournal(date: String, number: String, debit: Double, credit: Double) {
+            val id = db.insertOrThrow("journal_entries", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString()); put("entry_number", number + UUID.randomUUID())
+                put("entry_date", date); put("entry_type", "general"); put("description", "اختبار رصيد الأستاذ")
+                put("total_debit", debit); put("total_credit", credit); put("status", "posted")
+                put("station_id", 11); put("is_deleted", 0)
+            })
+            db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString()); put("journal_entry_id", id); put("line_number", 1)
+                put("account_id", debitAccountId); put("debit", debit); put("credit", 0.0)
+            })
+            db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString()); put("journal_entry_id", id); put("line_number", 2)
+                put("account_id", creditAccountId); put("debit", 0.0); put("credit", credit)
+            })
+        }
+        addJournal("2026-10-01", "GL-1-", 100.0, 100.0)
+        addJournal("2026-10-02", "GL-2-", 50.0, 50.0)
+
+        val rows = helper.getLedgerEntries(JSONObject().put("include_all", true)
+            .put("start_date", "2026-10-01").put("end_date", "2026-10-31"), 11)
+        val debitRows = (0 until rows.length()).map { rows.getJSONObject(it) }
+            .filter { it.getLong("account_id") == debitAccountId }
+        val creditRows = (0 until rows.length()).map { rows.getJSONObject(it) }
+            .filter { it.getLong("account_id") == creditAccountId }
+        assertEquals(2, debitRows.size)
+        assertEquals(2, creditRows.size)
+        assertEquals(100.0, debitRows[0].getDouble("balance"), 0.001)
+        assertEquals(150.0, debitRows[1].getDouble("balance"), 0.001)
+        assertEquals(-100.0, creditRows[0].getDouble("balance"), 0.001)
+        assertEquals(-150.0, creditRows[1].getDouble("balance"), 0.001)
+    }
 }
