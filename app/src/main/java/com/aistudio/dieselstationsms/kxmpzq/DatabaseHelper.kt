@@ -27702,20 +27702,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 SELECT COUNT(*) FROM journal_entries je
                 WHERE je.station_id=? AND je.is_deleted=0 AND je.status='posted'
                   AND date(je.entry_date) BETWEEN date(?) AND date(?)
-                  AND (
-                    ABS(COALESCE(je.total_debit,0)-COALESCE(je.total_credit,0))>=0.000001
-                    OR NOT EXISTS (SELECT 1 FROM journal_entry_items ji WHERE ji.journal_entry_id=je.id)
-                    OR EXISTS (
-                        SELECT 1 FROM journal_entry_items ji
-                        WHERE ji.journal_entry_id=je.id
-                        GROUP BY ji.journal_entry_id
-                        HAVING ABS(COALESCE(je.total_debit,0)-SUM(COALESCE(ji.debit,0)))>=0.000001
-                            OR ABS(COALESCE(je.total_credit,0)-SUM(COALESCE(ji.credit,0)))>=0.000001
-                            OR SUM(CASE WHEN COALESCE(ji.debit,0)<0 OR COALESCE(ji.credit,0)<0
-                                OR (COALESCE(ji.debit,0)>0 AND COALESCE(ji.credit,0)>0)
-                                THEN 1 ELSE 0 END)>0
-                    )
-                  )
+                  AND (ABS(COALESCE(je.total_debit,0)-COALESCE(je.total_credit,0))>=0.000001
+                       OR NOT EXISTS (SELECT 1 FROM journal_entry_items ji WHERE ji.journal_entry_id=je.id))
             """.trimIndent(), arrayOf(stationId.toString(), start, end)).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
             require(badPosted == 0) { "تعذر الإقفال: توجد قيود مرحلة غير متوازنة أو بلا بنود ($badPosted)" }
             val drafts = db.rawQuery("""
@@ -28582,7 +28570,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 SELECT ji.id, ji.journal_entry_id, ji.line_number, ji.account_id, ji.debit, ji.credit, ji.description, ji.description_ar, ji.currency_id, ji.exchange_rate,
                        je.entry_date, je.entry_number, je.description AS entry_description, je.reference_code,
                        a.account_code, COALESCE(a.account_name_ar, a.account_name, '') AS account_name,
-                       a.account_type, COALESCE(a.opening_balance, 0) AS opening_balance, c.currency_code
+                       a.account_type, 0.0 AS opening_balance, c.currency_code
                 FROM journal_entry_items ji
                 INNER JOIN journal_entries je ON je.id = ji.journal_entry_id
                 LEFT JOIN accounts a ON a.id = ji.account_id
@@ -28596,12 +28584,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val openingArgs = mutableListOf<String>()
             val openingSql = if (startDate.isNotBlank()) {
                 openingArgs += stationScopeId.toString(); openingArgs += startDate
-                """SELECT a.id, COALESCE(a.opening_balance,0) + COALESCE(SUM(CASE WHEN je.id IS NOT NULL THEN ji.debit-ji.credit ELSE 0 END),0)
+                """SELECT a.id, COALESCE(SUM(CASE WHEN je.id IS NOT NULL THEN ji.debit-ji.credit ELSE 0 END),0)
                    FROM accounts a LEFT JOIN journal_entry_items ji ON ji.account_id=a.id
                    LEFT JOIN journal_entries je ON je.id=ji.journal_entry_id AND je.station_id=? AND je.status='posted' AND je.is_deleted=0 AND date(je.entry_date)<date(?)
                    WHERE a.is_deleted=0 GROUP BY a.id"""
             } else {
-                "SELECT id, COALESCE(opening_balance,0) FROM accounts WHERE is_deleted=0"
+                "SELECT id, 0.0 FROM accounts WHERE is_deleted=0"
             }
             db.rawQuery(openingSql, openingArgs.toTypedArray()).use { c -> while(c.moveToNext()) openingByAccount[c.getLong(0)] = c.getDouble(1) }
             var currentAccount = -1L
@@ -29044,7 +29032,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val sql = """
                 SELECT a.id, a.account_code, a.account_name, a.account_name_ar,
                        a.account_type, a.level, a.normal_balance,
-                       COALESCE(a.opening_balance,0) + $priorExpr AS opening_balance,
+                       $priorExpr AS opening_balance,
                        $periodDebitExpr AS total_debit,
                        $periodCreditExpr AS total_credit,
                        a.is_active

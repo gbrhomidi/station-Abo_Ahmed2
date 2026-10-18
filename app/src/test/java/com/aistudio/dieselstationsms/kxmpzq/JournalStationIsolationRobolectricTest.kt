@@ -554,4 +554,41 @@ class JournalStationIsolationRobolectricTest {
             put("is_active", 1)
             put("is_deleted", 0)
         })
+
+    @Test
+    fun `trial balance and ledger opening balances exclude global account opening balance across stations`() {
+        val db = helper.writableDatabase
+        insertStation(db, 27, "TEST-TB-SCOPE-A", "محطة اختبار ميزان المراجعة أ")
+        insertStation(db, 28, "TEST-TB-SCOPE-B", "محطة اختبار ميزان المراجعة ب")
+        val debitAccount = insertAccount(db, "T-TB-SCOPE-DR", "حساب مدين لاختبار نطاق الميزان")
+        val creditAccount = insertAccount(db, "T-TB-SCOPE-CR", "حساب دائن لاختبار نطاق الميزان")
+        db.update("accounts", ContentValues().apply { put("opening_balance", 500.0) }, "id=?", arrayOf(debitAccount.toString()))
+        db.update("accounts", ContentValues().apply { put("opening_balance", 500.0) }, "id=?", arrayOf(creditAccount.toString()))
+
+        fun post(stationId: Int, date: String, amount: Double, description: String) {
+            val id = helper.saveJournalEntry(
+                JSONObject().put("entry_date", date).put("description", description).put("entry_type", "general")
+                    .put("items", JSONArray()
+                        .put(JSONObject().put("account_id", debitAccount).put("debit", amount).put("credit", 0.0))
+                        .put(JSONObject().put("account_id", creditAccount).put("debit", 0.0).put("credit", amount))),
+                0L, stationId
+            )
+            assertEquals(1, helper.postJournalEntry(id, 0L, stationId))
+        }
+        post(27, "2026-08-24", 10.0, "حركة سابقة ضمن محطة أ")
+        post(27, "2026-08-25", 5.0, "حركة الفترة ضمن محطة أ")
+        post(28, "2026-08-24", 900.0, "حركة منفصلة ضمن محطة ب")
+
+        val trialBalance = helper.getChartTrialBalance(null, null, 27)
+        val debitRow = (0 until trialBalance.length()).mapNotNull { trialBalance.optJSONObject(it) }
+            .first { it.optLong("id") == debitAccount }
+        assertEquals(0.0, debitRow.getDouble("opening_balance"), 0.001)
+        assertEquals(15.0, debitRow.getDouble("total_debit"), 0.001)
+
+        val ledger = helper.getLedgerEntries(JSONObject().put("account_id", debitAccount).put("start_date", "2026-08-25"), 27)
+        assertEquals(1, ledger.length())
+        assertEquals(10.0, ledger.getJSONObject(0).getDouble("opening_balance"), 0.001)
+        assertEquals(15.0, ledger.getJSONObject(0).getDouble("balance"), 0.001)
+    }
+
 }
