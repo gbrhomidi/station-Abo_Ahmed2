@@ -298,4 +298,68 @@ class FiscalPeriodLifecycleRobolectricTest {
         assertEquals(-100.0, creditRows[0].getDouble("balance"), 0.001)
         assertEquals(-150.0, creditRows[1].getDouble("balance"), 0.001)
     }
+
+    @Test
+    fun financialReportsRetainPostedHistoryForSoftDeletedAccounts() {
+        val db = helper.writableDatabase
+        val revenueId = db.rawQuery(
+            "SELECT id FROM accounts WHERE account_code='4101' AND account_type='revenue' LIMIT 1", null
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val assetId = db.rawQuery(
+            "SELECT id FROM accounts WHERE account_code='1101' AND account_type='asset' LIMIT 1", null
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val currencyId = db.rawQuery(
+            "SELECT id FROM currencies WHERE is_default=1 AND is_deleted=0 LIMIT 1", null
+        ).use { c -> if (c.moveToFirst()) c.getLong(0) else {
+            db.rawQuery("SELECT id FROM currencies WHERE is_deleted=0 ORDER BY id LIMIT 1", null).use { fallback ->
+                check(fallback.moveToFirst()); fallback.getLong(0)
+            }
+        } }
+
+        // Soft deletion must not erase posted financial history from reports.
+        db.update("accounts", ContentValues().apply { put("is_deleted", 1) }, "id IN (?,?)",
+            arrayOf(revenueId.toString(), assetId.toString()))
+        val journalId = db.insertOrThrow("journal_entries", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("entry_number", "TEST-HISTORICAL-ACCOUNT-" + UUID.randomUUID().toString().take(8))
+            put("entry_date", "2026-10-05")
+            put("entry_type", "sales")
+            put("description", "Posted history for soft-deleted accounts")
+            put("total_debit", 120.0); put("total_credit", 120.0)
+            put("is_balanced", 1); put("status", "posted"); put("station_id", 11)
+            put("is_deleted", 0); put("posted_by", userId); put("created_by", userId)
+        })
+        db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("journal_entry_id", journalId)
+            put("line_number", 1); put("account_id", assetId); put("debit", 120.0); put("credit", 0.0)
+            put("currency_id", currencyId); put("exchange_rate", 1.0)
+        })
+        db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("journal_entry_id", journalId)
+            put("line_number", 2); put("account_id", revenueId); put("debit", 0.0); put("credit", 120.0)
+            put("currency_id", currencyId); put("exchange_rate", 1.0)
+        })
+
+        val trial = helper.getChartTrialBalance("2026-10-01", "2026-10-31", 11)
+        val assetTrial = (0 until trial.length()).map { trial.getJSONObject(it) }.first { it.getLong("id") == assetId }
+        val revenueTrial = (0 until trial.length()).map { trial.getJSONObject(it) }.first { it.getLong("id") == revenueId }
+        assertEquals(120.0, assetTrial.getDouble("total_debit"), 0.001)
+        assertEquals(120.0, revenueTrial.getDouble("total_credit"), 0.001)
+
+        val profit = helper.getProfitReport("2026-10-01", "2026-10-31", 11)
+        assertEquals(120.0, profit.getDouble("revenue"), 0.001)
+        assertEquals(0.0, profit.getDouble("expense"), 0.001)
+        assertEquals(120.0, profit.getDouble("profit"), 0.001)
+
+        val ledger = helper.getLedgerEntries(JSONObject().put("account_id", revenueId)
+            .put("start_date", "2026-10-01").put("end_date", "2026-10-31"), 11)
+        assertEquals(1, ledger.length())
+
+        val balanceSheet = helper.getBalanceSheet("2026-10-31", 11, currencyId)
+        val assets = balanceSheet.getJSONArray("assets")
+        assertTrue((0 until assets.length()).any { assets.getJSONObject(it).optLong("id") == assetId })
+        assertEquals(120.0, balanceSheet.getDouble("total_assets"), 0.001)
+        assertEquals(120.0, balanceSheet.getDouble("net_income"), 0.001)
+        assertTrue(balanceSheet.getBoolean("is_balanced"))
+    }
 }

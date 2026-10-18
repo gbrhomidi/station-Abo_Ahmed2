@@ -16267,7 +16267,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 JOIN accounts a ON a.id=jei.account_id
                 WHERE je.station_id=? AND je.status='posted' AND je.is_deleted=0
                   AND date(je.entry_date) BETWEEN date(?) AND date(?)
-                  AND a.is_deleted=0
             """.trimIndent(), arrayOf(stationId.toString(), fromDate, toDate)).use { c ->
                 val result = JSONObject()
                 if (c.moveToFirst()) {
@@ -16587,13 +16586,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    AND je.status = 'posted'
                    AND je.is_deleted = 0
                    AND je.station_id = ?
-                WHERE a.is_active = 1
-                  AND a.is_deleted = 0
+                WHERE ((a.is_active = 1 AND a.is_deleted = 0) OR EXISTS (
+                    SELECT 1 FROM journal_entry_items historical_item
+                    JOIN journal_entries historical_entry ON historical_entry.id=historical_item.journal_entry_id
+                    WHERE historical_item.account_id=a.id
+                      AND historical_entry.entry_date <= ?
+                      AND historical_entry.station_id=?
+                      AND historical_entry.status='posted' AND historical_entry.is_deleted=0
+                ))
                   AND a.account_type IN ('asset', 'liability', 'equity', 'revenue', 'expense')
                 ORDER BY a.account_type, a.level, a.account_code, jei.id
             """.trimIndent()
 
-            db.rawQuery(accountSql, arrayOf(reportDate, stationId.toString())).use { cursor ->
+            db.rawQuery(accountSql, arrayOf(reportDate, stationId.toString(), reportDate, stationId.toString())).use { cursor ->
                 val idIndex = cursor.getColumnIndexOrThrow("id")
                 val codeIndex = cursor.getColumnIndexOrThrow("account_code")
                 val nameIndex = cursor.getColumnIndexOrThrow("account_name")
@@ -29137,11 +29142,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     AND je.is_deleted=0 AND je.station_id=?
                 LEFT JOIN journal_entry_items jei ON jei.journal_entry_id = je.id
                     AND jei.account_id = a.id
-                WHERE a.is_deleted=0
+                WHERE (a.is_deleted=0 OR EXISTS (
+                    SELECT 1 FROM journal_entry_items historical_item
+                    JOIN journal_entries historical_entry ON historical_entry.id=historical_item.journal_entry_id
+                    WHERE historical_item.account_id=a.id
+                      AND historical_entry.station_id=?
+                      AND historical_entry.status='posted' AND historical_entry.is_deleted=0
+                ))
                 GROUP BY a.id
                 ORDER BY a.account_code COLLATE NOCASE, a.id
             """.trimIndent()
-            val args = periodArgs.toMutableList().apply { add(stationScopeId.toString()) }
+            // Keep soft-deleted accounts visible only where this station has posted
+            // history, so the trial balance cannot silently drop historical ledger lines.
+            val args = periodArgs.toMutableList().apply {
+                add(stationScopeId.toString())
+                add(stationScopeId.toString())
+            }
             db.rawQuery(sql, args.toTypedArray()).use { cursorToJsonArray(it) }
         } finally { dbLock.unlock() }
     }
