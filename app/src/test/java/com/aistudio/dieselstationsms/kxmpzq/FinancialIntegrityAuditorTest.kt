@@ -129,4 +129,36 @@ class FinancialIntegrityAuditorTest {
         val result = auditor.audit(1)
         assertTrue(result.getJSONObject("checked").getInt("invalid_reversal_link_count") > 0)
     }
+
+    @Test
+    fun detectsReversalAccountLineMismatchWithoutChangingPostedEntries() {
+        db.execSQL("""INSERT INTO journal_entries(id,station_id,status,total_debit,total_credit,reference_type,reference_id,reversed_entry_id,is_deleted,entry_date)
+            VALUES(10,1,'reversed',10,10,'payment',88,11,0,'2026-10-01')""")
+        db.execSQL("""INSERT INTO journal_entries(id,station_id,status,total_debit,total_credit,reference_type,reference_id,reversed_entry_id,is_deleted,entry_date)
+            VALUES(11,1,'posted',10,10,'reversal',10,10,0,'2026-10-02')""")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(10,10,100,10,0)")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(11,10,200,0,10)")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(12,11,100,0,9)")
+        db.execSQL("INSERT INTO journal_entry_items(id,journal_entry_id,account_id,debit,credit) VALUES(13,11,200,10,0)")
+
+        val result = auditor.audit(1)
+        val checked = result.getJSONObject("checked")
+        val mismatches = checked.getJSONArray("reversal_item_mismatches")
+        assertEquals(1, mismatches.length())
+        assertEquals(100L, mismatches.getJSONObject(0).getLong("account_id"))
+        assertTrue(checked.getInt("invalid_reversal_link_count") > 0)
+        assertTrue(result.getJSONArray("issues").toString().contains("invalid_reversal_links"))
+
+        // The integrity auditor is diagnostic only; it must not rewrite either side.
+        db.rawQuery("SELECT debit,credit FROM journal_entry_items WHERE id=12", null).use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(0.0, c.getDouble(0), 0.001)
+            assertEquals(9.0, c.getDouble(1), 0.001)
+        }
+        db.rawQuery("SELECT status,reversed_entry_id FROM journal_entries WHERE id=10", null).use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("reversed", c.getString(0))
+            assertEquals(11L, c.getLong(1))
+        }
+    }
 }
