@@ -244,4 +244,21 @@ class FinancialIntegrityContractTest {
         return candidates.firstOrNull { it.isFile }
             ?: error("DatabaseHelper.kt was not found from " + System.getProperty("user.dir"))
     }
+
+    @Test
+    fun ledgerOpeningBalancesRetainSoftDeletedAccountsWithStationHistory() {
+        val source = locateDatabaseHelper().readText()
+        val ledger = functionBody(source, "fun getLedgerEntries")
+        assertTrue(
+            "Opening-balance query must retain soft-deleted accounts that have posted history in the requested station",
+            ledger.contains("historical_entry.station_id=?") &&
+                ledger.contains("historical_entry.status='posted'") &&
+                ledger.contains("WHERE a.is_deleted=0 OR EXISTS")
+        )
+        assertTrue(
+            "Opening-balance query must bind the station scope for both dated and undated ledger reports",
+            ledger.contains("openingArgs += stationScopeId.toString(); openingArgs += startDate; openingArgs += stationScopeId.toString()") &&
+                ledger.contains("openingArgs += stationScopeId.toString()")
+        )
+    }
 }

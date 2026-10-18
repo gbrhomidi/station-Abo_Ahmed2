@@ -28680,13 +28680,28 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val openingByAccount = mutableMapOf<Long, Double>()
             val openingArgs = mutableListOf<String>()
             val openingSql = if (startDate.isNotBlank()) {
-                openingArgs += stationScopeId.toString(); openingArgs += startDate
+                openingArgs += stationScopeId.toString(); openingArgs += startDate; openingArgs += stationScopeId.toString()
                 """SELECT a.id, COALESCE(SUM(CASE WHEN je.id IS NOT NULL THEN ji.debit-ji.credit ELSE 0 END),0)
                    FROM accounts a LEFT JOIN journal_entry_items ji ON ji.account_id=a.id
                    LEFT JOIN journal_entries je ON je.id=ji.journal_entry_id AND je.station_id=? AND je.status='posted' AND je.is_deleted=0 AND date(je.entry_date)<date(?)
-                   WHERE a.is_deleted=0 GROUP BY a.id"""
+                   WHERE a.is_deleted=0 OR EXISTS (
+                       SELECT 1 FROM journal_entry_items historical_item
+                       JOIN journal_entries historical_entry ON historical_entry.id=historical_item.journal_entry_id
+                       WHERE historical_item.account_id=a.id
+                         AND historical_entry.station_id=?
+                         AND historical_entry.status='posted' AND historical_entry.is_deleted=0
+                   )
+                   GROUP BY a.id"""
             } else {
-                "SELECT id, 0.0 FROM accounts WHERE is_deleted=0"
+                openingArgs += stationScopeId.toString()
+                """SELECT a.id, 0.0 FROM accounts a
+                   WHERE a.is_deleted=0 OR EXISTS (
+                       SELECT 1 FROM journal_entry_items historical_item
+                       JOIN journal_entries historical_entry ON historical_entry.id=historical_item.journal_entry_id
+                       WHERE historical_item.account_id=a.id
+                         AND historical_entry.station_id=?
+                         AND historical_entry.status='posted' AND historical_entry.is_deleted=0
+                   )"""
             }
             db.rawQuery(openingSql, openingArgs.toTypedArray()).use { c -> while(c.moveToNext()) openingByAccount[c.getLong(0)] = c.getDouble(1) }
             // Rows are chronological across all accounts when include_all=true. Keep
