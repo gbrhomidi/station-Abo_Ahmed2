@@ -8314,67 +8314,55 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
 
-        @JavascriptInterface
-        fun printCurrentPage(): String {
+        private fun scheduleWebViewPrint(documentTitle: String, jobTitle: String): String {
+            val currentWebView = webView ?: return errorResponse("صفحة الطباعة غير متاحة")
+            // WebView exposes progress, not a public isLoading property.
+            if (currentWebView.progress < 100) {
+                return errorResponse("لا يمكن الطباعة قبل اكتمال تحميل الصفحة")
+            }
             return try {
                 runOnUiThread {
-                    val manager = getSystemService(Context.PRINT_SERVICE) as? PrintManager
-                    val currentWebView = webView
-                    if (manager == null || currentWebView == null) {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "خدمة الطباعة غير متاحة حالياً",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    } else {
-                        val adapter = currentWebView.createPrintDocumentAdapter("accounting-report")
+                    try {
+                        val manager = getSystemService(Context.PRINT_SERVICE) as? PrintManager
+                            ?: throw IllegalStateException("خدمة الطباعة غير متاحة حالياً")
+                        val liveWebView = webView
+                            ?: throw IllegalStateException("صفحة الطباعة لم تعد متاحة")
+                        if (liveWebView.progress < 100) {
+                            throw IllegalStateException("لا يمكن الطباعة قبل اكتمال تحميل الصفحة")
+                        }
                         manager.print(
-                            "فاتورة بيع",
-                            adapter,
+                            jobTitle,
+                            liveWebView.createPrintDocumentAdapter(documentTitle),
                             PrintAttributes.Builder()
                                 .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
                                 .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
                                 .build()
                         )
+                    } catch (e: Exception) {
+                        DebugLogger.logException("NativePrint", e)
+                        Toast.makeText(
+                            this@MainActivity,
+                            e.message ?: "تعذر فتح نافذة الطباعة",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
-                successResponse(true, "تم فتح نافذة الطباعة")
+                successResponse(true, "تم إرسال طلب الطباعة")
             } catch (e: Exception) {
                 DebugLogger.logException("NativePrint", e)
-                errorResponse(e.message)
+                errorResponse(e.message ?: "تعذر فتح نافذة الطباعة")
             }
         }
 
         @JavascriptInterface
+        fun printCurrentPage(): String =
+            scheduleWebViewPrint("accounting-report", "فاتورة بيع")
+
+        @JavascriptInterface
         fun printCurrentPageWithTitle(title: String = "طباعة"): String {
-            return try {
-                runOnUiThread {
-                    val manager = getSystemService(Context.PRINT_SERVICE) as? PrintManager
-                    val currentWebView = webView
-                    if (manager == null || currentWebView == null) {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "خدمة الطباعة غير متاحة حالياً",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    } else {
-                        val safeTitle = title.trim().ifBlank { "document" }
-                        val adapter = currentWebView.createPrintDocumentAdapter(safeTitle)
-                        manager.print(
-                            title.trim().ifBlank { "طباعة" },
-                            adapter,
-                            PrintAttributes.Builder()
-                                .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-                                .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
-                                .build()
-                        )
-                    }
-                }
-                successResponse(true, "تم فتح نافذة الطباعة")
-            } catch (e: Exception) {
-                DebugLogger.logException("PrintWithTitle", e)
-                errorResponse(e.message ?: "تعذر فتح نافذة الطباعة")
-            }
+            val safeTitle = title.trim().take(120).ifBlank { "طباعة" }
+            val documentTitle = safeTitle.replace(Regex("[\\r\\n\\u0000-\\u001F]"), " ")
+            return scheduleWebViewPrint(documentTitle, safeTitle)
         }
 
         private fun operationalJson(jsonData: String): JSONObject = try {
