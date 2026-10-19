@@ -114,7 +114,6 @@
     --field-border-color: var(--silver-border-color);
     --field-text-color: var(--text-primary);
 
-    /* Bottom-action buttons — Light */
     --act-complete-from: #10b981;
     --act-complete-to: #047857;
     --act-complete-border: #065f46;
@@ -134,7 +133,6 @@
     --act-wa-shadow: rgba(37, 211, 102, 0.35);
     --act-text: #ffffff;
 
-    /* WhatsApp brand tokens */
     --wa-header-bg: #075E54;
     --wa-header-bg-dark: #054D44;
     --wa-accent: #25D366;
@@ -1264,13 +1262,42 @@ body.sleep-mode .sidebar-toggle { display: none; }
     box-shadow: var(--silver-shadow);
     cursor: pointer;
 }
-#posPrintReceipt { display: none; }
+
+/* ============================================================
+   ✅ Print Media Query (محسّن لضمان طباعة PDF سليمة)
+   ============================================================ */
 @media print {
-    body > * { display: none !important; }
-    #posPrintReceipt { display: block !important; direction: rtl; color: #000; background: #fff; padding: 16px; font: 13px/1.6 Arial, sans-serif; }
-    #posPrintReceipt table { width: 100%; border-collapse: collapse; }
-    #posPrintReceipt th, #posPrintReceipt td { border-bottom: 1px solid #ccc; padding: 5px; text-align: right; }
+    /* إخفاء كل شيء في الصفحة */
+    body > * {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    /* إظهار الفاتورة فقط وإرجاعها لموضعها الطبيعي */
+    body > #posInvoice {
+        display: block !important;
+        visibility: visible !important;
+        position: static !important;
+        width: 210mm !important;
+        min-height: 297mm !important;
+        margin: 0 !important;
+        padding: 10mm 9mm 8mm !important;
+        background: #fff !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        z-index: auto !important;
+    }
+    /* إظهار جميع محتويات الفاتورة */
+    #posInvoice * {
+        visibility: visible !important;
+    }
+    @page {
+        size: A4;
+        margin: 0;
+    }
 }
+
+#posPrintReceipt { display: none; }
+
 .sales-report-table tr.selected-row {
     background-color: #000 !important;
     color: orange !important;
@@ -3031,7 +3058,7 @@ body.invoice-print-mode #posInvoice {
 }
 
 /* ============================================================
-   WhatsApp Share Modal — إضافة جديدة كاملة + معاينة الفاتورة الحقيقية
+   WhatsApp Share Modal
    ============================================================ */
 #whatsappShareModal {
     display: none;
@@ -3290,7 +3317,6 @@ body.invoice-print-mode #posInvoice {
 
 /* ============================================================
    ✅ معاينة الفاتورة الحقيقية داخل محادثة واتساب
-   تُعرض كصورة مصغّرة قابلة للتوسيع بنفس تصميم الطباعة
    ============================================================ */
 .wa-invoice-preview-card {
     position: relative;
@@ -3316,7 +3342,7 @@ body.invoice-print-mode #posInvoice {
     width: 794px;
     height: 1123px;
     transform-origin: top left;
-    transform: scale(0.3023); /* 240/794 = 0.3023 للحفاظ على نسبة A4 */
+    transform: scale(0.3023);
     pointer-events: none;
     background: #ffffff;
     color: #172b45;
@@ -3355,7 +3381,7 @@ body.invoice-print-mode #posInvoice {
     font-weight: 600;
 }
 
-/* شاشة عرض الفاتورة بالحجم الكامل داخل واتساب */
+/* ✅ شاشة عرض الفاتورة بالحجم الكامل داخل واتساب (تم إصلاح القص والتمرير) */
 .wa-invoice-fullscreen {
     position: fixed;
     inset: 0;
@@ -3402,43 +3428,97 @@ body.invoice-print-mode #posInvoice {
     transition: background 0.2s;
 }
 .wa-invoice-fullscreen-close:hover { background: rgba(255, 255, 255, 0.25); }
+
+/* الحل الجذري للقص والتمرير */
 .wa-invoice-fullscreen-body {
     flex: 1;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 20px;
+    padding: 16px;
     display: flex;
     align-items: flex-start;
-    justify-content: center;
+    justify-content: flex-start; /* تم التعديل من center إلى flex-start لحل مشكلة القص */
     background: #2a2a2a;
 }
-.wa-invoice-fullscreen-body .wa-invoice-preview-scaler-full {
+
+.wa-invoice-fullscreen-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    /* Dimensions set by JS for proper scrolling */
+    flex-shrink: 0; /* منع Flexbox من تصغير الحاوية */
+    margin: 0 auto; /* توسيط العنصر بأمان */
+}
+
+.wa-invoice-preview-scaler-full {
     background: #ffffff;
     color: #172b45;
     width: 794px;
-    min-height: 1123px;
+    height: 1123px;
     direction: rtl;
     font-family: 'Cairo', 'Noto Sans Arabic', Arial, sans-serif;
     font-variant-numeric: lining-nums tabular-nums;
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
     flex-shrink: 0;
+    transform-origin: top left;
+}
+
+/* ✅ NEW: زر إعادة المحاولة في مودال واتساب */
+.wa-retry-btn {
+    display: none;
+    margin: 10px auto;
+    padding: 10px 20px;
+    background: linear-gradient(145deg, #ef4444, #b91c1c);
+    color: #ffffff;
+    border: 2px solid #991b1b;
+    border-radius: 10px;
+    font-weight: 800;
+    font-size: 0.85rem;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    align-items: center;
+    gap: 8px;
+    font-family: 'Cairo', 'Inter', sans-serif;
+}
+.wa-retry-btn.show { display: inline-flex; }
+.wa-retry-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(239, 68, 68, 0.6); }
+.wa-retry-btn:active { transform: scale(0.96); }
+
+/* ✅ NEW: تحذير الصورة الفارغة */
+.wa-blank-warning {
+    display: none;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    color: #92400e;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    text-align: center;
+    line-height: 1.5;
+}
+.wa-blank-warning.show { display: block; }
+[data-theme="dark"] .wa-blank-warning {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: #f59e0b;
+    color: #fcd34d;
 }
   </style>
 
   <style id="posInvoiceStyleBlock">
     /* ============================================================
-       ملاحظة تصميم مهمة:
-       - #posInvoice يبقى مخفياً بـ display:none على الشاشة لأن الفاتورة
-         تُعرض للمستخدم عبر المودالات فقط، وتُبنى نسخة جديدة داخل WebView
-         في Kotlin لالتقاطها كصورة PNG.
-       - عند إرسال الصورة، نُرسل مستند HTML كامل إلى Kotlin مع override
-         صريح + أنماط inline على العنصر نفسه؛ لا تعتمد على أن WebView
-         الالتقاط سيحمل هذه القاعدة الأصلية.
-       - أي تعديل على هذا القسم يجب أن يُختبر مع شاشة الأجهزة الحقيقية
-         لأن أي class جديد يستخدم Font Awesome يجب أن يُضاف للأصول المحلية.
+       تم تغيير المحددات من #posInvoice إلى .pos-invoice
+       لضمان تطبيق التنسيقات على العنصر الأصلي والنسخ (Clones)
+       دون التأثير على المعرف ID الذي يحتاجه كود Kotlin.
        ============================================================ */
-    #posInvoice {
-      display: none;
+    .pos-invoice {
+      /* إخفاء الفاتورة عن المستخدم بإزاحتها للخارج بدلاً من display: none */
+      /* هذا الإجراء يجبر المتصفح على حساب الأبعاد ورسم العناصر، مما يمنع الطباعة البيضاء */
+      position: absolute;
+      left: -9999px;
+      top: 0;
+      display: block;
       width: 210mm;
       min-height: 297mm;
       box-sizing: border-box;
@@ -3447,13 +3527,13 @@ body.invoice-print-mode #posInvoice {
       direction: rtl;
       font-family: 'Cairo', 'Noto Sans Arabic', Arial, sans-serif;
       padding: 10mm 9mm 8mm;
-      position: relative;
       overflow: visible;
       font-variant-numeric: lining-nums tabular-nums;
       font-feature-settings: "lnum" 1, "tnum" 1;
+      z-index: -1000; /* يضمن بقاءها في الخلف ولا تؤثر على التصميم */
     }
-    #posInvoice * { box-sizing: border-box; font-variant-numeric: lining-nums tabular-nums; }
-    #posInvoice .invoice-header {
+    .pos-invoice * { box-sizing: border-box; font-variant-numeric: lining-nums tabular-nums; }
+    .pos-invoice .invoice-header {
       background-color: #1a3a5a;
       border-radius: 5mm;
       padding: 6mm 6mm;
@@ -3466,7 +3546,7 @@ body.invoice-print-mode #posInvoice {
       margin-bottom: 8mm;
       overflow: visible;
     }
-    #posInvoice .invoice-logo-circle {
+    .pos-invoice .invoice-logo-circle {
       width: 34mm;
       height: 34mm;
       background-color: #fff;
@@ -3483,14 +3563,14 @@ body.invoice-print-mode #posInvoice {
       box-shadow: 0 0 0 1.5mm #fff;
       z-index: 10;
     }
-    #posInvoice .invoice-logo-circle img {
+    .pos-invoice .invoice-logo-circle img {
       width: 100%;
       height: 100%;
       object-fit: contain;
       display: block;
       border-radius: 50%;
     }
-    #posInvoice .invoice-center {
+    .pos-invoice .invoice-center {
       grid-column: 2;
       display: flex;
       flex-direction: column;
@@ -3499,7 +3579,7 @@ body.invoice-print-mode #posInvoice {
       gap: 2mm;
       text-align: center;
     }
-    #posInvoice .invoice-title {
+    .pos-invoice .invoice-title {
       background-color: #fff;
       color: #1a3a5a;
       padding: 2.5mm 12mm;
@@ -3510,14 +3590,14 @@ body.invoice-print-mode #posInvoice {
       white-space: nowrap;
       display: inline-block;
     }
-    #posInvoice .invoice-brand-en {
+    .pos-invoice .invoice-brand-en {
       color: #fff;
       font-size: 9px;
       font-weight: 800;
       letter-spacing: 1px;
       opacity: 0.95;
     }
-    #posInvoice .invoice-payment {
+    .pos-invoice .invoice-payment {
       display: flex;
       justify-content: center;
       align-items: center;
@@ -3527,14 +3607,14 @@ body.invoice-print-mode #posInvoice {
       font-size: 12px;
       font-weight: 800;
     }
-    #posInvoice .invoice-meta {
+    .pos-invoice .invoice-meta {
       grid-column: 3;
       display: flex;
       flex-direction: column;
       gap: 2mm;
       align-self: center;
     }
-    #posInvoice .invoice-meta-pill {
+    .pos-invoice .invoice-meta-pill {
       border: 1.2px solid #fff;
       border-radius: 4mm;
       padding: 1.5mm 3mm;
@@ -3547,21 +3627,21 @@ body.invoice-print-mode #posInvoice {
       background-color: transparent;
       min-height: 7mm;
     }
-    #posInvoice .invoice-meta-pill > span:first-child { white-space: nowrap; }
-    #posInvoice .invoice-meta-pill .value {
+    .pos-invoice .invoice-meta-pill > span:first-child { white-space: nowrap; }
+    .pos-invoice .invoice-meta-pill .value {
       flex: 1;
       text-align: center;
       border-bottom: 1px dotted #fff;
       min-height: 1em;
       padding: 0 2mm;
     }
-    #posInvoice .invoice-meta-pill .invoice-number-value {
+    .pos-invoice .invoice-meta-pill .invoice-number-value {
       color: #ff0000;
       font-size: 14px;
       font-weight: 900;
       border-bottom: 1px dotted #fff;
     }
-    #posInvoice .invoice-customer {
+    .pos-invoice .invoice-customer {
       border: 2px solid #1a3a5a;
       border-radius: 4mm;
       padding: 3mm 4mm;
@@ -3572,8 +3652,8 @@ body.invoice-print-mode #posInvoice {
       font-weight: 800;
       font-size: 12px;
     }
-    #posInvoice .invoice-customer .label-right { white-space: nowrap; }
-    #posInvoice .invoice-customer .line {
+    .pos-invoice .invoice-customer .label-right { white-space: nowrap; }
+    .pos-invoice .invoice-customer .line {
       flex: 1;
       text-align: center;
       border-bottom: 2px dotted #1a3a5a;
@@ -3584,8 +3664,8 @@ body.invoice-print-mode #posInvoice {
       padding: 0 2mm;
       overflow-wrap: anywhere;
     }
-    #posInvoice .invoice-customer .label-left { white-space: nowrap; }
-    #posInvoice .invoice-items {
+    .pos-invoice .invoice-customer .label-left { white-space: nowrap; }
+    .pos-invoice .invoice-items {
       width: 100%;
       border-collapse: separate;
       border-spacing: 0;
@@ -3596,8 +3676,8 @@ body.invoice-print-mode #posInvoice {
       table-layout: fixed;
       page-break-inside: auto;
     }
-    #posInvoice .invoice-items th,
-    #posInvoice .invoice-items td {
+    .pos-invoice .invoice-items th,
+    .pos-invoice .invoice-items td {
       border: 1px solid #1a3a5a;
       padding: 2.2mm 1.5mm;
       font-size: 11px;
@@ -3605,40 +3685,40 @@ body.invoice-print-mode #posInvoice {
       vertical-align: middle;
       overflow-wrap: anywhere;
     }
-    #posInvoice .invoice-items th {
+    .pos-invoice .invoice-items th {
       background-color: #1a3a5a;
       color: #fff;
       font-weight: 900;
       line-height: 1.3;
     }
-    #posInvoice .invoice-items td { color: #000; font-weight: 700; }
-    #posInvoice .invoice-items tbody td:first-child {
+    .pos-invoice .invoice-items td { color: #000; font-weight: 700; }
+    .pos-invoice .invoice-items tbody td:first-child {
       background: linear-gradient(to bottom, #fdfbf7 0%, #f4eae1 100%);
     }
-    #posInvoice .invoice-items tbody tr { page-break-inside: avoid; }
-    #posInvoice .invoice-items .desc  { width: 45%; text-align: center; }
-    #posInvoice .invoice-items .qty   { width: 10%; }
-    #posInvoice .invoice-items .unit  { width: 22.5%; }
-    #posInvoice .invoice-items .total { width: 22.5%; }
-    #posInvoice .invoice-summary {
+    .pos-invoice .invoice-items tbody tr { page-break-inside: avoid; }
+    .pos-invoice .invoice-items .desc  { width: 45%; text-align: center; }
+    .pos-invoice .invoice-items .qty   { width: 10%; }
+    .pos-invoice .invoice-items .unit  { width: 22.5%; }
+    .pos-invoice .invoice-items .total { width: 22.5%; }
+    .pos-invoice .invoice-summary {
       width: 100%;
       margin: 4mm 0 6mm;
       border: 0;
       overflow: visible;
       background: transparent;
     }
-    #posInvoice .invoice-summary-row {
+    .pos-invoice .invoice-summary-row {
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 2.5mm;
       margin-bottom: 3mm;
     }
-    #posInvoice .invoice-summary-row.payment-balance-row {
+    .pos-invoice .invoice-summary-row.payment-balance-row {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 4mm;
       margin-top: 2mm;
     }
-    #posInvoice .invoice-summary-card {
+    .pos-invoice .invoice-summary-card {
       min-width: 0;
       border: 1.2px solid #1a3a5a;
       border-radius: 3mm;
@@ -3646,7 +3726,7 @@ body.invoice-print-mode #posInvoice {
       background: #fff;
       text-align: center;
     }
-    #posInvoice .invoice-summary-card .summary-label {
+    .pos-invoice .invoice-summary-card .summary-label {
       min-height: 9mm;
       padding: 2mm 1mm;
       display: flex;
@@ -3658,7 +3738,7 @@ body.invoice-print-mode #posInvoice {
       line-height: 1.25;
       font-weight: 900;
     }
-    #posInvoice .invoice-summary-card .summary-value {
+    .pos-invoice .invoice-summary-card .summary-value {
       min-height: 10mm;
       padding: 2mm 1mm;
       display: flex;
@@ -3671,29 +3751,29 @@ body.invoice-print-mode #posInvoice {
       font-weight: 800;
       overflow-wrap: anywhere;
     }
-    #posInvoice .invoice-summary-card.grand .summary-value {
+    .pos-invoice .invoice-summary-card.grand .summary-value {
       background: #f3f6fa;
       color: #000;
       font-size: 13px;
       font-weight: 900;
     }
-    #posInvoice .payment-balance-row .invoice-summary-card .summary-value {
+    .pos-invoice .payment-balance-row .invoice-summary-card .summary-value {
       font-size: 15px;
       font-weight: 900;
       color: #000;
     }
-    #posInvoice .invoice-footer {
+    .pos-invoice .invoice-footer {
       margin-top: 10mm;
       display: flex;
       flex-direction: column;
       gap: 2.5mm;
       page-break-inside: avoid;
     }
-    #posInvoice .invoice-footer-labels {
+    .pos-invoice .invoice-footer-labels {
       display: flex;
       gap: 5mm;
     }
-    #posInvoice .invoice-footer-labels span {
+    .pos-invoice .invoice-footer-labels span {
       flex: 1;
       background-color: #1a3a5a;
       color: #fff;
@@ -3703,16 +3783,16 @@ body.invoice-print-mode #posInvoice {
       font-weight: 900;
       text-align: center;
     }
-    #posInvoice .invoice-footer-dots {
+    .pos-invoice .invoice-footer-dots {
       display: flex;
       gap: 5mm;
     }
-    #posInvoice .invoice-footer-dots span {
+    .pos-invoice .invoice-footer-dots span {
       flex: 1;
       border-bottom: 1.5px dotted #1a3a5a;
       min-height: 6mm;
     }
-    #posInvoice .receipt-note {
+    .pos-invoice .receipt-note {
       margin-top: 4mm;
       text-align: center;
       font-size: 11px;
@@ -3720,20 +3800,20 @@ body.invoice-print-mode #posInvoice {
       color: #1a3a5a;
     }
     @media(max-width:720px){
-      #posInvoice{width:100%;min-height:auto;padding:6mm 4mm}
-      #posInvoice .invoice-header{grid-template-columns:1fr;gap:4mm;padding:5mm}
-      #posInvoice .invoice-meta{order:3}
-      #posInvoice .invoice-center{order:2;margin-top:8mm}
-      #posInvoice .invoice-logo-circle{width:26mm;height:26mm;right:-3mm}
-      #posInvoice .invoice-title{font-size:17px;padding:2.5mm 8mm}
-      #posInvoice .invoice-items th,#posInvoice .invoice-items td{font-size:9px;padding:1.6mm 1mm}
-      #posInvoice .invoice-summary{width:100%}
-      #posInvoice .invoice-summary-row{grid-template-columns:repeat(5,minmax(0,1fr));gap:1.2mm}
-      #posInvoice .invoice-summary-row.payment-balance-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:2mm}
-      #posInvoice .invoice-summary-card .summary-label{font-size:8px;padding:1.5mm .5mm}
-      #posInvoice .invoice-summary-card .summary-value{font-size:9px;padding:1.5mm .5mm}
-      #posInvoice .payment-balance-row .invoice-summary-card .summary-value{font-size:12px}
-      #posInvoice .invoice-footer{margin-top:8mm}
+      .pos-invoice{width:100%;min-height:auto;padding:6mm 4mm}
+      .pos-invoice .invoice-header{grid-template-columns:1fr;gap:4mm;padding:5mm}
+      .pos-invoice .invoice-meta{order:3}
+      .pos-invoice .invoice-center{order:2;margin-top:8mm}
+      .pos-invoice .invoice-logo-circle{width:26mm;height:26mm;right:-3mm}
+      .pos-invoice .invoice-title{font-size:17px;padding:2.5mm 8mm}
+      .pos-invoice .invoice-items th,.pos-invoice .invoice-items td{font-size:9px;padding:1.6mm 1mm}
+      .pos-invoice .invoice-summary{width:100%}
+      .pos-invoice .invoice-summary-row{grid-template-columns:repeat(5,minmax(0,1fr));gap:1.2mm}
+      .pos-invoice .invoice-summary-row.payment-balance-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:2mm}
+      .pos-invoice .invoice-summary-card .summary-label{font-size:8px;padding:1.5mm .5mm}
+      .pos-invoice .invoice-summary-card .summary-value{font-size:9px;padding:1.5mm .5mm}
+      .pos-invoice .payment-balance-row .invoice-summary-card .summary-value{font-size:12px}
+      .pos-invoice .invoice-footer{margin-top:8mm}
     }
   </style>
   <script src="file:///android_asset/assets-local/js/business-day.js"></script>
@@ -4136,7 +4216,7 @@ body.invoice-print-mode #posInvoice {
   </div>
 </div>
 
-<!-- مودال واتساب — تصميم يحاكي واتساب 100% + معاينة الفاتورة الحقيقية -->
+<!-- ✅ مودال واتساب -->
 <div id="whatsappShareModal" role="dialog" aria-modal="true" aria-labelledby="waModalTitle">
   <div class="wa-screen">
     <div class="wa-header">
@@ -4156,8 +4236,15 @@ body.invoice-print-mode #posInvoice {
         <i class="fas fa-lock"></i>
         الرسائل مشفرة تماماً بين الطرفين. لا يمكن لأي شخص خارج هذه المحادثة قراءتها.
       </div>
+
+      <!-- ✅ تحذير الصورة الفارغة -->
+      <div class="wa-blank-warning" id="waBlankWarning">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span id="waBlankWarningText">تعذر تحويل الفاتورة إلى صورة، يرجى المحاولة مرة أخرى</span>
+      </div>
+
       <div class="wa-message-out">
-        <!-- ✅ معاينة الفاتورة الحقيقية بنفس شكل الطباعة -->
+        <!-- ✅ معاينة الفاتورة الحقيقية -->
         <div class="wa-invoice-preview-card" id="waInvoicePreviewCard" title="انقر لعرض الفاتورة بالحجم الكامل">
           <div class="wa-invoice-preview-scaler" id="waInvoicePreviewScaler"></div>
           <div class="wa-preview-overlay">
@@ -4166,13 +4253,18 @@ body.invoice-print-mode #posInvoice {
           </div>
         </div>
         <span class="wa-preview-caption">فاتورة بيع · صورة مصغّرة</span>
-        <!-- النص النصي التفصيلي (احتياطي) -->
         <div class="wa-invoice-preview" id="waInvoicePreview" style="display:none;"></div>
         <div class="wa-msg-meta">
           <span id="waMessageTime"></span>
           <i class="fas fa-check-double wa-checks"></i>
         </div>
       </div>
+
+      <!-- ✅ زر إعادة المحاولة -->
+      <button class="wa-retry-btn" id="waRetryBtn" type="button" onclick="retryWhatsappShare()">
+        <i class="fas fa-redo-alt"></i>
+        <span>إعادة المحاولة</span>
+      </button>
     </div>
     <div class="wa-validation-msg" id="waValidationMsg"></div>
     <div class="wa-input-bar">
@@ -4185,14 +4277,17 @@ body.invoice-print-mode #posInvoice {
   </div>
 </div>
 
-<!-- شاشة عرض الفاتورة بالحجم الكامل (تظهر داخل المودال عند النقر على المعاينة) -->
+<!-- ✅ شاشة عرض الفاتورة بالحجم الكامل -->
 <div class="wa-invoice-fullscreen" id="waInvoiceFullscreen" role="dialog" aria-modal="true" aria-label="عرض الفاتورة بالحجم الكامل">
   <div class="wa-invoice-fullscreen-header">
     <h3><i class="fas fa-file-invoice"></i> معاينة الفاتورة</h3>
     <button class="wa-invoice-fullscreen-close" type="button" onclick="closeWhatsappInvoiceFullscreen()" aria-label="إغلاق"><i class="fas fa-times"></i></button>
   </div>
   <div class="wa-invoice-fullscreen-body">
-    <div class="wa-invoice-preview-scaler-full" id="waInvoiceFullscreenScaler"></div>
+    <!-- ✅ غلاف (Wrapper) يسمح بالتمرير الصحيح -->
+    <div class="wa-invoice-fullscreen-wrapper" id="waFullscreenWrapper">
+      <div class="wa-invoice-preview-scaler-full pos-invoice" id="waInvoiceFullscreenScaler"></div>
+    </div>
   </div>
 </div>
 
@@ -4205,7 +4300,6 @@ body.invoice-print-mode #posInvoice {
 <script>
 // ============================================================
 // 1. apiCall — جسر AndroidInterface
-// مشاركة الفاتورة المصورة تتم عبر Android Bridge غير متزامن؛ لا تستخدم wa.me النصي.
 // ============================================================
 function apiCall(action, params) {
     const p = params || {};
@@ -4275,7 +4369,7 @@ function handleAndroidResult(action, data) {
 }
 
 // ============================================================
-// 2. نظام التحميل — عدّاد مرجعي + شبكة أمان
+// 2. نظام التحميل
 // ============================================================
 let _loadingRefCount = 0;
 let _loadingSafetyTimer = null;
@@ -4313,7 +4407,7 @@ function forceHideLoading() {
 }
 
 // ============================================================
-// 3. Toast — يفرض إخفاء التحميل قبل Swal
+// 3. Toast
 // ============================================================
 function showToast(message, type = 'success') {
     forceHideLoading();
@@ -4424,9 +4518,12 @@ let stationLogoDataUrl = '';
 let stationLogoLoadPromise = null;
 let _whatsappBusy = false;
 let _currentWhatsappInvoice = null;
+let _lastShareAttemptFailed = false;
+let _lastShareHtml = '';
+let _lastSharePhone = '';
 
 // ============================================================
-// 6. تطبيع الأرقام العربية + تتبع الحقل النشط
+// 6. تطبيع الأرقام العربية
 // ============================================================
 function toLatinDigits(str) {
     return String(str)
@@ -5234,6 +5331,9 @@ function resetForm() {
     document.getElementById('toggleScanBtn').innerHTML = '<i class="fas fa-play" style="color: #ffffff;"></i>';
     lastScannedBarcode = '';
     activeSaleOperationKey = '';
+    _lastShareAttemptFailed = false;
+    _lastShareHtml = '';
+    _lastSharePhone = '';
 }
 
 function completeSale() {
@@ -5475,13 +5575,20 @@ async function printReceipt() {
         const invoice = response.data || response;
         await loadCurrentStationLogo();
         renderReceiptForPrint(response.data || response);
-        document.body.classList.add('invoice-print-mode');
+
+        // إجبار المتصفح على إعادة حساب الأبعاد (Reflow) لضمان رؤية العناصر المخفية
+        const posInv = document.getElementById('posInvoice');
+        if (posInv) {
+            posInv.offsetHeight; // Trigger reflow
+        }
+
+        // إعطاء وقت كافٍ لتحميل الصور والخطوط قبل استدعاء أمر الطباعة
+        await new Promise(resolve => setTimeout(resolve, 800));
+
         const printResult = await apiCall('printReceipt');
         if (!printResult.success) throw new Error(printResult.message || printResult.error || 'فشل فتح نافذة الطباعة');
         showToast(printResult.message || 'تم فتح فاتورة البيع للطباعة', 'success');
-        setTimeout(() => document.body.classList.remove('invoice-print-mode'), 5000);
     } catch (error) {
-        document.body.classList.remove('invoice-print-mode');
         showToast(error.message || 'حدث خطأ أثناء الطباعة', 'error');
     } finally {
         showLoading(false);
@@ -5489,7 +5596,7 @@ async function printReceipt() {
 }
 
 // ============================================================
-// 12. WhatsApp — التطبيع الذكي + المشاركة النصية + المعاينة الحقيقية
+// 12. WhatsApp
 // ============================================================
 function normalizeWhatsappPhone(raw) {
     let digits = String(raw || '').replace(/\D/g, '');
@@ -5513,10 +5620,6 @@ function normalizeWhatsappPhone(raw) {
     return { ok: false, number: '', reason: 'رقم غير صالح — أدخل رقماً يمنياً أو دولياً' };
 }
 
-/**
- * ✅ عرض معاينة حقيقية للفاتورة داخل مودال واتساب بنفس تصميم الطباعة.
- * نُنسخ #posInvoice ثم نُطبّق transform: scale لملاءمته حجم البطاقة.
- */
 function renderWhatsappInvoicePreview(invoice) {
     const scaler = document.getElementById('waInvoicePreviewScaler');
     const fullscreenScaler = document.getElementById('waInvoiceFullscreenScaler');
@@ -5525,28 +5628,31 @@ function renderWhatsappInvoicePreview(invoice) {
     const source = document.getElementById('posInvoice');
     if (!source) return;
 
-    // نُخفي نسخة المعاينة السابقة (النص)
     const textPreview = document.getElementById('waInvoicePreview');
     if (textPreview) textPreview.style.display = 'none';
 
-    // نستنسخ محتوى الفاتورة المُصيَّر
     const cloned = source.cloneNode(true);
     cloned.removeAttribute('id');
+    cloned.classList.add('pos-invoice');
     cloned.style.display = 'block';
     cloned.style.visibility = 'visible';
     cloned.style.opacity = '1';
+    cloned.style.position = 'relative';
+    cloned.style.left = '0';
 
-    // نُفرغ الحاويتين ثم نُضيف النسخة
     scaler.innerHTML = '';
-    scaler.appendChild(cloned.cloneNode(true));
+    scaler.appendChild(cloned);
 
     if (fullscreenScaler) {
         fullscreenScaler.innerHTML = '';
         const fullClone = source.cloneNode(true);
         fullClone.removeAttribute('id');
+        fullClone.classList.add('pos-invoice');
         fullClone.style.display = 'block';
         fullClone.style.visibility = 'visible';
         fullClone.style.opacity = '1';
+        fullClone.style.position = 'relative';
+        fullClone.style.left = '0';
         fullClone.style.width = '794px';
         fullClone.style.minHeight = '1123px';
         fullClone.style.background = '#fff';
@@ -5567,6 +5673,8 @@ function openWhatsappShare() {
     }
 
     forceHideLoading();
+    _lastShareAttemptFailed = false;
+    hideBlankWarning();
 
     const previewEl = document.getElementById('waInvoicePreview');
     const timeEl = document.getElementById('waMessageTime');
@@ -5620,12 +5728,50 @@ function closeWhatsappShare() {
     closeWhatsappInvoiceFullscreen();
     _whatsappBusy = false;
     _currentWhatsappInvoice = null;
+    hideBlankWarning();
+    hideRetryBtn();
 }
 
+/**
+ * ✅ تم إصلاح مشكلة القص الأفقي وعدم القدرة على التمرير
+ */
 function openWhatsappInvoiceFullscreen() {
     const fullscreen = document.getElementById('waInvoiceFullscreen');
     if (!fullscreen) return;
     fullscreen.classList.add('show');
+
+    // إعطاء وقت بسيط لضمان أن المودال تم عرضه (display: flex) وتم حساب أبعاد الشاشة بشكل صحيح
+    setTimeout(() => {
+        const container = fullscreen.querySelector('.wa-invoice-fullscreen-body');
+        const wrapper = document.getElementById('waFullscreenWrapper');
+        const scaler = document.getElementById('waInvoiceFullscreenScaler');
+
+        if (container && wrapper && scaler) {
+            const computedStyle = window.getComputedStyle(container);
+            const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+            const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+
+            // عرض المساحة الفعلية المتاحة
+            const containerWidth = container.clientWidth - paddingLeft - paddingRight;
+
+            if (containerWidth > 0) {
+                const invoiceWidth = 794;
+                const invoiceHeight = 1123;
+
+                // حساب نسبة التكبير بناءً على العرض المتاح
+                const scale = Math.min(1, containerWidth / invoiceWidth);
+
+                scaler.style.transform = `scale(${scale})`;
+                scaler.style.transformOrigin = 'top left';
+
+                // تعيين أبعاد الحاوية (Wrapper) لتتطابق مع الفاتورة المكبرة، لضمان عمل التمرير بشكل صحيح
+                wrapper.style.width = `${invoiceWidth * scale}px`;
+                wrapper.style.height = `${invoiceHeight * scale}px`;
+                wrapper.style.margin = '0 auto';
+                wrapper.style.flexShrink = '0'; // منع Flexbox من تصغير الحاوية
+            }
+        }
+    }, 150);
 }
 
 function closeWhatsappInvoiceFullscreen() {
@@ -5672,110 +5818,79 @@ function showWhatsappValidation(msg) {
     setTimeout(() => { el.classList.remove('show'); }, 4000);
 }
 
-/**
- * ═══════════════════════════════════════════════════════════════
- *  ✅✅✅ حل جذري نهائي لمشكلة "الصورة البيضاء" في واتساب  ✅✅✅
- * ═══════════════════════════════════════════════════════════════
- *
- * الأسباب الجذرية التي تم إصلاحها:
- *
- * 1) روابط file:// داخل مستند يُمرّر إلى WebView الالتقاط:
- *    <link rel="stylesheet" href="file:///android_asset/...">
- *    WebView في Kotlin عندما يستقبل HTML عبر loadDataWithBaseURL
- *    قد يفشل في تحميل هذه الملفات بسبب سياسة Same-Origin، ويُوقف
- *    عملية الرسم → صفحة فارغة.
- *    الحل: إزالة كل روابط file:// نهائياً. الأنماط كلها inline.
- *
- * 2) تضخّم HTML بسبب base64 لصورة المحطة:
- *    الجسر @JavascriptInterface له حد أقصى للنص (~1-2MB)، وتجاوزه
- *    يُقتطع النص بصمت → HTML تالف → صورة بيضاء.
- *    الحل: إزالة الشعار من HTML المُرسَل للالتقاط (يبقى في الطباعة).
- *
- * 3) وحدات mm غير مستقرة في WebView الالتقاط:
- *    الحل: تحويل إلى px بمعيار A4 (794×1123 @96DPI).
- *
- * 4) display:none المتسرّب من posInvoiceStyleBlock:
- *    الحل: تعقيم الـstyle block + إجبار inline !important.
- *
- * 5) @media(max-width:720px) يُفعَّل خطأً:
- *    الحل: إلغاء صريح داخل overrideStyle.
- *
- * 6) عدم اكتمال الرسم قبل الالتقاط في Kotlin:
- *    الحل (جانب Kotlin): تأخير 600ms بعد onPageFinished.
- */
-async function sendWhatsappInvoice() {
+function showBlankWarning(message) {
+    const warning = document.getElementById('waBlankWarning');
+    const text = document.getElementById('waBlankWarningText');
+    if (!warning || !text) return;
+    text.textContent = message || 'تعذر تحويل الفاتورة إلى صورة، يرجى المحاولة مرة أخرى';
+    warning.classList.add('show');
+}
+function hideBlankWarning() {
+    const warning = document.getElementById('waBlankWarning');
+    if (warning) warning.classList.remove('show');
+}
+
+function showRetryBtn() {
+    const btn = document.getElementById('waRetryBtn');
+    if (btn) btn.classList.add('show');
+}
+function hideRetryBtn() {
+    const btn = document.getElementById('waRetryBtn');
+    if (btn) btn.classList.remove('show');
+}
+
+async function retryWhatsappShare() {
     if (_whatsappBusy) return;
-    const invoice = _currentWhatsappInvoice;
-    if (!invoice) { showWhatsappValidation('لم يتم تحميل الفاتورة بعد. الرجاء الانتظار'); return; }
-
+    if (!_lastShareHtml || !_lastSharePhone) {
+        showWhatsappValidation('لا توجد بيانات سابقة لإعادة المحاولة. أغلق النافذة وأعد الإرسال');
+        return;
+    }
+    hideBlankWarning();
+    hideRetryBtn();
     const phoneInput = document.getElementById('waPhoneInput');
-    const raw = (phoneInput && phoneInput.value || '').trim();
-    if (!raw) { showWhatsappValidation('الرجاء إدخال رقم واتساب العميل'); if (phoneInput) phoneInput.focus(); return; }
+    if (phoneInput) phoneInput.value = _lastSharePhone;
+    await sendWhatsappInvoice();
+}
 
-    const result = normalizeWhatsappPhone(raw);
-    if (!result.ok) { showWhatsappValidation(result.reason || 'رقم غير صالح'); if (phoneInput) phoneInput.focus(); return; }
+function buildCaptureDocument() {
+    const invoiceSection = document.getElementById('posInvoice');
+    if (!invoiceSection || !invoiceSection.innerHTML.trim()) {
+        throw new Error('تصميم الفاتورة غير جاهز للإرسال');
+    }
 
-    const sendBtn = document.getElementById('waSendBtn');
-    if (sendBtn) sendBtn.disabled = true;
+    const captured = invoiceSection.cloneNode(true);
+    captured.id = 'posInvoice';
+    captured.classList.add('pos-invoice');
 
-    _whatsappBusy = true;
-    showLoading(true);
+    const forceStyle = (el, prop, val) => el && el.style.setProperty(prop, val, 'important');
 
-    let timeoutId = null;
-    try {
-        const invoiceSection = document.getElementById('posInvoice');
-        if (!invoiceSection || !invoiceSection.innerHTML.trim()) {
-            throw new Error('تصميم الفاتورة غير جاهز للإرسال');
-        }
-        if (!window.AndroidInterface || typeof AndroidInterface.shareInvoiceJpg !== 'function') {
-            throw new Error('مشاركة الفاتورة المصورة متاحة من داخل تطبيق Android فقط');
-        }
+    forceStyle(captured, 'display', 'block');
+    forceStyle(captured, 'visibility', 'visible');
+    forceStyle(captured, 'opacity', '1');
+    forceStyle(captured, 'position', 'relative');
+    forceStyle(captured, 'left', '0');
+    forceStyle(captured, 'width', '794px');
+    forceStyle(captured, 'min-height', '1123px');
+    forceStyle(captured, 'height', 'auto');
+    forceStyle(captured, 'background-color', '#ffffff');
+    forceStyle(captured, 'color', '#172b45');
+    forceStyle(captured, 'margin', '0 auto');
+    forceStyle(captured, 'padding', '38px 34px 30px');
+    forceStyle(captured, 'box-sizing', 'border-box');
+    forceStyle(captured, 'direction', 'rtl');
+    forceStyle(captured, 'font-family', 'Cairo, "Noto Sans Arabic", Arial, sans-serif');
+    forceStyle(captured, 'font-variant-numeric', 'lining-nums tabular-nums');
+    forceStyle(captured, 'overflow', 'visible');
+    forceStyle(captured, '-webkit-print-color-adjust', 'exact');
+    forceStyle(captured, 'print-color-adjust', 'exact');
 
-        /* ═══════════════════════════════════════════════════════
-           (1) استنساخ نظيف + إزالة الصور الضخمة (base64)
-           ═══════════════════════════════════════════════════════ */
-        const captured = invoiceSection.cloneNode(true);
+    const invoiceStyleRaw = document.getElementById('posInvoiceStyleBlock')?.outerHTML || '';
+    const invoiceStyleSanitized = invoiceStyleRaw
+        .replace(/display\s*:\s*none\s*;?/gi, 'display: block;')
+        .replace(/visibility\s*:\s*hidden\s*;?/gi, 'visibility: visible;')
+        .replace(/opacity\s*:\s*0\s*;?/gi, 'opacity: 1;');
 
-        const logoImg = captured.querySelector('.invoice-logo-circle img');
-        if (logoImg) {
-            // نتخلّص من الشعار المُضمَّن لتقليل حجم HTML ومنع تجاوز حد الجسر
-            logoImg.remove();
-        }
-
-        /* ═══════════════════════════════════════════════════════
-           (2) إجبار الأنماط Inline !important على عنصر الفاتورة
-           ═══════════════════════════════════════════════════════ */
-        const forceStyle = (el, prop, val) => el && el.style.setProperty(prop, val, 'important');
-
-        forceStyle(captured, 'display', 'block');
-        forceStyle(captured, 'visibility', 'visible');
-        forceStyle(captured, 'opacity', '1');
-        forceStyle(captured, 'position', 'relative');
-        forceStyle(captured, 'width', '794px');
-        forceStyle(captured, 'min-height', '1123px');
-        forceStyle(captured, 'height', 'auto');
-        forceStyle(captured, 'background-color', '#ffffff');
-        forceStyle(captured, 'color', '#172b45');
-        forceStyle(captured, 'margin', '0 auto');
-        forceStyle(captured, 'padding', '38px 34px 30px');
-        forceStyle(captured, 'box-sizing', 'border-box');
-        forceStyle(captured, 'direction', 'rtl');
-        forceStyle(captured, 'font-family', 'Cairo, "Noto Sans Arabic", Arial, sans-serif');
-        forceStyle(captured, 'font-variant-numeric', 'lining-nums tabular-nums');
-        forceStyle(captured, 'overflow', 'visible');
-        forceStyle(captured, '-webkit-print-color-adjust', 'exact');
-        forceStyle(captured, 'print-color-adjust', 'exact');
-
-        /* ═══════════════════════════════════════════════════════
-           (3) تعقيم style block + إضافة Override شامل
-           ═══════════════════════════════════════════════════════ */
-        const invoiceStyleRaw = document.getElementById('posInvoiceStyleBlock')?.outerHTML || '';
-        const invoiceStyleSanitized = invoiceStyleRaw
-            .replace(/display\s*:\s*none\s*;?/gi, 'display: block;')
-            .replace(/visibility\s*:\s*hidden\s*;?/gi, 'visibility: visible;')
-            .replace(/opacity\s*:\s*0\s*;?/gi, 'opacity: 1;');
-
-        const overrideStyle = `
+    const overrideStyle = `
 <style id="posInvoiceCaptureOverride">
     html, body {
         margin: 0 !important;
@@ -5796,6 +5911,7 @@ async function sendWhatsappInvoice() {
         visibility: visible !important;
         opacity: 1 !important;
         position: relative !important;
+        left: 0 !important;
         width: 794px !important;
         min-width: 794px !important;
         min-height: 1123px !important;
@@ -5826,41 +5942,96 @@ async function sendWhatsappInvoice() {
     #posInvoice .invoice-items td { font-size: 11px !important; padding: 8px 5px !important; }
 </style>`;
 
-        /* ═══════════════════════════════════════════════════════
-           (4) بناء المستند النهائي — بدون أي روابط file://
-           ═══════════════════════════════════════════════════════ */
-        const viewportMeta =
-            '<meta name="viewport" content="width=794, initial-scale=1.0, ' +
-            'maximum-scale=1.0, user-scalable=no">';
+    const viewportMeta = '<meta name="viewport" content="width=794, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">';
 
-        const invoiceHtml =
-            '<!DOCTYPE html>' +
-            '<html lang="ar" dir="rtl">' +
-            '<head>' +
-                '<meta charset="UTF-8">' +
-                viewportMeta +
-                invoiceStyleSanitized +
-                overrideStyle +
-            '</head>' +
-            '<body style="margin:0;padding:0;background:#ffffff;width:794px;min-height:1123px;">' +
-                captured.outerHTML +
-            '</body>' +
-            '</html>';
+    const invoiceHtml =
+        '<!DOCTYPE html>' +
+        '<html lang="ar" dir="rtl">' +
+        '<head>' +
+            '<meta charset="UTF-8">' +
+            viewportMeta +
+            invoiceStyleSanitized +
+            overrideStyle +
+        '</head>' +
+        '<body style="margin:0;padding:0;background:#ffffff;width:794px;min-height:1123px;">' +
+            captured.outerHTML +
+        '</body>' +
+        '</html>';
 
-        /* تشخيص */
-        console.log('[WhatsApp] HTML length:', invoiceHtml.length);
-        console.log('[WhatsApp] Rows count:', captured.querySelectorAll('.invoice-items tbody tr').length);
-        console.log('[WhatsApp] captured display inline:', captured.style.display);
+    const rowsCount = captured.querySelectorAll('.invoice-items tbody tr').length;
+    const itemsCount = captured.querySelectorAll('.invoice-items tbody td').length;
+    const hasLogo = !!captured.querySelector('.invoice-logo-circle img');
+    const logoSrcLen = (captured.querySelector('.invoice-logo-circle img')?.getAttribute('src') || '').length;
 
-        /* ═══════════════════════════════════════════════════════
-           (5) استدعاء الجسر والانتظار
-           ═══════════════════════════════════════════════════════ */
+    console.log('[WhatsApp Capture] Diagnostics:', {
+        htmlLength: invoiceHtml.length,
+        rowsCount,
+        itemsCount,
+        hasLogo,
+        logoSrcBytes: logoSrcLen,
+        capturedDisplay: captured.style.display,
+        invoiceInnerLength: invoiceSection.innerHTML.length
+    });
+
+    const approxBytes = new Blob([invoiceHtml]).size;
+    if (approxBytes > 1_500_000) {
+        console.warn('[WhatsApp Capture] HTML too large:', approxBytes, 'bytes; stripping logo to fit bridge limit');
+        const logoImg = captured.querySelector('.invoice-logo-circle img');
+        if (logoImg) logoImg.remove();
+        return buildCaptureDocumentWithoutLogo(captured, invoiceStyleSanitized, overrideStyle);
+    }
+
+    return { html: invoiceHtml, diagnostics: { rowsCount, itemsCount, hasLogo, logoSrcLen, approxBytes } };
+}
+
+function buildCaptureDocumentWithoutLogo(captured, sanitizedStyle, overrideStyle) {
+    const html = '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">' +
+        '<meta name="viewport" content="width=794, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">' +
+        sanitizedStyle + overrideStyle + '</head>' +
+        '<body style="margin:0;padding:0;background:#ffffff;width:794px;min-height:1123px;">' +
+        captured.outerHTML + '</body></html>';
+    console.warn('[WhatsApp Capture] Rebuilt HTML without logo:', html.length, 'chars');
+    return { html, diagnostics: { logoSrcLen: 0, approxBytes: html.length } };
+}
+
+async function sendWhatsappInvoice() {
+    if (_whatsappBusy) return;
+    const invoice = _currentWhatsappInvoice;
+    if (!invoice) { showWhatsappValidation('لم يتم تحميل الفاتورة بعد. الرجاء الانتظار'); return; }
+
+    const phoneInput = document.getElementById('waPhoneInput');
+    const raw = (phoneInput && phoneInput.value || '').trim();
+    if (!raw) { showWhatsappValidation('الرجاء إدخال رقم واتساب العميل'); if (phoneInput) phoneInput.focus(); return; }
+
+    const result = normalizeWhatsappPhone(raw);
+    if (!result.ok) { showWhatsappValidation(result.reason || 'رقم غير صالح'); if (phoneInput) phoneInput.focus(); return; }
+
+    const sendBtn = document.getElementById('waSendBtn');
+    if (sendBtn) sendBtn.disabled = true;
+
+    _whatsappBusy = true;
+    hideBlankWarning();
+    hideRetryBtn();
+    showLoading(true);
+
+    let timeoutId = null;
+    try {
+        if (!window.AndroidInterface || typeof AndroidInterface.shareInvoiceJpg !== 'function') {
+            throw new Error('مشاركة الفاتورة المصورة متاحة من داخل تطبيق Android فقط');
+        }
+
+        const capture = buildCaptureDocument();
+        const invoiceHtml = capture.html;
+
+        _lastShareHtml = invoiceHtml;
+        _lastSharePhone = raw;
+
         const resultPromise = new Promise((resolve, reject) => {
             registerPendingCall('shareInvoiceJpg', resolve);
 
             timeoutId = setTimeout(() => {
                 clearPendingCall('shareInvoiceJpg');
-                reject(new Error('انتهت مهلة تحويل الفاتورة إلى صورة'));
+                reject(new Error('انتهت مهلة تحويل الفاتورة إلى صورة (35 ثانية)'));
             }, 35000);
 
             try {
@@ -5884,13 +6055,36 @@ async function sendWhatsappInvoice() {
 
         if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
 
-        if (!shareResult || !shareResult.success) {
-            throw new Error(shareResult?.error || shareResult?.message || 'فشل إرسال صورة الفاتورة');
+        const isFailure = !shareResult || !shareResult.success;
+        const isBlank = isFailure && (
+            (shareResult?.error || '').toLowerCase().includes('blank') ||
+            (shareResult?.error || '').includes('فارغ') ||
+            shareResult?.blank === true
+        );
+
+        if (isFailure) {
+            _lastShareAttemptFailed = true;
+            if (isBlank) {
+                showBlankWarning('تعذر تحويل الفاتورة إلى صورة (صورة فارغة). قد تكون هذه مشكلة في جهازك أو في WebView. يرجى إعادة المحاولة أو استخدام زر الطباعة كبديل.');
+            } else {
+                showBlankWarning(shareResult?.error || 'فشل تحويل الفاتورة إلى صورة');
+            }
+            showRetryBtn();
+            showWhatsappValidation('تعذر إرسال الصورة عبر واتساب. يمكنك إعادة المحاولة أو استخدام "طباعة".');
+            console.error('[WhatsApp Share Failed]', shareResult);
+            return;
         }
+
+        _lastShareAttemptFailed = false;
+        hideBlankWarning();
+        hideRetryBtn();
         showToast('تم فتح واتساب مع الفاتورة كصورة كاملة', 'success');
         closeWhatsappShare();
     } catch (error) {
         console.error('WhatsApp image share failed:', error);
+        _lastShareAttemptFailed = true;
+        showBlankWarning(error.message || 'تعذر إرسال صورة الفاتورة');
+        showRetryBtn();
         showWhatsappValidation(error.message || 'تعذر إرسال صورة الفاتورة');
     } finally {
         if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
@@ -6794,7 +6988,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const waSendBtn = document.getElementById('waSendBtn');
     if (waSendBtn) waSendBtn.addEventListener('click', sendWhatsappInvoice);
 
-    // ✅ ربط النقر على معاينة الفاتورة لفتح العرض بالحجم الكامل
     const waPreviewCard = document.getElementById('waInvoicePreviewCard');
     if (waPreviewCard) {
         waPreviewCard.addEventListener('click', openWhatsappInvoiceFullscreen);
@@ -6842,6 +7035,6 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
 <!-- فاتورة البيع المرجعية -->
-<section id="posInvoice" aria-label="فاتورة بيع"></section>
+<section id="posInvoice" class="pos-invoice" aria-label="فاتورة بيع"></section>
 </body>
 </html>
