@@ -11647,6 +11647,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("price_source", resolvedPrice.source); put("price_source_id", resolvedPrice.sourceId ?: JSONObject.NULL)
                     put("price_list_item_id", resolvedPrice.priceListItemId ?: JSONObject.NULL)
                     put("quantity_limit", resolvedPrice.quantityLimit ?: JSONObject.NULL)
+                    put("occasion_code", data.optString("occasion_code", "").trim())
                     put("price_reason", resolvedPrice.reason ?: JSONObject.NULL); put("price_valid_until", resolvedPrice.validUntil ?: JSONObject.NULL)
                 }
             }
@@ -11709,10 +11710,27 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("unit_price", item.getDouble("unit_price"))
                 put("price_source", item.getString("price_source"))
                 put("price_source_id", item.opt("price_source_id"))
+                put("price_list_item_id", item.opt("price_list_item_id"))
+                put("occasion_code", item.optString("occasion_code", ""))
                 put("price_reason", item.opt("price_reason"))
                 put("price_valid_until", item.opt("price_valid_until"))
+                put("quantity_limit", item.opt("quantity_limit"))
             }) }
-            db.update("sales_transactions", ContentValues().apply { put("extra_data", JSONObject().apply { put("pricing", pricingMetadata); put("business_day", BusinessDay.currentDate()) }.toString()) }, "id = ? AND station_id = ?", arrayOf(saleId.toString(), stationScopeId.toString()))
+            // Merge metadata instead of replacing unrelated extra_data keys written by other workflows.
+            val existingExtraData = db.rawQuery(
+                "SELECT extra_data FROM sales_transactions WHERE id = ? AND station_id = ?",
+                arrayOf(saleId.toString(), stationScopeId.toString())
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0).orEmpty() else "" }
+            val mergedExtraData = runCatching { JSONObject(existingExtraData) }.getOrElse { JSONObject() }
+            mergedExtraData.put("pricing", pricingMetadata)
+            mergedExtraData.put("business_day", BusinessDay.currentDate())
+            val metadataUpdated = db.update(
+                "sales_transactions",
+                ContentValues().apply { put("extra_data", mergedExtraData.toString()) },
+                "id = ? AND station_id = ?",
+                arrayOf(saleId.toString(), stationScopeId.toString())
+            )
+            check(metadataUpdated == 1) { "تعذر حفظ بيانات تسعير البيع" }
 
             prepared.forEachIndexed { index, item ->
                 val productId = item.getLong("product_id")
