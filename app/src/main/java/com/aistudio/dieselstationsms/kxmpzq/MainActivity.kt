@@ -8387,7 +8387,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             var resultJson: String? = null
             activity.runOnUiThread {
                 try {
-                    if (activity.isFinishing || activity.isDestroyed) {
+                    if (activity.isFinishing || activity.isDestroyed.get()) {
                         throw IllegalStateException("تعذر الطباعة لأن الشاشة أُغلقت")
                     }
                     val liveWebView = activity.webView
