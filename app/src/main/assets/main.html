@@ -2010,7 +2010,9 @@
                 const values = response.data && typeof response.data === 'object' ? response.data : response;
                 displaySettings = {...DEFAULT_DISPLAY_SETTINGS};
                 for (const key of Object.keys(DEFAULT_DISPLAY_SETTINGS)) {
-                    if (Object.prototype.hasOwnProperty.call(values, key)) displaySettings[key] = String(values[key] ?? '');
+                    if (Object.prototype.hasOwnProperty.call(values, key) && String(values[key] ?? '').trim() !== '') {
+                        displaySettings[key] = String(values[key]);
+                    }
                 }
             } catch (error) {
                 console.warn('تعذر تحميل إعدادات العرض المحفوظة؛ ستستخدم القيم الآمنة الافتراضية:', error);
