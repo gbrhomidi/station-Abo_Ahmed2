@@ -2029,8 +2029,8 @@
                         const raw = window.AndroidInterface.getImageDataUrl(imagePath);
                         const result = typeof raw === 'string' ? JSON.parse(raw) : raw;
                         const image = result && result.data ? result.data : result;
-                        const dataUrl = image && (image.dataUrl || image.data_url || image.base64);
-                        if (dataUrl && /^data:image\//i.test(dataUrl)) overlay.style.backgroundImage = `linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.45)),url("${dataUrl.replace(/["\\\\]/g, '')}")`;
+                        const dataUrl = typeof image === 'string' ? image : (image && (image.dataUrl || image.data_url || image.base64));
+                        if (typeof dataUrl === 'string' && /^data:image\//i.test(dataUrl)) overlay.style.backgroundImage = `linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.45)),url("${dataUrl.replace(/["\\\\]/g, '')}")`;
                     } catch (e) { console.warn('تعذر تحميل صورة شاشة التوقف:', e); }
                 }
             }
