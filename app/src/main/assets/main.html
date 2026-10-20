@@ -1863,7 +1863,13 @@
         // ================================================================
         // Sleep Mode Variables
         // ================================================================
-        const SLEEP_TIMEOUT = 30000;
+        const DEFAULT_DISPLAY_SETTINGS = {
+            DISPLAY_IDLE_TIMEOUT_SECONDS: '300',
+            DISPLAY_SLEEP_TEXT: '⛽ محطة أبو أحمد',
+            DISPLAY_SLEEP_IMAGE: '',
+            DISPLAY_LOCK_ON_IDLE: '0'
+        };
+        let displaySettings = {...DEFAULT_DISPLAY_SETTINGS};
         let inactivityTimer = null;
         let sleepMoveInterval = null;
         let isSleeping = false;
@@ -1997,14 +2003,54 @@
         // ================================================================
         // Sleep Mode
         // ================================================================
+        async function loadDisplaySettings() {
+            try {
+                const response = await apiCall('getAllSystemSettingsMap');
+                if (!response || response.success === false) throw new Error(response?.error || 'تعذر قراءة إعدادات العرض');
+                const values = response.data && typeof response.data === 'object' ? response.data : response;
+                displaySettings = {...DEFAULT_DISPLAY_SETTINGS};
+                for (const key of Object.keys(DEFAULT_DISPLAY_SETTINGS)) {
+                    if (Object.prototype.hasOwnProperty.call(values, key)) displaySettings[key] = String(values[key] ?? '');
+                }
+            } catch (error) {
+                console.warn('تعذر تحميل إعدادات العرض المحفوظة؛ ستستخدم القيم الآمنة الافتراضية:', error);
+                displaySettings = {...DEFAULT_DISPLAY_SETTINGS};
+            }
+            const sleepText = document.getElementById('sleepText');
+            if (sleepText) sleepText.textContent = displaySettings.DISPLAY_SLEEP_TEXT || '⛽ محطة أبو أحمد';
+            const imagePath = String(displaySettings.DISPLAY_SLEEP_IMAGE || '').trim();
+            const overlay = document.getElementById('sleepOverlay');
+            if (overlay) {
+                overlay.style.backgroundImage = '';
+                if (imagePath && !/^https?:|^data:/i.test(imagePath) && window.AndroidInterface && typeof window.AndroidInterface.getImageDataUrl === 'function') {
+                    try {
+                        const raw = window.AndroidInterface.getImageDataUrl(imagePath);
+                        const result = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                        const image = result && result.data ? result.data : result;
+                        const dataUrl = image && (image.dataUrl || image.data_url || image.base64);
+                        if (dataUrl && /^data:image\//i.test(dataUrl)) overlay.style.backgroundImage = `linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.45)),url("${dataUrl.replace(/["\\\\]/g, '')}")`;
+                    } catch (e) { console.warn('تعذر تحميل صورة شاشة التوقف:', e); }
+                }
+            }
+        }
+
         function resetInactivityTimer() {
             if (inactivityTimer) clearTimeout(inactivityTimer);
             if (isSleeping) return;
-            inactivityTimer = setTimeout(enterSleepMode, SLEEP_TIMEOUT);
+            const seconds = Number.parseInt(displaySettings.DISPLAY_IDLE_TIMEOUT_SECONDS, 10);
+            if (!Number.isFinite(seconds) || seconds <= 0) return;
+            inactivityTimer = setTimeout(enterSleepMode, Math.max(5, seconds) * 1000);
         }
 
         function enterSleepMode() {
             if (isSleeping) return;
+            if (String(displaySettings.DISPLAY_LOCK_ON_IDLE) === '1' || String(displaySettings.DISPLAY_LOCK_ON_IDLE).toLowerCase() === 'true') {
+                if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; }
+                try { localStorage.removeItem('user'); } catch (_) {}
+                currentUser = null;
+                window.location.replace('screens/login.html');
+                return;
+            }
             isSleeping = true;
 
             document.body.classList.add('sleep-active');
@@ -2168,7 +2214,8 @@
                 sendDueSoonDebtRemindersTyped: () => androidInterface.sendDueSoonDebtRemindersTyped(JSON.stringify(safeParams)),
                 screenExists: () => androidInterface.screenExists(
                     typeof safeParams.path === 'string' ? safeParams.path : ''
-                )
+                ),
+                getAllSystemSettingsMap: () => androidInterface.getAllSystemSettingsMap()
             };
             const handler = bridgeActions[action];
             if (typeof handler !== 'function') {
@@ -3491,6 +3538,7 @@
             clockInterval = setInterval(updateDateTime, 1000);
 
             initDragGestures();
+            await loadDisplaySettings();
             initSleepMode();
 
             const cmdInput = document.getElementById('commandPaletteInput');
