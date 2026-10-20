@@ -3726,7 +3726,7 @@ tr:last-child td { border-bottom:0; }
 
             // Persist every visible legacy control in the real SQLite settings table too.
             for (const [key, value] of Object.entries(uiApplicationPayload)) {
-                await bridgeCall('setSetting', {key, value: typeof value === 'boolean' ? (value ? '1' : '0') : String(value ?? '')});
+                await bridgeCall('setSetting', {key, value: typeof value === 'boolean' ? (value ? '1' : '0') : Array.isArray(value) ? value.join(', ') : String(value ?? '')});
             }
             for (const [key, value] of Object.entries(allSystemPayload)) {
                 await bridgeCall('setSystemSetting', {key, value: String(value ?? '')});
