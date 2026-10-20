@@ -5740,40 +5740,74 @@ function openWhatsappInvoiceFullscreen() {
     if (!fullscreen) return;
     fullscreen.classList.add('show');
 
-    // إعطاء وقت بسيط لضمان أن المودال تم عرضه (display: flex) وتم حساب أبعاد الشاشة بشكل صحيح
-    setTimeout(() => {
+    // Recalculate after the modal is visible; use the real mobile viewport as a hard
+    // upper bound as WebView layouts can report a wider CSS viewport on some devices.
+    const fitInvoiceToViewport = () => {
         const container = fullscreen.querySelector('.wa-invoice-fullscreen-body');
         const wrapper = document.getElementById('waFullscreenWrapper');
         const scaler = document.getElementById('waInvoiceFullscreenScaler');
+        if (!container || !wrapper || !scaler || !fullscreen.classList.contains('show')) return;
 
-        if (container && wrapper && scaler) {
-            const computedStyle = window.getComputedStyle(container);
-            const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-            const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+        const style = window.getComputedStyle(container);
+        const horizontalPadding =
+            (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+        const measuredWidth = Math.max(0, container.clientWidth - horizontalPadding);
+        const viewportWidth = Math.max(
+            1,
+            Math.floor(
+                (window.visualViewport && window.visualViewport.width) ||
+                document.documentElement.clientWidth ||
+                window.innerWidth ||
+                measuredWidth
+            )
+        );
 
-            // عرض المساحة الفعلية المتاحة
-            const containerWidth = container.clientWidth - paddingLeft - paddingRight;
+        // Keep a small safety margin so shadows/borders never cross the phone edges.
+        const safeViewportWidth = Math.max(1, viewportWidth - 20);
+        const availableWidth = Math.max(
+            1,
+            Math.min(measuredWidth > 0 ? measuredWidth : safeViewportWidth, safeViewportWidth)
+        );
+        const invoiceWidth = 794;
+        const scale = Math.min(1, availableWidth / invoiceWidth);
+        const naturalHeight = Math.max(1123, scaler.scrollHeight || scaler.offsetHeight || 1123);
 
-            if (containerWidth > 0) {
-                const invoiceWidth = 794;
-                const invoiceHeight = 1123;
+        scaler.style.width = invoiceWidth + 'px';
+        scaler.style.maxWidth = 'none';
+        scaler.style.transform = 'scale(' + scale + ')';
+        scaler.style.transformOrigin = 'top left';
 
-                // حساب نسبة التكبير بناءً على العرض المتاح
-                const scale = Math.min(1, containerWidth / invoiceWidth);
+        // Transforms do not affect normal layout size; size the scroll wrapper to the
+        // transformed bounds, including invoices with more rows than a single A4 page.
+        wrapper.style.width = Math.ceil(invoiceWidth * scale) + 'px';
+        wrapper.style.height = Math.ceil(naturalHeight * scale) + 'px';
+        wrapper.style.maxWidth = '100%';
+        wrapper.style.marginLeft = 'auto';
+        wrapper.style.marginRight = 'auto';
+        wrapper.style.flexShrink = '0';
+        wrapper.style.position = 'relative';
+        container.scrollLeft = 0;
+    };
 
-                scaler.style.transform = `scale(${scale})`;
-                scaler.style.transformOrigin = 'top left';
+    // The first frame opens the dialog; the next frame has its final available width.
+    requestAnimationFrame(() => {
+        requestAnimationFrame(fitInvoiceToViewport);
+    });
+    setTimeout(fitInvoiceToViewport, 180);
 
-                // تعيين أبعاد الحاوية (Wrapper) لتتطابق مع الفاتورة المكبرة، لضمان عمل التمرير بشكل صحيح
-                wrapper.style.width = `${invoiceWidth * scale}px`;
-                wrapper.style.height = `${invoiceHeight * scale}px`;
-                wrapper.style.margin = '0 auto';
-                wrapper.style.flexShrink = '0'; // منع Flexbox من تصغير الحاوية
-            }
+    // Refit after rotation, keyboard/display viewport changes, or split-screen resizing.
+    if (fullscreen._invoiceFitHandler) {
+        window.removeEventListener('resize', fullscreen._invoiceFitHandler);
+        if (window.visualViewport) {
+            window.visualViewport.removeEventListener('resize', fullscreen._invoiceFitHandler);
         }
-    }, 150);
+    }
+    fullscreen._invoiceFitHandler = fitInvoiceToViewport;
+    window.addEventListener('resize', fitInvoiceToViewport, { passive: true });
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', fitInvoiceToViewport, { passive: true });
+    }
 }
-
 function closeWhatsappInvoiceFullscreen() {
     const fullscreen = document.getElementById('waInvoiceFullscreen');
     if (fullscreen) fullscreen.classList.remove('show');
