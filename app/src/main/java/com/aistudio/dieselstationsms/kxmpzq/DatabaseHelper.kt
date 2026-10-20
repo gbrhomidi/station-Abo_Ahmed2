@@ -16888,38 +16888,46 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // ========================================================================
 
     fun getSetting(key: String): String {
+        require(key.isNotBlank()) { "مفتاح الإعداد مطلوب" }
         dbLock.lock()
         return try {
             val db = readableDatabase
-            db.rawQuery("SELECT setting_value FROM system_settings WHERE setting_key = ?", arrayOf(key))
-                .use { cursor ->
-                    if (cursor.moveToFirst()) cursor.getString(0) else ""
-                }
+            // The legacy settings bridge and getAllSettingsMap must use the same table.
+            // Fall back to system_settings for values written by older app versions.
+            val legacyValue = db.rawQuery(
+                "SELECT setting_value FROM settings WHERE setting_key = ?",
+                arrayOf(key.trim())
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+            legacyValue ?: db.rawQuery(
+                "SELECT setting_value FROM system_settings WHERE setting_key = ? AND archived = 0",
+                arrayOf(key.trim())
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else "" }
         } finally {
             dbLock.unlock()
         }
     }
 
     fun setSetting(key: String, value: String): Boolean {
+        require(key.isNotBlank()) { "مفتاح الإعداد مطلوب" }
         dbLock.lock()
         return try {
             val db = writableDatabase
+            val now = getCurrentDateTime()
             val cv = ContentValues().apply {
                 put("setting_value", value)
-                put("updated_at", getCurrentDateTime())
+                put("updated_at", now)
             }
-            val rows = db.update("system_settings", cv, "setting_key = ?", arrayOf(key))
+            val rows = db.update("settings", cv, "setting_key = ?", arrayOf(key.trim()))
             if (rows == 0) {
                 val insertCv = ContentValues().apply {
-                    put("uuid", UUID.randomUUID().toString())
-                    put("setting_key", key)
+                    put("setting_key", key.trim())
                     put("setting_value", value)
-                    put("category", "general")
-                    put("data_type", "string")
-                    put("created_at", getCurrentDateTime())
-                    put("updated_at", getCurrentDateTime())
+                    put("setting_type", "string")
+                    put("is_editable", 1)
+                    put("created_at", now)
+                    put("updated_at", now)
                 }
-                db.insert("system_settings", null, insertCv)
+                db.insertOrThrow("settings", null, insertCv)
             }
             true
         } finally {
