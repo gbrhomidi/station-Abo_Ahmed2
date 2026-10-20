@@ -7586,6 +7586,40 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
 
+        /**
+         * يقفل الجلسة الحالية دون محو بيانات Remember-Me.
+         * - user_sessions.is_active = 0 (المصدر الموثّق)
+         * - currentAuthToken/currentUserId تُصفّران في الذاكرة
+         * - remember_me/saved_token/saved_user_id/saved_username تبقى سليمة
+         *   حتى يبقى biometricAutoLogin متاحاً من شاشة القفل.
+         */
+        @JavascriptInterface
+        fun lockSession(reason: String = "idle_lock"): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val token = activity.currentAuthToken
+            if (token.isNullOrBlank()) return successResponse(false, "لا توجد جلسة نشطة")
+            return try {
+                val invalidated = db.invalidateUserSession(token, reason.take(50))
+                activity.currentAuthToken = null
+                activity.currentUserId = 0L
+                activity.currentUserRole = ""
+                activity.currentUserName = ""
+                activity.sharedPrefs.edit().remove(KEY_TOKEN).apply()
+                try {
+                    db.logActivity("system", "session_lock", "قفل الجلسة: ${reason.take(50)}")
+                } catch (_: Exception) {}
+                JSONObject().apply {
+                    put("success", true)
+                    put("invalidated_rows", invalidated)
+                    put("message", "تم إبطال الجلسة في user_sessions")
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("LockSession", e)
+                errorResponse(e.message)
+            }
+        }
+
         @JavascriptInterface
         fun clearCredentials(): String {
             DebugLogger.info("WebAppInterface", "clearCredentials called")
@@ -10855,7 +10889,12 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val normalized = kind.trim().lowercase()
-                require(normalized == "station_photo" || normalized == "layout_plan") { "نوع ملف المحطة غير صالح" }
+                require(
+                    normalized == "station_photo" ||
+                    normalized == "layout_plan" ||
+                    normalized == "sleep_image" ||
+                    normalized == "lock_bg_image"
+                ) { "نوع ملف المحطة غير صالح" }
                 pendingStationFileKind = normalized
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
