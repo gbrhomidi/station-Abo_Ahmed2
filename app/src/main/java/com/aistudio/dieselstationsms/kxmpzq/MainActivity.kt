@@ -8094,6 +8094,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     capture = null
                 }
 
+                var completed = false
+
                 /**
                  * يرسم WebView إلى Bitmap ويحفظه كـPNG ثم يفتح واتساب.
                  * يُنفَّذ دائمًا على UI thread وبعد تأخير يسمح بتحميل الصور/الخطوط.
@@ -8274,7 +8276,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     // invoiceHtml is already a complete HTML document. Preserve its head,
                     // stylesheet and font declarations instead of stripping/rebuilding tags.
                     val captureHtml = invoiceHtml
-                    var completed = false
                     var renderScheduled = false
                     val renderTimeout = Runnable {
                         if (!completed) {
