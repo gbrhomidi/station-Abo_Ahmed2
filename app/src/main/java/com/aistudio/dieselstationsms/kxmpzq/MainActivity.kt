@@ -8380,48 +8380,53 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
 
         private fun scheduleWebViewPrint(documentTitle: String, jobTitle: String): String {
-            // @JavascriptInterface is called from a WebView bridge thread. Do not read
-            // WebView state or create a print adapter until we're on the UI thread.
+            // @JavascriptInterface runs on a bridge thread. All WebView and PrintManager
+            // access must happen on the UI thread, but return the real launch result to JS.
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            return try {
-                activity.runOnUiThread {
-                    try {
-                        if (activity.isFinishing || activity.isDestroyed) {
-                            throw IllegalStateException("تعذر الطباعة لأن الشاشة أُغلقت")
-                        }
-                        val liveWebView = activity.webView
-                            ?: throw IllegalStateException("صفحة الطباعة غير متاحة")
-                        if (!liveWebView.isAttachedToWindow || liveWebView.progress < 100) {
-                            throw IllegalStateException("انتظر حتى يكتمل تحميل الصفحة ثم أعد الطباعة")
-                        }
-                        val manager = activity.getSystemService(Context.PRINT_SERVICE) as? PrintManager
-                            ?: throw IllegalStateException("خدمة الطباعة غير متاحة حالياً")
-                        val adapter = liveWebView.createPrintDocumentAdapter(documentTitle)
-                        manager.print(
-                            jobTitle,
-                            adapter,
-                            PrintAttributes.Builder()
-                                .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-                                .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
-                                .build()
-                        )
-                    } catch (e: Exception) {
-                        DebugLogger.logException("NativePrint", e)
-                        Toast.makeText(
-                            activity,
-                            e.message ?: "تعذر فتح نافذة الطباعة",
-                            Toast.LENGTH_LONG
-                        ).show()
+            val completed = CountDownLatch(1)
+            var resultJson: String? = null
+            activity.runOnUiThread {
+                try {
+                    if (activity.isFinishing || activity.isDestroyed) {
+                        throw IllegalStateException("تعذر الطباعة لأن الشاشة أُغلقت")
                     }
+                    val liveWebView = activity.webView
+                        ?: throw IllegalStateException("صفحة الطباعة غير متاحة")
+                    if (!liveWebView.isAttachedToWindow || liveWebView.progress < 100) {
+                        throw IllegalStateException("انتظر حتى يكتمل تحميل الصفحة ثم أعد الطباعة")
+                    }
+                    val manager = activity.getSystemService(Context.PRINT_SERVICE) as? PrintManager
+                        ?: throw IllegalStateException("خدمة الطباعة غير متاحة حالياً")
+                    manager.print(
+                        jobTitle,
+                        liveWebView.createPrintDocumentAdapter(documentTitle),
+                        PrintAttributes.Builder()
+                            .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                            .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+                            .build()
+                    )
+                    resultJson = successResponse(true, "تم فتح نافذة الطباعة")
+                } catch (e: Exception) {
+                    DebugLogger.logException("NativePrint", e)
+                    Toast.makeText(
+                        activity,
+                        e.message ?: "تعذر فتح نافذة الطباعة",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    resultJson = errorResponse(e.message ?: "تعذر فتح نافذة الطباعة")
+                } finally {
+                    completed.countDown()
                 }
-                JSONObject().apply {
-                    put("success", true)
-                    put("queued", true)
-                    put("message", "تمت جدولة طلب الطباعة؛ ستظهر نافذة الطباعة إذا كان تحميل الصفحة مكتملاً")
-                }.toString()
-            } catch (e: Exception) {
-                DebugLogger.logException("NativePrint", e)
-                errorResponse(e.message ?: "تعذر جدولة الطباعة")
+            }
+            return try {
+                if (!completed.await(5, TimeUnit.SECONDS)) {
+                    errorResponse("انتهت مهلة فتح نافذة الطباعة؛ يرجى المحاولة مجدداً")
+                } else {
+                    resultJson ?: errorResponse("تعذر تحديد نتيجة طلب الطباعة")
+                }
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                errorResponse("تم إيقاف انتظار الطباعة")
             }
         }
 
