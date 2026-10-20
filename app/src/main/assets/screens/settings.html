@@ -3628,17 +3628,23 @@ tr:last-child td { border-bottom:0; }
     async function loadSettings() {
         showLoading(true);
         try {
-            const application = dataOf(await bridgeCall('getApplicationSettings')) || {};
-            Object.keys(settings).forEach(key => delete settings[key]);
-            Object.assign(settings, application);
+            const [applicationRaw, legacyRaw] = await Promise.all([
+                bridgeCall('getApplicationSettings'),
+                bridgeCall('getAllSettingsMap')
+            ]);
+            const application = dataOf(applicationRaw) || {};
+            const legacy = dataOf(legacyRaw) || {};
 
+            Object.keys(settings).forEach(key => delete settings[key]);
+            Object.assign(settings, application, legacy);
+
+            // The HTML contains legacy controls as well as fields in ApplicationSettings.
+            // Prefer the persisted value from SQLite when a legacy control has its own key.
             Object.keys(settings).forEach(key => setApplicationField(key, settings[key]));
 
-            if (settings.darkMode === true || settings.darkMode === 1 || settings.darkMode === '1') {
-                setDarkMode(true);
-            } else {
-                setDarkMode(false);
-            }
+            const darkModeValue = settings.darkMode;
+            setDarkMode(darkModeValue === true || darkModeValue === 1 || darkModeValue === '1' ||
+                String(settings.theme || '').toLowerCase() === 'dark');
 
             await loadSystemSettings();
         } catch (error) {
@@ -3690,39 +3696,78 @@ tr:last-child td { border-bottom:0; }
         closeActivePopover();
         showLoading(true);
         try {
-            const applicationPayload = collectApplicationSettings();
+            const uiApplicationPayload = collectApplicationSettings();
             const systemPayload = collectSystemSettings();
+            const displayPayload = collectDisplaySettings();
+            const allSystemPayload = {...systemPayload, ...displayPayload};
+
+            // Do not pass the UI's legacy-only keys as a replacement ApplicationSettings object:
+            // kotlinx.serialization ignores unknown keys and would otherwise reset model fields
+            // omitted by the HTML to their defaults.
+            const currentModel = dataOf(await bridgeCall('getApplicationSettings')) || {};
+            const modelPayload = {...currentModel};
+            const modelKeys = new Set([
+                'stationName', 'language', 'theme', 'smsServiceEnabled', 'smsReceiveEnabled',
+                'smsSendEnabled', 'smsRetryEnabled', 'autoStartEnabled', 'startOnBoot',
+                'runInBackground', 'deliveryReportsEnabled', 'smsMaxParts', 'smsCostPerPart',
+                'monitoringEnabled', 'auditLoggingEnabled', 'keepLogsDays',
+                'requireBiometricForSettings', 'encryptBackup', 'backupRetentionCount'
+            ]);
+            for (const [key, value] of Object.entries(uiApplicationPayload)) {
+                if (modelKeys.has(key)) modelPayload[key] = value;
+            }
+            if (Object.prototype.hasOwnProperty.call(uiApplicationPayload, 'darkMode')) {
+                modelPayload.theme = uiApplicationPayload.darkMode ? 'dark' : 'light';
+            }
 
             const applicationResult = dataOf(
-                await bridgeCall('saveApplicationSettings', applicationPayload)
+                await bridgeCall('saveApplicationSettings', modelPayload)
             ) || {};
 
-            Object.keys(settings).forEach(key => delete settings[key]);
-            Object.assign(settings, applicationResult);
-
-            const displayPayload = collectDisplaySettings();
-            for (const [key, value] of Object.entries({...systemPayload, ...displayPayload})) {
-                await bridgeCall('setSystemSetting', {key, value});
+            // Persist every visible legacy control in the real SQLite settings table too.
+            for (const [key, value] of Object.entries(uiApplicationPayload)) {
+                await bridgeCall('setSetting', {key, value: typeof value === 'boolean' ? (value ? '1' : '0') : String(value ?? '')});
             }
-            const persisted = dataOf(await bridgeCall('getAllSystemSettingsMap')) || {};
-            for (const [key, value] of Object.entries({...systemPayload, ...displayPayload})) {
-                if (!Object.prototype.hasOwnProperty.call(persisted, key) || String(persisted[key]) !== String(value)) {
+            for (const [key, value] of Object.entries(allSystemPayload)) {
+                await bridgeCall('setSystemSetting', {key, value: String(value ?? '')});
+            }
+
+            const [persistedApplicationRaw, persistedLegacyRaw, persistedSystemRaw] = await Promise.all([
+                bridgeCall('getApplicationSettings'),
+                bridgeCall('getAllSettingsMap'),
+                bridgeCall('getAllSystemSettingsMap')
+            ]);
+            const persistedApplication = dataOf(persistedApplicationRaw) || {};
+            const persistedLegacy = dataOf(persistedLegacyRaw) || {};
+            const persistedSystem = dataOf(persistedSystemRaw) || {};
+
+            for (const [key, value] of Object.entries(uiApplicationPayload)) {
+                const expected = typeof value === 'boolean' ? (value ? '1' : '0') :
+                    Array.isArray(value) ? value.join(', ') : String(value ?? '');
+                if (!Object.prototype.hasOwnProperty.call(persistedLegacy, key) ||
+                    String(persistedLegacy[key]) !== expected) {
+                    throw new Error('فشل التحقق من حفظ إعداد التطبيق: ' + key);
+                }
+            }
+            for (const [key, value] of Object.entries(allSystemPayload)) {
+                if (!Object.prototype.hasOwnProperty.call(persistedSystem, key) ||
+                    String(persistedSystem[key]) !== String(value ?? '')) {
                     throw new Error('لم يتم التحقق من حفظ الإعداد: ' + key);
                 }
-                systemSettings[key] = persisted[key];
+                systemSettings[key] = persistedSystem[key];
             }
 
+            Object.keys(settings).forEach(key => delete settings[key]);
+            Object.assign(settings, persistedLegacy, persistedApplication, applicationResult);
             Object.keys(settings).forEach(key => setApplicationField(key, settings[key]));
-
             setDarkMode(
-                settings.darkMode === true ||
-                settings.darkMode === 1 ||
-                settings.darkMode === '1'
+                settings.darkMode === true || settings.darkMode === 1 || settings.darkMode === '1' ||
+                String(settings.theme || '').toLowerCase() === 'dark'
             );
 
-            toast('تم التحقق من حفظ الإعدادات في SQLite بنجاح');
+            toast('تم حفظ الإعدادات والتحقق من قراءتها مجدداً من SQLite');
         } catch (error) {
-            toast(error.message, 'bad');
+            toast(error.message || 'تعذر حفظ الإعدادات', 'bad');
         } finally {
             showLoading(false);
         }
