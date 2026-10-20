@@ -8131,14 +8131,36 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             }
                         }
 
-                        val canvas = android.graphics.Canvas(bitmap)
+                        val renderedBitmap = bitmap ?: throw IllegalStateException("تعذر إنشاء صورة الفاتورة")
+                        val canvas = android.graphics.Canvas(renderedBitmap)
                         canvas.drawColor(android.graphics.Color.WHITE)
                         view.draw(canvas)
+
+                        // A valid PNG may still contain only a white background. Reject it
+                        // before sharing, rather than reporting success for a blank invoice.
+                        var visibleContentSamples = 0
+                        for (y in 0 until measuredHeight step 4) {
+                            for (x in 0 until bitmapWidth step 4) {
+                                val pixel = renderedBitmap.getPixel(x, y)
+                                if (
+                                    android.graphics.Color.red(pixel) < 245 ||
+                                    android.graphics.Color.green(pixel) < 245 ||
+                                    android.graphics.Color.blue(pixel) < 245
+                                ) {
+                                    visibleContentSamples++
+                                    if (visibleContentSamples >= 25) break
+                                }
+                            }
+                            if (visibleContentSamples >= 25) break
+                        }
+                        check(visibleContentSamples >= 25) {
+                            "صورة الفاتورة فارغة أو لم يُرسم محتواها؛ لم تتم مشاركة صورة بيضاء"
+                        }
 
                         val invoiceDir = File(activity.filesDir, "invoices").apply { mkdirs() }
                         val imageFile = File(invoiceDir, "${safeNumber}.png")
                         FileOutputStream(imageFile).use { stream ->
-                            check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                            check(renderedBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
                                 "فشل ضغط الصورة"
                             }
                             stream.flush()
@@ -8222,50 +8244,53 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     }
                     root.addView(capture, ViewGroup.LayoutParams(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-                    val wrappedHtml = buildInvoiceWrapperHtml(invoiceHtml)
+                    // invoiceHtml is already a complete HTML document. Preserve its head,
+                    // stylesheet and font declarations instead of stripping/rebuilding tags.
+                    val captureHtml = invoiceHtml
+                    var completed = false
+                    var renderScheduled = false
+                    val renderTimeout = Runnable {
+                        if (!completed) {
+                            completed = true
+                            finish(JSONObject().apply {
+                                put("success", false)
+                                put("error", "انتهت مهلة تحميل مستند الفاتورة قبل اكتمال الرسم")
+                            })
+                            detachCapture()
+                        }
+                    }
                     capture?.webViewClient = object : WebViewClient() {
-                        private var completed = false
-                        private var renderScheduled = false
-                        private var pendingResources = 0
-                        private var pageFinished = false
-
                         private fun complete(result: JSONObject) {
                             if (completed) return
                             completed = true
+                            handler.removeCallbacks(renderTimeout)
                             finish(result)
                             detachCapture()
                         }
 
                         private fun scheduleRender(view: WebView) {
-                            if (renderScheduled) return
+                            if (completed || renderScheduled) return
                             renderScheduled = true
-                            // تأخير ديناميكي: إذا كانت هناك موارد معلّقة، نمنح المتصفح وقتًا كافيًا
-                            // لتحميلها قبل الرسم. 600ms للفواتير البسيطة، 900ms عند وجود صور/خطوط.
-                            val delay = if (pendingResources > 0) 900L else 600L
+                            // Wait for compositor readiness, then allow local images and fonts
+                            // a brief settling period before drawing the WebView to a bitmap.
                             view.postDelayed({
                                 if (!completed) performRender(view, ::complete)
-                            }, delay)
-                        }
-
-                        override fun onLoadResource(view: WebView?, url: String?) {
-                            super.onLoadResource(view, url)
-                            pendingResources += 1
+                            }, 350L)
                         }
 
                         override fun onPageFinished(view: WebView, url: String?) {
                             super.onPageFinished(view, url)
-                            pageFinished = true
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                                 view.postVisualStateCallback(
                                     System.nanoTime(),
                                     object : WebView.VisualStateCallback() {
                                         override fun onComplete(requestId: Long) {
-                                            if (!completed) scheduleRender(view)
+                                            scheduleRender(view)
                                         }
                                     }
                                 )
                             } else {
-                                view.postDelayed({ scheduleRender(view) }, 250L)
+                                view.postDelayed({ scheduleRender(view) }, 500L)
                             }
                         }
 
@@ -8274,13 +8299,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             request: WebResourceRequest?,
                             error: WebResourceError?
                         ) {
-                            DebugLogger.warn("ShareInvoice", "HTTP/Error: ${error?.description} @ ${request?.url}")
+                            super.onReceivedError(view, request, error)
+                            if (request?.isForMainFrame == true) {
+                                DebugLogger.warn("ShareInvoice", "Main document load error: ${error?.description} @ ${request.url}")
+                            } else {
+                                DebugLogger.warn("ShareInvoice", "Invoice resource load error: ${error?.description} @ ${request?.url}")
+                            }
                         }
                     }
+                    handler.postDelayed(renderTimeout, 25_000L)
 
                     capture?.loadDataWithBaseURL(
                         "file:///android_asset/",
-                        wrappedHtml,
+                        captureHtml,
                         "text/html",
                         "UTF-8",
                         null
@@ -8349,24 +8380,26 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
 
         private fun scheduleWebViewPrint(documentTitle: String, jobTitle: String): String {
-            val currentWebView = webView ?: return errorResponse("صفحة الطباعة غير متاحة")
-            // WebView exposes progress, not a public isLoading property.
-            if (currentWebView.progress < 100) {
-                return errorResponse("لا يمكن الطباعة قبل اكتمال تحميل الصفحة")
-            }
+            // @JavascriptInterface is called from a WebView bridge thread. Do not read
+            // WebView state or create a print adapter until we're on the UI thread.
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
-                runOnUiThread {
+                activity.runOnUiThread {
                     try {
-                        val manager = getSystemService(Context.PRINT_SERVICE) as? PrintManager
-                            ?: throw IllegalStateException("خدمة الطباعة غير متاحة حالياً")
-                        val liveWebView = webView
-                            ?: throw IllegalStateException("صفحة الطباعة لم تعد متاحة")
-                        if (liveWebView.progress < 100) {
-                            throw IllegalStateException("لا يمكن الطباعة قبل اكتمال تحميل الصفحة")
+                        if (activity.isFinishing || activity.isDestroyed) {
+                            throw IllegalStateException("تعذر الطباعة لأن الشاشة أُغلقت")
                         }
+                        val liveWebView = activity.webView
+                            ?: throw IllegalStateException("صفحة الطباعة غير متاحة")
+                        if (!liveWebView.isAttachedToWindow || liveWebView.progress < 100) {
+                            throw IllegalStateException("انتظر حتى يكتمل تحميل الصفحة ثم أعد الطباعة")
+                        }
+                        val manager = activity.getSystemService(Context.PRINT_SERVICE) as? PrintManager
+                            ?: throw IllegalStateException("خدمة الطباعة غير متاحة حالياً")
+                        val adapter = liveWebView.createPrintDocumentAdapter(documentTitle)
                         manager.print(
                             jobTitle,
-                            liveWebView.createPrintDocumentAdapter(documentTitle),
+                            adapter,
                             PrintAttributes.Builder()
                                 .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
                                 .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
@@ -8375,16 +8408,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     } catch (e: Exception) {
                         DebugLogger.logException("NativePrint", e)
                         Toast.makeText(
-                            this@MainActivity,
+                            activity,
                             e.message ?: "تعذر فتح نافذة الطباعة",
                             Toast.LENGTH_LONG
                         ).show()
                     }
                 }
-                successResponse(true, "تم إرسال طلب الطباعة")
+                JSONObject().apply {
+                    put("success", true)
+                    put("queued", true)
+                    put("message", "تمت جدولة طلب الطباعة؛ ستظهر نافذة الطباعة إذا كان تحميل الصفحة مكتملاً")
+                }.toString()
             } catch (e: Exception) {
                 DebugLogger.logException("NativePrint", e)
-                errorResponse(e.message ?: "تعذر فتح نافذة الطباعة")
+                errorResponse(e.message ?: "تعذر جدولة الطباعة")
             }
         }
 
