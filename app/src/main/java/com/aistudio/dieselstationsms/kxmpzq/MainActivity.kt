@@ -8267,11 +8267,17 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         // WebView مرئي (alpha=1) لكنه مُزاح خارج الشاشة؛ استخدام alpha=0f
                         // قد يُنتج bitmap فارغًا على بعض إصدارات WebView من OEMs.
                         alpha = 1f
-                        translationY = -100_000f
+                        // Keep the capture WebView inside the visible window bounds so Chromium
+                        // actually composites its page. A huge negative translation can cause
+                        // WebView to skip painting and return an all-white bitmap on some devices.
+                        translationY = 0f
                         isClickable = false
                         isFocusable = false
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                     }
-                    root.addView(capture, ViewGroup.LayoutParams(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT))
+                    // Place the capture view behind the app's existing content: it remains attached
+                    // and drawable, but does not cover or intercept the visible POS interface.
+                    root.addView(capture, 0, ViewGroup.LayoutParams(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT))
 
                     // invoiceHtml is already a complete HTML document. Preserve its head,
                     // stylesheet and font declarations instead of stripping/rebuilding tags.
