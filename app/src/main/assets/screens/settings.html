@@ -3628,15 +3628,19 @@ tr:last-child td { border-bottom:0; }
     async function loadSettings() {
         showLoading(true);
         try {
-            const [applicationRaw, legacyRaw] = await Promise.all([
+            const [applicationRaw, legacyRaw, previousSystemRaw] = await Promise.all([
                 bridgeCall('getApplicationSettings'),
-                bridgeCall('getAllSettingsMap')
+                bridgeCall('getAllSettingsMap'),
+                bridgeCall('getAllSystemSettingsMap')
             ]);
             const application = dataOf(applicationRaw) || {};
             const legacy = dataOf(legacyRaw) || {};
+            const previousSystem = dataOf(previousSystemRaw) || {};
 
             Object.keys(settings).forEach(key => delete settings[key]);
-            Object.assign(settings, application, legacy);
+            // Older releases accidentally stored some application controls in system_settings.
+            // Read those values as a migration fallback; settings remains authoritative once present.
+            Object.assign(settings, previousSystem, application, legacy);
 
             // The HTML contains legacy controls as well as fields in ApplicationSettings.
             // Prefer the persisted value from SQLite when a legacy control has its own key.
