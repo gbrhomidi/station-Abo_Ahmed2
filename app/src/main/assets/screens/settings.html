@@ -1014,6 +1014,20 @@ tr:last-child td { border-bottom:0; }
         </div>
     </section>
 
+    <section class="panel" id="panel-display">
+        <div class="card">
+            <div class="card-head">
+                <div class="card-head-main">
+                    <div class="card-avatar"><i class="fas fa-tv"></i></div>
+                    <div><h2>إعدادات العرض وشاشة التوقف</h2><p>تُقرأ وتُحفظ في system_settings، وتُطبق على لوحة التحكم.</p></div>
+                </div>
+                <span class="badge">SQLite / Android</span>
+            </div>
+            <div id="displayFields" class="form-grid"></div>
+            <div class="notice">مدة الخمول بالثواني. القيمة 0 تعطل شاشة التوقف. قفل الجلسة عند الخمول ينهي الجلسة الحالية ويعيد المستخدم إلى شاشة تسجيل الدخول.</div>
+        </div>
+    </section>
+
     <section class="panel" id="panel-users">
         <div class="card">
             <div class="card-head">
@@ -1118,7 +1132,8 @@ tr:last-child td { border-bottom:0; }
         ['security','الأمان','fa-shield-alt'],
         ['backup','النسخ','fa-copy'],
         ['maintenance','الصيانة','fa-tools'],
-        ['users','المستخدمون','fa-users']
+        ['users','المستخدمون','fa-users'],
+        ['display','العرض','fa-tv']
     ];
 
     const defs = {
@@ -1209,6 +1224,13 @@ tr:last-child td { border-bottom:0; }
         ['CREDIT_LIMIT_DEFAULT','حد الائتمان الافتراضي','number','system_settings / finance'],
         ['retention_days','مدة الاحتفاظ بالسجلات (يوم)','number','system_settings / system'],
         ['push_notifications_enabled','إشعارات Push','bool','system_settings / notifications']
+    ];
+
+    const displayDefs = [
+        ['DISPLAY_IDLE_TIMEOUT_SECONDS','مدة الخمول قبل شاشة التوقف (ثانية)','number','القيمة 0 تعطل شاشة التوقف؛ يوصى بـ 300 ثانية'],
+        ['DISPLAY_SLEEP_TEXT','النص المعروض أثناء شاشة التوقف','text','نص متحرك يظهر على شاشة التوقف'],
+        ['DISPLAY_SLEEP_IMAGE','مسار صورة شاشة التوقف','text','مسار صورة محلية ضمن ملفات التطبيق؛ اتركه فارغاً لإخفاء الصورة'],
+        ['DISPLAY_LOCK_ON_IDLE','قفل الجلسة عند الخمول','bool','عند التفعيل، يؤدي الخمول إلى إنهاء الجلسة والعودة إلى تسجيل الدخول']
     ];
 
     function el(id) {
@@ -1417,6 +1439,9 @@ tr:last-child td { border-bottom:0; }
         const systemTarget = el('systemFields');
         systemTarget.innerHTML = '';
         systemDefs.forEach(def => systemTarget.appendChild(createField(def, 'system')));
+        const displayTarget = el('displayFields');
+        displayTarget.innerHTML = '';
+        displayDefs.forEach(def => displayTarget.appendChild(createField(def, 'system')));
 
         el('statFields').textContent =
             Object.keys(defs).reduce((sum, section) => sum + defs[section].length, 0) + systemDefs.length;
@@ -1473,7 +1498,7 @@ tr:last-child td { border-bottom:0; }
     function collectSystemSettings() {
         const result = {};
 
-        systemDefs.forEach(def => {
+        systemDefs.concat(displayDefs).forEach(def => {
             const [key, , type] = def;
             const input = el('setting-' + key);
             if (!input) return;
@@ -1485,6 +1510,16 @@ tr:last-child td { border-bottom:0; }
             }
         });
 
+        return result;
+    }
+
+    function collectDisplaySettings() {
+        const result = {};
+        displayDefs.forEach(([key, , type]) => {
+            const input = el('setting-' + key);
+            if (!input) return;
+            result[key] = type === 'bool' ? (input.checked ? '1' : '0') : input.value;
+        });
         return result;
     }
 
@@ -1518,9 +1553,15 @@ tr:last-child td { border-bottom:0; }
             Object.keys(systemSettings).forEach(key => delete systemSettings[key]);
             Object.assign(systemSettings, values);
 
-            systemDefs.forEach(([key]) => {
+            systemDefs.concat(displayDefs).forEach(([key]) => {
                 if (Object.prototype.hasOwnProperty.call(systemSettings, key)) {
                     setSystemField(key, systemSettings[key]);
+                } else {
+                    const input = el('setting-' + key);
+                    if (input) {
+                        if (input.type === 'checkbox') input.checked = false;
+                        else input.value = key === 'DISPLAY_IDLE_TIMEOUT_SECONDS' ? '300' : (key === 'DISPLAY_SLEEP_TEXT' ? '⛽ محطة أبو أحمد' : '');
+                    }
                 }
             });
         } catch (error) {
@@ -1541,9 +1582,16 @@ tr:last-child td { border-bottom:0; }
             Object.keys(settings).forEach(key => delete settings[key]);
             Object.assign(settings, applicationResult);
 
-            for (const [key, value] of Object.entries(systemPayload)) {
+            const displayPayload = collectDisplaySettings();
+            for (const [key, value] of Object.entries({...systemPayload, ...displayPayload})) {
                 await bridgeCall('setSystemSetting', {key, value});
-                systemSettings[key] = value;
+            }
+            const persisted = dataOf(await bridgeCall('getAllSystemSettingsMap')) || {};
+            for (const [key, value] of Object.entries({...systemPayload, ...displayPayload})) {
+                if (!Object.prototype.hasOwnProperty.call(persisted, key) || String(persisted[key]) !== String(value)) {
+                    throw new Error('لم يتم التحقق من حفظ الإعداد: ' + key);
+                }
+                systemSettings[key] = persisted[key];
             }
 
             Object.keys(settings).forEach(key => setApplicationField(key, settings[key]));
@@ -1554,7 +1602,7 @@ tr:last-child td { border-bottom:0; }
                 settings.darkMode === '1'
             );
 
-            toast('تم حفظ وتطبيق الإعدادات فعلياً في SQLite وAndroid');
+            toast('تم التحقق من حفظ الإعدادات في SQLite بنجاح');
         } catch (error) {
             toast(error.message, 'bad');
         } finally {
