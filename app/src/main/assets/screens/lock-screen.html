@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0A0E13">
+<title>قفل الشاشة - محطة أبو أحمد</title>
+<link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
+<style>
+:root {
+    --bg-1: #0A0E13;
+    --bg-2: #101720;
+    --accent: #D4A86A;
+    --accent-2: #F0C992;
+    --text: #F6F1E7;
+    --muted: #A0A8B1;
+    --danger: #FF4757;
+    --success: #2ECC71;
+    --line: rgba(255,255,255,.08);
+    --font-sans: 'Cairo', 'Tajawal', 'Inter', 'Noto Sans Arabic', Arial, sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body {
+    width: 100%; min-height: 100vh;
+    background: linear-gradient(160deg, var(--bg-1), var(--bg-2));
+    color: var(--text);
+    font-family: var(--font-sans);
+    direction: rtl;
+    overflow-x: hidden;
+}
+body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+    background-image:
+        radial-gradient(circle at 20% 10%, rgba(212,168,106,.08), transparent 40%),
+        radial-gradient(circle at 80% 90%, rgba(212,168,106,.05), transparent 50%);
+    transition: background-image .4s;
+}
+
+.lock-card {
+    width: min(430px, 100%);
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(212,168,106,.18);
+    border-radius: 22px;
+    padding: 30px 24px 26px;
+    box-shadow: 0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    text-align: center;
+    animation: cardEnter .5s ease;
+}
+@keyframes cardEnter {
+    from { opacity: 0; transform: translateY(20px) scale(.97); }
+    to { opacity: 1; transform: none; }
+}
+
+.lock-avatar-wrap {
+    position: relative;
+    width: 104px;
+    height: 104px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    padding: 3px;
+    background: conic-gradient(from 180deg, var(--accent), var(--accent-2), var(--accent));
+    box-shadow: 0 0 30px rgba(212,168,106,.35);
+}
+.lock-avatar-wrap::after {
+    content: '';
+    position: absolute;
+    inset: -7px;
+    border-radius: 50%;
+    border: 2px dashed rgba(212,168,106,.35);
+    animation: rotateRing 20s linear infinite;
+}
+@keyframes rotateRing { to { transform: rotate(360deg); } }
+.lock-avatar {
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #1E2329;
+    display: block;
+}
+.lock-badge {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: grid;
+    place-items: center;
+    color: #0A0E13;
+    font-size: 12px;
+    border: 3px solid var(--bg-1);
+    z-index: 2;
+}
+
+.lock-name {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text);
+    margin: 0 0 8px;
+    word-break: break-word;
+    line-height: 1.35;
+}
+.lock-role {
+    font-size: 12px;
+    color: var(--accent);
+    background: rgba(212,168,106,.12);
+    border: 1px solid rgba(212,168,106,.25);
+    border-radius: 999px;
+    padding: 4px 14px;
+    display: inline-block;
+    margin-bottom: 20px;
+    max-width: 100%;
+    word-break: break-word;
+}
+
+.lock-clock {
+    font-family: 'Outfit', 'Tajawal', monospace;
+    font-size: 44px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: 1px;
+    line-height: 1;
+    margin-bottom: 6px;
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+}
+.lock-date {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 22px;
+}
+
+.lock-message {
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(212,168,106,.08);
+    border: 1px solid rgba(212,168,106,.2);
+    color: var(--accent-2);
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 18px;
+    text-align: center;
+}
+
+.section-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 16px 0;
+    color: var(--muted);
+    font-size: 11px;
+}
+.section-divider::before,
+.section-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+}
+
+.biometric-btn {
+    width: 100%;
+    min-height: 60px;
+    border: 1px solid rgba(212,168,106,.35);
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(212,168,106,.18), rgba(212,168,106,.06));
+    color: var(--accent-2);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px 16px;
+    transition: .2s;
+    box-shadow: 0 6px 24px rgba(212,168,106,.18);
+    line-height: 1.4;
+    text-align: center;
+}
+.biometric-btn:hover { background: linear-gradient(135deg, rgba(212,168,106,.26), rgba(212,168,106,.1)); }
+.biometric-btn:active { transform: scale(.98); }
+.biometric-btn:disabled { opacity: .55; cursor: wait; }
+.biometric-btn i { font-size: 24px; flex-shrink: 0; }
+
+.use-password-link {
+    display: block;
+    text-align: center;
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 4px;
+    width: 100%;
+    font-family: inherit;
+    transition: .2s;
+}
+.use-password-link:hover { color: var(--accent-2); }
+.use-password-link:active { transform: scale(.97); }
+
+.password-field {
+    text-align: right;
+    margin-bottom: 4px;
+}
+.password-field label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-weight: 700;
+}
+.password-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.password-input {
+    width: 100%;
+    min-height: 52px;
+    padding: 12px 16px 12px 52px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255,255,255,.03);
+    color: var(--text);
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+    transition: .2s;
+    direction: ltr;
+    text-align: right;
+}
+.password-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(212,168,106,.18);
+    background: rgba(255,255,255,.05);
+}
+.password-input.error {
+    border-color: var(--danger);
+    animation: shake .4s ease;
+}
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    50% { transform: translateX(6px); }
+    75% { transform: translateX(-3px); }
+}
+
+.eye-btn {
+    position: absolute;
+    left: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    border-radius: 10px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    font-size: 16px;
+    transition: .2s;
+}
+.eye-btn:hover { background: rgba(255,255,255,.06); color: var(--accent-2); }
+.eye-btn:active { transform: translateY(-50%) scale(.92); }
+
+.unlock-btn {
+    width: 100%;
+    min-height: 54px;
+    margin-top: 14px;
+    border: none;
+    border-radius: 14px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #1A1305;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: .2s;
+    box-shadow: 0 12px 30px rgba(212,168,106,.28);
+}
+.unlock-btn:hover { filter: brightness(1.06); }
+.unlock-btn:active { transform: scale(.98); }
+.unlock-btn:disabled { opacity: .55; cursor: wait; }
+
+.error-msg, .success-msg {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.5;
+    text-align: center;
+}
+.error-msg { background: rgba(255,71,87,.12); border: 1px solid rgba(255,71,87,.3); color: var(--danger); }
+.success-msg { background: rgba(46,204,113,.12); border: 1px solid rgba(46,204,113,.3); color: var(--success); }
+
+.hidden { display: none !important; }
+
+.footer-actions {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    gap: 8px;
+}
+.footer-btn {
+    flex: 1;
+    min-height: 42px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(255,255,255,.03);
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: .2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+.footer-btn:hover { background: rgba(255,255,255,.07); color: var(--text); }
+.footer-btn.danger { color: var(--danger); border-color: rgba(255,71,87,.25); }
+.footer-btn.danger:hover { background: rgba(255,71,87,.1); }
+
+@media (max-width: 380px) {
+    .lock-card { padding: 24px 18px 22px; }
+    .lock-avatar-wrap { width: 88px; height: 88px; }
+    .lock-clock { font-size: 38px; }
+    .lock-name { font-size: 18px; }
+}
+@media (max-height: 700px) {
+    .lock-clock { font-size: 36px; }
+    .lock-date { margin-bottom: 16px; }
+    .lock-card { padding-top: 22px; }
+    .lock-avatar-wrap { width: 84px; height: 84px; margin-bottom: 12px; }
+}
+</style>
+</head>
+<body>
+
+<div class="lock-card" role="dialog" aria-modal="true" aria-labelledby="lockName">
+    <div class="lock-avatar-wrap" id="avatarWrap">
+        <img id="lockAvatar" class="lock-avatar" alt="صورة المستخدم">
+        <div class="lock-badge"><i class="fas fa-lock"></i></div>
+    </div>
+
+    <h1 class="lock-name" id="lockName">جاري التحميل...</h1>
+    <div class="lock-role" id="lockRole">—</div>
+
+    <div class="lock-clock" id="lockClock">--:--:--</div>
+    <div class="lock-date" id="lockDate">—</div>
+
+    <div class="lock-message hidden" id="lockMessage"></div>
+
+    <!-- قسم البصمة البيومترية -->
+    <div id="biometricSection" class="hidden">
+        <button type="button" class="biometric-btn" id="biometricBtn" onclick="handleBiometricUnlock()">
+            <i class="fas fa-fingerprint"></i>
+            <span>تسجيل الدخول باستخدام البصمة البيومترية للمستخدم</span>
+        </button>
+        <button type="button" class="use-password-link" id="usePasswordLink" onclick="showPasswordSection(true)">
+            استخدام كلمة المرور بدلاً من ذلك
+        </button>
+    </div>
+
+    <!-- قسم كلمة المرور -->
+    <div id="passwordSection" class="hidden">
+        <div id="passwordDivider" class="section-divider hidden">
+            <span>أو</span>
+        </div>
+
+        <div class="password-field">
+            <label for="lockPassword">كلمة المرور</label>
+            <div class="password-input-wrap">
+                <input
+                    type="password"
+                    id="lockPassword"
+                    class="password-input"
+                    placeholder="أدخل كلمة المرور"
+                    autocomplete="current-password"
+                    enterkeyhint="go"
+                    maxlength="200">
+                <button
+                    type="button"
+                    class="eye-btn"
+                    id="eyeBtn"
+                    onclick="togglePasswordVisibility()"
+                    aria-label="إظهار كلمة المرور"
+                    title="إظهار / إخفاء كلمة المرور">
+                    <i class="fas fa-eye" id="eyeIcon"></i>
+                </button>
+            </div>
+        </div>
+
+        <button type="button" class="unlock-btn" id="unlockBtn" onclick="submitPassword()">
+            <i class="fas fa-lock-open"></i>
+            <span>فتح القفل</span>
+        </button>
+
+        <div class="error-msg hidden" id="errorMsg"></div>
+        <div class="success-msg hidden" id="successMsg"></div>
+    </div>
+
+    <div class="footer-actions">
+        <button type="button" class="footer-btn danger" onclick="switchUser()">
+            <i class="fas fa-sign-out-alt"></i> تبديل المستخدم
+        </button>
+        <button type="button" class="footer-btn" onclick="reloadClock()">
+            <i class="fas fa-sync-alt"></i> تحديث
+        </button>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    const KEY_LOCKED_USER = 'lockedUser';
+
+    const $ = (id) => document.getElementById(id);
+    const el = {
+        avatarWrap: $('avatarWrap'),
+        avatar: $('lockAvatar'),
+        name: $('lockName'),
+        role: $('lockRole'),
+        clock: $('lockClock'),
+        date: $('lockDate'),
+        message: $('lockMessage'),
+        biometricSection: $('biometricSection'),
+        biometricBtn: $('biometricBtn'),
+        usePasswordLink: $('usePasswordLink'),
+        passwordSection: $('passwordSection'),
+        passwordDivider: $('passwordDivider'),
+        password: $('lockPassword'),
+        eyeBtn: $('eyeBtn'),
+        eyeIcon: $('eyeIcon'),
+        unlockBtn: $('unlockBtn'),
+        errorMsg: $('errorMsg'),
+        successMsg: $('successMsg')
+    };
+
+    const DEFAULT_AVATAR = "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Ccircle cx='100' cy='100' r='100' fill='%231E2329'/%3E%3Crect x='56' y='78' width='10' height='22' rx='5' fill='%23D4A86A'/%3E%3Crect x='134' y='78' width='10' height='22' rx='5' fill='%23D4A86A'/%3E%3Cpath d='M62,72 Q62,38 100,38 Q138,38 138,72 L138,88 Q138,114 100,120 Q62,114 62,88 Z' fill='%23D4A86A'/%3E%3Crect x='86' y='116' width='28' height='24' fill='%23D4A86A'/%3E%3Cpath d='M32,200 L32,180 Q32,146 82,138 L118,138 Q168,146 168,180 L168,200 Z' fill='%23D4A86A'/%3E%3C/svg%3E";
+
+    let lockedUser = null;
+    let clockTimer = null;
+    let isSubmitting = false;
+    let isBiometricBusy = false;
+    let biometricTimer = null;
+
+    function safeParse(value) {
+        if (value == null) return null;
+        if (typeof value === 'object') return value;
+        try { return JSON.parse(value); } catch (_) { return null; }
+    }
+
+    function callBridge(name, ...args) {
+        try {
+            const api = window.AndroidInterface;
+            if (!api || typeof api[name] !== 'function') {
+                throw new Error('AndroidInterface.' + name + ' غير متاح');
+            }
+            return safeParse(api[name](...args));
+        } catch (e) {
+            return { success: false, error: e.message || String(e) };
+        }
+    }
+
+    function readLockedUser() {
+        try {
+            const raw = sessionStorage.getItem(KEY_LOCKED_USER);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object' || !parsed.username) return null;
+            return parsed;
+        } catch (_) { return null; }
+    }
+
+    function setAvatar(user) {
+        const raw = String(user && user.avatar_path || '').trim();
+        if (!raw) { el.avatar.src = DEFAULT_AVATAR; return; }
+        if (/^data:image\//i.test(raw)) { el.avatar.src = raw; return; }
+        const response = callBridge('getImageDataUrl', raw);
+        if (response && response.success && typeof response.data === 'string' && /^data:image\//i.test(response.data)) {
+            el.avatar.src = response.data;
+            return;
+        }
+        el.avatar.src = DEFAULT_AVATAR;
+    }
+
+    function renderUser(user) {
+        el.name.textContent = user.full_name_ar || user.full_name || user.display_name || user.username || 'مستخدم';
+        el.role.textContent = user.job_title || user.role_name_ar || user.role_name || user.role || '—';
+        setAvatar(user);
+    }
+
+    function updateClock() {
+        const now = new Date();
+        try {
+            el.clock.textContent = new Intl.DateTimeFormat('en-GB', {
+                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+            }).format(now);
+        } catch (_) {
+            el.clock.textContent = now.toLocaleTimeString('en-GB');
+        }
+        try {
+            el.date.textContent = new Intl.DateTimeFormat('ar-EG', {
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+            }).format(now);
+        } catch (_) {
+            el.date.textContent = now.toLocaleDateString('ar-EG');
+        }
+    }
+
+    function showError(message) {
+        el.errorMsg.textContent = String(message || 'حدث خطأ');
+        el.errorMsg.classList.remove('hidden');
+        el.successMsg.classList.add('hidden');
+    }
+
+    function clearError() {
+        el.errorMsg.textContent = '';
+        el.errorMsg.classList.add('hidden');
+    }
+
+    function showSuccess(message) {
+        el.successMsg.textContent = String(message || 'تم بنجاح');
+        el.successMsg.classList.remove('hidden');
+        el.errorMsg.classList.add('hidden');
+    }
+
+    function togglePasswordVisibility() {
+        const isPassword = el.password.type === 'password';
+        el.password.type = isPassword ? 'text' : 'password';
+        el.eyeIcon.className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
+        el.eyeBtn.setAttribute('aria-label', isPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور');
+        try { el.password.focus(); } catch (_) {}
+    }
+
+    function showPasswordSection(focus) {
+        el.passwordSection.classList.remove('hidden');
+        const showDivider = !el.biometricSection.classList.contains('hidden');
+        el.passwordDivider.classList.toggle('hidden', !showDivider);
+        if (focus) {
+            setTimeout(() => { try { el.password.focus(); } catch (_) {} }, 120);
+        }
+    }
+
+    function hidePasswordSection() {
+        el.passwordSection.classList.add('hidden');
+        el.passwordDivider.classList.add('hidden');
+    }
+
+    function showBiometricSection() {
+        el.biometricSection.classList.remove('hidden');
+        hidePasswordSection();
+    }
+
+    function setBiometricBusy(busy) {
+        isBiometricBusy = busy;
+        el.biometricBtn.disabled = busy;
+        const label = el.biometricBtn.querySelector('span');
+        if (label) {
+            label.textContent = busy
+                ? 'جارٍ التحقق من البصمة...'
+                : 'تسجيل الدخول باستخدام البصمة البيومترية للمستخدم';
+        }
+    }
+
+    function setSubmitBusy(busy) {
+        isSubmitting = busy;
+        el.unlockBtn.disabled = busy;
+        const label = el.unlockBtn.querySelector('span');
+        if (label) label.textContent = busy ? 'جارٍ التحقق...' : 'فتح القفل';
+    }
+
+    function persistSessionAndRedirect(user, token) {
+        try {
+            if (user) localStorage.setItem('user', JSON.stringify(user));
+            if (token) localStorage.setItem('authToken', token);
+            sessionStorage.removeItem(KEY_LOCKED_USER);
+        } catch (_) {}
+        showSuccess('تم التحقق بنجاح...');
+        setTimeout(() => { window.location.replace('../main.html'); }, 350);
+    }
+
+    function submitPassword() {
+        if (isSubmitting) return;
+        if (!lockedUser || !lockedUser.username) {
+            showError('بيانات المستخدم غير متاحة، يرجى تسجيل الدخول من جديد');
+            return;
+        }
+        const password = String(el.password.value || '');
+        if (!password) {
+            showError('يرجى إدخال كلمة المرور');
+            try { el.password.focus(); } catch (_) {}
+            return;
+        }
+        clearError();
+        setSubmitBusy(true);
+
+        const response = callBridge('login', lockedUser.username, password);
+        if (!response || response.success !== true) {
+            setSubmitBusy(false);
+            el.password.classList.add('error');
+            setTimeout(() => el.password.classList.remove('error'), 500);
+            showError(response && response.error ? response.error : 'كلمة المرور غير صحيحة');
+            el.password.value = '';
+            try { el.password.focus(); } catch (_) {}
+            return;
+        }
+
+        setSubmitBusy(false);
+        persistSessionAndRedirect(response.user || lockedUser, response.token || '');
+    }
+
+    function handleBiometricUnlock() {
+        if (isBiometricBusy) return;
+        clearError();
+
+        if (!window.AndroidInterface || typeof window.AndroidInterface.biometricAutoLogin !== 'function') {
+            showError('المصادقة البيومترية غير متاحة على هذا الجهاز');
+            showPasswordSection(true);
+            return;
+        }
+
+        setBiometricBusy(true);
+
+        let raw;
+        try { raw = window.AndroidInterface.biometricAutoLogin(); }
+        catch (e) {
+            setBiometricBusy(false);
+            showError(e.message || 'تعذر بدء التحقق من البصمة');
+            showPasswordSection(true);
+            return;
+        }
+        const initial = safeParse(raw);
+        if (!initial || initial.success !== true) {
+            setBiometricBusy(false);
+            showError(initial && initial.error ? initial.error : 'المصادقة البيومترية غير مفعلة');
+            showPasswordSection(true);
+            return;
+        }
+
+        // Safety timeout: cancel busy state if callback never fires
+        if (biometricTimer) clearTimeout(biometricTimer);
+        biometricTimer = setTimeout(() => {
+            if (isBiometricBusy) {
+                setBiometricBusy(false);
+                showError('انتهت مهلة التحقق من البصمة، حاول مجدداً أو استخدم كلمة المرور');
+                showPasswordSection(true);
+            }
+        }, 60000);
+    }
+
+    window.onBiometricAutoLogin = function (payload) {
+        const result = safeParse(payload);
+        if (biometricTimer) { clearTimeout(biometricTimer); biometricTimer = null; }
+        setBiometricBusy(false);
+
+        if (!result || result.success !== true) {
+            const msg = result && result.error ? result.error : 'لم يتم التحقق من البصمة';
+            showError(msg === 'cancelled' ? 'تم إلغاء التحقق من البصمة' : msg);
+            showPasswordSection(true);
+            return;
+        }
+
+        const user = result.user || lockedUser;
+        // Critical: verify the biometric-authenticated user matches the locked account
+        if (user && user.user_id && lockedUser && lockedUser.user_id && user.user_id != lockedUser.user_id) {
+            showError('المستخدم مختلف عن الحساب المقفل، يرجى استخدام كلمة المرور');
+            showPasswordSection(true);
+            return;
+        }
+
+        persistSessionAndRedirect(user, result.token || '');
+    };
+
+    function switchUser() {
+        try {
+            if (window.AndroidInterface && typeof window.AndroidInterface.clearCredentials === 'function') {
+                window.AndroidInterface.clearCredentials();
+            }
+        } catch (_) {}
+        try { sessionStorage.removeItem(KEY_LOCKED_USER); } catch (_) {}
+        window.location.replace('login.html');
+    }
+
+    function reloadClock() { updateClock(); }
+
+    function loadLockSettings() {
+        const response = callBridge('getAllSystemSettingsMap');
+        if (!response || response.success === false) return {};
+        const values = response.data && typeof response.data === 'object' ? response.data : response;
+        return values || {};
+    }
+
+    function applyLockAppearanceFromSettings() {
+        const values = loadLockSettings();
+
+        const message = String(values.DISPLAY_LOCK_MESSAGE || '').trim();
+        if (message) {
+            el.message.textContent = message;
+            el.message.classList.remove('hidden');
+        } else {
+            el.message.classList.add('hidden');
+        }
+
+        const showUser = String(values.DISPLAY_LOCK_SHOW_USER ?? '1') === '1';
+        if (!showUser) {
+            el.avatarWrap.style.display = 'none';
+            el.name.style.display = 'none';
+            el.role.style.display = 'none';
+        }
+
+        const showClock = String(values.DISPLAY_LOCK_SHOW_CLOCK ?? '1') === '1';
+        if (!showClock) {
+            el.clock.style.display = 'none';
+            el.date.style.display = 'none';
+        }
+
+        const bgPath = String(values.DISPLAY_LOCK_BG_IMAGE || '').trim();
+        if (bgPath && !/^https?:|^data:/i.test(bgPath)) {
+            const imgResp = callBridge('getImageDataUrl', bgPath);
+            if (imgResp && imgResp.success && typeof imgResp.data === 'string' && /^data:image\//i.test(imgResp.data)) {
+                document.body.style.backgroundImage = 'linear-gradient(rgba(10,14,19,.78),rgba(10,14,19,.85)),url("' +
+                    imgResp.data.replace(/["\\]/g, '') + '")';
+                document.body.style.backgroundSize = 'cover';
+                document.body.style.backgroundPosition = 'center';
+            }
+        }
+    }
+
+    function init() {
+        lockedUser = readLockedUser();
+
+        if (!lockedUser || !lockedUser.username) {
+            window.location.replace('login.html');
+            return;
+        }
+
+        renderUser(lockedUser);
+        updateClock();
+        clockTimer = setInterval(updateClock, 1000);
+
+        applyLockAppearanceFromSettings();
+
+        // Critical: verify saved credentials belong to lockedUser
+        const credentials = callBridge('hasSavedCredentials');
+        const savedUserId = credentials && credentials.userId ? Number(credentials.userId) : 0;
+        const biometricAvailable = credentials
+            && credentials.success === true
+            && credentials.hasCredentials === true
+            && savedUserId > 0
+            && Number(lockedUser.user_id) === savedUserId;
+
+        if (biometricAvailable) {
+            showBiometricSection();
+        } else {
+            showPasswordSection(true);
+        }
+
+        el.password.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); submitPassword(); }
+        });
+
+        if (!biometricAvailable) {
+            setTimeout(() => { try { el.password.focus(); } catch (_) {} }, 250);
+        }
+
+        window.addEventListener('beforeunload', function () {
+            if (clockTimer) clearInterval(clockTimer);
+            if (biometricTimer) clearTimeout(biometricTimer);
+        });
+    }
+
+    window.addEventListener('DOMContentLoaded', init);
+})();
+</script>
+</body>
+</html>

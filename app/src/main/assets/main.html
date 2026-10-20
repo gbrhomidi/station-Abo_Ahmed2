@@ -356,7 +356,6 @@
             z-index: 5;
         }
 
-        /* تم إلغاء تدرج اللون الذهبي، وتم تقصير الطول قليلاً */
         .header-arc {
             width: 100%;
             height: 255px;
@@ -367,8 +366,6 @@
             overflow: hidden;
         }
 
-        /* الإطار الداخلي المتقطع (----) يحيط بنصف الدائرة من الداخل
-           في الوضع الفاتح: ذهبي دافئ مشع | في الوضع المظلم: فضي مشع */
         .header-arc::before {
             content: '';
             position: absolute;
@@ -380,7 +377,6 @@
             animation: arcBorderGlow 3.4s ease-in-out infinite;
         }
 
-        /* توهج علوي ناعم (بدون ذهبي صريح) */
         .header-arc::after {
             content: '';
             position: absolute;
@@ -391,7 +387,6 @@
             z-index: 1;
         }
 
-        /* ====== Header top ====== */
         .header-top {
             position: absolute;
             top: 0;
@@ -478,24 +473,15 @@
             padding: 0;
         }
         .glass-btn:active { transform: scale(.9); }
-        .glass-btn:hover {
-            background: rgba(255, 255, 255, .14);
-        }
-
+        .glass-btn:hover { background: rgba(255, 255, 255, .14); }
         .glass-btn.close-app {
             background: rgba(255, 71, 87, .15);
             border-color: rgba(255, 71, 87, .25);
             color: #FF6B7A;
         }
-        .glass-btn.close-app:hover {
-            background: rgba(255, 71, 87, .25);
-        }
+        .glass-btn.close-app:hover { background: rgba(255, 71, 87, .25); }
+        .glass-btn.theme-btn { color: var(--gold); }
 
-        .glass-btn.theme-btn {
-            color: var(--gold);
-        }
-
-        /* ====== Time Chip ====== */
         .time-chip {
             position: absolute;
             top: 50%;
@@ -547,7 +533,6 @@
             flex-shrink: 0;
         }
 
-        /* ====== User Chip ====== */
         .user-chip {
             position: absolute;
             bottom: 18px;
@@ -617,7 +602,7 @@
         }
 
         /* ================================================================
-           SVG الجانبي المرن (Elastic Sidebar)
+           SVG الجانبي المرن
         ================================================================ */
         .elastic-sidebar-bg {
             position: fixed;
@@ -637,9 +622,6 @@
             transition: fill 0.4s ease;
         }
 
-        /* ================================================================
-           لسان الفتح
-        ================================================================ */
         .side-tab {
             position: fixed;
             top: 50%;
@@ -724,9 +706,6 @@
             }
         }
 
-        /* ================================================================
-           Overlay + Sidebar
-        ================================================================ */
         .sidebar-overlay {
             position: fixed;
             inset: 0;
@@ -1033,8 +1012,7 @@
         }
 
         /* ================================================================
-           Stats Grid — تخطيط ثنائي الأعمدة مع تقليل المسافة بين البطاقات
-           ودعم البطاقات بعرض كامل (span 2)
+           Stats Grid
         ================================================================ */
         .stats-grid {
             display: grid;
@@ -1047,12 +1025,10 @@
 
         .stats-grid > .stat-card { min-width: 0; max-width: 100%; box-sizing: border-box; }
 
-        /* بطاقة بعرض كامل (تشغل السطر بأكمله) */
         .stat-card.full-width {
             grid-column: 1 / -1;
         }
 
-        /* البطاقات المزدوجة: قيمتان داخل بطاقة واحدة */
         .dual-stat-values {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1124,7 +1100,6 @@
             transform: translateY(-1px);
         }
 
-        /* شريط لون فئة أعلى البطاقة */
         .stat-card::before {
             content: '';
             position: absolute;
@@ -1264,7 +1239,6 @@
             border-radius: 3px;
         }
 
-        /* ألوان الأيقونات لكل فئة */
         .stat-card.success-card .card-icon-wrapper {
             background: linear-gradient(135deg, rgba(46, 204, 113, .18), rgba(46, 204, 113, .06));
             color: var(--success);
@@ -1304,13 +1278,6 @@
         }
         .stat-card.info-card .progress-fill {
             background: linear-gradient(90deg, #3D8BC4, #2E6E9E);
-        }
-
-        /* ================================================================
-           معلومات التحديث - مخفية (تم إلغاء عنصر "تحديث" من الظهور)
-        ================================================================ */
-        .data-update-info {
-            display: none !important;
         }
 
         /* ================================================================
@@ -1598,12 +1565,14 @@
         }
 
         /* ================================================================
-           Sleep Mode - وضع السبات
+           Sleep Mode
         ================================================================ */
         .sleep-overlay {
             position: fixed;
             inset: 0;
             background: #000000;
+            background-size: cover;
+            background-position: center;
             z-index: 999999;
             display: none;
             opacity: 0;
@@ -1637,16 +1606,31 @@
             will-change: left, top;
         }
 
+        .sleep-clock {
+            position: fixed;
+            left: 50%;
+            bottom: 40px;
+            transform: translateX(-50%);
+            font-family: 'Outfit', 'Tajawal', monospace;
+            font-size: clamp(28px, 8vw, 64px);
+            font-weight: 700;
+            color: #FFFFFF;
+            text-shadow: 0 0 24px #D4A86A, 0 0 48px rgba(212, 168, 106, .5);
+            z-index: 1000001;
+            direction: ltr;
+            pointer-events: none;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 2px;
+            line-height: 1;
+        }
+
         @media (max-width: 480px) {
-            .sleep-text {
-                font-size: 22px;
-            }
+            .sleep-text { font-size: 22px; }
+            .sleep-clock { bottom: 24px; }
         }
 
         @media (max-width: 360px) {
-            .sleep-text {
-                font-size: 18px;
-            }
+            .sleep-text { font-size: 18px; }
         }
 
         .sleep-active .header-arc::before,
@@ -1655,6 +1639,18 @@
         .sleep-active .notification-bubble,
         .sleep-active .bubble-wave {
             animation-play-state: paused !important;
+        }
+
+        /* ================================================================
+           Reduce Motion (Accessibility)
+        ================================================================ */
+        body.reduce-motion *,
+        body.reduce-motion *::before,
+        body.reduce-motion *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
         }
 
         /* ================================================================
@@ -1714,13 +1710,125 @@
         .hidden { display: none !important; }
         .report-source-banner { display: none; }
 
-        .due-alert-btn{position:relative;display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(239,68,68,.55);background:linear-gradient(135deg,#7f1d1d,#dc2626);color:#fff;border-radius:14px;padding:10px 15px;font-weight:800;cursor:pointer;animation:mainDuePulse 1.8s infinite}.due-alert-btn .due-count{background:#fff;color:#b91c1c;border-radius:999px;min-width:22px;height:22px;display:grid;place-items:center;font-size:12px}@keyframes mainDuePulse{50%{box-shadow:0 0 0 10px rgba(239,68,68,0)}}.due-reminder-overlay{position:fixed;inset:0;background:rgba(2,6,23,.68);backdrop-filter:blur(8px);z-index:100000;display:none;align-items:center;justify-content:center;padding:18px}.due-reminder-overlay.show{display:flex}.due-reminder-card{width:min(760px,96vw);max-height:88vh;overflow:auto;background:var(--card-bg,#fff);color:var(--text-primary,#111827);border-radius:28px;padding:26px;box-shadow:0 30px 90px rgba(0,0,0,.35)}.due-reminder-card h3{margin:0 0 8px}.due-reminder-card p{line-height:1.8}.due-reminder-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:20px}.due-reminder-actions button{border:0;border-radius:13px;padding:11px 18px;font-weight:800;cursor:pointer}.due-ok{background:#059669;color:#fff}.due-cancel{background:#e5e7eb;color:#111827}.due-delay{background:#f59e0b;color:#fff}.due-view{background:#2563eb;color:#fff}.due-detail-modal{position:fixed;inset:0;z-index:100001;background:rgba(2,6,23,.7);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:16px}.due-detail-modal.show{display:flex}.due-detail-card{width:min(980px,97vw);max-height:88vh;overflow:auto;background:var(--card-bg,#fff);border-radius:24px;padding:20px;box-shadow:0 30px 90px rgba(0,0,0,.4)}.due-detail-table{width:100%;border-collapse:separate;border-spacing:0 8px}.due-detail-table th,.due-detail-table td{padding:10px;text-align:right}.due-detail-table td{background:rgba(148,163,184,.09)}.due-red{color:#dc2626;font-weight:900}.due-blue{color:#2563eb;font-weight:900}.due-bubble{position:fixed;top:82px;right:20px;z-index:100002;background:#dc2626;color:#fff;border-radius:999px;padding:10px 15px;display:none;gap:8px;box-shadow:0 12px 35px rgba(0,0,0,.28);cursor:pointer;font-weight:800}.due-bubble.show{display:flex}
-
+        /* ================================================================
+           Due Reminders (خارج قسم السكون)
+        ================================================================ */
+        .due-alert-btn {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid rgba(239, 68, 68, .55);
+            background: linear-gradient(135deg, #7f1d1d, #dc2626);
+            color: #fff;
+            border-radius: 14px;
+            padding: 10px 15px;
+            font-weight: 800;
+            cursor: pointer;
+            animation: mainDuePulse 1.8s infinite;
+        }
+        .due-alert-btn .due-count {
+            background: #fff;
+            color: #b91c1c;
+            border-radius: 999px;
+            min-width: 22px;
+            height: 22px;
+            display: grid;
+            place-items: center;
+            font-size: 12px;
+        }
+        @keyframes mainDuePulse {
+            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        }
+        .due-reminder-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, .68);
+            backdrop-filter: blur(8px);
+            z-index: 100000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+        }
+        .due-reminder-overlay.show { display: flex; }
+        .due-reminder-card {
+            width: min(760px, 96vw);
+            max-height: 88vh;
+            overflow: auto;
+            background: var(--card-bg, #fff);
+            color: var(--text-primary, #111827);
+            border-radius: 28px;
+            padding: 26px;
+            box-shadow: 0 30px 90px rgba(0, 0, 0, .35);
+        }
+        .due-reminder-card h3 { margin: 0 0 8px; }
+        .due-reminder-card p { line-height: 1.8; }
+        .due-reminder-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        .due-reminder-actions button {
+            border: 0;
+            border-radius: 13px;
+            padding: 11px 18px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        .due-ok { background: #059669; color: #fff; }
+        .due-cancel { background: #e5e7eb; color: #111827; }
+        .due-delay { background: #f59e0b; color: #fff; }
+        .due-view { background: #2563eb; color: #fff; }
+        .due-detail-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 100001;
+            background: rgba(2, 6, 23, .7);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .due-detail-modal.show { display: flex; }
+        .due-detail-card {
+            width: min(980px, 97vw);
+            max-height: 88vh;
+            overflow: auto;
+            background: var(--card-bg, #fff);
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow: 0 30px 90px rgba(0, 0, 0, .4);
+        }
+        .due-detail-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; }
+        .due-detail-table th, .due-detail-table td { padding: 10px; text-align: right; }
+        .due-detail-table td { background: rgba(148, 163, 184, .09); }
+        .due-red { color: #dc2626; font-weight: 900; }
+        .due-blue { color: #2563eb; font-weight: 900; }
+        .due-bubble {
+            position: fixed;
+            top: 82px;
+            right: 20px;
+            z-index: 100002;
+            background: #dc2626;
+            color: #fff;
+            border-radius: 999px;
+            padding: 10px 15px;
+            display: none;
+            gap: 8px;
+            box-shadow: 0 12px 35px rgba(0, 0, 0, .28);
+            cursor: pointer;
+            font-weight: 800;
+        }
+        .due-bubble.show { display: flex; }
     </style>
     <meta name="reports-bridge-methods" content="getDashboardStats">
     <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
     <script src="file:///android_asset/assets-local/js/business-day.js"></script>
-  <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+    <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
 </head>
 <body>
 
@@ -1826,8 +1934,6 @@
 
             <div class="stats-grid" id="dashStats"></div>
 
-            <!-- تم إلغاء عنصر "تحديث" من الظهور، والتحديث يحدث تلقائياً عند فتح الشاشة -->
-
         </div>
     </main>
 
@@ -1861,24 +1967,48 @@
         let recent = JSON.parse(localStorage.getItem('recent') || '[]');
 
         // ================================================================
-        // Sleep Mode Variables
+        // إعدادات العرض الموسعة (تتوافق مع settings.html)
         // ================================================================
         const DEFAULT_DISPLAY_SETTINGS = {
             DISPLAY_IDLE_TIMEOUT_SECONDS: '300',
             DISPLAY_SLEEP_TEXT: '⛽ محطة أبو أحمد',
             DISPLAY_SLEEP_IMAGE: '',
-            DISPLAY_LOCK_ON_IDLE: '0'
+            DISPLAY_SLEEP_OVERLAY_OPACITY: '45',
+            DISPLAY_SLEEP_FONT_SIZE: '30',
+            DISPLAY_SLEEP_TEXT_COLOR: '#D4A86A',
+            DISPLAY_SLEEP_SPEED: 'normal',
+            DISPLAY_SLEEP_CLOCK: '0',
+            DISPLAY_LOCK_ON_IDLE: '0',
+            DISPLAY_SESSION_TIMEOUT_SECONDS: '900',
+            DISPLAY_SESSION_WARNING_SECONDS: '30',
+            DISPLAY_LOCK_MESSAGE: '',
+            DISPLAY_LOCK_SHOW_USER: '1',
+            DISPLAY_LOCK_SHOW_CLOCK: '1',
+            DISPLAY_LOCK_BG_IMAGE: '',
+            DISPLAY_DARK_MODE_SCHEDULE_ENABLED: '0',
+            DISPLAY_DARK_MODE_FROM: '20:00',
+            DISPLAY_DARK_MODE_TO: '07:00',
+            DISPLAY_FONT_SCALE: '100',
+            DISPLAY_REDUCE_MOTION: '0'
         };
-        let displaySettings = {...DEFAULT_DISPLAY_SETTINGS};
+        let displaySettings = { ...DEFAULT_DISPLAY_SETTINGS };
         let inactivityTimer = null;
         let sleepMoveInterval = null;
         let isSleeping = false;
+
+        // حالة Session Timeout
+        let sessionTimeoutTimer = null;
+        let sessionWarningTimer = null;
+        let sessionWarningCountdownTimer = null;
+        let sessionWarningVisible = false;
+        let sessionWarningRemaining = 0;
+
         const dashboardBusinessDayWatcher = createBusinessDayWatcher(() => {
             if (!isSleeping) loadDashboard(true);
         });
 
         // ================================================================
-        // Elastic Sidebar Variables
+        // Elastic Sidebar
         // ================================================================
         const SVG_BASE_WIDTH = 320;
         const SIDEBAR_CLOSED = SVG_BASE_WIDTH;
@@ -1886,12 +2016,14 @@
         let currentLeadX = SIDEBAR_CLOSED;
         let isSidebarAnimating = false;
 
-        // الصورة الافتراضية (ذكر - رأس بأذنين وأكتاف عريضة)
+        // الصورة الافتراضية
         const DEFAULT_AVATAR = "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Ccircle cx='100' cy='100' r='100' fill='%234A5568'/%3E%3Crect x='56' y='78' width='10' height='22' rx='5' fill='%23E2E8F0'/%3E%3Crect x='134' y='78' width='10' height='22' rx='5' fill='%23E2E8F0'/%3E%3Cpath d='M62,72 Q62,38 100,38 Q138,38 138,72 L138,88 Q138,114 100,120 Q62,114 62,88 Z' fill='%23E2E8F0'/%3E%3Crect x='86' y='116' width='28' height='24' fill='%23E2E8F0'/%3E%3Cpath d='M32,200 L32,180 Q32,146 82,138 L118,138 Q168,146 168,180 L168,200 Z' fill='%23E2E8F0'/%3E%3C/svg%3E";
 
-        // رمز العملة الجديد
         const CURRENCY = '﷼';
 
+        // ================================================================
+        // Elastic SVG helpers
+        // ================================================================
         function createElasticD(leadX, arcRadius) {
             return 'M' + SVG_BASE_WIDTH + ',0 ' +
                    'L' + leadX + ',0 ' +
@@ -1948,10 +2080,11 @@
         }
 
         // ================================================================
-        // أدوات مساعدة
+        // أدوات عامة
         // ================================================================
         function showToast(message, type = 'info') {
             const container = document.getElementById('toastContainer');
+            if (!container) return;
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
             const text = document.createElement('span');
@@ -1967,7 +2100,8 @@
         }
 
         function showLoading(show) {
-            document.getElementById('loadingOverlay').classList.toggle('active', show);
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) overlay.classList.toggle('active', show);
         }
 
         // ================================================================
@@ -2001,14 +2135,16 @@
         }
 
         // ================================================================
-        // Sleep Mode
+        // تحميل إعدادات العرض وتطبيقها
         // ================================================================
         async function loadDisplaySettings() {
             try {
                 const response = await apiCall('getAllSystemSettingsMap');
-                if (!response || response.success === false) throw new Error(response?.error || 'تعذر قراءة إعدادات العرض');
+                if (!response || response.success === false) {
+                    throw new Error((response && response.error) || 'تعذر قراءة إعدادات العرض');
+                }
                 const values = response.data && typeof response.data === 'object' ? response.data : response;
-                displaySettings = {...DEFAULT_DISPLAY_SETTINGS};
+                displaySettings = { ...DEFAULT_DISPLAY_SETTINGS };
                 for (const key of Object.keys(DEFAULT_DISPLAY_SETTINGS)) {
                     if (Object.prototype.hasOwnProperty.call(values, key) && String(values[key] ?? '').trim() !== '') {
                         displaySettings[key] = String(values[key]);
@@ -2016,26 +2152,150 @@
                 }
             } catch (error) {
                 console.warn('تعذر تحميل إعدادات العرض المحفوظة؛ ستستخدم القيم الآمنة الافتراضية:', error);
-                displaySettings = {...DEFAULT_DISPLAY_SETTINGS};
+                displaySettings = { ...DEFAULT_DISPLAY_SETTINGS };
             }
+
+            applySleepTextStyle();
+            applyFontScale();
+            applyReduceMotion();
+            applyScheduledTheme();
+            applySleepOverlayImage();
+
+            // تحديث ساعة السكون
+            syncSleepClock();
+        }
+
+        function applySleepTextStyle() {
             const sleepText = document.getElementById('sleepText');
-            if (sleepText) sleepText.textContent = displaySettings.DISPLAY_SLEEP_TEXT || '⛽ محطة أبو أحمد';
-            const imagePath = String(displaySettings.DISPLAY_SLEEP_IMAGE || '').trim();
+            if (!sleepText) return;
+
+            const fs = Math.max(12, Math.min(72, parseInt(displaySettings.DISPLAY_SLEEP_FONT_SIZE, 10) || 30));
+            const color = /^#[0-9a-fA-F]{6}$/.test(displaySettings.DISPLAY_SLEEP_TEXT_COLOR || '')
+                ? displaySettings.DISPLAY_SLEEP_TEXT_COLOR
+                : '#D4A86A';
+
+            sleepText.textContent = displaySettings.DISPLAY_SLEEP_TEXT || '⛽ محطة أبو أحمد';
+            sleepText.style.fontSize = fs + 'px';
+            sleepText.style.color = color;
+            sleepText.style.textShadow = '0 0 20px ' + color + ', 0 0 40px ' + color + ', 0 0 80px ' + color + '80';
+        }
+
+        function applyFontScale() {
+            const scale = Math.max(80, Math.min(150, parseInt(displaySettings.DISPLAY_FONT_SCALE, 10) || 100));
+            document.documentElement.style.fontSize = scale + '%';
+        }
+
+        function applyReduceMotion() {
+            if (String(displaySettings.DISPLAY_REDUCE_MOTION) === '1') {
+                document.body.classList.add('reduce-motion');
+            } else {
+                document.body.classList.remove('reduce-motion');
+            }
+        }
+
+        function applySleepOverlayImage() {
             const overlay = document.getElementById('sleepOverlay');
-            if (overlay) {
-                overlay.style.backgroundImage = '';
-                if (imagePath && !/^https?:|^data:/i.test(imagePath) && window.AndroidInterface && typeof window.AndroidInterface.getImageDataUrl === 'function') {
-                    try {
-                        const raw = window.AndroidInterface.getImageDataUrl(imagePath);
-                        const result = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                        const image = result && result.data ? result.data : result;
-                        const dataUrl = typeof image === 'string' ? image : (image && (image.dataUrl || image.data_url || image.base64));
-                        if (typeof dataUrl === 'string' && /^data:image\//i.test(dataUrl)) overlay.style.backgroundImage = `linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.45)),url("${dataUrl.replace(/["\\\\]/g, '')}")`;
-                    } catch (e) { console.warn('تعذر تحميل صورة شاشة التوقف:', e); }
+            if (!overlay) return;
+
+            overlay.style.backgroundImage = '';
+            const imagePath = String(displaySettings.DISPLAY_SLEEP_IMAGE || '').trim();
+            if (!imagePath) return;
+
+            const opacity = Math.max(0, Math.min(100, parseInt(displaySettings.DISPLAY_SLEEP_OVERLAY_OPACITY, 10) || 45));
+            const alpha = (opacity / 100).toFixed(2);
+
+            const applyImage = (dataUrl) => {
+                if (typeof dataUrl === 'string' && /^data:image\//i.test(dataUrl)) {
+                    overlay.style.backgroundImage = 'linear-gradient(rgba(0,0,0,' + alpha + '),rgba(0,0,0,' + alpha + ')),url("' + dataUrl.replace(/["\\]/g, '') + '")';
+                    overlay.style.backgroundSize = 'cover';
+                    overlay.style.backgroundPosition = 'center';
+                }
+            };
+
+            if (/^data:image\//i.test(imagePath)) {
+                applyImage(imagePath);
+                return;
+            }
+
+            if (window.AndroidInterface && typeof window.AndroidInterface.getImageDataUrl === 'function') {
+                try {
+                    const raw = window.AndroidInterface.getImageDataUrl(imagePath);
+                    const result = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    const image = result && result.data ? result.data : result;
+                    const dataUrl = typeof image === 'string' ? image : (image && (image.dataUrl || image.data_url || image.base64));
+                    applyImage(dataUrl);
+                } catch (e) {
+                    console.warn('تعذر تحميل صورة شاشة التوقف:', e);
                 }
             }
         }
 
+        // ================================================================
+        // الساعة الكبيرة في شاشة التوقف
+        // ================================================================
+        let sleepClockInterval = null;
+
+        function syncSleepClock() {
+            const overlay = document.getElementById('sleepOverlay');
+            if (!overlay) return;
+
+            const wantClock = String(displaySettings.DISPLAY_SLEEP_CLOCK) === '1';
+            let clockEl = document.getElementById('sleepClock');
+
+            if (wantClock) {
+                if (!clockEl) {
+                    clockEl = document.createElement('div');
+                    clockEl.id = 'sleepClock';
+                    clockEl.className = 'sleep-clock';
+                    overlay.appendChild(clockEl);
+                }
+                updateSleepClockText();
+                if (!sleepClockInterval) {
+                    sleepClockInterval = setInterval(updateSleepClockText, 1000);
+                }
+            } else if (clockEl) {
+                if (sleepClockInterval) {
+                    clearInterval(sleepClockInterval);
+                    sleepClockInterval = null;
+                }
+                clockEl.remove();
+            }
+        }
+
+        function updateSleepClockText() {
+            const clockEl = document.getElementById('sleepClock');
+            if (!clockEl) return;
+            try {
+                clockEl.textContent = new Date().toLocaleTimeString('en-GB', { hour12: false });
+            } catch (_) {
+                clockEl.textContent = new Date().toTimeString().split(' ')[0];
+            }
+        }
+
+        // ================================================================
+        // جدولة الوضع الليلي
+        // ================================================================
+        function applyScheduledTheme() {
+            if (String(displaySettings.DISPLAY_DARK_MODE_SCHEDULE_ENABLED) !== '1') return;
+            const now = new Date();
+            const cur = now.getHours() * 60 + now.getMinutes();
+            const [fh, fm] = (displaySettings.DISPLAY_DARK_MODE_FROM || '20:00').split(':').map(Number);
+            const [th, tm] = (displaySettings.DISPLAY_DARK_MODE_TO || '07:00').split(':').map(Number);
+            const from = (fh || 0) * 60 + (fm || 0);
+            const to = (th || 0) * 60 + (tm || 0);
+            const inRange = from < to ? (cur >= from && cur < to) : (cur >= from || cur < to);
+            const next = inRange ? 'dark' : 'light';
+            const current = document.documentElement.getAttribute('data-theme');
+            if (current !== next && current !== null && current !== '') {
+                document.documentElement.setAttribute('data-theme', next);
+                updateThemeButton(next === 'dark');
+            }
+        }
+        setInterval(applyScheduledTheme, 60000);
+
+        // ================================================================
+        // Sleep Mode
+        // ================================================================
         function resetInactivityTimer() {
             if (inactivityTimer) clearTimeout(inactivityTimer);
             if (isSleeping) return;
@@ -2044,15 +2304,13 @@
             inactivityTimer = setTimeout(enterSleepMode, Math.max(5, seconds) * 1000);
         }
 
+        function getSleepSpeedInterval() {
+            const map = { slow: 6000, normal: 2200, fast: 1500 };
+            return map[displaySettings.DISPLAY_SLEEP_SPEED] || 2200;
+        }
+
         function enterSleepMode() {
             if (isSleeping) return;
-            if (String(displaySettings.DISPLAY_LOCK_ON_IDLE) === '1' || String(displaySettings.DISPLAY_LOCK_ON_IDLE).toLowerCase() === 'true') {
-                if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; }
-                try { localStorage.removeItem('user'); } catch (_) {}
-                currentUser = null;
-                window.location.replace('screens/login.html');
-                return;
-            }
             isSleeping = true;
 
             document.body.classList.add('sleep-active');
@@ -2079,16 +2337,22 @@
             overlay.classList.add('active');
 
             const sleepText = document.getElementById('sleepText');
-            sleepText.style.transition = 'none';
-            sleepText.style.left = '50%';
-            sleepText.style.top = '50%';
-            sleepText.style.transform = 'translate(-50%, -50%)';
+            if (sleepText) {
+                sleepText.style.transition = 'none';
+                sleepText.style.left = '50%';
+                sleepText.style.top = '50%';
+                sleepText.style.transform = 'translate(-50%, -50%)';
+            }
+
+            syncSleepClock();
 
             setTimeout(() => {
-                sleepText.style.transition = 'left 1.6s cubic-bezier(0.45, 0.05, 0.55, 0.95), top 1.6s cubic-bezier(0.45, 0.05, 0.55, 0.95)';
+                if (sleepText) {
+                    sleepText.style.transition = 'left ' + (getSleepSpeedInterval() / 1000 * 0.73).toFixed(2) + 's cubic-bezier(0.45, 0.05, 0.55, 0.95), top ' + (getSleepSpeedInterval() / 1000 * 0.73).toFixed(2) + 's cubic-bezier(0.45, 0.05, 0.55, 0.95)';
+                }
                 moveSleepText();
                 if (sleepMoveInterval) clearInterval(sleepMoveInterval);
-                sleepMoveInterval = setInterval(moveSleepText, 2200);
+                sleepMoveInterval = setInterval(moveSleepText, getSleepSpeedInterval());
             }, 400);
         }
 
@@ -2100,28 +2364,17 @@
             const w = window.innerWidth;
             const h = window.innerHeight;
 
-            const prevLeft = text.style.left;
-            const prevTop = text.style.top;
-            const prevTransform = text.style.transform;
-
             text.style.left = '0px';
             text.style.top = '0px';
             text.style.transform = 'none';
             const tw = text.offsetWidth || 200;
             const th = text.offsetHeight || 50;
 
-            text.style.left = prevLeft;
-            text.style.top = prevTop;
-            text.style.transform = prevTransform;
-
             const maxX = Math.max(padding, w - tw - padding);
             const maxY = Math.max(padding, h - th - padding);
 
-            const minX = Math.min(padding, maxX);
-            const minY = Math.min(padding, maxY);
-
-            const x = minX + Math.max(0, (maxX - minX) / 2);
-            const y = minY + Math.max(0, (maxY - minY) / 2);
+            const x = padding + Math.random() * Math.max(0, maxX - padding);
+            const y = padding + Math.random() * Math.max(0, maxY - padding);
 
             text.style.left = x + 'px';
             text.style.top = y + 'px';
@@ -2158,21 +2411,166 @@
                 refreshInterval = setInterval(() => { loadDashboard(true); }, 180000);
             }
 
-            resetInactivityTimer();
+            handleUserActivity();
         }
 
         function initSleepMode() {
             const events = ['mousemove', 'mousedown', 'touchstart', 'touchmove', 'keydown', 'scroll', 'click', 'wheel'];
             events.forEach(evt => {
                 document.addEventListener(evt, function() {
-                    if (!isSleeping) resetInactivityTimer();
+                    handleUserActivity();
                 }, { passive: true });
             });
-            resetInactivityTimer();
+            handleUserActivity();
         }
 
         // ================================================================
-        // جسر Android
+        // Session Timeout (Windows-like)
+        // ================================================================
+        function clearSessionTimers() {
+            if (sessionTimeoutTimer) { clearTimeout(sessionTimeoutTimer); sessionTimeoutTimer = null; }
+            if (sessionWarningTimer) { clearTimeout(sessionWarningTimer); sessionWarningTimer = null; }
+            if (sessionWarningCountdownTimer) { clearInterval(sessionWarningCountdownTimer); sessionWarningCountdownTimer = null; }
+        }
+
+        function handleUserActivity() {
+            if (isSleeping) return;
+            hideSessionWarning();
+            resetInactivityTimer();
+            scheduleSessionTimeout();
+        }
+
+        function scheduleSessionTimeout() {
+            clearSessionTimers();
+            hideSessionWarning();
+
+            if (String(displaySettings.DISPLAY_LOCK_ON_IDLE) !== '1') return;
+            const totalSeconds = parseInt(displaySettings.DISPLAY_SESSION_TIMEOUT_SECONDS, 10);
+            if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return;
+
+            const warningSeconds = Math.max(5, Math.min(totalSeconds - 1,
+                parseInt(displaySettings.DISPLAY_SESSION_WARNING_SECONDS, 10) || 30));
+            const warningAt = Math.max(1, totalSeconds - warningSeconds);
+
+            sessionWarningTimer = setTimeout(() => showSessionWarning(warningSeconds), warningAt * 1000);
+            sessionTimeoutTimer = setTimeout(() => performSessionLock('idle_timeout'), totalSeconds * 1000);
+        }
+
+        function showSessionWarning(warningSeconds) {
+            if (sessionWarningVisible) return;
+
+            // If sleeping, wake up first so user sees warning
+            if (isSleeping) {
+                isSleeping = false;
+                const overlay = document.getElementById('sleepOverlay');
+                if (overlay) overlay.classList.remove('active');
+                if (sleepMoveInterval) { clearInterval(sleepMoveInterval); sleepMoveInterval = null; }
+                document.body.classList.remove('sleep-active');
+                if (!clockInterval) { clockInterval = setInterval(updateDateTime, 1000); }
+                if (!refreshInterval) refreshInterval = setInterval(() => loadDashboard(true), 180000);
+            }
+
+            sessionWarningVisible = true;
+            sessionWarningRemaining = warningSeconds;
+
+            let overlay = document.getElementById('sessionWarningOverlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'sessionWarningOverlay';
+                overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.65);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px;';
+                overlay.innerHTML =
+                    '<div style="background:#FFFFFF;color:#1E1C1A;border-radius:20px;padding:26px;max-width:420px;width:100%;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.45);border:1px solid rgba(0,0,0,.08);font-family:\'Tajawal\',\'Inter\',sans-serif;">' +
+                        '<div style="font-size:34px;margin-bottom:8px;">🔒</div>' +
+                        '<h3 style="margin:0 0 10px;font-size:18px;font-weight:800;">سيتم قفل الشاشة قريباً</h3>' +
+                        '<p style="margin:0 0 14px;color:#6B635A;font-size:14px;line-height:1.7;">' +
+                            'سيتم قفل الشاشة تلقائياً خلال ' +
+                            '<strong id="sessionWarningCountdown" style="color:#FF4757;font-size:20px;font-variant-numeric:tabular-nums;">' + warningSeconds + '</strong>' +
+                            ' ثانية' +
+                        '</p>' +
+                        '<div style="display:flex;gap:10px;margin-top:20px;">' +
+                            '<button id="sessionWarningStayBtn" style="flex:1;min-height:46px;border:none;border-radius:12px;background:linear-gradient(135deg,#D4A86A,#B78D55);color:#1A1305;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;">متابعة العمل</button>' +
+                            '<button id="sessionWarningLockBtn" style="flex:1;min-height:46px;border:1px solid rgba(0,0,0,.1);border-radius:12px;background:transparent;color:#6B635A;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">قفل الآن</button>' +
+                        '</div>' +
+                    '</div>';
+                document.body.appendChild(overlay);
+
+                overlay.querySelector('#sessionWarningStayBtn').addEventListener('click', function () {
+                    hideSessionWarning();
+                    handleUserActivity();
+                });
+                overlay.querySelector('#sessionWarningLockBtn').addEventListener('click', function () {
+                    performSessionLock('manual_lock');
+                });
+            }
+
+            overlay.style.display = 'flex';
+
+            const countdownEl = document.getElementById('sessionWarningCountdown');
+            sessionWarningCountdownTimer = setInterval(() => {
+                sessionWarningRemaining -= 1;
+                if (countdownEl) countdownEl.textContent = Math.max(0, sessionWarningRemaining);
+                if (sessionWarningRemaining <= 0) {
+                    clearInterval(sessionWarningCountdownTimer);
+                    sessionWarningCountdownTimer = null;
+                }
+            }, 1000);
+        }
+
+        function hideSessionWarning() {
+            sessionWarningVisible = false;
+            const overlay = document.getElementById('sessionWarningOverlay');
+            if (overlay) overlay.style.display = 'none';
+            if (sessionWarningCountdownTimer) {
+                clearInterval(sessionWarningCountdownTimer);
+                sessionWarningCountdownTimer = null;
+            }
+        }
+
+        function performSessionLock(reason) {
+            clearSessionTimers();
+            hideSessionWarning();
+
+            try {
+                if (currentUser) {
+                    const lockedUser = {
+                        user_id: currentUser.user_id,
+                        username: currentUser.username,
+                        full_name: currentUser.full_name,
+                        full_name_ar: currentUser.full_name_ar,
+                        display_name: currentUser.display_name,
+                        job_title: currentUser.job_title,
+                        role: currentUser.role,
+                        role_name: currentUser.role_name,
+                        role_name_ar: currentUser.role_name_ar,
+                        avatar_path: currentUser.avatar_path,
+                        locked_at: Date.now(),
+                        reason: String(reason || 'session_timeout')
+                    };
+                    sessionStorage.setItem('lockedUser', JSON.stringify(lockedUser));
+                }
+            } catch (e) {
+                console.warn('Failed to persist locked user:', e);
+            }
+
+            try {
+                if (window.AndroidInterface && typeof window.AndroidInterface.lockSession === 'function') {
+                    const raw = window.AndroidInterface.lockSession(reason || 'idle_timeout');
+                    const res = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (!res || res.success !== true) {
+                        console.warn('lockSession returned non-success:', res);
+                    }
+                }
+            } catch (e) {
+                console.warn('lockSession bridge failed:', e);
+            }
+
+            try { localStorage.removeItem('dashboardCache'); } catch (_) {}
+
+            window.location.replace('screens/lock-screen.html');
+        }
+
+        // ================================================================
+        // Android Bridge
         // ================================================================
         function initAndroidBridge() {
             if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface !== null) {
@@ -2351,6 +2749,7 @@
             if (clockInterval) clearInterval(clockInterval);
             if (inactivityTimer) clearTimeout(inactivityTimer);
             if (sleepMoveInterval) clearInterval(sleepMoveInterval);
+            clearSessionTimers();
             hideAllBubbles();
             try {
                 const result = await apiCall('exitApplication');
@@ -2391,7 +2790,7 @@
         })();
 
         // ================================================================
-        // تحميل بيانات القائمة
+        // بيانات القائمة
         // ================================================================
         const fallbackSidebarData = [
             { id: 'security', label: 'الأمان والمصادقة', icon: 'fa-shield-alt', children: ['إدارة المستخدمين',
@@ -2413,7 +2812,7 @@
             { id: 'finance', label: 'المالية والحسابات', icon: 'fa-money-bill-wave', children: ['إدارة المدفوعات',
                     'إدارة الإيصالات', 'إدارة الصناديق', 'حركات النقدية', 'البنوك والحسابات', 'شجرة الحسابات',
                     'القيود المحاسبية', 'قائمة الاعتمادات المالية', 'فئات المصروفات', 'إدارة المصروفات', 'الميزانيات', 'الميزانية العمومية', 'الإيداعات النقدية',
-                    'دفتر الأستاذ', 'الميزانية العمومية'] },
+                    'دفتر الأستاذ'] },
             { id: 'hr', label: 'الموارد البشرية', icon: 'fa-user-tie', children: ['إدارة الموظفين', 'الحضور والانصراف',
                     'إدارة الرواتب', 'دفعات الموظفين'] },
             { id: 'assets', label: 'الأصول والصيانة', icon: 'fa-tools', children: ['الأصول الثابتة', 'إدارة الأصول V12',
@@ -2441,7 +2840,7 @@
             'إدارة المحطات': 'screens/stations.html',
             'إعدادات النظام': 'screens/settings.html',
             'أسعار الصرف': 'screens/exchange-rates.html',
-            'متصفح قاعدة البيانات': 'screens/database_browser.html',                        
+            'متصفح قاعدة البيانات': 'screens/database_browser.html',
             'إدارة العملاء': 'screens/customers.html',
             'إدارة الموردين': 'screens/suppliers.html',
             'أنواع الأطراف': 'screens/party-types.html',
@@ -2492,7 +2891,6 @@
             'الميزانية العمومية': 'screens/balance-sheet.html',
             'الإيداعات النقدية': 'screens/cash-deposits.html',
             'دفتر الأستاذ': 'screens/ledger.html',
-            'الميزانية العمومية': 'screens/balance-sheet.html',
             'إدارة الموظفين': 'screens/employees.html',
             'الحضور والانصراف': 'screens/attendance.html',
             'إدارة الرواتب': 'screens/payroll.html',
@@ -3100,63 +3498,112 @@
             if (first) first.classList.add('active');
         }
 
-
+        // ================================================================
+        // Due Reminders (نفس المنطق السابق)
+        // ================================================================
         let mainDueReminderRows = [];
         let mainDueReminderDeferred = false;
 
         function ensureMainDueReminderUI() {
-            if(!document.getElementById('mainDueReminderButton')){
-                const top=document.querySelector('.header-top');
-                if(top){
-                    const b=document.createElement('button'); b.id='mainDueReminderButton'; b.className='due-alert-btn'; b.style.display='none';
-                    b.innerHTML='<i class="fas fa-bell"></i><span>مستحقات محققة</span><span class="due-count">0</span>'; b.onclick=openMainDueReminderNotice;
+            if (!document.getElementById('mainDueReminderButton')) {
+                const top = document.querySelector('.header-top');
+                if (top) {
+                    const b = document.createElement('button');
+                    b.id = 'mainDueReminderButton';
+                    b.className = 'due-alert-btn';
+                    b.style.display = 'none';
+                    b.innerHTML = '<i class="fas fa-bell"></i><span>مستحقات محققة</span><span class="due-count">0</span>';
+                    b.onclick = openMainDueReminderNotice;
                     top.appendChild(b);
                 }
             }
-            if(!document.getElementById('mainDueReminderOverlay')){
-                const o=document.createElement('div');o.id='mainDueReminderOverlay';o.className='due-reminder-overlay';
-                o.innerHTML=`<div class="due-reminder-card"><h3>🔔 مستحقات العملاء تقترب</h3><p>يوجد عملاء عليهم ديون واقتربت تواريخ استحقاقها. هل تصرح للتطبيق بإرسال رسائل SMS تذكيرية الآن؟</p><div class="due-reminder-actions"><button class="due-view" onclick="openMainDueReminderDetails()">إطلاع</button><button class="due-delay" onclick="deferMainDueReminder()">تأجيل</button><button class="due-cancel" onclick="closeMainDueReminderNotice()">إلغاء</button><button class="due-ok" onclick="approveMainDueReminders()">موافق - يتم الإرسال فوراً</button></div></div>`;
+            if (!document.getElementById('mainDueReminderOverlay')) {
+                const o = document.createElement('div');
+                o.id = 'mainDueReminderOverlay';
+                o.className = 'due-reminder-overlay';
+                o.innerHTML = `<div class="due-reminder-card"><h3>🔔 مستحقات العملاء تقترب</h3><p>يوجد عملاء عليهم ديون واقتربت تواريخ استحقاقها. هل تصرح للتطبيق بإرسال رسائل SMS تذكيرية الآن؟</p><div class="due-reminder-actions"><button class="due-view" onclick="openMainDueReminderDetails()">إطلاع</button><button class="due-delay" onclick="deferMainDueReminder()">تأجيل</button><button class="due-cancel" onclick="closeMainDueReminderNotice()">إلغاء</button><button class="due-ok" onclick="approveMainDueReminders()">موافق - يتم الإرسال فوراً</button></div></div>`;
                 document.body.appendChild(o);
             }
-            if(!document.getElementById('mainDueDetailModal')){
-                const o=document.createElement('div');o.id='mainDueDetailModal';o.className='due-detail-modal';
-                o.innerHTML=`<div class="due-detail-card"><div style="display:flex;justify-content:space-between;align-items:center"><h3>العملاء الذين سيصلهم التذكير</h3><button class="glass-btn" onclick="closeMainDueReminderDetails()">✕</button></div><div id="mainDueDetailContent"></div></div>`;
+            if (!document.getElementById('mainDueDetailModal')) {
+                const o = document.createElement('div');
+                o.id = 'mainDueDetailModal';
+                o.className = 'due-detail-modal';
+                o.innerHTML = `<div class="due-detail-card"><div style="display:flex;justify-content:space-between;align-items:center"><h3>العملاء الذين سيصلهم التذكير</h3><button class="glass-btn" onclick="closeMainDueReminderDetails()">✕</button></div><div id="mainDueDetailContent"></div></div>`;
                 document.body.appendChild(o);
             }
-            if(!document.getElementById('mainDueReminderBubble')){
-                const b=document.createElement('div');b.id='mainDueReminderBubble';b.className='due-bubble';b.innerHTML='<i class="fas fa-bell"></i><span>تذكيرات مستحقة</span>';b.onclick=openMainDueReminderNotice;document.body.appendChild(b);
+            if (!document.getElementById('mainDueReminderBubble')) {
+                const b = document.createElement('div');
+                b.id = 'mainDueReminderBubble';
+                b.className = 'due-bubble';
+                b.innerHTML = '<i class="fas fa-bell"></i><span>تذكيرات مستحقة</span>';
+                b.onclick = openMainDueReminderNotice;
+                document.body.appendChild(b);
             }
         }
 
         async function refreshMainDueReminders() {
             ensureMainDueReminderUI();
-            try{
-                const result=await apiCall('getDueSoonDebtRemindersTyped',JSON.stringify({days:10}));
-                if(!result.success)return;
-                mainDueReminderRows=Array.isArray(result.data)?result.data:[];
-                const eligible=mainDueReminderRows.filter(r=>r.eligible && Number(r.days_remaining)<=10);
-                const b=document.getElementById('mainDueReminderButton');
-                if(b){b.style.display=eligible.length?'inline-flex':'none';const c=b.querySelector('.due-count');if(c)c.textContent=eligible.length;}
-                // اليوم الأخير: إرسال آلي مع احترام قاعدة 48 ساعة.
-                const auto=eligible.filter(r=>Number(r.days_remaining)===1);
-                if(auto.length){
-                    await apiCall('sendDueSoonDebtRemindersTyped',JSON.stringify({days:1,automatic_one_day:true}));
-                    const refreshed=await apiCall('getDueSoonDebtRemindersTyped',JSON.stringify({days:10}));
-                    if(refreshed.success) mainDueReminderRows=Array.isArray(refreshed.data)?refreshed.data:[];
+            try {
+                const result = await apiCall('getDueSoonDebtRemindersTyped', JSON.stringify({days: 10}));
+                if (!result.success) return;
+                mainDueReminderRows = Array.isArray(result.data) ? result.data : [];
+                const eligible = mainDueReminderRows.filter(r => r.eligible && Number(r.days_remaining) <= 10);
+                const b = document.getElementById('mainDueReminderButton');
+                if (b) {
+                    b.style.display = eligible.length ? 'inline-flex' : 'none';
+                    const c = b.querySelector('.due-count');
+                    if (c) c.textContent = eligible.length;
                 }
-                const after=mainDueReminderRows.filter(r=>r.eligible && Number(r.days_remaining)<=10);
-                if(after.length && !mainDueReminderDeferred && sessionStorage.getItem('mainDueReminderShownDate')!==new Date().toISOString().slice(0,10)){
-                    sessionStorage.setItem('mainDueReminderShownDate',new Date().toISOString().slice(0,10));
+                const auto = eligible.filter(r => Number(r.days_remaining) === 1);
+                if (auto.length) {
+                    await apiCall('sendDueSoonDebtRemindersTyped', JSON.stringify({days: 1, automatic_one_day: true}));
+                    const refreshed = await apiCall('getDueSoonDebtRemindersTyped', JSON.stringify({days: 10}));
+                    if (refreshed.success) mainDueReminderRows = Array.isArray(refreshed.data) ? refreshed.data : [];
+                }
+                const after = mainDueReminderRows.filter(r => r.eligible && Number(r.days_remaining) <= 10);
+                if (after.length && !mainDueReminderDeferred && sessionStorage.getItem('mainDueReminderShownDate') !== new Date().toISOString().slice(0, 10)) {
+                    sessionStorage.setItem('mainDueReminderShownDate', new Date().toISOString().slice(0, 10));
                     openMainDueReminderNotice();
                 }
-            }catch(e){console.warn('Main due reminders:',e);}
+            } catch (e) {
+                console.warn('Main due reminders:', e);
+            }
         }
-        function openMainDueReminderNotice(){ensureMainDueReminderUI();document.getElementById('mainDueReminderOverlay').classList.add('show');}
-        function closeMainDueReminderNotice(){document.getElementById('mainDueReminderOverlay')?.classList.remove('show');}
-        function deferMainDueReminder(){mainDueReminderDeferred=true;closeMainDueReminderNotice();document.getElementById('mainDueReminderBubble')?.classList.add('show');}
-        function approveMainDueReminders(){closeMainDueReminderNotice();apiCall('sendDueSoonDebtRemindersTyped',JSON.stringify({days:10})).then(r=>{if(!r.success)throw new Error(r.error||r.message||'تعذر إرسال التذكيرات');showToast(`تمت إضافة ${r.data?.queued_count||0} رسالة إلى طابور SMS`,'success');document.getElementById('mainDueReminderBubble')?.classList.remove('show');refreshMainDueReminders();}).catch(e=>showToast(e.message||'تعذر إرسال التذكيرات','error'))}
-        function openMainDueReminderDetails(){ensureMainDueReminderUI();const rows=mainDueReminderRows.filter(r=>r.eligible&&Number(r.days_remaining)<=10);document.getElementById('mainDueDetailContent').innerHTML=rows.length?`<div style="overflow:auto;margin-top:12px"><table class="due-detail-table"><thead><tr><th>العميل</th><th>الهاتف</th><th>الدين القريب</th><th>إجمالي غير المسدد</th><th>الاستحقاق</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${String(r.customer_name||'---')}</td><td dir="ltr">${String(r.phone||'---')}</td><td class="due-red">${Number(r.due_soon_amount||0).toLocaleString('en-US')} ${CURRENCY}</td><td class="due-blue">${Number(r.total_outstanding||0).toLocaleString('en-US')} ${CURRENCY}</td><td>${String(r.nearest_due_date||'---')}</td></tr>`).join('')}</tbody></table></div>`:'<div style="padding:30px;text-align:center">لا توجد مستحقات مؤهلة حالياً.</div>';document.getElementById('mainDueDetailModal').classList.add('show')}
-        function closeMainDueReminderDetails(){document.getElementById('mainDueDetailModal')?.classList.remove('show')}
+
+        function openMainDueReminderNotice() {
+            ensureMainDueReminderUI();
+            document.getElementById('mainDueReminderOverlay').classList.add('show');
+        }
+        function closeMainDueReminderNotice() {
+            document.getElementById('mainDueReminderOverlay')?.classList.remove('show');
+        }
+        function deferMainDueReminder() {
+            mainDueReminderDeferred = true;
+            closeMainDueReminderNotice();
+            document.getElementById('mainDueReminderBubble')?.classList.add('show');
+        }
+        function approveMainDueReminders() {
+            closeMainDueReminderNotice();
+            apiCall('sendDueSoonDebtRemindersTyped', JSON.stringify({days: 10}))
+                .then(r => {
+                    if (!r.success) throw new Error(r.error || r.message || 'تعذر إرسال التذكيرات');
+                    showToast(`تمت إضافة ${r.data?.queued_count || 0} رسالة إلى طابور SMS`, 'success');
+                    document.getElementById('mainDueReminderBubble')?.classList.remove('show');
+                    refreshMainDueReminders();
+                })
+                .catch(e => showToast(e.message || 'تعذر إرسال التذكيرات', 'error'));
+        }
+        function openMainDueReminderDetails() {
+            ensureMainDueReminderUI();
+            const rows = mainDueReminderRows.filter(r => r.eligible && Number(r.days_remaining) <= 10);
+            document.getElementById('mainDueDetailContent').innerHTML = rows.length
+                ? `<div style="overflow:auto;margin-top:12px"><table class="due-detail-table"><thead><tr><th>العميل</th><th>الهاتف</th><th>الدين القريب</th><th>إجمالي غير المسدد</th><th>الاستحقاق</th></tr></thead><tbody>${rows.map(r => `<tr><td>${String(r.customer_name || '---')}</td><td dir="ltr">${String(r.phone || '---')}</td><td class="due-red">${Number(r.due_soon_amount || 0).toLocaleString('en-US')} ${CURRENCY}</td><td class="due-blue">${Number(r.total_outstanding || 0).toLocaleString('en-US')} ${CURRENCY}</td><td>${String(r.nearest_due_date || '---')}</td></tr>`).join('')}</tbody></table></div>`
+                : '<div style="padding:30px;text-align:center">لا توجد مستحقات مؤهلة حالياً.</div>';
+            document.getElementById('mainDueDetailModal').classList.add('show');
+        }
+        function closeMainDueReminderDetails() {
+            document.getElementById('mainDueDetailModal')?.classList.remove('show');
+        }
 
         // ================================================================
         // Dashboard
@@ -3176,7 +3623,6 @@
             skeletonCards.forEach(id => {
                 const card = document.createElement('div');
                 card.className = 'stat-card skeleton';
-                // البطاقات المزدوجة تأخذ عرض كامل
                 if (id === 'returned-products-full' || id === 'damaged-products-full') {
                     card.classList.add('full-width');
                 }
@@ -3224,81 +3670,52 @@
             const salesTrend = formatTrend(stats.sales_trend_data);
             const custTrend = formatTrend(stats.customers_trend_data);
 
-            /* ============================================================
-               ترتيب البطاقات وفق الملاحظات:
-               1) إجمالي المنتجات + المبيعات اليومية
-               2) مبيعات نقدية + مبيعات آجلة
-               3) المتحصل فعلياً + العملاء النشطين
-               4) المرتجعات (عرض كامل)
-               5) التالفة (عرض كامل)
-               6) الفواتير المستحقة + المنتهية قريباً
-               7) مديونية العملاء + مديونية الموردين
-               8) قيمة المخزون + انخفاض المخزون
-               9) المهام المعلقة + امتلاء الخزانات
-            ============================================================ */
             const cardDefs = [
-                // السطر 1
                 { id: 'card-total-products', header: 'إجمالي المنتجات', icon: 'fa-boxes',
                     value: stats.total_products || 0, label: prodTrend.label,
                     trend: prodTrend.text, trendUp: prodTrend.up },
                 { id: 'card-daily-sales', header: 'المبيعات اليومية', icon: 'fa-chart-line',
                     value: (stats.daily_sales || 0).toFixed(2) + ' ' + CURRENCY, label: salesTrend.label,
                     trend: salesTrend.text, trendUp: salesTrend.up, cls: 'success-card' },
-
-                // السطر 2
                 { id: 'card-cash-sales', header: 'مبيعات نقدية', icon: 'fa-money-bill-wave',
                     value: (stats.cash_sales || 0).toFixed(2) + ' ' + CURRENCY,
                     label: 'من المبيعات اليومية' },
                 { id: 'card-credit-sales', header: 'مبيعات آجلة', icon: 'fa-user-clock',
                     value: (stats.credit_sales || 0).toFixed(2) + ' ' + CURRENCY,
                     label: 'إجمالي البيع الآجل اليوم' },
-
-                // السطر 3
                 { id: 'card-collected-amount', header: 'المتحصل فعلياً', icon: 'fa-hand-holding-usd',
                     value: (stats.collected_amount || 0).toFixed(2) + ' ' + CURRENCY,
                     label: 'من سجلات التحصيل اليوم' },
                 { id: 'card-active-customers', header: 'العملاء النشطين', icon: 'fa-users',
                     value: stats.active_customers || 0, label: custTrend.label,
                     trend: custTrend.text, trendUp: custTrend.up, cls: '' },
-
-                // السطر 4 - عرض كامل
                 { id: 'card-returned-products', header: 'المرتجعات', icon: 'fa-undo',
                     dual: [
                         { value: Number(stats.returned_fuel_today || 0).toFixed(2), label: 'كمية اليوم (لتر)' },
                         { value: Number(stats.returned_products_today || 0).toFixed(2), label: 'كمية اليوم (منتج)' }
                     ], cls: 'info-card', fullWidth: true },
-
-                // السطر 5 - عرض كامل
                 { id: 'card-damaged-products', header: 'التالفة', icon: 'fa-ban',
                     dual: [
                         { value: Number(stats.damaged_fuel_today || 0).toFixed(2), label: 'كمية اليوم (لتر)' },
                         { value: Number(stats.damaged_products_today || 0).toFixed(2), label: 'كمية اليوم (منتج)' }
                     ], cls: 'danger-card', fullWidth: true },
-
-                // السطر 6
                 { id: 'card-due-invoices', header: 'الفواتير المستحقة', icon: 'fa-file-invoice',
                     value: stats.due_invoices || 0, label: 'فاتورة خلال أسبوع', cls: 'info-card' },
                 { id: 'card-expiry-soon', header: 'المنتهية قريباً', icon: 'fa-hourglass-half',
                     value: stats.expiry_soon || 0, label: 'منتج خلال 30 يومًا',
                     badge: stats.expiry_soon || 0, cls: 'warning-card' },
-
-                // السطر 7
                 { id: 'card-customer-debts', header: 'مديونية العملاء', icon: 'fa-hand-holding-usd',
                     value: (stats.customer_debts || 0).toFixed(2) + ' ' + CURRENCY,
                     label: 'إجمالي الديون المستحقة', cls: 'warning-card' },
                 { id: 'card-supplier-debts', header: 'مديونية الموردين', icon: 'fa-file-invoice-dollar',
                     value: (stats.supplier_debts || 0).toFixed(2) + ' ' + CURRENCY,
                     label: 'إجمالي الدين للموردين' },
-
-                // السطر 8
                 { id: 'card-inventory-value', header: 'قيمة المخزون', icon: 'fa-warehouse',
                     value: (stats.inventory_value || 0).toFixed(2) + ' ' + CURRENCY,
                     label: 'القيمة الإجمالية للمخزون', cls: 'success-card' },
                 { id: 'card-low-stock', header: 'انخفاض المخزون', icon: 'fa-exclamation-circle',
                     value: stats.low_stock || 0, label: 'تحت الحد الأدنى',
                     badge: stats.low_stock || 0, cls: 'danger-card' },
-
-                // السطر 9
                 { id: 'card-pending-tasks', header: 'المهام المعلقة', icon: 'fa-tasks',
                     value: stats.pending_tasks || 0, label: 'مهمة تحتاج لمراجعتك',
                     badge: stats.pending_tasks || 0, cls: 'info-card' },
@@ -3390,28 +3807,33 @@
         }
 
         function manualRefresh() {
-            // لا يوجد زر تحديث مرئي، لكن الدالة تبقى للسحب والتحديث التلقائي.
             loadDashboard(true);
         }
 
         // ================================================================
-        // الإشعارات
+        // Notifications
         // ================================================================
         function showRealNotifications(stats) {
             if (stats.expiry_soon > 0) {
-                addNotificationToQueue({ title: 'تنبيه انتهاء الصلاحية',
+                addNotificationToQueue({
+                    title: 'تنبيه انتهاء الصلاحية',
                     message: `هناك ${stats.expiry_soon} منتج ستنتهي صلاحيته خلال 30 يومًا`,
-                    icon: 'fa-hourglass-half', type: 'warning', targetCard: 'card-expiry-soon' });
+                    icon: 'fa-hourglass-half', type: 'warning', targetCard: 'card-expiry-soon'
+                });
             }
             if (stats.low_stock > 0) {
-                addNotificationToQueue({ title: 'تنبيه انخفاض المخزون',
+                addNotificationToQueue({
+                    title: 'تنبيه انخفاض المخزون',
                     message: `هناك ${stats.low_stock} منتج تحت الحد الأدنى`,
-                    icon: 'fa-exclamation-circle', type: 'danger', targetCard: 'card-low-stock' });
+                    icon: 'fa-exclamation-circle', type: 'danger', targetCard: 'card-low-stock'
+                });
             }
             if (stats.pending_tasks > 0) {
-                addNotificationToQueue({ title: 'مهام معلقة',
+                addNotificationToQueue({
+                    title: 'مهام معلقة',
                     message: `لديك ${stats.pending_tasks} مهمة تحتاج إلى مراجعتك`,
-                    icon: 'fa-tasks', type: 'info', targetCard: 'card-pending-tasks' });
+                    icon: 'fa-tasks', type: 'info', targetCard: 'card-pending-tasks'
+                });
             }
             processNotificationQueue();
         }
@@ -3470,7 +3892,7 @@
         }
 
         // ================================================================
-        // النقر المزدوج على البطاقات (فقط التنقل)
+        // Card Double Click
         // ================================================================
         function initCardDoubleClick() {
             const routes = {
@@ -3613,16 +4035,21 @@
 
             if (currentUser) updateUserInfo(currentUser);
 
-            // التحديث التلقائي عند فتح الشاشة / العودة من الخلفية
             window.addEventListener('pageshow', function(e) {
-                // التحديث دائماً عند العودة إلى الصفحة
                 loadDashboard(true);
+                handleUserActivity();
             });
             document.addEventListener('visibilitychange', function() {
-                if (!document.hidden && !isSleeping) loadDashboard(true);
+                if (!document.hidden && !isSleeping) {
+                    loadDashboard(true);
+                    handleUserActivity();
+                }
             });
             window.addEventListener('focus', function() {
-                if (!isSleeping) loadDashboard(true);
+                if (!isSleeping) {
+                    loadDashboard(true);
+                    handleUserActivity();
+                }
             });
 
             window.addEventListener('resize', function() {
@@ -3630,9 +4057,6 @@
             });
         });
 
-        // ================================================================
-        // إغلاق القائمة عند النقر خارجها
-        // ================================================================
         function handlePanelOutsideClick(event) {
             if (isSleeping) return;
             const target = event.target;
