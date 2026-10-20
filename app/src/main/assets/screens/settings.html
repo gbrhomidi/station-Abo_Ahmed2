@@ -1560,7 +1560,8 @@ tr:last-child td { border-bottom:0; }
                     const input = el('setting-' + key);
                     if (input) {
                         if (input.type === 'checkbox') input.checked = false;
-                        else input.value = key === 'DISPLAY_IDLE_TIMEOUT_SECONDS' ? '300' : (key === 'DISPLAY_SLEEP_TEXT' ? '⛽ محطة أبو أحمد' : '');
+                        else input.value = '';
+                        input.placeholder = 'غير محفوظ في قاعدة البيانات';
                     }
                 }
             });
