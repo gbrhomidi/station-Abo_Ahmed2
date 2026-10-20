@@ -3567,7 +3567,11 @@ tr:last-child td { border-bottom:0; }
     }
 
     function collectApplicationSettings() {
-        const next = Object.assign({}, settings);
+        // Collect only controls rendered by this screen. Copying the global settings cache here
+        // also re-saved unrelated/stale keys (including numeric keys from bridge responses),
+        // then incorrectly required every cached key to be present in the legacy settings table.
+        // ApplicationSettings fields not represented by controls are preserved separately in saveSettings().
+        const next = {};
 
         Object.keys(defs).forEach(section => {
             defs[section].forEach(def => {
