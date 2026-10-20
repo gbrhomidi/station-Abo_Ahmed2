@@ -8098,7 +8098,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                  * يرسم WebView إلى Bitmap ويحفظه كـPNG ثم يفتح واتساب.
                  * يُنفَّذ دائمًا على UI thread وبعد تأخير يسمح بتحميل الصور/الخطوط.
                  */
-                fun performRender(view: WebView, onComplete: (JSONObject) -> Unit) {
+                fun performRender(view: WebView, onComplete: (JSONObject) -> Unit, attempt: Int = 1) {
                     var bitmap: Bitmap? = null
                     try {
                         // المحاولة الأولى: 794px مع ARGB_8888 (أفضل جودة ممكنة).
@@ -8213,11 +8213,38 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             put("message", "تم تحويل الفاتورة كاملة إلى صورة PNG وفتح واتساب")
                         })
                     } catch (e: Exception) {
-                        DebugLogger.logException("ShareInvoiceRender", e)
-                        onComplete(JSONObject().apply {
-                            put("success", false)
-                            put("error", e.message ?: "فشل تحويل الفاتورة إلى صورة")
-                        })
+                        val blankCapture = e.message?.contains(
+                            "صورة الفاتورة فارغة أو لم يُرسم محتواها"
+                        ) == true
+                        if (blankCapture && attempt < 2 && !completed) {
+                            // Retry once after WebView gets another layout/draw cycle. A
+                            // transient blank frame can occur even after onPageFinished and
+                            // the compositor callback, especially on older/OEM WebView builds.
+                            DebugLogger.warn(
+                                "ShareInvoiceRender",
+                                "Blank invoice bitmap on attempt $attempt; retrying after layout settle"
+                            )
+                            view.post {
+                                view.invalidate()
+                                view.requestLayout()
+                                view.postDelayed({
+                                    if (!completed && view.isAttachedToWindow) {
+                                        performRender(view, onComplete, attempt + 1)
+                                    } else if (!completed) {
+                                        onComplete(JSONObject().apply {
+                                            put("success", false)
+                                            put("error", "تعذر إعادة رسم الفاتورة بعد فشل المحاولة الأولى")
+                                        })
+                                    }
+                                }, 900L)
+                            }
+                        } else {
+                            DebugLogger.logException("ShareInvoiceRender", e)
+                            onComplete(JSONObject().apply {
+                                put("success", false)
+                                put("error", e.message ?: "فشل تحويل الفاتورة إلى صورة")
+                            })
+                        }
                     } finally {
                         runCatching { bitmap?.recycle() }
                     }
