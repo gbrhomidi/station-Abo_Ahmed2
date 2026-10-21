@@ -325,6 +325,14 @@ class MainActivity : AppCompatActivity() {
 
         requestAllPermissions()
 
+        // Enable whole-document WebView drawing before the invoice capture WebView is created.
+        // This is required for reliable off-screen rendering of long invoice documents on Android.
+        try {
+            WebView.enableSlowWholeDocumentDraw()
+        } catch (e: Exception) {
+            DebugLogger.warn("InvoicePdfRender", "Whole-document drawing setup failed: ${e.message}")
+        }
+
         setContent {
             MyApplicationTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -8404,7 +8412,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         bitmap = Bitmap.createBitmap(renderWidth, renderHeight, config)
                         val canvas = android.graphics.Canvas(bitmap!!)
                         canvas.drawColor(android.graphics.Color.WHITE)
-                        view.draw(canvas)
+                        // Replay the whole laid-out WebView picture into the PDF source bitmap.
+                        // Direct WebView.draw(Canvas) can produce a white surface on some OEMs.
+                        val picture = view.capturePicture()
+                        if (picture.width <= 0 || picture.height <= 0) {
+                            throw IllegalStateException("لم ينتج عارض الفاتورة صورة قابلة للرسم")
+                        }
+                        canvas.save()
+                        canvas.scale(
+                            renderWidth.toFloat() / picture.width.toFloat(),
+                            renderHeight.toFloat() / picture.height.toFloat()
+                        )
+                        picture.draw(canvas)
+                        canvas.restore()
 
                         // Reject blank captures rather than persisting a valid-looking empty PDF.
                         var visibleSamples = 0
