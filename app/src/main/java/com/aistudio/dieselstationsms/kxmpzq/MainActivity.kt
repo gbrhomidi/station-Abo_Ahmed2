@@ -1284,7 +1284,12 @@ class MainActivity : AppCompatActivity() {
                     val prefs = getSharedPreferences("invoice_pdf_archive", Context.MODE_PRIVATE)
                     prefs.edit().putString("tree_uri", uri.toString()).putLong("configured_at", System.currentTimeMillis()).apply()
                     DebugLogger.info("InvoicePdfArchive", "Persisted user-selected folder URI: $uri")
-                    webView?.post { safeEvaluateJs("window.resumeInvoicePdfAfterFolderSelection && window.resumeInvoicePdfAfterFolderSelection();") }
+                    webView?.post {
+                        safeEvaluateJs(
+                            "window.resumeInvoicePdfAfterFolderSelection && window.resumeInvoicePdfAfterFolderSelection(" +
+                                JSONObject.quote(action) + "," + JSONObject.quote(phone) + ");"
+                        )
+                    }
                 } catch (e: Exception) {
                     DebugLogger.logException("InvoicePdfFolderPicker", e)
                     webView?.post {
@@ -8236,11 +8241,21 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 }
 
                 fun isValidPdf(file: File): Boolean {
-                    if (!file.isFile || file.length() < 8L) return false
+                    if (!file.isFile || file.length() < 100L) return false
                     return try {
                         FileInputStream(file).use { input ->
                             val header = ByteArray(5)
-                            input.read(header) == 5 && String(header, Charsets.US_ASCII) == "%PDF-"
+                            if (input.read(header) != 5 ||
+                                String(header, Charsets.US_ASCII) != "%PDF-"
+                            ) return false
+                        }
+                        java.io.RandomAccessFile(file, "r").use { raf ->
+                            val tailLength = minOf(2048L, raf.length()).toInt()
+                            if (tailLength <= 0) return false
+                            val tail = ByteArray(tailLength)
+                            raf.seek(raf.length() - tailLength)
+                            raf.readFully(tail)
+                            String(tail, Charsets.ISO_8859_1).contains("%%EOF")
                         }
                     } catch (_: Exception) {
                         false
@@ -8367,9 +8382,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         val adapter = view.createPrintDocumentAdapter("invoice_$safeNumber")
                         val attributes = PrintAttributes.Builder()
                             .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-                            .setResolution(PrintAttributes.Resolution("invoice_pdf", "Invoice PDF", 300, 300))
                             .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
-                            .setMinMargins(PrintAttributes.Margins(180, 180, 180, 180))
+                            .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
                             .build()
                         val cancellation = android.os.CancellationSignal()
                         adapter.onLayout(
@@ -8566,13 +8580,17 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         isFocusable = false
                         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                     }
-                    root.addView(capture, 0, ViewGroup.LayoutParams(794, ViewGroup.LayoutParams.WRAP_CONTENT))
+                    root.addView(
+                        capture,
+                        0,
+                        android.widget.FrameLayout.LayoutParams(794, 1123)
+                    )
                     tempHtml = File(activity.cacheDir, "invoice_" + safeNumber + "_" + System.currentTimeMillis() + ".html")
                     tempPdf = File(invoiceDir, "." + safeNumber + "_" + System.currentTimeMillis() + ".pending.pdf")
                     tempHtml!!.writeText(invoiceHtml, Charsets.UTF_8)
                     mainHandler.postDelayed({
                         finish(JSONObject().put("success", false).put("error", "انتهت مهلة إنشاء ملف PDF"))
-                    }, 45_000L)
+                    }, 120_000L)
 
                     capture!!.webViewClient = object : WebViewClient() {
                         private var renderStarted = false
@@ -8584,8 +8602,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             val schedule = {
                                 if (!completed) {
                                     view.postDelayed({
+                                        if (completed) return@postDelayed
+                                        try {
+                                            view.measure(
+                                                View.MeasureSpec.makeMeasureSpec(794, View.MeasureSpec.EXACTLY),
+                                                View.MeasureSpec.makeMeasureSpec(1123, View.MeasureSpec.EXACTLY)
+                                            )
+                                            view.layout(0, 0, 794, 1123)
+                                            view.requestLayout()
+                                        } catch (layoutError: Exception) {
+                                            DebugLogger.warn("InvoicePdfLayout", "Explicit WebView measure/layout failed: ${layoutError.message}")
+                                        }
                                         renderAndSave(view, 794, Bitmap.Config.ARGB_8888, 1)
-                                    }, 450L)
+                                    }, 800L)
                                 }
                             }
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
