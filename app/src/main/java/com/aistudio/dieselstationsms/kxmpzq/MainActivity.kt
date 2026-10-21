@@ -8548,7 +8548,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             throw IllegalStateException("محتوى الفاتورة فارغ بعد ثلاث محاولات رسم؛ لم يتم حفظ ملف PDF فارغ")
                         }
 
-                        persistBitmapAsPdf(image, outputFile)
+                        persistBitmapAsPdf(bitmap!!, outputFile)
                         bitmap?.recycle()
                         bitmap = null
                         if (!isValidPdf(outputFile) || !InvoicePdfSupport.isPdfVisuallyNonBlank(outputFile)) {
