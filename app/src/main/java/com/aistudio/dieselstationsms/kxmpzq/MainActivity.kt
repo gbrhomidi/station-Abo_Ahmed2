@@ -8382,7 +8382,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     changed: Boolean
                                 ) {
                                     if (completed) return
-                                    if (info == null || info.pageCount <= 0) {
+                                    if (info == null || info.pageCount == 0) {
                                         finish(JSONObject().put("success", false)
                                             .put("error", "لم ينتج عارض الفاتورة أي صفحات PDF"))
                                         return
