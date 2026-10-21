@@ -8382,6 +8382,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         val adapter = view.createPrintDocumentAdapter("invoice_$safeNumber")
                         val attributes = PrintAttributes.Builder()
                             .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                            // Keep a concrete, moderate resolution: some Android print adapters
+                            // require this field, while 150 DPI avoids the memory cost of 300 DPI.
+                            .setResolution(PrintAttributes.Resolution("invoice_pdf", "Invoice PDF", 150, 150))
                             .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
                             .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
                             .build()
