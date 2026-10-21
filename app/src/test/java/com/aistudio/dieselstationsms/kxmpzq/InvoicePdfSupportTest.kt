@@ -32,14 +32,21 @@ class InvoicePdfSupportTest {
     }
 
     @Test fun validatesEveryPageAndRejectsBlankSecondPage() {
-        val file = File.createTempFile("invoice-pages", ".pdf")
+        val blankSecondPage = File.createTempFile("invoice-blank-page", ".pdf")
+        val allPagesVisible = File.createTempFile("invoice-visible-pages", ".pdf")
         try {
-            writePdf(file, blankSecondPage = true)
+            writePdf(blankSecondPage, blankSecondPage = true)
             assertFalse("A nonblank first page must not hide a blank second page",
-                InvoicePdfSupport.isPdfVisuallyNonBlank(file))
-            writePdf(file, blankSecondPage = false)
-            assertTrue(InvoicePdfSupport.isPdfVisuallyNonBlank(file))
-        } finally { file.delete() }
+                InvoicePdfSupport.isPdfVisuallyNonBlank(blankSecondPage))
+
+            // Use a distinct file for each PdfDocument. Robolectric's PdfDocument shadow can
+            // retain closed-document state when a second document rewrites the same file.
+            writePdf(allPagesVisible, blankSecondPage = false)
+            assertTrue(InvoicePdfSupport.isPdfVisuallyNonBlank(allPagesVisible))
+        } finally {
+            blankSecondPage.delete()
+            allPagesVisible.delete()
+        }
     }
 
     private fun writePdf(file: File, blankSecondPage: Boolean) {
