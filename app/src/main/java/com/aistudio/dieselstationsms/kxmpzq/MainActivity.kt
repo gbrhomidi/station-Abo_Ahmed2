@@ -84,6 +84,10 @@ import java.io.ByteArrayOutputStream
  */
 class MainActivity : AppCompatActivity() {
 
+    private var pendingInvoiceFolderHtml: String? = null
+    private var pendingInvoiceFolderPhone: String = ""
+    private var pendingInvoiceFolderAction: String = ""
+
     private fun currentDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
     companion object {
@@ -111,6 +115,7 @@ class MainActivity : AppCompatActivity() {
         private val mapPickerRequestCode = 4208
         private val vehicleFilePickerRequestCode = 4209
         private val stationFilePickerRequestCode = 4210
+        private val invoiceFolderPickerRequestCode = 4211
         private var pendingVehicleFileKind: String? = null
         private var pendingStationFileKind: String? = null
 
@@ -1264,6 +1269,39 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == invoiceFolderPickerRequestCode) {
+            val html = pendingInvoiceFolderHtml
+            val phone = pendingInvoiceFolderPhone
+            val action = pendingInvoiceFolderAction
+            pendingInvoiceFolderHtml = null
+            pendingInvoiceFolderPhone = ""
+            pendingInvoiceFolderAction = ""
+            val uri = data?.data
+            if (resultCode == RESULT_OK && uri != null && !html.isNullOrBlank() && action.isNotBlank()) {
+                try {
+                    val flags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    contentResolver.takePersistableUriPermission(uri, flags)
+                    val prefs = getSharedPreferences("invoice_pdf_archive", Context.MODE_PRIVATE)
+                    prefs.edit().putString("tree_uri", uri.toString()).putLong("configured_at", System.currentTimeMillis()).apply()
+                    DebugLogger.info("InvoicePdfArchive", "Persisted user-selected folder URI: $uri")
+                    val resumeJs = "window.resumeInvoicePdfAfterFolderSelection && window.resumeInvoicePdfAfterFolderSelection(" +
+                        JSONObject.quote(html) + "," + JSONObject.quote(phone) + "," + JSONObject.quote(action) + ");"
+                    webView?.post { safeEvaluateJs(resumeJs) }
+                } catch (e: Exception) {
+                    DebugLogger.logException("InvoicePdfFolderPicker", e)
+                    webView?.post {
+                        safeEvaluateJs("window.handleAndroidResult(" + JSONObject.quote(action) + "," +
+                            JSONObject.quote(JSONObject().put("success", false).put("error", e.message ?: "تعذر حفظ صلاحية مجلد الفواتير").toString()) + ");")
+                    }
+                }
+            } else if (!action.isBlank()) {
+                webView?.post {
+                    safeEvaluateJs("window.handleAndroidResult(" + JSONObject.quote(action) + "," +
+                        JSONObject.quote(JSONObject().put("success", false).put("cancelled", true).put("error", "أُلغي اختيار مجلد حفظ الفواتير").toString()) + ");")
+                }
+            }
+            return
+        }
         if (requestCode == mapPickerRequestCode) {
             if (resultCode == RESULT_OK && data != null) {
                 val latitude = data.getDoubleExtra(MapPickerActivity.EXTRA_LATITUDE, Double.NaN)
@@ -8091,6 +8129,53 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
             val pdfFile = File(invoiceDir, safeNumber + ".pdf")
 
+            val folderPrefs = activity.getSharedPreferences("invoice_pdf_archive", Context.MODE_PRIVATE)
+            if (folderPrefs.getString("tree_uri", null).isNullOrBlank()) {
+                activity.runOnUiThread {
+                    pendingInvoiceFolderHtml = invoiceHtml
+                    pendingInvoiceFolderPhone = phone
+                    pendingInvoiceFolderAction = callbackAction
+                    android.app.AlertDialog.Builder(activity)
+                        .setTitle("مجلد حفظ الفواتير")
+                        .setMessage("يرجى تحديد مجلد حفظ فواتير PDF. سيتم حفظ اختيارك واستخدامه تلقائياً في عمليات البيع التالية.")
+                        .setPositiveButton("تحديد") { _, _ ->
+                            val picker = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                            }
+                            try {
+                                activity.startActivityForResult(picker, invoiceFolderPickerRequestCode)
+                            } catch (e: Exception) {
+                                pendingInvoiceFolderHtml = null
+                                pendingInvoiceFolderPhone = ""
+                                pendingInvoiceFolderAction = ""
+                                activity.webView?.evaluateJavascript(
+                                    "window.handleAndroidResult(" + JSONObject.quote(callbackAction) + "," +
+                                        JSONObject.quote(JSONObject().put("success", false).put("error", "تعذر فتح مدير ملفات الهاتف").toString()) + ")", null
+                                )
+                            }
+                        }
+                        .setNegativeButton("إلغاء") { _, _ ->
+                            pendingInvoiceFolderHtml = null
+                            pendingInvoiceFolderPhone = ""
+                            pendingInvoiceFolderAction = ""
+                            activity.webView?.evaluateJavascript(
+                                "window.handleAndroidResult(" + JSONObject.quote(callbackAction) + "," +
+                                    JSONObject.quote(JSONObject().put("success", false).put("cancelled", true).put("error", "أُلغي اختيار مجلد حفظ الفواتير؛ لم يتم حفظ PDF").toString()) + ")", null
+                            )
+                        }
+                        .setCancelable(false)
+                        .show()
+                }
+                return JSONObject().apply {
+                    put("success", true)
+                    put("queued", true)
+                    put("needs_folder", true)
+                    put("message", "يلزم تحديد مجلد حفظ الفواتير لأول مرة")
+                }.toString()
+            }
+
             activity.runOnUiThread {
                 var capture: WebView? = null
                 var tempHtml: File? = null
@@ -8134,16 +8219,49 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     }
                 }
 
-                fun shareSavedPdf(file: File): JSONObject {
-                    val uri = try {
-                        FileProvider.getUriForFile(
-                            activity,
-                            activity.packageName + ".fileprovider",
-                            file
-                        )
-                    } catch (e: IllegalArgumentException) {
-                        throw IllegalStateException("تعذر مشاركة PDF؛ تحقق من إعداد file_paths.xml", e)
+                fun findOrCreateInvoiceDocument(treeUri: Uri, fileName: String): Uri {
+                    val rootId = android.provider.DocumentsContract.getTreeDocumentId(treeUri)
+                    val childrenUri = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, rootId)
+                    activity.contentResolver.query(
+                        childrenUri,
+                        arrayOf(
+                            android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                            android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                            android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE
+                        ),
+                        null, null, null
+                    )?.use { cursor ->
+                        val idCol = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                        val nameCol = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                        while (cursor.moveToNext()) {
+                            if (nameCol >= 0 && cursor.getString(nameCol) == fileName && idCol >= 0) {
+                                val id = cursor.getString(idCol)
+                                val existing = android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, id)
+                                runCatching { activity.contentResolver.delete(existing, null, null) }
+                                break
+                            }
+                        }
                     }
+                    return android.provider.DocumentsContract.createDocument(
+                        activity.contentResolver, treeUri, "application/pdf", fileName
+                    ) ?: throw IllegalStateException("تعذر إنشاء ملف PDF داخل المجلد المحدد")
+                }
+
+                fun copyPdfToSelectedFolder(source: File): Uri {
+                    val prefs = activity.getSharedPreferences("invoice_pdf_archive", Context.MODE_PRIVATE)
+                    val savedTree = prefs.getString("tree_uri", null)
+                        ?: throw IllegalStateException("لم يتم تحديد مجلد حفظ الفواتير")
+                    val treeUri = Uri.parse(savedTree)
+                    val destination = findOrCreateInvoiceDocument(treeUri, source.name)
+                    activity.contentResolver.openOutputStream(destination, "wt")?.use { output ->
+                        FileInputStream(source).use { input -> input.copyTo(output) }
+                        output.flush()
+                    } ?: throw IllegalStateException("تعذر الكتابة في مجلد الفواتير المحدد")
+                    return destination
+                }
+
+                fun shareSavedPdf(file: File): JSONObject {
+                    val uri = copyPdfToSelectedFolder(file)
                     val waPackage = listOf("com.whatsapp", "com.whatsapp.w4b")
                         .firstOrNull { pkg ->
                             activity.packageManager.getLaunchIntentForPackage(pkg) != null
@@ -8162,12 +8280,12 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     activity.startActivity(intent)
                     return JSONObject().apply {
                         put("success", true)
-                        put("path", file.absolutePath)
+                        put("path", uri.toString())
                         put("file_name", file.name)
                         put("bytes", file.length())
                         put("mime_type", "application/pdf")
                         put("phone", normalizedPhone)
-                        put("message", "تم حفظ الفاتورة PDF وفتح واتساب لمشاركتها")
+                        put("message", "تم حفظ الفاتورة PDF في المجلد المحدد وفتح واتساب لمشاركتها")
                     }
                 }
 
@@ -8260,13 +8378,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             pdfTemp.delete()
                         }
                         if (!isValidPdf(pdfFile)) throw IllegalStateException("تعذر التحقق من ملف PDF النهائي")
+                        val selectedUri = if (shouldShare) null else copyPdfToSelectedFolder(pdfFile)
                         val result = if (shouldShare) shareSavedPdf(pdfFile) else JSONObject().apply {
                             put("success", true)
-                            put("path", pdfFile.absolutePath)
+                            put("path", selectedUri.toString())
                             put("file_name", pdfFile.name)
                             put("bytes", pdfFile.length())
                             put("mime_type", "application/pdf")
-                            put("message", "تم حفظ ملف PDF للفاتورة")
+                            put("message", "تم حفظ ملف PDF في مجلد الفواتير المحدد")
                         }
                         finish(result)
                     } catch (oom: OutOfMemoryError) {
@@ -8300,16 +8419,35 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     }
                     if (isValidPdf(pdfFile)) {
                         try {
-                            finish(if (shouldShare) shareSavedPdf(pdfFile) else JSONObject().apply {
+                            val selectedUri = copyPdfToSelectedFolder(pdfFile)
+                            if (shouldShare) {
+                                // Share the exact document in the user-selected archive folder.
+                                val waPackage = listOf("com.whatsapp", "com.whatsapp.w4b")
+                                    .firstOrNull { pkg -> activity.packageManager.getLaunchIntentForPackage(pkg) != null }
+                                    ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/pdf"
+                                    putExtra(Intent.EXTRA_STREAM, selectedUri)
+                                    putExtra("jid", normalizedPhone + "@s.whatsapp.net")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    clipData = android.content.ClipData.newRawUri("invoice-pdf", selectedUri)
+                                    setPackage(waPackage)
+                                }
+                                if (intent.resolveActivity(activity.packageManager) == null) {
+                                    throw IllegalStateException("WhatsApp مثبت لكنه لا يقبل مشاركة مستند PDF")
+                                }
+                                activity.startActivity(intent)
+                            }
+                            finish(JSONObject().apply {
                                 put("success", true)
-                                put("path", pdfFile.absolutePath)
+                                put("path", selectedUri.toString())
                                 put("file_name", pdfFile.name)
                                 put("bytes", pdfFile.length())
                                 put("mime_type", "application/pdf")
-                                put("message", "تم استخدام ملف PDF المحفوظ")
+                                put("message", if (shouldShare) "تم حفظ PDF وفتح واتساب" else "تم استخدام ملف PDF المحفوظ")
                             })
                         } catch (e: Exception) {
-                            finish(JSONObject().put("success", false).put("error", e.message ?: "تعذرت مشاركة الفاتورة"))
+                            finish(JSONObject().put("success", false).put("error", e.message ?: "تعذر حفظ أو مشاركة الفاتورة"))
                         }
                         return@runOnUiThread
                     }
