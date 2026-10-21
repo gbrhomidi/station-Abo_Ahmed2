@@ -8367,11 +8367,13 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 }
 
                 fun renderAndSave(view: WebView, renderWidth: Int, config: Bitmap.Config, attempt: Int) {
-                    // Do not rasterize WebView into a Bitmap. Bitmap capture can be blank on
-                    // some Android/WebView versions even after onPageFinished and visual-state
-                    // callbacks. WebView's native PrintDocumentAdapter renders the loaded page
-                    // directly into PDF and avoids the false "blank bitmap" failure entirely.
+                    // PrintDocumentAdapter.LayoutResultCallback and WriteResultCallback have
+                    // package-private constructors in Android's SDK. They cannot be instantiated
+                    // by application code, so calling adapter.onLayout/onWrite directly does not
+                    // compile. Render the laid-out WebView into a checked bitmap and serialize it
+                    // with PdfDocument instead; this also avoids relying on the system print UI.
                     if (completed) return
+                    var bitmap: Bitmap? = null
                     try {
                         val outputFile = tempPdf
                             ?: throw IllegalStateException("ملف PDF المؤقت غير متاح")
@@ -8379,147 +8381,111 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         if (outputFile.exists() && !outputFile.delete()) {
                             throw IllegalStateException("تعذر تهيئة ملف PDF المؤقت")
                         }
-                        val adapter = view.createPrintDocumentAdapter("invoice_$safeNumber")
-                        val attributes = PrintAttributes.Builder()
-                            .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-                            // Keep a concrete, moderate resolution: some Android print adapters
-                            // require this field, while 150 DPI avoids the memory cost of 300 DPI.
-                            .setResolution(PrintAttributes.Resolution("invoice_pdf", "Invoice PDF", 150, 150))
-                            .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
-                            .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
-                            .build()
-                        val cancellation = android.os.CancellationSignal()
-                        adapter.onLayout(
-                            null,
-                            attributes,
-                            cancellation,
-                            object : android.print.PrintDocumentAdapter.LayoutResultCallback() {
-                                override fun onLayoutFinished(
-                                    info: android.print.PrintDocumentInfo?,
-                                    changed: Boolean
-                                ) {
-                                    if (completed) return
-                                    if (info == null || info.pageCount == 0) {
-                                        finish(JSONObject().put("success", false)
-                                            .put("error", "لم ينتج عارض الفاتورة أي صفحات PDF"))
-                                        return
-                                    }
-                                    val descriptor = try {
-                                        android.os.ParcelFileDescriptor.open(
-                                            outputFile,
-                                            android.os.ParcelFileDescriptor.MODE_CREATE or
-                                                android.os.ParcelFileDescriptor.MODE_TRUNCATE or
-                                                android.os.ParcelFileDescriptor.MODE_READ_WRITE
-                                        )
-                                    } catch (e: Exception) {
-                                        finish(JSONObject().put("success", false)
-                                            .put("error", "تعذر فتح ملف PDF للكتابة: " + (e.message ?: "خطأ غير معروف")))
-                                        return
-                                    }
-                                    adapter.onWrite(
-                                        arrayOf(android.print.PageRange.ALL_PAGES),
-                                        descriptor,
-                                        cancellation,
-                                        object : android.print.PrintDocumentAdapter.WriteResultCallback() {
-                                            override fun onWriteFinished(pages: Array<android.print.PageRange>) {
-                                                runCatching { descriptor.close() }
-                                                if (completed) return
-                                                try {
-                                                    if (!isValidPdf(outputFile)) {
-                                                        throw IllegalStateException("أنشأ عارض Android ملف PDF فارغًا أو غير صالح")
-                                                    }
-                                                    if (!pdfFile.exists() || !isValidPdf(pdfFile)) {
-                                                        if (pdfFile.exists() && !pdfFile.delete()) {
-                                                            throw IllegalStateException("تعذر استبدال ملف PDF السابق")
-                                                        }
-                                                        if (!outputFile.renameTo(pdfFile)) {
-                                                            outputFile.copyTo(pdfFile, overwrite = true)
-                                                            outputFile.delete()
-                                                        }
-                                                    }
-                                                    if (!isValidPdf(pdfFile)) {
-                                                        throw IllegalStateException("تعذر التحقق من ملف PDF النهائي")
-                                                    }
-                                                    val selectedUri = copyPdfToSelectedFolder(pdfFile)
-                                                    val result = if (shouldShare) {
-                                                        // Share the PDF copied to the user's persisted SAF folder.
-                                                        val waPackage = listOf("com.whatsapp", "com.whatsapp.w4b")
-                                                            .firstOrNull { pkg ->
-                                                                activity.packageManager.getLaunchIntentForPackage(pkg) != null
-                                                            } ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
-                                                        val intent = Intent(Intent.ACTION_SEND).apply {
-                                                            type = "application/pdf"
-                                                            putExtra(Intent.EXTRA_STREAM, selectedUri)
-                                                            putExtra("jid", normalizedPhone + "@s.whatsapp.net")
-                                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                            clipData = android.content.ClipData.newRawUri("invoice-pdf", selectedUri)
-                                                            setPackage(waPackage)
-                                                        }
-                                                        if (intent.resolveActivity(activity.packageManager) == null) {
-                                                            throw IllegalStateException("WhatsApp مثبت لكنه لا يقبل مشاركة مستند PDF")
-                                                        }
-                                                        activity.startActivity(intent)
-                                                        JSONObject().apply {
-                                                            put("success", true)
-                                                            put("path", selectedUri.toString())
-                                                            put("file_name", pdfFile.name)
-                                                            put("bytes", pdfFile.length())
-                                                            put("mime_type", "application/pdf")
-                                                            put("phone", normalizedPhone)
-                                                            put("message", "تم إنشاء ملف PDF ومشاركته عبر واتساب")
-                                                        }
-                                                    } else {
-                                                        JSONObject().apply {
-                                                            put("success", true)
-                                                            put("path", selectedUri.toString())
-                                                            put("file_name", pdfFile.name)
-                                                            put("bytes", pdfFile.length())
-                                                            put("mime_type", "application/pdf")
-                                                            put("message", "تم حفظ ملف PDF في مجلد الفواتير المحدد")
-                                                        }
-                                                    }
-                                                    finish(result)
-                                                } catch (e: Exception) {
-                                                    DebugLogger.logException("InvoicePdfWrite", e)
-                                                    finish(JSONObject().put("success", false)
-                                                        .put("error", e.message ?: "فشل حفظ أو مشاركة ملف PDF"))
-                                                }
-                                            }
 
-                                            override fun onWriteFailed(error: CharSequence?) {
-                                                runCatching { descriptor.close() }
-                                                finish(JSONObject().put("success", false)
-                                                    .put("error", "فشل إنشاء صفحات PDF: " + (error?.toString() ?: "خطأ غير معروف")))
-                                            }
-
-                                            override fun onWriteCancelled() {
-                                                runCatching { descriptor.close() }
-                                                finish(JSONObject().put("success", false)
-                                                    .put("cancelled", true)
-                                                    .put("error", "أُلغي إنشاء ملف PDF"))
-                                            }
-                                        }
-                                    )
-                                }
-
-                                override fun onLayoutFailed(error: CharSequence?) {
-                                    finish(JSONObject().put("success", false)
-                                        .put("error", "تعذر تخطيط الفاتورة للطباعة إلى PDF: " +
-                                            (error?.toString() ?: "خطأ غير معروف")))
-                                }
-
-                                override fun onLayoutCancelled() {
-                                    finish(JSONObject().put("success", false)
-                                        .put("cancelled", true)
-                                        .put("error", "أُلغي تجهيز تخطيط الفاتورة"))
-                                }
-                            },
-                            Bundle()
+                        val renderHeight = maxOf(1123, view.height, renderWidth * 842 / 595)
+                        view.measure(
+                            View.MeasureSpec.makeMeasureSpec(renderWidth, View.MeasureSpec.EXACTLY),
+                            View.MeasureSpec.makeMeasureSpec(renderHeight, View.MeasureSpec.EXACTLY)
                         )
+                        view.layout(0, 0, renderWidth, renderHeight)
+                        view.invalidate()
+
+                        bitmap = Bitmap.createBitmap(renderWidth, renderHeight, config)
+                        val canvas = android.graphics.Canvas(bitmap!!)
+                        canvas.drawColor(android.graphics.Color.WHITE)
+                        view.draw(canvas)
+
+                        // Reject blank captures rather than persisting a valid-looking empty PDF.
+                        var visibleSamples = 0
+                        val sampleStep = maxOf(1, minOf(renderWidth, renderHeight) / 100)
+                        val image = bitmap!!
+                        var y = 0
+                        while (y < image.height && visibleSamples < 12) {
+                            var x = 0
+                            while (x < image.width && visibleSamples < 12) {
+                                val pixel = image.getPixel(x, y)
+                                val r = android.graphics.Color.red(pixel)
+                                val g = android.graphics.Color.green(pixel)
+                                val b = android.graphics.Color.blue(pixel)
+                                if (r < 238 || g < 238 || b < 238) visibleSamples++
+                                x += sampleStep
+                            }
+                            y += sampleStep
+                        }
+                        if (visibleSamples < 12) {
+                            bitmap?.recycle()
+                            bitmap = null
+                            if (attempt < 3) {
+                                view.postDelayed({
+                                    if (!completed) renderAndSave(view, renderWidth, config, attempt + 1)
+                                }, 650L)
+                                return
+                            }
+                            throw IllegalStateException("محتوى الفاتورة فارغ بعد ثلاث محاولات رسم؛ لم يتم حفظ ملف PDF فارغ")
+                        }
+
+                        persistBitmapAsPdf(image, outputFile)
+                        bitmap?.recycle()
+                        bitmap = null
+                        if (!isValidPdf(outputFile)) {
+                            throw IllegalStateException("تعذر التحقق من ملف PDF الناتج")
+                        }
+
+                        if (!pdfFile.exists() || !isValidPdf(pdfFile)) {
+                            if (pdfFile.exists() && !pdfFile.delete()) {
+                                throw IllegalStateException("تعذر استبدال ملف PDF السابق")
+                            }
+                            if (!outputFile.renameTo(pdfFile)) {
+                                outputFile.copyTo(pdfFile, overwrite = true)
+                                outputFile.delete()
+                            }
+                        }
+                        if (!isValidPdf(pdfFile)) {
+                            throw IllegalStateException("تعذر التحقق من ملف PDF النهائي")
+                        }
+
+                        val selectedUri = copyPdfToSelectedFolder(pdfFile)
+                        val result = if (shouldShare) {
+                            val waPackage = listOf("com.whatsapp", "com.whatsapp.w4b")
+                                .firstOrNull { pkg -> activity.packageManager.getLaunchIntentForPackage(pkg) != null }
+                                ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/pdf"
+                                putExtra(Intent.EXTRA_STREAM, selectedUri)
+                                putExtra("jid", normalizedPhone + "@s.whatsapp.net")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                clipData = android.content.ClipData.newRawUri("invoice-pdf", selectedUri)
+                                setPackage(waPackage)
+                            }
+                            if (intent.resolveActivity(activity.packageManager) == null) {
+                                throw IllegalStateException("WhatsApp مثبت لكنه لا يقبل مشاركة مستند PDF")
+                            }
+                            activity.startActivity(intent)
+                            JSONObject().apply {
+                                put("success", true)
+                                put("path", selectedUri.toString())
+                                put("file_name", pdfFile.name)
+                                put("bytes", pdfFile.length())
+                                put("mime_type", "application/pdf")
+                                put("phone", normalizedPhone)
+                                put("message", "تم إنشاء ملف PDF والتحقق منه وفتح واتساب لمشاركته")
+                            }
+                        } else {
+                            JSONObject().apply {
+                                put("success", true)
+                                put("path", selectedUri.toString())
+                                put("file_name", pdfFile.name)
+                                put("bytes", pdfFile.length())
+                                put("mime_type", "application/pdf")
+                                put("message", "تم إنشاء ملف PDF والتحقق منه وحفظه في المجلد المحدد")
+                            }
+                        }
+                        finish(result)
                     } catch (e: Exception) {
-                        DebugLogger.logException("InvoicePdfPrintAdapter", e)
+                        runCatching { bitmap?.recycle() }
+                        DebugLogger.logException("InvoicePdfRender", e)
                         finish(JSONObject().put("success", false)
-                            .put("error", e.message ?: "فشل إنشاء PDF للفاتورة"))
+                            .put("error", e.message ?: "فشل رسم الفاتورة أو إنشاء ملف PDF"))
                     }
                 }
 
