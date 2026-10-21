@@ -8589,19 +8589,12 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                 (function() {
                                   try {
                                     var root = document.getElementById('posInvoice') || document.body;
-                                    if (!root) return JSON.stringify({ready:false, reason:'missing-root'});
+                                    if (!root) return 'missing-root';
                                     root.style.setProperty('display','block','important');
                                     root.style.setProperty('visibility','visible','important');
                                     root.style.setProperty('opacity','1','important');
                                     root.style.setProperty('height','auto','important');
-                                    root.style.setProperty('min-height','0','important');
                                     root.style.setProperty('overflow','visible','important');
-                                    Array.prototype.forEach.call(root.querySelectorAll('*'), function(el) {
-                                      var cs = window.getComputedStyle(el);
-                                      if (cs.display === 'none') el.style.setProperty('display','block','important');
-                                      if (cs.visibility === 'hidden') el.style.setProperty('visibility','visible','important');
-                                      if (parseFloat(cs.opacity) === 0) el.style.setProperty('opacity','1','important');
-                                    });
                                     var waits = [];
                                     if (document.fonts && document.fonts.ready) waits.push(document.fonts.ready.catch(function(){}));
                                     Array.prototype.forEach.call(document.images || [], function(img) {
@@ -8611,15 +8604,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                         setTimeout(resolve,3000);
                                       }));
                                     });
-                                    return Promise.all(waits).then(function() {
-                                      return JSON.stringify({
-                                        ready:true,
-                                        width:Math.max(root.scrollWidth,document.documentElement.scrollWidth,794),
-                                        height:Math.max(root.scrollHeight,document.body.scrollHeight,document.documentElement.scrollHeight),
-                                        text:(root.innerText || root.textContent || '').trim().length
-                                      });
+                                    Promise.all(waits).then(function() {
+                                      document.documentElement.setAttribute('data-invoice-ready','1');
                                     });
-                                  } catch(e) { return JSON.stringify({ready:false,reason:String(e)}); }
+                                    return 'waiting';
+                                  } catch(e) { return 'readiness-error:' + String(e); }
                                 })();
                             """.trimIndent()
 
@@ -8646,20 +8635,35 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                 }
                             }
 
-                            view.evaluateJavascript(readinessScript) { rawResult ->
-                                DebugLogger.info("InvoicePdfReady", "DOM readiness result: ${rawResult?.take(500) ?: "null"}")
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                    view.postVisualStateCallback(
-                                        System.nanoTime(),
-                                        object : WebView.VisualStateCallback() {
-                                            override fun onComplete(requestId: Long) {
+                            fun waitForInvoiceReady(deadlineMs: Long) {
+                                if (completed) return
+                                view.evaluateJavascript(
+                                    "document.documentElement.getAttribute('data-invoice-ready') === '1' ? " +
+                                        "JSON.stringify({ready:true,height:document.documentElement.scrollHeight}) : 'waiting'",
+                                    { rawResult ->
+                                        val ready = rawResult?.contains("\\\"ready\\\":true") == true
+                                        if (ready || System.currentTimeMillis() >= deadlineMs) {
+                                            DebugLogger.info("InvoicePdfReady", "DOM readiness: ${rawResult?.take(300) ?: "null"}")
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                                view.postVisualStateCallback(
+                                                    System.nanoTime(),
+                                                    object : WebView.VisualStateCallback() {
+                                                        override fun onComplete(requestId: Long) {
+                                                            scheduleRender()
+                                                        }
+                                                    }
+                                                )
+                                            } else {
                                                 scheduleRender()
                                             }
+                                        } else {
+                                            view.postDelayed({ waitForInvoiceReady(deadlineMs) }, 150L)
                                         }
-                                    )
-                                } else {
-                                    scheduleRender()
-                                }
+                                    }
+                                )
+                            }
+                            view.evaluateJavascript(readinessScript) {
+                                waitForInvoiceReady(System.currentTimeMillis() + 4000L)
                             }
                         }
 
