@@ -6182,13 +6182,9 @@ async function sendWhatsappInvoice() {
         showBlankWarning((error.message || 'تعذرت مشاركة الفاتورة المحفوظة') + ' — سيتم فتح نافذة الطباعة كمسار احتياطي لحفظ PDF.');
         showWhatsappValidation('تعذرت مشاركة الملف المحفوظ. استخدم نافذة الطباعة لحفظ المستند الأصلي ثم أعد المشاركة.');
         try {
-            const rawPrint = window.AndroidInterface && window.AndroidInterface.printCurrentPage();
-            const printAck = typeof rawPrint === 'string' ? JSON.parse(rawPrint) : rawPrint;
-            if (!printAck || !printAck.success) {
-                showWhatsappValidation(printAck?.error || 'تعذر فتح نافذة الطباعة الاحتياطية');
-            } else {
-                showToast('اختر حفظ بتنسيق PDF من نافذة الطباعة، ثم أعد المشاركة', 'info');
-            }
+            // Reuse the invoice-specific print flow: it reloads the committed invoice from SQLite,
+            // renders only the invoice, then invokes Android PrintManager for user-driven PDF export.
+            await printReceipt();
         } catch (printError) {
             showWhatsappValidation(printError.message || 'تعذر فتح نافذة الطباعة الاحتياطية');
         }
