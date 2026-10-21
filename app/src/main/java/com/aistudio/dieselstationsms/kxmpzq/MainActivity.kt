@@ -8553,7 +8553,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         settings.allowContentAccess = false
                         settings.loadsImagesAutomatically = true
                         setBackgroundColor(android.graphics.Color.WHITE)
-                        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                        // Keep WebView's default rendering pipeline. Forcing a software
+                        // layer can make WebView.draw(Canvas) return a white surface on
+                        // some Android System WebView/OEM combinations.
                         settings.useWideViewPort = true
                         settings.loadWithOverviewMode = false
                         alpha = 1f
