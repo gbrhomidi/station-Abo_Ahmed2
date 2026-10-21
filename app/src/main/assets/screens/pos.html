@@ -5586,6 +5586,9 @@ async function persistInvoicePdfAfterSale(invoiceNumber) {
         renderSalesInvoice(invoice, archiveSection);
         await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 450)));
         const capture = buildCaptureDocument(archiveSection);
+        // Keep the document in the page context while Android's SAF picker is open;
+        // avoid sending a potentially multi-megabyte HTML string through evaluateJavascript.
+        window._pendingInvoiceArchiveHtml = capture.html;
         const saveResult = await new Promise((resolve, reject) => {
             let timeoutId = setTimeout(() => {
                 clearPendingCall('saveInvoicePdf');
@@ -5618,17 +5621,18 @@ async function persistInvoicePdfAfterSale(invoiceNumber) {
 // Called by MainActivity after the user selects the archive folder in Android's
 // system folder picker. Re-enter the same bridge operation without re-registering
 // the JS promise; its original pending callback remains responsible for completion.
-window.resumeInvoicePdfAfterFolderSelection = function(invoiceHtml, phone, action) {
+window.resumeInvoicePdfAfterFolderSelection = function() {
     try {
-        if (action !== 'saveInvoicePdf' || !window.AndroidInterface ||
+        const invoiceHtml = window._pendingInvoiceArchiveHtml;
+        if (!invoiceHtml || !window.AndroidInterface ||
             typeof AndroidInterface.saveInvoicePdf !== 'function') {
-            window.handleAndroidResult(action || 'saveInvoicePdf', {
+            window.handleAndroidResult('saveInvoicePdf', {
                 success: false,
                 error: 'تعذر استئناف حفظ الفاتورة بعد اختيار المجلد'
             });
             return;
         }
-        const ack = JSON.parse(AndroidInterface.saveInvoicePdf(String(invoiceHtml || '')));
+        const ack = JSON.parse(AndroidInterface.saveInvoicePdf(String(invoiceHtml)));
         if (!ack.success && !ack.queued) {
             window.handleAndroidResult('saveInvoicePdf', {
                 success: false,
@@ -5641,7 +5645,7 @@ window.resumeInvoicePdfAfterFolderSelection = function(invoiceHtml, phone, actio
             error: error && error.message ? error.message : 'تعذر استئناف حفظ PDF'
         });
     }
-};
+}
 
 async function printReceipt() {
     try {
