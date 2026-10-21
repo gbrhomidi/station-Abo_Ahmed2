@@ -8426,24 +8426,36 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         picture.draw(canvas)
                         canvas.restore()
 
-                        // Reject blank captures rather than persisting a valid-looking empty PDF.
+                        // Reject a structurally valid but visually empty capture. Scan the
+                        // full coarse grid: a few antialiasing artifacts must not make a blank
+                        // page pass validation.
                         var visibleSamples = 0
+                        var totalSamples = 0
                         val sampleStep = maxOf(1, minOf(renderWidth, renderHeight) / 100)
                         val image = bitmap!!
                         var y = 0
-                        while (y < image.height && visibleSamples < 12) {
+                        while (y < image.height) {
                             var x = 0
-                            while (x < image.width && visibleSamples < 12) {
+                            while (x < image.width) {
                                 val pixel = image.getPixel(x, y)
                                 val r = android.graphics.Color.red(pixel)
                                 val g = android.graphics.Color.green(pixel)
                                 val b = android.graphics.Color.blue(pixel)
-                                if (r < 238 || g < 238 || b < 238) visibleSamples++
+                                totalSamples++
+                                val maxChannel = maxOf(r, g, b)
+                                val minChannel = minOf(r, g, b)
+                                // Count substantial ink or color, not near-white antialiasing noise.
+                                if (maxChannel < 232 || (maxChannel - minChannel) > 28) visibleSamples++
                                 x += sampleStep
                             }
                             y += sampleStep
                         }
-                        if (visibleSamples < 12) {
+                        val requiredVisibleSamples = maxOf(12, totalSamples / 200)
+                        DebugLogger.info(
+                            "InvoicePdfValidation",
+                            "capture=undefinedxundefined, visible=$visibleSamples/$totalSamples, required=$requiredVisibleSamples"
+                        )
+                        if (visibleSamples < requiredVisibleSamples) {
                             bitmap?.recycle()
                             bitmap = null
                             if (attempt < 3) {
@@ -8551,6 +8563,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         // some Android System WebView/OEM combinations.
                         settings.useWideViewPort = true
                         settings.loadWithOverviewMode = false
+                        // Use software composition for this temporary capture WebView. This is
+                        // not a guarantee by itself, so the bitmap is also content-validated below.
+                        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                        visibility = View.VISIBLE
                         alpha = 1f
                         translationY = 0f
                         isClickable = false
