@@ -12,9 +12,11 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfDocument
+import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -8108,6 +8110,76 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun saveInvoicePdf(invoiceHtml: String): String =
             processInvoicePdf(invoiceHtml, "", "saveInvoicePdf")
 
+        /** Share only the archived PDF for this exact invoice and station; never re-render here. */
+        @JavascriptInterface
+        fun shareSavedInvoicePdf(invoiceNumber: String, phone: String): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val normalizedPhone = phone.filter { it.isDigit() }
+            if (normalizedPhone.length !in 8..15) return errorResponse("رقم الهاتف غير صالح")
+            val number = invoiceNumber.trim()
+            if (number.isBlank()) return errorResponse("رقم الفاتورة غير متوفر")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val stationId = try { requireCurrentStationId(db, activity.currentUserId) }
+            catch (e: Exception) { return errorResponse(e.message ?: "تعذر تحديد المحطة الحالية") }
+            val safeName = InvoicePdfSupport.sanitizeInvoiceFileName(number)
+            if (safeName.isBlank()) return errorResponse("رقم الفاتورة غير صالح")
+            val source = File(activity.filesDir, "invoices/station_" + stationId + "/" + safeName + ".pdf")
+            if (!InvoicePdfSupport.isPdfVisuallyNonBlank(source)) {
+                return errorResponse("لا توجد نسخة PDF محفوظة وصالحة لهذه الفاتورة؛ استخدم الطباعة الاحتياطية")
+            }
+            return try {
+                val prefs = activity.getSharedPreferences("invoice_pdf_archive", Context.MODE_PRIVATE)
+                val treeText = prefs.getString("tree_uri", null)
+                    ?: throw IllegalStateException("مجلد Invoices غير محدد؛ استخدم الطباعة الاحتياطية أو احفظ الفاتورة أولاً")
+                val treeUri = Uri.parse(treeText)
+                val rootId = android.provider.DocumentsContract.getTreeDocumentId(treeUri)
+                val parent = android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, rootId)
+                val children = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, rootId)
+                var oldUri: Uri? = null
+                activity.contentResolver.query(children,
+                    arrayOf(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                        android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                    null, null, null)?.use { cursor ->
+                    val idCol = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                    val nameCol = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                    while (cursor.moveToNext()) {
+                        if (idCol >= 0 && nameCol >= 0 && cursor.getString(nameCol) == source.name) {
+                            oldUri = android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, cursor.getString(idCol))
+                            break
+                        }
+                    }
+                }
+                val destination = oldUri?.also { activity.contentResolver.delete(it, null, null) }
+                    ?: android.provider.DocumentsContract.createDocument(
+                        activity.contentResolver, parent, "application/pdf", source.name
+                    ) ?: throw IllegalStateException("تعذر إنشاء ملف الفاتورة في مجلد Invoices")
+                activity.contentResolver.openOutputStream(destination, "wt")?.use { output ->
+                    source.inputStream().use { it.copyTo(output) }
+                    output.flush()
+                } ?: throw IllegalStateException("تعذر الكتابة في مجلد Invoices")
+                val packageName = listOf("com.whatsapp", "com.whatsapp.w4b").firstOrNull {
+                    activity.packageManager.getLaunchIntentForPackage(it) != null
+                } ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/pdf"
+                    putExtra(Intent.EXTRA_STREAM, destination)
+                    putExtra("jid", normalizedPhone + "@s.whatsapp.net")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    clipData = android.content.ClipData.newRawUri("invoice-pdf", destination)
+                    setPackage(packageName)
+                }
+                if (intent.resolveActivity(activity.packageManager) == null) {
+                    throw IllegalStateException("WhatsApp لا يقبل مشاركة مستند PDF على هذا الجهاز")
+                }
+                activity.runOnUiThread { activity.startActivity(intent) }
+                JSONObject().put("success", true).put("file_name", source.name)
+                    .put("bytes", source.length()).put("message", "تم فتح واتساب بالنسخة المحفوظة من الفاتورة").toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("ShareSavedInvoicePdf", e)
+                errorResponse(e.message ?: "تعذرت مشاركة نسخة PDF المحفوظة")
+            }
+        }
+
         /**
          * Stores a station-scoped PDF using the invoice HTML rendered by WebView.
          * The committed sale remains independent from PDF generation and sharing.
@@ -8137,7 +8209,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 invoiceNumberRaw, android.text.Html.FROM_HTML_MODE_LEGACY
             ).toString().trim()
             if (invoiceNumber.isBlank()) return errorResponse("رقم الفاتورة في المستند فارغ")
-            val safeNumber = invoiceNumber.replace(Regex("[^A-Za-z0-9_-]"), "_").take(80)
+            val safeNumber = InvoicePdfSupport.sanitizeInvoiceFileName(invoiceNumber)
             if (safeNumber.isBlank()) return errorResponse("رقم الفاتورة غير صالح")
 
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
@@ -8470,23 +8542,30 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         persistBitmapAsPdf(image, outputFile)
                         bitmap?.recycle()
                         bitmap = null
-                        if (!isValidPdf(outputFile)) {
-                            throw IllegalStateException("تعذر التحقق من ملف PDF الناتج")
+                        if (!isValidPdf(outputFile) || !InvoicePdfSupport.isPdfVisuallyNonBlank(outputFile)) {
+                            throw IllegalStateException("ملف PDF الناتج تالف أو يحتوي على صفحة فارغة")
                         }
-
-                        // Replace older files even when their PDF structure looks valid:
-                        // a previous version may have archived a blank page.
-                        if (pdfFile.exists() && !pdfFile.delete()) {
-                            throw IllegalStateException("تعذر استبدال ملف PDF السابق")
+                        val backupFile = File(invoiceDir, ".$safeNumber.previous.pdf")
+                        if (backupFile.exists() && !backupFile.delete()) {
+                            throw IllegalStateException("تعذر تنظيف نسخة PDF الاحتياطية السابقة")
                         }
-                        if (!outputFile.renameTo(pdfFile)) {
-                            outputFile.copyTo(pdfFile, overwrite = true)
-                            if (outputFile.exists() && !outputFile.delete()) {
-                                DebugLogger.warn("InvoicePdfRender", "Could not remove temporary PDF after copy")
+                        val hadPrevious = pdfFile.exists()
+                        if (hadPrevious && !pdfFile.renameTo(backupFile)) {
+                            throw IllegalStateException("تعذر حماية نسخة PDF السابقة قبل الاستبدال")
+                        }
+                        try {
+                            if (!outputFile.renameTo(pdfFile)) {
+                                outputFile.copyTo(pdfFile, overwrite = false)
+                                if (outputFile.exists()) outputFile.delete()
                             }
-                        }
-                        if (!isValidPdf(pdfFile)) {
-                            throw IllegalStateException("تعذر التحقق من ملف PDF النهائي")
+                            if (!isValidPdf(pdfFile) || !InvoicePdfSupport.isPdfVisuallyNonBlank(pdfFile)) {
+                                throw IllegalStateException("ملف PDF النهائي تالف أو يحتوي على صفحة فارغة")
+                            }
+                            if (backupFile.exists()) backupFile.delete()
+                        } catch (replaceError: Exception) {
+                            if (pdfFile.exists()) pdfFile.delete()
+                            if (backupFile.exists()) backupFile.renameTo(pdfFile)
+                            throw replaceError
                         }
 
                         val selectedUri = copyPdfToSelectedFolder(pdfFile)
@@ -8543,10 +8622,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     // Always regenerate from the current invoice HTML; replace the archive only
                     // after the new rendering passes the non-blank bitmap check.
 
-                    if (pdfFile.exists() && !pdfFile.delete()) {
-                        throw IllegalStateException("ملف PDF السابق تالف وتعذر استبداله")
-                    }
-
+                    // Preserve any previous archive until a replacement passes all-page validation.
                     val root = activity.findViewById<ViewGroup>(android.R.id.content)
                         ?: throw IllegalStateException("حاوية الجذر غير متاحة")
                     capture = WebView(activity).apply {
