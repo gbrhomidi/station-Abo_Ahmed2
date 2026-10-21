@@ -8484,48 +8484,57 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         bitmap = Bitmap.createBitmap(renderWidth, renderHeight, config)
                         val canvas = android.graphics.Canvas(bitmap!!)
                         canvas.drawColor(android.graphics.Color.WHITE)
-                        // Replay the whole laid-out WebView picture into the PDF source bitmap.
-                        // Direct WebView.draw(Canvas) can produce a white surface on some OEMs.
-                        val picture = view.capturePicture()
-                        if (picture.width <= 0 || picture.height <= 0) {
-                            throw IllegalStateException("لم ينتج عارض الفاتورة صورة قابلة للرسم")
-                        }
-                        canvas.save()
-                        canvas.scale(
-                            renderWidth.toFloat() / picture.width.toFloat(),
-                            renderHeight.toFloat() / picture.height.toFloat()
-                        )
-                        picture.draw(canvas)
-                        canvas.restore()
-
-                        // Reject a structurally valid but visually empty capture. Scan the
-                        // full coarse grid: a few antialiasing artifacts must not make a blank
-                        // page pass validation.
-                        var visibleSamples = 0
-                        var totalSamples = 0
-                        val sampleStep = maxOf(1, minOf(renderWidth, renderHeight) / 100)
-                        val image = bitmap!!
-                        var y = 0
-                        while (y < image.height) {
-                            var x = 0
-                            while (x < image.width) {
-                                val pixel = image.getPixel(x, y)
-                                val r = android.graphics.Color.red(pixel)
-                                val g = android.graphics.Color.green(pixel)
-                                val b = android.graphics.Color.blue(pixel)
-                                totalSamples++
-                                val maxChannel = maxOf(r, g, b)
-                                val minChannel = minOf(r, g, b)
-                                // Count substantial ink or color, not near-white antialiasing noise.
-                                if (maxChannel < 232 || (maxChannel - minChannel) > 28) visibleSamples++
-                                x += sampleStep
+                        // OEM WebView implementations differ: capturePicture() may replay a
+                        // blank picture even when the live WebView has painted correctly.
+                        // Try the live view first, inspect its pixels, then retry the legacy
+                        // Picture path only if the first capture is genuinely blank.
+                        fun visibleInkCount(image: Bitmap): Pair<Int, Int> {
+                            var visible = 0
+                            var total = 0
+                            val step = maxOf(1, minOf(image.width, image.height) / 100)
+                            var y = 0
+                            while (y < image.height) {
+                                var x = 0
+                                while (x < image.width) {
+                                    val pixel = image.getPixel(x, y)
+                                    val r = android.graphics.Color.red(pixel)
+                                    val g = android.graphics.Color.green(pixel)
+                                    val b = android.graphics.Color.blue(pixel)
+                                    total++
+                                    val maxChannel = maxOf(r, g, b)
+                                    val minChannel = minOf(r, g, b)
+                                    if (maxChannel < 232 || (maxChannel - minChannel) > 28) visible++
+                                    x += step
+                                }
+                                y += step
                             }
-                            y += sampleStep
+                            return visible to total
                         }
+
+                        view.draw(canvas)
+                        var (visibleSamples, totalSamples) = visibleInkCount(bitmap!!)
                         val requiredVisibleSamples = maxOf(12, totalSamples / 200)
+                        var captureMethod = "webview-draw"
+                        if (visibleSamples < requiredVisibleSamples) {
+                            canvas.drawColor(android.graphics.Color.WHITE)
+                            val picture = view.capturePicture()
+                            if (picture.width > 0 && picture.height > 0) {
+                                canvas.save()
+                                canvas.scale(
+                                    renderWidth.toFloat() / picture.width.toFloat(),
+                                    renderHeight.toFloat() / picture.height.toFloat()
+                                )
+                                picture.draw(canvas)
+                                canvas.restore()
+                                val fallbackCounts = visibleInkCount(bitmap!!)
+                                visibleSamples = fallbackCounts.first
+                                totalSamples = fallbackCounts.second
+                                captureMethod = "capturePicture-fallback"
+                            }
+                        }
                         DebugLogger.info(
                             "InvoicePdfValidation",
-                            "capture=${image.width}x${image.height}, visible=$visibleSamples/$totalSamples, required=$requiredVisibleSamples"
+                            "method=$captureMethod capture=${bitmap!!.width}x${bitmap!!.height}, visible=$visibleSamples/$totalSamples, required=$requiredVisibleSamples"
                         )
                         if (visibleSamples < requiredVisibleSamples) {
                             bitmap?.recycle()
