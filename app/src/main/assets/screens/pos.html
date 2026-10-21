@@ -6055,6 +6055,24 @@ function buildCaptureDocument(invoiceSectionOverride) {
     #posInvoice .invoice-items td { font-size: 11px !important; padding: 8px 5px !important; }
 </style>`;
 
+    // Carry the authoritative invoice number as document metadata. Kotlin must not
+    // depend on one specific CSS class to identify a financial document.
+    const invoiceNumber = String(
+        captured.dataset.invoiceNumber ||
+        captured.querySelector('.invoice-number-value')?.textContent ||
+        document.getElementById('invoiceNumber')?.value ||
+        lastInvoiceNumber ||
+        ''
+    ).trim();
+    if (!invoiceNumber) {
+        throw new Error('رقم الفاتورة غير متوفر في بيانات الفاتورة');
+    }
+    const invoiceNumberAttribute = invoiceNumber
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    const invoiceNumberMeta = '<meta name="invoice-number" content="' + invoiceNumberAttribute + '">';
     const viewportMeta = '<meta name="viewport" content="width=794, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">';
 
     const invoiceHtml =
@@ -6062,6 +6080,7 @@ function buildCaptureDocument(invoiceSectionOverride) {
         '<html lang="ar" dir="rtl">' +
         '<head>' +
             '<meta charset="UTF-8">' +
+            invoiceNumberMeta +
             viewportMeta +
             invoiceStyleSanitized +
             overrideStyle +
@@ -6091,14 +6110,15 @@ function buildCaptureDocument(invoiceSectionOverride) {
         console.warn('[WhatsApp Capture] HTML too large:', approxBytes, 'bytes; stripping logo to fit bridge limit');
         const logoImg = captured.querySelector('.invoice-logo-circle img');
         if (logoImg) logoImg.remove();
-        return buildCaptureDocumentWithoutLogo(captured, invoiceStyleSanitized, overrideStyle);
+        return buildCaptureDocumentWithoutLogo(captured, invoiceStyleSanitized, overrideStyle, invoiceNumberMeta);
     }
 
     return { html: invoiceHtml, diagnostics: { rowsCount, itemsCount, hasLogo, logoSrcLen, approxBytes } };
 }
 
-function buildCaptureDocumentWithoutLogo(captured, sanitizedStyle, overrideStyle) {
+function buildCaptureDocumentWithoutLogo(captured, sanitizedStyle, overrideStyle, invoiceNumberMeta) {
     const html = '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">' +
+        invoiceNumberMeta +
         '<meta name="viewport" content="width=794, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">' +
         sanitizedStyle + overrideStyle + '</head>' +
         '<body style="margin:0;padding:0;background:#ffffff;width:794px;min-height:1123px;">' +

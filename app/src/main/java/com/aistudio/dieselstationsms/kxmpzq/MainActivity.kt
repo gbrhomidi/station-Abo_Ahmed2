@@ -8108,10 +8108,22 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 return errorResponse("رقم الهاتف غير صالح. استخدم الرقم الدولي بدون مسافات أو رموز.")
             }
 
-            val invoiceNumber = Regex("invoice-number-value[^>]*>([^<]+)<", RegexOption.IGNORE_CASE)
-                .find(invoiceHtml)?.groupValues?.getOrNull(1)?.trim()
-                ?.takeIf { it.isNotBlank() }
-                ?: return errorResponse("تعذر تحديد رقم الفاتورة من المستند")
+            // Extract the invoice identity from explicit metadata first. Keep
+            // backwards-compatible fallbacks for older HTML snapshots and DOM markup.
+            val invoiceNumberPatterns = listOf(
+                Regex("""<meta[^>]*name=["']invoice-number["'][^>]*content=["']([^"']+)["'][^>]*>""", RegexOption.IGNORE_CASE),
+                Regex("""data-invoice-number\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE),
+                Regex("""class=["'][^"']*\binvoice-number-value\b[^"']*["'][^>]*>\s*([^<]+)\s*</""", RegexOption.IGNORE_CASE),
+                Regex("""id=["']invoiceNumber["'][^>]*value=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+            )
+            val invoiceNumberRaw = invoiceNumberPatterns.asSequence()
+                .mapNotNull { pattern -> pattern.find(invoiceHtml)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() } }
+                .firstOrNull()
+                ?: return errorResponse("تعذر تحديد رقم الفاتورة من المستند: لا توجد بيانات رقم الفاتورة")
+            val invoiceNumber = android.text.Html.fromHtml(
+                invoiceNumberRaw, android.text.Html.FROM_HTML_MODE_LEGACY
+            ).toString().trim()
+            if (invoiceNumber.isBlank()) return errorResponse("رقم الفاتورة في المستند فارغ")
             val safeNumber = invoiceNumber.replace(Regex("[^A-Za-z0-9_-]"), "_").take(80)
             if (safeNumber.isBlank()) return errorResponse("رقم الفاتورة غير صالح")
 
