@@ -8128,14 +8128,32 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val pdfFile = File(invoiceDir, safeNumber + ".pdf")
 
             val folderPrefs = activity.getSharedPreferences("invoice_pdf_archive", Context.MODE_PRIVATE)
-            if (folderPrefs.getString("tree_uri", null).isNullOrBlank()) {
+            val configuredTreeUri = folderPrefs.getString("tree_uri", null)
+            val folderIsAccessible = try {
+                if (configuredTreeUri.isNullOrBlank()) false else {
+                    val tree = Uri.parse(configuredTreeUri)
+                    val rootDocument = android.provider.DocumentsContract.buildDocumentUriUsingTree(
+                        tree, android.provider.DocumentsContract.getTreeDocumentId(tree)
+                    )
+                    activity.contentResolver.query(
+                        rootDocument,
+                        arrayOf(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID),
+                        null, null, null
+                    )?.use { it.moveToFirst() } ?: false
+                }
+            } catch (e: Exception) {
+                DebugLogger.warn("InvoicePdfArchive", "Saved folder URI is no longer accessible: ${e.message}")
+                false
+            }
+            if (!folderIsAccessible) {
+                folderPrefs.edit().remove("tree_uri").apply()
                 activity.runOnUiThread {
                     pendingInvoiceFolderHtml = invoiceHtml
                     pendingInvoiceFolderPhone = phone
                     pendingInvoiceFolderAction = callbackAction
                     android.app.AlertDialog.Builder(activity)
                         .setTitle("مجلد حفظ الفواتير")
-                        .setMessage("يرجى تحديد مجلد حفظ فواتير PDF. سيتم حفظ اختيارك واستخدامه تلقائياً في عمليات البيع التالية.")
+                        .setMessage("يرجى تحديد مجلد Invoices لحفظ فواتير PDF. يمكنك إنشاء المجلد من مدير الملفات ثم اختياره. سيتم حفظ اختيارك واستخدامه تلقائياً في عمليات البيع التالية.")
                         .setPositiveButton("تحديد") { _, _ ->
                             val picker = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or
