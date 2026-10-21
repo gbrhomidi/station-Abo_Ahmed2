@@ -8453,7 +8453,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         val requiredVisibleSamples = maxOf(12, totalSamples / 200)
                         DebugLogger.info(
                             "InvoicePdfValidation",
-                            "capture=undefinedxundefined, visible=$visibleSamples/$totalSamples, required=$requiredVisibleSamples"
+                            "capture=\${image.width}x\${image.height}, visible=$visibleSamples/$totalSamples, required=$requiredVisibleSamples"
                         )
                         if (visibleSamples < requiredVisibleSamples) {
                             bitmap?.recycle()
