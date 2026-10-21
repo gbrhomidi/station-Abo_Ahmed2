@@ -8462,13 +8462,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             throw IllegalStateException("تعذر التحقق من ملف PDF الناتج")
                         }
 
-                        if (!pdfFile.exists() || !isValidPdf(pdfFile)) {
-                            if (pdfFile.exists() && !pdfFile.delete()) {
-                                throw IllegalStateException("تعذر استبدال ملف PDF السابق")
-                            }
-                            if (!outputFile.renameTo(pdfFile)) {
-                                outputFile.copyTo(pdfFile, overwrite = true)
-                                outputFile.delete()
+                        // Replace older files even when their PDF structure looks valid:
+                        // a previous version may have archived a blank page.
+                        if (pdfFile.exists() && !pdfFile.delete()) {
+                            throw IllegalStateException("تعذر استبدال ملف PDF السابق")
+                        }
+                        if (!outputFile.renameTo(pdfFile)) {
+                            outputFile.copyTo(pdfFile, overwrite = true)
+                            if (outputFile.exists() && !outputFile.delete()) {
+                                DebugLogger.warn("InvoicePdfRender", "Could not remove temporary PDF after copy")
                             }
                         }
                         if (!isValidPdf(pdfFile)) {
@@ -8524,40 +8526,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     if (activity.isFinishing || activity.isDestroyed.get()) {
                         throw IllegalStateException("تعذر إنشاء PDF لأن الشاشة أُغلقت")
                     }
-                    if (isValidPdf(pdfFile)) {
-                        try {
-                            val selectedUri = copyPdfToSelectedFolder(pdfFile)
-                            if (shouldShare) {
-                                // Share the exact document in the user-selected archive folder.
-                                val waPackage = listOf("com.whatsapp", "com.whatsapp.w4b")
-                                    .firstOrNull { pkg -> activity.packageManager.getLaunchIntentForPackage(pkg) != null }
-                                    ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "application/pdf"
-                                    putExtra(Intent.EXTRA_STREAM, selectedUri)
-                                    putExtra("jid", normalizedPhone + "@s.whatsapp.net")
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    clipData = android.content.ClipData.newRawUri("invoice-pdf", selectedUri)
-                                    setPackage(waPackage)
-                                }
-                                if (intent.resolveActivity(activity.packageManager) == null) {
-                                    throw IllegalStateException("WhatsApp مثبت لكنه لا يقبل مشاركة مستند PDF")
-                                }
-                                activity.startActivity(intent)
-                            }
-                            finish(JSONObject().apply {
-                                put("success", true)
-                                put("path", selectedUri.toString())
-                                put("file_name", pdfFile.name)
-                                put("bytes", pdfFile.length())
-                                put("mime_type", "application/pdf")
-                                put("message", if (shouldShare) "تم حفظ PDF وفتح واتساب" else "تم استخدام ملف PDF المحفوظ")
-                            })
-                        } catch (e: Exception) {
-                            finish(JSONObject().put("success", false).put("error", e.message ?: "تعذر حفظ أو مشاركة الفاتورة"))
-                        }
-                        return@runOnUiThread
-                    }
+                    // Never trust an archived PDF based only on its header and EOF marker.
+                    // Earlier renderers could save a structurally valid but visually blank PDF.
+                    // Always regenerate from the current invoice HTML; replace the archive only
+                    // after the new rendering passes the non-blank bitmap check.
+
                     if (pdfFile.exists() && !pdfFile.delete()) {
                         throw IllegalStateException("ملف PDF السابق تالف وتعذر استبداله")
                     }
