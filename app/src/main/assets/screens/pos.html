@@ -5463,7 +5463,7 @@ async function loadCurrentStationLogo(forceReload) {
     return stationLogoLoadPromise;
 }
 
-function renderSalesInvoice(invoice) {
+function renderSalesInvoice(invoice, targetSection) {
     const items = Array.isArray(invoice.items) ? invoice.items : [];
     const customerName = invoice.customer_name || 'بيع نقدي';
     const payment = invoice.payment_type || 'cash';
@@ -5496,7 +5496,7 @@ function renderSalesInvoice(invoice) {
     const paid = Number(invoice.amount_paid ?? 0);
     const remaining = Number(invoice.remaining_amount ?? Math.max(0, net - paid));
 
-    const section = document.getElementById('posInvoice');
+    const section = targetSection || document.getElementById('posInvoice');
     section.innerHTML = `
       <div class="invoice-header">
         <div class="invoice-logo-circle">
@@ -5578,9 +5578,14 @@ async function persistInvoicePdfAfterSale(invoiceNumber) {
         if (!response || !response.success) throw new Error(response?.message || response?.error || 'تعذر استرجاع الفاتورة المرحلة');
         const invoice = response.data || response;
         await loadCurrentStationLogo();
-        renderSalesInvoice(invoice);
+        // Render into a detached node so background archiving cannot replace the
+        // currently displayed invoice if the cashier starts another sale.
+        const archiveSection = document.createElement('section');
+        archiveSection.id = 'posInvoice';
+        archiveSection.classList.add('pos-invoice');
+        renderSalesInvoice(invoice, archiveSection);
         await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 450)));
-        const capture = buildCaptureDocument();
+        const capture = buildCaptureDocument(archiveSection);
         const saveResult = await new Promise((resolve, reject) => {
             let timeoutId = setTimeout(() => {
                 clearPendingCall('saveInvoicePdf');
@@ -5928,8 +5933,8 @@ async function retryWhatsappShare() {
     await sendWhatsappInvoice();
 }
 
-function buildCaptureDocument() {
-    const invoiceSection = document.getElementById('posInvoice');
+function buildCaptureDocument(invoiceSectionOverride) {
+    const invoiceSection = invoiceSectionOverride || document.getElementById('posInvoice');
     if (!invoiceSection || !invoiceSection.innerHTML.trim()) {
         throw new Error('تصميم الفاتورة غير جاهز للإرسال');
     }
