@@ -4331,6 +4331,7 @@ function apiCall(action, params) {
             case 'salesReport': raw = AndroidInterface.salesReport(); break;
             case 'printReceipt': raw = AndroidInterface.printCurrentPage(); break;
             case 'shareInvoiceJpg': raw = AndroidInterface.shareInvoiceJpg(String(p.invoice_html || ''), String(p.phone || '')); break;
+            case 'saveInvoicePdf': raw = AndroidInterface.saveInvoicePdf(String(p.invoice_html || '')); break;
             case 'printSalesReport': raw = AndroidInterface.printCurrentPageWithTitle('تقرير المبيعات'); break;
             default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
         }
@@ -5399,6 +5400,8 @@ function completeSale() {
                 const saleSms = sale.sms || {};
                 showToast('تم ترحيل البيع وتحديث المخزون فعلياً' +
                     (isCredit ? (saleSms.queued ? ' — تم وضع SMS في طابور الإرسال' : ' — تعذر تجهيز SMS: ' + (saleSms.reason || 'غير معروف')) : ''), 'success');
+                // Archive the already-committed invoice independently; PDF errors must not repeat the sale.
+                void persistInvoicePdfAfterSale(lastInvoiceNumber);
                 resetForm();
             } else { showToast(sale.error || sale.message || data.error || data.message || 'تعذر ترحيل الفاتورة؛ لم يُخصم المخزون', 'error'); }
         })
@@ -5566,6 +5569,45 @@ async function loadInvoiceForLastSale() {
     const response = await apiCall('retrieveInvoice', { invoice_number: invoiceNumber });
     if (!response.success) throw new Error(response.message || response.error || 'تعذر تحميل الفاتورة من SQLite');
     return response.data || response;
+}
+
+async function persistInvoicePdfAfterSale(invoiceNumber) {
+    if (!invoiceNumber || !window.AndroidInterface || typeof AndroidInterface.saveInvoicePdf !== 'function') return;
+    try {
+        const response = await apiCall('retrieveInvoice', { invoice_number: invoiceNumber });
+        if (!response || !response.success) throw new Error(response?.message || response?.error || 'تعذر استرجاع الفاتورة المرحلة');
+        const invoice = response.data || response;
+        await loadCurrentStationLogo();
+        renderSalesInvoice(invoice);
+        await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 450)));
+        const capture = buildCaptureDocument();
+        const saveResult = await new Promise((resolve, reject) => {
+            let timeoutId = setTimeout(() => {
+                clearPendingCall('saveInvoicePdf');
+                reject(new Error('انتهت مهلة حفظ PDF في الأرشيف'));
+            }, 45000);
+            registerPendingCall('saveInvoicePdf', result => {
+                if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+                resolve(result);
+            });
+            try {
+                const ack = JSON.parse(AndroidInterface.saveInvoicePdf(capture.html));
+                if (!ack.success && !ack.queued) {
+                    clearPendingCall('saveInvoicePdf');
+                    if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+                    reject(new Error(ack.error || ack.message || 'تعذر بدء حفظ PDF'));
+                }
+            } catch (error) {
+                clearPendingCall('saveInvoicePdf');
+                if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+                reject(error);
+            }
+        });
+        if (!saveResult || !saveResult.success) throw new Error(saveResult?.error || 'فشل حفظ PDF');
+        console.info('[Invoice PDF Archive] Saved', invoiceNumber, saveResult.file_name, saveResult.bytes);
+    } catch (error) {
+        console.warn('[Invoice PDF Archive] Deferred; sale remains committed:', invoiceNumber, error);
+    }
 }
 
 async function printReceipt() {
@@ -6051,7 +6093,7 @@ async function sendWhatsappInvoice() {
     let timeoutId = null;
     try {
         if (!window.AndroidInterface || typeof AndroidInterface.shareInvoiceJpg !== 'function') {
-            throw new Error('مشاركة الفاتورة المصورة متاحة من داخل تطبيق Android فقط');
+            throw new Error('مشاركة فاتورة PDF متاحة من داخل تطبيق Android فقط');
         }
 
         const capture = buildCaptureDocument();
@@ -6065,8 +6107,8 @@ async function sendWhatsappInvoice() {
 
             timeoutId = setTimeout(() => {
                 clearPendingCall('shareInvoiceJpg');
-                reject(new Error('انتهت مهلة تحويل الفاتورة إلى صورة (35 ثانية)'));
-            }, 35000);
+                reject(new Error('انتهت مهلة تجهيز ملف PDF (45 ثانية)'));
+            }, 45000);
 
             try {
                 const acknowledgement = JSON.parse(
@@ -6084,7 +6126,7 @@ async function sendWhatsappInvoice() {
             }
         });
 
-        showToast('جاري تجهيز صورة الفاتورة...', 'info');
+        showToast('جاري تجهيز ملف PDF للفاتورة...', 'info');
         const shareResult = await resultPromise;
 
         if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
@@ -6099,12 +6141,12 @@ async function sendWhatsappInvoice() {
         if (isFailure) {
             _lastShareAttemptFailed = true;
             if (isBlank) {
-                showBlankWarning('تعذر تحويل الفاتورة إلى صورة (صورة فارغة). قد تكون هذه مشكلة في جهازك أو في WebView. يرجى إعادة المحاولة أو استخدام زر الطباعة كبديل.');
+                showBlankWarning('تعذر إنشاء ملف PDF صالح. يمكنك إعادة المحاولة أو استخدام زر الطباعة كبديل.');
             } else {
-                showBlankWarning(shareResult?.error || 'فشل تحويل الفاتورة إلى صورة');
+                showBlankWarning(shareResult?.error || 'فشل إنشاء ملف PDF للفاتورة');
             }
             showRetryBtn();
-            showWhatsappValidation('تعذر إرسال الصورة عبر واتساب. يمكنك إعادة المحاولة أو استخدام "طباعة".');
+            showWhatsappValidation('تعذر مشاركة ملف PDF عبر واتساب. يمكنك إعادة المحاولة أو استخدام "طباعة".');
             console.error('[WhatsApp Share Failed]', shareResult);
             return;
         }
@@ -6112,14 +6154,14 @@ async function sendWhatsappInvoice() {
         _lastShareAttemptFailed = false;
         hideBlankWarning();
         hideRetryBtn();
-        showToast('تم فتح واتساب مع الفاتورة كصورة كاملة', 'success');
+        showToast('تم فتح واتساب مع ملف PDF للفاتورة', 'success');
         closeWhatsappShare();
     } catch (error) {
-        console.error('WhatsApp image share failed:', error);
+        console.error('WhatsApp PDF share failed:', error);
         _lastShareAttemptFailed = true;
-        showBlankWarning(error.message || 'تعذر إرسال صورة الفاتورة');
+        showBlankWarning(error.message || 'تعذر مشاركة ملف PDF للفاتورة');
         showRetryBtn();
-        showWhatsappValidation(error.message || 'تعذر إرسال صورة الفاتورة');
+        showWhatsappValidation(error.message || 'تعذر مشاركة ملف PDF للفاتورة');
     } finally {
         if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
         clearPendingCall('shareInvoiceJpg');

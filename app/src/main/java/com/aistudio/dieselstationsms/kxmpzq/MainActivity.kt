@@ -63,6 +63,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
+import java.io.FileInputStream
 import java.io.InputStreamReader
 import java.lang.ref.WeakReference
 import java.security.SecureRandom
@@ -8050,212 +8051,150 @@ fun getDashboardStats(jsonData: String = "{}"): String {
          *  7) نقوم بتنظيف HTML الوارد من DOCTYPE/HTML/HEAD/BODY المتكررة قبل التغليف.
          */
         @JavascriptInterface
-        fun shareInvoiceJpg(invoiceHtml: String, phone: String = ""): String {
+        fun shareInvoiceJpg(invoiceHtml: String, phone: String = ""): String =
+            processInvoicePdf(invoiceHtml, phone, "shareInvoiceJpg")
+
+        @JavascriptInterface
+        fun saveInvoicePdf(invoiceHtml: String): String =
+            processInvoicePdf(invoiceHtml, "", "saveInvoicePdf")
+
+        /**
+         * Saves a station-scoped PDF through Android's HTML print renderer.
+         * Reuses an existing valid PDF; this operation never repeats the sale transaction.
+         */
+        private fun processInvoicePdf(invoiceHtml: String, phone: String, callbackAction: String): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             if (invoiceHtml.isBlank()) return errorResponse("محتوى الفاتورة غير متوفر")
+            val shouldShare = callbackAction == "shareInvoiceJpg"
             val normalizedPhone = phone.filter { it.isDigit() }
-            if (normalizedPhone.length !in 8..15) {
+            if (shouldShare && normalizedPhone.length !in 8..15) {
                 return errorResponse("رقم الهاتف غير صالح. استخدم الرقم الدولي بدون مسافات أو رموز.")
             }
 
-            val invoiceNumber = Regex("invoice-number-value[^>]*>([^<]+)<")
-                .find(invoiceHtml)
-                ?.groupValues?.getOrNull(1)
-                ?.trim()
+            val invoiceNumber = Regex("invoice-number-value[^>]*>([^<]+)<", RegexOption.IGNORE_CASE)
+                .find(invoiceHtml)?.groupValues?.getOrNull(1)?.trim()
                 ?.takeIf { it.isNotBlank() }
-                ?: "invoice_${System.currentTimeMillis()}"
-            val safeNumber = invoiceNumber
-                .replace(Regex("[^A-Za-z0-9_\\-]"), "_")
-                .take(80)
+                ?: return errorResponse("تعذر تحديد رقم الفاتورة من المستند")
+            val safeNumber = invoiceNumber.replace(Regex("[^A-Za-z0-9_-]"), "_").take(80)
+            if (safeNumber.isBlank()) return errorResponse("رقم الفاتورة غير صالح")
 
-            val widthPx = 794
-            val maxHeightPx = 12000
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val stationId = try {
+                requireCurrentStationId(db, activity.currentUserId)
+            } catch (e: Exception) {
+                return errorResponse(e.message ?: "تعذر تحديد المحطة الحالية")
+            }
+            val invoiceDir = File(activity.filesDir, "invoices/station_" + stationId)
+            if (!invoiceDir.exists() && !invoiceDir.mkdirs()) {
+                return errorResponse("تعذر إنشاء مجلد أرشيف الفواتير")
+            }
+            val pdfFile = File(invoiceDir, safeNumber + ".pdf")
 
-            // لا تنتظر النتيجة داخل دالة JavascriptInterface؛ ذلك يجمّد خيط WebView
-            // ويمنع runOnUiThread من تنفيذ عملية الرسم. يتم الإبلاغ بالنتيجة لاحقاً.
             activity.runOnUiThread {
                 var capture: WebView? = null
+                var tempHtml: File? = null
+                var tempPdf: File? = null
+                var completed = false
+                val mainHandler = Handler(Looper.getMainLooper())
 
-                fun finish(result: JSONObject) {
-                    activity.runOnUiThread {
-                        val callback = "window.handleAndroidResult('shareInvoiceJpg', ${JSONObject.quote(result.toString())})"
-                        activity.webView?.evaluateJavascript(callback, null)
-                    }
-                }
-
-                fun detachCapture() {
+                fun cleanup() {
                     runCatching {
-                        capture?.let {
-                            (it.parent as? ViewGroup)?.removeView(it)
-                            it.stopLoading()
-                            it.destroy()
+                        capture?.let { view ->
+                            (view.parent as? ViewGroup)?.removeView(view)
+                            view.stopLoading()
+                            view.destroy()
                         }
                     }
                     capture = null
+                    runCatching { tempHtml?.delete() }
+                    runCatching { tempPdf?.delete() }
                 }
 
-                var completed = false
+                fun finish(result: JSONObject) {
+                    if (completed) return
+                    completed = true
+                    mainHandler.removeCallbacksAndMessages(null)
+                    cleanup()
+                    val callback = "window.handleAndroidResult(" +
+                        JSONObject.quote(callbackAction) + ", " +
+                        JSONObject.quote(result.toString()) + ")"
+                    activity.webView?.evaluateJavascript(callback, null)
+                }
 
-                /**
-                 * يرسم WebView إلى Bitmap ويحفظه كـPNG ثم يفتح واتساب.
-                 * يُنفَّذ دائمًا على UI thread وبعد تأخير يسمح بتحميل الصور/الخطوط.
-                 */
-                fun performRender(view: WebView, onComplete: (JSONObject) -> Unit, attempt: Int = 1) {
-                    var bitmap: Bitmap? = null
-                    try {
-                        // المحاولة الأولى: 794px مع ARGB_8888 (أفضل جودة ممكنة).
-                        view.measure(
-                            View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
-                            View.MeasureSpec.makeMeasureSpec(maxHeightPx, View.MeasureSpec.AT_MOST)
+                fun isValidPdf(file: File): Boolean {
+                    if (!file.isFile || file.length() < 8L) return false
+                    return try {
+                        FileInputStream(file).use { input ->
+                            val header = ByteArray(5)
+                            input.read(header) == 5 && String(header, Charsets.US_ASCII) == "%PDF-"
+                        }
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
+
+                fun shareSavedPdf(file: File): JSONObject {
+                    val uri = try {
+                        FileProvider.getUriForFile(
+                            activity,
+                            activity.packageName + ".fileprovider",
+                            file
                         )
-                        var measuredHeight = view.measuredHeight.coerceAtLeast(1123)
-                        view.layout(0, 0, widthPx, measuredHeight)
-                        var bitmapWidth = widthPx
-
-                        bitmap = try {
-                            Bitmap.createBitmap(bitmapWidth, measuredHeight, Bitmap.Config.ARGB_8888)
-                        } catch (oomFull: OutOfMemoryError) {
-                            DebugLogger.warn(
-                                "ShareInvoice",
-                                "OOM at ${bitmapWidth}x${measuredHeight}/ARGB_8888; falling back to 595px RGB_565"
-                            )
-                            bitmapWidth = 595
-                            view.measure(
-                                View.MeasureSpec.makeMeasureSpec(bitmapWidth, View.MeasureSpec.EXACTLY),
-                                View.MeasureSpec.makeMeasureSpec(maxHeightPx, View.MeasureSpec.AT_MOST)
-                            )
-                            measuredHeight = view.measuredHeight.coerceAtLeast(842)
-                            view.layout(0, 0, bitmapWidth, measuredHeight)
-                            try {
-                                Bitmap.createBitmap(bitmapWidth, measuredHeight, Bitmap.Config.RGB_565)
-                            } catch (oomFallback: OutOfMemoryError) {
-                                throw IllegalStateException("الذاكرة غير كافية لإنشاء صورة الفاتورة", oomFallback)
-                            }
-                        }
-
-                        val renderedBitmap = bitmap ?: throw IllegalStateException("تعذر إنشاء صورة الفاتورة")
-                        val canvas = android.graphics.Canvas(renderedBitmap)
-                        canvas.drawColor(android.graphics.Color.WHITE)
-                        view.draw(canvas)
-
-                        // A valid PNG may still contain only a white background. Reject it
-                        // before sharing, rather than reporting success for a blank invoice.
-                        var visibleContentSamples = 0
-                        for (y in 0 until measuredHeight step 4) {
-                            for (x in 0 until bitmapWidth step 4) {
-                                val pixel = renderedBitmap.getPixel(x, y)
-                                if (
-                                    android.graphics.Color.red(pixel) < 245 ||
-                                    android.graphics.Color.green(pixel) < 245 ||
-                                    android.graphics.Color.blue(pixel) < 245
-                                ) {
-                                    visibleContentSamples++
-                                    if (visibleContentSamples >= 25) break
-                                }
-                            }
-                            if (visibleContentSamples >= 25) break
-                        }
-                        check(visibleContentSamples >= 25) {
-                            "صورة الفاتورة فارغة أو لم يُرسم محتواها؛ لم تتم مشاركة صورة بيضاء"
-                        }
-
-                        val invoiceDir = File(activity.filesDir, "invoices").apply { mkdirs() }
-                        val imageFile = File(invoiceDir, "${safeNumber}.png")
-                        FileOutputStream(imageFile).use { stream ->
-                            check(renderedBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
-                                "فشل ضغط الصورة"
-                            }
-                            stream.flush()
-                        }
-                        require(imageFile.isFile && imageFile.length() > 0L) {
-                            "ملف الصورة الناتج فارغ"
-                        }
-
-                        val uri = try {
-                            FileProvider.getUriForFile(
-                                activity,
-                                "${activity.packageName}.fileprovider",
-                                imageFile
-                            )
-                        } catch (e: IllegalArgumentException) {
-                            throw IllegalStateException(
-                                "تعذر توليد URI للصورة؛ تحقق من إعداد file_paths.xml",
-                                e
-                            )
-                        }
-
-                        // نتحقق مبكرًا من وجود واتساب قبل بناء Intent، لأن resolveActivity()
-                        // بدون setPackage يُعيد أي تطبيق يقبل ACTION_SEND ولا يميّز واتساب.
-                        val waPackage = listOf("com.whatsapp", "com.whatsapp.w4b")
-                            .firstOrNull { pkg ->
-                                activity.packageManager.getLaunchIntentForPackage(pkg) != null
-                            } ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
-
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "image/png"
-                            putExtra(Intent.EXTRA_STREAM, uri)
-                            putExtra("jid", "${normalizedPhone}@s.whatsapp.net")
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            setPackage(waPackage)
-                            clipData = android.content.ClipData.newRawUri("invoice", uri)
-                        }
-                        if (shareIntent.resolveActivity(activity.packageManager) == null) {
-                            throw IllegalStateException("WhatsApp مثبت لكن لا يستجيب لطلبات المشاركة")
-                        }
-                        // startActivity مباشرة بدون createChooser لتجنب تجاهل setPackage،
-                        // ومن ثمّ يصل الـjid والرقم إلى واتساب بشكل صحيح.
-                        activity.startActivity(shareIntent)
-
-                        onComplete(JSONObject().apply {
-                            put("success", true)
-                            put("path", imageFile.absolutePath)
-                            put("file_name", imageFile.name)
-                            put("bytes", imageFile.length())
-                            put("phone", normalizedPhone)
-                            put("message", "تم تحويل الفاتورة كاملة إلى صورة PNG وفتح واتساب")
-                        })
-                    } catch (e: Exception) {
-                        val blankCapture = e.message?.contains(
-                            "صورة الفاتورة فارغة أو لم يُرسم محتواها"
-                        ) == true
-                        if (blankCapture && attempt < 2 && !completed) {
-                            // Retry once after WebView gets another layout/draw cycle. A
-                            // transient blank frame can occur even after onPageFinished and
-                            // the compositor callback, especially on older/OEM WebView builds.
-                            DebugLogger.warn(
-                                "ShareInvoiceRender",
-                                "Blank invoice bitmap on attempt $attempt; retrying after layout settle"
-                            )
-                            view.post {
-                                view.invalidate()
-                                view.requestLayout()
-                                view.postDelayed({
-                                    if (!completed && view.isAttachedToWindow) {
-                                        performRender(view, onComplete, attempt + 1)
-                                    } else if (!completed) {
-                                        onComplete(JSONObject().apply {
-                                            put("success", false)
-                                            put("error", "تعذر إعادة رسم الفاتورة بعد فشل المحاولة الأولى")
-                                        })
-                                    }
-                                }, 900L)
-                            }
-                        } else {
-                            DebugLogger.logException("ShareInvoiceRender", e)
-                            onComplete(JSONObject().apply {
-                                put("success", false)
-                                put("error", e.message ?: "فشل تحويل الفاتورة إلى صورة")
-                            })
-                        }
-                    } finally {
-                        runCatching { bitmap?.recycle() }
+                    } catch (e: IllegalArgumentException) {
+                        throw IllegalStateException("تعذر مشاركة PDF؛ تحقق من إعداد file_paths.xml", e)
+                    }
+                    val waPackage = listOf("com.whatsapp", "com.whatsapp.w4b")
+                        .firstOrNull { pkg ->
+                            activity.packageManager.getLaunchIntentForPackage(pkg) != null
+                        } ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/pdf"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra("jid", normalizedPhone + "@s.whatsapp.net")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        clipData = android.content.ClipData.newRawUri("invoice-pdf", uri)
+                        setPackage(waPackage)
+                    }
+                    if (intent.resolveActivity(activity.packageManager) == null) {
+                        throw IllegalStateException("WhatsApp مثبت لكنه لا يقبل مشاركة مستند PDF")
+                    }
+                    activity.startActivity(intent)
+                    return JSONObject().apply {
+                        put("success", true)
+                        put("path", file.absolutePath)
+                        put("file_name", file.name)
+                        put("bytes", file.length())
+                        put("mime_type", "application/pdf")
+                        put("phone", normalizedPhone)
+                        put("message", "تم حفظ الفاتورة PDF وفتح واتساب لمشاركتها")
                     }
                 }
 
                 try {
+                    if (activity.isFinishing || activity.isDestroyed.get()) {
+                        throw IllegalStateException("تعذر إنشاء PDF لأن الشاشة أُغلقت")
+                    }
+                    if (isValidPdf(pdfFile)) {
+                        try {
+                            finish(if (shouldShare) shareSavedPdf(pdfFile) else JSONObject().apply {
+                                put("success", true)
+                                put("path", pdfFile.absolutePath)
+                                put("file_name", pdfFile.name)
+                                put("bytes", pdfFile.length())
+                                put("mime_type", "application/pdf")
+                                put("message", "تم استخدام ملف PDF المحفوظ")
+                            })
+                        } catch (e: Exception) {
+                            finish(JSONObject().put("success", false).put("error", e.message ?: "تعذرت مشاركة الفاتورة"))
+                        }
+                        return@runOnUiThread
+                    }
+                    if (pdfFile.exists() && !pdfFile.delete()) {
+                        throw IllegalStateException("ملف PDF السابق تالف وتعذر استبداله")
+                    }
+
                     val root = activity.findViewById<ViewGroup>(android.R.id.content)
                         ?: throw IllegalStateException("حاوية الجذر غير متاحة")
-
                     capture = WebView(activity).apply {
                         settings.javaScriptEnabled = false
                         settings.domStorageEnabled = false
@@ -8263,53 +8202,122 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         settings.allowContentAccess = false
                         settings.loadsImagesAutomatically = true
                         setBackgroundColor(android.graphics.Color.WHITE)
-                        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                        // WebView مرئي (alpha=1) لكنه مُزاح خارج الشاشة؛ استخدام alpha=0f
-                        // قد يُنتج bitmap فارغًا على بعض إصدارات WebView من OEMs.
                         alpha = 1f
-                        // Keep the capture WebView inside the visible window bounds so Chromium
-                        // actually composites its page. A huge negative translation can cause
-                        // WebView to skip painting and return an all-white bitmap on some devices.
                         translationY = 0f
                         isClickable = false
                         isFocusable = false
                         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                     }
-                    // Place the capture view behind the app's existing content: it remains attached
-                    // and drawable, but does not cover or intercept the visible POS interface.
-                    root.addView(capture, 0, ViewGroup.LayoutParams(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT))
+                    root.addView(
+                        capture,
+                        0,
+                        ViewGroup.LayoutParams(794, ViewGroup.LayoutParams.WRAP_CONTENT)
+                    )
 
-                    // invoiceHtml is already a complete HTML document. Preserve its head,
-                    // stylesheet and font declarations instead of stripping/rebuilding tags.
-                    val captureHtml = invoiceHtml
-                    var renderScheduled = false
-                    val renderTimeout = Runnable {
-                        if (!completed) {
-                            completed = true
-                            finish(JSONObject().apply {
-                                put("success", false)
-                                put("error", "انتهت مهلة تحميل مستند الفاتورة قبل اكتمال الرسم")
-                            })
-                            detachCapture()
-                        }
-                    }
-                    capture?.webViewClient = object : WebViewClient() {
-                        private fun complete(result: JSONObject) {
-                            if (completed) return
-                            completed = true
-                            handler.removeCallbacks(renderTimeout)
-                            finish(result)
-                            detachCapture()
-                        }
+                    tempHtml = File(activity.cacheDir, "invoice_" + safeNumber + "_" + System.currentTimeMillis() + ".html")
+                    tempPdf = File(invoiceDir, "." + safeNumber + "_" + System.currentTimeMillis() + ".pending.pdf")
+                    tempHtml!!.writeText(invoiceHtml, Charsets.UTF_8)
+                    val pdfTemp = tempPdf!!
+                    mainHandler.postDelayed({
+                        finish(JSONObject().put("success", false).put("error", "انتهت مهلة إنشاء ملف PDF"))
+                    }, 45_000L)
 
-                        private fun scheduleRender(view: WebView) {
-                            if (completed || renderScheduled) return
-                            renderScheduled = true
-                            // Wait for compositor readiness, then allow local images and fonts
-                            // a brief settling period before drawing the WebView to a bitmap.
-                            view.postDelayed({
-                                if (!completed) performRender(view, ::complete)
-                            }, 350L)
+                    capture!!.webViewClient = object : WebViewClient() {
+                        private var started = false
+
+                        private fun beginPdfWrite(view: WebView) {
+                            if (started || completed) return
+                            started = true
+                            try {
+                                val adapter = view.createPrintDocumentAdapter("Invoice_" + safeNumber)
+                                val attributes = PrintAttributes.Builder()
+                                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                                    .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+                                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                                    .build()
+                                adapter.onLayout(
+                                    null,
+                                    attributes,
+                                    CancellationSignal(),
+                                    object : PrintDocumentAdapter.LayoutResultCallback() {
+                                        override fun onLayoutFinished(info: PrintDocumentInfo?, changed: Boolean) {
+                                            if (completed) return
+                                            if (info == null) {
+                                                finish(JSONObject().put("success", false).put("error", "لم يُنتج عارض الطباعة معلومات صفحات PDF"))
+                                                return
+                                            }
+                                            val descriptor = try {
+                                                ParcelFileDescriptor.open(
+                                                    pdfTemp,
+                                                    ParcelFileDescriptor.MODE_CREATE or
+                                                        ParcelFileDescriptor.MODE_TRUNCATE or
+                                                        ParcelFileDescriptor.MODE_READ_WRITE
+                                                )
+                                            } catch (e: Exception) {
+                                                finish(JSONObject().put("success", false).put("error", "تعذر فتح ملف PDF للكتابة: " + (e.message ?: "")))
+                                                return
+                                            }
+                                            adapter.onWrite(
+                                                arrayOf(PageRange.ALL_PAGES),
+                                                descriptor,
+                                                CancellationSignal(),
+                                                object : PrintDocumentAdapter.WriteResultCallback() {
+                                                    override fun onWriteFinished(pages: Array<PageRange>) {
+                                                        runCatching { descriptor.close() }
+                                                        if (completed) return
+                                                        try {
+                                                            if (!isValidPdf(pdfTemp)) {
+                                                                throw IllegalStateException("نتج ملف PDF فارغ أو غير صالح")
+                                                            }
+                                                            if (!pdfTemp.renameTo(pdfFile)) {
+                                                                pdfTemp.copyTo(pdfFile, overwrite = true)
+                                                                pdfTemp.delete()
+                                                            }
+                                                            if (!isValidPdf(pdfFile)) {
+                                                                throw IllegalStateException("تعذر التحقق من ملف PDF النهائي")
+                                                            }
+                                                            val result = if (shouldShare) shareSavedPdf(pdfFile) else JSONObject().apply {
+                                                                put("success", true)
+                                                                put("path", pdfFile.absolutePath)
+                                                                put("file_name", pdfFile.name)
+                                                                put("bytes", pdfFile.length())
+                                                                put("mime_type", "application/pdf")
+                                                                put("message", "تم حفظ ملف PDF للفاتورة")
+                                                            }
+                                                            finish(result)
+                                                        } catch (e: Exception) {
+                                                            DebugLogger.logException("InvoicePdfWrite", e)
+                                                            finish(JSONObject().put("success", false).put("error", e.message ?: "فشل حفظ ملف PDF"))
+                                                        }
+                                                    }
+
+                                                    override fun onWriteFailed(error: CharSequence?) {
+                                                        runCatching { descriptor.close() }
+                                                        finish(JSONObject().put("success", false).put("error", error?.toString() ?: "فشل إنشاء ملف PDF"))
+                                                    }
+
+                                                    override fun onWriteCancelled() {
+                                                        runCatching { descriptor.close() }
+                                                        finish(JSONObject().put("success", false).put("error", "تم إلغاء إنشاء ملف PDF"))
+                                                    }
+                                                }
+                                            )
+                                        }
+
+                                        override fun onLayoutFailed(error: CharSequence?) {
+                                            finish(JSONObject().put("success", false).put("error", error?.toString() ?: "فشل تجهيز صفحات PDF"))
+                                        }
+
+                                        override fun onLayoutCancelled() {
+                                            finish(JSONObject().put("success", false).put("error", "تم إلغاء تجهيز صفحات PDF"))
+                                        }
+                                    },
+                                    Bundle()
+                                )
+                            } catch (e: Exception) {
+                                DebugLogger.logException("InvoicePdfLayout", e)
+                                finish(JSONObject().put("success", false).put("error", e.message ?: "تعذر تحويل الفاتورة إلى PDF"))
+                            }
                         }
 
                         override fun onPageFinished(view: WebView, url: String?) {
@@ -8319,12 +8327,12 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     System.nanoTime(),
                                     object : WebView.VisualStateCallback() {
                                         override fun onComplete(requestId: Long) {
-                                            scheduleRender(view)
+                                            view.postDelayed({ beginPdfWrite(view) }, 350L)
                                         }
                                     }
                                 )
                             } else {
-                                view.postDelayed({ scheduleRender(view) }, 500L)
+                                view.postDelayed({ beginPdfWrite(view) }, 600L)
                             }
                         }
 
@@ -8335,34 +8343,21 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         ) {
                             super.onReceivedError(view, request, error)
                             if (request?.isForMainFrame == true) {
-                                DebugLogger.warn("ShareInvoice", "Main document load error: ${error?.description} @ ${request.url}")
-                            } else {
-                                DebugLogger.warn("ShareInvoice", "Invoice resource load error: ${error?.description} @ ${request?.url}")
+                                finish(JSONObject().put("success", false).put("error", "تعذر تحميل HTML الفاتورة: " + (error?.description?.toString() ?: "خطأ غير معروف")))
                             }
                         }
                     }
-                    handler.postDelayed(renderTimeout, 25_000L)
-
-                    capture?.loadDataWithBaseURL(
-                        "file:///android_asset/",
-                        captureHtml,
-                        "text/html",
-                        "UTF-8",
-                        null
-                    )
+                    capture!!.loadUrl(android.net.Uri.fromFile(tempHtml!!).toString())
                 } catch (e: Exception) {
-                    DebugLogger.logException("ShareInvoiceSetup", e)
-                    detachCapture()
-                    finish(JSONObject().apply {
-                        put("success", false)
-                        put("error", e.message ?: "فشل تهيئة تحويل الفاتورة")
-                    })
+                    DebugLogger.logException("InvoicePdfSetup", e)
+                    finish(JSONObject().put("success", false).put("error", e.message ?: "فشل تهيئة إنشاء PDF"))
                 }
             }
+
             return JSONObject().apply {
                 put("success", true)
                 put("queued", true)
-                put("message", "جاري تحويل الفاتورة إلى صورة")
+                put("message", if (shouldShare) "جاري تجهيز ملف PDF ومشاركته" else "جاري حفظ ملف PDF")
             }.toString()
         }
 
