@@ -14,6 +14,11 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.CancellationSignal
+import android.os.ParcelFileDescriptor
+import android.print.PageRange
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
