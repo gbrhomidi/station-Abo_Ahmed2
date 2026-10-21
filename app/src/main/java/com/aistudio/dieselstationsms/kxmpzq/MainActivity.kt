@@ -1284,9 +1284,7 @@ class MainActivity : AppCompatActivity() {
                     val prefs = getSharedPreferences("invoice_pdf_archive", Context.MODE_PRIVATE)
                     prefs.edit().putString("tree_uri", uri.toString()).putLong("configured_at", System.currentTimeMillis()).apply()
                     DebugLogger.info("InvoicePdfArchive", "Persisted user-selected folder URI: $uri")
-                    val resumeJs = "window.resumeInvoicePdfAfterFolderSelection && window.resumeInvoicePdfAfterFolderSelection(" +
-                        JSONObject.quote(html) + "," + JSONObject.quote(phone) + "," + JSONObject.quote(action) + ");"
-                    webView?.post { safeEvaluateJs(resumeJs) }
+                    webView?.post { safeEvaluateJs("window.resumeInvoicePdfAfterFolderSelection && window.resumeInvoicePdfAfterFolderSelection();") }
                 } catch (e: Exception) {
                     DebugLogger.logException("InvoicePdfFolderPicker", e)
                     webView?.post {
@@ -8242,8 +8240,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             }
                         }
                     }
+                    val parentDocumentUri = android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, rootId)
                     return android.provider.DocumentsContract.createDocument(
-                        activity.contentResolver, treeUri, "application/pdf", fileName
+                        activity.contentResolver, parentDocumentUri, "application/pdf", fileName
                     ) ?: throw IllegalStateException("تعذر إنشاء ملف PDF داخل المجلد المحدد")
                 }
 
