@@ -8382,7 +8382,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             throw IllegalStateException("تعذر تهيئة ملف PDF المؤقت")
                         }
 
-                        val renderHeight = maxOf(1123, view.height, renderWidth * 842 / 595)
+                        // WebView.contentHeight is in CSS pixels. Convert it to the view's
+                        // physical pixel scale and use the real document height instead of
+                        // truncating every invoice to the first A4-sized viewport.
+                        val cssContentHeight = runCatching {
+                            (view.contentHeight * view.scale).toInt()
+                        }.getOrDefault(0)
+                        val renderHeight = maxOf(
+                            1123,
+                            view.height,
+                            renderWidth * 842 / 595,
+                            cssContentHeight
+                        ).coerceAtMost(12000)
                         view.measure(
                             View.MeasureSpec.makeMeasureSpec(renderWidth, View.MeasureSpec.EXACTLY),
                             View.MeasureSpec.makeMeasureSpec(renderHeight, View.MeasureSpec.EXACTLY)
@@ -8534,7 +8545,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     val root = activity.findViewById<ViewGroup>(android.R.id.content)
                         ?: throw IllegalStateException("حاوية الجذر غير متاحة")
                     capture = WebView(activity).apply {
-                        settings.javaScriptEnabled = false
+                        // Enable JS only for deterministic DOM readiness/height measurement of the
+                        // locally generated invoice document; no external page is loaded here.
+                        settings.javaScriptEnabled = true
                         settings.domStorageEnabled = false
                         settings.allowFileAccess = true
                         settings.allowContentAccess = false
@@ -8568,35 +8581,85 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             super.onPageFinished(view, url)
                             if (renderStarted || completed) return
                             renderStarted = true
-                            val schedule = {
+
+                            // A WebView load callback alone does not mean fonts/images/layout
+                            // are ready. Ask the document to expose the invoice content and
+                            // wait for fonts and image decoding before measuring its true height.
+                            val readinessScript = """
+                                (function() {
+                                  try {
+                                    var root = document.getElementById('posInvoice') || document.body;
+                                    if (!root) return JSON.stringify({ready:false, reason:'missing-root'});
+                                    root.style.setProperty('display','block','important');
+                                    root.style.setProperty('visibility','visible','important');
+                                    root.style.setProperty('opacity','1','important');
+                                    root.style.setProperty('height','auto','important');
+                                    root.style.setProperty('min-height','0','important');
+                                    root.style.setProperty('overflow','visible','important');
+                                    Array.prototype.forEach.call(root.querySelectorAll('*'), function(el) {
+                                      var cs = window.getComputedStyle(el);
+                                      if (cs.display === 'none') el.style.setProperty('display','block','important');
+                                      if (cs.visibility === 'hidden') el.style.setProperty('visibility','visible','important');
+                                      if (parseFloat(cs.opacity) === 0) el.style.setProperty('opacity','1','important');
+                                    });
+                                    var waits = [];
+                                    if (document.fonts && document.fonts.ready) waits.push(document.fonts.ready.catch(function(){}));
+                                    Array.prototype.forEach.call(document.images || [], function(img) {
+                                      if (!img.complete) waits.push(new Promise(function(resolve) {
+                                        img.addEventListener('load',resolve,{once:true});
+                                        img.addEventListener('error',resolve,{once:true});
+                                        setTimeout(resolve,3000);
+                                      }));
+                                    });
+                                    return Promise.all(waits).then(function() {
+                                      return JSON.stringify({
+                                        ready:true,
+                                        width:Math.max(root.scrollWidth,document.documentElement.scrollWidth,794),
+                                        height:Math.max(root.scrollHeight,document.body.scrollHeight,document.documentElement.scrollHeight),
+                                        text:(root.innerText || root.textContent || '').trim().length
+                                      });
+                                    });
+                                  } catch(e) { return JSON.stringify({ready:false,reason:String(e)}); }
+                                })();
+                            """.trimIndent()
+
+                            val scheduleRender = {
                                 if (!completed) {
                                     view.postDelayed({
                                         if (completed) return@postDelayed
                                         try {
+                                            val cssHeight = (view.contentHeight * view.scale).toInt()
+                                            val measuredHeight = maxOf(1123, cssHeight, 794 * 842 / 595)
+                                                .coerceAtMost(12000)
                                             view.measure(
                                                 View.MeasureSpec.makeMeasureSpec(794, View.MeasureSpec.EXACTLY),
-                                                View.MeasureSpec.makeMeasureSpec(1123, View.MeasureSpec.EXACTLY)
+                                                View.MeasureSpec.makeMeasureSpec(measuredHeight, View.MeasureSpec.EXACTLY)
                                             )
-                                            view.layout(0, 0, 794, 1123)
+                                            view.layout(0, 0, 794, measuredHeight)
                                             view.requestLayout()
+                                            view.invalidate()
                                         } catch (layoutError: Exception) {
                                             DebugLogger.warn("InvoicePdfLayout", "Explicit WebView measure/layout failed: ${layoutError.message}")
                                         }
                                         renderAndSave(view, 794, Bitmap.Config.ARGB_8888, 1)
-                                    }, 800L)
+                                    }, 350L)
                                 }
                             }
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                view.postVisualStateCallback(
-                                    System.nanoTime(),
-                                    object : WebView.VisualStateCallback() {
-                                        override fun onComplete(requestId: Long) {
-                                            schedule()
+
+                            view.evaluateJavascript(readinessScript) { rawResult ->
+                                DebugLogger.info("InvoicePdfReady", "DOM readiness result: ${rawResult?.take(500) ?: "null"}")
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                    view.postVisualStateCallback(
+                                        System.nanoTime(),
+                                        object : WebView.VisualStateCallback() {
+                                            override fun onComplete(requestId: Long) {
+                                                scheduleRender()
+                                            }
                                         }
-                                    }
-                                )
-                            } else {
-                                view.postDelayed({ schedule() }, 600L)
+                                    )
+                                } else {
+                                    scheduleRender()
+                                }
                             }
                         }
 
