@@ -5590,7 +5590,7 @@ async function persistInvoicePdfAfterSale(invoiceNumber) {
             let timeoutId = setTimeout(() => {
                 clearPendingCall('saveInvoicePdf');
                 reject(new Error('انتهت مهلة حفظ PDF في الأرشيف'));
-            }, 45000);
+            }, 180000);
             registerPendingCall('saveInvoicePdf', result => {
                 if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
                 resolve(result);
@@ -5614,6 +5614,34 @@ async function persistInvoicePdfAfterSale(invoiceNumber) {
         console.warn('[Invoice PDF Archive] Deferred; sale remains committed:', invoiceNumber, error);
     }
 }
+
+// Called by MainActivity after the user selects the archive folder in Android's
+// system folder picker. Re-enter the same bridge operation without re-registering
+// the JS promise; its original pending callback remains responsible for completion.
+window.resumeInvoicePdfAfterFolderSelection = function(invoiceHtml, phone, action) {
+    try {
+        if (action !== 'saveInvoicePdf' || !window.AndroidInterface ||
+            typeof AndroidInterface.saveInvoicePdf !== 'function') {
+            window.handleAndroidResult(action || 'saveInvoicePdf', {
+                success: false,
+                error: 'تعذر استئناف حفظ الفاتورة بعد اختيار المجلد'
+            });
+            return;
+        }
+        const ack = JSON.parse(AndroidInterface.saveInvoicePdf(String(invoiceHtml || '')));
+        if (!ack.success && !ack.queued) {
+            window.handleAndroidResult('saveInvoicePdf', {
+                success: false,
+                error: ack.error || ack.message || 'تعذر بدء حفظ PDF داخل المجلد المحدد'
+            });
+        }
+    } catch (error) {
+        window.handleAndroidResult('saveInvoicePdf', {
+            success: false,
+            error: error && error.message ? error.message : 'تعذر استئناف حفظ PDF'
+        });
+    }
+};
 
 async function printReceipt() {
     try {
