@@ -8563,10 +8563,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         // some Android System WebView/OEM combinations.
                         settings.useWideViewPort = true
                         settings.loadWithOverviewMode = false
-                        // Use software composition for this temporary capture WebView. This is
-                        // not a guarantee by itself, so the bitmap is also content-validated below.
-                        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                        visibility = View.VISIBLE
                         alpha = 1f
                         translationY = 0f
                         isClickable = false
