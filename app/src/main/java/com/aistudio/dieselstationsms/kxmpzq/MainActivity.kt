@@ -11,14 +11,10 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.CancellationSignal
-import android.os.ParcelFileDescriptor
-import android.print.PageRange
-import android.print.PrintDocumentAdapter
-import android.print.PrintDocumentInfo
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -8064,8 +8060,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             processInvoicePdf(invoiceHtml, "", "saveInvoicePdf")
 
         /**
-         * Saves a station-scoped PDF through Android's HTML print renderer.
-         * Reuses an existing valid PDF; this operation never repeats the sale transaction.
+         * Stores a station-scoped PDF using the invoice HTML rendered by WebView.
+         * The committed sale remains independent from PDF generation and sharing.
          */
         private fun processInvoicePdf(invoiceHtml: String, phone: String, callbackAction: String): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -8175,6 +8171,129 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     }
                 }
 
+                fun persistBitmapAsPdf(bitmap: Bitmap, outputFile: File) {
+                    val document = PdfDocument()
+                    try {
+                        val pageWidth = 595
+                        val pageHeight = 842
+                        val sourcePageHeight = ((bitmap.width.toDouble() * pageHeight) / pageWidth)
+                            .toInt().coerceAtLeast(1)
+                        val pageCount = ((bitmap.height + sourcePageHeight - 1) / sourcePageHeight)
+                            .coerceAtLeast(1)
+                        val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+                        for (pageIndex in 0 until pageCount) {
+                            val top = pageIndex * sourcePageHeight
+                            val bottom = minOf(bitmap.height, top + sourcePageHeight)
+                            val page = document.startPage(
+                                PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageIndex + 1).create()
+                            )
+                            val source = android.graphics.Rect(0, top, bitmap.width, bottom)
+                            val targetHeight = ((bottom - top).toDouble() * pageWidth / bitmap.width)
+                                .toInt().coerceIn(1, pageHeight)
+                            val target = android.graphics.Rect(0, 0, pageWidth, targetHeight)
+                            page.canvas.drawColor(android.graphics.Color.WHITE)
+                            page.canvas.drawBitmap(bitmap, source, target, paint)
+                            document.finishPage(page)
+                        }
+                        FileOutputStream(outputFile).use { stream ->
+                            document.writeTo(stream)
+                            stream.flush()
+                        }
+                    } finally {
+                        document.close()
+                    }
+                }
+
+                fun renderAndSave(view: WebView, renderWidth: Int, config: Bitmap.Config, attempt: Int) {
+                    var bitmap: Bitmap? = null
+                    try {
+                        if (completed) return
+                        view.measure(
+                            View.MeasureSpec.makeMeasureSpec(renderWidth, View.MeasureSpec.EXACTLY),
+                            View.MeasureSpec.makeMeasureSpec(12_000, View.MeasureSpec.AT_MOST)
+                        )
+                        val contentHeight = (view.contentHeight * view.scale).toInt()
+                        val measuredHeight = maxOf(view.measuredHeight, contentHeight, 1123)
+                        if (measuredHeight > 12_000) {
+                            throw IllegalStateException("الفاتورة أطول من الحد المدعوم لإنشاء PDF؛ يرجى تقسيم الفاتورة")
+                        }
+                        view.layout(0, 0, renderWidth, measuredHeight)
+                        bitmap = Bitmap.createBitmap(renderWidth, measuredHeight, config)
+                        val rendered = bitmap ?: throw IllegalStateException("تعذر إنشاء صورة وسيطة للفاتورة")
+                        val canvas = android.graphics.Canvas(rendered)
+                        canvas.drawColor(android.graphics.Color.WHITE)
+                        view.draw(canvas)
+
+                        var visibleSamples = 0
+                        for (y in 0 until measuredHeight step 4) {
+                            for (x in 0 until renderWidth step 4) {
+                                val pixel = rendered.getPixel(x, y)
+                                if (
+                                    android.graphics.Color.red(pixel) < 246 ||
+                                    android.graphics.Color.green(pixel) < 246 ||
+                                    android.graphics.Color.blue(pixel) < 246
+                                ) {
+                                    visibleSamples++
+                                    if (visibleSamples >= 12) break
+                                }
+                            }
+                            if (visibleSamples >= 12) break
+                        }
+                        if (visibleSamples < 12) {
+                            if (attempt < 2) {
+                                DebugLogger.warn("InvoicePdfRender", "Blank WebView render attempt " + attempt + "; retrying")
+                                view.post {
+                                    view.invalidate()
+                                    view.requestLayout()
+                                    view.postDelayed({ renderAndSave(view, renderWidth, config, attempt + 1) }, 900L)
+                                }
+                                return
+                            }
+                            throw IllegalStateException("تعذر رسم محتوى الفاتورة في PDF بعد محاولتين")
+                        }
+
+                        val pdfTemp = tempPdf ?: throw IllegalStateException("ملف PDF المؤقت غير متاح")
+                        persistBitmapAsPdf(rendered, pdfTemp)
+                        if (!isValidPdf(pdfTemp)) throw IllegalStateException("نتج ملف PDF فارغ أو غير صالح")
+                        if (!pdfTemp.renameTo(pdfFile)) {
+                            pdfTemp.copyTo(pdfFile, overwrite = true)
+                            pdfTemp.delete()
+                        }
+                        if (!isValidPdf(pdfFile)) throw IllegalStateException("تعذر التحقق من ملف PDF النهائي")
+                        val result = if (shouldShare) shareSavedPdf(pdfFile) else JSONObject().apply {
+                            put("success", true)
+                            put("path", pdfFile.absolutePath)
+                            put("file_name", pdfFile.name)
+                            put("bytes", pdfFile.length())
+                            put("mime_type", "application/pdf")
+                            put("message", "تم حفظ ملف PDF للفاتورة")
+                        }
+                        finish(result)
+                    } catch (oom: OutOfMemoryError) {
+                        runCatching { bitmap?.recycle() }
+                        bitmap = null
+                        if (renderWidth > 595 && !completed) {
+                            DebugLogger.warn("InvoicePdfRender", "Memory pressure; retrying at 595px RGB_565")
+                            view.postDelayed({
+                                renderAndSave(view, 595, Bitmap.Config.RGB_565, attempt + 1)
+                            }, 500L)
+                        } else {
+                            DebugLogger.logException("InvoicePdfOutOfMemory", oom)
+                            finish(JSONObject().put("success", false).put("error", "الذاكرة غير كافية لإنشاء PDF للفاتورة"))
+                        }
+                    } catch (e: Exception) {
+                        val blank = e.message?.contains("تعذر رسم محتوى الفاتورة") == true
+                        if (blank && attempt < 2 && !completed) {
+                            view.postDelayed({ renderAndSave(view, renderWidth, config, attempt + 1) }, 900L)
+                        } else {
+                            DebugLogger.logException("InvoicePdfRender", e)
+                            finish(JSONObject().put("success", false).put("error", e.message ?: "فشل إنشاء PDF للفاتورة"))
+                        }
+                    } finally {
+                        runCatching { bitmap?.recycle() }
+                    }
+                }
+
                 try {
                     if (activity.isFinishing || activity.isDestroyed.get()) {
                         throw IllegalStateException("تعذر إنشاء PDF لأن الشاشة أُغلقت")
@@ -8213,131 +8332,39 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         isFocusable = false
                         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                     }
-                    root.addView(
-                        capture,
-                        0,
-                        ViewGroup.LayoutParams(794, ViewGroup.LayoutParams.WRAP_CONTENT)
-                    )
-
+                    root.addView(capture, 0, ViewGroup.LayoutParams(794, ViewGroup.LayoutParams.WRAP_CONTENT))
                     tempHtml = File(activity.cacheDir, "invoice_" + safeNumber + "_" + System.currentTimeMillis() + ".html")
                     tempPdf = File(invoiceDir, "." + safeNumber + "_" + System.currentTimeMillis() + ".pending.pdf")
                     tempHtml!!.writeText(invoiceHtml, Charsets.UTF_8)
-                    val pdfTemp = tempPdf!!
                     mainHandler.postDelayed({
                         finish(JSONObject().put("success", false).put("error", "انتهت مهلة إنشاء ملف PDF"))
                     }, 45_000L)
 
                     capture!!.webViewClient = object : WebViewClient() {
-                        private var started = false
-
-                        private fun beginPdfWrite(view: WebView) {
-                            if (started || completed) return
-                            started = true
-                            try {
-                                val adapter = view.createPrintDocumentAdapter("Invoice_" + safeNumber)
-                                val attributes = PrintAttributes.Builder()
-                                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-                                    .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
-                                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
-                                    .build()
-                                adapter.onLayout(
-                                    null,
-                                    attributes,
-                                    CancellationSignal(),
-                                    object : PrintDocumentAdapter.LayoutResultCallback() {
-                                        override fun onLayoutFinished(info: PrintDocumentInfo?, changed: Boolean) {
-                                            if (completed) return
-                                            if (info == null) {
-                                                finish(JSONObject().put("success", false).put("error", "لم يُنتج عارض الطباعة معلومات صفحات PDF"))
-                                                return
-                                            }
-                                            val descriptor = try {
-                                                ParcelFileDescriptor.open(
-                                                    pdfTemp,
-                                                    ParcelFileDescriptor.MODE_CREATE or
-                                                        ParcelFileDescriptor.MODE_TRUNCATE or
-                                                        ParcelFileDescriptor.MODE_READ_WRITE
-                                                )
-                                            } catch (e: Exception) {
-                                                finish(JSONObject().put("success", false).put("error", "تعذر فتح ملف PDF للكتابة: " + (e.message ?: "")))
-                                                return
-                                            }
-                                            adapter.onWrite(
-                                                arrayOf(PageRange.ALL_PAGES),
-                                                descriptor,
-                                                CancellationSignal(),
-                                                object : PrintDocumentAdapter.WriteResultCallback() {
-                                                    override fun onWriteFinished(pages: Array<PageRange>) {
-                                                        runCatching { descriptor.close() }
-                                                        if (completed) return
-                                                        try {
-                                                            if (!isValidPdf(pdfTemp)) {
-                                                                throw IllegalStateException("نتج ملف PDF فارغ أو غير صالح")
-                                                            }
-                                                            if (!pdfTemp.renameTo(pdfFile)) {
-                                                                pdfTemp.copyTo(pdfFile, overwrite = true)
-                                                                pdfTemp.delete()
-                                                            }
-                                                            if (!isValidPdf(pdfFile)) {
-                                                                throw IllegalStateException("تعذر التحقق من ملف PDF النهائي")
-                                                            }
-                                                            val result = if (shouldShare) shareSavedPdf(pdfFile) else JSONObject().apply {
-                                                                put("success", true)
-                                                                put("path", pdfFile.absolutePath)
-                                                                put("file_name", pdfFile.name)
-                                                                put("bytes", pdfFile.length())
-                                                                put("mime_type", "application/pdf")
-                                                                put("message", "تم حفظ ملف PDF للفاتورة")
-                                                            }
-                                                            finish(result)
-                                                        } catch (e: Exception) {
-                                                            DebugLogger.logException("InvoicePdfWrite", e)
-                                                            finish(JSONObject().put("success", false).put("error", e.message ?: "فشل حفظ ملف PDF"))
-                                                        }
-                                                    }
-
-                                                    override fun onWriteFailed(error: CharSequence?) {
-                                                        runCatching { descriptor.close() }
-                                                        finish(JSONObject().put("success", false).put("error", error?.toString() ?: "فشل إنشاء ملف PDF"))
-                                                    }
-
-                                                    override fun onWriteCancelled() {
-                                                        runCatching { descriptor.close() }
-                                                        finish(JSONObject().put("success", false).put("error", "تم إلغاء إنشاء ملف PDF"))
-                                                    }
-                                                }
-                                            )
-                                        }
-
-                                        override fun onLayoutFailed(error: CharSequence?) {
-                                            finish(JSONObject().put("success", false).put("error", error?.toString() ?: "فشل تجهيز صفحات PDF"))
-                                        }
-
-                                        override fun onLayoutCancelled() {
-                                            finish(JSONObject().put("success", false).put("error", "تم إلغاء تجهيز صفحات PDF"))
-                                        }
-                                    },
-                                    Bundle()
-                                )
-                            } catch (e: Exception) {
-                                DebugLogger.logException("InvoicePdfLayout", e)
-                                finish(JSONObject().put("success", false).put("error", e.message ?: "تعذر تحويل الفاتورة إلى PDF"))
-                            }
-                        }
+                        private var renderStarted = false
 
                         override fun onPageFinished(view: WebView, url: String?) {
                             super.onPageFinished(view, url)
+                            if (renderStarted || completed) return
+                            renderStarted = true
+                            val schedule = {
+                                if (!completed) {
+                                    view.postDelayed({
+                                        renderAndSave(view, 794, Bitmap.Config.ARGB_8888, 1)
+                                    }, 450L)
+                                }
+                            }
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                                 view.postVisualStateCallback(
                                     System.nanoTime(),
                                     object : WebView.VisualStateCallback() {
                                         override fun onComplete(requestId: Long) {
-                                            view.postDelayed({ beginPdfWrite(view) }, 350L)
+                                            schedule()
                                         }
                                     }
                                 )
                             } else {
-                                view.postDelayed({ beginPdfWrite(view) }, 600L)
+                                view.postDelayed({ schedule() }, 600L)
                             }
                         }
 
