@@ -6148,103 +6148,58 @@ async function sendWhatsappInvoice() {
     if (_whatsappBusy) return;
     const invoice = _currentWhatsappInvoice;
     if (!invoice) { showWhatsappValidation('لم يتم تحميل الفاتورة بعد. الرجاء الانتظار'); return; }
-
     const phoneInput = document.getElementById('waPhoneInput');
     const raw = (phoneInput && phoneInput.value || '').trim();
     if (!raw) { showWhatsappValidation('الرجاء إدخال رقم واتساب العميل'); if (phoneInput) phoneInput.focus(); return; }
-
     const result = normalizeWhatsappPhone(raw);
     if (!result.ok) { showWhatsappValidation(result.reason || 'رقم غير صالح'); if (phoneInput) phoneInput.focus(); return; }
-
     const sendBtn = document.getElementById('waSendBtn');
     if (sendBtn) sendBtn.disabled = true;
-
     _whatsappBusy = true;
     hideBlankWarning();
     hideRetryBtn();
     showLoading(true);
-
-    let timeoutId = null;
     try {
-        if (!window.AndroidInterface || typeof AndroidInterface.shareInvoiceJpg !== 'function') {
-            throw new Error('مشاركة فاتورة PDF متاحة من داخل تطبيق Android فقط');
+        if (!window.AndroidInterface || typeof AndroidInterface.shareSavedInvoicePdf !== 'function') {
+            throw new Error('مشاركة PDF المحفوظ متاحة من داخل تطبيق Android فقط');
         }
-
-        const capture = buildCaptureDocument();
-        const invoiceHtml = capture.html;
-
-        _lastShareHtml = invoiceHtml;
-        _lastSharePhone = result.number;
-
-        const resultPromise = new Promise((resolve, reject) => {
-            registerPendingCall('shareInvoiceJpg', resolve);
-
-            timeoutId = setTimeout(() => {
-                clearPendingCall('shareInvoiceJpg');
-                reject(new Error('انتهت مهلة تجهيز ملف PDF (150 ثانية)'));
-            }, 150000);
-
-            try {
-                const acknowledgement = JSON.parse(
-                    AndroidInterface.shareInvoiceJpg(invoiceHtml, result.number)
-                );
-                if (!acknowledgement.success && !acknowledgement.queued) {
-                    clearPendingCall('shareInvoiceJpg');
-                    if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
-                    reject(new Error(acknowledgement.message || acknowledgement.error || 'تعذر بدء تحويل الفاتورة'));
-                }
-            } catch (bridgeError) {
-                clearPendingCall('shareInvoiceJpg');
-                if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
-                reject(bridgeError);
-            }
-        });
-
-        showToast('جاري تجهيز ملف PDF للفاتورة...', 'info');
-        const shareResult = await resultPromise;
-
-        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
-
-        const isFailure = !shareResult || !shareResult.success;
-        const isBlank = isFailure && (
-            (shareResult?.error || '').toLowerCase().includes('blank') ||
-            (shareResult?.error || '').includes('فارغ') ||
-            shareResult?.blank === true
-        );
-
-        if (isFailure) {
-            _lastShareAttemptFailed = true;
-            if (isBlank) {
-                showBlankWarning('تعذر إنشاء ملف PDF صالح. يمكنك إعادة المحاولة أو استخدام زر الطباعة كبديل.');
-            } else {
-                showBlankWarning(shareResult?.error || 'فشل إنشاء ملف PDF للفاتورة');
-            }
-            showRetryBtn();
-            showWhatsappValidation('تعذر مشاركة ملف PDF عبر واتساب. يمكنك إعادة المحاولة أو استخدام "طباعة".');
-            console.error('[WhatsApp Share Failed]', shareResult);
-            return;
+        const invoiceNumber = String(invoice.invoice_number || lastInvoiceNumber || '').trim();
+        if (!invoiceNumber) throw new Error('رقم الفاتورة غير متوفر للاسترجاع من الأرشيف');
+        showToast('جاري فتح نسخة الفاتورة المحفوظة في واتساب...', 'info');
+        const rawAck = AndroidInterface.shareSavedInvoicePdf(invoiceNumber, result.number);
+        const shareResult = typeof rawAck === 'string' ? JSON.parse(rawAck) : rawAck;
+        if (!shareResult || !shareResult.success) {
+            throw new Error(shareResult?.error || shareResult?.message || 'تعذرت مشاركة النسخة المحفوظة');
         }
-
         _lastShareAttemptFailed = false;
         hideBlankWarning();
         hideRetryBtn();
-        showToast('تم فتح واتساب مع ملف PDF للفاتورة', 'success');
+        showToast('تم فتح واتساب بالنسخة المحفوظة من الفاتورة', 'success');
         closeWhatsappShare();
     } catch (error) {
-        console.error('WhatsApp PDF share failed:', error);
+        console.error('[Saved invoice PDF share failed]', error);
         _lastShareAttemptFailed = true;
-        showBlankWarning(error.message || 'تعذر مشاركة ملف PDF للفاتورة');
+        showBlankWarning((error.message || 'تعذرت مشاركة الفاتورة المحفوظة') + ' — سيتم فتح نافذة الطباعة كمسار احتياطي لحفظ PDF.');
+        showWhatsappValidation('تعذرت مشاركة الملف المحفوظ. استخدم نافذة الطباعة لحفظ المستند الأصلي ثم أعد المشاركة.');
+        try {
+            const rawPrint = window.AndroidInterface && window.AndroidInterface.printCurrentPage();
+            const printAck = typeof rawPrint === 'string' ? JSON.parse(rawPrint) : rawPrint;
+            if (!printAck || !printAck.success) {
+                showWhatsappValidation(printAck?.error || 'تعذر فتح نافذة الطباعة الاحتياطية');
+            } else {
+                showToast('اختر حفظ بتنسيق PDF من نافذة الطباعة، ثم أعد المشاركة', 'info');
+            }
+        } catch (printError) {
+            showWhatsappValidation(printError.message || 'تعذر فتح نافذة الطباعة الاحتياطية');
+        }
         showRetryBtn();
-        showWhatsappValidation(error.message || 'تعذر مشاركة ملف PDF للفاتورة');
     } finally {
-        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
-        clearPendingCall('shareInvoiceJpg');
+        clearPendingCall('shareSavedInvoicePdf');
         _whatsappBusy = false;
         if (sendBtn) sendBtn.disabled = false;
         showLoading(false);
     }
 }
-
 async function deliverLastPurchase() {
     try {
         let saleId = Number(lastSaleId || 0);
