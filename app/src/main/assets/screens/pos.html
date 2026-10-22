@@ -5873,12 +5873,23 @@ function openWhatsappInvoiceFullscreen() {
         );
         const invoiceWidth = 794;
         const scale = Math.min(1, availableWidth / invoiceWidth);
-        const naturalHeight = Math.max(1123, scaler.scrollHeight || scaler.offsetHeight || 1123);
 
+        // Establish the unscaled document width before measuring height. Measuring first
+        // can capture a stale/narrow layout and leave the scaled invoice clipped vertically.
         scaler.style.width = invoiceWidth + 'px';
+        scaler.style.minWidth = invoiceWidth + 'px';
         scaler.style.maxWidth = 'none';
         scaler.style.transform = 'scale(' + scale + ')';
         scaler.style.transformOrigin = 'top left';
+
+        // Read after layout has been forced at the final width. Include scroll and rendered
+        // bounds because long invoices can exceed one A4 page.
+        const naturalHeight = Math.max(
+            1123,
+            scaler.scrollHeight || 0,
+            scaler.offsetHeight || 0,
+            scaler.getBoundingClientRect().height / Math.max(scale, 0.01) || 0
+        );
 
         // Transforms do not affect normal layout size; size the scroll wrapper to the
         // transformed bounds, including invoices with more rows than a single A4 page.
@@ -5913,7 +5924,15 @@ function openWhatsappInvoiceFullscreen() {
 }
 function closeWhatsappInvoiceFullscreen() {
     const fullscreen = document.getElementById('waInvoiceFullscreen');
-    if (fullscreen) fullscreen.classList.remove('show');
+    if (!fullscreen) return;
+    fullscreen.classList.remove('show');
+    if (fullscreen._invoiceFitHandler) {
+        window.removeEventListener('resize', fullscreen._invoiceFitHandler);
+        if (window.visualViewport) {
+            window.visualViewport.removeEventListener('resize', fullscreen._invoiceFitHandler);
+        }
+        fullscreen._invoiceFitHandler = null;
+    }
 }
 
 function buildInvoiceWhatsAppText(invoice) {
