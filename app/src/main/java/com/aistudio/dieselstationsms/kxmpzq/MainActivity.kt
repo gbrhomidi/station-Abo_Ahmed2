@@ -8149,14 +8149,26 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         }
                     }
                 }
-                val destination = oldUri?.also { activity.contentResolver.delete(it, null, null) }
+                // Preserve an existing archived invoice until the replacement stream is opened.
+                // Deleting the old document first can permanently lose the last valid invoice if
+                // create/write fails (SAF providers may reject a second create with the same name).
+                val destination = oldUri
                     ?: android.provider.DocumentsContract.createDocument(
                         activity.contentResolver, parent, "application/pdf", source.name
                     ) ?: throw IllegalStateException("تعذر إنشاء ملف الفاتورة في مجلد Invoices")
-                activity.contentResolver.openOutputStream(destination, "wt")?.use { output ->
-                    source.inputStream().use { it.copyTo(output) }
-                    output.flush()
-                } ?: throw IllegalStateException("تعذر الكتابة في مجلد Invoices")
+                try {
+                    activity.contentResolver.openOutputStream(destination, "wt")?.use { output ->
+                        source.inputStream().use { input -> input.copyTo(output) }
+                        output.flush()
+                    } ?: throw IllegalStateException("تعذر الكتابة في مجلد Invoices")
+                } catch (writeError: Exception) {
+                    // Only remove a newly-created incomplete document. Never delete the user's
+                    // pre-existing archive entry as part of a failed replacement.
+                    if (oldUri == null) {
+                        try { activity.contentResolver.delete(destination, null, null) } catch (_: Exception) { }
+                    }
+                    throw writeError
+                }
                 val packageName = listOf("com.whatsapp", "com.whatsapp.w4b").firstOrNull {
                     activity.packageManager.getLaunchIntentForPackage(it) != null
                 } ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
