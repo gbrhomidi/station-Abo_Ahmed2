@@ -3465,6 +3465,7 @@ tr:last-child td { border-bottom:0; }
         el('bottomSave').classList.add('hidden');
         el('resetBtn').classList.toggle('hidden', name !== 'general');
         if (name === 'monitoring') refreshMonitoring();
+        if (name === 'display') loadSystemSettings();
         if (name === 'backup') refreshBackups();
         if (name === 'maintenance') refreshDatabaseInfo();
         if (name === 'users' && cachedUsers.length) renderUsers(cachedUsers, el('searchInput').value.trim());
@@ -3571,14 +3572,20 @@ tr:last-child td { border-bottom:0; }
     async function loadSettings() {
         showLoading(true);
         try {
-            const [applicationRaw, legacyRaw, previousSystemRaw] = await Promise.all([
+            // ApplicationSettings and the legacy settings table are unrelated
+            // to display persistence. Do not let a failure in either one hide
+            // values that are already present in system_settings.
+            const [applicationResult, legacyResult, previousSystemResult] = await Promise.allSettled([
                 bridgeCall('getApplicationSettings'),
                 bridgeCall('getAllSettingsMap'),
                 bridgeCall('getAllSystemSettingsMap')
             ]);
-            const application = dataOf(applicationRaw) || {};
-            const legacy = dataOf(legacyRaw) || {};
-            const previousSystem = dataOf(previousSystemRaw) || {};
+            const application = applicationResult.status === 'fulfilled'
+                ? (dataOf(applicationResult.value) || {}) : {};
+            const legacy = legacyResult.status === 'fulfilled'
+                ? (dataOf(legacyResult.value) || {}) : {};
+            const previousSystem = previousSystemResult.status === 'fulfilled'
+                ? (dataOf(previousSystemResult.value) || {}) : {};
 
             Object.keys(settings).forEach(key => delete settings[key]);
             // Older releases accidentally stored some application controls in system_settings.

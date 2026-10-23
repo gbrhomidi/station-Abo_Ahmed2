@@ -9,6 +9,8 @@ assert(html.includes("bridge.saveDisplaySettings(JSON.stringify(payload || {}))"
 assert(html.includes('result.verified !== true'), 'display save must require native SQLite verification');
 const displaySave = html.match(/async function saveDisplaySettingsOnly\(\)\s*\{([\s\S]*?)\n\s*\}\n\s*async function saveSettings/)?.[1] || '';
 assert(!displaySave.includes("bridgeCall('setSystemSetting'"), 'display save must not fall back to per-field simulated writes');
+assert(html.includes('Promise.allSettled(['), 'display load must not depend on unrelated settings repositories');
+assert(html.includes("if (name === 'display') loadSystemSettings();"), 'reopening display tab must reread SQLite values');
 assert(kotlin.includes('fun saveDisplaySettings(jsonData: String): String'), 'MainActivity must expose the native display save contract');
 assert(kotlin.includes('put("verified", true)'), 'native save must report verified persistence');
 assert(kotlin.includes('db.getAllSystemSettingsMap()'), 'native save must read persisted values back from SQLite');
