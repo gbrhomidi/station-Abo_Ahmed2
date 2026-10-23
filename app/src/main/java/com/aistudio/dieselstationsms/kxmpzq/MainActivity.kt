@@ -8902,6 +8902,17 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     root.style.setProperty('opacity','1','important');
                                     root.style.setProperty('height','auto','important');
                                     root.style.setProperty('overflow','visible','important');
+                                    // The source invoice may carry inline/theme background styles that
+                                    // survive wrapper CSS and make the captured page a dark surface.
+                                    // Normalize the document canvas and invoice root before rendering.
+                                    [document.documentElement, document.body, root].forEach(function(el) {
+                                      if (!el) return;
+                                      el.style.setProperty('color-scheme','light','important');
+                                      el.style.setProperty('background','#fff','important');
+                                      el.style.setProperty('background-color','#fff','important');
+                                      el.style.setProperty('filter','none','important');
+                                      el.style.setProperty('mix-blend-mode','normal','important');
+                                    });
                                     var waits = [];
                                     if (document.fonts && document.fonts.ready) waits.push(document.fonts.ready.catch(function(){}));
                                     Array.prototype.forEach.call(document.images || [], function(img) {
@@ -9045,6 +9056,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                       font-variant-numeric: lining-nums tabular-nums;
                       font-feature-settings: "lnum" 1, "tnum" 1;
                       overflow: visible !important; color-scheme: light;
+                      forced-color-adjust: none; print-color-adjust: exact;
+                    }
+                    html, body, #posInvoice {
+                      color-scheme: light !important;
+                      background-color: #fff !important;
+                      forced-color-adjust: none !important;
+                      filter: none !important;
+                      mix-blend-mode: normal !important;
                     }
                     body > #posInvoice, #posInvoice {
                       display: block !important; visibility: visible !important; opacity: 1 !important;
