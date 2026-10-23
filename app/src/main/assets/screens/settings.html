@@ -3752,6 +3752,7 @@ tr:last-child td { border-bottom:0; }
             // Verify each written key through the single-key SQLite read path.
             // The bulk settings map is retained for refreshing the screen only; it is not
             // accepted as proof that an individual write was persisted correctly.
+            const verifiedLegacy = {};
             for (const [key, value] of Object.entries(uiApplicationPayload)) {
                 const expected = typeof value === 'boolean' ? (value ? '1' : '0') :
                     Array.isArray(value) ? value.join(', ') : String(value ?? '');
@@ -3770,7 +3771,13 @@ tr:last-child td { border-bottom:0; }
                         ' (المطلوب: ' + expected + '، المقروء: ' + actual + ')'
                     );
                 }
+                verifiedLegacy[key] = readback.value;
             }
+
+            // Render the values that were individually verified, not a possibly stale
+            // or differently shaped bulk-map snapshot.
+            Object.assign(persistedLegacy, verifiedLegacy);
+
             for (const [key, value] of Object.entries(allSystemPayload)) {
                 if (!Object.prototype.hasOwnProperty.call(persistedSystem, key) ||
                     String(persistedSystem[key]) !== String(value ?? '')) {
