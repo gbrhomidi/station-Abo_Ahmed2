@@ -1776,6 +1776,35 @@ class MainActivity : AppCompatActivity() {
     ) {
         private val contextRef = WeakReference(context)
         private val activityRef = WeakReference(activity)
+
+        /**
+         * Loads only the nine allowlisted settings panel templates bundled in this APK.
+         * The whitelist prevents JavaScript from using this bridge as an arbitrary asset reader.
+         * File-to-file access remains disabled in WebView.
+         */
+        @JavascriptInterface
+        fun loadSettingsPanel(panelName: String): String {
+            val assetName = when (panelName) {
+                "general" -> "general.html"
+                "startup" -> "operations.html"
+                "sms" -> "sms.html"
+                "monitoring" -> "monitoring.html"
+                "security" -> "security.html"
+                "backup" -> "backup.html"
+                "maintenance" -> "maintenance.html"
+                "users" -> "users.html"
+                "display" -> "display.html"
+                else -> return ""
+            }
+
+            return try {
+                val context = contextRef.get() ?: return ""
+                context.assets.open("screens/settings-panels/$assetName").bufferedReader(Charsets.UTF_8).use { it.readText() }
+            } catch (e: Exception) {
+                DebugLogger.logException("SettingsPanelLoader", e)
+                ""
+            }
+        }
         private val dbHelperRef = WeakReference(dbHelper)
         private val db: DatabaseHelper
             get() = dbHelperRef.get() ?: throw IllegalStateException("قاعدة البيانات غير متاحة")
