@@ -8365,6 +8365,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 }.toString()
             }
 
+            val densityScale = activity.resources.displayMetrics.density.coerceAtLeast(1f)
+            val renderWidthPx = (794f * densityScale).toInt().coerceAtLeast(794)
+            val baseRenderHeightPx = (1123f * densityScale).toInt().coerceAtLeast(1123)
+
             activity.runOnUiThread {
                 var capture: WebView? = null
                 var tempHtml: File? = null
@@ -8542,10 +8546,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         // physical pixel scale and use the real document height instead of
                         // truncating every invoice to the first A4-sized viewport.
                         val cssContentHeight = runCatching {
-                            (view.contentHeight * view.scale).toInt()
+                            (view.contentHeight * densityScale * view.scale).toInt()
                         }.getOrDefault(0)
                         val renderHeight = maxOf(
-                            1123,
+                            baseRenderHeightPx,
                             view.height,
                             renderWidth * 842 / 595,
                             cssContentHeight
@@ -8564,10 +8568,12 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         // blank picture even when the live WebView has painted correctly.
                         // Try the live view first, inspect its pixels, then retry the legacy
                         // Picture path only if the first capture is genuinely blank.
-                        fun visibleInkCount(image: Bitmap): Pair<Int, Int> {
+                        fun bitmapStats(image: Bitmap): Triple<Int, Int, Int> {
                             var visible = 0
+                            var lightPaper = 0
                             var total = 0
-                            val step = maxOf(1, minOf(image.width, image.height) / 100)
+                            val stepX = maxOf(1, image.width / 96)
+                            val stepY = maxOf(1, image.height / 128)
                             var y = 0
                             while (y < image.height) {
                                 var x = 0
@@ -8576,22 +8582,31 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     val r = android.graphics.Color.red(pixel)
                                     val g = android.graphics.Color.green(pixel)
                                     val b = android.graphics.Color.blue(pixel)
-                                    total++
                                     val maxChannel = maxOf(r, g, b)
                                     val minChannel = minOf(r, g, b)
-                                    if (maxChannel < 232 || (maxChannel - minChannel) > 28) visible++
-                                    x += step
+                                    total++
+                                    if (r >= 200 && g >= 200 && b >= 200) lightPaper++
+                                    if (maxChannel < 235 || (maxChannel - minChannel) > 24) visible++
+                                    x += stepX
                                 }
-                                y += step
+                                y += stepY
                             }
-                            return visible to total
+                            return Triple(visible, total, lightPaper)
+                        }
+
+                        fun looksLikeInvoice(image: Bitmap): Boolean {
+                            val stats = bitmapStats(image)
+                            return stats.second > 0 &&
+                                stats.third.toDouble() / stats.second >= 0.35 &&
+                                stats.first.toDouble() / stats.second >= 0.002
                         }
 
                         view.draw(canvas)
-                        var (visibleSamples, totalSamples) = visibleInkCount(bitmap!!)
+                        var (visibleSamples, totalSamples, lightSamples) = bitmapStats(bitmap!!)
                         val requiredVisibleSamples = maxOf(12, totalSamples / 200)
                         var captureMethod = "webview-draw"
-                        if (visibleSamples < requiredVisibleSamples) {
+                        var captureLooksValid = looksLikeInvoice(bitmap!!)
+                        if (!captureLooksValid) {
                             canvas.drawColor(android.graphics.Color.WHITE)
                             val picture = view.capturePicture()
                             if (picture.width > 0 && picture.height > 0) {
@@ -8602,17 +8617,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                 )
                                 picture.draw(canvas)
                                 canvas.restore()
-                                val fallbackCounts = visibleInkCount(bitmap!!)
+                                val fallbackCounts = bitmapStats(bitmap!!)
                                 visibleSamples = fallbackCounts.first
                                 totalSamples = fallbackCounts.second
+                                lightSamples = fallbackCounts.third
+                                captureLooksValid = looksLikeInvoice(bitmap!!)
                                 captureMethod = "capturePicture-fallback"
                             }
                         }
                         DebugLogger.info(
                             "InvoicePdfValidation",
-                            "method=$captureMethod capture=${bitmap!!.width}x${bitmap!!.height}, visible=$visibleSamples/$totalSamples, required=$requiredVisibleSamples"
+                            "method=$captureMethod capture=${bitmap!!.width}x${bitmap!!.height}, visible=$visibleSamples/$totalSamples, light=$lightSamples/$totalSamples"
                         )
-                        if (visibleSamples < requiredVisibleSamples) {
+                        if (!captureLooksValid || visibleSamples < requiredVisibleSamples) {
                             bitmap?.recycle()
                             bitmap = null
                             if (attempt < 3) {
@@ -8724,6 +8741,12 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         // some Android System WebView/OEM combinations.
                         settings.useWideViewPort = true
                         settings.loadWithOverviewMode = false
+                        // Keep invoice colors stable regardless of the app/system dark theme.
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            settings.isAlgorithmicDarkeningAllowed = false
+                        }
+                        @Suppress("DEPRECATION")
+                        run { settings.forceDark = WebSettings.FORCE_DARK_OFF }
                         alpha = 1f
                         translationY = 0f
                         isClickable = false
@@ -8733,11 +8756,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     root.addView(
                         capture,
                         0,
-                        android.widget.FrameLayout.LayoutParams(794, 1123)
+                        android.widget.FrameLayout.LayoutParams(renderWidthPx, baseRenderHeightPx)
                     )
                     tempHtml = File(activity.cacheDir, "invoice_" + safeNumber + "_" + System.currentTimeMillis() + ".html")
                     tempPdf = File(invoiceDir, "." + safeNumber + "_" + System.currentTimeMillis() + ".pending.pdf")
-                    tempHtml!!.writeText(invoiceHtml, Charsets.UTF_8)
+                    tempHtml!!.writeText(buildInvoiceWrapperHtml(invoiceHtml), Charsets.UTF_8)
                     mainHandler.postDelayed({
                         finish(JSONObject().put("success", false).put("error", "انتهت مهلة إنشاء ملف PDF"))
                     }, 120_000L)
@@ -8785,20 +8808,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     view.postDelayed({
                                         if (completed) return@postDelayed
                                         try {
-                                            val cssHeight = (view.contentHeight * view.scale).toInt()
-                                            val measuredHeight = maxOf(1123, cssHeight, 794 * 842 / 595)
+                                            val cssHeight = (view.contentHeight * densityScale * view.scale).toInt()
+                                            val measuredHeight = maxOf(baseRenderHeightPx, cssHeight, renderWidthPx * 842 / 595)
                                                 .coerceAtMost(12000)
                                             view.measure(
-                                                View.MeasureSpec.makeMeasureSpec(794, View.MeasureSpec.EXACTLY),
+                                                View.MeasureSpec.makeMeasureSpec(renderWidthPx, View.MeasureSpec.EXACTLY),
                                                 View.MeasureSpec.makeMeasureSpec(measuredHeight, View.MeasureSpec.EXACTLY)
                                             )
-                                            view.layout(0, 0, 794, measuredHeight)
+                                            view.layout(0, 0, renderWidthPx, measuredHeight)
                                             view.requestLayout()
                                             view.invalidate()
                                         } catch (layoutError: Exception) {
                                             DebugLogger.warn("InvoicePdfLayout", "Explicit WebView measure/layout failed: ${layoutError.message}")
                                         }
-                                        renderAndSave(view, 794, Bitmap.Config.ARGB_8888, 1)
+                                        renderAndSave(view, renderWidthPx, Bitmap.Config.ARGB_8888, 1)
                                     }, 350L)
                                 }
                             }
@@ -8868,39 +8891,53 @@ fun getDashboardStats(jsonData: String = "{}"): String {
          *   (نتجنب تكرار الروابط وتضخيم عدد الطلبات في WebView الالتقاط).
          */
         private fun buildInvoiceWrapperHtml(invoiceHtml: String): String {
-            val cleaned = invoiceHtml
-                .replace(Regex("^\\s*<!DOCTYPE[^>]*>", RegexOption.IGNORE_CASE), "")
-                .replace(Regex("</?html[^>]*>", RegexOption.IGNORE_CASE), "")
-                .replace(Regex("</?head[^>]*>", RegexOption.IGNORE_CASE), "")
-                .replace(Regex("</?body[^>]*>", RegexOption.IGNORE_CASE), "")
+            // Preserve the source document's head (metadata/styles) and body separately.
+            val headContent = Regex("""(?is)<head\b[^>]*>(.*?)</head>""")
+                .find(invoiceHtml)?.groupValues?.get(1).orEmpty()
+            val bodyMatch = Regex("""(?is)<body\b[^>]*>(.*?)</body>""").find(invoiceHtml)
+            val bodyContent = bodyMatch?.groupValues?.get(1) ?: invoiceHtml
+                .replace(Regex("""(?is)^\s*<!doctype[^>]*>"""), "")
+                .replace(Regex("""(?is)</?(html|head|body)\b[^>]*>"""), "")
+            val safeHead = headContent.replace(
+                Regex("""(?is)<meta\b(?=[^>]*\bname\s*=\s*['"]?viewport['"]?)[^>]*>"""),
+                ""
+            )
             return """
                 <!DOCTYPE html>
-                <html lang="ar" dir="rtl">
+                <html lang="ar" dir="rtl" data-theme="light">
                 <head>
-                <meta charset="utf-8">
-                <meta name="viewport" content="width=794, initial-scale=1.0, user-scalable=no">
-                <style>
-                  *, *::before, *::after { box-sizing: border-box; }
-                  html, body {
-                    margin: 0; padding: 0; border: 0;
-                    width: 794px; min-width: 794px;
-                    min-height: 1123px;
-                    background: #ffffff;
-                    direction: rtl;
-                    font-family: 'Cairo', 'Noto Sans Arabic', Arial, sans-serif;
-                    -webkit-font-smoothing: antialiased;
-                    font-variant-numeric: lining-nums tabular-nums;
-                    font-feature-settings: "lnum" 1, "tnum" 1;
-                    overflow: visible !important;
-                  }
-                  body > #posInvoice { display: block !important; }
-                  img { max-width: 100%; display: block; }
-                  table { border-collapse: separate; }
-                  * { animation: none !important; transition: none !important; }
-                </style>
+                  <meta charset="utf-8">
+                  <meta name="viewport" content="width=794, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                  $safeHead
+                  <style>
+                    *, *::before, *::after { box-sizing: border-box; }
+                    html, body {
+                      margin: 0 !important; padding: 0 !important; border: 0;
+                      width: 794px; min-width: 794px; max-width: 794px;
+                      min-height: 1123px; background: #fff !important;
+                      background-color: #fff !important; color: #172b45;
+                      direction: rtl; font-family: 'Cairo', 'Noto Sans Arabic', Arial, sans-serif;
+                      -webkit-font-smoothing: antialiased;
+                      font-variant-numeric: lining-nums tabular-nums;
+                      font-feature-settings: "lnum" 1, "tnum" 1;
+                      overflow: visible !important; color-scheme: light;
+                    }
+                    body > #posInvoice, #posInvoice {
+                      display: block !important; visibility: visible !important; opacity: 1 !important;
+                      position: relative !important; left: 0 !important; top: 0 !important;
+                      z-index: auto !important; transform: none !important;
+                      width: 794px !important; min-width: 794px !important;
+                      min-height: 1123px !important; height: auto !important;
+                      margin: 0 auto !important; background: #fff !important;
+                      background-color: #fff !important; box-sizing: border-box !important;
+                    }
+                    #posInvoice * { visibility: visible !important; opacity: 1 !important; }
+                    img { max-width: 100%; }
+                    * { animation: none !important; transition: none !important; }
+                  </style>
                 </head>
-                <body>
-                $cleaned
+                <body style="margin:0;padding:0;background:#fff;width:794px;min-height:1123px;">
+                  $bodyContent
                 </body>
                 </html>
             """.trimIndent()
