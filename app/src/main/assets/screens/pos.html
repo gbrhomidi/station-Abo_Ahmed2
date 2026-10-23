@@ -5742,6 +5742,10 @@ function renderWhatsappInvoicePreview(invoice) {
     cloned.style.opacity = '1';
     cloned.style.position = 'relative';
     cloned.style.left = '0';
+    cloned.style.top = '0';
+    cloned.style.zIndex = 'auto';
+    cloned.style.isolation = 'isolate';
+    cloned.style.transform = 'none';
 
     scaler.innerHTML = '';
     scaler.appendChild(cloned);
@@ -5756,6 +5760,10 @@ function renderWhatsappInvoicePreview(invoice) {
         fullClone.style.opacity = '1';
         fullClone.style.position = 'relative';
         fullClone.style.left = '0';
+        fullClone.style.top = '0';
+        fullClone.style.zIndex = 'auto';
+        fullClone.style.isolation = 'isolate';
+        fullClone.style.transform = 'none';
         fullClone.style.width = '794px';
         fullClone.style.minHeight = '1123px';
         fullClone.style.background = '#fff';
@@ -6025,6 +6033,10 @@ function buildCaptureDocument(invoiceSectionOverride) {
     forceStyle(captured, 'opacity', '1');
     forceStyle(captured, 'position', 'relative');
     forceStyle(captured, 'left', '0');
+    forceStyle(captured, 'top', '0');
+    forceStyle(captured, 'z-index', 'auto');
+    forceStyle(captured, 'isolation', 'isolate');
+    forceStyle(captured, 'transform', 'none');
     forceStyle(captured, 'width', '794px');
     forceStyle(captured, 'min-height', '1123px');
     forceStyle(captured, 'height', 'auto');
@@ -6068,6 +6080,10 @@ function buildCaptureDocument(invoiceSectionOverride) {
         opacity: 1 !important;
         position: relative !important;
         left: 0 !important;
+        top: 0 !important;
+        z-index: auto !important;
+        transform: none !important;
+        isolation: isolate !important;
         width: 794px !important;
         min-width: 794px !important;
         min-height: 1123px !important;
@@ -6120,7 +6136,7 @@ function buildCaptureDocument(invoiceSectionOverride) {
 
     const invoiceHtml =
         '<!DOCTYPE html>' +
-        '<html lang="ar" dir="rtl">' +
+        '<html lang="ar" dir="rtl" data-theme="light">' +
         '<head>' +
             '<meta charset="UTF-8">' +
             invoiceNumberMeta +
