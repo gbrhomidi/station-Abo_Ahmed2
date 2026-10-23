@@ -8898,7 +8898,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     Promise.all(waits).then(function() {
                                       document.documentElement.setAttribute('data-invoice-ready','1');
                                     });
-                                    return 'waiting';
+                                    var snapshot = document.getElementById('posInvoice') || document.body;
+                                    var style = snapshot ? getComputedStyle(snapshot) : null;
+                                    return JSON.stringify({rootFound:!!document.getElementById('posInvoice'),textChars:snapshot?(snapshot.innerText||snapshot.textContent||'').trim().length:0,htmlChars:snapshot?snapshot.innerHTML.length:0,rows:snapshot?snapshot.querySelectorAll('tr').length:0,tables:snapshot?snapshot.querySelectorAll('table').length:0,images:document.images.length,pendingImages:Array.prototype.filter.call(document.images,function(i){return !i.complete}).length,docHeight:document.documentElement.scrollHeight,bodyHeight:document.body?document.body.scrollHeight:0,rootHeight:snapshot?snapshot.scrollHeight:0,rootWidth:snapshot?snapshot.getBoundingClientRect().width:0,display:style?style.display:null,visibility:style?style.visibility:null,opacity:style?style.opacity:null});
                                   } catch(e) { return 'readiness-error:' + String(e); }
                                 })();
                             """.trimIndent()
@@ -8954,7 +8956,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     }
                                 )
                             }
-                            view.evaluateJavascript(readinessScript) {
+                            view.evaluateJavascript(readinessScript) { diagnosticSnapshot ->
+                                DebugLogger.info("InvoicePdfDiag", "phase=initial_dom snapshot=" + (diagnosticSnapshot?.take(1400) ?: "null"))
                                 waitForInvoiceReady(System.currentTimeMillis() + 4000L)
                             }
                         }
