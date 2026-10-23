@@ -8642,11 +8642,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             throw IllegalStateException("تعذر تهيئة ملف PDF المؤقت")
                         }
 
-                        // WebView.contentHeight is in CSS pixels. Convert it to the view's
-                        // physical pixel scale and use the real document height instead of
-                        // truncating every invoice to the first A4-sized viewport.
+                        // WebView.contentHeight is already expressed in CSS pixels. The
+                        // wrapper fixes the viewport to 794 CSS px and renderWidth is
+                        // exactly 794 * display density, so convert the height using
+                        // display density only. Multiplying by WebView.scale here applies
+                        // page zoom a second time: on affected devices scale can be > 1,
+                        // inflating a 1123px invoice to ~8984px and making the bitmap/PDF
+                        // renderer paint a mostly invalid surface.
                         val cssContentHeight = runCatching {
-                            (view.contentHeight * densityScale * view.scale).toInt()
+                            (view.contentHeight * densityScale).toInt()
                         }.getOrDefault(0)
                         val renderHeight = maxOf(
                             baseRenderHeightPx,
