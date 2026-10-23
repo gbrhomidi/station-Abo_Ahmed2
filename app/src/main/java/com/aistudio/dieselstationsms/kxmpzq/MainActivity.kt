@@ -5129,6 +5129,41 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try { dataResponse(db.getAllSystemSettingsMap()) } catch (e: Exception) { errorResponse(e.message) }
         }
 
+        /**
+         * Read one system setting directly from SQLite. This deliberately avoids relying
+         * on the aggregate map when the UI verifies a just-written value.
+         */
+        @JavascriptInterface
+        fun getSystemSetting(key: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val normalizedKey = key.trim()
+            if (normalizedKey.isBlank()) return errorResponse("مفتاح إعداد النظام مطلوب")
+            return try {
+                db.readableDatabase.rawQuery(
+                    "SELECT setting_value FROM system_settings WHERE setting_key = ? AND archived = 0 LIMIT 1",
+                    arrayOf(normalizedKey)
+                ).use { cursor ->
+                    if (!cursor.moveToFirst()) {
+                        JSONObject().apply {
+                            put("success", true)
+                            put("found", false)
+                            put("key", normalizedKey)
+                        }.toString()
+                    } else {
+                        JSONObject().apply {
+                            put("success", true)
+                            put("found", true)
+                            put("key", normalizedKey)
+                            put("value", cursor.getString(0))
+                        }.toString()
+                    }
+                }
+            } catch (e: Exception) {
+                DebugLogger.logException("SystemSettingReadback", e)
+                errorResponse(e.message)
+            }
+        }
+
         @JavascriptInterface
         fun setSystemSetting(key: String, value: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
