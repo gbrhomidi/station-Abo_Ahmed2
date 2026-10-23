@@ -2097,6 +2097,9 @@ tr:last-child td { border-bottom:0; }
                 case 'getAllSystemSettingsMap':
                     raw = bridge.getAllSystemSettingsMap();
                     break;
+                case 'getSystemSetting':
+                    raw = bridge.getSystemSetting(String(payload.key));
+                    break;
                 case 'setSystemSetting':
                     raw = bridge.setSystemSetting(String(payload.key), String(payload.value));
                     break;
@@ -3712,26 +3715,29 @@ tr:last-child td { border-bottom:0; }
 
             for (const [key, value] of Object.entries(allSystemPayload)) {
                 const expected = String(value ?? '');
-                let actualMap = persistedSystem;
-                // Re-read after the write and retry the idempotent SQLite upsert once if
-                // the first aggregate snapshot omitted this key (older DBs may have stale rows).
-                if (!Object.prototype.hasOwnProperty.call(actualMap, key) ||
-                    String(actualMap[key] ?? '') !== expected) {
-                    await bridgeCall('setSystemSetting', {key, value: expected});
-                    actualMap = dataOf(await bridgeCall('getAllSystemSettingsMap')) || {};
+                let readback = await bridgeCall('getSystemSetting', {key});
+                if (!readback || readback.success !== true) {
+                    throw new Error('تعذرت قراءة إعداد النظام من SQLite: ' + key);
                 }
-                if (!Object.prototype.hasOwnProperty.call(actualMap, key) ||
-                    String(actualMap[key] ?? '') !== expected) {
-                    const actual = Object.prototype.hasOwnProperty.call(actualMap, key)
-                        ? String(actualMap[key] ?? '')
-                        : '(المفتاح غير موجود في قراءة SQLite)';
+
+                // A single-key read is the source of truth. If it shows a missing or
+                // mismatched row, retry the idempotent upsert once and read that exact key again.
+                if (readback.found !== true || String(readback.value ?? '') !== expected) {
+                    await bridgeCall('setSystemSetting', {key, value: expected});
+                    readback = await bridgeCall('getSystemSetting', {key});
+                }
+                if (!readback || readback.success !== true || readback.found !== true ||
+                    String(readback.value ?? '') !== expected) {
+                    const actual = readback && readback.found === true
+                        ? String(readback.value ?? '')
+                        : '(المفتاح غير موجود في SQLite)';
                     throw new Error(
                         'فشل التحقق من إعداد النظام ' + key +
                         '؛ القيمة المطلوبة: ' + expected + '؛ القيمة المقروءة: ' + actual
                     );
                 }
-                persistedSystem[key] = actualMap[key];
-                systemSettings[key] = actualMap[key];
+                persistedSystem[key] = readback.value;
+                systemSettings[key] = readback.value;
             }
 
             Object.keys(settings).forEach(key => delete settings[key]);
