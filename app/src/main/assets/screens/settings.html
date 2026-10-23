@@ -1848,6 +1848,15 @@ tr:last-child td { border-bottom:0; }
     </div>
 </div>
 
+<script src="file:///android_asset/assets/screens/settings-panels/general.js"></script>
+<script src="file:///android_asset/assets/screens/settings-panels/operations.js"></script>
+<script src="file:///android_asset/assets/screens/settings-panels/sms.js"></script>
+<script src="file:///android_asset/assets/screens/settings-panels/monitoring.js"></script>
+<script src="file:///android_asset/assets/screens/settings-panels/security.js"></script>
+<script src="file:///android_asset/assets/screens/settings-panels/backup.js"></script>
+<script src="file:///android_asset/assets/screens/settings-panels/maintenance.js"></script>
+<script src="file:///android_asset/assets/screens/settings-panels/users.js"></script>
+<script src="file:///android_asset/assets/screens/settings-panels/display.js"></script>
 <script>
 (function () {
     'use strict';
@@ -4183,17 +4192,10 @@ tr:last-child td { border-bottom:0; }
         const actions = el('screenActions');
         const loading = el('panelLoading');
         const panelFiles = ["general","operations","sms","monitoring","security","backup","maintenance","users","display"];
-        const loaded = await Promise.all(panelFiles.map(file => new Promise((resolve, reject) => {
-            const request = new XMLHttpRequest();
-            request.open('GET', 'settings-panels/' + file + '.html', true);
-            request.onreadystatechange = function () {
-                if (request.readyState !== 4) return;
-                if ((request.status >= 200 && request.status < 300) || (request.status === 0 && request.responseText)) resolve(request.responseText);
-                else reject(new Error('تعذر تحميل شاشة الإعدادات: ' + file + ' (' + request.status + ')'));
-            };
-            request.onerror = () => reject(new Error('تعذر قراءة ملف الشاشة: ' + file));
-            request.send();
-        })));
+        const loaded = panelFiles.map(file => window.SettingsScreenTemplates && window.SettingsScreenTemplates[file]);
+        if (loaded.some(markup => typeof markup !== 'string' || !markup.trim())) {
+            throw new Error('تعذر تحميل إحدى شاشات الإعدادات المستقلة.');
+        }
         loaded.forEach(markup => {
             const template = document.createElement('template');
             template.innerHTML = markup.trim();
