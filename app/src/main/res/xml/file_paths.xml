@@ -55,6 +55,11 @@
         name="app_crash_logs"
         path="crashes/" />
 
+    <!-- Verified temporary invoice copies shared with external apps. -->
+    <cache-path
+        name="invoice_share_cache"
+        path="invoice-share/" />
+
     <!-- ═══ التخزين الخارجي (External Storage) ═══ -->
     
     <!-- 
