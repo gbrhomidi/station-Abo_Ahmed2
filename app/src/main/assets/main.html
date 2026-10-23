@@ -2137,8 +2137,21 @@
         // ================================================================
         // تحميل إعدادات العرض وتطبيقها
         // ================================================================
+        async function waitForAndroidBridge(maxAttempts = 10) {
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                if (useAndroidInterface && androidInterface) return true;
+                initAndroidBridge();
+                if (useAndroidInterface && androidInterface) return true;
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+            return useAndroidInterface && !!androidInterface;
+        }
+
         async function loadDisplaySettings() {
             try {
+                if (!await waitForAndroidBridge()) {
+                    throw new Error('AndroidInterface غير متاح بعد عدة محاولات');
+                }
                 const response = await apiCall('getAllSystemSettingsMap');
                 if (!response || response.success === false) {
                     throw new Error((response && response.error) || 'تعذر قراءة إعدادات العرض');
@@ -3962,6 +3975,7 @@
             clockInterval = setInterval(updateDateTime, 1000);
 
             initDragGestures();
+            const bridgeReady = await waitForAndroidBridge();
             await loadDisplaySettings();
             initSleepMode();
 
@@ -4009,7 +4023,6 @@
 
             document.addEventListener('click', handlePanelOutsideClick);
 
-            const bridgeReady = initAndroidBridge();
             initPullToRefresh();
 
             if (!bridgeReady) {

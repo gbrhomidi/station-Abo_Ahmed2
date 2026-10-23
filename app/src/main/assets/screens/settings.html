@@ -319,7 +319,7 @@ button:disabled { opacity:.55; cursor:not-allowed; }
 .screen-host.active { display:block; }
 .screen-toolbar { display:flex; justify-content:flex-start; margin-bottom:10px; }
 .screen-back { flex:0 1 auto; min-width:170px; }
-.screen-actions { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 2px; padding-top:12px; border-top:1px solid var(--border); }
+.screen-actions { position:sticky; bottom:0; z-index:20; display:flex; flex-wrap:wrap; gap:8px; margin:12px -2px 2px; padding:12px 2px calc(12px + env(safe-area-inset-bottom)); border-top:1px solid var(--border); background:color-mix(in srgb,var(--surface) 94%,transparent); backdrop-filter:blur(14px); }
 .screen-actions .btn { min-width:130px; }
 #searchBox.hidden, #bottomSave.hidden { display:none !important; }
 @media(max-width:520px) { .screen-host { max-height:calc(100dvh - 220px); padding:8px; border-radius:15px; } .screen-actions .btn { flex:1 1 100%; } }
@@ -3457,7 +3457,9 @@ tr:last-child td { border-bottom:0; }
         el('searchBox').classList.remove('hidden');
         const hasEditableSettings = ['general','startup','sms','security','backup','maintenance','display'].includes(name);
         el('saveBtn').classList.toggle('hidden', !hasEditableSettings);
-        el('bottomSave').classList.toggle('hidden', !hasEditableSettings);
+        // The fixed action is reserved for the settings home. Each tab uses
+        // its contextual actions at the bottom of the tab content.
+        el('bottomSave').classList.add('hidden');
         el('resetBtn').classList.toggle('hidden', name !== 'general');
         if (name === 'monitoring') refreshMonitoring();
         if (name === 'backup') refreshBackups();
@@ -3475,8 +3477,8 @@ tr:last-child td { border-bottom:0; }
         el('settingsHome').classList.remove('hidden');
         el('homeStats').classList.remove('hidden');
         el('searchBox').classList.add('hidden');
-        el('saveBtn').classList.remove('hidden');
-        el('bottomSave').classList.add('hidden');
+        el('saveBtn').classList.add('hidden');
+        el('bottomSave').classList.remove('hidden');
         el('resetBtn').classList.add('hidden');
         window.scrollTo({top:0, behavior:'smooth'});
     }
