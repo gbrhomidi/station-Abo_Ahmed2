@@ -3634,12 +3634,68 @@ tr:last-child td { border-bottom:0; }
         }
     }
 
+    async function saveDisplaySettingsOnly() {
+        const payload = collectDisplaySettings();
+        const entries = Object.entries(payload);
+        if (!entries.length) throw new Error('لا توجد إعدادات عرض قابلة للحفظ.');
+
+        // The display tab is backed exclusively by system_settings. Do not read
+        // or write ApplicationSettings/legacy settings here: a corrupt legacy
+        // payload must not block an otherwise independent display save.
+        for (const [key, value] of entries) {
+            const expected = String(value ?? '');
+            await bridgeCall('setSystemSetting', {key, value: expected});
+        }
+
+        const persisted = {};
+        for (const [key, value] of entries) {
+            const expected = String(value ?? '');
+            let readback = await bridgeCall('getSystemSetting', {key});
+
+            // The retry is idempotent and covers devices where the first
+            // SQLite read races a just-completed native write.
+            if (!readback || readback.success !== true || readback.found !== true ||
+                String(readback.value ?? '') !== expected) {
+                await bridgeCall('setSystemSetting', {key, value: expected});
+                readback = await bridgeCall('getSystemSetting', {key});
+            }
+
+            if (!readback || readback.success !== true || readback.found !== true ||
+                String(readback.value ?? '') !== expected) {
+                const actual = readback && readback.found === true
+                    ? String(readback.value ?? '')
+                    : '(المفتاح غير موجود في SQLite)';
+                throw new Error(
+                    'فشل حفظ إعداد العرض ' + key +
+                    '؛ القيمة المطلوبة: ' + expected + '؛ القيمة المقروءة: ' + actual
+                );
+            }
+
+            persisted[key] = readback.value;
+            systemSettings[key] = readback.value;
+        }
+
+        entries.forEach(([key]) => setSystemField(key, persisted[key]));
+        refreshSleepPreview();
+        loadLockBgPreview(el('setting-DISPLAY_LOCK_BG_IMAGE')?.value || '');
+        toast('تم حفظ إعدادات العرض والتحقق منها في SQLite');
+    }
+
     async function saveSettings() {
         closeActivePopover();
         showLoading(true);
         try {
             if (!activeTab) throw new Error('افتح تبويباً أولاً قبل حفظ الإعدادات.');
             if (['monitoring','users'].includes(activeTab)) throw new Error('هذا التبويب لا يحتوي إعدادات قابلة للحفظ.');
+
+            // Keep display persistence isolated from the application and
+            // legacy settings contracts. This is intentionally before any
+            // getApplicationSettings() call below.
+            if (activeTab === 'display') {
+                await saveDisplaySettingsOnly();
+                return;
+            }
+
             const uiApplicationPayload = collectApplicationSettings(activeTab);
             const allSystemPayload = collectSystemSettings(activeTab);
 
