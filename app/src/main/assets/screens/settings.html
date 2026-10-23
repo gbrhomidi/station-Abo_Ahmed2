@@ -702,6 +702,35 @@ button:disabled { opacity:.55; cursor:not-allowed; }
     gap: 10px;
 }
 
+.popover-actions {
+    position: sticky;
+    bottom: -16px;
+    display: flex;
+    gap: 8px;
+    margin: 6px -16px -16px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 2;
+}
+.popover-actions button {
+    flex: 1 1 0;
+    min-height: 44px;
+    border-radius: 11px;
+    border: 1px solid var(--border);
+    font-weight: 900;
+    font-size: .78rem;
+}
+.popover-actions .popover-apply {
+    color: #fff;
+    background: linear-gradient(135deg,var(--primary-2),var(--primary));
+    border-color: transparent;
+}
+.popover-actions .popover-cancel {
+    color: var(--text);
+    background: var(--surface-2);
+}
+
 /* ====== Slider داخل Popover ====== */
 .slider-field {
     display: flex;
@@ -2149,6 +2178,32 @@ tr:last-child td { border-bottom:0; }
             closeBtn.addEventListener('click', closeActivePopover);
             header.appendChild(closeBtn);
         }
+
+        // Capture the field's committed value so Cancel really discards edits.
+        const settingKey = trigger.dataset.triggerFor || '';
+        const backingInput = settingKey ? el('setting-' + settingKey) : null;
+        const previousValue = backingInput ? backingInput.value : null;
+        const actions = document.createElement('div');
+        actions.className = 'popover-actions';
+        const cancelButton = document.createElement('button');
+        cancelButton.type = 'button';
+        cancelButton.className = 'popover-cancel';
+        cancelButton.textContent = 'إلغاء';
+        cancelButton.addEventListener('click', () => {
+            if (backingInput && previousValue !== null) {
+                backingInput.value = previousValue;
+                updateTriggerDisplay(settingKey, previousValue);
+                backingInput.dispatchEvent(new Event('change', {bubbles:true}));
+            }
+            closeActivePopover();
+        });
+        const applyButton = document.createElement('button');
+        applyButton.type = 'button';
+        applyButton.className = 'popover-apply';
+        applyButton.textContent = 'تطبيق الاختيار';
+        applyButton.addEventListener('click', closeActivePopover);
+        actions.append(cancelButton, applyButton);
+        content.appendChild(actions);
 
         popover.appendChild(content);
         document.body.appendChild(popover);
@@ -3656,11 +3711,27 @@ tr:last-child td { border-bottom:0; }
             Object.assign(persistedLegacy, verifiedLegacy);
 
             for (const [key, value] of Object.entries(allSystemPayload)) {
-                if (!Object.prototype.hasOwnProperty.call(persistedSystem, key) ||
-                    String(persistedSystem[key]) !== String(value ?? '')) {
-                    throw new Error('لم يتم التحقق من حفظ الإعداد: ' + key);
+                const expected = String(value ?? '');
+                let actualMap = persistedSystem;
+                // Re-read after the write and retry the idempotent SQLite upsert once if
+                // the first aggregate snapshot omitted this key (older DBs may have stale rows).
+                if (!Object.prototype.hasOwnProperty.call(actualMap, key) ||
+                    String(actualMap[key] ?? '') !== expected) {
+                    await bridgeCall('setSystemSetting', {key, value: expected});
+                    actualMap = dataOf(await bridgeCall('getAllSystemSettingsMap')) || {};
                 }
-                systemSettings[key] = persistedSystem[key];
+                if (!Object.prototype.hasOwnProperty.call(actualMap, key) ||
+                    String(actualMap[key] ?? '') !== expected) {
+                    const actual = Object.prototype.hasOwnProperty.call(actualMap, key)
+                        ? String(actualMap[key] ?? '')
+                        : '(المفتاح غير موجود في قراءة SQLite)';
+                    throw new Error(
+                        'فشل التحقق من إعداد النظام ' + key +
+                        '؛ القيمة المطلوبة: ' + expected + '؛ القيمة المقروءة: ' + actual
+                    );
+                }
+                persistedSystem[key] = actualMap[key];
+                systemSettings[key] = actualMap[key];
             }
 
             Object.keys(settings).forEach(key => delete settings[key]);
