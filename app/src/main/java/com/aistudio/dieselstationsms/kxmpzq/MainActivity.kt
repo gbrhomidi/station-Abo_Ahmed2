@@ -8655,6 +8655,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         )
                         view.layout(0, 0, renderWidth, renderHeight)
                         view.invalidate()
+                        DebugLogger.info("InvoicePdfDiag", "phase=before_draw attempt=" + attempt + " attached=" + view.isAttachedToWindow + " shown=" + view.isShown + " measured=" + view.measuredWidth + "x" + view.measuredHeight + " laidOut=" + view.width + "x" + view.height + " contentHeight=" + view.contentHeight + " scale=" + view.scale + " htmlChars=" + (tempHtml?.length() ?: -1))
 
                         bitmap = Bitmap.createBitmap(renderWidth, renderHeight, config)
                         val canvas = android.graphics.Canvas(bitmap!!)
@@ -8720,6 +8721,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                 captureMethod = "capturePicture-fallback"
                             }
                         }
+                        DebugLogger.info(
+                            "InvoicePdfDiag",
+                            "phase=bitmap attempt=" + attempt + " method=" + captureMethod + " capture=" + bitmap!!.width + "x" + bitmap!!.height + " contentHeight=" + cssContentHeight + " renderHeight=" + renderHeight + " visible=" + visibleSamples + "/" + totalSamples + " light=" + lightSamples + "/" + totalSamples + " requiredVisible=" + requiredVisibleSamples + " valid=" + captureLooksValid
+                        )
                         DebugLogger.info(
                             "InvoicePdfValidation",
                             "method=$captureMethod capture=${bitmap!!.width}x${bitmap!!.height}, visible=$visibleSamples/$totalSamples, light=$lightSamples/$totalSamples"
@@ -8929,6 +8934,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     { rawResult ->
                                         val ready = rawResult?.contains("\\\"ready\\\":true") == true
                                         if (ready || System.currentTimeMillis() >= deadlineMs) {
+                                            DebugLogger.info("InvoicePdfDiag", "phase=dom_ready deadline=" + (System.currentTimeMillis() >= deadlineMs) + " result=" + (rawResult?.take(1200) ?: "null"))
                                             DebugLogger.info("InvoicePdfReady", "DOM readiness: ${rawResult?.take(300) ?: "null"}")
                                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                                                 view.postVisualStateCallback(
