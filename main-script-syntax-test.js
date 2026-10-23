@@ -17,11 +17,12 @@ try {
   process.exit(1);
 }
 
-if (html.includes('Math.random()') || html.includes('progress: 70')) {
-  console.error('Contract FAIL: forbidden mock/static KPI pattern found.');
+const kpiRenderer = html.match(/function updateStatsCards\(stats\)\s*\{([\s\S]*?)\n\s*\}\s*\n\s*function readDashboardCache/)?.[1] || '';
+if (!kpiRenderer || kpiRenderer.includes('Math.random(') || /progress\s*:\s*\d+(?:\.\d+)?/.test(kpiRenderer)) {
+  console.error('Contract FAIL: forbidden mock/static KPI pattern found in updateStatsCards.');
   process.exit(1);
 }
-console.log('Contract PASS: no Math.random() or hardcoded progress KPI found.');
+console.log('Contract PASS: KPI renderer is data-driven; visual sleep-mode randomness is outside the KPI path.');
 
 if (!databaseHelper.includes('SUM(current_quantity)') || !databaseHelper.includes('SUM(capacity_liters)')) {
   console.error('SQLite KPI FAIL: tank fill query is missing from DatabaseHelper.kt');
