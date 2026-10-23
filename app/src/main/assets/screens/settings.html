@@ -1801,8 +1801,25 @@ tr:last-child td { border-bottom:0; }
         </div>
     </section>
     <div class="screen-host" id="screenHost" aria-live="polite" aria-label="شاشة إعدادات المجموعة المحددة">
-        <div id="panelLoading" class="empty-state">جارٍ تحميل شاشات الإعدادات…</div>
-        <div class="screen-actions" id="screenActions">
+        <section class="panel" id="panel-general"><div class="card"><div class="card-head"><div class="card-head-main"><div class="card-avatar"><i class="fas fa-cog"></i></div><div><h2>الإعدادات العامة</h2><p>تفضيلات التطبيق وإعدادات النظام</p></div></div><span class="badge">SQLite / Android</span></div><div id="generalFields" class="form-grid"></div></div><div class="card"><div class="card-head"><div class="card-head-main"><div class="card-avatar"><i class="fas fa-database"></i></div><div><h2>إعدادات النظام وقاعدة البيانات</h2></div></div><span class="badge">system_settings</span></div><div id="systemFields" class="form-grid"></div></div></section>
+
+<section class="panel" id="panel-startup"><div class="card"><div class="card-head"><div class="card-head-main"><div class="card-avatar"><i class="fas fa-power-off"></i></div><div><h2>التشغيل والمعالجة</h2><p>الخيارات التشغيلية الخاصة بالخدمة والمعالجة</p></div></div></div><div id="startupFields" class="form-grid"></div></div></section>
+
+<section class="panel" id="panel-sms"><div class="card"><div class="card-head"><div class="card-head-main"><div class="card-avatar"><i class="fas fa-sms"></i></div><div><h2>خدمة SMS</h2><p>إعدادات الاستقبال والإرسال وإعادة المحاولة</p></div></div></div><div id="smsFields" class="form-grid"></div></div></section>
+
+<section class="panel" id="panel-monitoring"><div class="card"><div class="card-head"><div class="card-head-main"><div class="card-avatar"><i class="fas fa-heartbeat"></i></div><div><h2>المراقبة والصحة</h2><p>بيانات حية من Android Monitoring Repository</p></div></div><span class="badge" id="monitoringBadge">غير مقروءة</span></div><div id="monitoringState" class="status-grid"><div class="empty-state">اضغط تحديث الحالة لقراءة الحالة الفعلية.</div></div><div id="metrics" class="status-grid" style="margin-top:9px"></div><div class="actions"><button class="btn primary" id="refreshMonitoring"><i class="fas fa-sync-alt"></i> تحديث الحالة</button><button class="btn" id="openMonitoringReport"><i class="fas fa-file-alt"></i> تقرير الحالة</button><button class="btn warning" id="clearLogs"><i class="fas fa-broom"></i> تنظيف السجلات</button><button class="btn" id="clearMetrics"><i class="fas fa-chart-line"></i> تنظيف المقاييس</button></div></div></section>
+
+<section class="panel" id="panel-security"><div class="card"><div class="card-head"><div class="card-head-main"><div class="card-avatar"><i class="fas fa-shield-alt"></i></div><div><h2>الأمان والخصوصية</h2><p>إعدادات الحماية التي يدعمها التطبيق</p></div></div></div><div id="securityFields" class="form-grid"></div></div></section>
+
+<section class="panel" id="panel-backup"><div class="card"><div class="card-head"><div class="card-head-main"><div class="card-avatar"><i class="fas fa-copy"></i></div><div><h2>النسخ الاحتياطي</h2><p>إدارة النسخ المحفوظة</p></div></div></div><div id="backupFields" class="form-grid"></div><div class="actions"><button class="btn primary" id="createBackup">إنشاء نسخة</button><button class="btn" id="refreshBackups">تحديث القائمة</button></div><div class="table-shell"><table><thead><tr><th>المعرف</th><th>التاريخ</th><th>الحجم</th><th>تشفير</th><th>الإجراء</th></tr></thead><tbody id="backupsBody"><tr><td colspan="5"><div class="empty-state">لا توجد بيانات بعد.</div></td></tr></tbody></table></div></div></section>
+
+<section class="panel" id="panel-maintenance"><div class="card"><div class="card-head"><div class="card-head-main"><div class="card-avatar"><i class="fas fa-tools"></i></div><div><h2>الصيانة وقاعدة البيانات</h2><p>فحص السلامة وتحسين SQLite دون حذف بيانات الأعمال</p></div></div></div><div id="maintenanceFields" class="form-grid"></div><div class="actions"><button class="btn warning" id="optimizeDb">فحص وتحسين</button><button class="btn" id="checkIntegrity">فحص السلامة</button><button class="btn" id="refreshDbInfo">معلومات قاعدة البيانات</button></div><div id="integrityResult" class="status-grid"></div></div></section>
+
+<section class="panel" id="panel-users"><div class="card"><div class="card-head"><div class="card-head-main"><div class="card-avatar"><i class="fas fa-users"></i></div><div><h2>نتائج البحث في المستخدمين</h2></div></div><span class="badge" id="userSearchBadge">0</span></div><div class="notice">تُعرض بيانات المستخدمين الفعلية من قاعدة البيانات.</div><div class="table-shell"><table><thead><tr><th>ID</th><th>اسم المستخدم</th><th>الاسم الكامل</th><th>الدور</th><th>المحطة</th><th>الحالة</th><th>آخر دخول</th></tr></thead><tbody id="usersBody"><tr><td colspan="7"><div class="empty-state">اكتب كلمة بحث ثم اضغط بحث.</div></td></tr></tbody></table></div></div></section>
+
+<section class="panel" id="panel-display"><div class="card"><div class="card-head"><div class="card-head-main"><div class="card-avatar"><i class="fas fa-tv"></i></div><div><h2>إعدادات العرض</h2><p>شاشة التوقف، قفل الجلسة، والمظهر والوصولية</p></div></div><span class="badge">SQLite / Android</span></div><div class="notice">تُحفظ إعدادات العرض في system_settings وتُطبق على لوحة التحكم وشاشة القفل.</div><div id="displayFields" class="form-grid"></div></div></section>
+
+    <div class="screen-actions" id="screenActions">
         <button class="btn primary" id="saveBtn"><i class="fas fa-save"></i> حفظ إعدادات هذا التبويب</button>
         <button class="btn danger" id="resetBtn"><i class="fas fa-undo"></i> إعادة إعدادات التطبيق الافتراضية</button>
     </div>
@@ -1848,15 +1865,6 @@ tr:last-child td { border-bottom:0; }
     </div>
 </div>
 
-<script src="file:///android_asset/assets/screens/settings-panels/general.js"></script>
-<script src="file:///android_asset/assets/screens/settings-panels/operations.js"></script>
-<script src="file:///android_asset/assets/screens/settings-panels/sms.js"></script>
-<script src="file:///android_asset/assets/screens/settings-panels/monitoring.js"></script>
-<script src="file:///android_asset/assets/screens/settings-panels/security.js"></script>
-<script src="file:///android_asset/assets/screens/settings-panels/backup.js"></script>
-<script src="file:///android_asset/assets/screens/settings-panels/maintenance.js"></script>
-<script src="file:///android_asset/assets/screens/settings-panels/users.js"></script>
-<script src="file:///android_asset/assets/screens/settings-panels/display.js"></script>
 <script>
 (function () {
     'use strict';
@@ -4187,25 +4195,6 @@ tr:last-child td { border-bottom:0; }
         return escapeHtml(value).replace(/`/g,'&#96;');
     }
 
-    async function loadIndependentPanels() {
-        const host = el('screenHost');
-        const actions = el('screenActions');
-        const loading = el('panelLoading');
-        const panelFiles = ["general","operations","sms","monitoring","security","backup","maintenance","users","display"];
-        const loaded = panelFiles.map(file => window.SettingsScreenTemplates && window.SettingsScreenTemplates[file]);
-        if (loaded.some(markup => typeof markup !== 'string' || !markup.trim())) {
-            throw new Error('تعذر تحميل إحدى شاشات الإعدادات المستقلة.');
-        }
-        loaded.forEach(markup => {
-            const template = document.createElement('template');
-            template.innerHTML = markup.trim();
-            const panel = template.content.firstElementChild;
-            if (!panel || !panel.classList.contains('panel')) throw new Error('ملف شاشة إعدادات غير صالح');
-            host.insertBefore(panel, actions);
-        });
-        loading.remove();
-    }
-
     function runGlobalSearch() {
         const query = el('searchInput').value.trim().toLocaleLowerCase();
         if (activeTab === 'users') {
@@ -4226,18 +4215,11 @@ tr:last-child td { border-bottom:0; }
     }
 
     renderTabs();
+    renderFields();
+    bind();
     el('bottomSave').classList.add('hidden');
     el('resetBtn').classList.add('hidden');
-    loadIndependentPanels().then(() => {
-        renderFields();
-        bind();
-        loadSettings();
-    }).catch(error => {
-        const loading = el('panelLoading');
-        loading.textContent = error.message + ' — أعد فتح الشاشة وحاول مجدداً.';
-        loading.classList.add('bad');
-        console.error(error);
-    });
+    loadSettings();
 
 })();
 </script>
