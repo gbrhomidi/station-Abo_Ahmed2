@@ -3532,8 +3532,8 @@ tr:last-child td { border-bottom:0; }
     // Collect
     // ============================================================
     function renderTabs() {
-        el('tabs').innerHTML = tabs.map((tab, index) =>
-            `<button class="segment ${false ? 'active' : ''}" data-tab="${tab[0]}" type="button">
+        el('tabs').innerHTML = tabs.map((tab) =>
+            `<button class="segment" data-tab="${tab[0]}" type="button">
                 <i class="fas ${tab[2]}"></i> ${tab[1]}
             </button>`
         ).join('');
