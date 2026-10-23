@@ -2103,6 +2103,9 @@ tr:last-child td { border-bottom:0; }
                 case 'setSystemSetting':
                     raw = bridge.setSystemSetting(String(payload.key), String(payload.value));
                     break;
+                case 'saveDisplaySettings':
+                    raw = bridge.saveDisplaySettings(JSON.stringify(payload || {}));
+                    break;
                 case 'searchUsers':
                     raw = bridge.searchUsers(JSON.stringify(payload || {}));
                     break;
@@ -3641,41 +3644,20 @@ tr:last-child td { border-bottom:0; }
         const entries = Object.entries(payload);
         if (!entries.length) throw new Error('لا توجد إعدادات عرض قابلة للحفظ.');
 
-        // The display tab is backed exclusively by system_settings. Do not read
-        // or write ApplicationSettings/legacy settings here: a corrupt legacy
-        // payload must not block an otherwise independent display save.
-        for (const [key, value] of entries) {
-            const expected = String(value ?? '');
-            await bridgeCall('setSystemSetting', {key, value: expected});
+        // The native method writes only the allowlisted display keys, then
+        // reads the same rows back from SQLite before returning success.
+        const result = await bridgeCall('saveDisplaySettings', payload);
+        if (!result || result.success !== true || result.verified !== true) {
+            throw new Error('لم يتم التحقق من حفظ إعدادات العرض في SQLite.');
         }
-
-        const persisted = {};
-        for (const [key, value] of entries) {
+        const persisted = dataOf(result) || {};
+        entries.forEach(([key, value]) => {
             const expected = String(value ?? '');
-            let readback = await bridgeCall('getSystemSetting', {key});
-
-            // The retry is idempotent and covers devices where the first
-            // SQLite read races a just-completed native write.
-            if (!readback || readback.success !== true || readback.found !== true ||
-                String(readback.value ?? '') !== expected) {
-                await bridgeCall('setSystemSetting', {key, value: expected});
-                readback = await bridgeCall('getSystemSetting', {key});
+            if (String(persisted[key] ?? '') !== expected) {
+                throw new Error('اختلاف القيمة المحفوظة لإعداد العرض ' + key);
             }
-
-            if (!readback || readback.success !== true || readback.found !== true ||
-                String(readback.value ?? '') !== expected) {
-                const actual = readback && readback.found === true
-                    ? String(readback.value ?? '')
-                    : '(المفتاح غير موجود في SQLite)';
-                throw new Error(
-                    'فشل حفظ إعداد العرض ' + key +
-                    '؛ القيمة المطلوبة: ' + expected + '؛ القيمة المقروءة: ' + actual
-                );
-            }
-
-            persisted[key] = readback.value;
-            systemSettings[key] = readback.value;
-        }
+            systemSettings[key] = persisted[key];
+        });
 
         entries.forEach(([key]) => setSystemField(key, persisted[key]));
         refreshSleepPreview();

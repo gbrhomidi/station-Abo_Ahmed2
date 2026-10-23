@@ -5173,6 +5173,46 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             } catch (e: Exception) { errorResponse(e.message) }
         }
 
+        @JavascriptInterface
+        fun saveDisplaySettings(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val allowedKeys = setOf(
+                "DISPLAY_IDLE_TIMEOUT_SECONDS", "DISPLAY_SLEEP_TEXT", "DISPLAY_SLEEP_IMAGE",
+                "DISPLAY_SLEEP_OVERLAY_OPACITY", "DISPLAY_SLEEP_FONT_SIZE", "DISPLAY_SLEEP_TEXT_COLOR",
+                "DISPLAY_SLEEP_SPEED", "DISPLAY_SLEEP_CLOCK", "DISPLAY_LOCK_ON_IDLE",
+                "DISPLAY_SESSION_TIMEOUT_SECONDS", "DISPLAY_SESSION_WARNING_SECONDS", "DISPLAY_LOCK_MESSAGE",
+                "DISPLAY_LOCK_SHOW_USER", "DISPLAY_LOCK_SHOW_CLOCK", "DISPLAY_LOCK_BG_IMAGE",
+                "DISPLAY_DARK_MODE_SCHEDULE_ENABLED", "DISPLAY_DARK_MODE_FROM", "DISPLAY_DARK_MODE_TO",
+                "DISPLAY_FONT_SCALE", "DISPLAY_REDUCE_MOTION"
+            )
+            return try {
+                val payload = JSONObject(jsonData.ifBlank { "{}" })
+                val values = mutableMapOf<String, String>()
+                val keys = payload.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    if (key !in allowedKeys) throw IllegalArgumentException("مفتاح إعداد عرض غير مسموح: $key")
+                    values[key] = payload.optString(key, "")
+                }
+                if (values.isEmpty()) throw IllegalArgumentException("لا توجد إعدادات عرض قابلة للحفظ")
+                values.forEach { (key, value) -> db.setSystemSetting(key, value) }
+                val persisted = db.getAllSystemSettingsMap()
+                val verified = JSONObject()
+                values.forEach { (key, expected) ->
+                    val actual = persisted[key]
+                    if (actual != expected) throw IllegalStateException("فشل التحقق من $key؛ المطلوب=$expected؛ المقروء=$actual")
+                    verified.put(key, actual)
+                }
+                JSONObject().apply {
+                    put("success", true)
+                    put("verified", true)
+                    put("data", verified)
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("DisplaySettings", e)
+                errorResponse(e.message)
+            }
+        }
         // ============================================================
         // 17. Settings module — عقد SQLite/Bridge الصريح
         // ============================================================
