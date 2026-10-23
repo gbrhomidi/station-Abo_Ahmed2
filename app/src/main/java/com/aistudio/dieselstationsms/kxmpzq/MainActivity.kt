@@ -8191,66 +8191,85 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!InvoicePdfSupport.isPdfVisuallyNonBlank(source)) {
                 return errorResponse("لا توجد نسخة PDF محفوظة وصالحة لهذه الفاتورة؛ استخدم الطباعة الاحتياطية")
             }
+
+            var shareFile: File? = null
             return try {
                 val prefs = activity.getSharedPreferences("invoice_pdf_archive", Context.MODE_PRIVATE)
                 val treeText = prefs.getString("tree_uri", null)
-                    ?: throw IllegalStateException("مجلد Invoices غير محدد؛ استخدم الطباعة الاحتياطية أو احفظ الفاتورة أولاً")
+                    ?: throw IllegalStateException("مجلد Invoices غير محدد؛ أعد حفظ الفاتورة أولاً")
                 val treeUri = Uri.parse(treeText)
                 val rootId = android.provider.DocumentsContract.getTreeDocumentId(treeUri)
-                val parent = android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, rootId)
                 val children = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, rootId)
-                var oldUri: Uri? = null
-                activity.contentResolver.query(children,
-                    arrayOf(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                        android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME),
-                    null, null, null)?.use { cursor ->
+                var archivedUri: Uri? = null
+                activity.contentResolver.query(
+                    children,
+                    arrayOf(
+                        android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                        android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME
+                    ), null, null, null
+                )?.use { cursor ->
                     val idCol = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID)
                     val nameCol = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME)
                     while (cursor.moveToNext()) {
                         if (idCol >= 0 && nameCol >= 0 && cursor.getString(nameCol) == source.name) {
-                            oldUri = android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, cursor.getString(idCol))
+                            archivedUri = android.provider.DocumentsContract.buildDocumentUriUsingTree(
+                                treeUri, cursor.getString(idCol)
+                            )
                             break
                         }
                     }
                 }
-                // Preserve an existing archived invoice until the replacement stream is opened.
-                // Deleting the old document first can permanently lose the last valid invoice if
-                // create/write fails (SAF providers may reject a second create with the same name).
-                val destination = oldUri
-                    ?: android.provider.DocumentsContract.createDocument(
-                        activity.contentResolver, parent, "application/pdf", source.name
-                    ) ?: throw IllegalStateException("تعذر إنشاء ملف الفاتورة في مجلد Invoices")
-                try {
-                    activity.contentResolver.openOutputStream(destination, "wt")?.use { output ->
-                        source.inputStream().use { input -> input.copyTo(output) }
-                        output.flush()
-                    } ?: throw IllegalStateException("تعذر الكتابة في مجلد Invoices")
-                } catch (writeError: Exception) {
-                    // Only remove a newly-created incomplete document. Never delete the user's
-                    // pre-existing archive entry as part of a failed replacement.
-                    if (oldUri == null) {
-                        try { activity.contentResolver.delete(destination, null, null) } catch (_: Exception) { }
-                    }
-                    throw writeError
+                val finalArchiveUri = archivedUri
+                    ?: throw IllegalStateException("لا توجد نسخة نهائية للفاتورة داخل مجلد Invoices")
+
+                val shareDir = File(activity.cacheDir, "invoice-share")
+                if (!shareDir.exists() && !shareDir.mkdirs()) {
+                    throw IllegalStateException("تعذر إنشاء مساحة مؤقتة لمشاركة الفاتورة")
                 }
+                val now = System.currentTimeMillis()
+                shareDir.listFiles()?.filter { it.isFile && now - it.lastModified() > 24L * 60L * 60L * 1000L }
+                    ?.forEach { runCatching { it.delete() } }
+                shareFile = File.createTempFile("invoice_" + safeName.take(32) + "_", ".pdf", shareDir)
+                activity.contentResolver.openInputStream(finalArchiveUri)?.use { input ->
+                    FileOutputStream(shareFile!!).use { output -> input.copyTo(output); output.flush() }
+                } ?: throw IllegalStateException("تعذرت إعادة قراءة نسخة الفاتورة من مجلد Invoices")
+
+                if (shareFile!!.length() != source.length() ||
+                    !InvoicePdfSupport.isPdfVisuallyNonBlank(shareFile!!)
+                ) {
+                    throw IllegalStateException("نسخة الفاتورة في مجلد Invoices فارغة أو تالفة")
+                }
+                val shareUri = FileProvider.getUriForFile(
+                    activity, "${activity.packageName}.fileprovider", shareFile!!
+                )
                 val packageName = listOf("com.whatsapp", "com.whatsapp.w4b").firstOrNull {
                     activity.packageManager.getLaunchIntentForPackage(it) != null
                 } ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
                 val intent = Intent(Intent.ACTION_SEND).apply {
                     type = "application/pdf"
-                    putExtra(Intent.EXTRA_STREAM, destination)
+                    putExtra(Intent.EXTRA_STREAM, shareUri)
                     putExtra("jid", normalizedPhone + "@s.whatsapp.net")
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    clipData = android.content.ClipData.newRawUri("invoice-pdf", destination)
+                    clipData = android.content.ClipData.newRawUri("invoice-pdf", shareUri)
                     setPackage(packageName)
                 }
                 if (intent.resolveActivity(activity.packageManager) == null) {
                     throw IllegalStateException("WhatsApp لا يقبل مشاركة مستند PDF على هذا الجهاز")
                 }
-                activity.runOnUiThread { activity.startActivity(intent) }
+                val launchLatch = CountDownLatch(1)
+                var launchError: Exception? = null
+                activity.runOnUiThread {
+                    try { activity.startActivity(intent) }
+                    catch (e: Exception) { launchError = e }
+                    finally { launchLatch.countDown() }
+                }
+                if (!launchLatch.await(5, TimeUnit.SECONDS)) throw IllegalStateException("انتهت مهلة فتح واتساب")
+                launchError?.let { throw it }
                 JSONObject().put("success", true).put("file_name", source.name)
-                    .put("bytes", source.length()).put("message", "تم فتح واتساب بالنسخة المحفوظة من الفاتورة").toString()
+                    .put("bytes", shareFile!!.length())
+                    .put("message", "تم التحقق من نسخة Invoices وفتح واتساب بملف PDF").toString()
             } catch (e: Exception) {
+                shareFile?.delete()
                 DebugLogger.logException("ShareSavedInvoicePdf", e)
                 errorResponse(e.message ?: "تعذرت مشاركة نسخة PDF المحفوظة")
             }
@@ -8422,60 +8441,136 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     }
                 }
 
-                fun findOrCreateInvoiceDocument(treeUri: Uri, fileName: String): Uri {
-                    val rootId = android.provider.DocumentsContract.getTreeDocumentId(treeUri)
-                    val childrenUri = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, rootId)
-                    activity.contentResolver.query(
-                        childrenUri,
-                        arrayOf(
-                            android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                            android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                            android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE
-                        ),
-                        null, null, null
-                    )?.use { cursor ->
-                        val idCol = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-                        val nameCol = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME)
-                        while (cursor.moveToNext()) {
-                            if (nameCol >= 0 && cursor.getString(nameCol) == fileName && idCol >= 0) {
-                                val id = cursor.getString(idCol)
-                                val existing = android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, id)
-                                runCatching { activity.contentResolver.delete(existing, null, null) }
-                                break
-                            }
-                        }
-                    }
-                    val parentDocumentUri = android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, rootId)
-                    return android.provider.DocumentsContract.createDocument(
-                        activity.contentResolver, parentDocumentUri, "application/pdf", fileName
-                    ) ?: throw IllegalStateException("تعذر إنشاء ملف PDF داخل المجلد المحدد")
-                }
-
                 fun copyPdfToSelectedFolder(source: File): Uri {
                     val prefs = activity.getSharedPreferences("invoice_pdf_archive", Context.MODE_PRIVATE)
                     val savedTree = prefs.getString("tree_uri", null)
                         ?: throw IllegalStateException("لم يتم تحديد مجلد حفظ الفواتير")
                     val treeUri = Uri.parse(savedTree)
-                    val destination = findOrCreateInvoiceDocument(treeUri, source.name)
-                    activity.contentResolver.openOutputStream(destination, "wt")?.use { output ->
-                        FileInputStream(source).use { input -> input.copyTo(output) }
-                        output.flush()
-                    } ?: throw IllegalStateException("تعذر الكتابة في مجلد الفواتير المحدد")
-                    return destination
+                    val rootId = android.provider.DocumentsContract.getTreeDocumentId(treeUri)
+                    val parentUri = android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, rootId)
+                    val stagingName = "." + source.nameWithoutExtension + "_" + System.currentTimeMillis() + ".pending.pdf"
+                    val stagingUri = android.provider.DocumentsContract.createDocument(
+                        activity.contentResolver, parentUri, "application/pdf", stagingName
+                    ) ?: throw IllegalStateException("تعذر إنشاء ملف PDF مؤقت داخل مجلد الفواتير")
+
+                    fun verifyDocument(uri: Uri) {
+                        val checkFile = File(activity.cacheDir, "invoice-saf-check-" + System.currentTimeMillis() + ".pdf")
+                        try {
+                            activity.contentResolver.openInputStream(uri)?.use { input ->
+                                FileOutputStream(checkFile).use { output -> input.copyTo(output); output.flush() }
+                            } ?: throw IllegalStateException("تعذرت إعادة قراءة نسخة PDF من مجلد Invoices")
+                            if (checkFile.length() != source.length() || !isValidPdf(checkFile) ||
+                                !InvoicePdfSupport.isPdfVisuallyNonBlank(checkFile)) {
+                                throw IllegalStateException("نسخة الفاتورة في مجلد Invoices فارغة أو تالفة")
+                            }
+                        } finally { checkFile.delete() }
+                    }
+
+                    try {
+                        activity.contentResolver.openOutputStream(stagingUri, "wt")?.use { output ->
+                            FileInputStream(source).use { input -> input.copyTo(output) }
+                            output.flush()
+                        } ?: throw IllegalStateException("تعذر الكتابة في مجلد الفواتير المحدد")
+                        verifyDocument(stagingUri)
+
+                        val childrenUri = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, rootId)
+                        var oldUri: Uri? = null
+                        activity.contentResolver.query(
+                            childrenUri,
+                            arrayOf(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                                android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                            null, null, null
+                        )?.use { cursor ->
+                            val idCol = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                            val nameCol = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                            while (cursor.moveToNext()) {
+                                if (idCol >= 0 && nameCol >= 0 && cursor.getString(nameCol) == source.name) {
+                                    oldUri = android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, cursor.getString(idCol))
+                                    break
+                                }
+                            }
+                        }
+
+                        val renamed = runCatching {
+                            android.provider.DocumentsContract.renameDocument(activity.contentResolver, stagingUri, source.name)
+                        }.getOrNull()
+                        if (renamed != null) {
+                            verifyDocument(renamed)
+                            oldUri?.takeIf { it != renamed }?.let { runCatching { activity.contentResolver.delete(it, null, null) } }
+                            return renamed
+                        }
+
+                        // Keep the old file until a second, final document has been written and validated.
+                        val candidate = runCatching {
+                            android.provider.DocumentsContract.createDocument(
+                                activity.contentResolver, parentUri, "application/pdf", source.name
+                            )
+                        }.getOrNull()
+                        if (candidate != null) {
+                            try {
+                                activity.contentResolver.openOutputStream(candidate, "wt")?.use { output ->
+                                    activity.contentResolver.openInputStream(stagingUri)?.use { input -> input.copyTo(output) }
+                                        ?: throw IllegalStateException("تعذرت قراءة النسخة المؤقتة")
+                                    output.flush()
+                                } ?: throw IllegalStateException("تعذر كتابة النسخة النهائية في مجلد Invoices")
+                                verifyDocument(candidate)
+                                oldUri?.let { runCatching { activity.contentResolver.delete(it, null, null) } }
+                                val finalUri = runCatching {
+                                    android.provider.DocumentsContract.renameDocument(activity.contentResolver, candidate, source.name)
+                                }.getOrNull() ?: candidate
+                                activity.contentResolver.delete(stagingUri, null, null)
+                                return finalUri
+                            } catch (candidateError: Exception) {
+                                runCatching { activity.contentResolver.delete(candidate, null, null) }
+                                throw candidateError
+                            }
+                        }
+
+                        // Only providers rejecting duplicate names take this fallback. The staged,
+                        // verified file remains intact while we remove the old name and rename staging.
+                        oldUri?.let { activity.contentResolver.delete(it, null, null) }
+                        val retryUri = android.provider.DocumentsContract.renameDocument(
+                            activity.contentResolver, stagingUri, source.name
+                        ) ?: throw IllegalStateException("تعذر استبدال ملف الفاتورة في مجلد Invoices")
+                        verifyDocument(retryUri)
+                        return retryUri
+                    } catch (e: Exception) {
+                        // Retain staging on failure so a provider error cannot destroy the last valid copy.
+                        throw e
+                    }
                 }
 
                 fun shareSavedPdf(file: File): JSONObject {
-                    val uri = copyPdfToSelectedFolder(file)
+                    val savedUri = copyPdfToSelectedFolder(file)
+                    val shareDir = File(activity.cacheDir, "invoice-share")
+                    if (!shareDir.exists() && !shareDir.mkdirs()) {
+                        throw IllegalStateException("تعذر إنشاء مساحة مؤقتة لمشاركة الفاتورة")
+                    }
+                    val shareFile = File.createTempFile("invoice_" + file.nameWithoutExtension.take(32) + "_", ".pdf", shareDir)
+                    try {
+                        activity.contentResolver.openInputStream(savedUri)?.use { input ->
+                            FileOutputStream(shareFile).use { output -> input.copyTo(output); output.flush() }
+                        } ?: throw IllegalStateException("تعذرت إعادة قراءة نسخة الفاتورة المؤرشفة")
+                        if (shareFile.length() != file.length() || !isValidPdf(shareFile) ||
+                            !InvoicePdfSupport.isPdfVisuallyNonBlank(shareFile)) {
+                            throw IllegalStateException("نسخة الفاتورة في مجلد Invoices فارغة أو تالفة")
+                        }
+                    } catch (e: Exception) {
+                        shareFile.delete()
+                        throw e
+                    }
+                    val shareUri = FileProvider.getUriForFile(
+                        activity, "${activity.packageName}.fileprovider", shareFile
+                    )
                     val waPackage = listOf("com.whatsapp", "com.whatsapp.w4b")
-                        .firstOrNull { pkg ->
-                            activity.packageManager.getLaunchIntentForPackage(pkg) != null
-                        } ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
+                        .firstOrNull { pkg -> activity.packageManager.getLaunchIntentForPackage(pkg) != null }
+                        ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "application/pdf"
-                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra(Intent.EXTRA_STREAM, shareUri)
                         putExtra("jid", normalizedPhone + "@s.whatsapp.net")
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        clipData = android.content.ClipData.newRawUri("invoice-pdf", uri)
+                        clipData = android.content.ClipData.newRawUri("invoice-pdf", shareUri)
                         setPackage(waPackage)
                     }
                     if (intent.resolveActivity(activity.packageManager) == null) {
@@ -8484,12 +8579,12 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     activity.startActivity(intent)
                     return JSONObject().apply {
                         put("success", true)
-                        put("path", uri.toString())
+                        put("path", shareUri.toString())
                         put("file_name", file.name)
-                        put("bytes", file.length())
+                        put("bytes", shareFile.length())
                         put("mime_type", "application/pdf")
                         put("phone", normalizedPhone)
-                        put("message", "تم حفظ الفاتورة PDF في المجلد المحدد وفتح واتساب لمشاركتها")
+                        put("message", "تم حفظ نسخة PDF والتحقق منها وفتح واتساب لمشاركتها")
                     }
                 }
 
