@@ -311,14 +311,18 @@ button:disabled { opacity:.55; cursor:not-allowed; }
 .panel.active { display:block; }
 .settings-home { display:block; }
 .settings-home.hidden { display:none !important; }
-.screen-host { display:none; width:100%; max-width:100%; margin:0 auto 14px; padding:10px; border:1px solid var(--border); border-radius:20px; background:var(--surface); box-shadow:var(--shadow-lg); max-height:calc(100dvh - 230px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+.screen-host { display:none; width:100%; max-width:100%; min-width:0; margin:0 auto 14px; padding:10px; border:1px solid var(--border); border-radius:20px; background:var(--surface); box-shadow:var(--shadow-lg); max-height:calc(100dvh - 245px); overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+.screen-host .panel { width:100%; min-width:0; }
+.screen-host .panel *, .screen-host .screen-actions * { min-width:0; }
+.screen-host .table-shell { width:100%; max-width:100%; overflow-x:auto; }
+.screen-host img, .screen-host video, .screen-host canvas { max-width:100%; height:auto; }
 .screen-host.active { display:block; }
 .screen-toolbar { display:flex; justify-content:flex-start; margin-bottom:10px; }
 .screen-back { flex:0 1 auto; min-width:170px; }
 .screen-actions { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 2px; padding-top:12px; border-top:1px solid var(--border); }
 .screen-actions .btn { min-width:130px; }
 #searchBox.hidden, #bottomSave.hidden { display:none !important; }
-@media(max-width:520px) { .screen-host { max-height:calc(100dvh - 205px); padding:8px; border-radius:15px; } .screen-actions .btn { flex:1 1 100%; } .screen-back { min-width:0; } }
+@media(max-width:520px) { .screen-host { max-height:calc(100dvh - 220px); padding:8px; border-radius:15px; } .screen-actions .btn { flex:1 1 100%; } }
 
 .card {
     background:linear-gradient(145deg,var(--surface),var(--surface-2));
@@ -1796,224 +1800,9 @@ tr:last-child td { border-bottom:0; }
             <div class="notice">تُعرض كل مجموعة داخل مساحة مستقلة في هذه الشاشة. استخدم زر «رجوع» للعودة إلى قائمة إعدادات النظام دون مغادرة الصفحة.</div>
         </div>
     </section>
-    <div class="screen-host" id="screenHost" aria-live="polite">
-        <div class="screen-toolbar"><button class="btn screen-back" id="panelBack" type="button"><i class="fas fa-arrow-right"></i> رجوع إلى إعدادات النظام</button></div>
-    <section class="panel" id="panel-general">
-        <div class="card">
-            <div class="card-head">
-                <div class="card-head-main">
-                    <div class="card-avatar"><i class="fas fa-cog"></i></div>
-                    <div>
-                        <h2>الإعدادات العامة</h2>
-                        <p>تفضيلات التطبيق التي يديرها Settings Bridge</p>
-                    </div>
-                </div>
-                <span class="badge">SQLite / Android</span>
-            </div>
-            <div id="generalFields" class="form-grid"></div>
-        </div>
-
-        <div class="card">
-            <div class="card-head">
-                <div class="card-head-main">
-                    <div class="card-avatar"><i class="fas fa-building"></i></div>
-                    <div>
-                        <h2>إعدادات النظام وقاعدة البيانات</h2>
-                    </div>
-                </div>
-                <span class="badge">system_settings</span>
-            </div>
-            <div id="systemFields" class="form-grid"></div>
-        </div>
-    </section>
-
-    <section class="panel" id="panel-startup">
-        <div class="card">
-            <div class="card-head">
-                <div class="card-head-main">
-                    <div class="card-avatar"><i class="fas fa-power-off"></i></div>
-                    <div>
-                        <h2>التشغيل والمعالجة</h2>
-                        <p>الخيارات التشغيلية الخاصة بالخدمة وPipeline</p>
-                    </div>
-                </div>
-            </div>
-            <div id="startupFields" class="form-grid"></div>
-        </div>
-    </section>
-
-    <section class="panel" id="panel-sms">
-        <div class="card">
-            <div class="card-head">
-                <div class="card-head-main">
-                    <div class="card-avatar"><i class="fas fa-sms"></i></div>
-                    <div>
-                        <h2>خدمة SMS</h2>
-                        <p>إعدادات الاستقبال والإرسال وإعادة المحاولة</p>
-                    </div>
-                </div>
-            </div>
-            <div id="smsFields" class="form-grid"></div>
-        </div>
-    </section>
-
-    <section class="panel" id="panel-monitoring">
-        <div class="card">
-            <div class="card-head">
-                <div class="card-head-main">
-                    <div class="card-avatar"><i class="fas fa-heartbeat"></i></div>
-                    <div>
-                        <h2>المراقبة والصحة</h2>
-                        <p>بيانات حية من Android Monitoring Repository</p>
-                    </div>
-                </div>
-                <span class="badge" id="monitoringBadge">غير مقروءة</span>
-            </div>
-            <div id="monitoringState" class="status-grid">
-                <div class="empty-state">اضغط «تحديث الحالة» لقراءة الحالة الفعلية.</div>
-            </div>
-            <div id="metrics" class="status-grid" style="margin-top:9px"></div>
-            <div class="actions">
-                <button class="btn primary" id="refreshMonitoring"><i class="fas fa-sync-alt"></i> تحديث الحالة</button>
-                <button class="btn" id="openMonitoringReport"><i class="fas fa-file-alt"></i> تقرير الحالة</button>
-                <button class="btn warning" id="clearLogs"><i class="fas fa-broom"></i> تنظيف السجلات</button>
-                <button class="btn" id="clearMetrics"><i class="fas fa-chart-line"></i> تنظيف المقاييس</button>
-            </div>
-        </div>
-    </section>
-
-    <section class="panel" id="panel-security">
-        <div class="card">
-            <div class="card-head">
-                <div class="card-head-main">
-                    <div class="card-avatar"><i class="fas fa-shield-alt"></i></div>
-                    <div>
-                        <h2>الأمان والخصوصية</h2>
-                        <p>إعدادات الحماية التي يدعمها نموذج التطبيق الحالي</p>
-                    </div>
-                </div>
-            </div>
-            <div id="securityFields" class="form-grid"></div>
-        </div>
-    </section>
-
-    <section class="panel" id="panel-backup">
-        <div class="card">
-            <div class="card-head">
-                <div class="card-head-main">
-                    <div class="card-avatar"><i class="fas fa-copy"></i></div>
-                    <div>
-                        <h2>النسخ الاحتياطي</h2>
-                        <p>إدارة النسخ من خلال BackupManager الفعلي</p>
-                    </div>
-                </div>
-            </div>
-            <div id="backupFields" class="form-grid"></div>
-            <div class="actions">
-                <button class="btn primary" id="createBackup"><i class="fas fa-plus"></i> إنشاء نسخة</button>
-                <button class="btn" id="refreshBackups"><i class="fas fa-sync-alt"></i> تحديث القائمة</button>
-            </div>
-            <div class="table-shell">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>المعرف</th>
-                            <th>التاريخ</th>
-                            <th>الحجم</th>
-                            <th>تشفير</th>
-                            <th>الإجراء</th>
-                        </tr>
-                    </thead>
-                    <tbody id="backupsBody">
-                        <tr><td colspan="5"><div class="empty-state"><i class="fas fa-folder-open"></i>لا توجد بيانات بعد.</div></td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </section>
-
-    <section class="panel" id="panel-maintenance">
-        <div class="card">
-            <div class="card-head">
-                <div class="card-head-main">
-                    <div class="card-avatar"><i class="fas fa-tools"></i></div>
-                    <div>
-                        <h2>الصيانة وقاعدة البيانات</h2>
-                        <p>فحص السلامة وتحسين SQLite دون حذف بيانات الأعمال</p>
-                    </div>
-                </div>
-            </div>
-            <div id="maintenanceFields" class="form-grid"></div>
-            <div class="actions">
-                <button class="btn warning" id="optimizeDb"><i class="fas fa-wrench"></i> فحص وتحسين</button>
-                <button class="btn" id="checkIntegrity"><i class="fas fa-shield-alt"></i> فحص السلامة</button>
-                <button class="btn" id="refreshDbInfo"><i class="fas fa-database"></i> معلومات قاعدة البيانات</button>
-            </div>
-            <div id="integrityResult" class="status-grid" style="margin-top:12px"></div>
-        </div>
-    </section>
-
-    <section class="panel" id="panel-display">
-        <div class="card">
-            <div class="card-head">
-                <div class="card-head-main">
-                    <div class="card-avatar"><i class="fas fa-tv"></i></div>
-                    <div>
-                        <h2>إعدادات العرض</h2>
-                        <p>شاشة التوقف، قفل الجلسة، والمظهر والوصولية</p>
-                    </div>
-                </div>
-                <span class="badge">SQLite / Android</span>
-            </div>
-            <div class="notice">
-                <strong>ملاحظة:</strong>
-                تُحفظ جميع الإعدادات في <code>system_settings</code> وتُطبق على لوحة التحكم وشاشة القفل.
-                الحقول المركّبة (الحجم / اللون / المدة / الوقت) تفتح لوحة ضبط عائمة عند النقر عليها، وتُغلق عند النقر خارجها.
-                عند تفعيل <em>قفل الجلسة</em>، تُقفل الجلسة بعد انتهاء المهلة المحددة ويظهر تحذير مسبق مثل ويندوز قبل القفل.
-            </div>
-            <div id="displayFields" class="form-grid"></div>
-        </div>
-    </section>
-
-    <section class="panel" id="panel-users">
-        <div class="card">
-            <div class="card-head">
-                <div class="card-head-main">
-                    <div class="card-avatar"><i class="fas fa-users"></i></div>
-                    <div>
-                        <h2>نتائج البحث في المستخدمين</h2>
-                    </div>
-                </div>
-                <span class="badge" id="userSearchBadge">0</span>
-            </div>
-
-            <div class="notice">
-                البحث لا يعتمد على بيانات وهمية. عند الضغط على «بحث» يتم استدعاء الجسر الموجود
-                في <strong>MainActivity.kt</strong>، والذي يستدعي <strong>DatabaseHelper.getUsers()</strong> ثم يتم عرض النتائج الفعلية.
-            </div>
-
-            <div class="table-shell">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>اسم المستخدم</th>
-                            <th>الاسم الكامل</th>
-                            <th>الدور</th>
-                            <th>المحطة</th>
-                            <th>الحالة</th>
-                            <th>آخر دخول</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersBody">
-                        <tr><td colspan="7"><div class="empty-state"><i class="fas fa-search"></i>اكتب كلمة بحث ثم اضغط «بحث».</div></td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </section>
-
-    <div class="screen-actions" id="screenActions">
+    <div class="screen-host" id="screenHost" aria-live="polite" aria-label="شاشة إعدادات المجموعة المحددة">
+        <div id="panelLoading" class="empty-state">جارٍ تحميل شاشات الإعدادات…</div>
+        <div class="screen-actions" id="screenActions">
         <button class="btn primary" id="saveBtn"><i class="fas fa-save"></i> حفظ إعدادات هذا التبويب</button>
         <button class="btn danger" id="resetBtn"><i class="fas fa-undo"></i> إعادة إعدادات التطبيق الافتراضية</button>
     </div>
@@ -3551,7 +3340,7 @@ tr:last-child td { border-bottom:0; }
         el('settingsHome').classList.add('hidden');
         el('homeStats').classList.add('hidden');
         el('screenHost').classList.add('active');
-        el('searchBox').classList.toggle('hidden', name !== 'users');
+        el('searchBox').classList.remove('hidden');
         const hasEditableSettings = ['general','startup','sms','security','backup','maintenance','display'].includes(name);
         el('saveBtn').classList.toggle('hidden', !hasEditableSettings);
         el('bottomSave').classList.toggle('hidden', !hasEditableSettings);
@@ -4257,18 +4046,20 @@ tr:last-child td { border-bottom:0; }
             window.location.href = '../main.html';
         });
 
-        el('searchBtn').addEventListener('click', searchUsers);
+        el('searchBtn').addEventListener('click', runGlobalSearch);
+
+        el('searchInput').addEventListener('input', runGlobalSearch);
 
         el('searchInput').addEventListener('keydown', event => {
             if (event.key === 'Enter') {
                 event.preventDefault();
-                searchUsers();
+                runGlobalSearch();
             }
         });
 
         el('saveBtn').addEventListener('click', saveSettings);
         el('bottomSave').addEventListener('click', saveSettings);
-        el('panelBack').addEventListener('click', returnToSettingsHome);
+        // Navigation stays in the parent Settings screen; no per-panel Back/Exit button.
 
         el('resetBtn').addEventListener('click', () =>
             ask(
@@ -4387,13 +4178,64 @@ tr:last-child td { border-bottom:0; }
         return escapeHtml(value).replace(/`/g,'&#96;');
     }
 
+    async function loadIndependentPanels() {
+        const host = el('screenHost');
+        const actions = el('screenActions');
+        const loading = el('panelLoading');
+        const panelFiles = ["general","operations","sms","monitoring","security","backup","maintenance","users","display"];
+        const loaded = await Promise.all(panelFiles.map(file => new Promise((resolve, reject) => {
+            const request = new XMLHttpRequest();
+            request.open('GET', 'settings-panels/' + file + '.html', true);
+            request.onreadystatechange = function () {
+                if (request.readyState !== 4) return;
+                if ((request.status >= 200 && request.status < 300) || (request.status === 0 && request.responseText)) resolve(request.responseText);
+                else reject(new Error('تعذر تحميل شاشة الإعدادات: ' + file + ' (' + request.status + ')'));
+            };
+            request.onerror = () => reject(new Error('تعذر قراءة ملف الشاشة: ' + file));
+            request.send();
+        })));
+        loaded.forEach(markup => {
+            const template = document.createElement('template');
+            template.innerHTML = markup.trim();
+            const panel = template.content.firstElementChild;
+            if (!panel || !panel.classList.contains('panel')) throw new Error('ملف شاشة إعدادات غير صالح');
+            host.insertBefore(panel, actions);
+        });
+        loading.remove();
+    }
+
+    function runGlobalSearch() {
+        const query = el('searchInput').value.trim().toLocaleLowerCase();
+        if (activeTab === 'users') {
+            searchUsers();
+            return;
+        }
+        const panel = activeTab ? el('panel-' + activeTab) : null;
+        if (!panel) return;
+        panel.querySelectorAll('.field').forEach(field => {
+            const label = field.innerText.toLocaleLowerCase();
+            field.classList.toggle('hidden', !!query && !label.includes(query));
+        });
+        panel.querySelectorAll('.card').forEach(card => {
+            const fields = Array.from(card.querySelectorAll('.field'));
+            if (fields.length) card.classList.toggle('hidden', !!query && fields.every(field => field.classList.contains('hidden')));
+        });
+        if (!query) panel.querySelectorAll('.field, .card').forEach(node => node.classList.remove('hidden'));
+    }
+
     renderTabs();
-    renderFields();
-    bind();
-    el('searchBox').classList.add('hidden');
     el('bottomSave').classList.add('hidden');
     el('resetBtn').classList.add('hidden');
-    loadSettings();
+    loadIndependentPanels().then(() => {
+        renderFields();
+        bind();
+        loadSettings();
+    }).catch(error => {
+        const loading = el('panelLoading');
+        loading.textContent = error.message + ' — أعد فتح الشاشة وحاول مجدداً.';
+        loading.classList.add('bad');
+        console.error(error);
+    });
 
 })();
 </script>
