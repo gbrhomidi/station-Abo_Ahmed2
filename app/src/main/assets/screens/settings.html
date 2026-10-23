@@ -3749,12 +3749,26 @@ tr:last-child td { border-bottom:0; }
             const persistedLegacy = dataOf(persistedLegacyRaw) || {};
             const persistedSystem = dataOf(persistedSystemRaw) || {};
 
+            // Verify each written key through the single-key SQLite read path.
+            // The bulk settings map is retained for refreshing the screen only; it is not
+            // accepted as proof that an individual write was persisted correctly.
             for (const [key, value] of Object.entries(uiApplicationPayload)) {
                 const expected = typeof value === 'boolean' ? (value ? '1' : '0') :
                     Array.isArray(value) ? value.join(', ') : String(value ?? '');
-                if (!Object.prototype.hasOwnProperty.call(persistedLegacy, key) ||
-                    String(persistedLegacy[key]) !== expected) {
-                    throw new Error('فشل التحقق من حفظ إعداد التطبيق: ' + key);
+                const readback = await bridgeCall('getSetting', {key});
+                if (!readback || readback.success !== true ||
+                    !Object.prototype.hasOwnProperty.call(readback, 'value')) {
+                    throw new Error(
+                        'تعذر التحقق من قراءة إعداد التطبيق من SQLite: ' + key
+                    );
+                }
+
+                const actual = String(readback.value ?? '');
+                if (actual !== expected) {
+                    throw new Error(
+                        'اختلاف القيمة المحفوظة لإعداد التطبيق ' + key +
+                        ' (المطلوب: ' + expected + '، المقروء: ' + actual + ')'
+                    );
                 }
             }
             for (const [key, value] of Object.entries(allSystemPayload)) {
