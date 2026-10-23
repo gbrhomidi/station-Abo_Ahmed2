@@ -8438,6 +8438,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 var lastDomDiagnostic = "not-recorded"
                 var lastReadyDiagnostic = "not-recorded"
                 var lastBitmapDiagnostic = "not-recorded"
+                // DOM scrollHeight is authoritative; WebView.contentHeight may include OEM zoom.
+                var lastDomHeightCss = 1123
                 val mainHandler = Handler(Looper.getMainLooper())
 
                 fun cleanup() {
@@ -8689,9 +8691,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         // page zoom a second time: on affected devices scale can be > 1,
                         // inflating a 1123px invoice to ~8984px and making the bitmap/PDF
                         // renderer paint a mostly invalid surface.
-                        val cssContentHeight = runCatching {
-                            (view.contentHeight * densityScale).toInt()
-                        }.getOrDefault(0)
+                        // Use DOM CSS pixels, not WebView.contentHeight: on affected devices the
+                        // latter is already zoom-scaled and can inflate 1123px to ~8984px.
+                        val cssContentHeight = (lastDomHeightCss * densityScale).toInt().coerceAtLeast(0)
                         val renderHeight = maxOf(
                             baseRenderHeightPx,
                             view.height,
@@ -8981,7 +8983,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     view.postDelayed({
                                         if (completed) return@postDelayed
                                         try {
-                                            val cssHeight = (view.contentHeight * densityScale * view.scale).toInt()
+                                            val cssHeight = (lastDomHeightCss * densityScale).toInt()
                                             val measuredHeight = maxOf(baseRenderHeightPx, cssHeight, renderWidthPx * 842 / 595)
                                                 .coerceAtMost(12000)
                                             view.measure(
@@ -9005,10 +9007,16 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     "document.documentElement.getAttribute('data-invoice-ready') === '1' ? " +
                                         "JSON.stringify({ready:true,height:document.documentElement.scrollHeight}) : 'waiting'",
                                     { rawResult ->
-                                        val ready = rawResult?.contains("\\\"ready\\\":true") == true
+                                        val readyPayload = runCatching {
+                                            val decoded = org.json.JSONTokener(rawResult ?: "null").nextValue()
+                                            if (decoded is String) JSONObject(decoded) else decoded as? JSONObject
+                                        }.getOrNull()
+                                        val measuredDomHeight = readyPayload?.optInt("height", 0) ?: 0
+                                        val ready = readyPayload?.optBoolean("ready", false) == true && measuredDomHeight > 0
+                                        if (ready) lastDomHeightCss = measuredDomHeight.coerceIn(1123, 12000)
                                         if (ready || System.currentTimeMillis() >= deadlineMs) {
                                             lastReadyDiagnostic = "deadline=" + (System.currentTimeMillis() >= deadlineMs) +
-                                                ",result=" + (rawResult?.take(220) ?: "null")
+                                                ",domHeightCss=" + lastDomHeightCss + ",result=" + (rawResult?.take(220) ?: "null")
                                             DebugLogger.info("InvoicePdfDiag", "phase=dom_ready " + lastReadyDiagnostic)
                                             DebugLogger.info("InvoicePdfReady", "DOM readiness: ${rawResult?.take(300) ?: "null"}")
                                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
