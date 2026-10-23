@@ -309,6 +309,16 @@ button:disabled { opacity:.55; cursor:not-allowed; }
 }
 
 .panel.active { display:block; }
+.settings-home { display:block; }
+.settings-home.hidden { display:none !important; }
+.screen-host { display:none; width:100%; max-width:100%; margin:0 auto 14px; padding:10px; border:1px solid var(--border); border-radius:20px; background:var(--surface); box-shadow:var(--shadow-lg); max-height:calc(100dvh - 230px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+.screen-host.active { display:block; }
+.screen-toolbar { display:flex; justify-content:flex-start; margin-bottom:10px; }
+.screen-back { flex:0 1 auto; min-width:170px; }
+.screen-actions { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 2px; padding-top:12px; border-top:1px solid var(--border); }
+.screen-actions .btn { min-width:130px; }
+#searchBox.hidden, #bottomSave.hidden { display:none !important; }
+@media(max-width:520px) { .screen-host { max-height:calc(100dvh - 205px); padding:8px; border-radius:15px; } .screen-actions .btn { flex:1 1 100%; } .screen-back { min-width:0; } }
 
 .card {
     background:linear-gradient(145deg,var(--surface),var(--surface-2));
@@ -1741,7 +1751,7 @@ tr:last-child td { border-bottom:0; }
         </div>
     </div>
 
-    <div class="search-box">
+    <div class="search-box" id="searchBox">
         <div class="search-input-wrap">
             <i class="fas fa-search search-icon"></i>
             <input id="searchInput" class="search-input" type="search"
@@ -1757,7 +1767,7 @@ tr:last-child td { border-bottom:0; }
 </header>
 
 <main class="page">
-    <section class="stats" aria-label="ملخص النظام">
+    <section class="stats" id="homeStats" aria-label="ملخص النظام">
         <article class="kpi">
             <div class="ico"><i class="fas fa-sliders-h"></i></div>
             <strong id="statFields">—</strong>
@@ -1780,7 +1790,15 @@ tr:last-child td { border-bottom:0; }
         </article>
     </section>
 
-    <section class="panel active" id="panel-general">
+    <section class="settings-home" id="settingsHome">
+        <div class="card">
+            <div class="card-head"><div class="card-head-main"><div class="card-avatar"><i class="fas fa-sliders-h"></i></div><div><h2>إعدادات النظام</h2><p>اختر أحد التبويبات أعلاه لفتح شاشة الإعدادات المطلوبة.</p></div></div></div>
+            <div class="notice">تُعرض كل مجموعة داخل مساحة مستقلة في هذه الشاشة. استخدم زر «رجوع» للعودة إلى قائمة إعدادات النظام دون مغادرة الصفحة.</div>
+        </div>
+    </section>
+    <div class="screen-host" id="screenHost" aria-live="polite">
+        <div class="screen-toolbar"><button class="btn screen-back" id="panelBack" type="button"><i class="fas fa-arrow-right"></i> رجوع إلى إعدادات النظام</button></div>
+    <section class="panel" id="panel-general">
         <div class="card">
             <div class="card-head">
                 <div class="card-head-main">
@@ -1995,11 +2013,10 @@ tr:last-child td { border-bottom:0; }
         </div>
     </section>
 
-    <div class="card">
-        <div class="actions">
-            <button class="btn primary" id="saveBtn"><i class="fas fa-save"></i> حفظ وتطبيق الإعدادات</button>
-            <button class="btn danger" id="resetBtn"><i class="fas fa-undo"></i> إعادة الافتراضيات</button>
-        </div>
+    <div class="screen-actions" id="screenActions">
+        <button class="btn primary" id="saveBtn"><i class="fas fa-save"></i> حفظ إعدادات هذا التبويب</button>
+        <button class="btn danger" id="resetBtn"><i class="fas fa-undo"></i> إعادة إعدادات التطبيق الافتراضية</button>
+    </div>
     </div>
 </main>
 
@@ -2052,6 +2069,7 @@ tr:last-child td { border-bottom:0; }
     let pendingConfirm = null;
     let lastMonitoring = null;
     let cachedUsers = [];
+    let activeTab = null;
 
     // ============================================================
     // Popover state
@@ -3515,7 +3533,7 @@ tr:last-child td { border-bottom:0; }
     // ============================================================
     function renderTabs() {
         el('tabs').innerHTML = tabs.map((tab, index) =>
-            `<button class="segment ${index === 0 ? 'active' : ''}" data-tab="${tab[0]}" type="button">
+            `<button class="segment ${false ? 'active' : ''}" data-tab="${tab[0]}" type="button">
                 <i class="fas ${tab[2]}"></i> ${tab[1]}
             </button>`
         ).join('');
@@ -3527,20 +3545,35 @@ tr:last-child td { border-bottom:0; }
 
     function selectTab(name) {
         closeActivePopover();
-        document.querySelectorAll('.segment').forEach(button => {
-            button.classList.toggle('active', button.dataset.tab === name);
-        });
-        document.querySelectorAll('.panel').forEach(panel => {
-            panel.classList.toggle('active', panel.id === 'panel-' + name);
-        });
-
+        activeTab = name;
+        document.querySelectorAll('.segment').forEach(button => button.classList.toggle('active', button.dataset.tab === name));
+        document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', panel.id === 'panel-' + name));
+        el('settingsHome').classList.add('hidden');
+        el('homeStats').classList.add('hidden');
+        el('screenHost').classList.add('active');
+        el('searchBox').classList.toggle('hidden', name !== 'users');
+        const hasEditableSettings = ['general','startup','sms','security','backup','maintenance','display'].includes(name);
+        el('saveBtn').classList.toggle('hidden', !hasEditableSettings);
+        el('bottomSave').classList.toggle('hidden', !hasEditableSettings);
+        el('resetBtn').classList.toggle('hidden', name !== 'general');
         if (name === 'monitoring') refreshMonitoring();
         if (name === 'backup') refreshBackups();
         if (name === 'maintenance') refreshDatabaseInfo();
-        if (name === 'users') {
-            if (cachedUsers.length) renderUsers(cachedUsers, el('searchInput').value.trim());
-        }
+        if (name === 'users' && cachedUsers.length) renderUsers(cachedUsers, el('searchInput').value.trim());
+        window.scrollTo({top:0, behavior:'smooth'});
+    }
 
+    function returnToSettingsHome() {
+        closeActivePopover();
+        activeTab = null;
+        document.querySelectorAll('.segment, .panel').forEach(node => node.classList.remove('active'));
+        el('screenHost').classList.remove('active');
+        el('settingsHome').classList.remove('hidden');
+        el('homeStats').classList.remove('hidden');
+        el('searchBox').classList.add('hidden');
+        el('saveBtn').classList.remove('hidden');
+        el('bottomSave').classList.add('hidden');
+        el('resetBtn').classList.add('hidden');
         window.scrollTo({top:0, behavior:'smooth'});
     }
 
@@ -3566,14 +3599,11 @@ tr:last-child td { border-bottom:0; }
             displayFieldCount;
     }
 
-    function collectApplicationSettings() {
-        // Collect only controls rendered by this screen. Copying the global settings cache here
-        // also re-saved unrelated/stale keys (including numeric keys from bridge responses),
-        // then incorrectly required every cached key to be present in the legacy settings table.
-        // ApplicationSettings fields not represented by controls are preserved separately in saveSettings().
+    function collectApplicationSettings(scope) {
+        // Only collect controls belonging to the currently opened settings group.
         const next = {};
-
-        Object.keys(defs).forEach(section => {
+        const sections = scope && defs[scope] ? [scope] : [];
+        sections.forEach(section => {
             defs[section].forEach(def => {
                 if (isSectionDef(def) || isPreviewDef(def)) return;
                 const [key, , type] = def;
@@ -3595,10 +3625,10 @@ tr:last-child td { border-bottom:0; }
         return next;
     }
 
-    function collectSystemSettings() {
+    function collectSystemSettings(scope) {
         const result = {};
-
-        systemDefs.concat(displayDefs).forEach(def => {
+        const source = scope === 'display' ? displayDefs : scope === 'general' ? systemDefs : [];
+        source.forEach(def => {
             if (isSectionDef(def) || isPreviewDef(def)) return;
             const [key, , type] = def;
             const input = el('setting-' + key);
@@ -3704,10 +3734,10 @@ tr:last-child td { border-bottom:0; }
         closeActivePopover();
         showLoading(true);
         try {
-            const uiApplicationPayload = collectApplicationSettings();
-            const systemPayload = collectSystemSettings();
-            const displayPayload = collectDisplaySettings();
-            const allSystemPayload = {...systemPayload, ...displayPayload};
+            if (!activeTab) throw new Error('افتح تبويباً أولاً قبل حفظ الإعدادات.');
+            if (['monitoring','users'].includes(activeTab)) throw new Error('هذا التبويب لا يحتوي إعدادات قابلة للحفظ.');
+            const uiApplicationPayload = collectApplicationSettings(activeTab);
+            const allSystemPayload = collectSystemSettings(activeTab);
 
             // Do not pass the UI's legacy-only keys as a replacement ApplicationSettings object:
             // kotlinx.serialization ignores unknown keys and would otherwise reset model fields
@@ -3728,9 +3758,10 @@ tr:last-child td { border-bottom:0; }
                 modelPayload.theme = uiApplicationPayload.darkMode ? 'dark' : 'light';
             }
 
-            const applicationResult = dataOf(
-                await bridgeCall('saveApplicationSettings', modelPayload)
-            ) || {};
+            let applicationResult = {};
+            if (Object.keys(uiApplicationPayload).some(key => modelKeys.has(key))) {
+                applicationResult = dataOf(await bridgeCall('saveApplicationSettings', modelPayload)) || {};
+            }
 
             // Persist every visible legacy control in the real SQLite settings table too.
             for (const [key, value] of Object.entries(uiApplicationPayload)) {
@@ -3788,13 +3819,22 @@ tr:last-child td { border-bottom:0; }
 
             Object.keys(settings).forEach(key => delete settings[key]);
             Object.assign(settings, persistedLegacy, persistedApplication, applicationResult);
-            Object.keys(settings).forEach(key => setApplicationField(key, settings[key]));
-            setDarkMode(
-                settings.darkMode === true || settings.darkMode === 1 || settings.darkMode === '1' ||
-                String(settings.theme || '').toLowerCase() === 'dark'
-            );
-
-            toast('تم حفظ الإعدادات والتحقق من قراءتها مجدداً من SQLite');
+            if (defs[activeTab]) {
+                defs[activeTab].forEach(def => {
+                    if (!Array.isArray(def)) return;
+                    const key = def[0];
+                    if (Object.prototype.hasOwnProperty.call(settings, key)) setApplicationField(key, settings[key]);
+                });
+            }
+            if (activeTab === 'general') {
+                systemDefs.forEach(def => { if (Object.prototype.hasOwnProperty.call(systemSettings, def[0])) setSystemField(def[0], systemSettings[def[0]]); });
+            } else if (activeTab === 'display') {
+                displayDefs.forEach(def => { if (Array.isArray(def) && Object.prototype.hasOwnProperty.call(systemSettings, def[0])) setSystemField(def[0], systemSettings[def[0]]); });
+            }
+            if (activeTab === 'general' && Object.prototype.hasOwnProperty.call(settings, 'darkMode')) {
+                setDarkMode(settings.darkMode === true || settings.darkMode === 1 || settings.darkMode === '1' || String(settings.theme || '').toLowerCase() === 'dark');
+            }
+            toast('تم حفظ إعدادات التبويب والتحقق من القيم المحفوظة في SQLite');
         } catch (error) {
             toast(error.message || 'تعذر حفظ الإعدادات', 'bad');
         } finally {
@@ -4228,6 +4268,7 @@ tr:last-child td { border-bottom:0; }
 
         el('saveBtn').addEventListener('click', saveSettings);
         el('bottomSave').addEventListener('click', saveSettings);
+        el('panelBack').addEventListener('click', returnToSettingsHome);
 
         el('resetBtn').addEventListener('click', () =>
             ask(
@@ -4349,6 +4390,9 @@ tr:last-child td { border-bottom:0; }
     renderTabs();
     renderFields();
     bind();
+    el('searchBox').classList.add('hidden');
+    el('bottomSave').classList.add('hidden');
+    el('resetBtn').classList.add('hidden');
     loadSettings();
 
 })();
