@@ -8393,6 +8393,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 var tempHtml: File? = null
                 var tempPdf: File? = null
                 var completed = false
+                // Keep a privacy-safe, bounded diagnostic summary so users without ADB can
+                // report the actual failure from the on-screen error message.
+                var lastDomDiagnostic = "not-recorded"
+                var lastReadyDiagnostic = "not-recorded"
+                var lastBitmapDiagnostic = "not-recorded"
                 val mainHandler = Handler(Looper.getMainLooper())
 
                 fun cleanup() {
@@ -8721,9 +8726,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                 captureMethod = "capturePicture-fallback"
                             }
                         }
+                        lastBitmapDiagnostic = "attempt=" + attempt + ",method=" + captureMethod +
+                            ",capture=" + bitmap!!.width + "x" + bitmap!!.height +
+                            ",contentHeight=" + cssContentHeight + ",renderHeight=" + renderHeight +
+                            ",visible=" + visibleSamples + "/" + totalSamples +
+                            ",light=" + lightSamples + "/" + totalSamples +
+                            ",requiredVisible=" + requiredVisibleSamples + ",valid=" + captureLooksValid
                         DebugLogger.info(
                             "InvoicePdfDiag",
-                            "phase=bitmap attempt=" + attempt + " method=" + captureMethod + " capture=" + bitmap!!.width + "x" + bitmap!!.height + " contentHeight=" + cssContentHeight + " renderHeight=" + renderHeight + " visible=" + visibleSamples + "/" + totalSamples + " light=" + lightSamples + "/" + totalSamples + " requiredVisible=" + requiredVisibleSamples + " valid=" + captureLooksValid
+                            "phase=bitmap " + lastBitmapDiagnostic
                         )
                         DebugLogger.info(
                             "InvoicePdfValidation",
@@ -8738,7 +8749,12 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                 }, 650L)
                                 return
                             }
-                            throw IllegalStateException("محتوى الفاتورة فارغ بعد ثلاث محاولات رسم؛ لم يتم حفظ ملف PDF فارغ")
+                            throw IllegalStateException(
+                                "محتوى الفاتورة لم يجتز فحص الرسم بعد ثلاث محاولات؛ لم يتم حفظ PDF فارغ. " +
+                                    "تشخيص آمن: DOM=" + lastDomDiagnostic.take(650) +
+                                    "; READY=" + lastReadyDiagnostic.take(250) +
+                                    "; BITMAP=" + lastBitmapDiagnostic.take(350)
+                            )
                         }
 
                         persistBitmapAsPdf(bitmap!!, outputFile)
@@ -8936,7 +8952,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     { rawResult ->
                                         val ready = rawResult?.contains("\\\"ready\\\":true") == true
                                         if (ready || System.currentTimeMillis() >= deadlineMs) {
-                                            DebugLogger.info("InvoicePdfDiag", "phase=dom_ready deadline=" + (System.currentTimeMillis() >= deadlineMs) + " result=" + (rawResult?.take(1200) ?: "null"))
+                                            lastReadyDiagnostic = "deadline=" + (System.currentTimeMillis() >= deadlineMs) +
+                                                ",result=" + (rawResult?.take(220) ?: "null")
+                                            DebugLogger.info("InvoicePdfDiag", "phase=dom_ready " + lastReadyDiagnostic)
                                             DebugLogger.info("InvoicePdfReady", "DOM readiness: ${rawResult?.take(300) ?: "null"}")
                                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                                                 view.postVisualStateCallback(
@@ -8957,7 +8975,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                 )
                             }
                             view.evaluateJavascript(readinessScript) { diagnosticSnapshot ->
-                                DebugLogger.info("InvoicePdfDiag", "phase=initial_dom snapshot=" + (diagnosticSnapshot?.take(1400) ?: "null"))
+                                // The JS result contains layout/count metadata only, not invoice text.
+                                lastDomDiagnostic = diagnosticSnapshot?.take(650) ?: "null"
+                                DebugLogger.info("InvoicePdfDiag", "phase=initial_dom snapshot=" + lastDomDiagnostic)
                                 waitForInvoiceReady(System.currentTimeMillis() + 4000L)
                             }
                         }
