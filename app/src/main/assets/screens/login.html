@@ -66,6 +66,44 @@
             100% { background-position: 0% 50%; }
         }
 
+        /* ============================================================
+           ✅ زر تبديل الوضع (🌞/🌙) — مثبّت أعلى الشاشة الجهة اليسرى
+           ============================================================ */
+        .theme-toggle-fixed {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #2c3e50, #3498db);
+            color: #ffffff;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            transition: all 0.3s ease;
+            padding: 0;
+        }
+
+        .theme-toggle-fixed:hover {
+            transform: scale(1.1) rotate(15deg);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .theme-toggle-fixed:active {
+            transform: scale(0.95);
+        }
+
+        .dark-mode .theme-toggle-fixed {
+            background: linear-gradient(145deg, #f39c12, #f1c40f);
+            color: #1a202c;
+        }
+
         .login-container {
             width: 100%;
             max-width: 450px;
@@ -199,6 +237,86 @@
             color: var(--night-border-focus);
         }
 
+        /* ============================================================
+           ✅ حقل كلمة المرور: زر العين داخل الحقل عند طرفه
+           ============================================================ */
+        .password-input-container {
+            position: relative;
+        }
+
+        .password-field-with-eye input {
+            padding: 15px 15px 15px 100px !important;
+        }
+
+        .password-field-with-eye .field-icon {
+            position: absolute;
+            left: 55px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--primary-color);
+            font-size: 1.2rem;
+            z-index: 2;
+            transition: all 0.3s ease;
+        }
+
+        .dark-mode .password-field-with-eye .field-icon {
+            color: var(--dark-text);
+        }
+
+        .password-field-with-eye:focus-within .field-icon {
+            color: var(--secondary-color);
+            transform: translateY(-50%) scale(1.15);
+        }
+
+        .dark-mode .password-field-with-eye:focus-within .field-icon {
+            color: var(--night-border-focus);
+        }
+
+        .password-eye-btn-inline {
+            position: absolute;
+            left: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            border: none;
+            background: transparent;
+            color: #7f8c8d;
+            font-size: 1.05rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 5;
+            transition: background 0.2s ease, color 0.2s ease;
+            padding: 0;
+            font-family: inherit;
+        }
+
+        .password-eye-btn-inline:hover {
+            background: rgba(52, 152, 219, 0.12);
+            color: var(--secondary-color);
+        }
+
+        .password-eye-btn-inline:active {
+            transform: translateY(-50%) scale(0.92);
+        }
+
+        .password-eye-btn-inline:focus {
+            outline: 2px solid rgba(52, 152, 219, 0.4);
+            outline-offset: 2px;
+        }
+
+        .dark-mode .password-eye-btn-inline {
+            color: #a0aec0;
+        }
+
+        .dark-mode .password-eye-btn-inline:hover {
+            background: rgba(99, 179, 237, 0.16);
+            color: #63b3ed;
+        }
+
         .remember-forgot {
             display: flex;
             justify-content: space-between;
@@ -329,10 +447,6 @@
 
         .dark-mode .login-footer a {
             color: #63b3ed;
-        }
-
-        .password-input-container {
-            position: relative;
         }
 
         .modal {
@@ -698,42 +812,6 @@
             border-radius: 50%;
             background: rgba(255, 255, 255, 0.1);
             animation: float 15s infinite ease-in-out;
-        }
-
-        .floating-actions {
-            position: fixed;
-            bottom: 130px;
-            left: 20px;
-            display: flex;
-            flex-direction: column-reverse;
-            gap: 10px;
-            z-index: 1000;
-        }
-        .floating-actions .action-btn {
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            border: none;
-            background: linear-gradient(145deg, #2c3e50, #3498db);
-            color: white;
-            font-size: 1rem;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .floating-actions .action-btn:hover {
-            transform: scale(1.1) rotate(5deg);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-        }
-        .floating-actions .action-btn:active {
-            transform: scale(0.95);
-        }
-        .dark-mode .floating-actions .action-btn {
-            background: linear-gradient(145deg, #f39c12, #f1c40f);
-            color: #1a202c;
         }
 
         .notification-container {
@@ -1279,6 +1357,14 @@
         }
 
         @media (max-width: 480px) {
+            .theme-toggle-fixed {
+                top: 15px;
+                left: 15px;
+                width: 40px;
+                height: 40px;
+                font-size: 1.2rem;
+            }
+
             .login-container {
                 max-width: 95%;
                 transform: translateY(0);
@@ -1304,17 +1390,6 @@
             .modal-content {
                 width: 95%;
                 padding: 20px;
-            }
-
-            .floating-actions {
-                bottom: 110px;
-                left: 10px;
-                gap: 8px;
-            }
-            .floating-actions .action-btn {
-                width: 30px;
-                height: 30px;
-                font-size: 0.9rem;
             }
         }
     </style>
@@ -1387,12 +1462,10 @@
     <!-- Floating background elements -->
     <div class="floating-elements" id="floatingElements"></div>
 
-    <!-- Floating Actions -->
-    <div class="floating-actions" id="floatingActions">
-        <!-- تم إزالة زر البصمة (id="btnBiometric") لأنه سيتم تشغيله تلقائياً -->
-        <button class="action-btn" id="btnTogglePassword" data-tooltip="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
-        <button class="action-btn" id="btnThemeToggle" data-tooltip="تبديل الوضع الليلي/النهاري"><i class="fas fa-moon"></i></button>
-    </div>
+    <!-- ✅ زر تبديل الوضع (🌞/🌙) — مثبّت أعلى الشاشة الجهة اليسرى -->
+    <button class="theme-toggle-fixed" id="btnThemeToggle" type="button" title="تبديل الوضع الليلي / النهاري" aria-label="تبديل الوضع الليلي أو النهاري">
+        <i class="fas fa-moon"></i>
+    </button>
 
     <!-- Login Screen -->
     <div class="login-container">
@@ -1403,8 +1476,6 @@
 
         <div class="login-body">
             <div id="successMessage" class="success-message"></div>
-
-            <!-- تم إزالة quickLoginBadge -->
 
             <div id="attemptsCounter" class="attempts-counter">
                 <i class="fas fa-exclamation-triangle"></i>
@@ -1426,9 +1497,13 @@
 
                 <div class="input-group">
                     <label for="password">كلمة المرور</label>
-                    <div class="password-input-container">
+                    <div class="password-input-container password-field-with-eye">
                         <i class="fas fa-lock field-icon"></i>
                         <input type="password" id="password" name="password" placeholder="أدخل كلمة المرور" required autocomplete="current-password" data-tooltip="أدخل كلمة المرور الخاصة بك">
+                        <!-- ✅ زر إظهار/إخفاء كلمة المرور — داخل الحقل عند طرفه -->
+                        <button type="button" id="btnTogglePassword" class="password-eye-btn-inline" title="إظهار / إخفاء كلمة المرور" aria-label="إظهار أو إخفاء كلمة المرور">
+                            <i class="fas fa-eye"></i>
+                        </button>
                     </div>
                     <div class="error-message" id="passwordError"></div>
                 </div>
