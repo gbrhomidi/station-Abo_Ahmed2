@@ -3366,6 +3366,7 @@ tr:last-child td { border-bottom:0; }
         if (name === 'backup') refreshBackups();
         if (name === 'maintenance') refreshDatabaseInfo();
         if (name === 'users' && cachedUsers.length) renderUsers(cachedUsers, el('searchInput').value.trim());
+        if (el('searchInput').value.trim()) runGlobalSearch();
         window.scrollTo({top:0, behavior:'smooth'});
     }
 
@@ -4064,8 +4065,6 @@ tr:last-child td { border-bottom:0; }
         });
 
         el('searchBtn').addEventListener('click', runGlobalSearch);
-
-        el('searchInput').addEventListener('input', runGlobalSearch);
 
         el('searchInput').addEventListener('keydown', event => {
             if (event.key === 'Enter') {
