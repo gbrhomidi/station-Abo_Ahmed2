@@ -16,6 +16,39 @@ internal object InvoicePdfSupport {
             .trim('_')
             .take(80)
 
+    /**
+     * Require a light paper background and visible content. Dark WebView surfaces must not
+     * pass merely because they contain many non-white pixels.
+     */
+    fun isBitmapVisuallyInvoiceLike(bitmap: Bitmap): Boolean {
+        if (bitmap.width <= 0 || bitmap.height <= 0) return false
+        var samples = 0
+        var lightPaper = 0
+        var content = 0
+        val stepX = maxOf(1, bitmap.width / 96)
+        val stepY = maxOf(1, bitmap.height / 128)
+        var y = 0
+        while (y < bitmap.height) {
+            var x = 0
+            while (x < bitmap.width) {
+                val pixel = bitmap.getPixel(x, y)
+                val r = Color.red(pixel)
+                val g = Color.green(pixel)
+                val b = Color.blue(pixel)
+                val maxChannel = maxOf(r, g, b)
+                val minChannel = minOf(r, g, b)
+                samples++
+                if (r >= 200 && g >= 200 && b >= 200) lightPaper++
+                if (maxChannel < 235 || (maxChannel - minChannel) > 24) content++
+                x += stepX
+            }
+            y += stepY
+        }
+        if (samples == 0) return false
+        return lightPaper.toDouble() / samples >= 0.35 &&
+            content.toDouble() / samples >= 0.002
+    }
+
     fun isPdfVisuallyNonBlank(file: File): Boolean {
         if (!file.isFile || file.length() < 100L) return false
         return try {
@@ -28,17 +61,7 @@ internal object InvoicePdfSupport {
                         try {
                             bitmap.eraseColor(Color.WHITE)
                             page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                            var visible = 0
-                            for (y in 0 until bitmap.height) {
-                                for (x in 0 until bitmap.width) {
-                                    val pixel = bitmap.getPixel(x, y)
-                                    val r = Color.red(pixel)
-                                    val g = Color.green(pixel)
-                                    val b = Color.blue(pixel)
-                                    if (maxOf(r, g, b) < 245 || (maxOf(r, g, b) - minOf(r, g, b)) > 20) visible++
-                                }
-                            }
-                            if (visible < 4) return false
+                            if (!isBitmapVisuallyInvoiceLike(bitmap)) return false
                         } finally {
                             bitmap.recycle()
                             page.close()
