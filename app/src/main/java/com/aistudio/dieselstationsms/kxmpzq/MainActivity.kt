@@ -4705,18 +4705,22 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     return errorResponse("إرسال SMS معطل من إعدادات النظام")
                 }
                 val data = JSONObject(jsonData)
-                val recipient = data.optString("phone_number", data.optString("recipient")).trim()
-                val body = data.optString("message_body", data.optString("body"))
+                val recipient = PhoneUtils.normalize(data.optString("phone_number", data.optString("recipient")))
+                    ?: return errorResponse("رقم هاتف المستلم غير صالح")
+                val body = SmsMessageNormalizer.normalizeForSms(data.optString("message_body", data.optString("body")))
+                if (body.isBlank()) return errorResponse("نص الرسالة فارغ أو غير صالح")
+                val eventId = data.optString("event_id").takeIf { it.isNotBlank() }
+                    ?: "manual-sms:${UUID.randomUUID()}"
                 val result = SmsOutboxRepository.enqueue(
                     db = db,
                     recipient = recipient,
                     body = body,
-                    eventId = data.optString("event_id").takeIf { it.isNotBlank() },
-                    conversationId = data.optString("conversation_id").takeIf { it.isNotBlank() },
+                    eventId = eventId,
+                    conversationId = data.optString("conversation_id").takeIf { it.isNotBlank() } ?: recipient,
                     businessEntityId = data.optString("business_entity_id").takeIf { it.isNotBlank() },
                     priority = runCatching { SmsBudgetManager.Priority.valueOf(data.optString("priority", "NORMAL").uppercase()) }
                         .getOrDefault(SmsBudgetManager.Priority.NORMAL)
-                ) ?: return errorResponse("بيانات الرسالة غير صالحة")
+                ) ?: return errorResponse("تعذر إضافة الرسالة إلى طابور الإرسال")
                 SmsOutboxWorker.schedule(this@MainActivity)
                 JSONObject().apply {
                     put("success", true)
