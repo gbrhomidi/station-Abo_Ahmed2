@@ -2041,28 +2041,53 @@ class MainActivity : AppCompatActivity() {
             return successResponse(true, "تمت جدولة قراءة تفاصيل حركة المخزون")
         }
 
+        /** Converts Map<*, *> to a safe JSONObject. */
+        private fun jsonObjectFromMap(map: Map<*, *>): JSONObject {
+            val obj = JSONObject()
+            for ((rawKey, rawValue) in map) {
+                if (rawKey !is String) continue
+                when (rawValue) {
+                    null -> obj.put(rawKey, JSONObject.NULL)
+                    is String, is Boolean, is Int, is Long, is Double, is Float -> obj.put(rawKey, rawValue)
+                    is Number -> obj.put(rawKey, rawValue.toDouble())
+                    is JSONObject, is JSONArray -> obj.put(rawKey, rawValue)
+                    is Map<*, *> -> obj.put(rawKey, jsonObjectFromMap(rawValue))
+                    is Collection<*> -> obj.put(rawKey, jsonArrayFromCollection(rawValue))
+                    else -> obj.put(rawKey, rawValue.toString())
+                }
+            }
+            return obj
+        }
+
+        /** Converts Collection<*> (List/Set) to a safe JSONArray. */
+        private fun jsonArrayFromCollection(collection: Collection<*>): JSONArray {
+            val arr = JSONArray()
+            for (item in collection) {
+                when (item) {
+                    null -> arr.put(JSONObject.NULL)
+                    is String, is Boolean, is Int, is Long, is Double, is Float -> arr.put(item)
+                    is Number -> arr.put(item.toDouble())
+                    is JSONObject, is JSONArray -> arr.put(item)
+                    is Map<*, *> -> arr.put(jsonObjectFromMap(item))
+                    is Collection<*> -> arr.put(jsonArrayFromCollection(item))
+                    else -> arr.put(item.toString())
+                }
+            }
+            return arr
+        }
+
         private fun dataResponseObject(data: Any): JSONObject {
             return when (data) {
                 is JSONObject -> data.put("success", true)
                 is JSONArray -> JSONObject().apply { put("success", true); put("data", data) }
+                is Map<*, *> -> JSONObject().apply { put("success", true); put("data", jsonObjectFromMap(data)) }
+                is Collection<*> -> JSONObject().apply { put("success", true); put("data", jsonArrayFromCollection(data)) }
                 else -> JSONObject().apply { put("success", true); put("data", data) }
             }
         }
-
         private fun dataResponse(data: Any): String {
-            return when (data) {
-                is JSONObject -> data.put("success", true).toString()
-                is JSONArray -> JSONObject().apply {
-                    put("success", true)
-                    put("data", data)
-                }.toString()
-                else -> JSONObject().apply {
-                    put("success", true)
-                    put("data", data)
-                }.toString()
-            }
+            return dataResponseObject(data).toString()
         }
-
         private fun applicationSettingsJson(settings: ApplicationSettings): JSONObject {
             val encoded = settingsJson.encodeToString(ApplicationSettings.serializer(), settings)
             return JSONObject(encoded)
@@ -5195,6 +5220,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     values[key] = payload.optString(key, "")
                 }
                 if (values.isEmpty()) throw IllegalArgumentException("لا توجد إعدادات عرض قابلة للحفظ")
+
+                // Defense in depth: enforce mutual exclusivity server-side.
+                val timeoutRaw = values["DISPLAY_IDLE_TIMEOUT_SECONDS"]?.trim().orEmpty()
+                val timeout = timeoutRaw.toIntOrNull() ?: 0
+                values["DISPLAY_IDLE_TIMEOUT_SECONDS"] = timeout.coerceAtLeast(0).toString()
+                val lockOn = values["DISPLAY_LOCK_ON_IDLE"]?.trim() == "1"
+                values["DISPLAY_LOCK_ON_IDLE"] = if (lockOn) "1" else "0"
+                if (timeout > 0 && lockOn) values["DISPLAY_LOCK_ON_IDLE"] = "0"
+
                 values.forEach { (key, value) -> db.setSystemSetting(key, value) }
                 val persisted = db.getAllSystemSettingsMap()
                 val verified = JSONObject()

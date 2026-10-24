@@ -2159,8 +2159,8 @@
                 const values = response.data && typeof response.data === 'object' ? response.data : response;
                 displaySettings = { ...DEFAULT_DISPLAY_SETTINGS };
                 for (const key of Object.keys(DEFAULT_DISPLAY_SETTINGS)) {
-                    if (Object.prototype.hasOwnProperty.call(values, key) && String(values[key] ?? '').trim() !== '') {
-                        displaySettings[key] = String(values[key]);
+                    if (Object.prototype.hasOwnProperty.call(values, key)) {
+                        displaySettings[key] = String(values[key] ?? '');
                     }
                 }
             } catch (error) {
@@ -2187,7 +2187,7 @@
                 ? displaySettings.DISPLAY_SLEEP_TEXT_COLOR
                 : '#D4A86A';
 
-            sleepText.textContent = displaySettings.DISPLAY_SLEEP_TEXT || '⛽ محطة أبو أحمد';
+            sleepText.textContent = displaySettings.DISPLAY_SLEEP_TEXT ?? '';
             sleepText.style.fontSize = fs + 'px';
             sleepText.style.color = color;
             sleepText.style.textShadow = '0 0 20px ' + color + ', 0 0 40px ' + color + ', 0 0 80px ' + color + '80';
@@ -2309,9 +2309,21 @@
         // ================================================================
         // Sleep Mode
         // ================================================================
+        function isSleepScreenEnabled() {
+            const v = parseInt(displaySettings.DISPLAY_IDLE_TIMEOUT_SECONDS, 10);
+            return Number.isFinite(v) && v > 0;
+        }
+        function isLockScreenEnabled() {
+            return String(displaySettings.DISPLAY_LOCK_ON_IDLE) === '1';
+        }
+        function effectiveIdleMode() {
+            if (isSleepScreenEnabled()) return 'sleep';
+            if (isLockScreenEnabled()) return 'lock';
+            return 'none';
+        }
         function resetInactivityTimer() {
-            if (inactivityTimer) clearTimeout(inactivityTimer);
-            if (isSleeping) return;
+            if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; }
+            if (isSleeping || effectiveIdleMode() !== 'sleep') return;
             const seconds = Number.parseInt(displaySettings.DISPLAY_IDLE_TIMEOUT_SECONDS, 10);
             if (!Number.isFinite(seconds) || seconds <= 0) return;
             inactivityTimer = setTimeout(enterSleepMode, Math.max(5, seconds) * 1000);
@@ -2325,6 +2337,8 @@
         function enterSleepMode() {
             if (isSleeping) return;
             isSleeping = true;
+            clearSessionTimers();
+            hideSessionWarning();
 
             document.body.classList.add('sleep-active');
 
@@ -2457,7 +2471,7 @@
             clearSessionTimers();
             hideSessionWarning();
 
-            if (String(displaySettings.DISPLAY_LOCK_ON_IDLE) !== '1') return;
+            if (effectiveIdleMode() !== 'lock') return;
             const totalSeconds = parseInt(displaySettings.DISPLAY_SESSION_TIMEOUT_SECONDS, 10);
             if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return;
 
@@ -2481,6 +2495,7 @@
                 document.body.classList.remove('sleep-active');
                 if (!clockInterval) { clockInterval = setInterval(updateDateTime, 1000); }
                 if (!refreshInterval) refreshInterval = setInterval(() => loadDashboard(true), 180000);
+                console.warn('[Display] Session warning fired while sleeping — mutual exclusion triggered cleanup.');
             }
 
             sessionWarningVisible = true;
@@ -4048,7 +4063,8 @@
 
             if (currentUser) updateUserInfo(currentUser);
 
-            window.addEventListener('pageshow', function(e) {
+            window.addEventListener('pageshow', async function(e) {
+                await loadDisplaySettings();
                 loadDashboard(true);
                 handleUserActivity();
             });

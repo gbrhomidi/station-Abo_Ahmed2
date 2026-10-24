@@ -85,6 +85,24 @@ button,input,select,textarea { font-family:var(--font-sans); }
 button { cursor:pointer; }
 button:disabled { opacity:.55; cursor:not-allowed; }
 .hidden { display:none !important; }
+.field input:disabled,
+.field select:disabled,
+.field textarea:disabled,
+.popover-trigger:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+.switch input:disabled + .slider {
+    opacity: .5;
+    cursor: not-allowed;
+    filter: grayscale(.5);
+}
+.file-picker-btn:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
 
 .topbar {
     position:sticky;
@@ -3170,7 +3188,9 @@ tr:last-child td { border-bottom:0; }
         const colorHidden = el('setting-DISPLAY_SLEEP_TEXT_COLOR');
         const sizeHidden = el('setting-DISPLAY_SLEEP_FONT_SIZE');
 
-        const text = (textInput?.value || '').trim() || '⛽ محطة أبو أحمد';
+        const rawText = (textInput?.value ?? '').trim();
+        const text = rawText || '— لا يوجد نص —';
+        textEl.style.opacity = rawText ? '1' : '0.45';
         const colorRaw = (colorHidden?.value || '').trim();
         const color = /^#[0-9a-fA-F]{6}$/.test(colorRaw) ? colorRaw : '#D4A86A';
         const size = Math.max(12, Math.min(72, parseInt(sizeHidden?.value || '30', 10) || 30));
@@ -3641,13 +3661,23 @@ tr:last-child td { border-bottom:0; }
 
             refreshSleepPreview();
             loadLockBgPreview(el('setting-DISPLAY_LOCK_BG_IMAGE')?.value || '');
+            const _sleepTimeout = parseInt(systemSettings.DISPLAY_IDLE_TIMEOUT_SECONDS || '0', 10) || 0;
+            const _lockOn = String(systemSettings.DISPLAY_LOCK_ON_IDLE || '') === '1';
+            if (_sleepTimeout > 0 && _lockOn) {
+                const lockInput = el('setting-DISPLAY_LOCK_ON_IDLE');
+                if (lockInput) lockInput.checked = false;
+                systemSettings.DISPLAY_LOCK_ON_IDLE = '0';
+                toast('تعارض قديم: تم تعطيل قفل الجلسة تلقائياً لأن شاشة التوقف مفعلة. اضغط حفظ لتثبيت الحالة.', 'warn');
+            }
+            syncDisplayExclusivityUI();
         } catch (error) {
             toast('تعذر قراءة system_settings: ' + error.message, 'warn');
         }
     }
 
     async function saveDisplaySettingsOnly() {
-        const payload = collectDisplaySettings();
+        const raw = collectDisplaySettings();
+        const payload = enforceDisplayExclusivity({ ...raw });
         const entries = Object.entries(payload);
         if (!entries.length) throw new Error('لا توجد إعدادات عرض قابلة للحفظ.');
 
@@ -4220,6 +4250,79 @@ tr:last-child td { border-bottom:0; }
         target.addEventListener('change', handle);
     }
 
+    // ============================================================
+    // Display Settings — Mutual Exclusion
+    // شاشة التوقف أو قفل الجلسة: لا يُسمح بتفعيلهما معاً.
+    // ============================================================
+    const DISPLAY_SLEEP_SUBORDINATES = ['DISPLAY_SLEEP_TEXT', 'DISPLAY_SLEEP_IMAGE', 'DISPLAY_SLEEP_OVERLAY_OPACITY', 'DISPLAY_SLEEP_FONT_SIZE', 'DISPLAY_SLEEP_TEXT_COLOR', 'DISPLAY_SLEEP_SPEED', 'DISPLAY_SLEEP_CLOCK'];
+    const DISPLAY_LOCK_SUBORDINATES = ['DISPLAY_SESSION_TIMEOUT_SECONDS', 'DISPLAY_SESSION_WARNING_SECONDS', 'DISPLAY_LOCK_MESSAGE', 'DISPLAY_LOCK_SHOW_USER', 'DISPLAY_LOCK_SHOW_CLOCK', 'DISPLAY_LOCK_BG_IMAGE'];
+    function isDisplaySleepEnabled() {
+        const input = el('setting-DISPLAY_IDLE_TIMEOUT_SECONDS');
+        const v = input ? parseInt(input.value, 10) : 0;
+        return Number.isFinite(v) && v > 0;
+    }
+    function isDisplayLockEnabled() {
+        const input = el('setting-DISPLAY_LOCK_ON_IDLE');
+        return !!(input && input.checked);
+    }
+    function disableDisplayField(key, reason) {
+        const input = el('setting-' + key);
+        if (!input) return;
+        const trigger = document.querySelector('.popover-trigger[data-trigger-for="' + key + '"]');
+        if (trigger) { trigger.disabled = true; trigger.setAttribute('aria-disabled', 'true'); trigger.title = reason; }
+        if (!(input.tagName === 'INPUT' && input.type === 'hidden')) { input.disabled = true; input.title = reason; }
+        const wrap = input.closest('.file-picker-wrap');
+        if (wrap) wrap.querySelectorAll('.file-picker-btn').forEach(btn => { btn.disabled = true; btn.title = reason; });
+    }
+    function enableDisplayField(key) {
+        const input = el('setting-' + key);
+        if (!input) return;
+        const trigger = document.querySelector('.popover-trigger[data-trigger-for="' + key + '"]');
+        if (trigger) { trigger.disabled = false; trigger.removeAttribute('aria-disabled'); trigger.removeAttribute('title'); }
+        if (!(input.tagName === 'INPUT' && input.type === 'hidden')) { input.disabled = false; input.removeAttribute('title'); }
+        const wrap = input.closest('.file-picker-wrap');
+        if (wrap) wrap.querySelectorAll('.file-picker-btn').forEach(btn => { btn.disabled = false; btn.removeAttribute('title'); });
+    }
+    function syncDisplayExclusivityUI() {
+        const sleepOn = isDisplaySleepEnabled();
+        const lockOn = isDisplayLockEnabled();
+        DISPLAY_SLEEP_SUBORDINATES.forEach(key => sleepOn ? enableDisplayField(key) : disableDisplayField(key, 'أدخل مدة خمول أكبر من صفر أولاً'));
+        DISPLAY_LOCK_SUBORDINATES.forEach(key => lockOn ? enableDisplayField(key) : disableDisplayField(key, 'فعّل قفل الجلسة أولاً'));
+    }
+    function bindDisplayExclusivity() {
+        const sleepInput = el('setting-DISPLAY_IDLE_TIMEOUT_SECONDS');
+        const lockInput = el('setting-DISPLAY_LOCK_ON_IDLE');
+        if (sleepInput) {
+            const onSleepInput = () => {
+                const v = parseInt(sleepInput.value, 10);
+                if (Number.isFinite(v) && v > 0 && lockInput && lockInput.checked) {
+                    lockInput.checked = false;
+                    lockInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    toast('تم إيقاف قفل الجلسة تلقائياً: لا يمكن تشغيل شاشة التوقف وقفل الجلسة معاً', 'warn');
+                }
+                syncDisplayExclusivityUI();
+            };
+            sleepInput.addEventListener('input', onSleepInput);
+            sleepInput.addEventListener('change', syncDisplayExclusivityUI);
+        }
+        if (lockInput) lockInput.addEventListener('change', () => {
+            if (lockInput.checked && sleepInput && parseInt(sleepInput.value, 10) > 0) {
+                sleepInput.value = '0';
+                sleepInput.dispatchEvent(new Event('change', { bubbles: true }));
+                toast('تم إيقاف شاشة التوقف تلقائياً: لا يمكن تشغيل شاشة التوقف وقفل الجلسة معاً', 'warn');
+            }
+            syncDisplayExclusivityUI();
+        });
+        syncDisplayExclusivityUI();
+    }
+    function enforceDisplayExclusivity(payload) {
+        const parsed = parseInt(payload.DISPLAY_IDLE_TIMEOUT_SECONDS, 10);
+        payload.DISPLAY_IDLE_TIMEOUT_SECONDS = Number.isFinite(parsed) ? String(parsed) : '0';
+        payload.DISPLAY_LOCK_ON_IDLE = payload.DISPLAY_LOCK_ON_IDLE === '1' ? '1' : '0';
+        if (parseInt(payload.DISPLAY_IDLE_TIMEOUT_SECONDS, 10) > 0 && payload.DISPLAY_LOCK_ON_IDLE === '1') payload.DISPLAY_LOCK_ON_IDLE = '0';
+        return payload;
+    }
+
     function bind() {
         el('themeBtn').addEventListener('click', toggleTheme);
 
@@ -4315,6 +4418,7 @@ tr:last-child td { border-bottom:0; }
         });
 
         bindDisplayFieldListeners();
+        bindDisplayExclusivity();
     }
 
     function formatDate(value) {
