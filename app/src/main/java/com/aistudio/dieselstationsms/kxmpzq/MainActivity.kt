@@ -740,6 +740,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun scheduleDebtReminderWork(userId: Long) {
+        if (userId <= 0L || !isPermissionGranted(Manifest.permission.SEND_SMS)) return
+        runCatching {
+            val stationId = dbHelper.getUserById(userId)?.optInt("station_id", 0) ?: 0
+            if (stationId > 0) {
+                DebtDueReminderWorker.schedule(this, stationId, userId)
+            }
+        }.onFailure {
+            DebugLogger.warn("SMS", "Unable to schedule due-date debt reminders: ${it.message}")
+        }
+    }
+
     private fun requestBatteryOptimizationExemption() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
         runCatching {
@@ -2441,6 +2453,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         act.currentUserId = userId
                         act.currentUserRole = role
                         act.currentUserName = authResult.optString("username", "")
+                        act.scheduleDebtReminderWork(userId)
                         DebugLogger.info("LOGIN", "Session updated for user ${authResult.optString("username")}")
                     }
 
