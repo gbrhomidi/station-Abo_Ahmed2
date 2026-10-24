@@ -53,14 +53,12 @@ class DebtDueReminderWorker(
                 // from yesterday must not suppress the actual due-date notification.
                 if (row.optString("last_reminder_at").take(10) == dueDate) continue
 
-                val balanceText = if (balance % 1.0 == 0.0) {
-                    balance.toLong().toString()
-                } else {
-                    String.format(java.util.Locale.US, "%,.2f", balance)
-                }
+                val dueAmount = row.optDouble("due_soon_amount", balance)
+                val balanceText = formatAmount(balance)
+                val dueAmountText = formatAmount(dueAmount)
                 val customerName = row.optString("customer_name").trim().ifBlank { "عميلنا الكريم" }
                 val message = "مرحباً $customerName، نذكّركم بأن موعد استحقاق الدين هو اليوم ($dueDate). " +
-                    "يرجى تسديد الرصيد المستحق وقدره $balanceText ر. ي. شاكرين تعاونكم."
+                    "المبلغ المستحق اليوم $dueAmountText ر. ي، وإجمالي الرصيد القائم $balanceText ر. ي. شاكرين تعاونكم."
 
                 val eventId = "debt-reminder:$stationId:$customerId:$dueDate"
                 val dedupeKey = "$eventId:$phone"
@@ -95,6 +93,12 @@ class DebtDueReminderWorker(
         } catch (exception: Exception) {
             Result.retry()
         }
+    }
+
+    private fun formatAmount(value: Double): String = if (value % 1.0 == 0.0) {
+        value.toLong().toString()
+    } else {
+        String.format(java.util.Locale.US, "%,.2f", value)
     }
 
     companion object {
