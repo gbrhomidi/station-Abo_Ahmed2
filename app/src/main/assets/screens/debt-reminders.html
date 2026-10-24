@@ -2830,7 +2830,10 @@ async function sendReminder() {
                 priority: priority.toUpperCase() === 'URGENT' ? 'HIGH' : priority.toUpperCase(),
                 business_entity_id: String(debtId),
                 // One manual reminder per debt per local day; future-day reminders remain possible.
-                event_id: 'debt-reminder-manual:' + debtId + ':' + new Date().toISOString().slice(0, 10),
+                event_id: 'debt-reminder-manual:' + debtId + ':' + (() => {
+                    const now = new Date();
+                    return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+                })(),
                 conversation_id: debt.customer_phone
             };
             const smsResult = await invoke('addSmsMessage', [JSON.stringify(smsPayload)]);
@@ -3711,7 +3714,10 @@ async function openSettingsModal() {
 async function saveSetting(key, value) {
     showLoading(true);
     try {
-        await invoke('setSetting', [key, String(value)]);
+        const result = await invoke('setSetting', [key, String(value)]);
+        if (!result || result.success === false) {
+            throw new Error((result && result.message) || 'تعذر حفظ الإعداد في SQLite');
+        }
         showToast('تم حفظ الإعداد في SQLite', 'success');
     } catch (e) {
         showToast('فشل حفظ الإعداد: ' + e.message, 'error');
