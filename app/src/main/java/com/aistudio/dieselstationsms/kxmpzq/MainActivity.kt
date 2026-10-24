@@ -11532,21 +11532,44 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         private fun queueDueReminder(db: DatabaseHelper, row: JSONObject, stationId: Int, userId: Long): JSONObject {
             val customerId = row.optLong("customer_party_id", 0L)
             val phone = row.optString("phone")
+            val normalizedPhone = PhoneUtils.normalize(phone)
             val total = row.optDouble("total_outstanding", 0.0)
+            val dueDate = row.optString("nearest_due_date").trim()
             val days = row.optInt("days_remaining", 999)
-            if (customerId <= 0L || phone.isBlank() || total <= 0.0) {
+            if (customerId <= 0L || normalizedPhone == null || total <= 0.0 || dueDate.isBlank()) {
                 return JSONObject().put("queued", false).put("reason", "invalid_customer_contact_or_balance")
             }
-            val message = if (days == 1) {
-                "مرحبا 🙋\nتاريخ استحقاق تسديد ما عليكم يوم غد\nلذلك يرجى التسديد فوراً\nأجمالي ما عليكم: ${formatYER(total)}"
-            } else {
-                "مرحبا 🙋\nنُعلمكم بإن تاريخ استحقاق تسديد ما عليكم يقترب\nلذلك يرجى الوفاء و سرعة التسديد\nحيث و إن أجمالي ما عليكم: ${formatYER(total)}"
+            if (!row.optBoolean("eligible", false)) {
+                return JSONObject().put("queued", false).put("reason", "recent_reminder_exists")
             }
             val candidate = row.optLong("transaction_id", 0L)
             if (candidate <= 0L) return JSONObject().put("queued", false).put("reason", "no_due_invoice")
-            val queued = queueSms(db, phone, message, "debt-reminder:$stationId:${customerId}:${row.optString("nearest_due_date")}", "party:$customerId", userId)
+
+            val eventId = "debt-reminder:$stationId:$customerId:$dueDate"
+            val dedupeKey = "$eventId:$normalizedPhone"
+            val alreadyQueued = db.readableDatabase.rawQuery(
+                "SELECT 1 FROM sms_outbox WHERE dedupe_key = ? LIMIT 1",
+                arrayOf(dedupeKey)
+            ).use { it.moveToFirst() }
+            if (alreadyQueued) {
+                return JSONObject().put("queued", false).put("reason", "reminder_already_queued")
+                    .put("customer_name", row.optString("customer_name")).put("balance", total)
+            }
+
+            val dueAmount = row.optDouble("due_soon_amount", total)
+            val message = if (days == 1) {
+                "مرحبا 🙋\nنذكّركم بأن موعد استحقاق الدين يوم غد ($dueDate).\nالمبلغ المستحق: ${formatYER(dueAmount)}\nإجمالي الرصيد عليكم: ${formatYER(total)}"
+            } else if (days == 0) {
+                "مرحبا 🙋\nنذكّركم بأن موعد استحقاق الدين اليوم ($dueDate).\nالمبلغ المستحق اليوم: ${formatYER(dueAmount)}\nإجمالي الرصيد عليكم: ${formatYER(total)}"
+            } else {
+                "مرحبا 🙋\nنذكّركم باقتراب موعد استحقاق الدين ($dueDate).\nالمبلغ المستحق: ${formatYER(dueAmount)}\nإجمالي الرصيد عليكم: ${formatYER(total)}"
+            }
+            val queued = queueSms(db, normalizedPhone, message, eventId, "party:$customerId", userId)
             if (queued.optBoolean("queued", false)) {
-                db.recordQueuedDebtReminder(customerId, candidate, PhoneUtils.normalize(phone) ?: phone, message, userId)
+                db.recordQueuedDebtReminder(
+                    customerId, candidate, normalizedPhone, message,
+                    createdBy = userId, daysBeforeDue = days.coerceAtLeast(0)
+                )
             }
             return queued.put("customer_name", row.optString("customer_name")).put("balance", total)
         }
