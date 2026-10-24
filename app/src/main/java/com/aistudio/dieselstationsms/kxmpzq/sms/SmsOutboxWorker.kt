@@ -1,6 +1,9 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -18,7 +21,12 @@ class SmsOutboxWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val db = DatabaseHelper.getInstance(applicationContext)
-        // Restore messages failed only because SEND_SMS was denied, once the worker is scheduled again.
+        // Respect the global outbound switch and leave messages durable while permission is absent.
+        if (db.getSetting("sms_send_enabled") == "0") return@withContext Result.success()
+        if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+            return@withContext Result.success()
+        }
+        // Restore messages failed only because SEND_SMS was denied, once permission is restored.
         SmsOutboxRepository.requeuePermissionFailures(db)
         SmsOutboxRepository.recoverStuck(db)
         SmsOutboxRepository.failDeliveryTimeouts(db).forEach { messageId ->
