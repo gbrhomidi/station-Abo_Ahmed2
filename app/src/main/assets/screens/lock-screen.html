@@ -373,11 +373,11 @@ body {
 
     <!-- قسم البصمة البيومترية -->
     <div id="biometricSection" class="hidden">
-        <button type="button" class="biometric-btn" id="biometricBtn" onclick="handleBiometricUnlock()">
+        <button type="button" class="biometric-btn" id="biometricBtn">
             <i class="fas fa-fingerprint"></i>
             <span>تسجيل الدخول باستخدام البصمة البيومترية للمستخدم</span>
         </button>
-        <button type="button" class="use-password-link" id="usePasswordLink" onclick="showPasswordSection(true)">
+        <button type="button" class="use-password-link" id="usePasswordLink">
             استخدام كلمة المرور بدلاً من ذلك
         </button>
     </div>
@@ -403,7 +403,6 @@ body {
                     type="button"
                     class="eye-btn"
                     id="eyeBtn"
-                    onclick="togglePasswordVisibility()"
                     aria-label="إظهار كلمة المرور"
                     title="إظهار / إخفاء كلمة المرور">
                     <i class="fas fa-eye" id="eyeIcon"></i>
@@ -411,7 +410,7 @@ body {
             </div>
         </div>
 
-        <button type="button" class="unlock-btn" id="unlockBtn" onclick="submitPassword()">
+        <button type="button" class="unlock-btn" id="unlockBtn">
             <i class="fas fa-lock-open"></i>
             <span>فتح القفل</span>
         </button>
@@ -421,10 +420,10 @@ body {
     </div>
 
     <div class="footer-actions">
-        <button type="button" class="footer-btn danger" onclick="switchUser()">
+        <button type="button" class="footer-btn danger" id="switchUserBtn">
             <i class="fas fa-sign-out-alt"></i> تبديل المستخدم
         </button>
-        <button type="button" class="footer-btn" onclick="reloadClock()">
+        <button type="button" class="footer-btn" id="reloadClockBtn">
             <i class="fas fa-sync-alt"></i> تحديث
         </button>
     </div>
@@ -700,7 +699,27 @@ body {
                 window.AndroidInterface.clearCredentials();
             }
         } catch (_) {}
+        let raw;
+        try {
+            if (!window.AndroidInterface || typeof window.AndroidInterface.clearCredentials !== 'function') {
+                showError('تعذر تبديل المستخدم: جسر التطبيق غير متاح');
+                return;
+            }
+            raw = window.AndroidInterface.clearCredentials();
+        } catch (e) {
+            showError('تعذر تبديل المستخدم: ' + (e && e.message ? e.message : 'فشل إبطال بيانات الدخول'));
+            return;
+        }
+        const result = safeParse(raw);
+        if (!result || result.success !== true) {
+            showError(result && result.error ? result.error : 'لم يتم إبطال بيانات الدخول؛ لم يتم تبديل المستخدم');
+            return;
+        }
         try { sessionStorage.removeItem(KEY_LOCKED_USER); } catch (_) {}
+        try {
+            localStorage.removeItem('user');
+            localStorage.removeItem('authToken');
+        } catch (_) {}
         window.location.replace('login.html');
     }
 
@@ -777,6 +796,15 @@ body {
         } else {
             showPasswordSection(true);
         }
+
+        // These functions are private to this IIFE. Bind handlers explicitly
+        // rather than relying on inline HTML handlers/global name lookup.
+        el.biometricBtn.addEventListener('click', handleBiometricUnlock);
+        el.usePasswordLink.addEventListener('click', () => showPasswordSection(true));
+        el.eyeBtn.addEventListener('click', togglePasswordVisibility);
+        el.unlockBtn.addEventListener('click', submitPassword);
+        $('switchUserBtn').addEventListener('click', switchUser);
+        $('reloadClockBtn').addEventListener('click', reloadClock);
 
         el.password.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') { e.preventDefault(); submitPassword(); }
