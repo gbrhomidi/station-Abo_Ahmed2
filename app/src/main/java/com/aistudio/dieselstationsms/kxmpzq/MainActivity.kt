@@ -11657,18 +11657,27 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun sendTestSmsTyped(jsonData: String): String {
             return try {
                 val obj = JSONObject(jsonData)
-                val phone = obj.optString("phone_number")
-                val msg = obj.optString("message_body", "Test message")
-                require(phone.isNotEmpty()) { "رقم الهاتف مطلوب" }
+                val phone = PhoneUtils.normalize(obj.optString("phone_number"))
+                val msg = SmsMessageNormalizer.normalizeForSms(obj.optString("message_body", "رسالة اختبار SMS"))
+                require(phone != null && msg.isNotBlank()) { "رقم الهاتف ونص الرسالة مطلوبان" }
+                require(db.getSetting("sms_send_enabled") != "0") { "إرسال SMS معطل من إعدادات النظام" }
 
-                val smsData = JSONObject().apply {
-                    put("phone_number", phone)
-                    put("message_body", msg)
-                    put("message_type", "outgoing")
-                    put("status", "pending")
-                }
-                val id = db.addSmsMessage(smsData)
-                successResponse(id, "تم إرسال رسالة الاختبار")
+                val result = SmsOutboxRepository.enqueue(
+                    db = db,
+                    recipient = phone,
+                    body = msg,
+                    eventId = "sms-test:${System.currentTimeMillis()}",
+                    businessEntityId = "sms-test",
+                    priority = SmsBudgetManager.Priority.HIGH
+                ) ?: throw IllegalStateException("تعذر وضع رسالة الاختبار في طابور الإرسال")
+                SmsOutboxWorker.schedule(this@MainActivity)
+                JSONObject().apply {
+                    put("success", true)
+                    put("queued", true)
+                    put("message_id", result.messageId)
+                    put("parts_count", result.partsCount)
+                    put("message", "تم وضع رسالة الاختبار في طابور الإرسال")
+                }.toString()
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
 
