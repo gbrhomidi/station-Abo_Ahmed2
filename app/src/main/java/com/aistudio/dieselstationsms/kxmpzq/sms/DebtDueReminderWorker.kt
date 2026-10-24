@@ -1,9 +1,6 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
-import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -41,7 +38,6 @@ class DebtDueReminderWorker(
             var queuedCount = 0
             for (index in 0 until dueRows.length()) {
                 val row = dueRows.optJSONObject(index) ?: continue
-                if (!row.optBoolean("eligible", false)) continue
                 if (row.optInt("days_remaining", Int.MAX_VALUE) != 0) continue
 
                 val customerId = row.optLong("customer_party_id", 0L)
@@ -53,6 +49,10 @@ class DebtDueReminderWorker(
                     phone == null || dueDate.isBlank()
                 ) continue
 
+                // A reminder already recorded on the due date is enough; a reminder
+                // from yesterday must not suppress the actual due-date notification.
+                if (row.optString("last_reminder_at").take(10) == dueDate) continue
+
                 val balanceText = if (balance % 1.0 == 0.0) {
                     balance.toLong().toString()
                 } else {
@@ -62,7 +62,14 @@ class DebtDueReminderWorker(
                 val message = "مرحباً $customerName، نذكّركم بأن موعد استحقاق الدين هو اليوم ($dueDate). " +
                     "يرجى تسديد الرصيد المستحق وقدره $balanceText ر. ي. شاكرين تعاونكم."
 
-                val eventId = "debt-due-reminder:$stationId:$customerId:$dueDate"
+                val eventId = "debt-reminder:$stationId:$customerId:$dueDate"
+                val dedupeKey = "$eventId:$phone"
+                val alreadyQueued = db.readableDatabase.rawQuery(
+                    "SELECT 1 FROM sms_outbox WHERE dedupe_key = ? LIMIT 1",
+                    arrayOf(dedupeKey)
+                ).use { it.moveToFirst() }
+                if (alreadyQueued) continue
+
                 val result = SmsOutboxRepository.enqueue(
                     db = db,
                     recipient = phone,
@@ -70,12 +77,14 @@ class DebtDueReminderWorker(
                     eventId = eventId,
                     businessEntityId = "party:$customerId",
                     priority = SmsBudgetManager.Priority.HIGH,
-                    dedupeKey = "$eventId:$phone"
+                    dedupeKey = dedupeKey
                 ) ?: continue
 
-                // Record only after the outbox accepted the reminder. The
-                // eligibility query prevents a second audit record on later runs.
-                db.recordQueuedDebtReminder(customerId, transactionId, phone, message, userId)
+                // Persist the exact due-day event only after the durable outbox accepted it.
+                db.recordQueuedDebtReminder(
+                    customerId, transactionId, phone, message,
+                    createdBy = userId, daysBeforeDue = 0
+                )
                 if (result.status == "QUEUED" || result.status == "RETRY_PENDING") queuedCount++
             }
 
