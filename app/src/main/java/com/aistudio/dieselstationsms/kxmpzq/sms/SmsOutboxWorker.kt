@@ -18,6 +18,8 @@ class SmsOutboxWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val db = DatabaseHelper.getInstance(applicationContext)
+        // Restore messages failed only because SEND_SMS was denied, once the worker is scheduled again.
+        SmsOutboxRepository.requeuePermissionFailures(db)
         SmsOutboxRepository.recoverStuck(db)
         SmsOutboxRepository.failDeliveryTimeouts(db).forEach { messageId ->
             SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, messageId)
