@@ -5170,6 +5170,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 ) {
                     SmsOutboxRepository.requeuePermissionFailures(db)
                     if (SmsOutboxRepository.hasPending(db)) SmsOutboxWorker.schedule(this@MainActivity)
+                    scheduleDebtReminderWork(currentUserId)
                 }
                 // Setting values can contain sensitive configuration; log only the key.
                 DebugLogger.info("Setting", "Updated key=$key")
