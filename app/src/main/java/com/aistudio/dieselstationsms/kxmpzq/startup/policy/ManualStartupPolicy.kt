@@ -3,11 +3,17 @@ package com.aistudio.dieselstationsms.kxmpzq.startup.policy
 import com.aistudio.dieselstationsms.kxmpzq.startup.StartupPolicy
 import com.aistudio.dieselstationsms.kxmpzq.startup.StartupReason
 import com.aistudio.dieselstationsms.kxmpzq.startup.pipeline.InitializationPhase
+import com.aistudio.dieselstationsms.kxmpzq.startup.config.ConfigurationProvider
 
-class ManualStartupPolicy(override val phases: List<InitializationPhase>) : StartupPolicy {
+class ManualStartupPolicy(override val phases: List<InitializationPhase>, private val config: ConfigurationProvider) : StartupPolicy {
     override val reason = StartupReason.MANUAL
-    override val allowParallelExecution = true
-    override val continueOnFailure = true
+    override val allowParallelExecution = config.getParallelExecutionEnabled()
+    override val continueOnFailure = config.getContinueOnFailure()
     override val healthCheckEnabled = false
-    override val metricsEnabled = true
+    override val metricsEnabled = config.getMetricsEnabled()
+    override val allowPhaseSkipping = config.getAllowPhaseSkipping()
+    override val criticalPhaseFailureStopsPipeline = config.getCriticalPhaseFailureStopsPipeline()
+    override val maxParallelPhases = config.getMaxParallelPhases()
+    override val dagValidationEnabled = config.getDagValidationEnabled()
+    override val dagAutoRecoveryEnabled = config.getDagAutoRecoveryEnabled()
 }

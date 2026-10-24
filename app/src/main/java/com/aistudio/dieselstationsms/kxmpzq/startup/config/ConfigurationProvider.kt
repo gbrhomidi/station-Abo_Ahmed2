@@ -11,4 +11,11 @@ interface ConfigurationProvider {
     fun getMetricsEnabled(): Boolean
     fun isPipelineEnabled(): Boolean = true
     fun getStartupMode(): String = "BOOT"
+    fun getParallelExecutionEnabled(): Boolean = false
+    fun getContinueOnFailure(): Boolean = true
+    fun getMaxParallelPhases(): Int = 2
+    fun getDagValidationEnabled(): Boolean = true
+    fun getDagAutoRecoveryEnabled(): Boolean = true
+    fun getAllowPhaseSkipping(): Boolean = false
+    fun getCriticalPhaseFailureStopsPipeline(): Boolean = true
 }

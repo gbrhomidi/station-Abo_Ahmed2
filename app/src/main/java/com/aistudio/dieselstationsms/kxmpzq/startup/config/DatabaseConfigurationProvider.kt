@@ -16,7 +16,7 @@ class DatabaseConfigurationProvider(context: Context) : ConfigurationProvider {
     }
 
     override fun getBootDelayMs(): Long = int("bootDelayMs", 5_000, 0, 60_000).toLong()
-    override fun getMaxRetryAttempts(): Int = int("maxRetryAttempts", 3, 1, 20)
+    override fun getMaxRetryAttempts(): Int = if (getDagAutoRecoveryEnabled()) int("maxRetryAttempts", 3, 1, 20) else 1
     override fun getRetryBackoffMs(): Long = int("retryBackoffMs", 5_000, 0, 300_000).toLong()
     override fun getPhaseTimeoutMs(): Long = int("phaseTimeoutMs", 10_000, 100, 300_000).toLong()
     override fun getPipelineTimeoutMs(): Long = int("pipelineTimeoutMs", 30_000, 1_000, 600_000).toLong()
@@ -25,4 +25,11 @@ class DatabaseConfigurationProvider(context: Context) : ConfigurationProvider {
     override fun getMetricsEnabled(): Boolean = bool("metricsEnabled", true)
     override fun isPipelineEnabled(): Boolean = bool("pipelineEnabled", true)
     override fun getStartupMode(): String = if (value("startupMode").equals("MANUAL", true)) "MANUAL" else "BOOT"
+    override fun getParallelExecutionEnabled(): Boolean = bool("parallelExecutionEnabled", false)
+    override fun getContinueOnFailure(): Boolean = bool("continueOnFailure", true)
+    override fun getMaxParallelPhases(): Int = int("maxParallelPhases", 2, 1, 16)
+    override fun getDagValidationEnabled(): Boolean = bool("dagValidationEnabled", true)
+    override fun getDagAutoRecoveryEnabled(): Boolean = bool("dagAutoRecoveryEnabled", true)
+    override fun getAllowPhaseSkipping(): Boolean = bool("allowPhaseSkipping", false)
+    override fun getCriticalPhaseFailureStopsPipeline(): Boolean = bool("criticalPhaseFailureStopsPipeline", true)
 }

@@ -8,5 +8,10 @@ interface StartupPolicy {
     val continueOnFailure: Boolean
     val healthCheckEnabled: Boolean
     val metricsEnabled: Boolean
+    val allowPhaseSkipping: Boolean get() = false
+    val criticalPhaseFailureStopsPipeline: Boolean get() = true
+    val maxParallelPhases: Int get() = 1
+    val dagValidationEnabled: Boolean get() = true
+    val dagAutoRecoveryEnabled: Boolean get() = true
     val phases: List<InitializationPhase>
 }

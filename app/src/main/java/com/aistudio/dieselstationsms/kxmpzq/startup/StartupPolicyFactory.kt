@@ -3,9 +3,10 @@ package com.aistudio.dieselstationsms.kxmpzq.startup
 import com.aistudio.dieselstationsms.kxmpzq.startup.pipeline.PhaseRegistry
 import com.aistudio.dieselstationsms.kxmpzq.startup.policy.BootStartupPolicy
 import com.aistudio.dieselstationsms.kxmpzq.startup.policy.ManualStartupPolicy
+import com.aistudio.dieselstationsms.kxmpzq.startup.config.ConfigurationProvider
 
 object StartupPolicyFactory {
-    fun create(reason: StartupReason, phaseRegistry: PhaseRegistry): StartupPolicy {
+    fun create(reason: StartupReason, phaseRegistry: PhaseRegistry, config: ConfigurationProvider): StartupPolicy {
         val phases = when (reason) {
             StartupReason.BOOT -> listOf(
                 phaseRegistry.get("EnvironmentCheck"),
@@ -28,8 +29,8 @@ object StartupPolicyFactory {
             )
         }
         return when (reason) {
-            StartupReason.BOOT -> BootStartupPolicy(phases)
-            else -> ManualStartupPolicy(phases)
+            StartupReason.BOOT -> BootStartupPolicy(phases, config)
+            else -> ManualStartupPolicy(phases, config)
         }
     }
 }

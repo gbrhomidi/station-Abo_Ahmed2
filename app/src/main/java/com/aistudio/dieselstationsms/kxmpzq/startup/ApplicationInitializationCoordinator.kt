@@ -61,7 +61,7 @@ class ApplicationInitializationCoordinator(
             }
 
             try {
-                val policy = StartupPolicyFactory.create(reason, phaseRegistry)
+                val policy = StartupPolicyFactory.create(reason, phaseRegistry, config)
                 val pipeline = InitializationPipeline(policy.phases, eventBus, stateMachine, retryPolicy)
                 stateMachine.transition(StartupStateMachine.State.RUNNING)
 

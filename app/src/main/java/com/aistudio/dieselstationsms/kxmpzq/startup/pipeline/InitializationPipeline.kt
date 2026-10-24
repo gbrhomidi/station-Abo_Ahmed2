@@ -24,10 +24,11 @@ class InitializationPipeline(
 
     suspend fun execute(ctx: InitializationContext, policy: StartupPolicy): PipelineResult {
         val dag = DagEngine(phases)
-        val dagResult = dag.validateAndSort()
-
-        if (!dagResult.isValid) {
-            return PipelineResult(false, emptyList(), emptyList(), "DAG", dagResult.error)
+        if (policy.dagValidationEnabled) {
+            val dagResult = dag.validateAndSort()
+            if (!dagResult.isValid) {
+                return PipelineResult(false, emptyList(), emptyList(), "DAG", dagResult.error)
+            }
         }
 
         val completed = mutableListOf<String>()
@@ -44,14 +45,11 @@ class InitializationPipeline(
                 return PipelineResult(false, completed, skipped, "DAG", "Stuck: ${phases.map { it.name } - executed}")
             }
 
-            val results = if (policy.allowParallelExecution) {
-                coroutineScope {
-                    ready.map { phase ->
-                        async { executePhase(ctx, phase) }
-                    }.awaitAll()
-                }
-            } else {
-                ready.map { executePhase(ctx, it) }
+            val parallelLimit = if (policy.allowParallelExecution) policy.maxParallelPhases.coerceIn(1, 16) else 1
+            val results = ready.chunked(parallelLimit).flatMap { batch ->
+                if (parallelLimit > 1) {
+                    coroutineScope { batch.map { phase -> async { executePhase(ctx, phase) } }.awaitAll() }
+                } else batch.map { executePhase(ctx, it) }
             }
 
             for ((phase, result) in ready.zip(results)) {
@@ -67,9 +65,13 @@ class InitializationPipeline(
                     }
                     is PhaseResult.Failure -> {
                         eventBus.emit(StartupEvent.PhaseFailed(phase.name, result.error, ctx.correlationId))
-                        if (phase.isCritical) {
-                            return PipelineResult(false, completed, skipped, phase.name, result.error)
-                        } else skipped.add(phase.name)
+                        val shouldStop = if (phase.isCritical) {
+                            policy.criticalPhaseFailureStopsPipeline
+                        } else {
+                            !policy.continueOnFailure || !policy.allowPhaseSkipping
+                        }
+                        if (shouldStop) return PipelineResult(false, completed, skipped, phase.name, result.error)
+                        skipped.add(phase.name)
                     }
                 }
             }
@@ -81,7 +83,7 @@ class InitializationPipeline(
         ctx.logger.logPhaseStarted(phase.name, ctx.correlationId)
         eventBus.emit(StartupEvent.PhaseStarted(phase.name, ctx.correlationId))
         return try {
-            withTimeout(phase.timeoutMs) { executeWithRetry(ctx, phase) }
+            withTimeout(minOf(phase.timeoutMs, ctx.config.getPhaseTimeoutMs())) { executeWithRetry(ctx, phase) }
         } catch (e: TimeoutCancellationException) {
             PhaseResult.Failure("Timeout after ${phase.timeoutMs}ms", retryable = true)
         }
