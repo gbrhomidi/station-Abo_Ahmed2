@@ -698,19 +698,23 @@ class MainActivity : AppCompatActivity() {
     private fun startSMSService() {
         if (isDestroyed.get()) return
 
-        // When SMS permission is granted (including after a previous denial),
-        // resume durable outbox entries that failed only because of that permission.
+        // Resume durable outbox entries after SMS permission is granted and
+        // persist a station-scoped due-date reminder schedule for background use.
         if (isPermissionGranted(Manifest.permission.SEND_SMS)) {
             runCatching {
-                val db = getDbHelper()
-                if (db != null) {
-                    SmsOutboxRepository.requeuePermissionFailures(db)
-                    if (SmsOutboxRepository.hasPending(db)) {
-                        SmsOutboxWorker.schedule(this)
-                    }
+                val db = dbHelper
+                SmsOutboxRepository.requeuePermissionFailures(db)
+                if (SmsOutboxRepository.hasPending(db)) {
+                    SmsOutboxWorker.schedule(this)
+                }
+
+                val userId = currentUserId
+                val stationId = db.getUserById(userId)?.optInt("station_id", 0) ?: 0
+                if (userId > 0L && stationId > 0) {
+                    DebtDueReminderWorker.schedule(this, stationId, userId)
                 }
             }.onFailure {
-                DebugLogger.warn("SMS", "Unable to resume pending SMS outbox: ${it.message}")
+                DebugLogger.warn("SMS", "Unable to resume pending SMS/reminder work: ${it.message}")
             }
         }
         if (isSMSServiceRunning()) return
