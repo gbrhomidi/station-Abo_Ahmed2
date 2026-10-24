@@ -3759,6 +3759,35 @@ tr:last-child td { border-bottom:0; }
             ]);
             const persistedApplication = dataOf(persistedApplicationRaw) || {};
             const persistedLegacy = dataOf(persistedLegacyRaw) || {};
+
+            // Verify the typed ApplicationSettings model independently from the
+            // legacy key/value table. A successful bridge response alone is not
+            // evidence that the model fields survived SQLite serialization.
+            const sameSettingValue = (actual, expected) => {
+                if (typeof actual === 'boolean' || typeof expected === 'boolean') {
+                    const asBoolean = value => value === true || value === 1 ||
+                        String(value).toLowerCase() === 'true' || String(value) === '1';
+                    return asBoolean(actual) === asBoolean(expected);
+                }
+                const actualText = String(actual ?? '').trim();
+                const expectedText = String(expected ?? '').trim();
+                if (actualText !== '' && expectedText !== '' &&
+                    Number.isFinite(Number(actualText)) && Number.isFinite(Number(expectedText))) {
+                    return Number(actualText) === Number(expectedText);
+                }
+                return actualText === expectedText;
+            };
+            for (const [key, requestedValue] of Object.entries(uiApplicationPayload)) {
+                if (!modelKeys.has(key) && key !== 'darkMode') continue;
+                const modelKey = key === 'darkMode' ? 'theme' : key;
+                const expectedValue = key === 'darkMode'
+                    ? (requestedValue ? 'dark' : 'light')
+                    : requestedValue;
+                if (!Object.prototype.hasOwnProperty.call(persistedApplication, modelKey) ||
+                    !sameSettingValue(persistedApplication[modelKey], expectedValue)) {
+                    throw new Error('لم يتم تأكيد حفظ إعداد التطبيق في SQLite: ' + key);
+                }
+            }
             const persistedSystem = dataOf(persistedSystemRaw) || {};
 
             // Verify each written key through the single-key SQLite read path.
@@ -3836,7 +3865,13 @@ tr:last-child td { border-bottom:0; }
             }
             toast('تم حفظ إعدادات التبويب والتحقق من القيم المحفوظة في SQLite');
         } catch (error) {
-            toast(error.message || 'تعذر حفظ الإعدادات', 'bad');
+            // Avoid showing raw SQLite/JSON diagnostics or stored setting values
+            // in a long toast. Native code retains technical details in its log.
+            const message = String(error && error.message || '');
+            const safeMessage = /افتح تبويباً|هذا التبويب|لا توجد إعدادات عرض|تعذر التحقق|لم يتم تأكيد حفظ إعداد التطبيق/.test(message)
+                ? message
+                : 'تعذر حفظ الإعدادات والتحقق منها في SQLite. لم يتم تأكيد نجاح الحفظ؛ راجع السجل الفني ثم أعد المحاولة.';
+            toast(safeMessage, 'bad');
         } finally {
             showLoading(false);
         }
