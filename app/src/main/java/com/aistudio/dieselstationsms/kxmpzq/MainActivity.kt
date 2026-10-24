@@ -697,6 +697,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun startSMSService() {
         if (isDestroyed.get()) return
+
+        // When SMS permission is granted (including after a previous denial),
+        // resume durable outbox entries that failed only because of that permission.
+        if (isPermissionGranted(Manifest.permission.SEND_SMS)) {
+            runCatching {
+                val db = getDbHelper()
+                if (db != null) {
+                    SmsOutboxRepository.requeuePermissionFailures(db)
+                    if (SmsOutboxRepository.hasPending(db)) {
+                        SmsOutboxWorker.schedule(this)
+                    }
+                }
+            }.onFailure {
+                DebugLogger.warn("SMS", "Unable to resume pending SMS outbox: ${it.message}")
+            }
+        }
         if (isSMSServiceRunning()) return
 
         try {
