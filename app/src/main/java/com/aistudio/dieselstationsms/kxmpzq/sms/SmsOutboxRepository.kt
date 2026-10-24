@@ -336,6 +336,55 @@ object SmsOutboxRepository {
         return ids
     }
 
+    /**
+     * أعد إدراج الرسائل التي فشلت حصراً لأن إذن SEND_SMS كان مفقوداً.
+     * لا نعيد رسائل فشلت بسبب رقم غير صالح أو خطأ شبكة/مشغل.
+     */
+    fun requeuePermissionFailures(db: DatabaseHelper, now: Long = System.currentTimeMillis()): Int {
+        val database = db.writableDatabase
+        database.beginTransaction()
+        try {
+            val ids = database.rawQuery(
+                "SELECT message_id FROM sms_outbox WHERE status = 'FAILED' AND failure_code = 'SEND_SMS_PERMISSION'",
+                null
+            ).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(cursor.getString(0))
+                }
+            }
+            if (ids.isEmpty()) {
+                database.setTransactionSuccessful()
+                return 0
+            }
+            val values = ContentValues().apply {
+                put("status", "QUEUED")
+                put("attempt_count", 0)
+                putNull("failure_code")
+                putNull("failure_reason")
+                putNull("failed_at")
+                put("next_attempt_at", now)
+                put("queued_at", now)
+            }
+            var changed = 0
+            ids.forEach { id ->
+                val count = database.update(
+                    "sms_outbox",
+                    values,
+                    "message_id = ? AND status = 'FAILED' AND failure_code = 'SEND_SMS_PERMISSION'",
+                    arrayOf(id)
+                )
+                if (count == 1) {
+                    syncLegacyStatus(database, id, "queued", now)
+                    changed++
+                }
+            }
+            database.setTransactionSuccessful()
+            return changed
+        } finally {
+            database.endTransaction()
+        }
+    }
+
     fun hasPending(db: DatabaseHelper): Boolean = db.readableDatabase.rawQuery(
         "SELECT 1 FROM sms_outbox WHERE status IN ('QUEUED','RETRY_PENDING','SENDING','DELIVERY_PENDING') LIMIT 1",
         null
