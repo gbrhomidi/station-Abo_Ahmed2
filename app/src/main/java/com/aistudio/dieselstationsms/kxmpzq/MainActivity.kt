@@ -5126,12 +5126,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "setSetting called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                db.setSetting(key, value)
-                DebugLogger.info("Setting", "Updated $key=$value")
-                successResponse(0, "تم التحديث")
+                // Never report success when the SQLite helper explicitly rejects a write.
+                check(db.setSetting(key, value)) { "تعذر حفظ الإعداد في SQLite" }
+                // Setting values can contain sensitive configuration; log only the key.
+                DebugLogger.info("Setting", "Updated key=$key")
+                successResponse(true, "تم حفظ الإعداد والتحقق من قبول SQLite للكتابة")
             } catch (e: Exception) {
                 DebugLogger.logException("Setting", e)
-                errorResponse(e.message)
+                errorResponse("تعذر حفظ الإعداد في SQLite")
             }
         }
 
