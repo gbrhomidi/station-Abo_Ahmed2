@@ -24,5 +24,20 @@ data class ApplicationSettings(
     val requireBiometricForSettings: Boolean = false,
     val encryptBackup: Boolean = true,
     val backupRetentionCount: Int = 10,
+
+    // Persistent startup and pipeline controls shared by the UI and runtime.
+    val bootDelayMs: Int = 5000,
+    val startupMode: String = "BOOT",
+    val pipelineEnabled: Boolean = true,
+    val pipelineTimeoutMs: Int = 30000,
+    val phaseTimeoutMs: Int = 10000,
+    val parallelExecutionEnabled: Boolean = false,
+    val continueOnFailure: Boolean = true,
+    val maxParallelPhases: Int = 2,
+    val dagValidationEnabled: Boolean = true,
+    val dagAutoRecoveryEnabled: Boolean = true,
+    val allowPhaseSkipping: Boolean = false,
+    val criticalPhaseFailureStopsPipeline: Boolean = true,
+
     val updatedAt: Long = 0L
 )

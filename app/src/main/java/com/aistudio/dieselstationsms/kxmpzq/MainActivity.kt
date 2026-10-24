@@ -5271,7 +5271,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val payload = JSONObject(jsonData.ifBlank { "{}" })
                 val settingsObject = payload.optJSONObject("settings") ?: payload
-                val settings = settingsJson.decodeFromString<ApplicationSettings>(settingsObject.toString())
+                val decoded = settingsJson.decodeFromString<ApplicationSettings>(settingsObject.toString())
+                val settings = decoded.copy(
+                    bootDelayMs = decoded.bootDelayMs.coerceIn(0, 60_000),
+                    startupMode = if (decoded.startupMode.equals("MANUAL", true)) "MANUAL" else "BOOT",
+                    pipelineTimeoutMs = decoded.pipelineTimeoutMs.coerceIn(1_000, 600_000),
+                    phaseTimeoutMs = decoded.phaseTimeoutMs.coerceIn(100, 300_000),
+                    maxParallelPhases = decoded.maxParallelPhases.coerceIn(1, 16)
+                )
                 val saved = runBlocking(Dispatchers.IO) {
                     settingsModule.settingsRepository.saveSettings(settings)
                     settingsModule.settingsRepository.getSettings()
@@ -5435,6 +5442,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             dbHelper.setSetting("sms_send_enabled", if (settings.smsSendEnabled) "1" else "0")
             dbHelper.setSetting("sms_retry_enabled", if (settings.smsRetryEnabled) "1" else "0")
             dbHelper.setSetting("auto_start_enabled", if (settings.autoStartEnabled) "1" else "0")
+            // Mirror typed startup settings into the legacy SQLite key/value contract used before the UI opens.
+            dbHelper.setSetting("autoStartEnabled", if (settings.autoStartEnabled) "1" else "0")
+            dbHelper.setSetting("bootDelayMs", settings.bootDelayMs.coerceIn(0, 60_000).toString())
+            dbHelper.setSetting("startupMode", if (settings.startupMode.equals("MANUAL", true)) "MANUAL" else "BOOT")
+            dbHelper.setSetting("pipelineEnabled", if (settings.pipelineEnabled) "1" else "0")
+            dbHelper.setSetting("pipelineTimeoutMs", settings.pipelineTimeoutMs.coerceIn(1_000, 600_000).toString())
+            dbHelper.setSetting("phaseTimeoutMs", settings.phaseTimeoutMs.coerceIn(100, 300_000).toString())
+            dbHelper.setSetting("parallelExecutionEnabled", if (settings.parallelExecutionEnabled) "1" else "0")
+            dbHelper.setSetting("continueOnFailure", if (settings.continueOnFailure) "1" else "0")
+            dbHelper.setSetting("maxParallelPhases", settings.maxParallelPhases.coerceIn(1, 16).toString())
+            dbHelper.setSetting("dagValidationEnabled", if (settings.dagValidationEnabled) "1" else "0")
+            dbHelper.setSetting("dagAutoRecoveryEnabled", if (settings.dagAutoRecoveryEnabled) "1" else "0")
+            dbHelper.setSetting("allowPhaseSkipping", if (settings.allowPhaseSkipping) "1" else "0")
+            dbHelper.setSetting("criticalPhaseFailureStopsPipeline", if (settings.criticalPhaseFailureStopsPipeline) "1" else "0")
             if (smsEnabled && settings.autoStartEnabled) startSMSService() else stopSMSService()
         }
 

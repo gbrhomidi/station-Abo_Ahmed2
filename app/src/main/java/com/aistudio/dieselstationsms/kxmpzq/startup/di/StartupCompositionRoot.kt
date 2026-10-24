@@ -3,7 +3,7 @@ package com.aistudio.dieselstationsms.kxmpzq.startup.di
 import android.content.Context
 import com.aistudio.dieselstationsms.kxmpzq.startup.*
 import com.aistudio.dieselstationsms.kxmpzq.startup.config.ConfigurationProvider
-import com.aistudio.dieselstationsms.kxmpzq.startup.config.StaticConfigurationProvider
+import com.aistudio.dieselstationsms.kxmpzq.startup.config.DatabaseConfigurationProvider
 import com.aistudio.dieselstationsms.kxmpzq.startup.event.CoroutineEventBus
 import com.aistudio.dieselstationsms.kxmpzq.startup.event.EventBus
 import com.aistudio.dieselstationsms.kxmpzq.startup.health.HealthMonitor
@@ -17,7 +17,7 @@ import com.aistudio.dieselstationsms.kxmpzq.service.SMSServiceHeartbeatProvider
 
 class StartupCompositionRoot(private val context: Context) {
 
-    private val config: ConfigurationProvider = StaticConfigurationProvider
+    private val config: ConfigurationProvider = DatabaseConfigurationProvider(context.applicationContext)
     private val eventBus: EventBus = CoroutineEventBus()
     private val stateMachine: StartupStateMachine = StartupStateMachine()
     private val metricsCollector: MetricsCollector = InMemoryMetricsCollector()

@@ -9,4 +9,6 @@ interface ConfigurationProvider {
     fun getHealthCheckDelayMs(): Long
     fun getHealthCheckIntervalMs(): Long
     fun getMetricsEnabled(): Boolean
+    fun isPipelineEnabled(): Boolean = true
+    fun getStartupMode(): String = "BOOT"
 }

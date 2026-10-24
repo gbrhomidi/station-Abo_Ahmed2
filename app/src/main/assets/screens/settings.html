@@ -3730,7 +3730,11 @@ tr:last-child td { border-bottom:0; }
                 'smsSendEnabled', 'smsRetryEnabled', 'autoStartEnabled', 'startOnBoot',
                 'runInBackground', 'deliveryReportsEnabled', 'smsMaxParts', 'smsCostPerPart',
                 'monitoringEnabled', 'auditLoggingEnabled', 'keepLogsDays',
-                'requireBiometricForSettings', 'encryptBackup', 'backupRetentionCount'
+                'requireBiometricForSettings', 'encryptBackup', 'backupRetentionCount',
+                'bootDelayMs', 'startupMode', 'pipelineEnabled', 'pipelineTimeoutMs',
+                'phaseTimeoutMs', 'parallelExecutionEnabled', 'continueOnFailure',
+                'maxParallelPhases', 'dagValidationEnabled', 'dagAutoRecoveryEnabled',
+                'allowPhaseSkipping', 'criticalPhaseFailureStopsPipeline'
             ]);
             for (const [key, value] of Object.entries(uiApplicationPayload)) {
                 if (modelKeys.has(key)) modelPayload[key] = value;
