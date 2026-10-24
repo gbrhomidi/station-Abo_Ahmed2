@@ -4688,6 +4688,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "addSmsMessage called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
+                if (db.getSetting("sms_send_enabled") == "0") {
+                    return errorResponse("إرسال SMS معطل من إعدادات النظام")
+                }
                 val data = JSONObject(jsonData)
                 val recipient = data.optString("phone_number", data.optString("recipient")).trim()
                 val body = data.optString("message_body", data.optString("body"))
@@ -5148,6 +5151,13 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 // Never report success when the SQLite helper explicitly rejects a write.
                 check(db.setSetting(key, value)) { "تعذر حفظ الإعداد في SQLite" }
+                // Resume durable outgoing messages immediately when sending is enabled again.
+                if (key == "sms_send_enabled" && value == "1" &&
+                    isPermissionGranted(Manifest.permission.SEND_SMS)
+                ) {
+                    SmsOutboxRepository.requeuePermissionFailures(db)
+                    if (SmsOutboxRepository.hasPending(db)) SmsOutboxWorker.schedule(this@MainActivity)
+                }
                 // Setting values can contain sensitive configuration; log only the key.
                 DebugLogger.info("Setting", "Updated key=$key")
                 successResponse(true, "تم حفظ الإعداد والتحقق من قبول SQLite للكتابة")
