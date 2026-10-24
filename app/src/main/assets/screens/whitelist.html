@@ -2225,7 +2225,7 @@
 
             showLoading(false);
             if (successCount > 0) {
-                showToast(`✅ تم إرسال الرسالة إلى ${successCount} مستلم${failCount > 0 ? `، فشل ${failCount}` : ''}`, 'success');
+                showToast(`✅ تم وضع الرسالة في طابور الإرسال إلى ${successCount} مستلم${failCount > 0 ? `، فشل ${failCount}` : ''}`, 'success');
                 closeModal();
                 // إلغاء التحديد بعد الإرسال
                 selectedIds.clear();
