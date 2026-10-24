@@ -25813,23 +25813,27 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = readableDatabase
+            val today = getCurrentDate()
             val sql = """
+                WITH date_bounds AS (
+                    SELECT date(?) AS today, date(?, '+' || ? || ' day') AS end_date
+                )
                 SELECT p.id AS customer_party_id,
                        p.commercial_name AS customer_name,
                        COALESCE(${primaryPartyContactSql("p", "phone")}, '') AS phone,
                        SUM(CASE WHEN s.due_date IS NOT NULL
-                                  AND date(s.due_date) BETWEEN date('now') AND date('now', '+' || ? || ' day')
+                                  AND date(s.due_date) BETWEEN date_bounds.today AND date_bounds.end_date
                                 THEN s.remaining_amount ELSE 0 END) AS due_soon_amount,
                        SUM(s.remaining_amount) AS total_outstanding,
                        MIN(CASE WHEN s.due_date IS NOT NULL
-                                  AND date(s.due_date) BETWEEN date('now') AND date('now', '+' || ? || ' day')
+                                  AND date(s.due_date) BETWEEN date_bounds.today AND date_bounds.end_date
                                 THEN date(s.due_date) END) AS nearest_due_date,
                        MIN(CASE WHEN s.due_date IS NOT NULL
-                                  AND date(s.due_date) BETWEEN date('now') AND date('now', '+' || ? || ' day')
+                                  AND date(s.due_date) BETWEEN date_bounds.today AND date_bounds.end_date
                                 THEN s.id END) AS transaction_id,
                        MIN(CASE WHEN s.due_date IS NOT NULL
-                                  AND date(s.due_date) BETWEEN date('now') AND date('now', '+' || ? || ' day')
-                                THEN CAST(julianday(date(s.due_date)) - julianday(date('now')) AS INTEGER) END) AS days_remaining,
+                                  AND date(s.due_date) BETWEEN date_bounds.today AND date_bounds.end_date
+                                THEN CAST(julianday(date(s.due_date)) - julianday(date_bounds.today) AS INTEGER) END) AS days_remaining,
                        (SELECT MAX(COALESCE(sl.created_at, ''))
                           FROM sms_logs sl
                          WHERE sl.customer_party_id = p.id
@@ -25837,6 +25841,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                            AND sl.status IN ('queued','sending','sent','delivered')
                        ) AS last_reminder_at
                 FROM parties p
+                CROSS JOIN date_bounds
                 JOIN sales_transactions s ON s.customer_party_id = p.id
                     AND s.station_id = p.station_id
                     AND s.is_deleted = 0
@@ -25848,7 +25853,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 HAVING due_soon_amount > 0
                 ORDER BY date(nearest_due_date) ASC, p.commercial_name COLLATE NOCASE ASC
             """.trimIndent()
-            val args = arrayOf(days.toString(), days.toString(), days.toString(), days.toString(), stationScopeId.toString())
+            val args = arrayOf(today, today, days.toString(), stationScopeId.toString())
             db.rawQuery(sql, args).use { c ->
                 val arr = JSONArray()
                 while (c.moveToNext()) {
@@ -25876,7 +25881,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun recordQueuedDebtReminder(customerPartyId: Long, transactionId: Long, phone: String, message: String, createdBy: Long = 0L): Long {
+    fun recordQueuedDebtReminder(customerPartyId: Long, transactionId: Long, phone: String, message: String, createdBy: Long = 0L, daysBeforeDue: Int = 10): Long {
         require(customerPartyId > 0 && transactionId > 0 && phone.isNotBlank() && message.isNotBlank())
         dbLock.lock()
         return try {
@@ -25888,7 +25893,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("transaction_id", transactionId)
                 put("reminder_type", "due_date")
                 put("reminder_date", getCurrentDate())
-                put("days_before_due", 10)
+                put("days_before_due", daysBeforeDue.coerceIn(0, 365))
                 put("message_content", message)
                 put("message_template", "customer_debt_due_date")
                 put("status", "pending")
