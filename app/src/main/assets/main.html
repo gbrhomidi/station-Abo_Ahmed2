@@ -2444,7 +2444,13 @@
         function initSleepMode() {
             const events = ['mousemove', 'mousedown', 'touchstart', 'touchmove', 'keydown', 'scroll', 'click', 'wheel'];
             events.forEach(evt => {
-                document.addEventListener(evt, function() {
+                document.addEventListener(evt, function(event) {
+                    // Android emits touchstart before click. Ignore warning
+                    // overlay interactions so the overlay is not dismissed
+                    // before its action button's click handler can run.
+                    const target = event && event.target;
+                    if (target && typeof target.closest === 'function'
+                        && target.closest('#sessionWarningOverlay')) return;
                     handleUserActivity();
                 }, { passive: true });
             });
@@ -2554,7 +2560,11 @@
             }
         }
 
+        let sessionLockInProgress = false;
+
         function performSessionLock(reason) {
+            if (sessionLockInProgress) return;
+            sessionLockInProgress = true;
             clearSessionTimers();
             hideSessionWarning();
 
