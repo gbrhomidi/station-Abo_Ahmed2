@@ -57,7 +57,7 @@ class SmsOutboxWorker(
             val request = OneTimeWorkRequestBuilder<SmsOutboxWorker>().build()
             WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
                 UNIQUE_WORK_NAME,
-                ExistingWorkPolicy.KEEP,
+                ExistingWorkPolicy.APPEND_OR_REPLACE,
                 request
             )
         }
