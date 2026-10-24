@@ -11544,7 +11544,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
             val candidate = row.optLong("transaction_id", 0L)
             if (candidate <= 0L) return JSONObject().put("queued", false).put("reason", "no_due_invoice")
-            val queued = queueSms(db, phone, message, "debt-reminder:${customerId}:${row.optString("nearest_due_date")}", "party:$customerId", userId)
+            val queued = queueSms(db, phone, message, "debt-reminder:$stationId:${customerId}:${row.optString("nearest_due_date")}", "party:$customerId", userId)
             if (queued.optBoolean("queued", false)) {
                 db.recordQueuedDebtReminder(customerId, candidate, PhoneUtils.normalize(phone) ?: phone, message, userId)
             }
