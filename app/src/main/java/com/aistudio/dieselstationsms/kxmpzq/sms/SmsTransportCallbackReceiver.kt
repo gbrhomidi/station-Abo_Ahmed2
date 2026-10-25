@@ -20,7 +20,14 @@ class SmsTransportCallbackReceiver : BroadcastReceiver() {
         val delivered = action == SmsTransport.ACTION_DELIVERED
         val success = resultCode == Activity.RESULT_OK
         val code = if (success) "OK" else resultCode.toString()
-        val reason = if (success) "" else intent.getStringExtra("error") ?: "SMS transport callback failed"
+        val reason = if (success) "" else intent.getStringExtra("error")
+            ?: when (resultCode) {
+                android.telephony.SmsManager.RESULT_ERROR_GENERIC_FAILURE -> "فشل عام في إرسال SMS؛ تحقق من الشبكة ومركز الرسائل (SMSC)."
+                android.telephony.SmsManager.RESULT_ERROR_RADIO_OFF -> "راديو الهاتف أو شريحة SIM غير متاحين للإرسال؛ تحقق من تفعيل الشريحة ووضع الطيران وتغطية الشبكة."
+                android.telephony.SmsManager.RESULT_ERROR_NULL_PDU -> "تعذر إنشاء حزمة SMS (PDU) من محتوى الرسالة."
+                android.telephony.SmsManager.RESULT_ERROR_NO_SERVICE -> "لا توجد خدمة شبكة خلوية متاحة لإرسال SMS."
+                else -> "فشل إرسال SMS برمز Android: $resultCode"
+            }
 
         runCatching {
             val db = DatabaseHelper.getInstance(context.applicationContext)
