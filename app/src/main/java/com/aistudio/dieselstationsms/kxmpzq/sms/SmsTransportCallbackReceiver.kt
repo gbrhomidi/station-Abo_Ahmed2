@@ -10,6 +10,14 @@ import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 /** يستقبل نتائج modem لكل جزء؛ لا ينفذ منطقاً تجارياً. */
 class SmsTransportCallbackReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
+        handleCallback(context, intent, resultCode)
+    }
+
+    /**
+     * Shared callback path. An explicit result code allows tests to exercise modem outcomes
+     * without pretending a direct onReceive call is an ordered broadcast.
+     */
+    internal fun handleCallback(context: Context, intent: Intent?, callbackResultCode: Int) {
         if (intent == null) return
         val messageId = intent.getStringExtra(SmsTransport.EXTRA_MESSAGE_ID) ?: return
         val partIndex = intent.getIntExtra(SmsTransport.EXTRA_PART_INDEX, -1)
@@ -18,15 +26,15 @@ class SmsTransportCallbackReceiver : BroadcastReceiver() {
         val action = intent.action
         if (action != SmsTransport.ACTION_SENT && action != SmsTransport.ACTION_DELIVERED) return
         val delivered = action == SmsTransport.ACTION_DELIVERED
-        val success = resultCode == Activity.RESULT_OK
-        val code = if (success) "OK" else resultCode.toString()
+        val success = callbackResultCode == Activity.RESULT_OK
+        val code = if (success) "OK" else callbackResultCode.toString()
         val reason = if (success) "" else intent.getStringExtra("error")
-            ?: when (resultCode) {
+            ?: when (callbackResultCode) {
                 android.telephony.SmsManager.RESULT_ERROR_GENERIC_FAILURE -> "فشل عام في إرسال SMS؛ تحقق من الشبكة ومركز الرسائل (SMSC)."
                 android.telephony.SmsManager.RESULT_ERROR_RADIO_OFF -> "راديو الهاتف أو شريحة SIM غير متاحين للإرسال؛ تحقق من تفعيل الشريحة ووضع الطيران وتغطية الشبكة."
                 android.telephony.SmsManager.RESULT_ERROR_NULL_PDU -> "تعذر إنشاء حزمة SMS (PDU) من محتوى الرسالة."
                 android.telephony.SmsManager.RESULT_ERROR_NO_SERVICE -> "لا توجد خدمة شبكة خلوية متاحة لإرسال SMS."
-                else -> "فشل إرسال SMS برمز Android: $resultCode"
+                else -> "فشل إرسال SMS برمز Android: $callbackResultCode"
             }
 
         runCatching {
