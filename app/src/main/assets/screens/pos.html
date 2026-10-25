@@ -4329,7 +4329,7 @@ function apiCall(action, params) {
             case 'searchInvoices': raw = AndroidInterface.searchInvoices(JSON.stringify(p)); break;
             case 'retrieveInvoice': raw = AndroidInterface.retrieveInvoice(String(p.invoice_number || '')); break;
             case 'salesReport': raw = AndroidInterface.salesReport(); break;
-            case 'printReceipt': raw = AndroidInterface.printCurrentPage(); break;
+            case 'printReceipt': raw = AndroidInterface.printCurrentPage(String(p.invoice_number || '')); break;
             case 'shareInvoiceJpg': raw = AndroidInterface.shareInvoiceJpg(String(p.invoice_html || ''), String(p.phone || '')); break;
             case 'saveInvoicePdf': raw = AndroidInterface.saveInvoicePdf(String(p.invoice_html || '')); break;
             case 'printSalesReport': raw = AndroidInterface.printCurrentPageWithTitle('تقرير المبيعات'); break;
@@ -5618,9 +5618,7 @@ async function persistInvoicePdfAfterSale(invoiceNumber) {
         // Keep the committed sale intact, but expose the archive failure instead of
         // silently treating a missing PDF as a completed background task.
         console.error('[Invoice PDF Archive] Failed; sale remains committed:', invoiceNumber, error);
-        showToast('تم ترحيل البيع، لكن لم يكتمل حفظ PDF: ' +
-            (error && error.message ? error.message : 'خطأ غير معروف') +
-            '. سيحاول زر واتساب إنشاء النسخة مباشرة دون فتح نافذة الطباعة.', 'warning');
+        showToast('تم ترحيل البيع بنجاح. تعذر إكمال أرشفة PDF تلقائياً؛ يمكنك استخدام الطباعة أو إعادة المحاولة من واتساب.', 'warning');
         return false;
     }
 }
@@ -5688,7 +5686,7 @@ async function printReceipt() {
         // إعطاء وقت كافٍ لتحميل الصور والخطوط قبل استدعاء أمر الطباعة
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        const printResult = await apiCall('printReceipt');
+        const printResult = await apiCall('printReceipt', { invoice_number: invoice.invoice_number || lastInvoiceNumber || '' });
         if (!printResult.success) throw new Error(printResult.message || printResult.error || 'فشل فتح نافذة الطباعة');
         showToast(printResult.message || 'تم فتح فاتورة البيع للطباعة', 'success');
     } catch (error) {
