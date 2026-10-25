@@ -15,8 +15,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Drives the real BroadcastReceiver with synthetic modem result codes and verifies that
- * the production SQLite outbox and legacy SMS log remain synchronized. No carrier SMS is sent.
+ * Exercises the production callback-processing path with synthetic modem result codes and
+ * verifies that SQLite outbox and legacy SMS log remain synchronized. No carrier SMS is sent.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -48,19 +48,16 @@ class SmsTransportCallbackReceiverIntegrationTest {
         SmsOutboxRepository.prepareParts(database, claimed.messageId, claimed.partsCount)
         val receiver = SmsTransportCallbackReceiver()
 
-        receiver.setResultCode(Activity.RESULT_OK)
-        receiver.onReceive(context, callbackIntent(SmsTransport.ACTION_SENT, queued.messageId))
+        receiver.handleCallback(context, callbackIntent(SmsTransport.ACTION_SENT, queued.messageId), Activity.RESULT_OK)
         assertEquals("DELIVERY_PENDING", status(queued.messageId))
         assertEquals("sent", legacyStatus(queued.messageId))
 
-        receiver.setResultCode(Activity.RESULT_OK)
-        receiver.onReceive(context, callbackIntent(SmsTransport.ACTION_DELIVERED, queued.messageId))
+        receiver.handleCallback(context, callbackIntent(SmsTransport.ACTION_DELIVERED, queued.messageId), Activity.RESULT_OK)
         assertEquals("DELIVERED", status(queued.messageId))
         assertEquals("delivered", legacyStatus(queued.messageId))
 
         // A delayed SENT callback must not downgrade an already confirmed delivery.
-        receiver.setResultCode(Activity.RESULT_OK)
-        receiver.onReceive(context, callbackIntent(SmsTransport.ACTION_SENT, queued.messageId))
+        receiver.handleCallback(context, callbackIntent(SmsTransport.ACTION_SENT, queued.messageId), Activity.RESULT_OK)
         assertEquals("DELIVERED", status(queued.messageId))
         assertEquals("delivered", legacyStatus(queued.messageId))
     }
@@ -74,8 +71,11 @@ class SmsTransportCallbackReceiverIntegrationTest {
         SmsOutboxRepository.prepareParts(database, claimed.messageId, claimed.partsCount)
         val receiver = SmsTransportCallbackReceiver()
 
-        receiver.setResultCode(SmsManager.RESULT_ERROR_NO_SERVICE)
-        receiver.onReceive(context, callbackIntent(SmsTransport.ACTION_SENT, queued.messageId))
+        receiver.handleCallback(
+            context,
+            callbackIntent(SmsTransport.ACTION_SENT, queued.messageId),
+            SmsManager.RESULT_ERROR_NO_SERVICE
+        )
 
         assertEquals("RETRY_PENDING", status(queued.messageId))
         assertEquals(SmsManager.RESULT_ERROR_NO_SERVICE.toString(), failureCode(queued.messageId))
@@ -89,18 +89,17 @@ class SmsTransportCallbackReceiverIntegrationTest {
         )!!
         val receiver = SmsTransportCallbackReceiver()
 
-        receiver.setResultCode(Activity.RESULT_CANCELED)
-        receiver.onReceive(context, Intent("unrelated.action").apply {
+        receiver.handleCallback(context, Intent("unrelated.action").apply {
             putExtra(SmsTransport.EXTRA_MESSAGE_ID, queued.messageId)
             putExtra(SmsTransport.EXTRA_PART_INDEX, 0)
-        })
-        receiver.onReceive(context, Intent(SmsTransport.ACTION_SENT).apply {
+        }, Activity.RESULT_CANCELED)
+        receiver.handleCallback(context, Intent(SmsTransport.ACTION_SENT).apply {
             putExtra(SmsTransport.EXTRA_PART_INDEX, 0)
-        })
-        receiver.onReceive(context, Intent(SmsTransport.ACTION_SENT).apply {
+        }, Activity.RESULT_OK)
+        receiver.handleCallback(context, Intent(SmsTransport.ACTION_SENT).apply {
             putExtra(SmsTransport.EXTRA_MESSAGE_ID, queued.messageId)
             putExtra(SmsTransport.EXTRA_PART_INDEX, -1)
-        })
+        }, Activity.RESULT_OK)
 
         assertEquals("QUEUED", status(queued.messageId))
         assertEquals("queued", legacyStatus(queued.messageId))
