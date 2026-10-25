@@ -36,43 +36,46 @@ object PhoneUtils {
         if (phone.isNullOrBlank()) return null
 
         return try {
-            var normalized = phone.trim()
-                .replace(" ", "")
-                .replace("-", "")
-                .replace("(", "")
-                .replace(")", "")
-                .replace("+", "")
+            // Convert all Unicode decimal digits (Arabic, Persian, fullwidth, etc.) to ASCII.
+            val canonicalInput = buildString(phone.length) {
+                for (ch in phone) {
+                    val digit = Character.digit(ch, 10)
+                    when {
+                        digit in 0..9 -> append(('0'.code + digit).toChar())
+                        ch == '+' || ch == '\uFF0B' -> append('+')
+                        ch.isWhitespace() || Character.isSpaceChar(ch) -> Unit
+                        Character.getType(ch) == Character.FORMAT.toInt() -> Unit // bidi/zero-width formatting
+                        ch == '-' || ch == '\u2010' || ch == '\u2011' || ch == '\u2012' ||
+                            ch == '\u2013' || ch == '\u2014' || ch == '(' || ch == ')' ||
+                            ch == '.' || ch == '/' -> Unit
+                        else -> append(ch)
+                    }
+                }
+            }
+            var normalized = canonicalInput.replace("+", "")
 
-            // إزالة البادئات المكررة
+            // Reject remaining non-ASCII numeric/text characters instead of silently accepting them.
+            if (normalized.any { it !in '0'..'9' }) return null
+
+            // Strip international access/country prefixes.
             when {
                 normalized.startsWith("00967") -> normalized = normalized.substring(5)
                 normalized.startsWith("967") -> normalized = normalized.substring(3)
                 normalized.startsWith("00") -> normalized = normalized.substring(2)
             }
 
-            // إزالة صفر الاتصال المحلي الوطني (trunk 0) للصيغة المحلية 07XXXXXXXX
+            // Strip domestic trunk zero from 10-digit local format.
             if (normalized.startsWith("0") && normalized.length == 10) {
                 normalized = normalized.substring(1)
             }
 
-            // إضافة بادئة الدولة إذا لم تكن موجودة
-            if (!normalized.startsWith(COUNTRY_CODE) && normalized.length == 9) {
-                normalized = COUNTRY_CODE + normalized
-            }
+            if (normalized.length == 9) normalized = COUNTRY_CODE + normalized
+            if (normalized.length != 12) return null
 
-            // التحقق من الطول القياسي
-            if (normalized.length != 12) {
-                return null
-            }
-
-            // التحقق من بادئة الشركة اليمنية
             val nationalPrefix = normalized.substring(3, 5)
-            if (nationalPrefix !in YEMEN_MOBILE_PREFIXES) {
-                return null
-            }
-
+            if (nationalPrefix !in YEMEN_MOBILE_PREFIXES) return null
             normalized
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
