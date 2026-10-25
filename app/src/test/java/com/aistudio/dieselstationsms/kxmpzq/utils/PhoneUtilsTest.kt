@@ -104,6 +104,13 @@ class PhoneUtilsTest {
     // ═══════════════════════════════════════════════════════
 
     @Test
+    fun `normalize pasted Arabic Indic digits and invisible clipboard marks returns canonical`() {
+        assertEquals("967771234567", PhoneUtils.normalize("+٩٦٧ ٧٧١٢٣٤٥٦٧"))
+        assertEquals("967771234567", PhoneUtils.normalize("\u200F+967\u200B-77-123-4567"))
+        assertEquals("967771234567", PhoneUtils.normalize("＋９６７７７１２３４５６７"))
+    }
+
+    @Test
     fun `normalize null returns null`() {
         assertNull(PhoneUtils.normalize(null))
     }
