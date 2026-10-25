@@ -39,7 +39,12 @@ object PhoneUtils {
             // Convert all Unicode decimal digits (Arabic, Persian, fullwidth, etc.) to ASCII.
             val canonicalInput = buildString(phone.length) {
                 for (ch in phone) {
-                    val digit = Character.digit(ch, 10)
+                    val digit = when (ch.code) {
+                        in 0x0660..0x0669 -> ch.code - 0x0660
+                        in 0x06F0..0x06F9 -> ch.code - 0x06F0
+                        in 0xFF10..0xFF19 -> ch.code - 0xFF10
+                        else -> Character.digit(ch, 10)
+                    }
                     when {
                         digit in 0..9 -> append(('0'.code + digit).toChar())
                         ch == '+' || ch == '\uFF0B' -> append('+')
