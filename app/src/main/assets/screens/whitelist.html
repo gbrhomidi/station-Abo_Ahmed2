@@ -1409,26 +1409,34 @@
             COUNTRY_CODE: '967',
 
             normalize: function(phone) {
-                if (!phone || phone.trim() === '') return null;
-                let normalized = phone.trim().replace(/[\s\-\(\)\+]/g, '');
-                if (normalized.startsWith('00967')) {
-                    normalized = normalized.substring(5);
-                } else if (normalized.startsWith('967')) {
-                    normalized = normalized.substring(3);
-                } else if (normalized.startsWith('00')) {
-                    normalized = normalized.substring(2);
+                if (phone == null) return null;
+                // Clipboard and some Android keyboards may supply Arabic/Persian/fullwidth
+                // digits, bidi marks, NBSP, or formatted national/international numbers.
+                let normalized = '';
+                for (const ch of String(phone)) {
+                    const cp = ch.codePointAt(0);
+                    let digit = -1;
+                    if (cp >= 0x0660 && cp <= 0x0669) digit = cp - 0x0660;
+                    else if (cp >= 0x06F0 && cp <= 0x06F9) digit = cp - 0x06F0;
+                    else if (cp >= 0xFF10 && cp <= 0xFF19) digit = cp - 0xFF10;
+                    else if (ch >= '0' && ch <= '9') digit = cp - 0x30;
+                    if (digit >= 0) { normalized += String(digit); continue; }
+                    // Ignore human formatting and Unicode directional/zero-width marks.
+                    if (/^[+\uFF0B\s\u00A0\u202F\-\u2010-\u2015()./\u200B-\u200F\u202A-\u202E\u2060\uFEFF]$/.test(ch)) continue;
+                    // Ignore other Unicode FORMAT controls (including isolates).
+                    if (/\p{Cf}/u.test(ch)) continue;
+                    // Any other character is invalid, never silently interpreted.
+                    return null;
                 }
-                if (normalized.startsWith('0') && normalized.length === 10) {
-                    normalized = normalized.substring(1);
-                }
-                if (!normalized.startsWith(this.COUNTRY_CODE) && normalized.length === 9) {
-                    normalized = this.COUNTRY_CODE + normalized;
-                }
+                if (!normalized) return null;
+                if (normalized.startsWith('00967')) normalized = normalized.substring(5);
+                else if (normalized.startsWith('967')) normalized = normalized.substring(3);
+                else if (normalized.startsWith('00')) normalized = normalized.substring(2);
+                if (normalized.startsWith('0') && normalized.length === 10) normalized = normalized.substring(1);
+                if (normalized.length === 9) normalized = this.COUNTRY_CODE + normalized;
                 if (normalized.length !== 12) return null;
                 const nationalPrefix = normalized.substring(3, 5);
                 if (!this.YEMEN_PREFIXES.includes(nationalPrefix)) return null;
-                const rest = normalized.substring(5);
-                if (!/^\d+$/.test(rest)) return null;
                 return normalized;
             },
 
