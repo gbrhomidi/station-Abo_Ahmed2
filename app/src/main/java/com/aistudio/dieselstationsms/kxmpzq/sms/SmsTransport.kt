@@ -19,8 +19,18 @@ class SmsTransport(private val context: Context) {
         private const val FLAG_BASE = PendingIntent.FLAG_UPDATE_CURRENT
 
         fun getSmsManager(context: Context, subscriptionId: Int?): SmsManager {
-            if (subscriptionId != null && subscriptionId >= 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                return SmsManager.getSmsManagerForSubscriptionId(subscriptionId)
+            // A saved SIM subscription ID can become stale after SIM removal, eSIM changes,
+            // reboot, or a settings migration. Avoid routing through an inactive ID.
+            if (subscriptionId != null && subscriptionId >= 0 &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1
+            ) {
+                val isActive = runCatching {
+                    val manager = context.getSystemService(android.telephony.SubscriptionManager::class.java)
+                    manager?.activeSubscriptionInfoList?.any { it.subscriptionId == subscriptionId } == true
+                }.getOrDefault(false)
+                if (isActive) {
+                    return SmsManager.getSmsManagerForSubscriptionId(subscriptionId)
+                }
             }
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 context.getSystemService(SmsManager::class.java) ?: defaultManager()
