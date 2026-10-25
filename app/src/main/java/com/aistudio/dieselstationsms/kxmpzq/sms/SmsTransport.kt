@@ -7,8 +7,13 @@ import android.os.Build
 import android.telephony.SmsManager
 import java.util.ArrayList
 
-/** نقل SMS فقط؛ النتيجة النهائية تأتي من callback receiver. */
-class SmsTransport(private val context: Context) {
+/** عقد النقل الصادر؛ يسمح للاختبارات باستبدال مودم SMS دون استبدال قاعدة البيانات أو المستودع. */
+fun interface SmsTransportSender {
+    fun send(job: SmsOutboxRepository.OutboxMessage)
+}
+
+/** نقل SMS الحقيقي فقط؛ النتيجة النهائية تأتي من callback receiver. */
+class SmsTransport(private val context: Context) : SmsTransportSender {
     companion object {
         const val ACTION_SENT = "com.aistudio.dieselstationsms.SMS_SENT"
         const val ACTION_DELIVERED = "com.aistudio.dieselstationsms.SMS_DELIVERED"
@@ -43,7 +48,7 @@ class SmsTransport(private val context: Context) {
         private fun defaultManager(): SmsManager = SmsManager.getDefault()
     }
 
-    fun send(job: SmsOutboxRepository.OutboxMessage) {
+    override fun send(job: SmsOutboxRepository.OutboxMessage) {
         val manager = getSmsManager(context, job.subscriptionId)
         val parts = SmsBudgetManager.divideMessage(job.body)
         require(parts.isNotEmpty()) { "SMS body produced no parts" }

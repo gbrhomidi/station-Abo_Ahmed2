@@ -14,9 +14,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** عامل النقل الصادر. QUEUED لا تصبح SENT إلا عبر PendingIntent callback. */
-class SmsOutboxWorker(
+ class SmsOutboxWorker @JvmOverloads constructor(
     appContext: Context,
-    workerParams: WorkerParameters
+    workerParams: WorkerParameters,
+    private val transportSender: SmsTransportSender = SmsTransport(appContext)
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -38,7 +39,7 @@ class SmsOutboxWorker(
             val job = SmsOutboxRepository.claimNext(db) ?: break
             try {
                 SmsOutboxRepository.prepareParts(db, job.messageId, job.partsCount)
-                SmsTransport(applicationContext).send(job)
+                transportSender.send(job)
             } catch (securityException: SecurityException) {
                 SmsOutboxRepository.markFailed(db, job.messageId, "SEND_SMS_PERMISSION", securityException.message.orEmpty(), retry = false)
                 SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, job.messageId)
