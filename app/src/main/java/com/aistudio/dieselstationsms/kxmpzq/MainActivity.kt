@@ -9296,8 +9296,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
-        fun printCurrentPage(): String =
-            scheduleWebViewPrint("accounting-report", "فاتورة بيع")
+        fun printCurrentPage(invoiceNumber: String = ""): String {
+            // PrintManager uses the print-job title as the suggested PDF filename.
+            // Keep it tied to the invoice currently loaded by POS rather than a report default.
+            val safeInvoiceNumber = InvoicePdfSupport.sanitizeInvoiceFileName(invoiceNumber)
+            if (safeInvoiceNumber.isBlank()) {
+                return errorResponse("رقم الفاتورة غير متوفر؛ تعذر تحديد اسم ملف PDF")
+            }
+            return scheduleWebViewPrint(safeInvoiceNumber, safeInvoiceNumber)
+        }
 
         @JavascriptInterface
         fun printCurrentPageWithTitle(title: String = "طباعة"): String {
