@@ -33,9 +33,9 @@
     --radius: 12px;
     --radius-sm: 8px;
     --header-height: 56px;
-    --stats-height: 72px;
-    --search-height: 52px;
-    --tab-height: 44px;
+    --stats-height: 80px;
+    --search-height: 60px;
+    --tab-height: 48px;
     --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -200,6 +200,8 @@ body {
     left: 0;
     right: 0;
     height: var(--stats-height);
+    min-height: var(--stats-height);
+    align-items: stretch;
     background: var(--surface);
     display: flex;
     overflow-x: auto;
@@ -217,7 +219,12 @@ body {
     min-width: 80px;
     background: var(--card);
     border-radius: var(--radius-sm);
-    padding: 8px 12px;
+    padding: 5px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.25;
     text-align: center;
     border: 1px solid var(--border);
     cursor: pointer;
@@ -380,6 +387,8 @@ body {
     left: 0;
     right: 0;
     height: var(--tab-height);
+    min-height: var(--tab-height);
+    align-items: center;
     background: var(--surface);
     display: flex;
     overflow-x: auto;
@@ -394,7 +403,12 @@ body {
 
 .tab-btn {
     flex: 0 0 auto;
+    min-height: 36px;
     padding: 6px 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.25;
     border: none;
     background: transparent;
     color: var(--text-secondary);
@@ -1440,7 +1454,7 @@ body {
     right: 0;
     bottom: 0;
     background: rgba(0,0,0,0.3);
-    z-index: 4000;
+    z-index: 990;
     align-items: center;
     justify-content: center;
     flex-direction: column;
@@ -2309,14 +2323,26 @@ body {
         },
 
         switchTab(tabId) {
-            state.currentTab = tabId;
+            const tab = String(tabId || '').trim();
+            const target = document.getElementById(`tab-${tab}`);
+            if (!tab || !target) {
+                console.warn('SMS tab has no content container:', tab);
+                this.showToast('هذا القسم غير متاح في هذه النسخة', 'warning');
+                return;
+            }
+            state.currentTab = tab;
             document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.tab === tabId);
+                const active = btn.dataset.tab === tab;
+                btn.classList.toggle('active', active);
+                btn.setAttribute('aria-selected', active ? 'true' : 'false');
             });
             document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.toggle('active', content.id === `tab-${tabId}`);
+                const active = content.id === `tab-${tab}`;
+                content.classList.toggle('active', active);
+                content.setAttribute('aria-hidden', active ? 'false' : 'true');
             });
-            this.loadTabData(tabId);
+            // Keep fixed navigation reachable on small WebView screens and when loading is slow.
+            this.loadTabData(tab);
         },
 
         async loadTabData(tabId) {
@@ -3277,10 +3303,16 @@ body {
     // EVENT LISTENERS
     // ============================================
     function initEventListeners() {
-        // Tab switching
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', () => UI.switchTab(btn.dataset.tab));
-        });
+        // Tab switching: delegate from the stable nav container so every tab remains actionable.
+        const tabBar = document.getElementById('tabBar');
+        if (tabBar) {
+            tabBar.addEventListener('click', (event) => {
+                const btn = event.target && event.target.closest ? event.target.closest('.tab-btn') : null;
+                if (!btn || !tabBar.contains(btn)) return;
+                event.preventDefault();
+                UI.switchTab(btn.dataset.tab);
+            });
+        }
 
         // Search
         const searchInput = document.getElementById('searchInput');
@@ -3450,20 +3482,24 @@ body {
             });
         });
 
-        // Stats cards click
-        document.querySelectorAll('.stat-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const stat = card.dataset.stat;
-                const tabMap = {
-                    total: 'all',
-                    incoming: 'incoming',
-                    outgoing: 'outgoing',
-                    pending: 'pending',
-                    failed: 'failed'
-                };
-                if (tabMap[stat]) UI.switchTab(tabMap[stat]);
+        // Stats cards: mouse/touch plus keyboard activation.
+        const statsBar = document.getElementById('statsBar');
+        if (statsBar) {
+            statsBar.querySelectorAll('.stat-card').forEach(card => {
+                card.setAttribute('role', 'button');
+                card.setAttribute('tabindex', '0');
+                card.addEventListener('click', () => {
+                    const tabMap = { total: 'all', incoming: 'incoming', outgoing: 'outgoing', pending: 'pending', failed: 'failed' };
+                    if (tabMap[card.dataset.stat]) UI.switchTab(tabMap[card.dataset.stat]);
+                });
+                card.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        card.click();
+                    }
+                });
             });
-        });
+        }
 
         // SMS observability and analytics
         document.getElementById('opsRefreshBtn').addEventListener('click', async () => {
