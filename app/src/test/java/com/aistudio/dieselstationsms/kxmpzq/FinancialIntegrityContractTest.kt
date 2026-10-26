@@ -174,8 +174,16 @@ class FinancialIntegrityContractTest {
         assertTrue("Settlement resolution must not silently choose the first duplicate mapping",
             !resolver.contains("LIMIT 1") && resolver.contains("require(!c.moveToNext())"))
         assertTrue("Missing mappings must fail explicitly instead of using a generic account",
-            resolver.contains("require(c.moveToFirst())") &&
-                resolver.contains("راجع ربط الصندوق/البنك بدليل الحسابات"))
+            resolver.contains("throw IllegalStateException") &&
+                resolver.contains("لا يوجد حساب محاسبي نشط وصحيح مرتبط بوسيلة التسوية المحددة"))
+        assertTrue("Missing mapping diagnostics must report the selected source id and classify the mismatch",
+            resolver.contains("val sourceColumn = if (isCash)") &&
+                resolver.contains("التشخيص: \\$sourceLabel #\\$arg") &&
+                resolver.contains("تصنيف الحساب النقدي/البنكي غير مطابق"))
+        assertTrue("Settlement diagnosis must be read-only and must not weaken the eligibility predicate",
+            resolver.contains("SELECT COUNT(*)") &&
+                resolver.contains("classificationColumn=1") &&
+                resolver.contains("لم تُعدّل أي أرصدة."))
         val save = functionBody(source, "fun saveChartAccount")
         assertTrue("A GL settlement account cannot map to both cash and bank resources",
             save.contains("linkedBankAccountId > 0L && linkedCashBoxId > 0L"))

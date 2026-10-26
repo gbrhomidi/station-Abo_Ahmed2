@@ -21538,14 +21538,39 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private fun findSettlementAccount(db: SQLiteDatabase, cashBoxId: Long, bankAccountId: Long): Long {
         require((cashBoxId > 0L) xor (bankAccountId > 0L)) { "يجب تحديد وسيلة تسوية مالية واحدة فقط" }
-        val sql = if (cashBoxId > 0L) {
-            "SELECT id FROM accounts WHERE cash_box_id=? AND account_type='asset' AND is_cash_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id"
-        } else {
-            "SELECT id FROM accounts WHERE bank_account_id=? AND account_type='asset' AND is_bank_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id"
-        }
-        val arg = if (cashBoxId > 0L) cashBoxId else bankAccountId
+        val isCash = cashBoxId > 0L
+        val arg = if (isCash) cashBoxId else bankAccountId
+        val sourceColumn = if (isCash) "cash_box_id" else "bank_account_id"
+        val classificationColumn = if (isCash) "is_cash_account" else "is_bank_account"
+        val sourceLabel = if (isCash) "الصندوق" else "الحساب البنكي"
+        val sql = "SELECT id FROM accounts WHERE $sourceColumn=? AND account_type='asset' AND $classificationColumn=1 AND is_active=1 AND is_deleted=0 ORDER BY id"
         return db.rawQuery(sql, arrayOf(arg.toString())).use { c ->
-            require(c.moveToFirst()) { "لا يوجد حساب محاسبي نشط وصحيح مرتبط بوسيلة التسوية المحددة؛ راجع ربط الصندوق/البنك بدليل الحسابات" }
+            if (!c.moveToFirst()) {
+                // Read-only diagnosis: classify why the selected source has no eligible GL mapping.
+                // This query does not read or mutate balances and does not weaken settlement validation.
+                val diagnosticSql = "SELECT COUNT(*), " +
+                    "COALESCE(SUM(CASE WHEN is_active=1 AND is_deleted=0 THEN 1 ELSE 0 END),0), " +
+                    "COALESCE(SUM(CASE WHEN is_active=1 AND is_deleted=0 AND account_type='asset' THEN 1 ELSE 0 END),0), " +
+                    "COALESCE(SUM(CASE WHEN is_active=1 AND is_deleted=0 AND account_type='asset' AND $classificationColumn=1 THEN 1 ELSE 0 END),0) " +
+                    "FROM accounts WHERE $sourceColumn=?"
+                val counts = db.rawQuery(diagnosticSql, arrayOf(arg.toString())).use { d ->
+                    if (d.moveToFirst()) longArrayOf(d.getLong(0), d.getLong(1), d.getLong(2), d.getLong(3))
+                    else longArrayOf(0L, 0L, 0L, 0L)
+                }
+                val reason = when {
+                    counts[0] == 0L -> "لا يوجد أي حساب دليل مرتبط بهذا المعرّف"
+                    counts[1] == 0L -> "الحسابات المرتبطة كلها غير نشطة أو محذوفة"
+                    counts[2] == 0L -> "لا يوجد حساب مرتبط نشط من النوع أصل"
+                    counts[3] == 0L -> "تصنيف الحساب النقدي/البنكي غير مطابق"
+                    else -> "تعذر مطابقة شروط الحساب؛ راجع قيم الربط وخصائص الحساب"
+                }
+                throw IllegalStateException(
+                    "لا يوجد حساب محاسبي نشط وصحيح مرتبط بوسيلة التسوية المحددة؛ " +
+                        "التشخيص: $sourceLabel #$arg — $reason " +
+                        "(الروابط=${counts[0]}، النشطة=${counts[1]}، الأصول النشطة=${counts[2]}، " +
+                        "المطابقة للتصنيف=${counts[3]}). لم تُعدّل أي أرصدة."
+                )
+            }
             val accountId = c.getLong(0)
             require(!c.moveToNext()) { "يوجد أكثر من حساب محاسبي نشط مرتبط بوسيلة التسوية؛ أزل الربط المكرر قبل الترحيل" }
             accountId
