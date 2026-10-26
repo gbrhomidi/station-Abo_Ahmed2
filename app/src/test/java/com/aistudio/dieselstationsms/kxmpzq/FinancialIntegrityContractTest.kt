@@ -178,7 +178,7 @@ class FinancialIntegrityContractTest {
                 resolver.contains("لا يوجد حساب محاسبي نشط وصحيح مرتبط بوسيلة التسوية المحددة"))
         assertTrue("Missing mapping diagnostics must report the selected source id and classify the mismatch",
             resolver.contains("val sourceColumn = if (isCash)") &&
-                resolver.contains("التشخيص: \\$sourceLabel #\\$arg") &&
+                resolver.contains("التشخيص: \$sourceLabel #\$arg") &&
                 resolver.contains("تصنيف الحساب النقدي/البنكي غير مطابق"))
         assertTrue("Settlement diagnosis must be read-only and must not weaken the eligibility predicate",
             resolver.contains("SELECT COUNT(*)") &&
