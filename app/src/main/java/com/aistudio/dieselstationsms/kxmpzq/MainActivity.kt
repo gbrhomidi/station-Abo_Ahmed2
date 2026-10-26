@@ -8690,19 +8690,22 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         val backupName = "." + source.nameWithoutExtension + "_" +
                             System.currentTimeMillis() + ".previous.pdf"
                         var backupUri: Uri? = null
-                        if (oldUri != null) {
+                        oldUri?.let { existingUri ->
                             backupUri = android.provider.DocumentsContract.renameDocument(
-                                activity.contentResolver, oldUri, backupName
+                                activity.contentResolver, existingUri, backupName
                             ) ?: throw IllegalStateException("تعذر حماية نسخة الفاتورة السابقة قبل الاستبدال")
                         }
+                        var promotedUri: Uri? = null
                         try {
                             val retryUri = android.provider.DocumentsContract.renameDocument(
                                 activity.contentResolver, stagingUri, source.name
                             ) ?: throw IllegalStateException("تعذر استبدال ملف الفاتورة في مجلد Invoices")
+                            promotedUri = retryUri
                             verifyDocument(retryUri)
                             backupUri?.let { runCatching { activity.contentResolver.delete(it, null, null) } }
                             return retryUri
                         } catch (replaceError: Exception) {
+                            promotedUri?.let { runCatching { activity.contentResolver.delete(it, null, null) } }
                             backupUri?.let { previous ->
                                 runCatching {
                                     android.provider.DocumentsContract.renameDocument(
