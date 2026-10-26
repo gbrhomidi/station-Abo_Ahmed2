@@ -1772,16 +1772,16 @@ body.sleep-mode .sidebar-toggle { display: none; }
     min-width: 70px !important; max-width: 90px !important; width: 10% !important;
 }
 #productsTable th:nth-child(2), #productsTable td:nth-child(2) {
-    min-width: 150px !important; max-width: 220px !important; width: 28% !important;
+    min-width: 200px !important; max-width: 300px !important; width: 37% !important;
 }
 #productsTable th:nth-child(3), #productsTable td:nth-child(3) {
-    min-width: 80px !important; max-width: 110px !important; width: 14% !important;
+    min-width: 70px !important; max-width: 100px !important; width: 12% !important;
 }
 #productsTable th:nth-child(4), #productsTable td:nth-child(4) {
     min-width: 100px !important; max-width: 130px !important; width: 18% !important;
 }
 #productsTable th:nth-child(5), #productsTable td:nth-child(5) {
-    min-width: 70px !important; max-width: 100px !important; width: 16% !important;
+    min-width: 35px !important; max-width: 55px !important; width: 8% !important;
 }
 #productsTable td {
     background: var(--bg-glass);
@@ -1840,8 +1840,8 @@ body.sleep-mode .sidebar-toggle { display: none; }
     .products-container-vertical { max-height: 300px; }
     #productsTable th, #productsTable td { padding: 10px 6px; font-size: 12px; }
     #productsTable th:nth-child(2), #productsTable td:nth-child(2) {
-        min-width: 110px !important;
-        max-width: 140px !important;
+        min-width: 145px !important;
+        max-width: 190px !important;
     }
     #productsTable .btn { padding: 6px 10px; font-size: 11px; }
     .products-scroll-wrapper { padding: 8px; }
@@ -5137,7 +5137,7 @@ function showProductDetailsCanvas(product, row) {
     content.innerHTML = `
         <p style="margin-bottom:8px;">اسم المنتج: <strong>${escapePosText(product.product_name || '')}</strong></p>
         <p style="margin-bottom:8px;">تاريخ الإنتهاء: ${escapePosText(product.expiry_date || 'غير محدد')}</p>
-        <p style="margin-bottom:8px;">المخزون الحالي منة: ${escapePosText(quantityLabel)}</p>
+        <p style="margin-bottom:8px;">المخزون الحالي منه: ${escapePosText(quantityLabel)}</p>
         <p style="margin-bottom:8px;">مستوى المخزون الأدنى: ${escapePosText(minimumStock ?? 'غير محدد')}</p>
         <div class="product-description-full">
             <label class="form-label">الوصف (Description)</label>

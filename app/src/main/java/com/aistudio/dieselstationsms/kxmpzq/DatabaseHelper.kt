@@ -11866,6 +11866,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
             }
             require(total.isFinite() && total >= 0.0) { "إجمالي البيع غير صالح" }
+            val discountAmount = data.optDouble("discount_amount", 0.0)
+            val taxAmount = data.optDouble("tax_amount", data.optDouble("vat_amount", 0.0))
+            val serviceFee = data.optDouble("service_fee", 0.0)
+            require(discountAmount.isFinite() && discountAmount >= 0.0) { "الخصم غير صالح" }
+            require(taxAmount.isFinite() && taxAmount >= 0.0) { "الضريبة غير صالحة" }
+            require(serviceFee.isFinite() && serviceFee >= 0.0) { "رسوم الخدمة غير صالحة" }
+            val netAmount = (total - discountAmount + taxAmount + serviceFee).coerceAtLeast(0.0)
+            require(netAmount.isFinite()) { "صافي البيع غير صالح" }
             val paymentType = data.optString("payment_type", "cash")
             val paymentMethod = when (paymentType) {
                 "آجل", "credit" -> "credit"
@@ -11875,9 +11883,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 else -> "cash"
             }
             val isCredit = paymentMethod == "credit"
-            val paidAmount = data.optDouble("amount_paid", if (isCredit) 0.0 else total)
+            val paidAmount = data.optDouble("amount_paid", if (isCredit) 0.0 else netAmount)
             require(paidAmount.isFinite() && paidAmount >= 0.0) { "المبلغ المدفوع غير صالح" }
-            require(isCredit || paidAmount + 1e-9 >= total) { "المبلغ المدفوع أقل من الإجمالي" }
+            require(isCredit || paidAmount + 1e-9 >= netAmount) { "المبلغ المدفوع أقل من الإجمالي" }
             if (isCredit) require(data.optLong("entity_id", 0L) > 0L) { "العميل مطلوب للبيع الآجل" }
 
             db.beginTransaction()
@@ -11905,10 +11913,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 liters = 0.0,
                 pricePerLiter = 0.0,
                 subtotal = total,
-                discountAmount = 0.0,
-                taxAmount = 0.0,
+                discountAmount = discountAmount,
+                taxAmount = taxAmount,
                 grossAmount = total,
-                netAmount = total,
+                netAmount = netAmount,
                 paymentMethod = paymentMethod,
                 isCredit = isCredit,
                 dueDate = data.optString("due_date", null),
@@ -11980,7 +11988,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             postSaleRevenueJournalWithinTransaction(
                 db, saleId, stationScopeId, cashierId, "products",
                 data.optLong("entity_id", 0L).takeIf { it > 0L }?.toInt(),
-                paymentMethod, total, paidAmount
+                paymentMethod, netAmount, paidAmount
             )
             val productCostTotal = prepared.sumOf { it.optDouble("cost_price", 0.0).coerceAtLeast(0.0) * it.optDouble("quantity", 0.0) }
             if (productCostTotal > 0.000001) postSaleCostJournalWithinTransaction(db, saleId, stationScopeId, cashierId, "products", productCostTotal)
