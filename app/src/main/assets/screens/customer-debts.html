@@ -1857,6 +1857,69 @@
         .due-detail-table{width:100%;border-collapse:separate;border-spacing:0 8px}.due-detail-table th{font-size:12px;color:#64748b;text-align:right;padding:8px}.due-detail-table td{padding:12px;background:rgba(148,163,184,.09);border-top:1px solid rgba(148,163,184,.15);border-bottom:1px solid rgba(148,163,184,.15)}.due-detail-table td:first-child{border-radius:0 10px 10px 0}.due-detail-table td:last-child{border-radius:10px 0 0 10px}.due-red{color:#dc2626;font-weight:900}.due-blue{color:#2563eb;font-weight:900}
         .due-bubble{position:fixed;top:82px;right:20px;z-index:100002;background:#dc2626;color:#fff;border-radius:999px;padding:10px 15px;display:none;align-items:center;gap:8px;box-shadow:0 12px 35px rgba(0,0,0,.28);cursor:pointer;font-weight:800}.due-bubble.show{display:flex}
 
+            /* Customer-debts-specific presentation and modal styles. */
+        .payment-inline-message{margin:12px 18px 0;padding:11px 13px;border-radius:12px;border:1px solid var(--danger);background:rgba(239,68,68,.10);color:var(--danger);font-size:.88rem;font-weight:800;line-height:1.7}
+        .payment-inline-message.success{border-color:var(--success);background:rgba(16,185,129,.10);color:var(--success)}
+        .payment-inline-message[hidden]{display:none!important}
+        .debt-view-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;margin-bottom:12px;border:1px solid var(--border-color);border-radius:16px;background:var(--bg-card)}
+        .debt-view-caption{color:var(--text-muted);font-size:.83rem;font-weight:800;margin-inline-end:auto}
+        .debt-view-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 13px;border-radius:11px;border:1px solid var(--border-color);background:var(--bg-glass);color:var(--text-primary);font-family:inherit;font-weight:800;cursor:pointer}
+        .debt-view-button.active{background:var(--emerald-primary);border-color:var(--emerald-primary);color:#062f22}
+        #debtCardsView,#debtTreeView{display:none}
+        #debtTableSection[data-view="cards"] .table-wrapper,#debtTableSection[data-view="tree"] .table-wrapper{display:none}
+        #debtTableSection[data-view="cards"] #debtCardsView{display:grid}
+        #debtTableSection[data-view="tree"] #debtTreeView{display:block}
+        .debt-card-grid{grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:12px}
+        .debt-card,.debt-tree-group{border:1px solid var(--border-color);border-radius:17px;background:var(--bg-card);box-shadow:var(--shadow-glow);overflow:hidden}
+        .debt-card{padding:15px;display:flex;flex-direction:column;gap:11px}
+        .debt-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+        .debt-card-name{font-weight:900;font-size:1rem;overflow-wrap:anywhere}
+        .debt-card-phone{font-size:.78rem;color:var(--text-muted);margin-top:3px;direction:ltr;text-align:right}
+        .debt-card-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+        .debt-card-value{padding:9px;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-glass)}
+        .debt-card-value small{display:block;color:var(--text-muted);font-size:.72rem;margin-bottom:4px}
+        .debt-card-value strong{font-size:.9rem;overflow-wrap:anywhere}
+        .debt-card-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:auto}
+        .debt-card-actions .btn-action{min-width:39px;min-height:36px}
+        .debt-tree-view{display:flex;flex-direction:column;gap:10px}
+        .debt-tree-group summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;font-weight:900}
+        .debt-tree-group summary::-webkit-details-marker{display:none}
+        .debt-tree-meta{display:flex;gap:9px;align-items:center;flex-wrap:wrap;color:var(--text-muted);font-size:.78rem;font-weight:700}
+        .debt-tree-items{padding:0 12px 12px}
+        .debt-tree-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px;margin-top:7px;border-radius:11px;background:var(--bg-glass);border:1px solid var(--border-color)}
+        .debt-tree-item-main{min-width:0;display:flex;flex-direction:column;gap:3px}
+        .debt-tree-item-main strong{overflow-wrap:anywhere}
+        .debt-tree-item-main small{color:var(--text-muted)}
+        .details-back{border:1px solid var(--border-color);border-radius:10px;padding:8px 11px;background:var(--bg-glass);color:var(--text-primary);font:inherit;font-size:.82rem;font-weight:800;white-space:nowrap}
+        .details-header{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+        .details-header .details-title{margin-inline-end:auto}
+        .report-workspace{display:flex;flex-direction:column;gap:14px}
+        .report-panel{padding:14px;border:1px solid var(--border-color);border-radius:16px;background:var(--bg-glass)}
+        .report-panel-title{font-weight:900;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+        .report-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px}
+        .report-field{display:flex;flex-direction:column;gap:6px;font-size:.8rem;color:var(--text-secondary);font-weight:800}
+        .report-field input,.report-field select,.debt-setting-row input,.debt-setting-row select{width:100%;min-width:0;padding:10px;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-primary);color:var(--text-primary);font:inherit}
+        .report-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+        .report-actions button{font-family:inherit}
+        .report-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px}
+        .report-kpi{padding:12px;border-radius:13px;border:1px solid var(--border-color);background:var(--bg-card)}
+        .report-kpi strong{display:block;font-size:1.15rem;color:var(--gold-primary);overflow-wrap:anywhere}
+        .report-kpi span{display:block;margin-top:5px;font-size:.75rem;color:var(--text-muted)}
+        .report-result-caption{font-size:.82rem;color:var(--text-muted);margin-bottom:9px}
+        .debt-settings-stack{display:flex;flex-direction:column;gap:13px}
+        .debt-setting-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,230px);gap:15px;align-items:center;padding:13px 0;border-bottom:1px solid var(--border-color)}
+        .debt-setting-row:last-child{border-bottom:0}
+        .debt-setting-label{font-weight:900;display:block}
+        .debt-setting-desc{display:block;margin-top:4px;color:var(--text-muted);font-size:.78rem;line-height:1.6}
+        .debt-setting-check{display:flex;align-items:center;gap:9px;color:var(--text-primary);font-weight:800}
+        .debt-setting-check input{width:20px;height:20px;accent-color:var(--emerald-primary)}
+        .debt-settings-feedback{padding:10px;border-radius:10px;margin-top:12px;font-size:.84rem;font-weight:800}
+        .debt-summary-card{padding:14px;border:1px solid var(--border-color);border-radius:15px;background:var(--bg-card)}
+        .debt-summary-card strong{display:block;font-size:1.25rem;color:var(--gold-primary);overflow-wrap:anywhere}
+        .debt-summary-card span{display:block;font-size:.77rem;color:var(--text-muted);margin-top:6px}
+        .debt-summary-section{margin-top:15px;padding:13px;border:1px solid var(--border-color);border-radius:15px;background:var(--bg-glass)}
+        .debt-summary-section h4{margin-bottom:10px}
+        @media(max-width:520px){.debt-view-caption{width:100%;margin-bottom:3px}.debt-view-button{flex:1;padding:9px 7px;font-size:.8rem}.debt-tree-item{align-items:flex-start;flex-direction:column}.debt-setting-row{grid-template-columns:1fr;gap:8px}.report-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
     </style>
   <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
@@ -1886,9 +1949,8 @@
                 <h2>
                     <i class="fas fa-hand-holding-usd"></i>
                     ديون العملاء
-                    <span class="ai-badge">AI</span>
                 </h2>
-                <span class="subtitle">إدارة ومتابعة ديون العملاء والمستحقات المتأخرة</span>
+                <span class="subtitle">إدارة ديون العملاء و المتأخرات</span>
             </div>
             <div class="header-actions">
                 <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
@@ -2045,7 +2107,15 @@
     <!-- ===================================================================
     جدول ديون العملاء
     =================================================================== -->
-    <div class="table-section">
+    <div class="table-section" id="debtTableSection" data-view="table">
+        <div class="debt-view-toolbar" id="debtViewToolbar" role="group" aria-label="خيارات عرض ديون العملاء">
+            <span class="debt-view-caption"><i class="fas fa-layer-group"></i> طريقة العرض</span>
+            <button type="button" class="debt-view-button active" id="debtViewTable" onclick="setDebtView('table')"><i class="fas fa-table"></i> جدول</button>
+            <button type="button" class="debt-view-button" id="debtViewCards" onclick="setDebtView('cards')"><i class="fas fa-th-large"></i> بطاقات</button>
+            <button type="button" class="debt-view-button" id="debtViewTree" onclick="setDebtView('tree')"><i class="fas fa-sitemap"></i> شجرة</button>
+        </div>
+        <div id="debtCardsView" class="debt-card-grid" aria-live="polite"></div>
+        <div id="debtTreeView" class="debt-tree-view" aria-live="polite"></div>
         <div class="table-wrapper">
             <div class="table-scroll">
                 <table class="data-table" id="debtTable">
@@ -2210,6 +2280,7 @@
                     <span id="pCurrentRemaining" style="font-weight:900;color:var(--gold-primary);">0.00</span>
                 </div>
             </div>
+            <div id="paymentInlineMessage" class="payment-inline-message" role="alert" aria-live="polite" hidden></div>
             <div class="modal-footer">
                 <button class="btn-modal secondary" onclick="closePaymentModal()">إلغاء</button>
                 <button class="btn-modal primary" onclick="submitPayment()">تسديد</button>
@@ -2256,7 +2327,7 @@
     <div class="modal-overlay" id="summaryModal" onclick="closeModalById('summaryModal')">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h3 class="modal-title"><i class="fas fa-chart-pie"></i> ملخص المحطة</h3>
+                <h3 class="modal-title"><i class="fas fa-chart-pie"></i> ملخص ديون العملاء</h3>
                 <button class="modal-close" onclick="closeModalById('summaryModal')">
                     <i class="fas fa-times"></i>
                 </button>
@@ -2368,6 +2439,9 @@
                         customer_party_id: toId(p.customer_party_id ?? p.customer_id),
                         amount: Number(p.amount ?? 0),
                         payment_method: String(p.payment_method ?? p.method ?? 'cash'),
+                        cash_box_id: toId(p.cash_box_id),
+                        bank_account_id: toId(p.bank_account_id),
+                        idempotency_key: String(p.idempotency_key ?? ''),
                         operator: String(p.operator ?? 'WebView'),
                         notes: String(p.notes ?? '')
                     }));
@@ -2475,6 +2549,26 @@
             toast._timer = setTimeout(() => toast.classList.remove('show'), 3500);
         }
 
+        function showPaymentFeedback(message, type = 'error') {
+            const modal = document.getElementById('paymentModal');
+            const box = document.getElementById('paymentInlineMessage');
+            if (modal && modal.classList.contains('show') && box) {
+                box.textContent = String(message || 'تعذر تنفيذ التسديد');
+                box.classList.toggle('success', type === 'success');
+                box.hidden = false;
+            } else {
+                showToast(String(message || 'تعذر تنفيذ التسديد'), type);
+            }
+        }
+
+        function clearPaymentFeedback() {
+            const box = document.getElementById('paymentInlineMessage');
+            if (!box) return;
+            box.textContent = '';
+            box.classList.remove('success');
+            box.hidden = true;
+        }
+
         function showLoading(show) {
             document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
         }
@@ -2557,6 +2651,10 @@
         let paymentSettlementOptionsLoaded = false;
         let statusChart = null;
         let trendChart = null;
+        let debtViewMode = 'table';
+        let debtScreenSettings = { defaultView: 'table', defaultStatus: '', dueSoonDays: 10, defaultReport: 'balances', highlightOverdue: true };
+        let debtScreenSettingsLoaded = false;
+        let debtReportState = { debts: [], payments: [], customers: [], columns: [], rows: [], type: 'balances', title: 'أرصدة الديون' };
 
         function finiteNumber(value, fallback = 0) {
             const number = Number(value);
@@ -2621,12 +2719,15 @@
             debtsData = filterDebts(allDebtsData);
             runtimeState.visibleDebts = debtsData;
             renderTable(debtsData);
+            renderDebtCards(debtsData);
+            renderDebtTree(debtsData);
+            updateDebtViewButtons();
             updateKPIs(debtsData);
             updateCharts(debtsData);
             updateFooter(debtsData);
             generateAlerts(debtsData);
             generateAIInsights(debtsData);
-            if (showSuccess) showToast(`✅ تم عرض ${debtsData.length} سجل فعلي`, 'success');
+            if (showSuccess) showToast('✅ تم عرض ' + debtsData.length + ' سجل فعلي', 'success');
         }
 
         async function loadDebts() {
@@ -2667,6 +2768,97 @@
         // ===================================================================
         // 6. عرض الجدول
         // ===================================================================
+function updateDebtViewButtons() {
+            const section = document.getElementById('debtTableSection');
+            if (!section) return;
+            section.dataset.view = ['table','cards','tree'].includes(debtViewMode) ? debtViewMode : 'table';
+            [['table','debtViewTable'],['cards','debtViewCards'],['tree','debtViewTree']].forEach(function(pair) {
+                const button = document.getElementById(pair[1]);
+                if (button) {
+                    button.classList.toggle('active', debtViewMode === pair[0]);
+                    button.setAttribute('aria-pressed', debtViewMode === pair[0] ? 'true' : 'false');
+                }
+            });
+        }
+
+        function setDebtView(view, persist) {
+            if (['table','cards','tree'].indexOf(view) < 0) return;
+            debtViewMode = view;
+            updateDebtViewButtons();
+            if (persist !== false) {
+                debtScreenSettings.defaultView = view;
+                apiCall('setSetting', {key:'customer_debts_default_view', value:view})
+                    .catch(function(error){ console.warn('تعذر حفظ تفضيل العرض:', error); });
+            }
+        }
+
+        function renderDebtCards(data) {
+            const container = document.getElementById('debtCardsView');
+            if (!container) return;
+            if (!Array.isArray(data) || !data.length) {
+                container.innerHTML = '<div class="empty-state">لا توجد ديون مطابقة للفلاتر لعرضها كبطاقات.</div>';
+                return;
+            }
+            container.innerHTML = data.map(function(item) {
+                const id = finiteNumber(item.customer_party_id ?? item.customer_id);
+                const total = finiteNumber(item.net_amount ?? item.total_debt);
+                const paid = finiteNumber(item.paid_amount);
+                const remaining = finiteNumber(item.remaining_amount);
+                const due = String(item.due_date || item.created_at || '').slice(0,10) || '---';
+                const warning = debtScreenSettings.highlightOverdue && item.status === 'overdue' ? ' border-color:var(--danger);' : '';
+                return '<article class="debt-card" style="' + warning + '">' +
+                    '<div class="debt-card-head"><div><div class="debt-card-name">' + escapeHtml(item.customer_name || 'عميل غير مسمى') + '</div>' +
+                    '<div class="debt-card-phone" dir="ltr">' + escapeHtml(item.customer_phone || '---') + '</div></div>' +
+                    getStatusBadge(item.status) + '</div>' +
+                    '<div class="debt-card-values">' +
+                    '<div class="debt-card-value"><small>إجمالي الفاتورة</small><strong>' + formatCurrency(total) + '</strong></div>' +
+                    '<div class="debt-card-value"><small>المدفوع</small><strong>' + formatCurrency(paid) + '</strong></div>' +
+                    '<div class="debt-card-value"><small>المتبقي</small><strong style="color:' + (remaining>0?'var(--danger)':'var(--success)') + '">' + formatCurrency(remaining) + '</strong></div>' +
+                    '<div class="debt-card-value"><small>تاريخ الاستحقاق</small><strong>' + escapeHtml(due) + '</strong></div></div>' +
+                    '<div class="debt-card-actions">' +
+                    '<button class="btn-action pay" onclick="openPaymentForCustomer(' + id + ',' + remaining + ')" title="تسديد"><i class="fas fa-money-bill-wave"></i></button>' +
+                    '<button class="btn-action view" onclick="viewCustomerDetails(' + id + ')" title="تفاصيل العميل"><i class="fas fa-eye"></i></button>' +
+                    '<button class="btn-action history" onclick="viewHistory(' + id + ')" title="سجل المعاملات"><i class="fas fa-history"></i></button>' +
+                    '</div></article>';
+            }).join('');
+        }
+
+        function renderDebtTree(data) {
+            const container = document.getElementById('debtTreeView');
+            if (!container) return;
+            if (!Array.isArray(data) || !data.length) {
+                container.innerHTML = '<div class="empty-state">لا توجد ديون مطابقة للفلاتر لعرضها كشجرة.</div>';
+                return;
+            }
+            const groups = new Map();
+            data.forEach(function(item) {
+                const id = finiteNumber(item.customer_party_id ?? item.customer_id);
+                const key = String(id || item.customer_name || 'unknown');
+                if (!groups.has(key)) groups.set(key,{id:id,name:item.customer_name || 'عميل غير مسمى',phone:item.customer_phone || '---',rows:[],total:0,overdue:false});
+                const group = groups.get(key);
+                group.rows.push(item);
+                group.total += finiteNumber(item.remaining_amount);
+                if (item.status === 'overdue') group.overdue = true;
+            });
+            container.innerHTML = Array.from(groups.values()).sort(function(a,b){return b.total-a.total;}).map(function(group) {
+                const warning = debtScreenSettings.highlightOverdue && group.overdue ? ' style="border-color:var(--danger)"' : '';
+                const children = group.rows.map(function(item) {
+                    const invoice = item.invoice_number || item.sale_code || ('فاتورة #' + item.id);
+                    const due = String(item.due_date || item.created_at || '').slice(0,10) || '---';
+                    return '<div class="debt-tree-item"><div class="debt-tree-item-main"><strong>' + escapeHtml(invoice) + '</strong>' +
+                        '<small>الاستحقاق: ' + escapeHtml(due) + ' · الحالة: ' + escapeHtml(getStatusLabel(item.status)) + '</small>' +
+                        '<strong>المتبقي: ' + formatCurrency(item.remaining_amount) + '</strong></div>' +
+                        '<div class="debt-card-actions"><button class="btn-action pay" onclick="openPaymentForCustomer(' + group.id + ',' + finiteNumber(item.remaining_amount) + ')" title="تسديد"><i class="fas fa-money-bill-wave"></i></button>' +
+                        '<button class="btn-action view" onclick="viewCustomerDetails(' + group.id + ')" title="تفاصيل العميل"><i class="fas fa-eye"></i></button>' +
+                        '<button class="btn-action history" onclick="viewHistory(' + group.id + ')" title="السجل"><i class="fas fa-history"></i></button></div></div>';
+                }).join('');
+                return '<details class="debt-tree-group"' + warning + '><summary><span><i class="fas fa-user-circle"></i> ' +
+                    escapeHtml(group.name) + ' <small style="color:var(--text-muted);font-weight:600">' + escapeHtml(group.phone) + '</small></span>' +
+                    '<span class="debt-tree-meta"><span>' + group.rows.length + ' فاتورة</span><strong>' + formatCurrency(group.total) +
+                    '</strong></span></summary><div class="debt-tree-items">' + children + '</div></details>';
+            }).join('');
+        }
+
         function renderTable(data) {
             const tbody = document.getElementById('debtTableBody');
             if (!data || data.length === 0) {
@@ -2985,7 +3177,7 @@
             const bridge = window.AndroidInterface;
             if (!bridge || typeof bridge.getActiveCashBoxes !== 'function' || typeof bridge.getBankAccounts !== 'function') {
                 paymentSettlementOptionsLoaded = false;
-                showToast('تعذر تحميل صناديق التحصيل والحسابات البنكية من قاعدة البيانات', 'error');
+                showPaymentFeedback('تعذر تحميل صناديق التحصيل والحسابات البنكية من قاعدة البيانات', 'error');
                 return false;
             }
             try {
@@ -3005,7 +3197,7 @@
                 return true;
             } catch (error) {
                 paymentSettlementOptionsLoaded = false;
-                showToast('تعذر تحميل وسائل التحصيل: ' + (error.message || 'خطأ غير معروف'), 'error');
+                showPaymentFeedback('تعذر تحميل وسائل التحصيل: ' + (error.message || 'خطأ غير معروف'), 'error');
                 return false;
             }
         }
@@ -3063,10 +3255,10 @@
             const [settlementType, settlementIdText] = String(settlementValue || '').split(':');
             const settlementId = finiteNumber(settlementIdText);
 
-            if (!customerId) { showToast('❌ الرجاء اختيار العميل', 'error'); return; }
-            if (!amount || amount <= 0) { showToast('❌ الرجاء إدخال مبلغ صحيح', 'error'); return; }
+            if (!customerId) { showPaymentFeedback('الرجاء اختيار العميل', 'error'); return; }
+            if (!amount || amount <= 0) { showPaymentFeedback('الرجاء إدخال مبلغ صحيح', 'error'); return; }
             if (currentRemaining > 0 && amount > currentRemaining + 0.000001) {
-                showToast('❌ مبلغ التسديد أكبر من الرصيد المتبقي', 'error');
+                showPaymentFeedback('مبلغ التسديد أكبر من الرصيد المتبقي', 'error');
                 return;
             }
             if (!paymentSettlementOptionsLoaded) {
@@ -3075,7 +3267,7 @@
             if (!settlementId || !['cash', 'bank'].includes(settlementType) ||
                 (method === 'cash' && settlementType !== 'cash') ||
                 (method !== 'cash' && settlementType !== 'bank')) {
-                showToast('❌ اختر صندوق التحصيل أو الحساب البنكي المطابق لطريقة الدفع', 'error');
+                showPaymentFeedback('اختر صندوق التحصيل أو الحساب البنكي المطابق لطريقة الدفع', 'error');
                 return;
             }
 
@@ -3109,7 +3301,7 @@
                 closePaymentModal();
                 setTimeout(()=>refreshDueReminderCandidates(false), 300);
             } catch (e) {
-                showToast(`❌ ${e.message || 'فشل التسديد'}`, 'error');
+                showPaymentFeedback(e.message || 'فشل التسديد', 'error');
                 console.error('Customer payment failed:', e);
             } finally {
                 paymentInFlight = false;
@@ -3119,6 +3311,7 @@
 
 
         function openPaymentModal() {
+            clearPaymentFeedback();
             document.getElementById('pCustomerId').value = '';
             document.getElementById('pAmount').value = '';
             document.getElementById('pMethod').value = 'cash';
@@ -3131,6 +3324,7 @@
         }
 
         function openPaymentForCustomer(customerId, remaining) {
+            clearPaymentFeedback();
             document.getElementById('pCustomerId').value = customerId;
             document.getElementById('pAmount').value = remaining > 0 ? remaining : '';
             document.getElementById('pMethod').value = 'cash';
@@ -3253,8 +3447,10 @@
             try {
                 const partyResult = await invokeCustomerDebtDetailsAsync(id);
                 if (requestVersion !== customerDebtDetailsVersion || !overlay.classList.contains('show')) return;
-                if (!partyResult.success || !partyResult.data) throw new Error(partyResult.error || partyResult.message || 'العميل غير موجود');
-                const c = partyResult.data;
+                const c = partyResult.data && typeof partyResult.data === 'object' ? partyResult.data : partyResult;
+                if (!partyResult.success || !c || typeof c !== 'object' || !finiteNumber(c.id ?? c.party_id)) {
+                    throw new Error(partyResult.error || partyResult.message || 'العميل غير موجود');
+                }
                 const sales = Array.isArray(c.invoices) ? c.invoices : [];
                 const customerDebts = allDebtsData.filter(row => row.customer_party_id === id);
                 const sourceRows = customerDebts.length ? customerDebts : sales.map(normalizeDebtRow);
@@ -3275,7 +3471,8 @@
                 content.innerHTML = `
                     <div class="details-header">
                         <h3 class="details-title">👤 ${escapeHtml(name)}</h3>
-                        <button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button>
+                        <button class="details-back" type="button" onclick="closeDetails()">↩ رجوع</button>
+                        <button class="details-close" aria-label="إغلاق التفاصيل" onclick="closeDetails()"><i class="fas fa-times"></i></button>
                     </div>
                     <div class="details-profile">
                         <div class="details-avatar">${escapeHtml(name.substring(0, 2))}</div>
@@ -3304,60 +3501,64 @@
                     <div style="height:30px;"></div>`;
             } catch (e) {
                 if (requestVersion !== customerDebtDetailsVersion || !overlay.classList.contains('show')) return;
-                content.innerHTML = `<div class="error-state">${escapeHtml(e.message || 'فشل تحميل بيانات العميل')}</div>`;
+                content.innerHTML = `<div class="details-header"><h3 class="details-title">تعذر تحميل تفاصيل العميل</h3><button class="details-back" type="button" onclick="closeDetails()">↩ رجوع</button></div><div class="error-state">${escapeHtml(e.message || 'فشل تحميل بيانات العميل')}</div>`;
                 showToast(`❌ ${e.message || 'فشل تحميل بيانات العميل'}`, 'error');
                 console.error('Customer details failed:', e);
             }
         }
 
         async function viewHistory(customerId) {
-            if (!customerId) return;
+            const id = finiteNumber(customerId);
+            if (!id) return;
+            const overlay = document.getElementById('detailsOverlay');
+            const content = document.getElementById('detailsContent');
+            overlay.classList.add('show');
+            document.body.style.overflow = 'hidden';
+            content.innerHTML = '<div class="details-header"><h3 class="details-title">📜 سجل معاملات العميل</h3><button class="details-back" type="button" onclick="closeDetails()">↩ رجوع</button></div><div class="empty-state">جاري تحميل سجل العميل...</div>';
             showLoading(true);
-            try {
-                const result = await apiCall('getCustomerLedger', { customer_id: customerId, limit: 50 });
-                if (result.success && result.data) {
-                    const items = result.data;
-                    let html = `
-                            <div class="details-header">
-                                <h3 class="details-title">📜 سجل معاملات العميل</h3>
-                                <button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button>
-                            </div>
-                            <div style="margin-bottom:16px;">
-                                <span style="color:var(--text-muted);">عرض آخر ${items.length} معاملة</span>
-                            </div>
-                        `;
-                    if (items.length === 0) {
-                        html +=
-                            `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-inbox" style="font-size:2rem;display:block;margin-bottom:12px;"></i>لا توجد معاملات</div>`;
-                    } else {
-                        html +=
-                            `<table class="mini-table"><thead><tr><th>التاريخ</th><th>النوع</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>`;
-                        items.forEach(item => {
-                            html += `
-                                    <tr>
-                                        <td>${item.transaction_date ? new Date(item.transaction_date).toLocaleDateString('en-GB') : '---'}</td>
-                                        <td>${escapeHtml(item.transaction_type || '---')}</td>
-                                        <td class="amount debit">${formatCurrency(item.debit || 0)}</td>
-                                        <td class="amount credit">${formatCurrency(item.credit || 0)}</td>
-                                        <td class="amount">${formatCurrency(item.balance || 0)}</td>
-                                    </tr>
-                                `;
-                        });
-                        html += `</tbody></table>`;
-                    }
-                    const content = document.getElementById('detailsContent');
-                    content.innerHTML = html;
-                    document.getElementById('detailsOverlay').classList.add('show');
-                    document.body.style.overflow = 'hidden';
+            Promise.all([
+                apiCall('getCustomerLedger',{customer_id:id,limit:100}).catch(function(e){return {success:false,error:e.message || 'تعذر قراءة دفتر الأستاذ'};}),
+                apiCall('getCustomerSales',{customer_id:id,limit:100}).catch(function(e){return {success:false,error:e.message || 'تعذر قراءة الفواتير'};}),
+                apiCall('getPayments').catch(function(e){return {success:false,error:e.message || 'تعذر قراءة المدفوعات'};})
+            ]).then(function(reads) {
+                const ledgerResult=reads[0],salesResult=reads[1],paymentsResult=reads[2];
+                if (!ledgerResult.success) throw new Error(ledgerResult.error || ledgerResult.message || 'تعذر قراءة دفتر الأستاذ');
+                const ledger=Array.isArray(ledgerResult.data)?ledgerResult.data:[];
+                const sales=salesResult.success && Array.isArray(salesResult.data)?salesResult.data:[];
+                const paymentsAll=paymentsResult.success && Array.isArray(paymentsResult.data)?paymentsResult.data:[];
+                const payments=paymentsAll.filter(function(p){return finiteNumber(p.customer_party_id ?? p.customer_id ?? p.party_id)===id;});
+                const fmtDate=function(v){return String(v || '').slice(0,10) || '---';};
+                let html='<div class="details-header"><h3 class="details-title">📜 سجل معاملات العميل</h3><button class="details-back" type="button" onclick="closeDetails()">↩ رجوع</button><button class="details-close" aria-label="إغلاق السجل" onclick="closeDetails()"><i class="fas fa-times"></i></button></div>';
+                html+='<div class="details-section"><div class="details-section-title"><i class="fas fa-book"></i> قيود دفتر الأستاذ</div>';
+                if(ledger.length){
+                    html+='<div class="report-result-caption">عدد القيود المسجلة فعلياً: '+ledger.length+'</div><div class="table-scroll"><table class="mini-table"><thead><tr><th>التاريخ</th><th>النوع</th><th>المرجع</th><th>مدين</th><th>دائن</th><th>الرصيد المسجل</th></tr></thead><tbody>';
+                    ledger.forEach(function(item){html+='<tr><td>'+escapeHtml(fmtDate(item.transaction_date || item.created_at))+'</td><td>'+escapeHtml(item.transaction_type || '---')+'</td><td>'+escapeHtml(item.reference_number || item.transaction_id || '---')+'</td><td class="amount debit">'+formatCurrency(item.debit)+'</td><td class="amount credit">'+formatCurrency(item.credit)+'</td><td class="amount">'+formatCurrency(item.balance)+'</td></tr>';});
+                    html+='</tbody></table></div>';
                 } else {
-                    showToast(result.message || '❌ فشل تحميل السجل', 'error');
+                    html+='<div class="empty-state">لا توجد قيود في جدول دفتر الأستاذ لهذا العميل حالياً.</div>';
+                    if(sales.length||payments.length) html+='<div class="debt-settings-feedback">تُعرض الفواتير والمدفوعات أدناه من جداولها الأصلية. لا يتم توليد قيود أو أرصدة محاسبية غير مسجلة.</div>';
                 }
-            } catch (e) {
-                showToast('❌ حدث خطأ', 'error');
-                console.error(e);
-            } finally {
-                showLoading(false);
-            }
+                html+='</div><div class="details-section"><div class="details-section-title"><i class="fas fa-file-invoice-dollar"></i> الفواتير المسجلة ('+sales.length+')</div>';
+                if(sales.length){
+                    html+='<div class="table-scroll"><table class="mini-table"><thead><tr><th>التاريخ</th><th>رقم الفاتورة</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th><th>الحالة</th></tr></thead><tbody>';
+                    sales.forEach(function(row){html+='<tr><td>'+escapeHtml(fmtDate(row.created_at || row.due_date))+'</td><td>'+escapeHtml(row.invoice_number || row.sale_code || ('#'+row.id))+'</td><td class="amount">'+formatCurrency(row.net_amount)+'</td><td class="amount">'+formatCurrency(row.paid_amount)+'</td><td class="amount">'+formatCurrency(row.remaining_amount)+'</td><td>'+escapeHtml(row.payment_status || row.status || '---')+'</td></tr>';});
+                    html+='</tbody></table></div>';
+                }else html+='<div class="empty-state">لا توجد فواتير مسجلة لهذا العميل.</div>';
+                html+='</div><div class="details-section"><div class="details-section-title"><i class="fas fa-money-bill-wave"></i> عمليات التسديد ('+payments.length+')</div>';
+                if(payments.length){
+                    payments.sort(function(a,b){return String(b.created_at || '').localeCompare(String(a.created_at || ''));});
+                    html+='<div class="table-scroll"><table class="mini-table"><thead><tr><th>التاريخ</th><th>رقم العملية</th><th>الطريقة</th><th>المبلغ</th><th>الرصيد بعد العملية</th><th>الحالة</th></tr></thead><tbody>';
+                    payments.forEach(function(p){html+='<tr><td>'+escapeHtml(fmtDate(p.created_at || p.payment_date))+'</td><td>'+escapeHtml(p.payment_code || p.reference_number || ('#'+p.id))+'</td><td>'+escapeHtml(p.payment_method || p.payment_type || '---')+'</td><td class="amount credit">'+formatCurrency(p.amount)+'</td><td class="amount">'+formatCurrency(p.remaining_after)+'</td><td>'+escapeHtml(p.status || '---')+'</td></tr>';});
+                    html+='</tbody></table></div>';
+                }else html+='<div class="empty-state">لا توجد عمليات تسديد مسجلة لهذا العميل.</div>';
+                html+='</div>';
+                if(!salesResult.success)html+='<div class="error-state">'+escapeHtml(salesResult.error || 'تعذر قراءة بعض الفواتير')+'</div>';
+                if(!paymentsResult.success)html+='<div class="error-state">'+escapeHtml(paymentsResult.error || 'تعذر قراءة بعض المدفوعات')+'</div>';
+                content.innerHTML=html;
+            }).catch(function(e){
+                content.innerHTML='<div class="details-header"><h3 class="details-title">سجل معاملات العميل</h3><button class="details-back" type="button" onclick="closeDetails()">↩ رجوع</button></div><div class="error-state">'+escapeHtml(e.message || 'فشل تحميل سجل العميل')+'</div>';
+                console.error('Customer history failed:',e);
+            }).finally(function(){showLoading(false);});
         }
 
         function closeDetails() {
@@ -3843,7 +4044,7 @@
             document.getElementById('filterDateTo').value = businessDayDate(today);
 
             loadDropdowns();
-            setTimeout(async()=>{ await loadDebts(); await refreshDueReminderCandidates(true); }, 600);
+            setTimeout(async()=>{ await loadCustomerDebtSettings(); await loadDebts(); await refreshDueReminderCandidates(true); }, 600);
 
             document.querySelectorAll('.modal-overlay').forEach(el => {
                 el.addEventListener('click', function(e) {
