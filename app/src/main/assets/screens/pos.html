@@ -5712,8 +5712,18 @@ async function printReceipt() {
         showLoading(true);
         const response = await loadInvoiceForLastSale();
         const invoice = response.data || response;
+
+        // A sale may have been committed moments ago while its verified PDF is
+        // still being copied into the user's selected Invoices folder. Wait for
+        // that exact archive operation before opening the system print preview.
+        // The archive promise never re-posts the sale and does not block printing
+        // if the archive attempt failed; its failure is logged and reported safely.
+        if (window._invoiceArchivePromise && typeof window._invoiceArchivePromise.then === 'function') {
+            await window._invoiceArchivePromise;
+        }
+
         await loadCurrentStationLogo();
-        renderReceiptForPrint(response.data || response);
+        renderReceiptForPrint(invoice);
 
         // إجبار المتصفح على إعادة حساب الأبعاد (Reflow) لضمان رؤية العناصر المخفية
         const posInv = document.getElementById('posInvoice');
