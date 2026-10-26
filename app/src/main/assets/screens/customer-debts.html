@@ -2500,6 +2500,7 @@
         const customerDebtDetailsCallbacks = new Map();
         let customerDebtDetailsSequence = 0;
         let customerDebtDetailsVersion = 0;
+        let customerHistoryRequestVersion = 0;
         window.__stationBridgeResolveCustomerDetails = function(requestId, rawPayload) {
             const pending = customerDebtDetailsCallbacks.get(String(requestId));
             if (!pending) return;
@@ -3453,7 +3454,7 @@ function updateDebtViewButtons() {
                 }
                 const sales = Array.isArray(c.invoices) ? c.invoices : [];
                 const customerDebts = allDebtsData.filter(row => row.customer_party_id === id);
-                const sourceRows = customerDebts.length ? customerDebts : sales.map(normalizeDebtRow);
+                const sourceRows = sales.length ? sales.map(normalizeDebtRow) : customerDebts;
                 const totalDebt = sourceRows.reduce((sum, row) => sum + finiteNumber(row.net_amount ?? row.total_debt), 0);
                 const paidAmount = sourceRows.reduce((sum, row) => sum + finiteNumber(row.paid_amount), 0);
                 const remainingAmount = sourceRows.reduce((sum, row) => sum + finiteNumber(row.remaining_amount), 0);
@@ -3510,6 +3511,9 @@ function updateDebtViewButtons() {
         async function viewHistory(customerId) {
             const id = finiteNumber(customerId);
             if (!id) return;
+            const historyVersion = ++customerHistoryRequestVersion;
+            customerDebtDetailsVersion += 1;
+            cancelPendingCustomerDebtDetails('تم الانتقال إلى سجل معاملات العميل');
             const overlay = document.getElementById('detailsOverlay');
             const content = document.getElementById('detailsContent');
             overlay.classList.add('show');
@@ -3521,6 +3525,7 @@ function updateDebtViewButtons() {
                 apiCall('getCustomerSales',{customer_id:id,limit:100}).catch(function(e){return {success:false,error:e.message || 'تعذر قراءة الفواتير'};}),
                 apiCall('getPayments').catch(function(e){return {success:false,error:e.message || 'تعذر قراءة المدفوعات'};})
             ]).then(function(reads) {
+                if (historyVersion !== customerHistoryRequestVersion || !overlay.classList.contains('show')) return;
                 const ledgerResult=reads[0],salesResult=reads[1],paymentsResult=reads[2];
                 if (!ledgerResult.success) throw new Error(ledgerResult.error || ledgerResult.message || 'تعذر قراءة دفتر الأستاذ');
                 const ledger=Array.isArray(ledgerResult.data)?ledgerResult.data:[];
@@ -3556,6 +3561,7 @@ function updateDebtViewButtons() {
                 if(!paymentsResult.success)html+='<div class="error-state">'+escapeHtml(paymentsResult.error || 'تعذر قراءة بعض المدفوعات')+'</div>';
                 content.innerHTML=html;
             }).catch(function(e){
+                if (historyVersion !== customerHistoryRequestVersion || !overlay.classList.contains('show')) return;
                 content.innerHTML='<div class="details-header"><h3 class="details-title">سجل معاملات العميل</h3><button class="details-back" type="button" onclick="closeDetails()">↩ رجوع</button></div><div class="error-state">'+escapeHtml(e.message || 'فشل تحميل سجل العميل')+'</div>';
                 console.error('Customer history failed:',e);
             }).finally(function(){showLoading(false);});
@@ -3565,7 +3571,9 @@ function updateDebtViewButtons() {
             document.getElementById('detailsOverlay').classList.remove('show');
             document.body.style.overflow = '';
             customerDebtDetailsVersion += 1;
+            customerHistoryRequestVersion += 1;
             cancelPendingCustomerDebtDetails();
+            showLoading(false);
         }
 
         window.addEventListener('pagehide', () => cancelPendingCustomerDebtDetails('تمت مغادرة شاشة ديون العملاء'));
