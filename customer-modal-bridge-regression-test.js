@@ -13,7 +13,7 @@ function between(source, start, end) {
   return source.slice(from, to);
 }
 
-const customerDetails = between(customers, 'async function loadCustomerDetails', '// ============================================================\n        // عرض جهات الاتصال');
+const customerDetails = between(customers, 'async function loadCustomerDetails', '// ============================================================\n        // تحديث العدادات');
 const saveCustomer = between(customers, 'async function saveCustomer', 'async function archiveCustomer');
 const insertParty = between(databaseHelper, 'fun insertParty', 'fun updateParty');
 const updateParty = between(databaseHelper, 'fun updateParty', 'fun deleteParty');
@@ -22,7 +22,7 @@ const updatePartyContact = between(databaseHelper, 'fun updatePartyContact', 'fu
 const deletePartyContact = between(databaseHelper, 'fun deletePartyContact', 'fun getPartyAddresses');
 const updatePartyAddress = between(databaseHelper, 'fun updatePartyAddress', 'fun deletePartyAddress');
 const deletePartyAddress = between(databaseHelper, 'fun deletePartyAddress', '// ========================================================================\n    // دوال ديون العملاء');
-const getCustomerDebts = between(databaseHelper, 'fun getCustomerDebts(partyId', 'fun getCustomerDebts(fromDate');
+const getCustomerDebts = between(databaseHelper, 'fun getCustomerDebts(fromDate', 'fun getCustomerDebtsForParty');
 
 assert.match(customers, /getPartyCrmBundleAsync/);
 assert.match(customers, /getCustomerLedgerAsync/);

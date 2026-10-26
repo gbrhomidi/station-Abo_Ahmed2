@@ -11,7 +11,7 @@ expect(!/async function viewMovement\([\s\S]*?apiCall\('getMovement'/.test(scree
 expect(screen.includes('inventoryMovementDetailsCallbacks = new Map()'), 'يلزم حفظ callbacks المؤقتة');
 expect(screen.includes('انتهت مهلة تحميل تفاصيل الحركة'), 'يلزم حد زمني صريح للطلب');
 expect(screen.includes("hidden.bs.modal") && screen.includes('cancelPendingInventoryMovementDetails()'), 'يلزم تنظيف callbacks عند إغلاق المودال');
-expect(screen.includes("const page = result.data || result;") && screen.includes("page.rows || []"), 'يجب دعم عقد صفحة SQLite ذي rows بدلاً من افتراض مصفوفة');
+expect(screen.includes('if (d && Array.isArray(d.rows)) return d.rows;'), 'يجب دعم عقد صفحة SQLite ذي rows بدلاً من افتراض مصفوفة');
 expect(!/function viewMovement\([\s\S]*?showLoading\(true\)[\s\S]*?invokeInventoryMovementDetailsAsync/.test(screen), 'لا يجوز استخدام الغطاء العام الحاجب لتفاصيل المودال');
 
 console.log('Inventory movement modal async bridge regression contract PASS.');

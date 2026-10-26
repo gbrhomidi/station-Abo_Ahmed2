@@ -1595,7 +1595,28 @@ function cancelPendingInventoryMovementDetails(reason = 'تم إلغاء تحم�
         pending.reject(new Error(reason));
     });
 }
-
+function invokeInventoryMovementDetailsAsync(movementId) {
+    const bridge = window.AndroidInterface;
+    if (!bridge || typeof bridge.getStockMovementDetailsAsync !== 'function') {
+        return Promise.reject(new Error('جسر تفاصيل حركة المخزون غير متاح'));
+    }
+    const requestId = `inventory-movement-details-${Date.now().toString(36)}-${++inventoryMovementDetailsCallbackSequence}`;
+    return new Promise((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => {
+            inventoryMovementDetailsCallbacks.delete(requestId);
+            reject(new Error('انتهت مهلة تحميل تفاصيل الحركة'));
+        }, 20000);
+        inventoryMovementDetailsCallbacks.set(requestId, { resolve, reject, timeoutId });
+        try {
+            const accepted = normalizeInventoryMovementBridgeResult(bridge.getStockMovementDetailsAsync(requestId, Number(movementId)));
+            if (!accepted.success) throw new Error(accepted.error || accepted.message || 'تعذر بدء قراءة تفاصيل الحركة');
+        } catch (error) {
+            inventoryMovementDetailsCallbacks.delete(requestId);
+            window.clearTimeout(timeoutId);
+            reject(error);
+        }
+    });
+}
 function handleAndroidResult(action, data) {
     try {
         const parsed = typeof data === 'string' ? JSON.parse(data) : data;
@@ -2530,20 +2551,34 @@ async function saveMovement() {
 // ============================================================
 // 9. عرض تفاصيل الحركة من المصفوفة المحلية (بدون استعلام جديد)
 // ============================================================
-function viewMovement(id, hintStockType) {
+function viewMovement(id, hintStockType, skipRemoteRead = false) {
     const movementId = Number(id);
     if (!movementId) { showToast('معرف الحركة غير صالح', 'error'); return; }
-
-    // المصدر الأول: المصفوفة المحلية — لأن getUnifiedInventoryMovements لا يدعم فلترة movement_id
-    let m = allMovements.find(x => Number(x.movement_id || x.id) === movementId);
-
-    if (!m) {
-        showToast('تعذر العثور على بيانات الحركة في الصفحة الحالية. انتقل إلى الصفحة التي تحتوي عليها.', 'warning');
-        return;
-    }
-
     const details = document.getElementById('movement-details');
     if (!details) return;
+    if (!skipRemoteRead) {
+        details.innerHTML = '<div class="text-center">⏳ جاري تحميل تفاصيل الحركة من SQLite...</div>';
+        if (window.bootstrap && window.bootstrap.Modal) {
+            window.bootstrap.Modal.getOrCreateInstance(document.getElementById('viewModal')).show();
+        }
+    }
+    // المصدر الأول: الصف المحلي، ثم تُستكمل البيانات من SQLite بالعقد المخصص للحركة.
+    let m = allMovements.find(x => Number(x.movement_id || x.id) === movementId);
+    if (!m) {
+        if (skipRemoteRead) {
+            details.innerHTML = '<div class="alert alert-warning">تعذر العثور على تفاصيل الحركة في نطاق المحطة الحالية.</div>';
+            return;
+        }
+        invokeInventoryMovementDetailsAsync(movementId).then(result => {
+            const rows = movementRows(result);
+            if (!rows.length) throw new Error(result.error || result.message || 'لم يتم العثور على الحركة');
+            allMovements = [rows[0], ...allMovements.filter(row => Number(row.movement_id || row.id) !== movementId)];
+            viewMovement(movementId, hintStockType, true);
+        }).catch(error => {
+            details.innerHTML = '<div class="alert alert-danger">' + escapeHtml(error.message || 'فشل تحميل تفاصيل الحركة') + '</div>';
+        });
+        return;
+    }
     const isFuel = String(m.stock_type || '').toLowerCase() === 'fuel';
     details.innerHTML = `<div class="info-grid">
         <div class="info-item"><span>نوع المخزون:</span><span>${isFuel ? '⛽ الوقود' : '🛒 المنتجات'}</span></div>
@@ -2565,6 +2600,19 @@ function viewMovement(id, hintStockType) {
     </div>`;
     if (window.bootstrap && window.bootstrap.Modal) {
         window.bootstrap.Modal.getOrCreateInstance(document.getElementById('viewModal')).show();
+    }
+    if (!skipRemoteRead) {
+        const requestVersion = ++inventoryMovementDetailsRequestVersion;
+        invokeInventoryMovementDetailsAsync(movementId).then(result => {
+            if (requestVersion !== inventoryMovementDetailsRequestVersion) return;
+            const rows = movementRows(result);
+            if (!rows.length) return;
+            allMovements = [rows[0], ...allMovements.filter(row => Number(row.movement_id || row.id) !== movementId)];
+            viewMovement(movementId, hintStockType, true);
+        }).catch(error => {
+            if (requestVersion !== inventoryMovementDetailsRequestVersion) return;
+            console.warn('Inventory movement details refresh failed:', error.message || error);
+        });
     }
 }
 
@@ -3042,6 +3090,10 @@ function renderChart(labels, values, inbound = [], outbound = []) {
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
     restoreTheme();
+    document.getElementById('viewModal')?.addEventListener('hidden.bs.modal', function() {
+        inventoryMovementDetailsRequestVersion += 1;
+        cancelPendingInventoryMovementDetails();
+    });
     onMovementStockTypeChanged();
     toggleAnalyticsSelector();
 
