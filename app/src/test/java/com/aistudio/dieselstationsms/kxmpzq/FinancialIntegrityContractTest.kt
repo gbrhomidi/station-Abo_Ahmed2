@@ -168,6 +168,31 @@ class FinancialIntegrityContractTest {
     }
 
     @Test
+    fun settlementAccountMappingRejectsMissingOrAmbiguousLinksAndValidatesAccountCreation() {
+        val source = locateDatabaseHelper().readText()
+        val resolver = functionBody(source, "private fun findSettlementAccount")
+        assertTrue("Settlement resolution must not silently choose the first duplicate mapping",
+            !resolver.contains("LIMIT 1") && resolver.contains("require(!c.moveToNext())"))
+        assertTrue("Missing mappings must fail explicitly instead of using a generic account",
+            resolver.contains("require(c.moveToFirst())") &&
+                resolver.contains("راجع ربط الصندوق/البنك بدليل الحسابات"))
+        val save = functionBody(source, "fun saveChartAccount")
+        assertTrue("A GL settlement account cannot map to both cash and bank resources",
+            save.contains("linkedBankAccountId > 0L && linkedCashBoxId > 0L"))
+        assertTrue("Cash mappings must reference an active, non-deleted cash box",
+            save.contains("FROM cash_boxes WHERE id=? AND status='active' AND is_deleted=0"))
+        assertTrue("Bank mappings must reference an active, non-deleted bank account",
+            save.contains("FROM bank_accounts WHERE id=? AND status='active' AND is_deleted=0"))
+        assertTrue("Settlement links must be unique among active GL accounts",
+            save.contains("cash_box_id=? AND is_active=1 AND is_deleted=0 AND id<>?") &&
+                save.contains("bank_account_id=? AND is_active=1 AND is_deleted=0 AND id<>?"))
+        assertTrue("Linked cash/bank accounts must be classified as asset accounts",
+            save.contains("require(type == \"asset\")") &&
+                save.contains("linkedBankAccountId > 0L -> 1") &&
+                save.contains("linkedCashBoxId > 0L -> 1"))
+    }
+
+    @Test
     fun paymentReversalRequiresMatchingPostedJournalAndStationScopedSettlement() {
         val source = locateDatabaseHelper().readText()
         val reversal = functionBody(source, "private fun reversePaymentRecordCore")

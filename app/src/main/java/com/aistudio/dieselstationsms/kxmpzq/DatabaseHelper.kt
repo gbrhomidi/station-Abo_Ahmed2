@@ -21539,14 +21539,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     private fun findSettlementAccount(db: SQLiteDatabase, cashBoxId: Long, bankAccountId: Long): Long {
         require((cashBoxId > 0L) xor (bankAccountId > 0L)) { "يجب تحديد وسيلة تسوية مالية واحدة فقط" }
         val sql = if (cashBoxId > 0L) {
-            "SELECT id FROM accounts WHERE cash_box_id=? AND account_type='asset' AND is_cash_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1"
+            "SELECT id FROM accounts WHERE cash_box_id=? AND account_type='asset' AND is_cash_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id"
         } else {
-            "SELECT id FROM accounts WHERE bank_account_id=? AND account_type='asset' AND is_bank_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1"
+            "SELECT id FROM accounts WHERE bank_account_id=? AND account_type='asset' AND is_bank_account=1 AND is_active=1 AND is_deleted=0 ORDER BY id"
         }
         val arg = if (cashBoxId > 0L) cashBoxId else bankAccountId
         return db.rawQuery(sql, arrayOf(arg.toString())).use { c ->
-            require(c.moveToFirst()) { "لا يوجد حساب محاسبي مرتبط بوسيلة التسوية المحددة" }
-            c.getLong(0)
+            require(c.moveToFirst()) { "لا يوجد حساب محاسبي نشط وصحيح مرتبط بوسيلة التسوية المحددة؛ راجع ربط الصندوق/البنك بدليل الحسابات" }
+            val accountId = c.getLong(0)
+            require(!c.moveToNext()) { "يوجد أكثر من حساب محاسبي نشط مرتبط بوسيلة التسوية؛ أزل الربط المكرر قبل الترحيل" }
+            accountId
         }
     }
 
@@ -29321,6 +29323,44 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val parentId = if (data.isNull("parent_account_id")) 0L else data.optLong("parent_account_id", 0L)
             val type = data.optString("account_type", "asset")
             require(type in setOf("asset", "liability", "equity", "revenue", "expense")) { "نوع الحساب غير صالح" }
+
+            // Settlement links must be explicit, valid asset-account mappings. Do not
+            // silently create or guess a GL account for a cash box or bank account.
+            val linkedBankAccountId = data.optLong("bank_account_id", 0L)
+            val linkedCashBoxId = data.optLong("cash_box_id", 0L)
+            require(!(linkedBankAccountId > 0L && linkedCashBoxId > 0L)) {
+                "لا يمكن ربط حساب الدليل بصندوق نقدي وحساب بنكي معاً"
+            }
+            if (linkedCashBoxId > 0L) {
+                require(type == "asset") { "حساب الصندوق المرتبط يجب أن يكون من نوع أصل" }
+                db.rawQuery(
+                    "SELECT 1 FROM cash_boxes WHERE id=? AND status='active' AND is_deleted=0",
+                    arrayOf(linkedCashBoxId.toString())
+                ).use { c ->
+                    require(c.moveToFirst()) { "الصندوق المرتبط غير موجود أو غير نشط" }
+                }
+                db.rawQuery(
+                    "SELECT COUNT(*) FROM accounts WHERE cash_box_id=? AND is_active=1 AND is_deleted=0 AND id<>?",
+                    arrayOf(linkedCashBoxId.toString(), id.toString())
+                ).use { c ->
+                    require(c.moveToFirst() && c.getInt(0) == 0) { "الصندوق مرتبط مسبقاً بحساب محاسبي نشط آخر" }
+                }
+            }
+            if (linkedBankAccountId > 0L) {
+                require(type == "asset") { "حساب البنك المرتبط يجب أن يكون من نوع أصل" }
+                db.rawQuery(
+                    "SELECT 1 FROM bank_accounts WHERE id=? AND status='active' AND is_deleted=0",
+                    arrayOf(linkedBankAccountId.toString())
+                ).use { c ->
+                    require(c.moveToFirst()) { "الحساب البنكي المرتبط غير موجود أو غير نشط" }
+                }
+                db.rawQuery(
+                    "SELECT COUNT(*) FROM accounts WHERE bank_account_id=? AND is_active=1 AND is_deleted=0 AND id<>?",
+                    arrayOf(linkedBankAccountId.toString(), id.toString())
+                ).use { c ->
+                    require(c.moveToFirst() && c.getInt(0) == 0) { "الحساب البنكي مرتبط مسبقاً بحساب محاسبي نشط آخر" }
+                }
+            }
             if (parentId > 0) {
                 require(parentId != id) { "لا يمكن أن يكون الحساب أباً لنفسه" }
                 require(getAccountRow(db, parentId) != null) { "الحساب الأب غير موجود" }
@@ -29335,13 +29375,21 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("normal_balance", data.optString("normal_balance", if (type in setOf("asset", "expense")) "debit" else "credit"))
                 put("opening_balance", data.optDouble("opening_balance", 0.0))
                 if (id <= 0) put("current_balance", data.optDouble("current_balance", data.optDouble("opening_balance", 0.0)))
-                put("is_bank_account", data.optInt("is_bank_account", 0))
-                put("is_cash_account", data.optInt("is_cash_account", 0))
+                put("is_bank_account", when {
+                    linkedBankAccountId > 0L -> 1
+                    linkedCashBoxId > 0L -> 0
+                    else -> data.optInt("is_bank_account", 0)
+                })
+                put("is_cash_account", when {
+                    linkedCashBoxId > 0L -> 1
+                    linkedBankAccountId > 0L -> 0
+                    else -> data.optInt("is_cash_account", 0)
+                })
                 put("is_control_account", data.optInt("is_control_account", 0))
                 put("is_active", data.optInt("is_active", 1))
                 if (parentId > 0) put("parent_account_id", parentId) else putNull("parent_account_id")
-                if (data.optLong("bank_account_id", 0L) > 0) put("bank_account_id", data.optLong("bank_account_id")) else putNull("bank_account_id")
-                if (data.optLong("cash_box_id", 0L) > 0) put("cash_box_id", data.optLong("cash_box_id")) else putNull("cash_box_id")
+                if (linkedBankAccountId > 0L) put("bank_account_id", linkedBankAccountId) else putNull("bank_account_id")
+                if (linkedCashBoxId > 0L) put("cash_box_id", linkedCashBoxId) else putNull("cash_box_id")
                 put("remarks", data.optString("remarks").trim())
                 put("updated_by", if (userId > 0) userId else null)
                 put("updated_at", getCurrentDateTime())
