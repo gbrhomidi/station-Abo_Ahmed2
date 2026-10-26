@@ -46,6 +46,29 @@ class FinancialIntegrityContractTest {
 
 
     @Test
+    fun customerReceivableAndInventoryAccountsAreRepairedForExistingInstallations() {
+        val source = locateDatabaseHelper().readText()
+        val start = source.indexOf("private fun ensureRequiredSaleAccounts")
+        val end = source.indexOf("private fun ensureSalesPricingDefaults", start)
+        assertTrue("Required sale-account repair must exist before pricing defaults", start >= 0 && end > start)
+        val repair = source.substring(start, end)
+        assertTrue("Customer receivable account 1103 must be created when absent", repair.contains("put(\"account_code\", \"1103\")"))
+        assertTrue("Soft-deleted customer receivable account must be restored", repair.contains("put(\"is_deleted\", 0)"))
+        assertTrue("Misused legacy account code must not be reclassified silently", repair.contains("1103-AR"))
+        assertTrue("Inventory account 1104 must be restored or created", repair.contains("put(\"account_code\", \"1104\")"))
+        assertTrue("Account repair must run from the existing-installation initialization path", source.contains("ensureRequiredSaleAccounts(db)"))
+    }
+
+    @Test
+    fun barcodeProductPayloadIncludesTheDatabaseDescriptionForPosDetails() {
+        val source = locateDatabaseHelper().readText()
+        val product = functionBody(source, "fun getProductByBarcode(barcode: String, stationScopeId")
+        assertTrue("POS barcode lookup must return products.quantity", product.contains("put(\"quantity\""))
+        assertTrue("POS barcode lookup must return products.description", product.contains("getColumnIndex(\"description\")"))
+        assertTrue("Product details must not substitute description_ar", !product.contains("description_ar"))
+    }
+
+    @Test
     fun fuelCogsUsesDeliveredVolumeRatherThanPostRefillTankLevel() {
         val source = locateDatabaseHelper().readText()
         val fuelSale = functionBody(source, "fun addFuelSale")
