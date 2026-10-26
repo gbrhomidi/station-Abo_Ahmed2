@@ -13,4 +13,9 @@ expect(source.includes('cancelPendingCustomerDebtDetails();'), 'يلزم تنظ�
 const detailsFunction = source.match(/async function viewCustomerDetails\([^\n]*\)\s*\{([\s\S]*?)\n\s*\}\s*async function viewHistory\(/);
 expect(detailsFunction, 'تعذر تحديد نطاق دالة تفاصيل العميل في اختبار الجسر');
 expect(!/Promise\.all\(/.test(detailsFunction[1]), 'لا يجوز تنفيذ قراءات جسر متزامنة داخل دالة تفاصيل العميل');
+['reportAgingBucket', 'reportMinOverdueDays', 'reportPaymentMethod', 'reportSettlementType'].forEach(id => {
+  expect(source.includes(`id="${id}"`), `يلزم وجود فلتر التقرير المتقدم: ${id}`);
+});
+expect(source.includes('reportAgingMatches(age,f.aging)'), 'يجب تطبيق فلتر الفئة العمرية على الديون');
+expect(source.includes('paymentSettlement!==f.settlementType'), 'يجب تطبيق فلتر مصدر التحصيل على المدفوعات');
 console.log(`Customer debts modal async bridge regression PASS (${scriptBlocks.length} script block(s)).`);

@@ -3822,27 +3822,38 @@ function updateDebtViewButtons() {
             return buckets;
         }
 
-function getReportFilters() {
+        function getReportFilters() {
             return {from:document.getElementById('reportDateFrom')?.value||'',to:document.getElementById('reportDateTo')?.value||'',
                 customerId:document.getElementById('reportCustomer')?.value||'',status:document.getElementById('reportStatus')?.value||'',
                 min:document.getElementById('reportMinAmount')?.value||'',max:document.getElementById('reportMaxAmount')?.value||'',
+                aging:document.getElementById('reportAgingBucket')?.value||'',
+                minOverdueDays:document.getElementById('reportMinOverdueDays')?.value||'',
+                paymentMethod:document.getElementById('reportPaymentMethod')?.value||'',
+                settlementType:document.getElementById('reportSettlementType')?.value||'',
                 type:document.getElementById('reportType')?.value||'balances'};
         }
         function reportDateMatches(value,from,to){const date=String(value||'').slice(0,10);return (!from||!date||date>=from)&&(!to||!date||date<=to);}
+        function reportAgeDays(value){const timestamp=Date.parse(value||'');if(!Number.isFinite(timestamp))return 0;return Math.max(0,Math.floor((Date.now()-timestamp)/86400000));}
+        function reportAgingMatches(age,bucket){if(!bucket)return true;if(bucket==='0-30')return age<=30;if(bucket==='31-60')return age>=31&&age<=60;if(bucket==='61-90')return age>=61&&age<=90;if(bucket==='90+')return age>=91;return true;}
         function validateReportAmountFilters(f){
             const min=f.min===''?null:finiteNumber(f.min,NaN),max=f.max===''?null:finiteNumber(f.max,NaN);
-            if((min!==null&&!Number.isFinite(min))||(max!==null&&!Number.isFinite(max))||(min!==null&&max!==null&&min>max))throw new Error('تحقق من الحد الأدنى والأعلى للمبلغ؛ يجب ألا يتجاوز الحد الأدنى الحد الأعلى.');
-            return {min:min,max:max};
+            const minOverdue=f.minOverdueDays===''?null:finiteNumber(f.minOverdueDays,NaN);
+            if((min!==null&&!Number.isFinite(min))||(max!==null&&!Number.isFinite(max))||(min!==null&&max!==null&&min>max)||
+                (minOverdue!==null&&(!Number.isFinite(minOverdue)||minOverdue<0)))throw new Error('تحقق من حدود المبلغ وأيام التأخر المدخلة.');
+            return {min:min,max:max,minOverdueDays:minOverdue};
         }
         function getReportFilteredDebts(){
             const f=getReportFilters(),limits=validateReportAmountFilters(f);
             return debtReportState.debts.filter(function(row){
                 const remaining=finiteNumber(row.remaining_amount),status=String(row.status||row.payment_status||'').toLowerCase();
+                const age=reportAgeDays(row.due_date||row.created_at);
                 if(!reportDateMatches(row.due_date||row.created_at,f.from,f.to))return false;
                 if(f.customerId&&String(row.customer_party_id??row.customer_id)!==String(f.customerId))return false;
                 if(['current','overdue','partial','paid'].indexOf(f.status)>=0&&status!==f.status)return false;
                 if(f.type==='overdue'&&status!=='overdue')return false;
                 if(f.type==='invoices'&&remaining<=0)return false;
+                if(!reportAgingMatches(age,f.aging))return false;
+                if(limits.minOverdueDays!==null&&(status!=='overdue'||age<limits.minOverdueDays))return false;
                 if(limits.min!==null&&remaining<limits.min)return false;
                 if(limits.max!==null&&remaining>limits.max)return false;
                 return true;
@@ -3855,6 +3866,9 @@ function getReportFilters() {
                 if(!reportDateMatches(date,f.from,f.to))return false;
                 if(f.customerId&&String(p.customer_party_id??p.customer_id??p.party_id)!==String(f.customerId))return false;
                 if(['completed','pending','cancelled','failed'].indexOf(f.status)>=0&&String(p.status||'').toLowerCase()!==f.status)return false;
+                if(f.paymentMethod&&String(p.payment_method||p.payment_type||'').toLowerCase()!==f.paymentMethod)return false;
+                const paymentSettlement=p.cash_box_id?'cash':(p.bank_account_id?'bank':'');
+                if(f.settlementType&&paymentSettlement!==f.settlementType)return false;
                 if(limits.min!==null&&amount<limits.min)return false;
                 if(limits.max!==null&&amount>limits.max)return false;
                 return true;
@@ -3989,7 +4003,11 @@ function getReportFilters() {
                     '<label class="report-field">العميل<select id="reportCustomer"><option value="">جميع العملاء</option>'+customerOptions+'</select></label>'+
                     '<label class="report-field">من تاريخ<input id="reportDateFrom" type="date"></label><label class="report-field">إلى تاريخ<input id="reportDateTo" type="date"></label>'+
                     '<label class="report-field">حالة السجل<select id="reportStatus"><option value="">كل الحالات</option><option value="current">جاري</option><option value="overdue">متأخر</option><option value="partial">مدفوع جزئياً</option><option value="completed">مكتمل</option><option value="pending">معلق</option><option value="cancelled">ملغى</option></select></label>'+
-                    '<label class="report-field">المبلغ من<input id="reportMinAmount" type="number" min="0" step="0.01" placeholder="بدون حد أدنى"></label><label class="report-field">المبلغ إلى<input id="reportMaxAmount" type="number" min="0" step="0.01" placeholder="بدون حد أعلى"></label></div>'+
+                    '<label class="report-field">المبلغ من<input id="reportMinAmount" type="number" min="0" step="0.01" placeholder="بدون حد أدنى"></label><label class="report-field">المبلغ إلى<input id="reportMaxAmount" type="number" min="0" step="0.01" placeholder="بدون حد أعلى"></label>'+
+                    '<label class="report-field">الفئة العمرية للدين<select id="reportAgingBucket"><option value="">كل الأعمار</option><option value="0-30">0–30 يوم</option><option value="31-60">31–60 يوم</option><option value="61-90">61–90 يوم</option><option value="90+">أكثر من 90 يوم</option></select></label>'+
+                    '<label class="report-field">أيام التأخر على الأقل<input id="reportMinOverdueDays" type="number" min="0" step="1" placeholder="للمتأخرات فقط"></label>'+
+                    '<label class="report-field">طريقة الدفع<select id="reportPaymentMethod"><option value="">كل الطرق</option><option value="cash">نقدي</option><option value="bank_transfer">تحويل بنكي</option><option value="cheque">شيك</option><option value="mobile_money">محفظة جوال</option></select></label>'+
+                    '<label class="report-field">مصدر التحصيل<select id="reportSettlementType"><option value="">كل المصادر</option><option value="cash">صندوق تحصيل</option><option value="bank">حساب بنكي</option></select></label></div>'+
                     '<div class="report-actions"><button class="btn-report primary" type="button" onclick="generateDebtReport()"><i class="fas fa-filter"></i> تطبيق الفلاتر</button>'+
                     '<button class="btn-report" type="button" onclick="exportDebtReportCSV()"><i class="fas fa-file-csv"></i> CSV</button><button class="btn-report" type="button" onclick="exportDebtReportPDF()"><i class="fas fa-file-pdf"></i> PDF</button>'+
                     '<button class="btn-report" type="button" onclick="window.print()"><i class="fas fa-print"></i> طباعة</button><button class="btn-report" type="button" onclick="openReportsModal()"><i class="fas fa-sync-alt"></i> تحديث البيانات</button></div></section>'+
@@ -3998,7 +4016,7 @@ function getReportFilters() {
                 document.getElementById('reportDateFrom').value=document.getElementById('filterDateFrom').value||'';
                 document.getElementById('reportDateTo').value=document.getElementById('filterDateTo').value||'';
                 document.getElementById('reportCustomer').addEventListener('change',generateDebtReport);
-                ['reportDateFrom','reportDateTo','reportStatus','reportMinAmount','reportMaxAmount'].forEach(function(id){document.getElementById(id).addEventListener('change',generateDebtReport);});
+                ['reportDateFrom','reportDateTo','reportStatus','reportMinAmount','reportMaxAmount','reportAgingBucket','reportMinOverdueDays','reportPaymentMethod','reportSettlementType'].forEach(function(id){document.getElementById(id).addEventListener('change',generateDebtReport);});
                 await generateDebtReport();
             }).catch(function(e){body.innerHTML='<div class="error-state">'+escapeHtml(e.message||'فشل تحميل تقارير ديون العملاء')+'</div>';console.error('Customer debt reports failed:',e);});
         }
