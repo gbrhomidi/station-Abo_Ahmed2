@@ -5111,14 +5111,24 @@ function showDoubleClickActions(event, row, product) {
 function showProductDetailsCanvas(product, row) {
     const content = document.getElementById('productDetailsContent');
     const rowValue = name => row ? String(row.getAttribute('data-' + name) || '') : '';
-    const description = String(product.description ?? product.product_description ?? rowValue('description') ?? '');
-    const currentStock = product.current_stock ?? product.stock_quantity ?? product.quantity_on_hand
-        ?? product.available_quantity ?? rowValue('current-stock');
+
+    // Use the products.quantity column as the authoritative current stock value.
+    // Do not substitute current_stock/stock_quantity aliases: they may represent
+    // another inventory measure or stale derived data.
+    const rawQuantity = product.quantity ?? rowValue('quantity');
+    const currentQuantity = rawQuantity === '' || rawQuantity === null || rawQuantity === undefined
+        ? null : Number(rawQuantity);
+    const quantityLabel = currentQuantity !== null && Number.isFinite(currentQuantity)
+        ? currentQuantity.toLocaleString(undefined, { maximumFractionDigits: 2 })
+        : 'غير متاح';
+
+    // Display description only; description_ar is intentionally excluded.
+    const description = String(product.description ?? rowValue('description') ?? '');
     const minimumStock = product.min_stock_level ?? product.minimum_stock ?? rowValue('min-stock');
     content.innerHTML = `
         <p style="margin-bottom:8px;">اسم المنتج: <strong>${escapePosText(product.product_name || '')}</strong></p>
         <p style="margin-bottom:8px;">تاريخ الإنتهاء: ${escapePosText(product.expiry_date || 'غير محدد')}</p>
-        <p style="margin-bottom:8px;">مستوى المخزون الحالي: ${escapePosText(currentStock ?? 'غير متاح')}</p>
+        <p style="margin-bottom:8px;">المخزون الحالي منة: ${escapePosText(quantityLabel)}</p>
         <p style="margin-bottom:8px;">مستوى المخزون الأدنى: ${escapePosText(minimumStock ?? 'غير محدد')}</p>
         <div class="product-description-full">
             <label class="form-label">الوصف (Description)</label>
