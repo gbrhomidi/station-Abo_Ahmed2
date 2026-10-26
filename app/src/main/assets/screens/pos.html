@@ -5734,9 +5734,20 @@ async function printReceipt() {
         // إعطاء وقت كافٍ لتحميل الصور والخطوط قبل استدعاء أمر الطباعة
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        const printResult = await apiCall('printReceipt', { invoice_number: invoice.invoice_number || lastInvoiceNumber || '' });
-        if (!printResult.success) throw new Error(printResult.message || printResult.error || 'فشل فتح نافذة الطباعة');
-        showToast(printResult.message || 'تم فتح فاتورة البيع للطباعة', 'success');
+        // Set the live document title as well as the native print-job title.
+        // Some Android print-service versions derive the suggested PDF filename
+        // from the WebView document title rather than the print-job label alone.
+        const originalDocumentTitle = document.title;
+        const printDocumentName = String(invoice.invoice_number || lastInvoiceNumber || '').trim();
+        if (!printDocumentName) throw new Error('رقم الفاتورة غير متوفر للطباعة');
+        document.title = printDocumentName;
+        try {
+            const printResult = await apiCall('printReceipt', { invoice_number: printDocumentName });
+            if (!printResult.success) throw new Error(printResult.message || printResult.error || 'فشل فتح نافذة الطباعة');
+            showToast(printResult.message || 'تم فتح فاتورة البيع للطباعة', 'success');
+        } finally {
+            document.title = originalDocumentTitle;
+        }
     } catch (error) {
         showToast(error.message || 'حدث خطأ أثناء الطباعة', 'error');
     } finally {
