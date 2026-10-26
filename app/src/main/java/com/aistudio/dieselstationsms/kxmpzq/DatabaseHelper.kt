@@ -474,7 +474,96 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
+    /**
+     * Ensures that the customer-receivable and inventory control accounts required by
+     * atomic payment/sale posting exist and are active. A soft-deleted canonical account
+     * is restored instead of creating duplicate account codes. If a legacy database has
+     * misused code 1103 for a non-asset account, preserve its history and create a distinct
+     * receivable account that findPartyAccount can safely resolve by its name/category.
+     */
+    private fun ensureRequiredSaleAccounts(db: SQLiteDatabase) {
+        fun findAccount(code: String): Pair<Long, String>? =
+            db.rawQuery("SELECT id, account_type FROM accounts WHERE account_code=? LIMIT 1", arrayOf(code)).use { c ->
+                if (c.moveToFirst()) c.getLong(0) to c.getString(1) else null
+            }
+
+        val receivable = findAccount("1103")
+        if (receivable == null) {
+            db.insertOrThrow("accounts", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("account_code", "1103")
+                put("account_name", "Accounts Receivable")
+                put("account_name_ar", "ذمم العملاء")
+                put("account_type", "asset")
+                put("account_category", "current_asset")
+                put("normal_balance", "debit")
+                put("level", 3)
+                put("is_active", 1)
+                put("is_deleted", 0)
+            })
+        } else if (receivable.second == "asset") {
+            db.update(
+                "accounts",
+                ContentValues().apply { put("is_active", 1); put("is_deleted", 0); put("updated_at", getCurrentDateTime()) },
+                "id=?",
+                arrayOf(receivable.first.toString())
+            )
+        } else {
+            val fallback = db.rawQuery(
+                "SELECT id FROM accounts WHERE account_type='asset' AND account_code='1103-AR' LIMIT 1",
+                null
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            if (fallback <= 0L) {
+                db.insertOrThrow("accounts", null, ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("account_code", "1103-AR")
+                    put("account_name", "Customer Accounts Receivable")
+                    put("account_name_ar", "ذمم العملاء")
+                    put("account_type", "asset")
+                    put("account_category", "current_asset_receivable")
+                    put("normal_balance", "debit")
+                    put("level", 3)
+                    put("is_active", 1)
+                    put("is_deleted", 0)
+                })
+            } else {
+                db.update(
+                    "accounts",
+                    ContentValues().apply { put("is_active", 1); put("is_deleted", 0); put("updated_at", getCurrentDateTime()) },
+                    "id=?",
+                    arrayOf(fallback.toString())
+                )
+            }
+        }
+
+        val inventory = findAccount("1104")
+        if (inventory == null) {
+            db.insertOrThrow("accounts", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("account_code", "1104")
+                put("account_name", "Inventory")
+                put("account_name_ar", "المخزون")
+                put("account_type", "asset")
+                put("account_category", "current_asset")
+                put("normal_balance", "debit")
+                put("level", 3)
+                put("is_active", 1)
+                put("is_deleted", 0)
+            })
+        } else if (inventory.second == "asset") {
+            db.update(
+                "accounts",
+                ContentValues().apply { put("is_active", 1); put("is_deleted", 0); put("updated_at", getCurrentDateTime()) },
+                "id=?",
+                arrayOf(inventory.first.toString())
+            )
+        }
+    }
+
     private fun ensureSalesPricingDefaults(db: SQLiteDatabase) {
+        // Repair control accounts on existing installations as well as fresh databases.
+        // Payment posting must never depend on a one-time seed having survived a restore.
+        ensureRequiredSaleAccounts(db)
         db.execSQL("""
             INSERT OR IGNORE INTO accounts
                 (uuid, account_code, account_name, account_name_ar, account_type, account_category, normal_balance, level, is_active)
@@ -11701,6 +11790,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("purchase_price", cursor.getDouble(cursor.getColumnIndexOrThrow("purchase_price")))
                     put("quantity", cursor.getDouble(cursor.getColumnIndexOrThrow("quantity")))
                     put("minimum_stock", cursor.getDouble(cursor.getColumnIndexOrThrow("minimum_stock")))
+                    val descriptionIndex = cursor.getColumnIndex("description")
+                    put("description", if (descriptionIndex >= 0 && !cursor.isNull(descriptionIndex)) cursor.getString(descriptionIndex) else "")
                     put("has_expiry", cursor.getInt(cursor.getColumnIndexOrThrow("has_expiry")))
                     put("expiry_date", cursor.getString(cursor.getColumnIndexOrThrow("expiry_date")))
                     put("status", cursor.getString(cursor.getColumnIndexOrThrow("status")))
