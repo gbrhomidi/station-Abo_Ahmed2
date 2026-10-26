@@ -6056,15 +6056,22 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val method = data.optString("payment_method", "cash")
                 val operator = data.optString("operator", "System")
                 val notes = data.optString("notes", "").trim()
+                val cashBoxId = data.optLong("cash_box_id", 0L)
+                val bankAccountId = data.optLong("bank_account_id", 0L)
+                val idempotencyKey = data.optString("idempotency_key", "").trim()
+                    .ifBlank { UUID.randomUUID().toString() }
                 if (customerId <= 0 || amount <= 0) return errorResponse("بيانات غير صالحة")
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
-                val paymentId = db.processPayment(customerId, amount, method, operator, notes, stationId)
+                val paymentId = db.processPayment(
+                    customerId, amount, method, operator, notes, stationId,
+                    idempotencyKey, activity.currentUserId, cashBoxId, bankAccountId
+                )
                 if (paymentId > 0L) {
                     val sms = queuePaymentSms(db, paymentId, stationId, activity.currentUserId)
                     return JSONObject().apply {
                         put("success", true)
-                        put("message", "تم التسديد بنجاح")
+                        put("message", "تم التسديد وترحيل قيده المحاسبي")
                         put("payment_id", paymentId)
                         put("sms", sms)
                     }.toString()

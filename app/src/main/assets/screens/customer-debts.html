@@ -2193,6 +2193,15 @@
                     </div>
                 </div>
                 <div class="form-group">
+                    <label id="pSettlementLabel" for="pSettlementId">صندوق التحصيل *</label>
+                    <select id="pSettlementId" required>
+                        <option value="">اختر صندوق التحصيل</option>
+                    </select>
+                    <small id="pSettlementHint" style="display:block;margin-top:6px;color:var(--text-muted);">
+                        يجب تحديد وسيلة التحصيل الفعلية ليتم تحديث رصيدها وترحيل القيد الصحيح.
+                    </small>
+                </div>
+                <div class="form-group">
                     <label>ملاحظات</label>
                     <textarea id="pNotes" placeholder="ملاحظات حول التسديد"></textarea>
                 </div>
@@ -2543,6 +2552,9 @@
         let debtsData = [];
         let allDebtsData = [];
         let paymentInFlight = false;
+        let paymentKeysByFingerprint = new Map();
+        let paymentSettlementOptions = { cashBoxes: [], bankAccounts: [] };
+        let paymentSettlementOptionsLoaded = false;
         let statusChart = null;
         let trendChart = null;
 
@@ -2969,6 +2981,77 @@
         // ===================================================================
         // 12. عمليات التسديد
         // ===================================================================
+        function loadPaymentSettlementOptions() {
+            const bridge = window.AndroidInterface;
+            if (!bridge || typeof bridge.getActiveCashBoxes !== 'function' || typeof bridge.getBankAccounts !== 'function') {
+                paymentSettlementOptionsLoaded = false;
+                showToast('تعذر تحميل صناديق التحصيل والحسابات البنكية من قاعدة البيانات', 'error');
+                return false;
+            }
+            try {
+                const cashResult = normalizeBridgeResult(bridge.getActiveCashBoxes());
+                const bankResult = normalizeBridgeResult(bridge.getBankAccounts());
+                if (!cashResult.success || !bankResult.success) {
+                    throw new Error(cashResult.error || bankResult.error || 'تعذر قراءة وسائل التحصيل');
+                }
+                paymentSettlementOptions = {
+                    cashBoxes: (Array.isArray(cashResult.data) ? cashResult.data : [])
+                        .filter(item => String(item.status || '').toLowerCase() === 'active'),
+                    bankAccounts: (Array.isArray(bankResult.data) ? bankResult.data : [])
+                        .filter(item => String(item.status || '').toLowerCase() === 'active')
+                };
+                paymentSettlementOptionsLoaded = true;
+                renderPaymentSettlementOptions();
+                return true;
+            } catch (error) {
+                paymentSettlementOptionsLoaded = false;
+                showToast('تعذر تحميل وسائل التحصيل: ' + (error.message || 'خطأ غير معروف'), 'error');
+                return false;
+            }
+        }
+
+        function renderPaymentSettlementOptions() {
+            const method = document.getElementById('pMethod').value;
+            const selector = document.getElementById('pSettlementId');
+            const label = document.getElementById('pSettlementLabel');
+            const hint = document.getElementById('pSettlementHint');
+            if (!selector || !label || !hint) return;
+            selector.innerHTML = '';
+            selector.value = '';
+            const isCash = method === 'cash';
+            const items = isCash ? paymentSettlementOptions.cashBoxes : paymentSettlementOptions.bankAccounts;
+            label.textContent = isCash ? 'صندوق التحصيل *' : 'الحساب البنكي/حساب التحصيل *';
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = isCash ? 'اختر صندوق التحصيل' : 'اختر الحساب المستلم';
+            selector.appendChild(placeholder);
+            items.forEach(item => {
+                const option = document.createElement('option');
+                option.value = (isCash ? 'cash:' : 'bank:') + String(item.id);
+                if (isCash) {
+                    option.textContent = item.box_name_ar || item.box_name || item.box_code || ('صندوق #' + item.id);
+                } else {
+                    const accountName = item.account_name_ar || item.account_name || ('حساب #' + item.id);
+                    const bankName = item.bank_name_ar || item.bank_name || '';
+                    option.textContent = bankName ? (accountName + ' — ' + bankName) : accountName;
+                }
+                selector.appendChild(option);
+            });
+            selector.disabled = items.length === 0 || !paymentSettlementOptionsLoaded;
+            hint.textContent = !paymentSettlementOptionsLoaded
+                ? 'تعذر تحميل وسائل التحصيل؛ أعد فتح نافذة التسديد.'
+                : (items.length === 0
+                    ? (isCash ? 'لا يوجد صندوق تحصيل نشط لهذه المحطة. أضف صندوقاً نشطاً وحساباً محاسبياً مرتبطاً به.' : 'لا يوجد حساب بنكي نشط لهذه المحطة. أضف حساباً نشطاً واربطه بحساب محاسبي.')
+                    : 'سيتم تحديث رصيد وسيلة التحصيل المختارة ودفترها والقيد المحاسبي ضمن معاملة واحدة.');
+        }
+
+        function createPaymentIdempotencyKey() {
+            try {
+                if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+            } catch (_) {}
+            return 'customer-payment-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+        }
+
         async function submitPayment() {
             if (paymentInFlight) return;
             const customerId = finiteNumber(document.getElementById('pCustomerId').value);
@@ -2976,12 +3059,31 @@
             const method = document.getElementById('pMethod').value;
             const notes = document.getElementById('pNotes').value.trim();
             const currentRemaining = finiteNumber(document.getElementById('pCurrentRemaining').textContent.replace(/,/g, ''));
+            const settlementValue = document.getElementById('pSettlementId').value;
+            const [settlementType, settlementIdText] = String(settlementValue || '').split(':');
+            const settlementId = finiteNumber(settlementIdText);
 
             if (!customerId) { showToast('❌ الرجاء اختيار العميل', 'error'); return; }
             if (!amount || amount <= 0) { showToast('❌ الرجاء إدخال مبلغ صحيح', 'error'); return; }
             if (currentRemaining > 0 && amount > currentRemaining + 0.000001) {
                 showToast('❌ مبلغ التسديد أكبر من الرصيد المتبقي', 'error');
                 return;
+            }
+            if (!paymentSettlementOptionsLoaded) {
+                if (!loadPaymentSettlementOptions()) return;
+            }
+            if (!settlementId || !['cash', 'bank'].includes(settlementType) ||
+                (method === 'cash' && settlementType !== 'cash') ||
+                (method !== 'cash' && settlementType !== 'bank')) {
+                showToast('❌ اختر صندوق التحصيل أو الحساب البنكي المطابق لطريقة الدفع', 'error');
+                return;
+            }
+
+            const fingerprint = JSON.stringify({ customerId, amount, method, notes, settlementType, settlementId });
+            let idempotencyKey = paymentKeysByFingerprint.get(fingerprint);
+            if (!idempotencyKey) {
+                idempotencyKey = createPaymentIdempotencyKey();
+                paymentKeysByFingerprint.set(fingerprint, idempotencyKey);
             }
 
             paymentInFlight = true;
@@ -2991,15 +3093,19 @@
                     customer_party_id: customerId,
                     amount,
                     payment_method: method,
+                    cash_box_id: settlementType === 'cash' ? settlementId : 0,
+                    bank_account_id: settlementType === 'bank' ? settlementId : 0,
+                    idempotency_key: idempotencyKey,
                     operator: 'WebView',
                     notes
                 });
                 if (!result.success) throw new Error(result.error || result.message || 'فشل التسديد في قاعدة البيانات');
                 const reloaded = await loadDebts();
-                if (!reloaded) throw new Error('تمت العملية، لكن تعذر إعادة تحميل الرصيد للتحقق منه');
+                if (!reloaded) throw new Error('تم تسجيل التسديد، لكن تعذر إعادة تحميل الرصيد للتحقق منه؛ أعد المحاولة بنفس بيانات التسديد لتجنب التكرار');
                 const sms = result.sms || {};
-                showToast('✅ تم التسديد والتحقق من الرصيد المحدث' +
+                showToast('✅ تم التسديد وتحديث الصندوق/الحساب البنكي وترحيل القيد المحاسبي' +
                     (sms.queued ? ' — تم وضع SMS في طابور الإرسال' : ' — تعذر تجهيز SMS: ' + (sms.reason || 'غير معروف')), 'success');
+                paymentKeysByFingerprint.delete(fingerprint);
                 closePaymentModal();
                 setTimeout(()=>refreshDueReminderCandidates(false), 300);
             } catch (e) {
@@ -3011,6 +3117,7 @@
             }
         }
 
+
         function openPaymentModal() {
             document.getElementById('pCustomerId').value = '';
             document.getElementById('pAmount').value = '';
@@ -3018,6 +3125,7 @@
             document.getElementById('pNotes').value = '';
             document.getElementById('pCurrentRemaining').textContent = '0.00';
             document.getElementById('paymentModal').classList.add('show');
+            loadPaymentSettlementOptions();
             document.body.style.overflow = 'hidden';
             loadCustomersForPayment();
         }
@@ -3029,6 +3137,7 @@
             document.getElementById('pNotes').value = '';
             document.getElementById('pCurrentRemaining').textContent = formatCurrency(remaining);
             document.getElementById('paymentModal').classList.add('show');
+            loadPaymentSettlementOptions();
             document.body.style.overflow = 'hidden';
             loadCustomersForPayment();
         }
@@ -3725,6 +3834,7 @@
             loadSavedTheme();
             setupSidebar();
             document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+            document.getElementById('pMethod').addEventListener('change', renderPaymentSettlementOptions);
 
             const today = new Date();
             const monthAgo = new Date();

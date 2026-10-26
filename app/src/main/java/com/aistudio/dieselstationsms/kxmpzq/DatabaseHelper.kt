@@ -11362,15 +11362,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 if (resolvedPrice.priceListItemId != null && (resolvedPrice.quantityLimit ?: 0.0) > 0.0) {
                     consumePriceListQuantity(db, resolvedPrice.priceListItemId, liters, stationScopeId)
                 }
+                // actual_quantity stores the tank level AFTER refill, not the quantity received.
+                // Fuel unit cost must therefore be weighted by delivered_quantity only.
                 val fuelUnitCost = db.rawQuery(
-                    """SELECT CASE WHEN SUM(COALESCE(NULLIF(actual_quantity, 0), delivered_quantity)) > 0
+                    """SELECT CASE WHEN SUM(delivered_quantity) > 0
                               THEN SUM(COALESCE(NULLIF(net_amount, 0), NULLIF(total_amount, 0),
-                                               COALESCE(unit_price, 0) * COALESCE(NULLIF(actual_quantity, 0), delivered_quantity)))
-                                   / SUM(COALESCE(NULLIF(actual_quantity, 0), delivered_quantity))
+                                               COALESCE(unit_price, 0) * delivered_quantity))
+                                   / SUM(delivered_quantity)
                               ELSE 0 END
                        FROM tank_refills
                        WHERE station_id = ? AND fuel_type_id = ? AND status = 'completed' AND is_deleted = 0
-                         AND COALESCE(NULLIF(actual_quantity, 0), delivered_quantity) > 0""",
+                         AND delivered_quantity > 0""",
                     arrayOf(stationScopeId.toString(), fuelTypeId.toString())
                 ).use { c -> if (c.moveToFirst()) c.getDouble(0).coerceAtLeast(0.0) else 0.0 }
                 val fuelCostAmount = liters * fuelUnitCost
@@ -15951,98 +15953,239 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun processPayment(customerId: Int, amount: Double, method: String, operator: String = "System", notes: String = "", stationScopeId: Int? = null, idempotencyKey: String? = null): Long {
+    fun processPayment(
+        customerId: Int,
+        amount: Double,
+        method: String,
+        operator: String = "System",
+        notes: String = "",
+        stationScopeId: Int? = null,
+        idempotencyKey: String? = null,
+        actorId: Long = 0L,
+        cashBoxId: Long = 0L,
+        bankAccountId: Long = 0L
+    ): Long {
         require(customerId > 0) { "معرف العميل غير صالح" }
         require(amount > 0.0 && amount.isFinite()) { "مبلغ التسديد غير صالح" }
         val normalizedMethod = method.trim().lowercase(Locale.ROOT)
         require(normalizedMethod in VALID_PAYMENT_TYPES) { "نوع الدفع غير صالح: $method" }
-        if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
-        val partyScopeClause = if (stationScopeId != null) " AND station_id = ?" else ""
-        val salesScopeClause = if (stationScopeId != null) " AND station_id = ?" else ""
-        val db = writableDatabase
-        val normalizedIdempotencyKey = idempotencyKey?.trim().orEmpty()
         val paymentStationId = stationScopeId ?: 0
-        db.beginTransaction()
+        require(paymentStationId > 0) { "معرف المحطة مطلوب لإثبات التسديد محاسبياً" }
+        require(actorId > 0L) { "معرف المستخدم مطلوب لإثبات التسديد محاسبياً" }
+        require((cashBoxId > 0L) xor (bankAccountId > 0L)) { "يجب تحديد صندوق تحصيل أو حساب بنكي واحد فقط" }
+        if (normalizedMethod == "cash") {
+            require(cashBoxId > 0L && bankAccountId <= 0L) { "طريقة الدفع النقدي تتطلب صندوق تحصيل" }
+        } else {
+            require(bankAccountId > 0L && cashBoxId <= 0L) { "طريقة الدفع المختارة تتطلب حساباً بنكياً/حساب تحصيل" }
+        }
+        val normalizedIdempotencyKey = idempotencyKey?.trim().orEmpty()
+        require(normalizedIdempotencyKey.isNotBlank()) { "مفتاح التسديد الفريد مطلوب لمنع تكرار العملية" }
+        val partyScopeClause = " AND station_id = ?"
+        val salesScopeClause = " AND station_id = ?"
+
+        dbLock.lock()
         try {
-            val existingPaymentId = findFinancialIdempotency(db, "payment", paymentStationId, normalizedIdempotencyKey)
-            if (existingPaymentId != null) return existingPaymentId
-            require(reserveFinancialIdempotency(db, "payment", paymentStationId, normalizedIdempotencyKey)) { "مفتاح العملية مستخدم مسبقاً" }
-            val partyBalance = db.rawQuery(
-                "SELECT COALESCE(total_due, 0) FROM parties WHERE id = ? AND is_deleted = 0$partyScopeClause LIMIT 1",
-                listOf(customerId.toString()).plus(stationScopeId?.toString()).filterNotNull().toTypedArray()
-            ).use { cursor ->
-                if (!cursor.moveToFirst()) return 0L
-                cursor.getDouble(0)
-            }
-            if (partyBalance + 0.000001 < amount) return 0L
-
-            var unapplied = amount
-            val invoices = db.rawQuery(
-                """SELECT id, COALESCE(remaining_amount, 0)
-                   FROM sales_transactions
-                   WHERE customer_party_id = ? AND remaining_amount > 0 AND is_deleted = 0$salesScopeClause
-                   ORDER BY due_date ASC, id ASC""",
-                listOf(customerId.toString()).plus(stationScopeId?.toString()).filterNotNull().toTypedArray()
-            )
-            invoices.use { cursor ->
-                while (cursor.moveToNext() && unapplied > 0.000001) {
-                    val invoiceId = cursor.getLong(0)
-                    val invoiceRemaining = cursor.getDouble(1)
-                    val applied = minOf(unapplied, invoiceRemaining)
-                    val updated = db.compileStatement(
-                        """UPDATE sales_transactions
-                           SET paid_amount = COALESCE(paid_amount, 0) + ?,
-                               remaining_amount = MAX(0, COALESCE(remaining_amount, 0) - ?),
-                               payment_status = CASE WHEN COALESCE(remaining_amount, 0) - ? <= 0 THEN 'paid' ELSE 'partial' END
-                           WHERE id = ? AND is_deleted = 0$salesScopeClause"""
-                    ).apply {
-                        bindDouble(1, applied)
-                        bindDouble(2, applied)
-                        bindDouble(3, applied)
-                        bindLong(4, invoiceId)
-                        if (stationScopeId != null) bindLong(5, stationScopeId.toLong())
-                    }.executeUpdateDelete()
-                    if (updated != 1) throw IllegalStateException("تعذر تحديث الفاتورة $invoiceId")
-                    unapplied -= applied
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                // A retry with the same key returns the original payment instead of applying it twice.
+                val existingPaymentId = findFinancialIdempotency(db, "payment", paymentStationId, normalizedIdempotencyKey)
+                if (existingPaymentId != null) return existingPaymentId
+                require(reserveFinancialIdempotency(db, "payment", paymentStationId, normalizedIdempotencyKey)) {
+                    "مفتاح العملية مستخدم مسبقاً"
                 }
+
+                val partyBalance = db.rawQuery(
+                    "SELECT COALESCE(total_due, 0) FROM parties WHERE id = ? AND is_deleted = 0$partyScopeClause LIMIT 1",
+                    arrayOf(customerId.toString(), paymentStationId.toString())
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) { "العميل غير موجود ضمن المحطة الحالية" }
+                    cursor.getDouble(0)
+                }
+                require(partyBalance + 0.000001 >= amount) { "مبلغ التسديد أكبر من إجمالي الدين المتبقي" }
+
+                // Validate and snapshot the actual settlement source before changing any balances.
+                var cashBalanceBefore = 0.0
+                var bankBalanceBefore = 0.0
+                var bankAvailableBefore = 0.0
+                if (cashBoxId > 0L) {
+                    cashBalanceBefore = db.rawQuery(
+                        "SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND status='active' AND is_deleted=0 LIMIT 1",
+                        arrayOf(cashBoxId.toString(), paymentStationId.toString())
+                    ).use { cursor ->
+                        require(cursor.moveToFirst()) { "صندوق التحصيل غير موجود أو غير نشط أو خارج المحطة" }
+                        cursor.getDouble(0)
+                    }
+                    require((cashBalanceBefore + amount).isFinite()) { "رصيد الصندوق الناتج غير صالح" }
+                } else {
+                    val balances = db.rawQuery(
+                        "SELECT current_balance, available_balance FROM bank_accounts WHERE id=? AND station_id=? AND status='active' AND is_deleted=0 LIMIT 1",
+                        arrayOf(bankAccountId.toString(), paymentStationId.toString())
+                    ).use { cursor ->
+                        require(cursor.moveToFirst()) { "حساب التحصيل البنكي غير موجود أو غير نشط أو خارج المحطة" }
+                        doubleArrayOf(
+                            cursor.getDouble(0),
+                            if (cursor.isNull(1)) cursor.getDouble(0) else cursor.getDouble(1)
+                        )
+                    }
+                    bankBalanceBefore = balances[0]
+                    bankAvailableBefore = balances[1]
+                    require((bankBalanceBefore + amount).isFinite() && (bankAvailableBefore + amount).isFinite()) {
+                        "رصيد الحساب البنكي الناتج غير صالح"
+                    }
+                }
+
+                var unapplied = amount
+                db.rawQuery(
+                    """SELECT id, COALESCE(remaining_amount, 0)
+                       FROM sales_transactions
+                       WHERE customer_party_id = ? AND remaining_amount > 0 AND is_deleted = 0$salesScopeClause
+                       ORDER BY CASE WHEN due_date IS NULL OR due_date='' THEN 1 ELSE 0 END, due_date ASC, id ASC""",
+                    arrayOf(customerId.toString(), paymentStationId.toString())
+                ).use { cursor ->
+                    while (cursor.moveToNext() && unapplied > 0.000001) {
+                        val invoiceId = cursor.getLong(0)
+                        val invoiceRemaining = cursor.getDouble(1)
+                        val applied = minOf(unapplied, invoiceRemaining)
+                        val updated = db.compileStatement(
+                            """UPDATE sales_transactions
+                               SET paid_amount = COALESCE(paid_amount, 0) + ?,
+                                   remaining_amount = MAX(0, COALESCE(remaining_amount, 0) - ?),
+                                   payment_status = CASE WHEN COALESCE(remaining_amount, 0) - ? <= 0 THEN 'paid' ELSE 'partial' END
+                               WHERE id = ? AND customer_party_id = ? AND is_deleted = 0 AND remaining_amount > 0$salesScopeClause"""
+                        ).apply {
+                            bindDouble(1, applied)
+                            bindDouble(2, applied)
+                            bindDouble(3, applied)
+                            bindLong(4, invoiceId)
+                            bindLong(5, customerId.toLong())
+                            bindLong(6, paymentStationId.toLong())
+                        }.executeUpdateDelete()
+                        if (updated != 1) throw IllegalStateException("تعذر تحديث الفاتورة $invoiceId")
+                        unapplied -= applied
+                    }
+                }
+                require(unapplied <= 0.000001) {
+                    "المبلغ لا يطابق فواتير الدين المفتوحة؛ أُلغيت العملية دون ترحيل"
+                }
+
+                val partyUpdated = db.compileStatement(
+                    """UPDATE parties
+                       SET current_balance = MAX(0, COALESCE(current_balance, 0) - ?),
+                           total_due = MAX(0, COALESCE(total_due, 0) - ?),
+                           updated_at = ?
+                       WHERE id = ? AND is_deleted = 0$partyScopeClause"""
+                ).apply {
+                    bindDouble(1, amount)
+                    bindDouble(2, amount)
+                    bindString(3, getCurrentDateTime())
+                    bindLong(4, customerId.toLong())
+                    bindLong(5, paymentStationId.toLong())
+                }.executeUpdateDelete()
+                if (partyUpdated != 1) throw IllegalStateException("تعذر تحديث رصيد العميل")
+
+                val paymentCode = "PAY-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}"
+                val now = getCurrentDateTime()
+                val paymentValues = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("payment_code", paymentCode)
+                    put("station_id", paymentStationId)
+                    put("customer_party_id", customerId)
+                    put("payment_type", normalizedMethod)
+                    put("payment_method", normalizedMethod)
+                    put("amount", amount)
+                    put("is_partial", if (amount + 0.000001 < partyBalance) 1 else 0)
+                    put("remaining_after", (partyBalance - amount).coerceAtLeast(0.0))
+                    put("cash_box_id", cashBoxId.takeIf { it > 0L })
+                    put("bank_account_id", bankAccountId.takeIf { it > 0L })
+                    put("status", "completed")
+                    put("operator", operator)
+                    put("notes", notes.ifBlank { "تسديد دين العميل عبر Bridge" })
+                    put("created_at", now)
+                    put("updated_at", now)
+                    put("business_day", BusinessDay.currentDate())
+                    put("created_by", actorId)
+                }
+                val paymentId = db.insertOrThrow("payments", null, paymentValues)
+
+                if (cashBoxId > 0L) {
+                    val cashAfter = cashBalanceBefore + amount
+                    require(db.update(
+                        "cash_boxes",
+                        ContentValues().apply { put("current_balance", cashAfter); put("updated_at", now) },
+                        "id=? AND station_id=? AND status='active' AND is_deleted=0",
+                        arrayOf(cashBoxId.toString(), paymentStationId.toString())
+                    ) == 1) { "تعذر تحديث رصيد صندوق التحصيل" }
+                    db.insertOrThrow("cash_movements", null, ContentValues().apply {
+                        put("uuid", UUID.randomUUID().toString())
+                        put("cash_box_id", cashBoxId)
+                        put("movement_type", "in")
+                        put("amount", amount)
+                        put("balance_before", cashBalanceBefore)
+                        put("balance_after", cashAfter)
+                        put("description", "تحصيل دين العميل: $paymentCode")
+                        put("reference_type", "payment")
+                        put("reference_id", paymentId)
+                        put("created_by", actorId.toString())
+                        put("created_at", now)
+                    })
+                } else {
+                    val bankAfter = bankBalanceBefore + amount
+                    val bankAvailableAfter = bankAvailableBefore + amount
+                    require(db.update(
+                        "bank_accounts",
+                        ContentValues().apply {
+                            put("current_balance", bankAfter)
+                            put("available_balance", bankAvailableAfter)
+                            put("updated_at", now)
+                        },
+                        "id=? AND station_id=? AND status='active' AND is_deleted=0",
+                        arrayOf(bankAccountId.toString(), paymentStationId.toString())
+                    ) == 1) { "تعذر تحديث رصيد حساب التحصيل البنكي" }
+                    insertBankLedgerEntry(
+                        db, bankAccountId, "payment", paymentId, paymentCode,
+                        amount, 0.0, "تحصيل دين العميل $paymentCode", actorId
+                    )
+                }
+
+                db.insertOrThrow("customer_ledger", null, ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("party_id", customerId)
+                    put("transaction_date", now)
+                    put("transaction_type", "payment")
+                    put("transaction_id", paymentId)
+                    put("reference_number", paymentCode)
+                    put("debit", 0.0)
+                    put("credit", amount)
+                    put("balance", getPartyBalance(customerId))
+                    put("description", "تسديد دين العميل $paymentCode")
+                    put("created_by", actorId)
+                })
+
+                // Journal and source payment are committed together: no "successful" payment without its GL proof.
+                val debitAccount = findSettlementAccount(db, cashBoxId, bankAccountId)
+                val creditAccount = findPartyAccount(db, "receivable")
+                val journalId = postFinanceJournal(
+                    db, paymentStationId, actorId, "general", "payment", paymentId,
+                    paymentCode, "قيد تحصيل دين العميل $paymentCode",
+                    debitAccount, creditAccount, amount
+                )
+                require(db.update(
+                    "payments",
+                    ContentValues().apply { put("journal_entry_id", journalId); put("updated_at", now); put("updated_by", actorId) },
+                    "id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(paymentId.toString(), paymentStationId.toString())
+                ) == 1) { "تعذر ربط قيد التحصيل بعملية التسديد" }
+
+                completeFinancialIdempotency(db, "payment", paymentStationId, normalizedIdempotencyKey, paymentId)
+                db.setTransactionSuccessful()
+                runCatching { logActivity(operator, "payment", "تسديد مبلغ $amount للعميل $customerId؛ رقم العملية $paymentCode") }
+                return paymentId
+            } finally {
+                db.endTransaction()
             }
-            if (unapplied > 0.000001) return 0L
-
-            val partyUpdated = db.compileStatement(
-                """UPDATE parties
-                   SET current_balance = MAX(0, COALESCE(current_balance, 0) - ?),
-                       total_due = MAX(0, COALESCE(total_due, 0) - ?)
-                   WHERE id = ? AND is_deleted = 0$partyScopeClause"""
-            ).apply {
-                bindDouble(1, amount)
-                bindDouble(2, amount)
-                bindLong(3, customerId.toLong())
-                if (stationScopeId != null) bindLong(4, stationScopeId.toLong())
-            }.executeUpdateDelete()
-            if (partyUpdated != 1) throw IllegalStateException("تعذر تحديث رصيد العميل")
-
-            val cv = ContentValues().apply {
-                put("uuid", UUID.randomUUID().toString())
-                put("payment_code", "PAY-${System.currentTimeMillis()}")
-                put("customer_party_id", customerId)
-                put("payment_type", normalizedMethod)
-                put("payment_method", normalizedMethod)
-                put("amount", amount)
-                put("status", "completed")
-                put("operator", operator)
-                put("notes", notes.ifBlank { "تسديد عبر Bridge" })
-                put("created_at", getCurrentDateTime())
-                put("business_day", BusinessDay.currentDate())
-            }
-            val paymentId = db.insert("payments", null, cv)
-            if (paymentId <= 0) throw IllegalStateException("تعذر تسجيل عملية التسديد")
-            completeFinancialIdempotency(db, "payment", paymentStationId, normalizedIdempotencyKey, paymentId)
-
-            db.setTransactionSuccessful()
-            runCatching { logActivity(operator, "payment", "تسديد مبلغ $amount للعميل $customerId") }
-            return paymentId
         } finally {
-            db.endTransaction()
+            dbLock.unlock()
         }
     }
 

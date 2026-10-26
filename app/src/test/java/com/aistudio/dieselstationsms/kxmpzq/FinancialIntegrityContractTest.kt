@@ -29,6 +29,12 @@ class FinancialIntegrityContractTest {
         assertTrue("Fuel sale must check the optional idempotency key", fuelSale.contains("idempotency_key"))
         assertTrue("Product sale must check the optional idempotency key", productSale.contains("idempotency_key"))
         assertTrue("Payment must check the optional idempotency key", payment.contains("idempotencyKey"))
+        assertTrue("Debt payment must create its accounting journal in the same transaction", payment.contains("postFinanceJournal("))
+        assertTrue("Debt payment must persist station scope", payment.contains("put(\"station_id\", paymentStationId)"))
+        assertTrue("Debt payment must retain its cash-box or bank settlement source", payment.contains("put(\"cash_box_id\", cashBoxId.takeIf") && payment.contains("put(\"bank_account_id\", bankAccountId.takeIf"))
+        assertTrue("Debt payment must link the posted journal to the payment record", payment.contains("put(\"journal_entry_id\", journalId)"))
+        assertTrue("Debt payment must create a customer-ledger credit", payment.contains("insertOrThrow(\"customer_ledger\"") && payment.contains("put(\"credit\", amount)"))
+        assertTrue("Debt payment must update the selected settlement balance", payment.contains("cash_movements") && payment.contains("insertBankLedgerEntry("))
         assertTrue("Product sale must use the transaction-neutral sale writer", productSale.contains("insertSaleTransactionInternal(db"))
         assertTrue("Fuel sale must use the transaction-neutral sale writer", fuelSale.contains("insertSaleTransactionInternal(db"))
         assertTrue("Stock updates inside a sale must use the transaction-neutral writer", productSale.contains("addStockMovementInternal("))
@@ -38,6 +44,19 @@ class FinancialIntegrityContractTest {
     }
 
 
+
+    @Test
+    fun fuelCogsUsesDeliveredVolumeRatherThanPostRefillTankLevel() {
+        val source = locateDatabaseHelper().readText()
+        val fuelSale = functionBody(source, "fun addFuelSale")
+        val start = fuelSale.indexOf("val fuelUnitCost =")
+        val end = fuelSale.indexOf("val fuelCostAmount = liters * fuelUnitCost", start)
+        assertTrue("Fuel sale must calculate a unit-cost query", start >= 0 && end > start)
+        val costQuery = fuelSale.substring(start, end)
+        assertTrue("Fuel COGS denominator must use actual delivered quantity", costQuery.contains("SUM(delivered_quantity)"))
+        assertTrue("Post-refill tank level must not be used as delivered volume", !costQuery.contains("actual_quantity"))
+        assertTrue("Customer delivery fee must not be part of fuel COGS", !costQuery.contains("delivery_fee"))
+    }
 
     @Test
     fun saleAdjustmentPathsAreAtomicAuditableAndIdempotent() {
