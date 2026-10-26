@@ -2381,7 +2381,7 @@
     <div class="modal-overlay" id="settingsModal" onclick="closeModalById('settingsModal')">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h3 class="modal-title"><i class="fas fa-cog"></i> الإعدادات</h3>
+                <h3 class="modal-title"><i class="fas fa-cog"></i> إعدادات ديون العملاء</h3>
                 <button class="modal-close" onclick="closeModalById('settingsModal')">
                     <i class="fas fa-times"></i>
                 </button>
@@ -3400,10 +3400,10 @@ function updateDebtViewButtons() {
         async function refreshDueReminderCandidates(showNotice=true) {
             ensureDueReminderUI();
             try {
-                const result=await apiCall('getDueSoonDebtRemindersTyped', JSON.stringify({days:10}));
+                const result=await apiCall('getDueSoonDebtRemindersTyped', {days:debtScreenSettings.dueSoonDays});
                 if(!result.success) return;
                 dueReminderRows=Array.isArray(result.data)?result.data:[];
-                const eligible=dueReminderRows.filter(r=>r.eligible && Number(r.days_remaining)<=10);
+                const eligible=dueReminderRows.filter(r=>r.eligible && Number(r.days_remaining)<=debtScreenSettings.dueSoonDays);
                 const btn=document.getElementById('dueReminderButton');
                 if(btn){btn.style.display=eligible.length?'inline-flex':'none'; const c=btn.querySelector('.due-count'); if(c)c.textContent=eligible.length;}
                 if(showNotice && eligible.length && !dueReminderDeferred) openDueReminderNotice();
@@ -3415,7 +3415,7 @@ function updateDebtViewButtons() {
         function deferDueReminder(){dueReminderDeferred=true;closeDueReminderNotice();document.getElementById('dueReminderBubble')?.classList.add('show');}
         function approveDueReminders(){
             closeDueReminderNotice();
-            apiCall('sendDueSoonDebtRemindersTyped',JSON.stringify({days:10})).then(r=>{
+            apiCall('sendDueSoonDebtRemindersTyped',{days:debtScreenSettings.dueSoonDays}).then(r=>{
                 if(!r.success)throw new Error(r.error||r.message||'تعذر إرسال التذكيرات');
                 showToast(`تمت إضافة ${r.data?.queued_count||0} رسالة إلى طابور SMS`,'success');
                 document.getElementById('dueReminderBubble')?.classList.remove('show');
@@ -3424,7 +3424,7 @@ function updateDebtViewButtons() {
         }
         function openDueReminderDetails(){
             ensureDueReminderUI();
-            const rows=dueReminderRows.filter(r=>r.eligible && Number(r.days_remaining)<=10);
+            const rows=dueReminderRows.filter(r=>r.eligible && Number(r.days_remaining)<=debtScreenSettings.dueSoonDays);
             const html=rows.length?`<div style="overflow:auto"><table class="due-detail-table"><thead><tr><th>العميل</th><th>الهاتف</th><th>الدين القريب</th><th>إجمالي غير المسدد</th><th>الاستحقاق</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHtml(r.customer_name||'---')}</td><td dir="ltr">${escapeHtml(r.phone||'---')}</td><td class="due-red">${formatCurrency(r.due_soon_amount||0)}</td><td class="due-blue">${formatCurrency(r.total_outstanding||0)}</td><td>${escapeHtml(r.nearest_due_date||'---')}</td></tr>`).join('')}</tbody></table></div>`:'<div style="padding:30px;text-align:center">لا توجد مستحقات مؤهلة حالياً.</div>';
             document.getElementById('dueDetailContent').innerHTML=html;
             document.getElementById('dueDetailModal').classList.add('show');
@@ -3702,62 +3702,41 @@ function updateDebtViewButtons() {
         // 17. دوال فتح المودالات (نفس تصميم السابق)
         // ===================================================================
         async function openSummaryModal() {
-            const modal = document.getElementById('summaryModal');
-            const body = document.getElementById('summaryBody');
-            modal.classList.add('show');
-            document.body.style.overflow = 'hidden';
-
-            body.innerHTML =
-                `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل الملخص...</p></div>`;
-
-            try {
-                const result = await apiCall('getDashboardStats');
-                if (result.success && result.data) {
-                    const stats = result.data;
-                    body.innerHTML = `
-                            <div class="modal-stats-grid">
-                                <div class="modal-stat-card">
-                                    <div class="stat-value">${formatCurrency(stats.daily_sales)}</div>
-                                    <div class="stat-label">💰 مبيعات اليوم</div>
-                                </div>
-                                <div class="modal-stat-card">
-                                    <div class="stat-value">${formatNumber(stats.active_customers)}</div>
-                                    <div class="stat-label">👥 العملاء النشطون</div>
-                                </div>
-                                <div class="modal-stat-card">
-                                    <div class="stat-value">${formatNumber(stats.total_products)}</div>
-                                    <div class="stat-label">📦 المنتجات النشطة</div>
-                                </div>
-                                <div class="modal-stat-card">
-                                    <div class="stat-value">${formatNumber(stats.due_invoices)}</div>
-                                    <div class="stat-label">📄 فواتير تستحق خلال 7 أيام</div>
-                                </div>
-                                <div class="modal-stat-card">
-                                    <div class="stat-value">${formatNumber(stats.low_stock)}</div>
-                                    <div class="stat-label">⚠️ منتجات منخفضة المخزون</div>
-                                </div>
-                                <div class="modal-stat-card">
-                                    <div class="stat-value">${formatNumber(stats.expiry_soon)}</div>
-                                    <div class="stat-label">⏳ منتجات تنتهي قريباً</div>
-                                </div>
-                            </div>
-                            <div style="margin-top:16px;background:var(--bg-glass);padding:12px;border-radius:var(--radius-small);border:1px solid var(--border-color);">
-                                <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-                                    <span style="color:var(--text-muted);font-size:0.8rem;">المرتجعات اليوم: <strong style="color:var(--gold-primary);">${formatNumber(stats.returned_products_today)}</strong></span>
-                                    <span style="color:var(--text-muted);font-size:0.8rem;">التالف اليوم: <strong style="color:var(--gold-primary);">${formatNumber(stats.damaged_products_today)}</strong></span>
-                                </div>
-                            </div>
-                            <div style="margin-top:12px;text-align:center;font-size:0.8rem;color:var(--text-muted);">آخر تحديث: ${new Date().toLocaleString('ar-SA')}</div>
-                        `;
-                } else {
-                    body.innerHTML =
-                        `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${result.message || 'فشل تحميل البيانات'}</div>`;
-                }
-            } catch (e) {
-                body.innerHTML =
-                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>حدث خطأ في الاتصال</div>`;
-                console.error(e);
-            }
+            const modal=document.getElementById('summaryModal'),body=document.getElementById('summaryBody');
+            modal.classList.add('show');document.body.style.overflow='hidden';
+            body.innerHTML='<div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> جاري حساب ملخص ديون العملاء...</div>';
+            Promise.all([apiCall('getCustomerDebts',{start_date:null,end_date:null}),apiCall('getPayments')]).then(function(reads){
+                if(!reads[0].success)throw new Error(reads[0].error||reads[0].message||'تعذر قراءة الديون');
+                const rows=(Array.isArray(reads[0].data)?reads[0].data:[]).map(normalizeDebtRow);
+                const payments=reads[1].success&&Array.isArray(reads[1].data)?reads[1].data:[];
+                const today=businessDayDate(),month=today.slice(0,7);
+                const total=rows.reduce(function(sum,r){return sum+finiteNumber(r.remaining_amount);},0);
+                const overdueRows=rows.filter(function(r){return r.status==='overdue';});
+                const overdue=overdueRows.reduce(function(sum,r){return sum+finiteNumber(r.remaining_amount);},0);
+                const partial=rows.filter(function(r){return r.status==='partial';});
+                const ids=new Set(rows.map(function(r){return finiteNumber(r.customer_party_id??r.customer_id);}).filter(function(id){return id>0;}));
+                const paidToday=payments.filter(function(p){return String(p.created_at||p.payment_date||'').slice(0,10)===today;}).reduce(function(sum,p){return sum+finiteNumber(p.amount);},0);
+                const paidMonth=payments.filter(function(p){return String(p.created_at||p.payment_date||'').slice(0,7)===month;}).reduce(function(sum,p){return sum+finiteNumber(p.amount);},0);
+                const groups=new Map();
+                rows.forEach(function(r){const id=String(r.customer_party_id??r.customer_id??'');if(!groups.has(id))groups.set(id,{id:finiteNumber(id),name:r.customer_name||'---',phone:r.customer_phone||'---',count:0,total:0,overdue:0});const g=groups.get(id);g.count++;g.total+=finiteNumber(r.remaining_amount);if(r.status==='overdue')g.overdue+=finiteNumber(r.remaining_amount);});
+                const top=Array.from(groups.values()).sort(function(a,b){return b.total-a.total;}).slice(0,5);
+                const topRows=top.length?top.map(function(g){return '<tr><td>'+escapeHtml(g.name)+'</td><td>'+g.count+'</td><td class="amount">'+formatCurrency(g.total)+'</td><td class="amount">'+formatCurrency(g.overdue)+'</td><td><button class="btn-action view" onclick="viewCustomerDetails('+g.id+')" title="تفاصيل العميل"><i class="fas fa-eye"></i></button><button class="btn-action history" onclick="viewHistory('+g.id+')" title="السجل"><i class="fas fa-history"></i></button></td></tr>';}).join(''):'<tr><td colspan="5"><div class="empty-state">لا توجد أرصدة ديون مفتوحة.</div></td></tr>';
+                const recent=payments.slice().sort(function(a,b){return String(b.created_at||'').localeCompare(String(a.created_at||''));}).slice(0,5);
+                const recentRows=recent.length?recent.map(function(p){return '<tr><td>'+escapeHtml(String(p.created_at||'').slice(0,10)||'---')+'</td><td>'+escapeHtml(p.customer_name||p.commercial_name||('عميل #'+(p.customer_party_id||p.customer_id||'')))+'</td><td>'+escapeHtml(p.payment_code||('#'+p.id))+'</td><td class="amount">'+formatCurrency(p.amount)+'</td></tr>';}).join(''):'<tr><td colspan="4"><div class="empty-state">لا توجد عمليات تحصيل مسجلة في مصدر المدفوعات.</div></td></tr>';
+                body.innerHTML='<div class="report-workspace"><div class="report-kpi-grid">'+
+                    '<div class="debt-summary-card"><strong>'+formatCurrency(total)+'</strong><span>إجمالي الرصيد المفتوح</span></div>'+
+                    '<div class="debt-summary-card"><strong>'+formatCurrency(overdue)+'</strong><span>قيمة الديون المتأخرة</span></div>'+
+                    '<div class="debt-summary-card"><strong>'+ids.size+'</strong><span>عدد العملاء أصحاب أرصدة مفتوحة</span></div>'+
+                    '<div class="debt-summary-card"><strong>'+overdueRows.length+'</strong><span>عدد فواتير الدين المتأخرة</span></div>'+
+                    '<div class="debt-summary-card"><strong>'+partial.length+'</strong><span>فواتير مدفوعة جزئياً</span></div>'+
+                    '<div class="debt-summary-card"><strong>'+(reads[1].success?formatCurrency(paidToday):'غير متاح')+'</strong><span>إجمالي التحصيلات اليوم</span></div>'+
+                    '<div class="debt-summary-card"><strong>'+(reads[1].success?formatCurrency(paidMonth):'غير متاح')+'</strong><span>إجمالي التحصيلات خلال الشهر</span></div>'+
+                    '<div class="debt-summary-card"><strong>'+rows.length+'</strong><span>فواتير الدين ذات الرصيد المتبقي</span></div></div>'+
+                    '<section class="debt-summary-section"><h4><i class="fas fa-user-clock"></i> أعلى خمسة عملاء حسب الرصيد المتبقي</h4><div class="table-scroll"><table class="mini-table"><thead><tr><th>العميل</th><th>الفواتير</th><th>الرصيد المفتوح</th><th>المتأخرات</th><th>إجراءات</th></tr></thead><tbody>'+topRows+'</tbody></table></div></section>'+
+                    '<section class="debt-summary-section"><h4><i class="fas fa-money-bill-wave"></i> أحدث عمليات التحصيل المسجلة</h4><div class="table-scroll"><table class="mini-table"><thead><tr><th>التاريخ</th><th>العميل</th><th>المرجع</th><th>المبلغ</th></tr></thead><tbody>'+recentRows+'</tbody></table></div></section>'+
+                    '<div class="report-actions"><button class="btn-report primary" onclick="openReportsModal()"><i class="fas fa-chart-bar"></i> التقارير التفصيلية</button><button class="btn-report" onclick="loadDebts()"><i class="fas fa-sync-alt"></i> تحديث شاشة الديون</button></div>'+
+                    '<div class="report-result-caption">المصدر: ديون ومدفوعات المحطة الحالية من SQLite. آخر تحديث: '+escapeHtml(new Date().toLocaleString('ar-SA'))+'</div></div>';
+            }).catch(function(e){body.innerHTML='<div class="error-state">'+escapeHtml(e.message||'تعذر تكوين ملخص الديون من قاعدة البيانات')+'</div>';console.error('Customer debt summary failed:',e);});
         }
 
         async function openInventoryModal() {
@@ -3821,117 +3800,247 @@ function updateDebtViewButtons() {
             return buckets;
         }
 
-        async function openReportsModal() {
-            const modal = document.getElementById('reportsModal');
-            const body = document.getElementById('reportsBody');
-            modal.classList.add('show');
-            document.body.style.overflow = 'hidden';
-            body.innerHTML =
-                `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل التقارير...</p></div>`;
-            try {
-                if (!runtimeState.rawDebts.length) await loadDebts();
-                const rows = runtimeState.rawDebts || [];
-                const aging = buildAgingSummary(rows);
-                const agingRows = aging.map(bucket => `
-                    <tr><td>${bucket.label}</td><td>${bucket.count}</td><td class="amount">${formatCurrency(bucket.amount)}</td></tr>
-                `).join('');
-                body.innerHTML = `
-                    <div style="background:var(--bg-glass);padding:16px;border-radius:var(--radius-small);border:1px solid var(--border-color);margin-bottom:16px;">
-                        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-                            <span style="color:var(--text-muted);">📊 إجمالي سجلات الديون المحملة</span>
-                            <span style="font-size:1.5rem;font-weight:900;color:var(--gold-primary);">${rows.length}</span>
-                        </div>
-                    </div>
-                    <div class="details-section">
-                        <div class="details-section-title"><i class="fas fa-hourglass-half"></i> تقرير أعمار الديون</div>
-                        <div class="table-scroll"><table class="mini-table"><thead><tr><th>الفئة العمرية</th><th>عدد السجلات</th><th>المتبقي</th></tr></thead><tbody>${agingRows}</tbody></table></div>
-                    </div>
-                    <div class="report-actions">
-                        <button class="btn-report primary" onclick="exportCSV(); closeModalById('reportsModal');"><i class="fas fa-file-csv"></i> تصدير CSV</button>
-                        <button class="btn-report primary" onclick="exportPDF(); closeModalById('reportsModal');"><i class="fas fa-file-pdf"></i> تصدير PDF</button>
-                        <button class="btn-report" onclick="window.print(); closeModalById('reportsModal');"><i class="fas fa-print"></i> طباعة</button>
-                        <button class="btn-report" onclick="loadDebts(); closeModalById('reportsModal');"><i class="fas fa-sync-alt"></i> تحديث البيانات</button>
-                    </div>`;
-            } catch (e) {
-                body.innerHTML = `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${escapeHtml(e.message || 'فشل تحميل التقرير')}</div>`;
-                console.error('Debt reports failed:', e);
+function getReportFilters() {
+            return {from:document.getElementById('reportDateFrom')?.value||'',to:document.getElementById('reportDateTo')?.value||'',
+                customerId:document.getElementById('reportCustomer')?.value||'',status:document.getElementById('reportStatus')?.value||'',
+                min:document.getElementById('reportMinAmount')?.value||'',max:document.getElementById('reportMaxAmount')?.value||'',
+                type:document.getElementById('reportType')?.value||'balances'};
+        }
+        function reportDateMatches(value,from,to){const date=String(value||'').slice(0,10);return (!from||!date||date>=from)&&(!to||!date||date<=to);}
+        function validateReportAmountFilters(f){
+            const min=f.min===''?null:finiteNumber(f.min,NaN),max=f.max===''?null:finiteNumber(f.max,NaN);
+            if((min!==null&&!Number.isFinite(min))||(max!==null&&!Number.isFinite(max))||(min!==null&&max!==null&&min>max))throw new Error('تحقق من الحد الأدنى والأعلى للمبلغ؛ يجب ألا يتجاوز الحد الأدنى الحد الأعلى.');
+            return {min:min,max:max};
+        }
+        function getReportFilteredDebts(){
+            const f=getReportFilters(),limits=validateReportAmountFilters(f);
+            return debtReportState.debts.filter(function(row){
+                const remaining=finiteNumber(row.remaining_amount),status=String(row.status||row.payment_status||'').toLowerCase();
+                if(!reportDateMatches(row.due_date||row.created_at,f.from,f.to))return false;
+                if(f.customerId&&String(row.customer_party_id??row.customer_id)!==String(f.customerId))return false;
+                if(['current','overdue','partial','paid'].indexOf(f.status)>=0&&status!==f.status)return false;
+                if(f.type==='overdue'&&status!=='overdue')return false;
+                if(f.type==='invoices'&&remaining<=0)return false;
+                if(limits.min!==null&&remaining<limits.min)return false;
+                if(limits.max!==null&&remaining>limits.max)return false;
+                return true;
+            });
+        }
+        function getReportFilteredPayments(){
+            const f=getReportFilters(),limits=validateReportAmountFilters(f);
+            return debtReportState.payments.filter(function(p){
+                const date=p.created_at||p.payment_date||p.date,amount=finiteNumber(p.amount);
+                if(!reportDateMatches(date,f.from,f.to))return false;
+                if(f.customerId&&String(p.customer_party_id??p.customer_id??p.party_id)!==String(f.customerId))return false;
+                if(['completed','pending','cancelled','failed'].indexOf(f.status)>=0&&String(p.status||'').toLowerCase()!==f.status)return false;
+                if(limits.min!==null&&amount<limits.min)return false;
+                if(limits.max!==null&&amount>limits.max)return false;
+                return true;
+            });
+        }
+        function setDebtReportOutput(title,columns,rows){
+            debtReportState.title=title;debtReportState.columns=columns;debtReportState.rows=rows;
+            const target=document.getElementById('reportOutput'),caption=document.getElementById('reportResultCaption');
+            if(caption)caption.textContent=title+' — '+rows.length+' سجل';if(!target)return;
+            if(!rows.length){target.innerHTML='<div class="empty-state"><i class="fas fa-inbox"></i> لا توجد سجلات مطابقة للفلاتر الحالية.</div>';return;}
+            const head='<tr>'+columns.map(function(c){return '<th>'+escapeHtml(c.label)+'</th>';}).join('')+'</tr>';
+            const body=rows.map(function(row){return '<tr>'+columns.map(function(c){return '<td>'+escapeHtml(row[c.key]??'---')+'</td>';}).join('')+'</tr>';}).join('');
+            target.innerHTML='<div class="table-scroll"><table class="mini-table"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
+        }
+        function renderDebtReportKpis(rows,payments){
+            const host=document.getElementById('reportKpis');if(!host)return;
+            const total=rows.reduce(function(sum,r){return sum+finiteNumber(r.remaining_amount);},0);
+            const overdue=rows.filter(function(r){return r.status==='overdue';}).reduce(function(sum,r){return sum+finiteNumber(r.remaining_amount);},0);
+            const ids=new Set(rows.map(function(r){return finiteNumber(r.customer_party_id??r.customer_id);}).filter(function(id){return id>0;}));
+            const collected=payments.reduce(function(sum,p){return sum+finiteNumber(p.amount);},0);
+            const metrics=[['الرصيد المفتوح',formatCurrency(total)],['المتأخرات',formatCurrency(overdue)],['عملاء مدينون',String(ids.size)],['عمليات التحصيل',String(payments.length)],['المبالغ المحصلة ضمن الفلتر',formatCurrency(collected)]];
+            host.innerHTML=metrics.map(function(m){return '<div class="report-kpi"><strong>'+escapeHtml(m[1])+'</strong><span>'+escapeHtml(m[0])+'</span></div>';}).join('');
+        }
+        async function generateDebtReport(){
+            const target=document.getElementById('reportOutput');
+            try{
+                const f=getReportFilters(),debts=getReportFilteredDebts(),payments=getReportFilteredPayments();
+                const money=function(v){return formatCurrency(v);},dateText=function(v){return String(v||'').slice(0,10)||'---';};
+                renderDebtReportKpis(debts,payments);
+                if(f.type==='payments'){
+                    const rows=payments.map(function(p){return {date:dateText(p.created_at||p.payment_date),customer:p.customer_name||p.commercial_name||'---',
+                        reference:p.payment_code||p.reference_number||('#'+p.id),method:p.payment_method||p.payment_type||'---',
+                        settlement:p.cash_box_id?('صندوق #'+p.cash_box_id):(p.bank_account_id?('حساب بنكي #'+p.bank_account_id):'---'),amount:money(p.amount),status:p.status||'---'};});
+                    setDebtReportOutput('تقرير عمليات التحصيل والتسديد',[
+                        {key:'date',label:'التاريخ'},{key:'customer',label:'العميل'},{key:'reference',label:'مرجع العملية'},
+                        {key:'method',label:'طريقة الدفع'},{key:'settlement',label:'وسيلة التحصيل'},{key:'amount',label:'المبلغ'},{key:'status',label:'الحالة'}],rows);return;
+                }
+                if(f.type==='aging'){
+                    const buckets=buildAgingSummary(debts);
+                    setDebtReportOutput('تقرير أعمار الديون',[{key:'label',label:'الفئة العمرية'},{key:'count',label:'عدد الفواتير'},{key:'amount',label:'إجمالي المتبقي'}],
+                        buckets.map(function(b){return {label:b.label,count:String(b.count),amount:money(b.amount)};}));return;
+                }
+                if(f.type==='customers'){
+                    const groups=new Map();
+                    debts.forEach(function(row){const id=String(row.customer_party_id??row.customer_id??'');
+                        if(!groups.has(id))groups.set(id,{customer:row.customer_name||'---',phone:row.customer_phone||'---',invoices:0,remaining:0,overdue:0});
+                        const g=groups.get(id);g.invoices++;g.remaining+=finiteNumber(row.remaining_amount);if(row.status==='overdue')g.overdue+=finiteNumber(row.remaining_amount);
+                    });
+                    const rows=Array.from(groups.values()).sort(function(a,b){return b.remaining-a.remaining;}).map(function(g){return {
+                        customer:g.customer,phone:g.phone,invoices:String(g.invoices),remaining:money(g.remaining),overdue:money(g.overdue)};});
+                    setDebtReportOutput('تقرير الأرصدة المجمعة حسب العميل',[
+                        {key:'customer',label:'العميل'},{key:'phone',label:'الهاتف'},{key:'invoices',label:'الفواتير المفتوحة'},
+                        {key:'remaining',label:'إجمالي المتبقي'},{key:'overdue',label:'المتأخرات'}],rows);return;
+                }
+                if(f.type==='statement'){
+                    if(!f.customerId)throw new Error('اختر عميلاً لإصدار كشف الحركة الخاص به.');
+                    const reads=await Promise.all([
+                        apiCall('getCustomerLedger',{customer_id:Number(f.customerId)}).catch(function(e){return {success:false,error:e.message};}),
+                        apiCall('getCustomerSales',{customer_id:Number(f.customerId)}).catch(function(e){return {success:false,error:e.message};}),
+                        apiCall('getPayments').catch(function(e){return {success:false,error:e.message};})
+                    ]);
+                    const ledger=reads[0].success&&Array.isArray(reads[0].data)?reads[0].data:[];
+                    if(ledger.length){
+                        const rows=ledger.filter(function(r){return reportDateMatches(r.transaction_date||r.created_at,f.from,f.to);}).map(function(r){return {
+                            date:dateText(r.transaction_date||r.created_at),type:r.transaction_type||'قيد',reference:r.reference_number||r.transaction_id||'---',
+                            debit:money(r.debit),credit:money(r.credit),balance:money(r.balance)};});
+                        setDebtReportOutput('كشف حركة العميل من دفتر الأستاذ',[
+                            {key:'date',label:'التاريخ'},{key:'type',label:'نوع القيد'},{key:'reference',label:'المرجع'},
+                            {key:'debit',label:'مدين'},{key:'credit',label:'دائن'},{key:'balance',label:'الرصيد المسجل'}],rows);
+                    }else{
+                        const sales=reads[1].success&&Array.isArray(reads[1].data)?reads[1].data:[];
+                        const allPayments=reads[2].success&&Array.isArray(reads[2].data)?reads[2].data:[];
+                        const customerPayments=allPayments.filter(function(p){return String(p.customer_party_id??p.customer_id??p.party_id)===String(f.customerId);});
+                        let rows=sales.filter(function(r){return reportDateMatches(r.created_at||r.due_date,f.from,f.to);}).map(function(r){return {
+                            date:dateText(r.created_at||r.due_date),type:'فاتورة',reference:r.invoice_number||r.sale_code||('#'+r.id),
+                            amount:money(r.net_amount),paid:money(r.paid_amount),remaining:money(r.remaining_amount),source:'sales_transactions'};});
+                        rows=rows.concat(customerPayments.filter(function(p){return reportDateMatches(p.created_at||p.payment_date,f.from,f.to);}).map(function(p){return {
+                            date:dateText(p.created_at||p.payment_date),type:'تسديد',reference:p.payment_code||('#'+p.id),
+                            amount:money(p.amount),paid:'---',remaining:money(p.remaining_after),source:'payments'};})).sort(function(a,b){return String(b.date).localeCompare(String(a.date));});
+                        setDebtReportOutput('كشف حركة العميل من الفواتير والمدفوعات المسجلة',[
+                            {key:'date',label:'التاريخ'},{key:'type',label:'الحركة'},{key:'reference',label:'المرجع'},
+                            {key:'amount',label:'المبلغ/الإجمالي'},{key:'paid',label:'المدفوع'},{key:'remaining',label:'المتبقي/بعد العملية'},{key:'source',label:'المصدر'}],rows);
+                    }return;
+                }
+                const rows=debts.map(function(r){return {date:dateText(r.created_at||r.due_date),customer:r.customer_name||'---',phone:r.customer_phone||'---',
+                    invoice:r.invoice_number||r.sale_code||('#'+r.id),total:money(r.net_amount??r.total_amount),paid:money(r.paid_amount),
+                    remaining:money(r.remaining_amount),due:dateText(r.due_date),status:getStatusLabel(r.status)};});
+                setDebtReportOutput(f.type==='overdue'?'تقرير الديون المتأخرة':(f.type==='invoices'?'تقرير الفواتير ذات الرصيد المتبقي':'تقرير أرصدة ديون العملاء'),[
+                    {key:'date',label:'تاريخ السجل'},{key:'customer',label:'العميل'},{key:'phone',label:'الهاتف'},{key:'invoice',label:'رقم الفاتورة'},
+                    {key:'total',label:'الإجمالي'},{key:'paid',label:'المدفوع'},{key:'remaining',label:'المتبقي'},
+                    {key:'due',label:'الاستحقاق'},{key:'status',label:'الحالة'}],rows);
+            }catch(e){
+                if(target)target.innerHTML='<div class="error-state">'+escapeHtml(e.message||'تعذر توليد التقرير')+'</div>';
+                debtReportState.rows=[];debtReportState.columns=[];console.error('Customer debt report failed:',e);
             }
+        }
+        function exportDebtReportCSV(){
+            if(!debtReportState.rows.length||!debtReportState.columns.length){showToast('لا توجد نتائج تقرير لتصديرها.','warning');return;}
+            const values=[debtReportState.columns.map(function(c){return c.label;}),...debtReportState.rows.map(function(row){return debtReportState.columns.map(function(c){return row[c.key]??'';});})];
+            const csv=values.map(function(row){return row.map(csvEscape).join(',');}).join('\n')+'\n';
+            const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}),link=document.createElement('a');
+            link.download='تقرير_ديون_العملاء_'+businessDayDate()+'.csv';link.href=URL.createObjectURL(blob);document.body.appendChild(link);link.click();link.remove();
+            setTimeout(function(){URL.revokeObjectURL(link.href);},1000);showToast('تم تصدير التقرير المفلتر إلى CSV.','success');
+        }
+        function exportDebtReportPDF(){
+            if(!debtReportState.rows.length||!debtReportState.columns.length){showToast('لا توجد نتائج تقرير لتصديرها.','warning');return;}
+            if(!window.jspdf||typeof window.jspdf.jsPDF!=='function'){showToast('مكتبة PDF المحلية غير متوفرة؛ استخدم CSV أو الطباعة.','error');return;}
+            try{
+                const doc=new window.jspdf.jsPDF('l','pt','a4');doc.setFontSize(15);doc.text('Customer Debts Report',30,35);
+                const head=[debtReportState.columns.map(function(c){return c.label;})];
+                const body=debtReportState.rows.map(function(row){return debtReportState.columns.map(function(c){return String(row[c.key]??'---');});});
+                if(typeof doc.autoTable==='function')doc.autoTable({head:head,body:body,startY:55,styles:{fontSize:7,cellPadding:3},margin:{left:24,right:24}});
+                else{let y=60;doc.setFontSize(7);body.forEach(function(row){if(y>560){doc.addPage();y=40;}doc.text(row.join(' | ').slice(0,190),24,y);y+=12;});}
+                doc.save('customer-debt-report-'+businessDayDate()+'.pdf');showToast('تم إنشاء PDF لنتائج التقرير الحالية.','success');
+            }catch(e){showToast('فشل إنشاء PDF: '+(e.message||'خطأ غير معروف'),'error');}
+        }
+
+        async function openReportsModal() {
+            const modal=document.getElementById('reportsModal'),body=document.getElementById('reportsBody');
+            modal.classList.add('show');document.body.style.overflow='hidden';
+            body.innerHTML='<div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> جاري تحميل بيانات التقارير من SQLite...</div>';
+            Promise.all([
+                apiCall('getCustomerDebts',{start_date:null,end_date:null}),apiCall('getPayments'),apiCall('getCustomers')
+            ]).then(async function(reads){
+                if(!reads[0].success)throw new Error(reads[0].error||reads[0].message||'تعذر قراءة ديون العملاء');
+                debtReportState.debts=(Array.isArray(reads[0].data)?reads[0].data:[]).map(normalizeDebtRow);
+                debtReportState.payments=reads[1].success&&Array.isArray(reads[1].data)?reads[1].data:[];
+                debtReportState.customers=reads[2].success&&Array.isArray(reads[2].data)?reads[2].data:[];
+                const customerOptions=debtReportState.customers.map(function(c){return '<option value="'+escapeHtml(c.id)+'">'+escapeHtml(c.commercial_name_ar||c.commercial_name||c.name||('عميل #'+c.id))+'</option>';}).join('');
+                body.innerHTML='<div class="report-workspace"><section class="report-panel"><div class="report-panel-title"><i class="fas fa-sliders-h"></i> معايير التقرير والفلترة</div><div class="report-filters">'+
+                    '<label class="report-field">نوع التقرير<select id="reportType" onchange="generateDebtReport()"><option value="balances">أرصدة ديون العملاء</option><option value="overdue">الديون المتأخرة</option><option value="aging">أعمار الديون (Aging)</option><option value="customers">ملخص حسب العميل</option><option value="invoices">الفواتير ذات الرصيد المتبقي</option><option value="payments">عمليات التحصيل والتسديد</option><option value="statement">كشف حركة عميل</option></select></label>'+
+                    '<label class="report-field">العميل<select id="reportCustomer"><option value="">جميع العملاء</option>'+customerOptions+'</select></label>'+
+                    '<label class="report-field">من تاريخ<input id="reportDateFrom" type="date"></label><label class="report-field">إلى تاريخ<input id="reportDateTo" type="date"></label>'+
+                    '<label class="report-field">حالة السجل<select id="reportStatus"><option value="">كل الحالات</option><option value="current">جاري</option><option value="overdue">متأخر</option><option value="partial">مدفوع جزئياً</option><option value="completed">مكتمل</option><option value="pending">معلق</option><option value="cancelled">ملغى</option></select></label>'+
+                    '<label class="report-field">المبلغ من<input id="reportMinAmount" type="number" min="0" step="0.01" placeholder="بدون حد أدنى"></label><label class="report-field">المبلغ إلى<input id="reportMaxAmount" type="number" min="0" step="0.01" placeholder="بدون حد أعلى"></label></div>'+
+                    '<div class="report-actions"><button class="btn-report primary" type="button" onclick="generateDebtReport()"><i class="fas fa-filter"></i> تطبيق الفلاتر</button>'+
+                    '<button class="btn-report" type="button" onclick="exportDebtReportCSV()"><i class="fas fa-file-csv"></i> CSV</button><button class="btn-report" type="button" onclick="exportDebtReportPDF()"><i class="fas fa-file-pdf"></i> PDF</button>'+
+                    '<button class="btn-report" type="button" onclick="window.print()"><i class="fas fa-print"></i> طباعة</button><button class="btn-report" type="button" onclick="openReportsModal()"><i class="fas fa-sync-alt"></i> تحديث البيانات</button></div></section>'+
+                    '<div class="report-kpi-grid" id="reportKpis"></div><section class="report-panel"><div class="report-panel-title"><i class="fas fa-file-alt"></i> النتائج</div><div class="report-result-caption" id="reportResultCaption">جاري تجهيز التقرير...</div><div id="reportOutput"></div></section></div>';
+                document.getElementById('reportType').value=debtScreenSettings.defaultReport||'balances';
+                document.getElementById('reportDateFrom').value=document.getElementById('filterDateFrom').value||'';
+                document.getElementById('reportDateTo').value=document.getElementById('filterDateTo').value||'';
+                document.getElementById('reportCustomer').addEventListener('change',generateDebtReport);
+                ['reportDateFrom','reportDateTo','reportStatus','reportMinAmount','reportMaxAmount'].forEach(function(id){document.getElementById(id).addEventListener('change',generateDebtReport);});
+                await generateDebtReport();
+            }).catch(function(e){body.innerHTML='<div class="error-state">'+escapeHtml(e.message||'فشل تحميل تقارير ديون العملاء')+'</div>';console.error('Customer debt reports failed:',e);});
+        }
+
+async function loadCustomerDebtSettings() {
+            const keys=['customer_debts_default_view','customer_debts_default_status','customer_debts_due_soon_days','customer_debts_default_report','customer_debts_highlight_overdue'];
+            const results=await Promise.all(keys.map(function(key){return apiCall('getSetting',{key:key}).catch(function(e){return {success:false,error:e.message};});}));
+            const read=function(i,fallback){const r=results[i];return r&&r.success?(r.value??r.data??fallback):fallback;};
+            const rawView=String(read(0,'table')), rawStatus=String(read(1,'')), rawDays=finiteNumber(read(2,10),10), rawReport=String(read(3,'balances')), rawHighlight=String(read(4,'1'));
+            debtScreenSettings={
+                defaultView:['table','cards','tree'].indexOf(rawView)>=0?rawView:'table',
+                defaultStatus:['','current','overdue','partial'].indexOf(rawStatus)>=0?rawStatus:'',
+                dueSoonDays:Math.max(1,Math.min(365,Math.round(rawDays||10))),
+                defaultReport:['balances','overdue','aging','customers','invoices','payments','statement'].indexOf(rawReport)>=0?rawReport:'balances',
+                highlightOverdue:rawHighlight!=='0'
+            };
+            debtScreenSettingsLoaded=true;
+            const statusFilter=document.getElementById('filterStatus');
+            if(statusFilter&&!statusFilter.value&&debtScreenSettings.defaultStatus)statusFilter.value=debtScreenSettings.defaultStatus;
+            setDebtView(debtScreenSettings.defaultView,false);
+            return debtScreenSettings;
+        }
+
+        async function saveCustomerDebtSettings() {
+            const view=document.getElementById('debtSettingDefaultView').value;
+            const status=document.getElementById('debtSettingDefaultStatus').value;
+            const days=finiteNumber(document.getElementById('debtSettingDueDays').value,NaN);
+            const report=document.getElementById('debtSettingDefaultReport').value;
+            const highlight=document.getElementById('debtSettingHighlightOverdue').checked?'1':'0';
+            const feedback=document.getElementById('debtSettingsFeedback');
+            if(['table','cards','tree'].indexOf(view)<0||['','current','overdue','partial'].indexOf(status)<0||
+               !Number.isInteger(days)||days<1||days>365||
+               ['balances','overdue','aging','customers','invoices','payments','statement'].indexOf(report)<0){
+                if(feedback){feedback.hidden=false;feedback.textContent='تحقق من القيم؛ عدد الأيام يجب أن يكون عدداً صحيحاً من 1 إلى 365.';feedback.style.color='var(--danger)';}return;
+            }
+            const pairs=[['customer_debts_default_view',view],['customer_debts_default_status',status],
+                ['customer_debts_due_soon_days',String(days)],['customer_debts_default_report',report],['customer_debts_highlight_overdue',highlight]];
+            if(feedback){feedback.hidden=false;feedback.textContent='جارٍ حفظ الإعدادات في SQLite والتحقق من كل قيمة...';feedback.style.color='var(--text-secondary)';}
+            try{
+                for(const pair of pairs){const result=await apiCall('setSetting',{key:pair[0],value:pair[1]});if(!result.success)throw new Error(result.error||result.message||('تعذر حفظ '+pair[0]));}
+                debtScreenSettings={defaultView:view,defaultStatus:status,dueSoonDays:days,defaultReport:report,highlightOverdue:highlight==='1'};
+                debtScreenSettingsLoaded=true;setDebtView(view,false);document.getElementById('filterStatus').value=status;renderCurrentDebtView(false);
+                if(feedback){feedback.hidden=false;feedback.textContent='تم حفظ الإعدادات الخمسة في SQLite وتطبيقها على الشاشة.';feedback.style.color='var(--success)';}
+                showToast('تم حفظ إعدادات ديون العملاء وتطبيقها.','success');
+            }catch(e){if(feedback){feedback.hidden=false;feedback.textContent='فشل الحفظ: '+(e.message||'خطأ غير معروف');feedback.style.color='var(--danger)';}console.error('Customer debt settings save failed:',e);}
         }
 
         async function openSettingsModal() {
-            const modal = document.getElementById('settingsModal');
-            const body = document.getElementById('settingsBody');
-            modal.classList.add('show');
-            document.body.style.overflow = 'hidden';
-
-            body.innerHTML =
-                `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل الإعدادات...</p></div>`;
-
-            try {
-                const keys = ['low_stock_threshold', 'max_discount_percent', 'auto_print_receipt', 'vat_percentage'];
-                const settings = {};
-                for (const key of keys) {
-                    const res = await apiCall('getSetting', { key });
-                    if (!res.success) throw new Error(res.error || res.message || `تعذر قراءة الإعداد ${key}`);
-                    settings[key] = res.value ?? res.data ?? '';
-                }
-                const lowStock = settings.low_stock_threshold ?? '';
-                const maxDiscount = settings.max_discount_percent ?? '';
-                const autoPrint = String(settings.auto_print_receipt) === '1';
-                const vat = settings.vat_percentage ?? '';
-
-                body.innerHTML = `
-                        <div class="settings-group">
-                            <div class="setting-row">
-                                <div>
-                                    <span class="setting-label">حد المخزون المنخفض</span>
-                                    <span class="setting-desc">الحد الأدنى للتنبيه قبل نفاذ المنتج</span>
-                                </div>
-                                <div style="display:flex;gap:8px;align-items:center;">
-                                    <input type="number" id="setting_low_stock" value="${lowStock}" style="width:80px;" />
-                                    <button class="btn-save-setting" onclick="saveSetting('low_stock_threshold', document.getElementById('setting_low_stock').value, 'settingsModal')">حفظ</button>
-                                </div>
-                            </div>
-                            <div class="setting-row">
-                                <div>
-                                    <span class="setting-label">الحد الأقصى للخصم (%)</span>
-                                    <span class="setting-desc">أقصى نسبة خصم مسموح بها في الفاتورة</span>
-                                </div>
-                                <div style="display:flex;gap:8px;align-items:center;">
-                                    <input type="number" id="setting_max_discount" value="${maxDiscount}" style="width:80px;" />
-                                    <button class="btn-save-setting" onclick="saveSetting('max_discount_percent', document.getElementById('setting_max_discount').value, 'settingsModal')">حفظ</button>
-                                </div>
-                            </div>
-                            <div class="setting-row">
-                                <div>
-                                    <span class="setting-label">طباعة الإيصال تلقائياً</span>
-                                    <span class="setting-desc">طباعة الإيصال مباشرة بعد إتمام البيع</span>
-                                </div>
-                                <div style="display:flex;gap:8px;align-items:center;">
-                                    <input type="checkbox" id="setting_auto_print" ${autoPrint ? 'checked' : ''} />
-                                    <button class="btn-save-setting" onclick="saveSetting('auto_print_receipt', document.getElementById('setting_auto_print').checked ? '1' : '0', 'settingsModal')">حفظ</button>
-                                </div>
-                            </div>
-                            <div class="setting-row">
-                                <div>
-                                    <span class="setting-label">نسبة ضريبة القيمة المضافة (%)</span>
-                                    <span class="setting-desc">نسبة الضريبة المطبقة على المبيعات</span>
-                                </div>
-                                <div style="display:flex;gap:8px;align-items:center;">
-                                    <input type="number" id="setting_vat" value="${vat}" style="width:80px;" step="0.1" />
-                                    <button class="btn-save-setting" onclick="saveSetting('vat_percentage', document.getElementById('setting_vat').value, 'settingsModal')">حفظ</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div style="margin-top:16px;text-align:center;font-size:0.75rem;color:var(--text-muted);">
-                            تم جلب الإعدادات من قاعدة البيانات الفعلية.
-                        </div>
-                    `;
-            } catch (e) {
-                body.innerHTML =
-                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>حدث خطأ في تحميل الإعدادات</div>`;
-                console.error(e);
-            }
+            const modal=document.getElementById('settingsModal'),body=document.getElementById('settingsBody');
+            modal.classList.add('show');document.body.style.overflow='hidden';
+            body.innerHTML='<div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> جاري تحميل إعدادات ديون العملاء...</div>';
+            loadCustomerDebtSettings().then(function(value){
+                body.innerHTML='<div class="report-workspace"><section class="report-panel"><div class="report-panel-title"><i class="fas fa-sliders-h"></i> تفضيلات شاشة ديون العملاء</div><div class="debt-settings-stack">'+
+                    '<div class="debt-setting-row"><div><span class="debt-setting-label">طريقة العرض الافتراضية</span><span class="debt-setting-desc">جدول أو بطاقات أو شجرة مجمعة حسب العميل.</span></div><select id="debtSettingDefaultView"><option value="table">جدول</option><option value="cards">بطاقات</option><option value="tree">شجرة</option></select></div>'+
+                    '<div class="debt-setting-row"><div><span class="debt-setting-label">حالة الديون الافتراضية</span><span class="debt-setting-desc">فلتر اختياري عند فتح الشاشة، ويمكن تغييره من شريط الفلاتر.</span></div><select id="debtSettingDefaultStatus"><option value="">جميع الحالات</option><option value="current">جاري</option><option value="overdue">متأخر</option><option value="partial">مدفوع جزئياً</option></select></div>'+
+                    '<div class="debt-setting-row"><div><span class="debt-setting-label">نافذة تذكير الاستحقاق بالأيام</span><span class="debt-setting-desc">نطاق قائمة تنبيهات الديون القريبة في هذه الشاشة.</span></div><input id="debtSettingDueDays" type="number" min="1" max="365" step="1" value="'+value.dueSoonDays+'"></div>'+
+                    '<div class="debt-setting-row"><div><span class="debt-setting-label">التقرير الافتراضي</span><span class="debt-setting-desc">التقرير الذي يظهر أولاً عند فتح التقارير.</span></div><select id="debtSettingDefaultReport"><option value="balances">أرصدة ديون العملاء</option><option value="overdue">الديون المتأخرة</option><option value="aging">أعمار الديون</option><option value="customers">ملخص حسب العميل</option><option value="invoices">الفواتير ذات الرصيد المتبقي</option><option value="payments">عمليات التحصيل والتسديد</option><option value="statement">كشف حركة عميل</option></select></div>'+
+                    '<div class="debt-setting-row"><div><span class="debt-setting-label">إبراز الديون المتأخرة</span><span class="debt-setting-desc">تنسيق تحذيري للديون المتأخرة في عرض البطاقات والشجرة.</span></div><label class="debt-setting-check"><input id="debtSettingHighlightOverdue" type="checkbox" '+(value.highlightOverdue?'checked':'')+'> تفعيل الإبراز</label></div>'+
+                    '</div><div id="debtSettingsFeedback" class="debt-settings-feedback" hidden></div><div class="report-actions"><button class="btn-report primary" onclick="saveCustomerDebtSettings()"><i class="fas fa-save"></i> حفظ الإعدادات</button><button class="btn-report" onclick="loadCustomerDebtSettings().then(openSettingsModal)"><i class="fas fa-undo"></i> إعادة تحميل المحفوظ</button></div></section>'+
+                    '<section class="report-panel"><div class="report-panel-title"><i class="fas fa-database"></i> التخزين والتحقق</div><p class="report-result-caption">تُحفظ التفضيلات في SQLite بمفاتيح خاصة بهذه الشاشة، ولا تستبدل إعدادات الضريبة أو المخزون أو المبيعات.</p></section></div>';
+                document.getElementById('debtSettingDefaultView').value=value.defaultView;
+                document.getElementById('debtSettingDefaultStatus').value=value.defaultStatus;
+                document.getElementById('debtSettingDefaultReport').value=value.defaultReport;
+            }).catch(function(e){body.innerHTML='<div class="error-state">'+escapeHtml(e.message||'تعذر تحميل إعدادات ديون العملاء')+'</div>';console.error('Customer debt settings failed:',e);});
         }
 
         async function saveSetting(key, value, modalId) {
