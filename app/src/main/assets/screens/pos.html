@@ -1767,16 +1767,16 @@ body.sleep-mode .sidebar-toggle { display: none; }
     min-width: 70px !important; max-width: 90px !important; width: 10% !important;
 }
 #productsTable th:nth-child(2), #productsTable td:nth-child(2) {
-    min-width: 130px !important; max-width: 180px !important; width: 22% !important;
+    min-width: 150px !important; max-width: 220px !important; width: 28% !important;
 }
 #productsTable th:nth-child(3), #productsTable td:nth-child(3) {
-    min-width: 100px !important; max-width: 130px !important; width: 18% !important;
+    min-width: 80px !important; max-width: 110px !important; width: 14% !important;
 }
 #productsTable th:nth-child(4), #productsTable td:nth-child(4) {
     min-width: 100px !important; max-width: 130px !important; width: 18% !important;
 }
 #productsTable th:nth-child(5), #productsTable td:nth-child(5) {
-    min-width: 130px !important; max-width: 180px !important; width: 32% !important;
+    min-width: 70px !important; max-width: 100px !important; width: 16% !important;
 }
 #productsTable td {
     background: var(--bg-glass);
@@ -5656,7 +5656,7 @@ async function persistInvoicePdfAfterSale(invoiceNumber) {
         // Keep the committed sale intact, but expose the archive failure instead of
         // silently treating a missing PDF as a completed background task.
         console.error('[Invoice PDF Archive] Failed; sale remains committed:', invoiceNumber, error);
-        showToast('تم ترحيل البيع بنجاح. تعذر إكمال أرشفة PDF تلقائياً؛ يمكنك استخدام الطباعة أو إعادة المحاولة من واتساب.', 'warning');
+        showToast('تم ترحيل البيع، لكن تعذر حفظ نسخة PDF. يمكنك إعادة المحاولة من زر واتساب.', 'warning');
         return false;
     }
 }
