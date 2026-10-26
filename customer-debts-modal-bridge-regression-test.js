@@ -10,5 +10,7 @@ expect(source.includes('customerDebtDetailsCallbacks = new Map()'), 'يلزم ح
 expect(source.includes('انتهت مهلة تحميل تفاصيل العميل'), 'يلزم حد زمني صريح');
 expect(source.includes("Array.isArray(c.invoices) ? c.invoices : []"), 'يجب استهلاك فواتير SQLite من bundle الحقيقي');
 expect(source.includes('cancelPendingCustomerDebtDetails();'), 'يلزم تنظيف callbacks عند إغلاق المودال أو مغادرة الشاشة');
-expect(!/async function viewCustomerDetails\([\s\S]*?Promise\.all\(/.test(source), 'لا يجوز تنفيذ قراءتي جسر متزامنتين قبل فتح مودال التفاصيل');
+const detailsFunction = source.match(/async function viewCustomerDetails\([^\n]*\)\s*\{([\s\S]*?)\n\s*\}\s*async function viewHistory\(/);
+expect(detailsFunction, 'تعذر تحديد نطاق دالة تفاصيل العميل في اختبار الجسر');
+expect(!/Promise\.all\(/.test(detailsFunction[1]), 'لا يجوز تنفيذ قراءات جسر متزامنة داخل دالة تفاصيل العميل');
 console.log(`Customer debts modal async bridge regression PASS (${scriptBlocks.length} script block(s)).`);

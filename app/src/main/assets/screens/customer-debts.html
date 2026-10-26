@@ -3458,18 +3458,22 @@ function updateDebtViewButtons() {
                 const partyResult = await invokeCustomerDebtDetailsAsync(id);
                 if (requestVersion !== customerDebtDetailsVersion || !overlay.classList.contains('show')) return;
                 const c = partyResult.data && typeof partyResult.data === 'object' ? partyResult.data : partyResult;
-                if (!partyResult.success || !c || typeof c !== 'object' || !finiteNumber(c.id ?? c.party_id)) {
-                    throw new Error(partyResult.error || partyResult.message || 'العميل غير موجود');
+                const customerDebts = allDebtsData.filter(row => finiteNumber(row.customer_party_id ?? row.customer_id) === id);
+                if ((!partyResult.success || !c || typeof c !== 'object' || !finiteNumber(c.id ?? c.party_id)) && !customerDebts.length) {
+                    throw new Error(partyResult.error || partyResult.message || 'العميل غير موجود ضمن بيانات المحطة الحالية');
                 }
                 const sales = Array.isArray(c.invoices) ? c.invoices : [];
-                const customerDebts = allDebtsData.filter(row => row.customer_party_id === id);
                 const sourceRows = sales.length ? sales.map(normalizeDebtRow) : customerDebts;
                 const totalDebt = sourceRows.reduce((sum, row) => sum + finiteNumber(row.net_amount ?? row.total_debt), 0);
                 const paidAmount = sourceRows.reduce((sum, row) => sum + finiteNumber(row.paid_amount), 0);
                 const remainingAmount = sourceRows.reduce((sum, row) => sum + finiteNumber(row.remaining_amount), 0);
                 const overdue = sourceRows.some(row => row.status === 'overdue');
                 const status = remainingAmount <= 0 ? 'paid' : overdue ? 'overdue' : paidAmount > 0 ? 'partial' : 'current';
-                const name = c.commercial_name || c.customer_name || c.name || 'عميل';
+                const firstDebt = customerDebts[0] || {};
+                const name = c.commercial_name || c.customer_name || c.name || firstDebt.customer_name || 'عميل';
+                const partyReadWarning = !partyResult.success
+                    ? `<div class="debt-settings-feedback">تعذر تحميل بعض بيانات ملف العميل الإضافية؛ عُرضت بيانات الديون المحملة من نطاق المحطة. السبب: ${escapeHtml(partyResult.error || partyResult.message || 'خطأ غير معروف')}</div>`
+                    : '';
                 const invoiceRows = sales.slice(0, 50).map((sale) => `
                     <tr>
                         <td>${escapeHtml(sale.invoice_number || sale.sale_code || '---')}</td>
@@ -3495,6 +3499,7 @@ function updateDebtViewButtons() {
                         <div class="details-row"><span class="details-label">البريد الإلكتروني</span><span class="details-value">${escapeHtml(c.email || '---')}</span></div>
                         <div class="details-row"><span class="details-label">العنوان</span><span class="details-value">${escapeHtml(c.address || '---')}</span></div>
                     </div>
+                    ${partyReadWarning}
                     <div class="details-section">
                         <div class="details-section-title"><i class="fas fa-hand-holding-usd"></i> الديون</div>
                         <div class="details-row"><span class="details-label">إجمالي الدين</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(totalDebt)}</span></div>
@@ -3536,7 +3541,6 @@ function updateDebtViewButtons() {
             ]).then(function(reads) {
                 if (historyVersion !== customerHistoryRequestVersion || !overlay.classList.contains('show')) return;
                 const ledgerResult=reads[0],salesResult=reads[1],paymentsResult=reads[2];
-                if (!ledgerResult.success) throw new Error(ledgerResult.error || ledgerResult.message || 'تعذر قراءة دفتر الأستاذ');
                 const ledger=Array.isArray(ledgerResult.data)?ledgerResult.data:[];
                 const sales=salesResult.success && Array.isArray(salesResult.data)?salesResult.data:[];
                 const paymentsAll=paymentsResult.success && Array.isArray(paymentsResult.data)?paymentsResult.data:[];
@@ -3552,6 +3556,7 @@ function updateDebtViewButtons() {
                     html+='<div class="empty-state">لا توجد قيود في جدول دفتر الأستاذ لهذا العميل حالياً.</div>';
                     if(sales.length||payments.length) html+='<div class="debt-settings-feedback">تُعرض الفواتير والمدفوعات أدناه من جداولها الأصلية. لا يتم توليد قيود أو أرصدة محاسبية غير مسجلة.</div>';
                 }
+                if(!ledgerResult.success)html+='<div class="error-state">'+escapeHtml(ledgerResult.error || ledgerResult.message || 'تعذر قراءة دفتر الأستاذ')+'</div>';
                 html+='</div><div class="details-section"><div class="details-section-title"><i class="fas fa-file-invoice-dollar"></i> الفواتير المسجلة ('+sales.length+')</div>';
                 if(sales.length){
                     html+='<div class="table-scroll"><table class="mini-table"><thead><tr><th>التاريخ</th><th>رقم الفاتورة</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th><th>الحالة</th></tr></thead><tbody>';
