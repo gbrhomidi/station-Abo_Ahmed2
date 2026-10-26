@@ -11569,12 +11569,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     consumePriceListQuantity(db, resolvedPrice.priceListItemId, liters, stationScopeId)
                 }
                 // actual_quantity stores the tank level AFTER refill, not the quantity received.
-                // Fuel unit cost must therefore be weighted by delivered_quantity only.
+                // Derive COGS from the fuel purchase amount only. net_amount includes transport
+                // charges (and may be non-zero even when the recorded fuel purchase is zero),
+                // so using it as the first fallback can incorrectly turn a delivery fee into the
+                // entire fuel cost (for example, a 1,000-riyal transport charge).
                 val fuelUnitCost = db.rawQuery(
                     """SELECT CASE WHEN SUM(delivered_quantity) > 0
-                              THEN SUM(COALESCE(NULLIF(net_amount, 0), NULLIF(total_amount, 0),
-                                               COALESCE(unit_price, 0) * delivered_quantity))
-                                   / SUM(delivered_quantity)
+                              THEN SUM(CASE
+                                  WHEN COALESCE(total_amount, 0) > 0 THEN total_amount
+                                  ELSE COALESCE(unit_price, 0) * delivered_quantity
+                              END) / SUM(delivered_quantity)
                               ELSE 0 END
                        FROM tank_refills
                        WHERE station_id = ? AND fuel_type_id = ? AND status = 'completed' AND is_deleted = 0
