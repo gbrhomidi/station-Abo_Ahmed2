@@ -1346,12 +1346,17 @@ body.sleep-mode .sidebar-toggle { display: none; }
 .product-table { width: 100%; table-layout: fixed; }
 .product-table th, .product-table td { min-width: 0; text-align: center; overflow-wrap: anywhere; }
 .product-table th:nth-child(1), .product-table td:nth-child(1) { width: 16%; }
-.product-table th:nth-child(2), .product-table td:nth-child(2) { width: 35%; }
-.product-table th:nth-child(3), .product-table td:nth-child(3) { width: 13%; }
-.product-table th:nth-child(4), .product-table td:nth-child(4) { width: 21%; }
-.product-table th:nth-child(5), .product-table td:nth-child(5) { width: 15%; }
-.product-table td:last-child { padding-left: 2px; padding-right: 2px; }
-.product-table .product-details-btn, .product-table .remove-product-btn { min-width: 0; padding: 5px; }
+.product-table th:nth-child(2), .product-table td:nth-child(2) { width: 37%; }
+.product-table th:nth-child(3), .product-table td:nth-child(3) { width: 12%; }
+.product-table th:nth-child(4), .product-table td:nth-child(4) { width: 27.5%; }
+.product-table th:nth-child(5), .product-table td:nth-child(5) { width: 7.5%; }
+.product-table td:last-child { padding: 2px 1px; }
+.product-table .product-row-actions { display: flex; flex-direction: column; align-items: stretch; gap: 2px; width: 100%; }
+.product-table .product-details-btn, .product-table .remove-product-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 100%; min-width: 0; min-height: 24px; padding: 2px;
+    font-size: 0.72rem; line-height: 1;
+}
 .product-table tr:nth-child(even) td { background: var(--bg-glass-light); }
 .product-table tr:hover td { background: var(--bg-glass-light); }
 .quantity-input {
@@ -5030,8 +5035,10 @@ function addProductToTable(product) {
         <td>${product.unit_price.toFixed(2)}</td>
         <td class="product-total">${product.unit_price.toFixed(2)}</td>
         <td>
-            <button class="btn btn-sm btn-primary product-details-btn" title="تفاصيل المنتج" type="button"><i class="fas fa-info-circle"></i></button>
-            <button class="btn btn-sm btn-danger remove-product-btn" title="حذف" type="button"><i class="fas fa-trash"></i></button>
+            <div class="product-row-actions">
+                <button class="btn btn-sm btn-primary product-details-btn" title="تفاصيل المنتج" type="button" aria-label="تفاصيل المنتج"><i class="fas fa-info-circle"></i></button>
+                <button class="btn btn-sm btn-danger remove-product-btn" title="حذف" type="button" aria-label="حذف المنتج"><i class="fas fa-trash"></i></button>
+            </div>
         </td>
     `;
     tbody.appendChild(row);
@@ -5439,7 +5446,7 @@ function completeSale() {
                 showToast('تم ترحيل البيع وتحديث المخزون فعلياً' +
                     (isCredit ? (saleSms.queued ? ' — تم وضع SMS في طابور الإرسال' : ' — تعذر تجهيز SMS: ' + (saleSms.reason || 'غير معروف')) : ''), 'success');
                 // Archive the already-committed invoice independently; PDF errors must not repeat the sale.
-                window._invoiceArchivePromise = persistInvoicePdfAfterSale(lastInvoiceNumber);
+                window._invoiceArchivePromise = queueInvoicePdfArchive(lastInvoiceNumber);
                 resetForm();
             } else { showToast(sale.error || sale.message || data.error || data.message || 'تعذر ترحيل الفاتورة؛ لم يُخصم المخزون', 'error'); }
         })
@@ -5609,8 +5616,22 @@ async function loadInvoiceForLastSale() {
     return response.data || response;
 }
 
-async function persistInvoicePdfAfterSale(invoiceNumber) {
-    if (!invoiceNumber || !window.AndroidInterface || typeof AndroidInterface.saveInvoicePdf !== 'function') return;
+function queueInvoicePdfArchive(invoiceNumber) {
+    // The SAF picker and callback bridge are single-flight operations. Serialize
+    // archive requests so two fast sales cannot overwrite the pending invoice HTML.
+    const previous = window._invoiceArchivePromise;
+    const next = Promise.resolve(previous)
+        .catch(error => {
+            console.warn('[Invoice PDF Archive] Previous queued operation failed:', error);
+            return false;
+        })
+        .then(() => persistInvoicePdfAfterSale(invoiceNumber));
+    window._invoiceArchivePromise = next;
+    return next;
+}
+
+async function persistInvoicePdfAfterSale(invoiceNumber, showFailureToast = true) {
+    if (!invoiceNumber || !window.AndroidInterface || typeof AndroidInterface.saveInvoicePdf !== 'function') return false;
     try {
         const response = await apiCall('retrieveInvoice', { invoice_number: invoiceNumber });
         if (!response || !response.success) throw new Error(response?.message || response?.error || 'تعذر استرجاع الفاتورة المرحلة');
@@ -5656,7 +5677,9 @@ async function persistInvoicePdfAfterSale(invoiceNumber) {
         // Keep the committed sale intact, but expose the archive failure instead of
         // silently treating a missing PDF as a completed background task.
         console.error('[Invoice PDF Archive] Failed; sale remains committed:', invoiceNumber, error);
-        showToast('تم ترحيل البيع، لكن تعذر حفظ نسخة PDF. يمكنك إعادة المحاولة من زر واتساب.', 'warning');
+        if (showFailureToast) {
+            showToast('تم ترحيل البيع، لكن تعذر حفظ نسخة PDF. يمكنك إعادة المحاولة من زر واتساب.', 'warning');
+        }
         return false;
     }
 }
@@ -5712,14 +5735,26 @@ async function printReceipt() {
         showLoading(true);
         const response = await loadInvoiceForLastSale();
         const invoice = response.data || response;
+        const printDocumentName = String(invoice.invoice_number || lastInvoiceNumber || '').trim();
+        if (!printDocumentName) throw new Error('رقم الفاتورة غير متوفر للطباعة');
 
-        // A sale may have been committed moments ago while its verified PDF is
-        // still being copied into the user's selected Invoices folder. Wait for
-        // that exact archive operation before opening the system print preview.
-        // The archive promise never re-posts the sale and does not block printing
-        // if the archive attempt failed; its failure is logged and reported safely.
+        // Do not open the print preview until this invoice has a verified PDF in
+        // the folder selected by the user. Retry a failed archive once; this never
+        // re-posts the sale, and detailed renderer diagnostics remain in the log.
+        let archiveSucceeded = false;
         if (window._invoiceArchivePromise && typeof window._invoiceArchivePromise.then === 'function') {
-            await window._invoiceArchivePromise;
+            try {
+                archiveSucceeded = (await window._invoiceArchivePromise) === true;
+            } catch (archiveError) {
+                console.warn('[Invoice PDF Archive] Previous archive attempt failed:', archiveError);
+            }
+        }
+        if (!archiveSucceeded) {
+            archiveSucceeded = (await persistInvoicePdfAfterSale(printDocumentName, false)) === true;
+            window._invoiceArchivePromise = Promise.resolve(archiveSucceeded);
+        }
+        if (!archiveSucceeded) {
+            throw new Error('تعذر حفظ نسخة PDF في مجلد فواتير المبيعات المحدد. أعد المحاولة.');
         }
 
         await loadCurrentStationLogo();
@@ -5738,8 +5773,6 @@ async function printReceipt() {
         // Some Android print-service versions derive the suggested PDF filename
         // from the WebView document title rather than the print-job label alone.
         const originalDocumentTitle = document.title;
-        const printDocumentName = String(invoice.invoice_number || lastInvoiceNumber || '').trim();
-        if (!printDocumentName) throw new Error('رقم الفاتورة غير متوفر للطباعة');
         document.title = printDocumentName;
         try {
             const printResult = await apiCall('printReceipt', { invoice_number: printDocumentName });

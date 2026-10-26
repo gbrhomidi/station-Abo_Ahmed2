@@ -8970,9 +8970,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         }
 
                         val result = if (shouldShare) {
-                            // Share a verified FileProvider-backed copy instead of passing the raw
-                            // document-tree URI to WhatsApp, which can silently drop the attachment.
-                            shareSavedPdf(pdfFile)
+                            // WhatsApp must receive the exact archived invoice from the
+                            // user-selected folder, not an internal/cache-only PDF copy.
+                            copyPdfToSelectedFolder(pdfFile)
+                            val archivedShareResult = shareSavedInvoicePdf(invoiceNumber, normalizedPhone)
+                            JSONObject(archivedShareResult)
                         } else {
                             val selectedUri = copyPdfToSelectedFolder(pdfFile)
                             JSONObject().apply {
