@@ -8687,12 +8687,31 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
                         // Only providers rejecting duplicate names take this fallback. The staged,
                         // verified file remains intact while we remove the old name and rename staging.
-                        oldUri?.let { activity.contentResolver.delete(it, null, null) }
-                        val retryUri = android.provider.DocumentsContract.renameDocument(
-                            activity.contentResolver, stagingUri, source.name
-                        ) ?: throw IllegalStateException("تعذر استبدال ملف الفاتورة في مجلد Invoices")
-                        verifyDocument(retryUri)
-                        return retryUri
+                        val backupName = "." + source.nameWithoutExtension + "_" +
+                            System.currentTimeMillis() + ".previous.pdf"
+                        var backupUri: Uri? = null
+                        if (oldUri != null) {
+                            backupUri = android.provider.DocumentsContract.renameDocument(
+                                activity.contentResolver, oldUri, backupName
+                            ) ?: throw IllegalStateException("تعذر حماية نسخة الفاتورة السابقة قبل الاستبدال")
+                        }
+                        try {
+                            val retryUri = android.provider.DocumentsContract.renameDocument(
+                                activity.contentResolver, stagingUri, source.name
+                            ) ?: throw IllegalStateException("تعذر استبدال ملف الفاتورة في مجلد Invoices")
+                            verifyDocument(retryUri)
+                            backupUri?.let { runCatching { activity.contentResolver.delete(it, null, null) } }
+                            return retryUri
+                        } catch (replaceError: Exception) {
+                            backupUri?.let { previous ->
+                                runCatching {
+                                    android.provider.DocumentsContract.renameDocument(
+                                        activity.contentResolver, previous, source.name
+                                    )
+                                }
+                            }
+                            throw replaceError
+                        }
                     } catch (e: Exception) {
                         // Retain staging on failure so a provider error cannot destroy the last valid copy.
                         throw e
@@ -8907,11 +8926,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                 }, 650L)
                                 return
                             }
-                            throw IllegalStateException(
-                                "محتوى الفاتورة لم يجتز فحص الرسم بعد ثلاث محاولات؛ لم يتم حفظ PDF فارغ. " +
-                                    "تشخيص آمن: DOM=" + lastDomDiagnostic.take(650) +
+                            DebugLogger.warn(
+                                "InvoicePdfRender",
+                                "Rejected blank invoice capture after retries: DOM=" + lastDomDiagnostic.take(650) +
                                     "; READY=" + lastReadyDiagnostic.take(250) +
                                     "; BITMAP=" + lastBitmapDiagnostic.take(350)
+                            )
+                            throw IllegalStateException(
+                                "لم يُحفظ ملف PDF لأن محتوى الفاتورة لم يظهر بصورة صحيحة. بقيت عملية البيع محفوظة؛ أعد المحاولة."
                             )
                         }
 
@@ -8944,33 +8966,12 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             throw replaceError
                         }
 
-                        val selectedUri = copyPdfToSelectedFolder(pdfFile)
                         val result = if (shouldShare) {
-                            val waPackage = listOf("com.whatsapp", "com.whatsapp.w4b")
-                                .firstOrNull { pkg -> activity.packageManager.getLaunchIntentForPackage(pkg) != null }
-                                ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "application/pdf"
-                                putExtra(Intent.EXTRA_STREAM, selectedUri)
-                                putExtra("jid", normalizedPhone + "@s.whatsapp.net")
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                clipData = android.content.ClipData.newRawUri("invoice-pdf", selectedUri)
-                                setPackage(waPackage)
-                            }
-                            if (intent.resolveActivity(activity.packageManager) == null) {
-                                throw IllegalStateException("WhatsApp مثبت لكنه لا يقبل مشاركة مستند PDF")
-                            }
-                            activity.startActivity(intent)
-                            JSONObject().apply {
-                                put("success", true)
-                                put("path", selectedUri.toString())
-                                put("file_name", pdfFile.name)
-                                put("bytes", pdfFile.length())
-                                put("mime_type", "application/pdf")
-                                put("phone", normalizedPhone)
-                                put("message", "تم إنشاء ملف PDF والتحقق منه وفتح واتساب لمشاركته")
-                            }
+                            // Share a verified FileProvider-backed copy instead of passing the raw
+                            // document-tree URI to WhatsApp, which can silently drop the attachment.
+                            shareSavedPdf(pdfFile)
                         } else {
+                            val selectedUri = copyPdfToSelectedFolder(pdfFile)
                             JSONObject().apply {
                                 put("success", true)
                                 put("path", selectedUri.toString())
