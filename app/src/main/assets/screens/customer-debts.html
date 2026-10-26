@@ -1946,11 +1946,7 @@
     <header class="top-bar">
         <div class="header-top">
             <div class="top-title">
-                <h2>
-                    <i class="fas fa-hand-holding-usd"></i>
-                    ديون العملاء
-                </h2>
-                <span class="subtitle">إدارة ديون العملاء و المتأخرات</span>
+                <h2>إدارة ديون العملاء و المتأخرات</h2>
             </div>
             <div class="header-actions">
                 <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
@@ -3187,15 +3183,28 @@ function updateDebtViewButtons() {
                 if (!cashResult.success || !bankResult.success) {
                     throw new Error(cashResult.error || bankResult.error || 'تعذر قراءة وسائل التحصيل');
                 }
+                const isActiveSettlement = item => {
+                    const status = String(item?.status ?? '').trim().toLowerCase();
+                    return ['active', 'نشط', 'enabled', 'open', '1'].includes(status);
+                };
+                // getActiveCashBoxes is already station-scoped and filters status='active'
+                // in SQLite; don't discard its rows a second time if an older bridge omits status.
                 paymentSettlementOptions = {
                     cashBoxes: (Array.isArray(cashResult.data) ? cashResult.data : [])
-                        .filter(item => String(item.status || '').toLowerCase() === 'active'),
+                        .filter(item => !String(item?.status ?? '').trim() || isActiveSettlement(item)),
                     bankAccounts: (Array.isArray(bankResult.data) ? bankResult.data : [])
-                        .filter(item => String(item.status || '').toLowerCase() === 'active')
+                        .filter(isActiveSettlement)
                 };
                 paymentSettlementOptionsLoaded = true;
                 renderPaymentSettlementOptions();
-                return true;
+                const method = document.getElementById('pMethod')?.value || 'cash';
+                const options = method === 'cash' ? paymentSettlementOptions.cashBoxes : paymentSettlementOptions.bankAccounts;
+                if (!options.length) {
+                    showPaymentFeedback(method === 'cash'
+                        ? 'لا يوجد صندوق تحصيل نشط للمحطة الحالية. فعّل صندوقاً من إعدادات الصناديق ثم أعد فتح نافذة التسديد.'
+                        : 'لا يوجد حساب بنكي/تحصيل نشط للمحطة الحالية. فعّل حساباً من إعدادات الحسابات ثم أعد فتح نافذة التسديد.', 'error');
+                }
+                return options.length > 0;
             } catch (error) {
                 paymentSettlementOptionsLoaded = false;
                 showPaymentFeedback('تعذر تحميل وسائل التحصيل: ' + (error.message || 'خطأ غير معروف'), 'error');
