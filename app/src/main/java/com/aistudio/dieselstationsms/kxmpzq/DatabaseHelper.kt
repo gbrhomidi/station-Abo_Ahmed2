@@ -21448,17 +21448,38 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     private fun findPartyAccount(db: SQLiteDatabase, partyKind: String): Long {
+        // Match canonical chart-of-accounts codes as well as localized account names.
+        // The seeded AR account 1103 is "Accounts Receivable" / "المدينون".
         val condition = when (partyKind) {
-            "receivable" -> "account_type='asset' AND (account_category LIKE '%receiv%' OR account_name LIKE '%customer%' OR account_name_ar LIKE '%عملاء%' OR account_name_ar LIKE '%ذمم%')"
-            "payable" -> "account_type='liability' AND (account_category LIKE '%pay%' OR account_name LIKE '%supplier%' OR account_name_ar LIKE '%مورد%' OR account_name_ar LIKE '%دائن%')"
+            "receivable" -> """account_type='asset' AND (
+                account_code='1103'
+                OR lower(COALESCE(account_category,'')) LIKE '%receiv%'
+                OR lower(COALESCE(account_name,'')) LIKE '%receiv%'
+                OR lower(COALESCE(account_name,'')) LIKE '%customer%'
+                OR COALESCE(account_name_ar,'') LIKE '%عملاء%'
+                OR COALESCE(account_name_ar,'') LIKE '%ذمم%'
+                OR COALESCE(account_name_ar,'') LIKE '%المدينون%'
+            )"""
+            "payable" -> """account_type='liability' AND (
+                account_code='2101'
+                OR lower(COALESCE(account_category,'')) LIKE '%pay%'
+                OR lower(COALESCE(account_name,'')) LIKE '%payable%'
+                OR lower(COALESCE(account_name,'')) LIKE '%supplier%'
+                OR COALESCE(account_name_ar,'') LIKE '%مورد%'
+                OR COALESCE(account_name_ar,'') LIKE '%دائن%'
+                OR COALESCE(account_name_ar,'') LIKE '%الدائنون%'
+            )"""
             else -> throw IllegalArgumentException("نوع حساب الطرف غير معروف")
         }
-        return db.rawQuery("SELECT id FROM accounts WHERE $condition AND is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1", null).use { c ->
+        return db.rawQuery(
+            "SELECT id FROM accounts WHERE $condition AND is_active=1 AND is_deleted=0 " +
+                "ORDER BY CASE WHEN account_code IN ('1103','2101') THEN 0 ELSE 1 END, id LIMIT 1",
+            null
+        ).use { c ->
             require(c.moveToFirst()) { "لا يوجد حساب ${if (partyKind == "receivable") "ذمم العملاء" else "ذمم الموردين"} فعال" }
             c.getLong(0)
         }
     }
-
     private fun findExpenseAccount(db: SQLiteDatabase, categoryId: Long): Long {
         return db.rawQuery("SELECT COALESCE(default_account_id,0) FROM expense_categories WHERE id=? AND is_deleted=0", arrayOf(categoryId.toString())).use { c ->
             require(c.moveToFirst()) { "فئة المصروف غير موجودة" }
