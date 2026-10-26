@@ -4880,10 +4880,11 @@ function addProductByBarcode(barcode) {
                     unit_price: Number(payload.sale_price || 0),
                     expiry_date: payload.expiry_date,
                     min_stock_level: payload.minimum_stock ?? payload.min_stock_level ?? 0,
+                    quantity: payload.quantity,
                     current_stock: payload.current_stock ?? payload.stock_quantity ?? payload.quantity_on_hand ?? payload.available_quantity,
                     sale_type: data.sale_type,
                     invoice_type: data.invoice_type,
-                    description: payload.description ?? payload.product_description ?? payload.productDescription ?? ''
+                    description: payload.description ?? ''
                 };
                 addProductToTable(product);
                 const row = Array.from(document.querySelectorAll('#productsTableBody tr')).find(item => String(item.dataset.productId || '') === String(product.product_id));
@@ -5018,10 +5019,11 @@ function addProductToTable(product) {
     row.setAttribute('data-barcode', product.barcode);
     row.setAttribute('data-expiry-date', product.expiry_date || '');
     row.setAttribute('data-min-stock', product.min_stock_level ?? '');
+    row.setAttribute('data-quantity', product.quantity ?? '');
     row.setAttribute('data-current-stock', product.current_stock ?? product.stock_quantity ?? product.quantity_on_hand ?? product.available_quantity ?? '');
     row.setAttribute('data-sale-type', product.sale_type || '');
     row.setAttribute('data-invoice-type', product.invoice_type || '');
-    row.setAttribute('data-description', product.description ?? product.product_description ?? '');
+    row.setAttribute('data-description', product.description ?? '');
     row.innerHTML = `
         <td><input type="number" class="form-control quantity-input" value="1" min="1" dir="ltr" inputmode="numeric"></td>
         <td class="product-name-large">${escapePosText(product.product_name)}</td>
