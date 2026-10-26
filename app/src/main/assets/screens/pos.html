@@ -1343,10 +1343,15 @@ body.sleep-mode .sidebar-toggle { display: none; }
     z-index: 10;
     border: var(--silver-border);
 }
-.product-table td {
-    min-width: 120px;
-    text-align: center;
-}
+.product-table { width: 100%; table-layout: fixed; }
+.product-table th, .product-table td { min-width: 0; text-align: center; overflow-wrap: anywhere; }
+.product-table th:nth-child(1), .product-table td:nth-child(1) { width: 16%; }
+.product-table th:nth-child(2), .product-table td:nth-child(2) { width: 35%; }
+.product-table th:nth-child(3), .product-table td:nth-child(3) { width: 13%; }
+.product-table th:nth-child(4), .product-table td:nth-child(4) { width: 21%; }
+.product-table th:nth-child(5), .product-table td:nth-child(5) { width: 15%; }
+.product-table td:last-child { padding-left: 2px; padding-right: 2px; }
+.product-table .product-details-btn, .product-table .remove-product-btn { min-width: 0; padding: 5px; }
 .product-table tr:nth-child(even) td { background: var(--bg-glass-light); }
 .product-table tr:hover td { background: var(--bg-glass-light); }
 .quantity-input {
@@ -4874,10 +4879,11 @@ function addProductByBarcode(barcode) {
                     product_name: payload.product_name || payload.product_name_ar,
                     unit_price: Number(payload.sale_price || 0),
                     expiry_date: payload.expiry_date,
-                    min_stock_level: payload.minimum_stock || 0,
+                    min_stock_level: payload.minimum_stock ?? payload.min_stock_level ?? 0,
+                    current_stock: payload.current_stock ?? payload.stock_quantity ?? payload.quantity_on_hand ?? payload.available_quantity,
                     sale_type: data.sale_type,
                     invoice_type: data.invoice_type,
-                    description: payload.description || payload.product_description || ''
+                    description: payload.description ?? payload.product_description ?? payload.productDescription ?? ''
                 };
                 addProductToTable(product);
                 const row = Array.from(document.querySelectorAll('#productsTableBody tr')).find(item => String(item.dataset.productId || '') === String(product.product_id));
@@ -4972,16 +4978,25 @@ function renderManualProductPicker(query) {
     });
 }
 
-function addProductManually() {
-    const barcode = document.getElementById('manualBarcodeInput').value.trim();
+async function addProductManually() {
+    const input = document.getElementById('manualBarcodeInput');
+    const barcode = input.value.trim();
     if (!barcode) {
         showToast('يرجى إدخال باركود المنتج', 'error');
         return;
     }
-    addProductByBarcode(barcode);
-    const input = document.getElementById('manualBarcodeInput');
+    const added = await addProductByBarcode(barcode);
     input.value = '';
-    focusPosField('manualBarcodeInput');
+    if (!added) focusPosField('manualBarcodeInput');
+}
+
+function focusAndSelectProductQuantity(row) {
+    const field = row && row.querySelector('.quantity-input');
+    if (!field) return;
+    requestAnimationFrame(() => {
+        try { field.focus({ preventScroll: false }); } catch (_) { field.focus(); }
+        field.select();
+    });
 }
 
 function addProductToTable(product) {
@@ -4990,10 +5005,11 @@ function addProductToTable(product) {
         .find(row => String(row.dataset.productId || '') === String(product.product_id));
     if (existingRow) {
         const qtyInput = existingRow.querySelector('.quantity-input');
-        qtyInput.value = parseInt(qtyInput.value) + 1;
+        qtyInput.value = parseInt(qtyInput.value || '0', 10) + 1;
         updateProductQuantity(existingRow);
         existingRow.classList.add('row-highlight');
         setTimeout(() => existingRow.classList.remove('row-highlight'), 1000);
+        focusAndSelectProductQuantity(existingRow);
         return;
     }
 
@@ -5001,10 +5017,11 @@ function addProductToTable(product) {
     row.setAttribute('data-product-id', product.product_id);
     row.setAttribute('data-barcode', product.barcode);
     row.setAttribute('data-expiry-date', product.expiry_date || '');
-    row.setAttribute('data-min-stock', product.min_stock_level || '');
+    row.setAttribute('data-min-stock', product.min_stock_level ?? '');
+    row.setAttribute('data-current-stock', product.current_stock ?? product.stock_quantity ?? product.quantity_on_hand ?? product.available_quantity ?? '');
     row.setAttribute('data-sale-type', product.sale_type || '');
     row.setAttribute('data-invoice-type', product.invoice_type || '');
-    row.setAttribute('data-description', product.description || '');
+    row.setAttribute('data-description', product.description ?? product.product_description ?? '');
     row.innerHTML = `
         <td><input type="number" class="form-control quantity-input" value="1" min="1" dir="ltr" inputmode="numeric"></td>
         <td class="product-name-large">${escapePosText(product.product_name)}</td>
@@ -5021,8 +5038,12 @@ function addProductToTable(product) {
     qtyInput.addEventListener('change', () => updateProductQuantity(row));
     qtyInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
-            document.getElementById('amountPaid').focus();
-            document.getElementById('amountPaid').select();
+            e.preventDefault();
+            const paidField = document.getElementById('amountPaid');
+            if (paidField) {
+                try { paidField.focus({ preventScroll: false }); } catch (_) { paidField.focus(); }
+                paidField.select();
+            }
         }
     });
     row.querySelector('.remove-product-btn').addEventListener('click', () => removeProduct(row));
@@ -5032,6 +5053,7 @@ function addProductToTable(product) {
     });
     row.classList.add('row-highlight');
     setTimeout(() => row.classList.remove('row-highlight'), 1000);
+    focusAndSelectProductQuantity(row);
 }
 
 function showDoubleClickActions(event, row, product) {
@@ -5088,15 +5110,19 @@ function showDoubleClickActions(event, row, product) {
 
 function showProductDetailsCanvas(product, row) {
     const content = document.getElementById('productDetailsContent');
-    const descFromRow = row ? String(row.getAttribute('data-description') || '') : '';
-    const description = product.description || product.product_description || descFromRow || '';
+    const rowValue = name => row ? String(row.getAttribute('data-' + name) || '') : '';
+    const description = String(product.description ?? product.product_description ?? rowValue('description') ?? '');
+    const currentStock = product.current_stock ?? product.stock_quantity ?? product.quantity_on_hand
+        ?? product.available_quantity ?? rowValue('current-stock');
+    const minimumStock = product.min_stock_level ?? product.minimum_stock ?? rowValue('min-stock');
     content.innerHTML = `
         <p style="margin-bottom:8px;">اسم المنتج: <strong>${escapePosText(product.product_name || '')}</strong></p>
         <p style="margin-bottom:8px;">تاريخ الإنتهاء: ${escapePosText(product.expiry_date || 'غير محدد')}</p>
-        <p style="margin-bottom:8px;">مستوى المخزون الأدنى: ${escapePosText(product.min_stock_level || 'غير محدد')}</p>
+        <p style="margin-bottom:8px;">مستوى المخزون الحالي: ${escapePosText(currentStock ?? 'غير متاح')}</p>
+        <p style="margin-bottom:8px;">مستوى المخزون الأدنى: ${escapePosText(minimumStock ?? 'غير محدد')}</p>
         <div class="product-description-full">
             <label class="form-label">الوصف (Description)</label>
-            <div class="desc-value">${description ? escapePosText(description) : '<span class="text-muted">لا يوجد وصف مسجل لهذا المنتج</span>'}</div>
+            <div class="desc-value">${description.trim() ? escapePosText(description) : '<span class="text-muted">لا يوجد وصف مسجل لهذا المنتج</span>'}</div>
         </div>
     `;
     openModal('productDetailsCanvas');
