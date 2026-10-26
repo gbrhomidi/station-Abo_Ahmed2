@@ -78,6 +78,8 @@ class FinancialIntegrityContractTest {
         val costQuery = fuelSale.substring(start, end)
         assertTrue("Fuel COGS denominator must use actual delivered quantity", costQuery.contains("SUM(delivered_quantity)"))
         assertTrue("Post-refill tank level must not be used as delivered volume", !costQuery.contains("actual_quantity"))
+        assertTrue("Fuel COGS must use the fuel purchase amount", costQuery.contains("total_amount") && costQuery.contains("unit_price"))
+        assertTrue("Transport-inclusive net_amount must not be used as fuel unit cost", !costQuery.contains("net_amount"))
         assertTrue("Customer delivery fee must not be part of fuel COGS", !costQuery.contains("delivery_fee"))
     }
 
