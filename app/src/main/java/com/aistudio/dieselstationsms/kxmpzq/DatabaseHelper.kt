@@ -415,6 +415,65 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      * This is intentionally idempotent and runs on every database open so older
      * databases receive the same defaults as newly-created databases.
      */
+    private fun ensureDeliveryFeeApprovalPermission(db: SQLiteDatabase) {
+        db.execSQL("""
+            INSERT OR IGNORE INTO permissions
+                (uuid, permission_code, permission_name, permission_name_ar, module, module_name_ar,
+                 action, requires_station, is_active, is_deleted)
+            VALUES
+                ('PER-DELIVERY-SERVICE-FEE-APPROVE-V1', 'delivery_service_fee.approve',
+                 'Approve Delivery Service Fees', 'اعتماد رسوم خدمة التوصيل',
+                 'deliveries', 'التوصيلات', 'approve', 1, 1, 0)
+        """.trimIndent())
+
+        // Seed role grants once only. Subsequent deliberate permission revocations must persist.
+        val seedKey = "DELIVERY_FEE_APPROVAL_PERMISSION_V1"
+        val alreadySeeded = db.rawQuery(
+            "SELECT setting_value FROM settings WHERE setting_key=? LIMIT 1",
+            arrayOf(seedKey)
+        ).use { cursor -> cursor.moveToFirst() && cursor.getString(0) == "1" }
+        if (alreadySeeded) return
+
+        val permissionId = db.rawQuery(
+            "SELECT id FROM permissions WHERE permission_code='delivery_service_fee.approve' AND is_active=1 AND is_deleted=0 LIMIT 1",
+            null
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+        require(permissionId > 0L) { "تعذر تهيئة صلاحية اعتماد رسوم التوصيل" }
+
+        val roleIds = mutableListOf<Long>()
+        db.rawQuery(
+            "SELECT id FROM roles WHERE role_code IN ('SUPER_ADMIN','ADMIN','STATION_MANAGER') AND is_active=1 AND is_deleted=0",
+            null
+        ).use { cursor -> while (cursor.moveToNext()) roleIds += cursor.getLong(0) }
+
+        roleIds.forEach { roleId ->
+            val globalGrantExists = db.rawQuery(
+                "SELECT 1 FROM role_permissions WHERE role_id=? AND permission_id=? AND station_id IS NULL LIMIT 1",
+                arrayOf(roleId.toString(), permissionId.toString())
+            ).use { it.moveToFirst() }
+            if (!globalGrantExists) {
+                db.insertOrThrow("role_permissions", null, ContentValues().apply {
+                    put("uuid", "RP-DELIVERY-FEE-APPROVE-$roleId-V1")
+                    put("role_id", roleId)
+                    put("permission_id", permissionId)
+                    put("can_read", 1)
+                    put("can_approve", 1)
+                    put("is_deleted", 0)
+                })
+            }
+        }
+
+        db.insertWithOnConflict("settings", null, ContentValues().apply {
+            put("setting_key", seedKey)
+            put("setting_value", "1")
+            put("setting_type", "boolean")
+            put("description", "إصدار تهيئة صلاحية اعتماد رسوم خدمة التوصيل")
+            put("is_editable", 0)
+            put("created_at", getCurrentDateTime())
+            put("updated_at", getCurrentDateTime())
+        }, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
     private fun ensureSalesPricingDefaults(db: SQLiteDatabase) {
         db.execSQL("""
             INSERT OR IGNORE INTO accounts
@@ -425,6 +484,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("UPDATE accounts SET is_active=1, is_deleted=0 WHERE account_code='5105' AND account_type='expense'")
 
         ensurePricingPermissions(db)
+        ensureDeliveryFeeApprovalPermission(db)
 
         // Requirement: the station manager role must retain every active system permission.
         // Resolve the role by its stable code rather than assuming role_id=3 in every database.
@@ -10616,9 +10676,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     ).use { cursor -> require(cursor.moveToFirst()) { "السائق المرتبط بالبيع غير مرتبط بالمركبة الأصلية" } }
                 }
 
-                val serviceFee = data.optDouble("delivery_service_fee", 0.0)
-                require(serviceFee.isFinite() && serviceFee >= 0.0) { "رسوم خدمة التوصيل غير صالحة" }
                 val originalServiceFee = sale.optDouble("service_fee", 0.0)
+                val serviceFee = if (data.has("delivery_service_fee") && !data.isNull("delivery_service_fee")) {
+                    data.optDouble("delivery_service_fee", originalServiceFee)
+                } else {
+                    originalServiceFee
+                }
+                require(serviceFee.isFinite() && serviceFee >= 0.0) { "رسوم خدمة التوصيل غير صالحة" }
                 val paymentMethod = sale.optString("payment_method", "credit")
                 val isCredit = sale.optInt("is_credit", 0) == 1 || paymentMethod == "credit"
                 require(serviceFee == 0.0 || isCredit || paymentMethod == "cash") {
@@ -10642,6 +10706,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val status = data.optString("status", "pending").trim()
                 require(status in setOf("pending", "assigned", "out_for_delivery", "delivered", "failed", "cancelled")) {
                     "حالة التوصيل غير صحيحة"
+                }
+
+                val serviceFeeDelta = serviceFee - originalServiceFee
+                if (kotlin.math.abs(serviceFeeDelta) > 0.000001) {
+                    require(status == "delivered") {
+                        "لا يمكن ترحيل أو تعديل رسوم التوصيل قبل تأكيد اكتمال التسليم"
+                    }
+                    require(userHasPermissionCode(db, cashierId, stationScopeId, "delivery_service_fee.approve")) {
+                        "لا يملك المستخدم صلاحية اعتماد رسوم خدمة التوصيل"
+                    }
+                    require(isCredit) {
+                        "تعديل رسوم التوصيل عبر هذا المسار مسموح للبيع الآجل فقط؛ لا يوجد تحصيل نقدي مرافق لتعديل البيع النقدي"
+                    }
+                    require(partyId != null) { "رسوم التوصيل تتطلب عميلاً مسجلاً" }
                 }
 
                 val isProductSale = sale.optString("order_type", "").equals("product", ignoreCase = true)
@@ -10740,8 +10818,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     })
                 }
 
-                val serviceFeeDelta = serviceFee - originalServiceFee
-                if (serviceFeeDelta != 0.0) {
+                if (kotlin.math.abs(serviceFeeDelta) > 0.000001) {
                     val oldNet = sale.optDouble("net_amount", 0.0)
                     val oldGross = sale.optDouble("gross_amount", oldNet)
                     val newNet = oldNet + serviceFeeDelta
@@ -10810,6 +10887,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                             }
                         )
                     }
+                    val feeAmount = kotlin.math.abs(serviceFeeDelta)
+                    val receivableAccount = findPartyAccount(db, "receivable")
+                    val revenueAccount = findFinancialAccount(db, "revenue")
+                    postFinanceJournal(
+                        db, stationScopeId, cashierId, "general",
+                        if (serviceFeeDelta > 0.0) "delivery_service_fee" else "delivery_service_fee_reversal",
+                        deliveryId,
+                        "DELIVERY-" + deliveryId + "-FEE-" + UUID.randomUUID().toString().take(8),
+                        if (serviceFeeDelta > 0.0) "اعتماد رسوم خدمة توصيل للفاتورة #$saleId"
+                        else "عكس رسوم خدمة توصيل للفاتورة #$saleId",
+                        if (serviceFeeDelta > 0.0) receivableAccount else revenueAccount,
+                        if (serviceFeeDelta > 0.0) revenueAccount else receivableAccount,
+                        feeAmount
+                    )
                 }
 
                 if (idempotencyKey.isNotBlank()) {
@@ -10910,6 +11001,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
                 val isCredit = sale.optInt("is_credit", 0) == 1 || sale.optString("payment_method") == "credit"
                 val delta = serviceFee - existingServiceFee
+                if (kotlin.math.abs(delta) > 0.000001) {
+                    require(status == "delivered") {
+                        "لا يمكن ترحيل أو تعديل رسوم التوصيل قبل تأكيد اكتمال التسليم"
+                    }
+                    require(userHasPermissionCode(db, actorId, stationScopeId, "delivery_service_fee.approve")) {
+                        "لا يملك المستخدم صلاحية اعتماد رسوم خدمة التوصيل"
+                    }
+                    require(isCredit) {
+                        "تعديل رسوم التوصيل عبر هذا المسار مسموح للبيع الآجل فقط؛ لا يوجد تحصيل نقدي مرافق لتعديل البيع النقدي"
+                    }
+                    require(partyId != null) { "رسوم التوصيل تتطلب عميلاً مسجلاً" }
+                }
                 require(delta == 0.0 || partyId != null) {
                     "لا يمكن تعديل رسوم خدمة توصيل لعميل غير مسجل لأن الحساب والدفتر يتطلبان عميلاً مسجلاً"
                 }
@@ -10992,6 +11095,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                             }
                         )
                     }
+                    val feeAmount = kotlin.math.abs(delta)
+                    val receivableAccount = findPartyAccount(db, "receivable")
+                    val revenueAccount = findFinancialAccount(db, "revenue")
+                    postFinanceJournal(
+                        db, stationScopeId, actorId, "general",
+                        if (delta > 0.0) "delivery_service_fee" else "delivery_service_fee_reversal",
+                        id,
+                        "DELIVERY-" + id + "-FEE-" + UUID.randomUUID().toString().take(8),
+                        if (delta > 0.0) "اعتماد رسوم خدمة توصيل للفاتورة #$saleId"
+                        else "عكس رسوم خدمة توصيل للفاتورة #$saleId",
+                        if (delta > 0.0) receivableAccount else revenueAccount,
+                        if (delta > 0.0) revenueAccount else receivableAccount,
+                        feeAmount
+                    )
                 }
 
                 db.setTransactionSuccessful()

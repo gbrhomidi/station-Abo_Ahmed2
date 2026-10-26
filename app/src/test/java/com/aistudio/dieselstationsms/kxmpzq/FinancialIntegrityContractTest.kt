@@ -59,6 +59,28 @@ class FinancialIntegrityContractTest {
     }
 
     @Test
+    fun deliveryServiceFeesRequireDeliveredStatusApprovalAndBalancedJournal() {
+        val source = locateDatabaseHelper().readText()
+        val createDelivery = functionBody(source, "fun addDelivery")
+        val updateDelivery = functionBody(source, "fun updateDeliveryRecord")
+
+        assertTrue("Creating a delivery must require delivered status for service-fee changes",
+            createDelivery.contains("status == \"delivered\""))
+        assertTrue("Creating a delivery must require the delivery-fee approval permission",
+            createDelivery.contains("delivery_service_fee.approve"))
+        assertTrue("Creating a delivery fee must post a GL journal",
+            createDelivery.contains("postFinanceJournal("))
+        assertTrue("Updating a delivery fee must require delivered status",
+            updateDelivery.contains("status == \"delivered\""))
+        assertTrue("Updating a delivery fee must require authorization",
+            updateDelivery.contains("delivery_service_fee.approve"))
+        assertTrue("Updating a delivery fee must post a GL journal",
+            updateDelivery.contains("postFinanceJournal("))
+        assertTrue("Fee approval permission must be seeded for designated management roles",
+            source.contains("ensureDeliveryFeeApprovalPermission(db)"))
+    }
+
+    @Test
     fun saleAdjustmentPathsAreAtomicAuditableAndIdempotent() {
         val source = locateDatabaseHelper().readText()
         val fuelAdjustment = functionBody(source, "fun processFuelSaleAdjustment")
