@@ -63,6 +63,26 @@ class HistoricalFinancialReconciliationRepairTest {
         assertEquals(1.0, scalar("SELECT is_cash_account FROM accounts WHERE id=12"),0.001)
     }
 
+    @Test fun clearsOnlyExactParentOpeningDuplicateAndPreservesChildOpenings() {
+        db.execSQL("""CREATE TABLE accounts(
+            id INTEGER PRIMARY KEY,station_id INTEGER,account_code TEXT,account_type TEXT,
+            is_active INTEGER DEFAULT 1,is_deleted INTEGER DEFAULT 0,
+            opening_balance REAL DEFAULT 0,parent_account_id INTEGER)""")
+        db.execSQL("INSERT INTO accounts(id,station_id,account_code,account_type,opening_balance,parent_account_id) VALUES" +
+            "(1,1,'1000','asset',300,NULL),(2,1,'1001','asset',100,1),(3,1,'1002','asset',200,1)," +
+            "(4,1,'2000','liability',500,NULL),(5,1,'2001','liability',200,4)")
+        val result=HistoricalFinancialReconciliationRepair(db).run(1,77L)
+        assertTrue(result.getBoolean("success"))
+        assertEquals(0.0,scalar("SELECT opening_balance FROM accounts WHERE id=1"),0.001)
+        assertEquals(100.0,scalar("SELECT opening_balance FROM accounts WHERE id=2"),0.001)
+        assertEquals(200.0,scalar("SELECT opening_balance FROM accounts WHERE id=3"),0.001)
+        // Unequal parent/child totals remain untouched and are recorded as ambiguous.
+        assertEquals(500.0,scalar("SELECT opening_balance FROM accounts WHERE id=4"),0.001)
+        assertEquals(200.0,scalar("SELECT opening_balance FROM accounts WHERE id=5"),0.001)
+        assertTrue(scalar("SELECT COUNT(*) FROM financial_reconciliation_actions WHERE action_code='clear_duplicate_parent_opening' AND status='repaired'")>=1)
+        assertTrue(scalar("SELECT COUNT(*) FROM financial_reconciliation_actions WHERE action_code='parent_opening_allocation_ambiguous' AND status='skipped'")>=1)
+    }
+
     @Test fun incompleteSchemaBlocksFinancialStatementApproval() {
         val result = HistoricalFinancialReconciliationAudit(db).run(1)
         assertEquals(false, result.getBoolean("ready_for_financial_statement_approval"))

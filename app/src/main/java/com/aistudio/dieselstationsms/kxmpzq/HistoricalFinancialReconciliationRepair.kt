@@ -324,18 +324,43 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
     private data class BankLine(val debit:Double,val credit:Double,val balance:Double)
 
     private fun repairExactDuplicateParentOpenings() {
-        if(!tableExists("accounts") || !columns("accounts").containsAll(setOf("id","parent_account_id","opening_balance"))) return
-        val parents=query("SELECT p.id,COALESCE(p.account_code,''),COALESCE(p.opening_balance,0),COALESCE(SUM(c.opening_balance),0) " +
-            "FROM accounts p JOIN accounts c ON c.parent_account_id=p.id WHERE p.is_active=1 AND c.is_active=1 " +
-            "AND COALESCE(p.is_deleted,0)=0 AND COALESCE(c.is_deleted,0)=0 GROUP BY p.id " +
-            "HAVING ABS(COALESCE(p.opening_balance,0))>0.01 AND ABS(COALESCE(SUM(c.opening_balance),0))>0.01",emptyArray()) {
-            Parent(it.getLong(0),it.getString(1),it.getDouble(2),it.getDouble(3))
+        if(!tableExists("accounts") || !columns("accounts").containsAll(setOf("id","parent_account_id","opening_balance","is_active","is_deleted"))) return
+        // A station-less chart can be shared by all stations: never mutate it from a station-scoped repair.
+        if(!hasColumn("accounts","station_id")) {
+            val possible = scalar("SELECT COUNT(*) FROM accounts p JOIN accounts c ON c.parent_account_id=p.id " +
+                "WHERE p.is_active=1 AND c.is_active=1 AND COALESCE(p.is_deleted,0)=0 AND COALESCE(c.is_deleted,0)=0 " +
+                "AND ABS(COALESCE(p.opening_balance,0))>0.01 AND ABS(COALESCE(c.opening_balance,0))>0.01")
+            if(possible>0) skip("parent_opening_chart_not_station_scoped","accounts",0,
+                "الحسابات ليست معزولة حسب المحطة؛ لم تُعدّل أرصدة افتتاحية مشتركة تلقائياً",
+                JSONObject().put("candidate_parent_count",possible))
+            return
         }
-        for(p in parents) skip("parent_opening_allocation_ambiguous","account",p.id,
-            if(abs(p.parent-p.children)<=eps)
-                "رصيد الأب يساوي مجموع الأبناء، لكن ذلك وحده لا يثبت أن الرصيد مكرر؛ لم يُعدّل رصيد افتتاحي"
-            else "رصيد الأب والأبناء متداخل والمبالغ لا تتطابق؛ يلزم تحديد مصدر الرصيد المعتمد",
-            JSONObject().put("account_code",p.code).put("parent_opening_balance",p.parent).put("children_opening_sum",p.children))
+        val parents=query(
+            "SELECT p.id,COALESCE(p.account_code,''),COALESCE(p.opening_balance,0),COALESCE(SUM(c.opening_balance),0) " +
+                "FROM accounts p JOIN accounts c ON c.parent_account_id=p.id AND c.station_id=p.station_id " +
+                "WHERE p.station_id=? AND p.is_active=1 AND c.is_active=1 " +
+                "AND COALESCE(p.is_deleted,0)=0 AND COALESCE(c.is_deleted,0)=0 " +
+                "GROUP BY p.id HAVING ABS(COALESCE(p.opening_balance,0))>0.01 " +
+                "AND ABS(COALESCE(SUM(c.opening_balance),0))>0.01 ORDER BY p.id",
+            arrayOf(station.toString())
+        ) { Parent(it.getLong(0),it.getString(1),it.getDouble(2),it.getDouble(3)) }
+        for(p in parents) {
+            if(abs(p.parent-p.children)<=eps) {
+                db.update("accounts",ContentValues().apply{put("opening_balance",0.0)},
+                    "id=? AND station_id=?",arrayOf(p.id.toString(),station.toString()))
+                action("clear_duplicate_parent_opening","accounts",p.id,"repaired",
+                    "أُزيل رصيد افتتاحي مكرر من حساب تجميعي لأن قيمته تساوي تماماً مجموع أرصدة أبنائه في المحطة نفسها؛ حُفظت أرصدة الأبناء",
+                    JSONObject().put("account_code",p.code).put("parent_opening_balance",p.parent)
+                        .put("children_opening_sum",p.children),
+                    JSONObject().put("account_code",p.code).put("parent_opening_balance",0.0)
+                        .put("children_opening_sum",p.children))
+            } else {
+                skip("parent_opening_allocation_ambiguous","account",p.id,
+                    "رصيد الأب والأبناء متداخل لكن المبالغ لا تتطابق؛ يلزم تحديد مصدر الرصيد المعتمد",
+                    JSONObject().put("account_code",p.code).put("parent_opening_balance",p.parent)
+                        .put("children_opening_sum",p.children))
+            }
+        }
     }
     private data class Parent(val id:Long,val code:String,val parent:Double,val children:Double)
 
@@ -398,7 +423,7 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
     private fun repairMissingPayments() {
         if(!tableExists("payments")) return
         val c=columns("payments")
-        if(!c.containsAll(setOf("id","station_id","amount","status","cash_box_id","bank_account_id","customer_party_id","supplier_party_id"))) return
+        if(!c.containsAll(setOf("id","station_id","payment_code","amount","status","cash_box_id","bank_account_id","customer_party_id","supplier_party_id","journal_entry_id"))) return
         val rows=query("SELECT id,COALESCE(payment_code,''),COALESCE(amount,0),COALESCE(customer_party_id,0),COALESCE(supplier_party_id,0)," +
             "COALESCE(cash_box_id,0),COALESCE(bank_account_id,0),COALESCE(journal_entry_id,0) FROM payments WHERE station_id=? AND status='completed'"+
             (if(c.contains("is_deleted")) " AND COALESCE(is_deleted,0)=0" else "")+" ORDER BY id",arrayOf(station.toString())) {
@@ -472,8 +497,9 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
             val ledgerType=if(isCash) "fuel_supply_cash" else "fuel_supply_credit"
             val evidence=query("SELECT COALESCE(debit,0),COALESCE(credit,0) FROM supplier_ledger WHERE party_id=? AND transaction_type=? AND transaction_id=?",
                 arrayOf(r.supplier.toString(),ledgerType,r.id.toString())) { it.getDouble(0) to it.getDouble(1) }
-            val proven=if(isCash) evidence.any{abs(it.first)<=eps && abs(it.second-r.amount)<=eps}
-                else evidence.size==1 && abs(evidence[0].first)<=eps && abs(evidence[0].second-r.amount)<=eps
+            val proven=evidence.size==1 && if(isCash)
+                abs(evidence[0].first)<=eps && abs(evidence[0].second-r.amount)<=eps
+            else abs(evidence[0].first)<=eps && abs(evidence[0].second-r.amount)<=eps
             val inv=inventoryAccount()
             val credit=if(isCash) settlement(r.cash,r.bank) else uniqueCode("2101","liability")
             if(!validSource || !proven || inv<=0 || credit<=0 || (isCash && ((r.cash>0)==(r.bank>0))) || (!isCash && r.method!="credit")) {
@@ -594,36 +620,94 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
         }
     }
 
+    /**
+     * Returns only a cost that can be reproduced from source-level historical costs.
+     * Mixed invoices add fuel and product cost components; current/default purchase prices
+     * are never used. Missing or contradictory line costs return zero so the caller logs a skip.
+     */
     private fun historicalCost(id:Long):Double {
-        if(tableExists("fuel_sales") && columns("fuel_sales").containsAll(setOf("sale_id","cost_amount"))) {
+        var fuelRows = 0
+        var fuelCost = 0.0
+        if (tableExists("fuel_sales")) {
             val c=columns("fuel_sales")
-            val sql="SELECT COALESCE(SUM(cost_amount),0) FROM fuel_sales WHERE sale_id=? AND COALESCE(cost_amount,0)>0"+
-                (if(c.contains("station_id")) " AND station_id=?" else "")+(if(c.contains("status")) " AND status='completed'" else "")+
-                (if(c.contains("is_deleted")) " AND COALESCE(is_deleted,0)=0" else "")
-            val value=scalarD(sql,if(c.contains("station_id")) arrayOf(id.toString(),station.toString()) else arrayOf(id.toString()))
-            if(value>eps) return value
+            if (c.containsAll(setOf("sale_id","cost_amount","quantity"))) {
+                val scope=(if(c.contains("station_id")) " AND station_id=?" else "")+
+                    (if(c.contains("status")) " AND status='completed'" else "")+
+                    (if(c.contains("is_deleted")) " AND COALESCE(is_deleted,0)=0" else "")
+                val args=if(c.contains("station_id")) arrayOf(id.toString(),station.toString()) else arrayOf(id.toString())
+                fuelRows=scalar("SELECT COUNT(*) FROM fuel_sales WHERE sale_id=?"+scope,args)
+                if(fuelRows>0) {
+                    val bad = scalar("SELECT COUNT(*) FROM fuel_sales WHERE sale_id=?"+scope+
+                        " AND (COALESCE(quantity,0)<=0 OR COALESCE(cost_amount,0)<=0"+
+                        (if(c.contains("cost_per_liter")) " OR COALESCE(cost_per_liter,0)<=0" else "")+")",args)
+                    if(bad>0) return 0.0
+                    fuelCost=scalarD("SELECT COALESCE(SUM(cost_amount),0) FROM fuel_sales WHERE sale_id=?"+scope,args)
+                    if(!fuelCost.isFinite() || fuelCost<=eps) return 0.0
+                }
+            }
         }
+
+        var productRows = 0
+        var itemCost: Double? = null
         if(tableExists("sale_items")) {
             val c=columns("sale_items")
-            if(c.containsAll(setOf("sale_id","quantity")) && (c.contains("cost_price") || c.contains("unit_cost"))) {
-                val col=if(c.contains("cost_price")) "cost_price" else "unit_cost"
+            if(c.containsAll(setOf("sale_id","quantity"))) {
                 val itemType=if(c.contains("item_type")) " AND item_type='product'" else ""
-                val value=scalarD("SELECT COALESCE(SUM(quantity*"+col+"),0) FROM sale_items WHERE sale_id=?"+itemType+
-                    (if(c.contains("station_id")) " AND station_id=?" else "")+(if(c.contains("is_deleted")) " AND COALESCE(is_deleted,0)=0" else ""),
-                    if(c.contains("station_id")) arrayOf(id.toString(),station.toString()) else arrayOf(id.toString()))
-                if(value>eps) return value
-            }
-        }
-        if(tableExists("inventory_movements")) {
-            val c=columns("inventory_movements")
-            if(c.containsAll(setOf("reference_type","reference_id","quantity_change","unit_cost"))) {
-                val sql="SELECT COALESCE(SUM(ABS(quantity_change)*unit_cost),0) FROM inventory_movements WHERE reference_type='sale' AND reference_id=?"+
-                    (if(c.contains("station_id")) " AND station_id=?" else "")+(if(c.contains("status")) " AND status='completed'" else "")+
+                val scope=itemType+(if(c.contains("station_id")) " AND station_id=?" else "")+
                     (if(c.contains("is_deleted")) " AND COALESCE(is_deleted,0)=0" else "")
-                return scalarD(sql,if(c.contains("station_id")) arrayOf(id.toString(),station.toString()) else arrayOf(id.toString()))
+                val args=if(c.contains("station_id")) arrayOf(id.toString(),station.toString()) else arrayOf(id.toString())
+                productRows=scalar("SELECT COUNT(*) FROM sale_items WHERE sale_id=?"+scope,args)
+                if(productRows>0) {
+                    val costColumn=when { c.contains("cost_price")->"cost_price"; c.contains("unit_cost")->"unit_cost"; else->"" }
+                    if(costColumn.isNotEmpty()) {
+                        val bad=scalar("SELECT COUNT(*) FROM sale_items WHERE sale_id=?"+scope+
+                            " AND (COALESCE(quantity,0)<=0 OR COALESCE("+costColumn+",0)<=0)",args)
+                        if(bad==0) {
+                            val value=scalarD("SELECT COALESCE(SUM(quantity*"+costColumn+"),0) FROM sale_items WHERE sale_id=?"+scope,args)
+                            if(value.isFinite() && value>eps) itemCost=value
+                        }
+                    }
+                }
             }
         }
-        return 0.0
+
+        var movementRows=0
+        var movementCost: Double? = null
+        var movementSourceInvalid=false
+        if(tableExists("inventory_movements") && hasColumn("inventory_movements","reference_type") &&
+            hasColumn("inventory_movements","reference_id") && hasColumn("inventory_movements","quantity_change") &&
+            hasColumn("inventory_movements","unit_cost") && (productRows>0 || fuelRows==0)) {
+            val c=columns("inventory_movements")
+            val scope=(if(c.contains("station_id")) " AND station_id=?" else "")+
+                (if(c.contains("status")) " AND status='completed'" else "")+
+                (if(c.contains("is_deleted")) " AND COALESCE(is_deleted,0)=0" else "")
+            val args=if(c.contains("station_id")) arrayOf(id.toString(),station.toString()) else arrayOf(id.toString())
+            val predicate=" WHERE reference_type='sale' AND reference_id=?"+scope
+            movementRows=scalar("SELECT COUNT(*) FROM inventory_movements"+predicate,args)
+            if(movementRows>0) {
+                movementSourceInvalid=scalar("SELECT COUNT(*) FROM inventory_movements"+predicate+
+                    " AND (ABS(COALESCE(quantity_change,0))<=0.000001 OR COALESCE(unit_cost,0)<=0)",args)>0
+                if(!movementSourceInvalid) {
+                    val value=scalarD("SELECT COALESCE(SUM(ABS(quantity_change)*unit_cost),0) FROM inventory_movements"+predicate,args)
+                    if(value.isFinite() && value>eps) movementCost=value
+                }
+            }
+        }
+
+        var productCost=0.0
+        if(productRows>0) {
+            // If movements exist for these product lines but their historical costing is incomplete,
+            // avoid posting a partial COGS journal even when item data looks plausible.
+            if(movementRows>0 && movementSourceInvalid) return 0.0
+            if(itemCost!=null && movementCost!=null &&
+                abs(itemCost-movementCost)>max(0.01, max(itemCost,movementCost)*0.01)) return 0.0
+            productCost=itemCost ?: movementCost ?: return 0.0
+        } else if(fuelRows==0 && movementRows>0) {
+            if(movementSourceInvalid || movementCost==null) return 0.0
+            productCost=movementCost
+        }
+        val total=fuelCost+productCost
+        return if(total.isFinite() && total>eps && (fuelRows>0 || productRows>0 || movementRows>0)) total else 0.0
     }
 
     private fun postJournal(refType:String,refId:Long,refCode:String,entryType:String,amount:Double,date:String,lines:List<Line>,description:String):Long {
