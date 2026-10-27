@@ -1331,14 +1331,6 @@ class MainActivity : AppCompatActivity() {
     private fun applySecurityRuntimeSettings(target: WebView? = webView) {
         if (!::securitySettingsStore.isInitialized) return
         val blockScreenshots = isTrueSetting(securitySettingValue("preventScreenshots"))
-        if (blockScreenshots) {
-            window.setFlags(
-                android.view.WindowManager.LayoutParams.FLAG_SECURE,
-                android.view.WindowManager.LayoutParams.FLAG_SECURE
-            )
-        } else {
-            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
-        }
         val hideSensitive = isTrueSetting(securitySettingValue("hideSensitiveData"))
         val script = if (hideSensitive) {
             """(function(){
@@ -1367,7 +1359,18 @@ class MainActivity : AppCompatActivity() {
         } else {
             """(function(){var s=document.getElementById('__station_sensitive_mask');if(s)s.remove();var extra=document.getElementById('__station_sensitive_runtime_style');if(extra)extra.remove();document.querySelectorAll('.__station_sensitive_runtime').forEach(function(node){node.classList.remove('__station_sensitive_runtime');});if(window.__stationSecurityMaskObserver){window.__stationSecurityMaskObserver.disconnect();window.__stationSecurityMaskObserver=null;}})();"""
         }
-        runCatching { target?.evaluateJavascript(script, null) }
+        runOnUiThread {
+            if (isDestroyed.get()) return@runOnUiThread
+            if (blockScreenshots) {
+                window.setFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SECURE,
+                    android.view.WindowManager.LayoutParams.FLAG_SECURE
+                )
+            } else {
+                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            }
+            runCatching { target?.evaluateJavascript(script, null) }
+        }
     }
 
     private fun requiresSecurityReauthentication(): Boolean =
