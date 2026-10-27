@@ -1,0 +1,626 @@
+package com.aistudio.dieselstationsms.kxmpzq
+
+import android.content.ContentValues
+import android.database.Cursor
+import android.database.sqlite.SQLiteDatabase
+import org.json.JSONArray
+import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
+import kotlin.math.abs
+
+/**
+ * Workpaper for reconciling historical financial data.
+ *
+ * Audit is read-only. Repair mode is deliberately restricted to completed fuel
+ * receipts whose supplier subledger proves exactly the same source, party and amount.
+ * No customer allocation, cash/bank balance, sales cost, product quantity or old
+ * posted journal is inferred or overwritten.
+ */
+internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteDatabase) {
+
+    fun run(stationId: Int): JSONObject {
+        require(stationId > 0) { "A valid station scope is required" }
+        val checks = JSONObject()
+        val issues = JSONArray()
+        checkSales(stationId, checks, issues)
+        checkPayments(stationId, checks, issues)
+        checkCustomerAndSupplierLedgers(stationId, checks, issues)
+        checkInventory(stationId, checks, issues)
+        checkFuelAndRefills(stationId, checks, issues)
+        checkPeriodsAndCurrency(stationId, checks, issues)
+        checkOpeningBalances(checks, issues)
+        return JSONObject()
+            .put("station_id", stationId)
+            .put("checked_at", now())
+            .put("status", if (issues.length() == 0) "reconciled" else "reconciliation_required")
+            .put("approval_status", if (issues.length() == 0) "ready" else "blocked")
+            .put("ready_for_financial_statement_approval", issues.length() == 0)
+            .put("blocking_issue_count", issues.length())
+            .put("checks", checks)
+            .put("issues", issues)
+            .put("automatic_repairs", false)
+    }
+
+    /**
+     * Repair only a missing fuel-supply GL posting where a matching supplier-ledger
+     * credit independently proves the supplier, source ID and amount.
+     */
+    fun applyProvableFuelSupplyRepairs(stationId: Int, actorUserId: Long): JSONObject {
+        require(stationId > 0) { "A valid station scope is required" }
+        require(actorUserId > 0L) { "A valid authenticated user is required" }
+        require(tableExists("tank_refills") && tableExists("supplier_ledger") && tableExists("journal_entries") &&
+            tableExists("journal_entry_items") && tableExists("accounts") && tableExists("parties") &&
+            tableExists("party_types") && tableExists("audit_logs")) {
+            "المخطط لا يحتوي على جميع جداول المصالحة المطلوبة؛ لم تُجرَ أي تغييرات."
+        }
+
+        val before = run(stationId)
+        ensureRunTables()
+        val runUuid = UUID.randomUUID().toString()
+        val started = now()
+        val runValues = ContentValues().apply {
+            put("uuid", runUuid)
+            put("station_id", stationId)
+            put("run_mode", "provable_fuel_supply_gl_repair")
+            put("started_at", started)
+            put("created_by", actorUserId)
+            put("status", "running")
+            put("approval_status_before", before.optString("approval_status", "blocked"))
+            put("before_json", before.toString())
+            put("remarks", "Source-proven repair only: exact supplier subledger credit + completed fuel receipt + unique control accounts + no existing source journal.")
+        }
+        val runId = db.insertOrThrow("historical_reconciliation_runs", null, runValues)
+        val repaired = JSONArray()
+        val skipped = JSONArray()
+        val refills = rows(
+            "SELECT id,COALESCE(refill_code,''),COALESCE(supplier_id,0),COALESCE(net_amount,0)," +
+                "COALESCE(total_amount,0),COALESCE(transport_cost,0),COALESCE(discount,0),COALESCE(tax_amount,0)," +
+                "COALESCE(arrival_date,order_date,created_at,''),COALESCE(currency_id,0) " +
+                "FROM tank_refills WHERE station_id=? AND status='completed' AND COALESCE(is_deleted,0)=0 ORDER BY id",
+            arrayOf(stationId.toString())
+        ) { c ->
+            JSONObject().put("refill_id", c.getLong(0)).put("refill_code", c.getString(1))
+                .put("supplier_id", c.getLong(2)).put("net_amount", c.getDouble(3))
+                .put("total_amount", c.getDouble(4)).put("transport_cost", c.getDouble(5))
+                .put("discount", c.getDouble(6)).put("tax_amount", c.getDouble(7))
+                .put("source_date", c.getString(8)).put("currency_id", c.getLong(9))
+        }
+
+        val inventoryAccount = uniqueAccountId("1104", "asset")
+        val payableAccount = uniqueAccountId("2101", "liability")
+        for (i in 0 until refills.length()) {
+            val source = refills.getJSONObject(i)
+            val refillId = source.getLong("refill_id")
+            val supplierId = source.getLong("supplier_id")
+            val amount = source.getDouble("net_amount")
+            val code = source.optString("refill_code")
+            val expectedAmount = source.getDouble("total_amount") + source.getDouble("transport_cost") -
+                source.getDouble("discount") + source.getDouble("tax_amount")
+            var skipReason: String? = null
+
+            if (amount <= 0.0 || abs(amount - expectedAmount) > 0.01)
+                skipReason = "صافي التوريد لا يطابق إجمالي الفاتورة والنقل والخصم والضريبة؛ يلزم مستند المصدر."
+            if (skipReason == null && !validSupplier(supplierId, stationId))
+                skipReason = "المورد غير نشط أو ليس مورداً للمحطة؛ لا يمكن إثبات الطرف المقابل."
+            if (skipReason == null && (inventoryAccount == null || payableAccount == null))
+                skipReason = "حساب المخزون 1104 أو الدائنين 2101 غير فريد/غير نشط؛ لم يُنشأ القيد."
+            if (skipReason == null && journalSourceCount(stationId, refillId) > 0)
+                skipReason = "يوجد قيد سابق لهذا المصدر (حتى لو كان غير مرحّل)؛ منعاً للتكرار لم يُنشأ قيد."
+            if (skipReason == null && isDateInClosedPeriod(stationId, source.optString("source_date")))
+                skipReason = "تاريخ التوريد في فترة مالية مغلقة/قيد الإغلاق؛ يلزم قيد تسوية في فترة مفتوحة."
+            if (skipReason == null && !oneExactSupplierCredit(supplierId, refillId, amount))
+                skipReason = "دفتر المورد لا يحتوي على قيد دائن وحيد مطابق تماماً للمورد والمصدر والمبلغ."
+            
+            if (skipReason != null) {
+                val finding = JSONObject().put("source_table", "tank_refills").put("source_id", refillId)
+                    .put("reference_code", code).put("amount", amount).put("status", "skipped").put("reason", skipReason)
+                skipped.put(finding)
+                persistItem(runId, stationId, refillId, "create_missing_fuel_supply_journal", "skipped", amount, finding, skipReason)
+                continue
+            }
+
+            var journalId = 0L
+            var failure: String? = null
+            db.beginTransaction()
+            try {
+                // Recheck within the transaction to keep retries idempotent.
+                check(journalSourceCount(stationId, refillId) == 0) { "تم إنشاء قيد لهذا المصدر أثناء المصالحة." }
+                check(oneExactSupplierCredit(supplierId, refillId, amount)) { "تغير دفتر المورد؛ أُلغيت المصالحة." }
+                val date = normalizeDate(source.optString("source_date"))
+                val yy = date.substring(0, 4).toIntOrNull()
+                val mm = date.substring(5, 7).toIntOrNull()
+                val entryNumber = "HFRS-S" + stationId + "-R" + refillId
+                check(scalar("SELECT COUNT(*) FROM journal_entries WHERE entry_number=?", arrayOf(entryNumber)) == 0) {
+                    "رقم قيد المصالحة مستخدم مسبقاً."
+                }
+                val header = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("entry_number", entryNumber)
+                    put("entry_date", date)
+                    put("entry_type", "purchase")
+                    put("reference_type", "fuel_supply")
+                    put("reference_id", refillId)
+                    put("reference_code", code)
+                    put("description", "Historical reconciliation - fuel receipt " + code)
+                    put("description_ar", "قيد مصالحة تاريخية لتوريد وقود مكتمل")
+                    put("total_debit", amount)
+                    put("total_credit", amount)
+                    put("is_balanced", 1)
+                    put("status", "posted")
+                    put("posted_at", started)
+                    put("posted_by", actorUserId)
+                    put("fiscal_year", yy)
+                    put("fiscal_period", mm)
+                    put("station_id", stationId)
+                    put("created_at", started)
+                    put("updated_at", started)
+                    put("created_by", actorUserId)
+                    put("updated_by", actorUserId)
+                    put("is_deleted", 0)
+                    put("remarks", "[historical-reconciliation] source=tank_refills#" + refillId +
+                        "; amount verified against supplier_ledger fuel_supply_credit")
+                    put("extra_data", JSONObject().put("reconciliation_run_uuid", runUuid)
+                        .put("source_table", "tank_refills").put("source_id", refillId)
+                        .put("evidence", "one exact supplier ledger credit").toString())
+                }
+                journalId = db.insertOrThrow("journal_entries", null, header)
+                val inventoryLine = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("journal_entry_id", journalId)
+                    put("line_number", 1)
+                    put("account_id", inventoryAccount!!)
+                    put("debit", amount)
+                    put("credit", 0.0)
+                    put("exchange_rate", 1.0)
+                    put("description", "Fuel inventory received from " + code)
+                    put("description_ar", "مخزون الوقود المستلم من " + code)
+                    if (source.optLong("currency_id") > 0L) put("currency_id", source.optLong("currency_id"))
+                }
+                db.insertOrThrow("journal_entry_items", null, inventoryLine)
+                val payableLine = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("journal_entry_id", journalId)
+                    put("line_number", 2)
+                    put("account_id", payableAccount!!)
+                    put("debit", 0.0)
+                    put("credit", amount)
+                    put("exchange_rate", 1.0)
+                    put("supplier_party_id", supplierId)
+                    put("description", "Accounts payable - supplier " + code)
+                    put("description_ar", "ذمم المورد - " + code)
+                    if (source.optLong("currency_id") > 0L) put("currency_id", source.optLong("currency_id"))
+                }
+                db.insertOrThrow("journal_entry_items", null, payableLine)
+
+                val totals = queryOne(
+                    "SELECT COALESCE(SUM(debit),0),COALESCE(SUM(credit),0) FROM journal_entry_items WHERE journal_entry_id=?",
+                    arrayOf(journalId.toString())
+                ) { c -> c.getDouble(0) to c.getDouble(1) }
+                check(totals != null && abs(totals.first - amount) <= 0.01 && abs(totals.second - amount) <= 0.01) {
+                    "قيد المصالحة لا يتوازن مع بنوده."
+                }
+                val log = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("user_id", actorUserId)
+                    put("action_type", "historical_financial_reconciliation")
+                    put("table_name", "journal_entries")
+                    put("record_id", journalId)
+                    put("old_row_json", JSONObject().put("missing_source_journal", true)
+                        .put("source_table", "tank_refills").put("source_id", refillId).toString())
+                    put("new_row_json", JSONObject().put("journal_id", journalId).put("source_id", refillId)
+                        .put("amount", amount).put("debit_account_id", inventoryAccount)
+                        .put("credit_account_id", payableAccount).toString())
+                    put("changed_columns", "journal_entries,journal_entry_items")
+                    put("request_id", runUuid)
+                    put("created_at", now())
+                }
+                db.insertOrThrow("audit_logs", null, log)
+                db.setTransactionSuccessful()
+            } catch (e: Exception) {
+                failure = e.message ?: "تعذر إنشاء القيد."
+            } finally {
+                db.endTransaction()
+            }
+
+            if (failure == null && journalId > 0L) {
+                val finding = JSONObject().put("source_table", "tank_refills").put("source_id", refillId)
+                    .put("reference_code", code).put("journal_id", journalId)
+                    .put("debit_account_id", inventoryAccount).put("credit_account_id", payableAccount)
+                    .put("amount", amount).put("status", "repaired")
+                repaired.put(finding)
+                persistItem(runId, stationId, refillId, "create_missing_fuel_supply_journal", "repaired", amount, finding,
+                    "Exact supplier-ledger source match; posted inventory / payable journal and audit log in one transaction.")
+            } else {
+                val finding = JSONObject().put("source_table", "tank_refills").put("source_id", refillId)
+                    .put("reference_code", code).put("amount", amount).put("status", "failed").put("reason", failure)
+                skipped.put(finding)
+                persistItem(runId, stationId, refillId, "create_missing_fuel_supply_journal", "failed", amount, finding,
+                    failure ?: "Unknown failure")
+            }
+        }
+
+        val after = run(stationId)
+        val finished = now()
+        db.update("historical_reconciliation_runs", ContentValues().apply {
+            put("completed_at", finished)
+            put("status", "completed")
+            put("approval_status_after", after.optString("approval_status", "blocked"))
+            put("repaired_count", repaired.length())
+            put("skipped_count", skipped.length())
+            put("after_json", after.toString())
+            put("remarks", "Safe repair pass complete. Unproven differences remain blocking and were not guessed.")
+        }, "id=?", arrayOf(runId.toString()))
+
+        return JSONObject().put("success", true).put("run_id", runId).put("run_uuid", runUuid)
+            .put("station_id", stationId).put("started_at", started).put("completed_at", finished)
+            .put("repaired_count", repaired.length()).put("skipped_count", skipped.length())
+            .put("repaired", repaired).put("skipped", skipped).put("before", before).put("after", after)
+            .put("ready_for_financial_statement_approval", after.optBoolean("ready_for_financial_statement_approval"))
+            .put("approval_status", after.optString("approval_status", "blocked"))
+    }
+
+    private fun checkSales(stationId: Int, checks: JSONObject, issues: JSONArray) {
+        if (!tableExists("sales_transactions") || !tableExists("journal_entries")) return
+        val sales = rows(
+            "SELECT s.id,COALESCE(s.sale_code,''),COALESCE(s.net_amount,0) FROM sales_transactions s " +
+                "WHERE s.station_id=? AND s.status='completed' AND COALESCE(s.is_deleted,0)=0 " +
+                "AND NOT EXISTS(SELECT 1 FROM journal_entries j WHERE j.station_id=s.station_id AND j.reference_type='sale' " +
+                "AND j.reference_id=s.id AND j.status='posted' AND COALESCE(j.is_deleted,0)=0) ORDER BY s.id",
+            arrayOf(stationId.toString())
+        ) { c -> JSONObject().put("sale_id", c.getLong(0)).put("sale_code", c.getString(1)).put("amount", c.getDouble(2)) }
+        val cogs = rows(
+            "SELECT s.id,COALESCE(s.sale_code,''),COALESCE(s.net_amount,0) FROM sales_transactions s " +
+                "WHERE s.station_id=? AND s.status='completed' AND COALESCE(s.is_deleted,0)=0 " +
+                "AND NOT EXISTS(SELECT 1 FROM journal_entries j WHERE j.station_id=s.station_id AND j.reference_type='sale_cogs' " +
+                "AND j.reference_id=s.id AND j.status='posted' AND COALESCE(j.is_deleted,0)=0) ORDER BY s.id",
+            arrayOf(stationId.toString())
+        ) { c -> JSONObject().put("sale_id", c.getLong(0)).put("sale_code", c.getString(1)).put("sales_amount", c.getDouble(2)) }
+        checks.put("missing_sale_journals", sales).put("missing_sale_cogs_journals", cogs)
+        add(issues, "missing_sale_journals", "critical", "مبيعات مكتملة بلا قيد إيراد/تحصيل/ذمم مطابق", sales.length(), sum(sales, "amount"), sales)
+        add(issues, "missing_sale_cogs_journals", "critical", "مبيعات مكتملة بلا قيد تكلفة مطابق؛ لا يمكن استنتاج تكلفة تاريخية من سعر اليوم", cogs.length(), sum(cogs, "sales_amount"), cogs)
+
+        val arithmetic = rows(
+            "SELECT id,COALESCE(sale_code,''),COALESCE(net_amount,0),COALESCE(paid_amount,0),COALESCE(remaining_amount,0) " +
+                "FROM sales_transactions WHERE station_id=? AND status='completed' AND COALESCE(is_deleted,0)=0 " +
+                "AND ABS(COALESCE(net_amount,0)-COALESCE(paid_amount,0)-COALESCE(remaining_amount,0))>0.01 ORDER BY id",
+            arrayOf(stationId.toString())
+        ) { c -> JSONObject().put("sale_id", c.getLong(0)).put("sale_code", c.getString(1)).put("net", c.getDouble(2))
+            .put("paid", c.getDouble(3)).put("remaining", c.getDouble(4)).put("difference", c.getDouble(2)-c.getDouble(3)-c.getDouble(4)) }
+        checks.put("sales_payment_arithmetic_mismatches", arithmetic)
+        add(issues, "sales_payment_arithmetic_mismatches", "critical", "صافي الفاتورة لا يساوي المدفوع زائد المتبقي", arithmetic.length(), sum(arithmetic, "difference"), arithmetic)
+    }
+
+    private fun checkPayments(stationId: Int, checks: JSONObject, issues: JSONArray) {
+        if (!tableExists("payments") || !tableExists("journal_entries")) return
+        val missing = rows(
+            "SELECT p.id,COALESCE(p.payment_code,''),COALESCE(p.amount,0),COALESCE(p.sale_id,0),COALESCE(p.customer_party_id,0)," +
+                "COALESCE(p.cash_box_id,0),COALESCE(p.bank_account_id,0),COALESCE(p.journal_entry_id,0),COALESCE(p.payment_method,'') " +
+                "FROM payments p WHERE p.station_id=? AND p.status='completed' AND COALESCE(p.is_deleted,0)=0 AND " +
+                "(COALESCE(p.journal_entry_id,0)=0 OR NOT EXISTS(SELECT 1 FROM journal_entries j WHERE j.id=p.journal_entry_id " +
+                "AND j.station_id=p.station_id AND j.reference_type='payment' AND j.reference_id=p.id AND j.status='posted' AND COALESCE(j.is_deleted,0)=0)) ORDER BY p.id",
+            arrayOf(stationId.toString())
+        ) { c -> JSONObject().put("payment_id", c.getLong(0)).put("payment_code", c.getString(1)).put("amount", c.getDouble(2))
+            .put("sale_id", c.getLong(3)).put("customer_party_id", c.getLong(4)).put("cash_box_id", c.getLong(5))
+            .put("bank_account_id", c.getLong(6)).put("journal_entry_id", c.getLong(7)).put("payment_method", c.getString(8)) }
+        checks.put("completed_payments_without_posted_journal", missing)
+        add(issues, "completed_payments_without_posted_journal", "critical",
+            "مدفوعات مكتملة بلا قيد مرحّل مطابق؛ يلزم إثبات مصدر التسوية وتخصيص الفاتورة أولاً",
+            missing.length(), sum(missing, "amount"), missing)
+        val withoutSource = rows(
+            "SELECT id,COALESCE(payment_code,''),COALESCE(amount,0),COALESCE(payment_method,'') FROM payments " +
+                "WHERE station_id=? AND status='completed' AND COALESCE(is_deleted,0)=0 AND " +
+                "COALESCE(cash_box_id,0)=0 AND COALESCE(bank_account_id,0)=0 ORDER BY id",
+            arrayOf(stationId.toString())
+        ) { c -> JSONObject().put("payment_id", c.getLong(0)).put("payment_code", c.getString(1)).put("amount", c.getDouble(2)).put("payment_method", c.getString(3)) }
+        checks.put("completed_payments_without_settlement_source", withoutSource)
+        add(issues, "completed_payments_without_settlement_source", "critical", "مدفوعات بلا صندوق أو بنك محفوظ في سجل المصدر",
+            withoutSource.length(), sum(withoutSource, "amount"), withoutSource)
+        val unscoped = if (hasColumn("payments", "station_id")) scalar(
+            "SELECT COUNT(*) FROM payments WHERE (station_id IS NULL OR station_id=0) AND status='completed' AND COALESCE(is_deleted,0)=0",
+            emptyArray()
+        ) else 0
+        checks.put("completed_payments_missing_station_scope", unscoped)
+        add(issues, "completed_payments_missing_station_scope", "critical",
+            "مدفوعات مكتملة بلا نطاق محطة؛ لا يجوز إسنادها تلقائياً إلى هذه المحطة", unscoped, null, null)
+    }
+
+    private fun checkCustomerAndSupplierLedgers(stationId: Int, checks: JSONObject, issues: JSONArray) {
+        if (tableExists("parties") && tableExists("party_types") && tableExists("customer_ledger")) {
+            val customers = rows(
+                "SELECT p.id,COALESCE(p.legal_name,''),COALESCE(p.current_balance,0),COUNT(l.id)," +
+                    "COALESCE(SUM(COALESCE(l.debit,0)-COALESCE(l.credit,0)),0) FROM parties p " +
+                    "JOIN party_types t ON t.id=p.party_type_id LEFT JOIN customer_ledger l ON l.party_id=p.id " +
+                    "WHERE p.station_id=? AND COALESCE(p.is_deleted,0)=0 AND t.type_code<>'SUPPLIER' GROUP BY p.id " +
+                    "HAVING ABS(COALESCE(p.current_balance,0)-COALESCE(SUM(COALESCE(l.debit,0)-COALESCE(l.credit,0)),0))>0.01 " +
+                    "OR (COUNT(l.id)=0 AND ABS(COALESCE(p.current_balance,0))>0.01) ORDER BY p.id",
+                arrayOf(stationId.toString())
+            ) { c -> JSONObject().put("party_id", c.getLong(0)).put("party_name", c.getString(1))
+                .put("current_balance", c.getDouble(2)).put("ledger_row_count", c.getInt(3)).put("ledger_net_debit", c.getDouble(4)) }
+            checks.put("customer_subledger_mismatches", customers)
+            add(issues, "customer_subledger_mismatches", "critical",
+                "رصيد العميل لا يطابق دفتر العميل؛ الرصيد الافتتاحي غير الموثق يحتاج سنداً مستقلاً",
+                customers.length(), sum(customers, "current_balance"), customers)
+            val ar = controlAccount(stationId, "1103", "asset", false)
+            checks.put("customer_receivable_control_reconciliation", ar)
+            if (ar.optBoolean("available") && abs(ar.optDouble("difference", 0.0)) > 0.01)
+                add(issues, "customer_receivable_control_reconciliation", "critical",
+                    "حساب رقابة المدينين لا يطابق مجموع أرصدة العملاء في المحطة", 1, ar.optDouble("difference"), JSONArray().put(ar))
+        }
+        if (tableExists("parties") && tableExists("party_types") && tableExists("supplier_ledger")) {
+            val suppliers = rows(
+                "SELECT p.id,COALESCE(p.legal_name,''),COALESCE(p.current_balance,0),COALESCE(p.total_due,0)," +
+                    "COALESCE(p.total_purchases,0),COALESCE(p.total_payments,0),COUNT(l.id)," +
+                    "COALESCE(SUM(COALESCE(l.credit,0)-COALESCE(l.debit,0)),0) FROM parties p " +
+                    "JOIN party_types t ON t.id=p.party_type_id LEFT JOIN supplier_ledger l ON l.party_id=p.id " +
+                    "WHERE p.station_id=? AND t.type_code='SUPPLIER' AND COALESCE(p.is_deleted,0)=0 GROUP BY p.id HAVING " +
+                    "ABS(COALESCE(p.current_balance,0)-COALESCE(p.total_due,0))>0.01 OR " +
+                    "ABS(COALESCE(p.current_balance,0)-COALESCE(SUM(COALESCE(l.credit,0)-COALESCE(l.debit,0)),0))>0.01 OR " +
+                    "ABS(COALESCE(p.total_purchases,0)-COALESCE(p.total_payments,0)-COALESCE(p.total_due,0))>0.01 ORDER BY p.id",
+                arrayOf(stationId.toString())
+            ) { c -> JSONObject().put("supplier_id", c.getLong(0)).put("supplier_name", c.getString(1))
+                .put("current_balance", c.getDouble(2)).put("total_due", c.getDouble(3))
+                .put("total_purchases", c.getDouble(4)).put("total_payments", c.getDouble(5))
+                .put("ledger_row_count", c.getInt(6)).put("ledger_net_credit", c.getDouble(7)) }
+            checks.put("supplier_subledger_mismatches", suppliers)
+            add(issues, "supplier_subledger_mismatches", "critical",
+                "رصيد المورد أو مجموع دفتر المورد لا يطابق إجمالي المشتريات والدفعات", suppliers.length(), null, suppliers)
+            val ap = controlAccount(stationId, "2101", "liability", true)
+            checks.put("supplier_payable_control_reconciliation", ap)
+            if (ap.optBoolean("available") && abs(ap.optDouble("difference", 0.0)) > 0.01)
+                add(issues, "supplier_payable_control_reconciliation", "critical",
+                    "حساب رقابة الدائنين لا يطابق دفتر الموردين", 1, ap.optDouble("difference"), JSONArray().put(ap))
+        }
+    }
+
+    private fun controlAccount(stationId: Int, code: String, accountType: String, supplier: Boolean): JSONObject {
+        val ids = rows(
+            "SELECT id,COALESCE(opening_balance,0) FROM accounts WHERE account_code=? AND account_type=? AND is_active=1 AND COALESCE(is_deleted,0)=0",
+            arrayOf(code, accountType)
+        ) { c -> c.getLong(0) to c.getDouble(1) }
+        if (ids.size != 1) return JSONObject().put("available", false).put("reason", "الحساب الرقابي غير فريد أو غير نشط")
+        val id = ids[0].first
+        val gl = scalarDouble(
+            "SELECT COALESCE(SUM(i.debit-i.credit),0) FROM journal_entry_items i JOIN journal_entries j ON j.id=i.journal_entry_id " +
+                "WHERE i.account_id=? AND j.station_id=? AND j.status='posted' AND COALESCE(j.is_deleted,0)=0",
+            arrayOf(id.toString(), stationId.toString())
+        )
+        val partyTotal = scalarDouble(
+            "SELECT COALESCE(SUM(p.current_balance),0) FROM parties p JOIN party_types t ON t.id=p.party_type_id " +
+                "WHERE p.station_id=? AND COALESCE(p.is_deleted,0)=0 AND " +
+                if (supplier) "t.type_code='SUPPLIER'" else "t.type_code<>'SUPPLIER'",
+            arrayOf(stationId.toString())
+        )
+        val expected = if (supplier) -partyTotal else partyTotal
+        val book = ids[0].second + gl
+        return JSONObject().put("available", true).put("account_id", id).put("account_code", code)
+            .put("opening_balance", ids[0].second).put("posted_gl_net_debit", gl)
+            .put("party_balance_total", partyTotal).put("expected_gl_net_debit", expected)
+            .put("difference", book - expected).put("reconciled", abs(book - expected) <= 0.01)
+    }
+
+    private fun checkInventory(stationId: Int, checks: JSONObject, issues: JSONArray) {
+        val movementsExist = tableExists("inventory_movements")
+        val ledgerCount = if (tableExists("inventory_ledger")) scalar("SELECT COUNT(*) FROM inventory_ledger", emptyArray()) else 0
+        val movementCount = if (movementsExist) scalar(
+            "SELECT COUNT(*) FROM inventory_movements WHERE station_id=? AND status='completed' AND COALESCE(is_deleted,0)=0",
+            arrayOf(stationId.toString())
+        ) else 0
+        checks.put("completed_inventory_movement_count", movementCount).put("inventory_ledger_row_count", ledgerCount)
+        if (movementCount > 0 && ledgerCount == 0)
+            add(issues, "inventory_ledger_missing", "high",
+                "توجد حركات مخزون معتمدة لكن دفتر المخزون المساعد فارغ؛ يلزم إعادة بنائه من مستندات الحركة والتحقق من الكلفة", 1, null, null)
+
+        if (tableExists("products") && tableExists("inventory_levels")) {
+            val levels = rows(
+                "SELECT p.id,COALESCE(p.product_name_ar,p.product_name,''),COALESCE(p.quantity,0)," +
+                    "COALESCE((SELECT SUM(l.quantity_on_hand) FROM inventory_levels l WHERE l.product_id=p.id),0) " +
+                    "FROM products p WHERE p.station_id=? AND COALESCE(p.is_deleted,0)=0 AND " +
+                    "EXISTS(SELECT 1 FROM inventory_levels l WHERE l.product_id=p.id) AND " +
+                    "ABS(COALESCE(p.quantity,0)-(SELECT SUM(l.quantity_on_hand) FROM inventory_levels l WHERE l.product_id=p.id))>0.01 ORDER BY p.id",
+                arrayOf(stationId.toString())
+            ) { c -> JSONObject().put("product_id", c.getLong(0)).put("product_name", c.getString(1))
+                .put("product_quantity", c.getDouble(2)).put("sum_warehouse_quantity", c.getDouble(3))
+                .put("difference", c.getDouble(2) - c.getDouble(3)) }
+            checks.put("product_quantity_vs_warehouse_levels", levels)
+            add(issues, "product_quantity_vs_warehouse_levels", "critical",
+                "كمية المنتج لا تطابق مجموع أرصدة المستودعات", levels.length(), null, levels)
+        }
+        if (movementsExist) {
+            val broken = rows(
+                "SELECT id,product_id,COALESCE(quantity_before,0),COALESCE(quantity_change,0),COALESCE(quantity_after,0) " +
+                    "FROM inventory_movements WHERE station_id=? AND status='completed' AND COALESCE(is_deleted,0)=0 " +
+                    "AND ABS(COALESCE(quantity_before,0)+COALESCE(quantity_change,0)-COALESCE(quantity_after,0))>0.01 ORDER BY id",
+                arrayOf(stationId.toString())
+            ) { c -> JSONObject().put("movement_id", c.getLong(0)).put("product_id", c.getLong(1))
+                .put("quantity_before", c.getDouble(2)).put("quantity_change", c.getDouble(3)).put("quantity_after", c.getDouble(4)) }
+            checks.put("inventory_movement_arithmetic_mismatches", broken)
+            add(issues, "inventory_movement_arithmetic_mismatches", "critical",
+                "حركات مخزون لا تحقق الرصيد السابق + التغير = الرصيد اللاحق؛ لا تعدل الكميات تلقائياً", broken.length(), null, broken)
+        }
+    }
+
+    private fun checkFuelAndRefills(stationId: Int, checks: JSONObject, issues: JSONArray) {
+        if (tableExists("fuel_sales") && tableExists("fuel_types")) {
+            val costs = rows(
+                "SELECT fs.id,COALESCE(fs.sale_id,0),COALESCE(fs.fuel_type_id,0),COALESCE(fs.quantity,0)," +
+                    "COALESCE(fs.cost_per_liter,0),COALESCE(fs.cost_amount,0),COALESCE(ft.default_purchase_price,0) " +
+                    "FROM fuel_sales fs LEFT JOIN fuel_types ft ON ft.id=fs.fuel_type_id WHERE fs.station_id=? " +
+                    "AND fs.status='completed' AND COALESCE(fs.is_deleted,0)=0 AND (COALESCE(fs.cost_per_liter,0)<=0 OR " +
+                    "COALESCE(fs.cost_amount,0)<=0 OR (COALESCE(ft.default_purchase_price,0)>0 AND fs.cost_per_liter<ft.default_purchase_price*0.5)) ORDER BY fs.id",
+                arrayOf(stationId.toString())
+            ) { c -> JSONObject().put("fuel_sale_id", c.getLong(0)).put("sale_id", c.getLong(1))
+                .put("fuel_type_id", c.getLong(2)).put("quantity", c.getDouble(3))
+                .put("recorded_cost_per_liter", c.getDouble(4)).put("recorded_cost_amount", c.getDouble(5))
+                .put("current_default_purchase_price_reference_only", c.getDouble(6)) }
+            checks.put("fuel_sales_cost_anomalies", costs)
+            add(issues, "fuel_sales_cost_anomalies", "critical",
+                "تكلفة وقود تاريخية مفقودة أو شاذة؛ لا يستخدم السعر الحالي لإعادة كتابة تكلفة تاريخية", costs.length(), null, costs)
+        }
+        if (!tableExists("tank_refills")) return
+        val quantity = rows(
+            "SELECT id,COALESCE(refill_code,''),COALESCE(delivered_quantity,0),COALESCE(actual_quantity,0)," +
+                "COALESCE(tank_level_before,0),COALESCE(tank_level_after,0),COALESCE(net_amount,0) FROM tank_refills " +
+                "WHERE station_id=? AND status='completed' AND COALESCE(is_deleted,0)=0 AND " +
+                "ABS(COALESCE(actual_quantity,0)-COALESCE(delivered_quantity,0))>0.01 ORDER BY id",
+            arrayOf(stationId.toString())
+        ) { c -> JSONObject().put("refill_id", c.getLong(0)).put("refill_code", c.getString(1))
+            .put("delivered_quantity", c.getDouble(2)).put("actual_quantity", c.getDouble(3))
+            .put("tank_level_before", c.getDouble(4)).put("tank_level_after", c.getDouble(5)).put("net_amount", c.getDouble(6)) }
+        checks.put("fuel_refill_quantity_anomalies", quantity)
+        add(issues, "fuel_refill_quantity_anomalies", "critical",
+            "حقل الكمية الفعلية لا يساوي الكمية المسلمة؛ قد يحتوي قراءة مستوى الخزان ولا يجوز استبداله آلياً", quantity.length(), null, quantity)
+
+        val missing = rows(
+            "SELECT r.id,COALESCE(r.refill_code,''),COALESCE(r.supplier_id,0),COALESCE(r.net_amount,0) FROM tank_refills r " +
+                "WHERE r.station_id=? AND r.status='completed' AND COALESCE(r.is_deleted,0)=0 AND NOT EXISTS(" +
+                "SELECT 1 FROM journal_entries j WHERE j.station_id=r.station_id AND j.reference_type='fuel_supply' " +
+                "AND j.reference_id=r.id AND COALESCE(j.is_deleted,0)=0) ORDER BY r.id",
+            arrayOf(stationId.toString())
+        ) { c -> JSONObject().put("refill_id", c.getLong(0)).put("refill_code", c.getString(1))
+            .put("supplier_id", c.getLong(2)).put("net_amount", c.getDouble(3))
+            .put("supplier_ledger_proof_available", oneExactSupplierCredit(c.getLong(2), c.getLong(0), c.getDouble(3))) }
+        checks.put("missing_fuel_supply_journals", missing)
+        add(issues, "missing_fuel_supply_journals", "critical",
+            "توريدات وقود مكتملة بلا قيد أستاذ عام؛ الحالات ذات الإثبات المطابق تظهر قابلة للإصلاح الآمن", missing.length(), sum(missing, "net_amount"), missing)
+    }
+
+    private fun checkPeriodsAndCurrency(stationId: Int, checks: JSONObject, issues: JSONArray) {
+        val periodCount = if (tableExists("fiscal_periods")) scalar("SELECT COUNT(*) FROM fiscal_periods WHERE station_id=?", arrayOf(stationId.toString())) else 0
+        val unperioded = if (tableExists("journal_entries")) scalar(
+            "SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND status='posted' AND COALESCE(is_deleted,0)=0 AND (fiscal_year IS NULL OR fiscal_period IS NULL)",
+            arrayOf(stationId.toString())
+        ) else 0
+        val noSalesCurrency = if (tableExists("sales_transactions")) scalar(
+            "SELECT COUNT(*) FROM sales_transactions WHERE station_id=? AND status='completed' AND COALESCE(is_deleted,0)=0 AND (currency_id IS NULL OR amount_in_default IS NULL)",
+            arrayOf(stationId.toString())
+        ) else 0
+        val noPaymentCurrency = if (tableExists("payments")) scalar(
+            "SELECT COUNT(*) FROM payments WHERE station_id=? AND status='completed' AND COALESCE(is_deleted,0)=0 AND (currency_id IS NULL OR amount_in_default IS NULL)",
+            arrayOf(stationId.toString())
+        ) else 0
+        checks.put("fiscal_period_count", periodCount).put("posted_journals_without_period", unperioded)
+            .put("sales_without_currency_or_default_amount", noSalesCurrency).put("payments_without_currency_or_default_amount", noPaymentCurrency)
+        if (periodCount == 0 || unperioded > 0)
+            add(issues, "fiscal_period_reconciliation_missing", "high",
+                "التقويم المالي مفقود أو أن قيوداً مرحلة بلا سنة/فترة مالية؛ يلزم إنشاء واعتماد التقويم من سياسة المحطة", maxOf(if (periodCount == 0) 1 else 0, unperioded), null, null)
+        if (noSalesCurrency + noPaymentCurrency > 0)
+            add(issues, "historical_currency_evidence_missing", "high",
+                "معاملات تاريخية بلا عملة/مبلغ بالعملة الافتراضية؛ لا يجوز اختراع سعر صرف تاريخي", noSalesCurrency + noPaymentCurrency, null, null)
+    }
+
+    private fun checkOpeningBalances(checks: JSONObject, issues: JSONArray) {
+        if (!tableExists("accounts")) return
+        val overlaps = rows(
+            "SELECT child.id,COALESCE(child.account_code,''),COALESCE(child.opening_balance,0),parent.id," +
+                "COALESCE(parent.account_code,''),COALESCE(parent.opening_balance,0) FROM accounts child " +
+                "JOIN accounts parent ON parent.id=child.parent_account_id WHERE child.is_active=1 AND parent.is_active=1 " +
+                "AND COALESCE(child.is_deleted,0)=0 AND COALESCE(parent.is_deleted,0)=0 " +
+                "AND ABS(COALESCE(child.opening_balance,0))>0.01 AND ABS(COALESCE(parent.opening_balance,0))>0.01 ORDER BY child.id",
+            emptyArray()
+        ) { c -> JSONObject().put("child_account_id", c.getLong(0)).put("child_account_code", c.getString(1))
+            .put("child_opening_balance", c.getDouble(2)).put("parent_account_id", c.getLong(3))
+            .put("parent_account_code", c.getString(4)).put("parent_opening_balance", c.getDouble(5)) }
+        checks.put("opening_balances_on_parent_and_child", overlaps)
+        add(issues, "opening_balances_on_parent_and_child", "critical",
+            "أرصدة افتتاحية مسجلة في حساب أب وتفاصيله معاً؛ لا يمكن احتساب الميزانية قبل تحديد الرصيد المعتمد", overlaps.length(), null, overlaps)
+    }
+
+    private fun validSupplier(supplierId: Long, stationId: Int) = scalar(
+        "SELECT COUNT(*) FROM parties p JOIN party_types t ON t.id=p.party_type_id WHERE p.id=? AND p.station_id=? " +
+            "AND t.type_code='SUPPLIER' AND COALESCE(p.is_active,1)=1 AND COALESCE(p.is_deleted,0)=0",
+        arrayOf(supplierId.toString(), stationId.toString())
+    ) == 1
+
+    private fun oneExactSupplierCredit(supplierId: Long, refillId: Long, amount: Double): Boolean {
+        if (!tableExists("supplier_ledger")) return false
+        val matches = rows(
+            "SELECT COALESCE(debit,0),COALESCE(credit,0) FROM supplier_ledger WHERE party_id=? AND transaction_type='fuel_supply_credit' AND transaction_id=?",
+            arrayOf(supplierId.toString(), refillId.toString())
+        ) { c -> c.getDouble(0) to c.getDouble(1) }
+        return matches.size == 1 && abs(matches[0].first) <= 0.01 && abs(matches[0].second - amount) <= 0.01
+    }
+
+    private fun uniqueAccountId(code: String, type: String): Long? {
+        val matches = rows(
+            "SELECT id FROM accounts WHERE account_code=? AND account_type=? AND is_active=1 AND COALESCE(is_deleted,0)=0",
+            arrayOf(code, type)
+        ) { c -> c.getLong(0) }
+        return if (matches.size == 1) matches[0] else null
+    }
+
+    private fun journalSourceCount(stationId: Int, refillId: Long) = scalar(
+        "SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND reference_type='fuel_supply' AND reference_id=? AND COALESCE(is_deleted,0)=0",
+        arrayOf(stationId.toString(), refillId.toString())
+    )
+
+    private fun isDateInClosedPeriod(stationId: Int, input: String): Boolean {
+        if (!tableExists("fiscal_periods")) return false
+        return scalar(
+            "SELECT COUNT(*) FROM fiscal_periods WHERE station_id=? AND date(?) BETWEEN date(period_start) AND date(period_end) AND status IN ('closing','closed')",
+            arrayOf(stationId.toString(), normalizeDate(input))
+        ) > 0
+    }
+
+    private fun persistItem(runId: Long, stationId: Int, sourceId: Long, action: String, status: String,
+                            amount: Double, detail: JSONObject, note: String) {
+        db.insertOrThrow("historical_reconciliation_items", null, ContentValues().apply {
+            put("run_id", runId); put("station_id", stationId); put("source_table", "tank_refills")
+            put("source_id", sourceId); put("action_type", action); put("action_status", status)
+            put("amount", amount); put("after_json", detail.toString()); put("note", note); put("created_at", now())
+        })
+    }
+
+    private fun ensureRunTables() {
+        db.execSQL("CREATE TABLE IF NOT EXISTS historical_reconciliation_runs (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,uuid TEXT NOT NULL UNIQUE,station_id INTEGER NOT NULL," +
+            "run_mode TEXT NOT NULL,started_at TEXT NOT NULL,completed_at TEXT,created_by INTEGER,status TEXT NOT NULL," +
+            "approval_status_before TEXT,approval_status_after TEXT,repaired_count INTEGER NOT NULL DEFAULT 0," +
+            "skipped_count INTEGER NOT NULL DEFAULT 0,before_json TEXT,after_json TEXT,remarks TEXT)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS historical_reconciliation_items (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,run_id INTEGER NOT NULL,station_id INTEGER NOT NULL," +
+            "source_table TEXT NOT NULL,source_id INTEGER,action_type TEXT NOT NULL,action_status TEXT NOT NULL," +
+            "amount REAL,before_json TEXT,after_json TEXT,note TEXT,created_at TEXT NOT NULL)")
+    }
+
+    private fun add(target: JSONArray, code: String, severity: String, message: String, count: Int, amount: Double?, records: JSONArray?) {
+        if (count <= 0) return
+        val finding = JSONObject().put("code", code).put("severity", severity).put("message", message).put("count", count)
+        if (amount != null) finding.put("amount", amount)
+        if (records != null) finding.put("records", records)
+        target.put(finding)
+    }
+    private fun sum(rows: JSONArray, key: String): Double {
+        var out = 0.0
+        for (i in 0 until rows.length()) out += rows.getJSONObject(i).optDouble(key, 0.0)
+        return out
+    }
+    private fun tableExists(table: String) = scalar("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", arrayOf(table)) > 0
+    private fun hasColumn(table: String, name: String): Boolean {
+        if (!table.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) || !tableExists(table)) return false
+        db.rawQuery("PRAGMA table_info(" + table + ")", null).use { c -> while (c.moveToNext()) if (c.getString(1) == name) return true }
+        return false
+    }
+    private fun scalar(sql: String, args: Array<String>): Int {
+        db.rawQuery(sql, args).use { c -> return if (c.moveToFirst()) c.getInt(0) else 0 }
+    }
+    private fun scalarDouble(sql: String, args: Array<String>): Double {
+        db.rawQuery(sql, args).use { c -> return if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+    }
+    private fun <T> rows(sql: String, args: Array<String>, mapper: (Cursor) -> T): List<T> {
+        val out = ArrayList<T>()
+        db.rawQuery(sql, args).use { c -> while (c.moveToNext()) out.add(mapper(c)) }
+        return out
+    }
+    private fun <T> queryOne(sql: String, args: Array<String>, mapper: (Cursor) -> T): T? {
+        db.rawQuery(sql, args).use { c -> return if (c.moveToFirst()) mapper(c) else null }
+    }
+    private fun normalizeDate(input: String): String {
+        val value = input.trim().take(10)
+        if (value.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) return value
+        return now().take(10)
+    }
+    private fun now() = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+}

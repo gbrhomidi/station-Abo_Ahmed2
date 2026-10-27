@@ -68,6 +68,11 @@ internal class FinancialIntegrityAuditor(private val database: SQLiteDatabase) {
         auditReversalLinks(stationId, issues, checked)
         auditLedgerTrialBalance(stationId, issues, checked)
         auditPostedJournalLineValidity(stationId, issues, checked)
+        val supplemental = HistoricalFinancialReconciliationAudit(database).run(stationId)
+        checked.put("historical_reconciliation", supplemental.optJSONObject("checks") ?: JSONObject())
+        checked.put("historical_reconciliation_status", supplemental.optString("status"))
+        val supplementalIssues = supplemental.optJSONArray("issues") ?: JSONArray()
+        for (i in 0 until supplementalIssues.length()) issues.put(supplementalIssues.getJSONObject(i))
         return output(stationId, issues, checked)
     }
 
