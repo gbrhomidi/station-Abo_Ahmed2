@@ -3493,7 +3493,7 @@ tr:last-child td { border-bottom:0; }
             'openMonitoringReport','clearLogs','clearMetrics','securityFields',
             'backupFields','createBackup','chooseBackupLocation','restoreDatabaseBackup','backupLocationStatus','refreshBackups','backupsBody',
             'maintenanceFields','optimizeDb','checkIntegrity','refreshDbInfo',
-            'maintenanceRuntimeStatus','integrityResult','userSearchBadge','usersBody','displayFields'
+            'maintenanceRuntimeStatus','databaseInfoResult','integrityResult','userSearchBadge','usersBody','displayFields'
         ];
         const missing = requiredIds.filter(id => !loadedIds.has(id));
         if (missing.length) {
@@ -3691,6 +3691,21 @@ tr:last-child td { border-bottom:0; }
             // Older releases accidentally stored some application controls in system_settings.
             // Read those values as a migration fallback; settings remains authoritative once present.
             Object.assign(settings, previousSystem, application, legacy);
+            // Defaults match the native maintenance policy for upgrades where these SQLite keys
+            // have not yet been created; they are persisted only after the user explicitly saves.
+            const maintenanceDefaults = {
+                autoCleanupEnabled: true,
+                cleanupIntervalDays: 1,
+                autoRepairEnabled: true,
+                batteryOptimizationEnabled: false,
+                networkOptimizationEnabled: false,
+                wakeLockEnabled: true,
+                developerMode: false,
+                showAdvancedSettings: false
+            };
+            Object.entries(maintenanceDefaults).forEach(([key, defaultValue]) => {
+                if (!Object.prototype.hasOwnProperty.call(settings, key)) settings[key] = defaultValue;
+            });
 
             // The HTML contains legacy controls as well as fields in ApplicationSettings.
             // Prefer the persisted value from SQLite when a legacy control has its own key.
@@ -4496,6 +4511,7 @@ tr:last-child td { border-bottom:0; }
         const showAdvanced = !!advancedToggle.checked;
         container.querySelectorAll('.maintenance-advanced-field').forEach(row => {
             row.hidden = !showAdvanced;
+            row.style.display = showAdvanced ? '' : 'none';
             row.setAttribute('aria-hidden', String(!showAdvanced));
         });
     }
@@ -4609,7 +4625,7 @@ tr:last-child td { border-bottom:0; }
             const value = dataOf(await bridgeCall('getDatabaseInfo')) || {};
             const tables = Array.isArray(value.tables) ? value.tables : [];
             const tableList = tables.length ? tables.join('، ') : 'لم تُرجع قائمة الجداول من SQLite.';
-            el('integrityResult').innerHTML = `
+            el('databaseInfoResult').innerHTML = `
                 <div class="status-card">
                     <span>إصدار SQLite المسجل (PRAGMA user_version)</span>
                     <strong>${escapeHtml(value.version == null ? '—' : value.version)}</strong>
