@@ -81,12 +81,16 @@ class SecuritySettingsStore internal constructor(
 
     fun putSetting(key: String, value: String) {
         require(key in SETTING_KEYS && key != KEY_PIN_CODE) { "مفتاح إعداد أمان غير مسموح" }
-        preferences.edit().putString(key, value).apply()
+        check(preferences.edit().putString(key, value).commit()) {
+            "تعذر تثبيت إعداد الأمان في التخزين"
+        }
     }
 
     fun removeSetting(key: String) {
         if (key in SETTING_KEYS && key != KEY_PIN_CODE) {
-            preferences.edit().remove(key).apply()
+            check(preferences.edit().remove(key).commit()) {
+                "تعذر إزالة إعداد الأمان من التخزين"
+            }
         }
     }
 
@@ -114,12 +118,14 @@ class SecuritySettingsStore internal constructor(
         } finally {
             chars.fill('\u0000')
         }
-        preferences.edit()
+        check(preferences.edit()
             .putString(PIN_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
             .putString(PIN_HASH, Base64.encodeToString(hash, Base64.NO_WRAP))
             .remove(PIN_FAILURES)
             .remove(PIN_BLOCKED_UNTIL)
-            .apply()
+            .commit()) {
+            "تعذر تثبيت بيانات PIN الآمنة"
+        }
     }
 
     /**
@@ -173,8 +179,10 @@ class SecuritySettingsStore internal constructor(
     /** Restore accepts only the fixed-size credential envelope produced by this class. */
     fun importPinCredential(credential: Map<String, String>) {
         if (credential.isEmpty()) {
-            preferences.edit().remove(PIN_SALT).remove(PIN_HASH)
-                .remove(PIN_FAILURES).remove(PIN_BLOCKED_UNTIL).apply()
+            check(preferences.edit().remove(PIN_SALT).remove(PIN_HASH)
+                .remove(PIN_FAILURES).remove(PIN_BLOCKED_UNTIL).commit()) {
+                "تعذر حذف بيانات PIN الآمنة"
+            }
             return
         }
         val salt = Base64.decode(credential["salt"] ?: error("ملح PIN غير موجود"), Base64.NO_WRAP)
@@ -182,12 +190,14 @@ class SecuritySettingsStore internal constructor(
         require(salt.size == 16 && hash.size == PIN_KEY_BITS / 8) {
             "بيانات PIN في النسخة الاحتياطية غير صالحة"
         }
-        preferences.edit()
+        check(preferences.edit()
             .putString(PIN_SALT, credential.getValue("salt"))
             .putString(PIN_HASH, credential.getValue("hash"))
             .remove(PIN_FAILURES)
             .remove(PIN_BLOCKED_UNTIL)
-            .apply()
+            .commit()) {
+            "تعذر تثبيت بيانات PIN المستعادة"
+        }
     }
 
     private fun derivePin(pin: CharArray, salt: ByteArray): ByteArray {
