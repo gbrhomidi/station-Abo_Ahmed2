@@ -12,10 +12,8 @@ import kotlin.math.abs
 /**
  * Workpaper for reconciling historical financial data.
  *
- * Audit is read-only. Repair mode is deliberately restricted to completed fuel
- * receipts whose supplier subledger proves exactly the same source, party and amount.
- * No customer allocation, cash/bank balance, sales cost, product quantity or old
- * posted journal is inferred or overwritten.
+ * Read-only workpaper used before and after source-backed historical repairs.
+ * Missing required schema and unresolved source differences block statement approval.
  */
 internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteDatabase) {
 
@@ -23,13 +21,16 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
         require(stationId > 0) { "A valid station scope is required" }
         val checks = JSONObject()
         val issues = JSONArray()
-        checkSales(stationId, checks, issues)
-        checkPayments(stationId, checks, issues)
-        checkCustomerAndSupplierLedgers(stationId, checks, issues)
-        checkInventory(stationId, checks, issues)
-        checkFuelAndRefills(stationId, checks, issues)
-        checkPeriodsAndCurrency(stationId, checks, issues)
-        checkOpeningBalances(checks, issues)
+        val schemaComplete = checkRequiredSchema(checks, issues)
+        if (schemaComplete) {
+            checkSales(stationId, checks, issues)
+            checkPayments(stationId, checks, issues)
+            checkCustomerAndSupplierLedgers(stationId, checks, issues)
+            checkInventory(stationId, checks, issues)
+            checkFuelAndRefills(stationId, checks, issues)
+            checkPeriodsAndCurrency(stationId, checks, issues)
+            checkOpeningBalances(stationId, checks, issues)
+        }
         return JSONObject()
             .put("station_id", stationId)
             .put("checked_at", now())
@@ -40,6 +41,52 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
             .put("checks", checks)
             .put("issues", issues)
             .put("automatic_repairs", false)
+    }
+
+    /**
+     * Prevent a false clean report when a checker silently returns because a table
+     * or a critical column is absent. Such a database cannot pass statement approval.
+     */
+    private fun checkRequiredSchema(checks: JSONObject, issues: JSONArray): Boolean {
+        val required = linkedMapOf(
+            "sales_transactions" to setOf("id","station_id","status","is_deleted","sale_code","net_amount","paid_amount","remaining_amount","currency_id","amount_in_default"),
+            "journal_entries" to setOf("id","station_id","reference_type","reference_id","status","is_deleted","fiscal_year","fiscal_period"),
+            "journal_entry_items" to setOf("journal_entry_id","account_id","debit","credit"),
+            "payments" to setOf("id","station_id","status","is_deleted","payment_code","amount","sale_id","customer_party_id","cash_box_id","bank_account_id","journal_entry_id","payment_method","currency_id","amount_in_default"),
+            "parties" to setOf("id","station_id","party_type_id","legal_name","current_balance","total_due","total_purchases","total_payments","is_deleted"),
+            "party_types" to setOf("id","type_code"),
+            "customer_ledger" to setOf("id","party_id","debit","credit"),
+            "supplier_ledger" to setOf("id","party_id","debit","credit","transaction_type","transaction_id"),
+            "accounts" to setOf("id","account_code","account_type","is_active","is_deleted","opening_balance","parent_account_id"),
+            "products" to setOf("id","station_id","product_name","product_name_ar","quantity","is_deleted"),
+            "inventory_levels" to setOf("product_id","quantity_on_hand"),
+            "inventory_movements" to setOf("id","station_id","status","is_deleted","product_id","quantity_before","quantity_change","quantity_after"),
+            "fuel_sales" to setOf("id","station_id","sale_id","fuel_type_id","quantity","cost_per_liter","cost_amount","status","is_deleted"),
+            "fuel_types" to setOf("id","default_purchase_price"),
+            "tank_refills" to setOf("id","station_id","refill_code","supplier_id","net_amount","delivered_quantity","actual_quantity","tank_level_before","tank_level_after","status","is_deleted"),
+            "fiscal_periods" to setOf("station_id","start_date","end_date")
+        )
+        val gaps = JSONArray()
+        var gapCount = 0
+        for ((table, needed) in required) {
+            if (!tableExists(table)) {
+                gaps.put(JSONObject().put("table",table).put("missing_table",true))
+                gapCount++
+                continue
+            }
+            val missing = (needed - columns(table)).sorted()
+            if (missing.isNotEmpty()) {
+                gaps.put(JSONObject().put("table",table).put("missing_columns",JSONArray(missing)))
+                gapCount += missing.size
+            }
+        }
+        checks.put("required_schema_gaps",gaps)
+        if (gaps.length() > 0) {
+            add(issues,"historical_schema_incomplete","critical",
+                "لا يمكن اعتماد القوائم المالية: توجد جداول أو أعمدة مطلوبة للمصالحة غير متاحة",gapCount,null,gaps)
+            return false
+        }
+        return true
     }
 
     private fun checkSales(stationId: Int, checks: JSONObject, issues: JSONArray) {
@@ -156,9 +203,11 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
     }
 
     private fun controlAccount(stationId: Int, code: String, accountType: String, supplier: Boolean): JSONObject {
+        val accountScope = if (hasColumn("accounts","station_id")) " AND station_id=?" else ""
+        val accountArgs = if (hasColumn("accounts","station_id")) arrayOf(code,accountType,stationId.toString()) else arrayOf(code,accountType)
         val ids = query(
-            "SELECT id,COALESCE(opening_balance,0) FROM accounts WHERE account_code=? AND account_type=? AND is_active=1 AND COALESCE(is_deleted,0)=0",
-            arrayOf(code, accountType)
+            "SELECT id,COALESCE(opening_balance,0) FROM accounts WHERE account_code=? AND account_type=? AND is_active=1 AND COALESCE(is_deleted,0)=0" + accountScope,
+            accountArgs
         ) { c -> c.getLong(0) to c.getDouble(1) }
         if (ids.size != 1) return JSONObject().put("available", false).put("reason", "الحساب الرقابي غير فريد أو غير نشط")
         val id = ids[0].first
@@ -183,15 +232,24 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
 
     private fun checkInventory(stationId: Int, checks: JSONObject, issues: JSONArray) {
         val movementsExist = tableExists("inventory_movements")
-        val ledgerCount = if (tableExists("inventory_ledger")) scalar("SELECT COUNT(*) FROM inventory_ledger", emptyArray()) else 0
+        val ledgerCount = if (!tableExists("inventory_ledger")) 0 else when {
+            hasColumn("inventory_ledger","station_id") ->
+                scalar("SELECT COUNT(*) FROM inventory_ledger WHERE station_id=?", arrayOf(stationId.toString()))
+            hasColumn("inventory_ledger","product_id") && tableExists("products") && hasColumn("products","station_id") ->
+                scalar("SELECT COUNT(*) FROM inventory_ledger l JOIN products p ON p.id=l.product_id WHERE p.station_id=?", arrayOf(stationId.toString()))
+            else -> -1
+        }
         val movementCount = if (movementsExist) scalar(
             "SELECT COUNT(*) FROM inventory_movements WHERE station_id=? AND status='completed' AND COALESCE(is_deleted,0)=0",
             arrayOf(stationId.toString())
         ) else 0
         checks.put("completed_inventory_movement_count", movementCount).put("inventory_ledger_row_count", ledgerCount)
-        if (movementCount > 0 && ledgerCount == 0)
-            add(issues, "inventory_ledger_missing", "high",
-                "توجد حركات مخزون معتمدة لكن دفتر المخزون المساعد فارغ؛ يلزم إعادة بنائه من مستندات الحركة والتحقق من الكلفة", 1, null, null)
+        if (movementCount > 0 && ledgerCount <= 0)
+            add(issues, "inventory_ledger_missing_or_unscoped", "high",
+                if (ledgerCount == -1)
+                    "تعذر عزل دفتر المخزون للمحطة؛ لا يمكن إثبات اكتماله دون مفتاح نطاق واضح"
+                else "توجد حركات مخزون معتمدة لكن دفتر المخزون المساعد فارغ؛ يلزم إعادة بنائه من مستندات الحركة والتحقق من الكلفة",
+                1, null, null)
 
         if (tableExists("products") && tableExists("inventory_levels")) {
             val levels = rows(
@@ -291,15 +349,17 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
                 "معاملات تاريخية بلا عملة/مبلغ بالعملة الافتراضية؛ لا يجوز اختراع سعر صرف تاريخي", noSalesCurrency + noPaymentCurrency, null, null)
     }
 
-    private fun checkOpeningBalances(checks: JSONObject, issues: JSONArray) {
+    private fun checkOpeningBalances(stationId: Int, checks: JSONObject, issues: JSONArray) {
         if (!tableExists("accounts")) return
+        val stationScope = if (hasColumn("accounts","station_id")) " AND child.station_id=? AND parent.station_id=?" else ""
+        val stationArgs = if (stationScope.isNotEmpty()) arrayOf(stationId.toString(),stationId.toString()) else emptyArray()
         val overlaps = rows(
             "SELECT child.id,COALESCE(child.account_code,''),COALESCE(child.opening_balance,0),parent.id," +
                 "COALESCE(parent.account_code,''),COALESCE(parent.opening_balance,0) FROM accounts child " +
                 "JOIN accounts parent ON parent.id=child.parent_account_id WHERE child.is_active=1 AND parent.is_active=1 " +
-                "AND COALESCE(child.is_deleted,0)=0 AND COALESCE(parent.is_deleted,0)=0 " +
+                "AND COALESCE(child.is_deleted,0)=0 AND COALESCE(parent.is_deleted,0)=0" + stationScope + " " +
                 "AND ABS(COALESCE(child.opening_balance,0))>0.01 AND ABS(COALESCE(parent.opening_balance,0))>0.01 ORDER BY child.id",
-            emptyArray()
+            stationArgs
         ) { c -> JSONObject().put("child_account_id", c.getLong(0)).put("child_account_code", c.getString(1))
             .put("child_opening_balance", c.getDouble(2)).put("parent_account_id", c.getLong(3))
             .put("parent_account_code", c.getString(4)).put("parent_opening_balance", c.getDouble(5)) }
@@ -330,11 +390,13 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
         return out
     }
     private fun tableExists(table: String) = scalar("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", arrayOf(table)) > 0
-    private fun hasColumn(table: String, name: String): Boolean {
-        if (!table.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) || !tableExists(table)) return false
-        db.rawQuery("PRAGMA table_info(" + table + ")", null).use { c -> while (c.moveToNext()) if (c.getString(1) == name) return true }
-        return false
+    private fun columns(table: String): Set<String> {
+        if (!table.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) || !tableExists(table)) return emptySet()
+        val result = linkedSetOf<String>()
+        db.rawQuery("PRAGMA table_info(" + table + ")", null).use { c -> while (c.moveToNext()) result.add(c.getString(1)) }
+        return result
     }
+    private fun hasColumn(table: String, name: String): Boolean = columns(table).contains(name)
     private fun scalar(sql: String, args: Array<String>): Int {
         db.rawQuery(sql, args).use { c -> return if (c.moveToFirst()) c.getInt(0) else 0 }
     }

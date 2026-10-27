@@ -63,5 +63,14 @@ class HistoricalFinancialReconciliationRepairTest {
         assertEquals(1.0, scalar("SELECT is_cash_account FROM accounts WHERE id=12"),0.001)
     }
 
+    @Test fun incompleteSchemaBlocksFinancialStatementApproval() {
+        val result = HistoricalFinancialReconciliationAudit(db).run(1)
+        assertEquals(false, result.getBoolean("ready_for_financial_statement_approval"))
+        val issues = result.getJSONArray("issues")
+        assertTrue((0 until issues.length()).any {
+            issues.getJSONObject(it).optString("code") == "historical_schema_incomplete"
+        })
+    }
+
     private fun scalar(sql:String)=db.rawQuery(sql,null).use{c->if(c.moveToFirst())c.getDouble(0)else Double.NaN}
 }

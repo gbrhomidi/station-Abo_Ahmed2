@@ -6474,9 +6474,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val integrity = FinancialIntegrityAuditor(sqlite).audit(stationId)
                 val historyCount = historical.optInt("blocking_issue_count", 1)
                 val glCount = integrity.optInt("issue_count", 1)
-                val ready = historical.optBoolean("ready_for_financial_statement_approval", false) && glCount == 0
+                val glOnlyCount = (glCount - historyCount).coerceAtLeast(0)
+                val ready = historical.optBoolean("ready_for_financial_statement_approval", false) && glOnlyCount == 0
                 historical.put("financial_integrity_audit", integrity)
-                    .put("blocking_issue_count", historyCount + glCount)
+                    .put("blocking_issue_count", historyCount + glOnlyCount)
                     .put("ready_for_financial_statement_approval", ready)
                     .put("approval_status", if (ready) "ready" else "blocked")
                     .put("status", if (ready) "reconciled" else "reconciliation_required")
