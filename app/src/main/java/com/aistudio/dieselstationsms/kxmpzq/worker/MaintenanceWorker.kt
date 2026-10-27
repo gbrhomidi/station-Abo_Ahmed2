@@ -300,6 +300,30 @@ class MaintenanceWorker(
     // Helpers
     // ========================================================================
 
+    private fun maintenanceSettingEnabled(db: DatabaseHelper, key: String, defaultValue: Boolean): Boolean {
+        return when (db.getSetting(key).trim().lowercase()) {
+            "1", "true", "yes", "on" -> true
+            "0", "false", "no", "off" -> false
+            else -> defaultValue
+        }
+    }
+
+    private fun skippedMaintenanceTask(taskId: TaskId, name: String, reason: String): TaskResult {
+        val now = System.currentTimeMillis()
+        return TaskResult(
+            taskId = taskId,
+            name = name,
+            success = true,
+            startTime = now,
+            endTime = now,
+            durationMs = 0L,
+            severity = TaskSeverity.NORMAL,
+            skipped = true,
+            retryable = false,
+            error = reason
+        )
+    }
+
     private fun shouldRetry(): Boolean = runAttemptCount < MaintenanceConfig.MAX_ATTEMPTS
 
     private fun shouldRetryForSeverity(severity: TaskSeverity): Boolean {
@@ -567,6 +591,7 @@ class MaintenanceWorker(
     )
 
     private suspend fun runMaintenanceTask(
+        db: DatabaseHelper,
         taskId: TaskId,
         name: String,
         severity: TaskSeverity = TaskSeverity.NORMAL,
@@ -585,10 +610,37 @@ class MaintenanceWorker(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            var reportedError: Exception = e
+            val repairSetting = runCatching { db.getSetting("autoRepairEnabled").trim().lowercase() }.getOrDefault("")
+            val autoRepairEnabled = when (repairSetting) {
+                "0", "false", "no", "off" -> false
+                "1", "true", "yes", "on" -> true
+                else -> true // Preserve the previous automatic worker retry/recovery behavior if no key exists.
+            }
+            if (severity == TaskSeverity.NORMAL && autoRepairEnabled && isTransientDatabaseError(e)) {
+                try {
+                    logWarning("Attempting non-destructive SQLite recovery after transient failure in $name")
+                    db.flush()
+                    db.writableDatabase.rawQuery("PRAGMA wal_checkpoint(PASSIVE)", null).use { cursor ->
+                        while (cursor.moveToNext()) { /* consume checkpoint result */ }
+                    }
+                    check(db.checkIntegrity()) { "SQLite integrity check failed during automatic recovery" }
+                    task()
+                    val endTime = System.currentTimeMillis()
+                    val duration = SystemClock.elapsedRealtime() - start
+                    logWarning("Recovered and re-ran $name after transient SQLite contention")
+                    return TaskResult(taskId, name, true, startTime, endTime, duration, severity, retryable = retryable)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (repairError: Exception) {
+                    reportedError = repairError
+                    logWarning("Non-destructive SQLite recovery did not resolve $name: ${repairError.message}")
+                }
+            }
             val endTime = System.currentTimeMillis()
             val duration = SystemClock.elapsedRealtime() - start
-            logError("✘ $name failed (${severity.name})", e)
-            TaskResult(taskId, name, false, startTime, endTime, duration, severity, retryable = retryable, error = e.message)
+            logError("✘ $name failed (${severity.name})", reportedError)
+            TaskResult(taskId, name, false, startTime, endTime, duration, severity, retryable = retryable, error = reportedError.message)
         }
     }
 
@@ -688,7 +740,7 @@ class MaintenanceWorker(
         val dbSizeBefore = getDatabaseSizeSafe(db)
 
         // ── 1. Security Check – SECURITY_CRITICAL ──
-        results += runMaintenanceTask(TaskId.SECURITY_CHECK, "Security Check", TaskSeverity.SECURITY_CRITICAL, retryable = true) {
+        results += runMaintenanceTask(db, TaskId.SECURITY_CHECK, "Security Check", TaskSeverity.SECURITY_CRITICAL, retryable = true) {
             val securityOk = db.performSecurityCheck()
             if (!securityOk) {
                 throw SecurityException("Security check returned false – system may be compromised")
@@ -705,7 +757,7 @@ class MaintenanceWorker(
         }
 
         // ── 2. WAL Mode Check – NORMAL (يفشل إذا لم يكن WAL) ──
-        results += runMaintenanceTask(TaskId.WAL_MODE_CHECK, "WAL Mode Check", retryable = false) {
+        results += runMaintenanceTask(db, TaskId.WAL_MODE_CHECK, "WAL Mode Check", retryable = false) {
             val journalMode = db.getJournalMode()
             val trimmedMode = journalMode?.trim()?.uppercase()
             if (trimmedMode != "WAL") {
@@ -713,38 +765,55 @@ class MaintenanceWorker(
             }
         }
 
-        // ── 3. Cleanup Expired – NORMAL ──
-        results += runMaintenanceTask(TaskId.CLEANUP_EXPIRED, "Cleanup Expired", retryable = true) {
-            db.cleanupExpired()
+        // ── Cleanup is controlled by the persisted maintenance settings ──
+        val autoCleanupEnabled = maintenanceSettingEnabled(db, "autoCleanupEnabled", true)
+        val cleanupIntervalDays = db.getSetting("cleanupIntervalDays").toIntOrNull()?.coerceIn(1, 3650) ?: 1
+        val lastCleanupAt = db.getSetting("maintenanceLastCleanupAt").toLongOrNull() ?: 0L
+        val cleanupIntervalMillis = cleanupIntervalDays.toLong() * 24L * 60L * 60L * 1000L
+        val cleanupDue = autoCleanupEnabled && (lastCleanupAt <= 0L ||
+            System.currentTimeMillis() - lastCleanupAt >= cleanupIntervalMillis)
+        val cleanupResultStartIndex = results.size
+        var cleanupBatchSucceeded = false
+        val cleanupSkipReason = if (!autoCleanupEnabled) {
+            "Skipped – automatic cleanup is disabled in maintenance settings"
+        } else {
+            "Skipped – cleanup interval of $cleanupIntervalDays day(s) has not elapsed"
         }
 
-        // ── 4. Cleanup Rate Limits – NORMAL ──
-        results += runMaintenanceTask(TaskId.CLEANUP_RATE_LIMITS, "Cleanup Rate Limits", retryable = true) {
-            db.cleanupOldRateLimits()
-        }
-
-        // ── 5. Cleanup Conversation Context – NORMAL ──
-        results += runMaintenanceTask(TaskId.CLEANUP_CONVERSATION_CONTEXT, "Cleanup Conversation Context", retryable = true) {
-            db.cleanupOldConversationContext()
-        }
-
-        // ── 6. Cleanup Metrics – NORMAL ──
-        results += runMaintenanceTask(TaskId.CLEANUP_METRICS, "Cleanup Metrics", retryable = true) {
-            db.cleanupOldMetrics()
-        }
-
-        // ── 7. Cleanup Old Data – NORMAL ──
-        results += runMaintenanceTask(TaskId.CLEANUP_OLD_DATA, "Cleanup Old Data (Full)", retryable = true) {
-            db.cleanupOldData()
+        if (cleanupDue) {
+            // These routines perform the actual database cleanup; the schedule gate only decides when they run.
+            results += runMaintenanceTask(db, TaskId.CLEANUP_EXPIRED, "Cleanup Expired", retryable = true) {
+                db.cleanupExpired()
+            }
+            results += runMaintenanceTask(db, TaskId.CLEANUP_RATE_LIMITS, "Cleanup Rate Limits", retryable = true) {
+                db.cleanupOldRateLimits()
+            }
+            results += runMaintenanceTask(db, TaskId.CLEANUP_CONVERSATION_CONTEXT, "Cleanup Conversation Context", retryable = true) {
+                db.cleanupOldConversationContext()
+            }
+            results += runMaintenanceTask(db, TaskId.CLEANUP_METRICS, "Cleanup Metrics", retryable = true) {
+                db.cleanupOldMetrics()
+            }
+            results += runMaintenanceTask(db, TaskId.CLEANUP_OLD_DATA, "Cleanup Old Data (Full)", retryable = true) {
+                db.cleanupOldData()
+            }
+            cleanupBatchSucceeded = results.drop(cleanupResultStartIndex).take(5)
+                .all { it.success && !it.skipped }
+        } else {
+            results += skippedMaintenanceTask(TaskId.CLEANUP_EXPIRED, "Cleanup Expired", cleanupSkipReason)
+            results += skippedMaintenanceTask(TaskId.CLEANUP_RATE_LIMITS, "Cleanup Rate Limits", cleanupSkipReason)
+            results += skippedMaintenanceTask(TaskId.CLEANUP_CONVERSATION_CONTEXT, "Cleanup Conversation Context", cleanupSkipReason)
+            results += skippedMaintenanceTask(TaskId.CLEANUP_METRICS, "Cleanup Metrics", cleanupSkipReason)
+            results += skippedMaintenanceTask(TaskId.CLEANUP_OLD_DATA, "Cleanup Old Data (Full)", cleanupSkipReason)
         }
 
         // ── 8. Flush – NORMAL (قبل Integrity) ──
-        results += runMaintenanceTask(TaskId.FLUSH_CACHE, "Flush Cache", retryable = true) {
+        results += runMaintenanceTask(db, TaskId.FLUSH_CACHE, "Flush Cache", retryable = true) {
             db.flush()
         }
 
         // ── 9. Integrity Check – DATABASE_CRITICAL ──
-        results += runMaintenanceTask(TaskId.INTEGRITY_CHECK, "Integrity Check", TaskSeverity.DATABASE_CRITICAL, retryable = false) {
+        results += runMaintenanceTask(db, TaskId.INTEGRITY_CHECK, "Integrity Check", TaskSeverity.DATABASE_CRITICAL, retryable = false) {
             val isOk = db.checkIntegrity()
             if (!isOk) {
                 throw IllegalStateException("Database integrity check failed – possible corruption")
@@ -761,14 +830,28 @@ class MaintenanceWorker(
             return PipelineResult(results, dbSizeBefore, dbSizeAfter, securityFailed = false, integrityFailed = true, vacuumExecuted = false)
         }
 
-        // ── 10. VACUUM – NORMAL (بعد التأكد من سلامة DB) ──
-        val (vacuumResult, didVacuum) = runVacuumSafely(db)
+        // ── 10. VACUUM – only as part of a due, successful cleanup batch ──
+        val (vacuumResult, didVacuum) = if (cleanupDue && cleanupBatchSucceeded) {
+            runVacuumSafely(db)
+        } else {
+            val reason = if (!cleanupDue) cleanupSkipReason else
+                "Skipped – one or more cleanup operations failed; VACUUM was not run"
+            val skipped = skippedMaintenanceTask(TaskId.VACUUM_DATABASE, "Vacuum Database", reason)
+            Pair(skipped, false)
+        }
         results += vacuumResult
         vacuumExecuted = didVacuum
 
         // ── 11. Final Flush – NORMAL ──
-        results += runMaintenanceTask(TaskId.FINAL_FLUSH, "Final Flush", retryable = true) {
+        results += runMaintenanceTask(db, TaskId.FINAL_FLUSH, "Final Flush", retryable = true) {
             db.flush()
+        }
+
+        // A cleanup period advances only after all cleanup tasks and both integrity checks succeeded.
+        if (cleanupDue && cleanupBatchSucceeded) {
+            check(db.setSetting("maintenanceLastCleanupAt", System.currentTimeMillis().toString())) {
+                "تعذر تسجيل وقت التنظيف الناجح في SQLite"
+            }
         }
 
         val dbSizeAfter = getDatabaseSizeSafe(db)
