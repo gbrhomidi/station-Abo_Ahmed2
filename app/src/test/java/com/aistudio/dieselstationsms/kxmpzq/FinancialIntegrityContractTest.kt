@@ -91,6 +91,18 @@ class FinancialIntegrityContractTest {
             fuelPurchase.contains("postFinanceJournal(") && fuelPurchase.contains("\"fuel_supply\""))
         assertTrue("Cash fuel purchases must have payment and supplier-ledger evidence",
             fuelPurchase.contains("insertSupplierCashPayment") && fuelPurchase.contains("recordImmediateSupplierPurchaseLedger"))
+
+        val supplierPayment = functionBody(source, "fun addPayment")
+        assertTrue("Supplier payments must validate supplier type and outstanding balance",
+            supplierPayment.contains("equals(\"SUPPLIER\", ignoreCase = true)") &&
+                supplierPayment.contains("supplierState[1] + 0.000001 >= amount"))
+        assertTrue("Supplier payments must reduce the supplier balance and total due",
+            supplierPayment.contains("put(\"current_balance\", newSupplierBalance)") &&
+                supplierPayment.contains("put(\"total_due\", (supplierState[1] - amount).coerceAtLeast(0.0))"))
+        assertTrue("Supplier payments must create an auxiliary-ledger debit",
+            supplierPayment.contains("insertOrThrow(\"supplier_ledger\"") &&
+                supplierPayment.contains("put(\"transaction_type\", \"supplier_payment\")") &&
+                supplierPayment.contains("put(\"debit\", amount)"))
     }
 
     @Test

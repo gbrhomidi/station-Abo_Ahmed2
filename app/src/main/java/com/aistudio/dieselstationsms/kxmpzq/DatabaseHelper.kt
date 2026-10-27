@@ -22695,6 +22695,57 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val creditAccount = if (customerId > 0L || data.optLong("sale_id",0L)>0L) findPartyAccount(db,"receivable") else findSettlementAccount(db,cashBoxId,bankAccountId)
                 val journalId = postFinanceJournal(db,stationScopeId,actorId,"general","payment",id,paymentCode,"قيد دفعة $paymentCode",debitAccount,creditAccount,amount)
                 db.update("payments",ContentValues().apply{put("journal_entry_id",journalId)},"id=?",arrayOf(id.toString()))
+
+                // Supplier payments must settle the auxiliary supplier balance in the
+                // same transaction as cash/bank movement and the posted GL journal.
+                if (supplierId > 0L) {
+                    val supplierState = db.rawQuery(
+                        """SELECT pt.type_code, COALESCE(p.current_balance,0),
+                                  COALESCE(p.total_due,0), COALESCE(p.total_payments,0)
+                           FROM parties p
+                           JOIN party_types pt ON pt.id=p.party_type_id
+                           WHERE p.id=? AND p.station_id=? AND p.is_deleted=0
+                             AND p.is_active=1 AND pt.is_deleted=0 LIMIT 1""",
+                        arrayOf(supplierId.toString(), stationScopeId.toString())
+                    ).use { c ->
+                        require(c.moveToFirst()) { "المورد غير موجود أو غير نشط ضمن المحطة" }
+                        require(c.getString(0).equals("SUPPLIER", ignoreCase = true)) {
+                            "الطرف المحدد ليس مورداً؛ لم يُعتمد سداد المورد"
+                        }
+                        doubleArrayOf(c.getDouble(1), c.getDouble(2), c.getDouble(3))
+                    }
+                    require(supplierState[0] + 0.000001 >= amount &&
+                            supplierState[1] + 0.000001 >= amount) {
+                        "مبلغ سداد المورد يتجاوز الرصيد المستحق؛ راجع كشف المورد قبل السداد"
+                    }
+                    val newSupplierBalance = (supplierState[0] - amount).coerceAtLeast(0.0)
+                    val changedSupplier = db.update(
+                        "parties",
+                        ContentValues().apply {
+                            put("current_balance", newSupplierBalance)
+                            put("total_due", (supplierState[1] - amount).coerceAtLeast(0.0))
+                            put("total_payments", supplierState[2] + amount)
+                            put("updated_at", getCurrentDateTime())
+                        },
+                        "id=? AND station_id=? AND is_deleted=0 AND is_active=1",
+                        arrayOf(supplierId.toString(), stationScopeId.toString())
+                    )
+                    require(changedSupplier == 1) { "تعذر تحديث رصيد المورد بعد السداد" }
+                    db.insertOrThrow("supplier_ledger", null, ContentValues().apply {
+                        put("uuid", UUID.randomUUID().toString())
+                        put("party_id", supplierId)
+                        put("transaction_date", getCurrentDateTime())
+                        put("transaction_type", "supplier_payment")
+                        put("transaction_id", id)
+                        put("reference_number", paymentCode)
+                        put("debit", amount)
+                        put("credit", 0.0)
+                        put("balance", newSupplierBalance)
+                        put("description", "سداد مستحقات المورد: $paymentCode")
+                        put("created_at", getCurrentDateTime())
+                        put("created_by", actorId)
+                    })
+                }
                 db.setTransactionSuccessful()
                 id
             } finally { db.endTransaction() }
