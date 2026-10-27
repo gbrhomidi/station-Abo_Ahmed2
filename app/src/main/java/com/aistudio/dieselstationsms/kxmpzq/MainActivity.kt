@@ -6461,6 +6461,40 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+        /** Read-only historical reconciliation workpaper for the current station. */
+        @JavascriptInterface
+        fun runHistoricalFinancialReconciliation(): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+                if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة المصالحة المالية")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                HistoricalFinancialReconciliationAudit(db.readableDatabase).run(stationId).toString()
+            } catch (e: SecurityException) {
+                errorResponse("تعذر التحقق من نطاق المحطة")
+            } catch (e: Exception) {
+                DebugLogger.logException("HistoricalFinancialAudit", e)
+                errorResponse("تعذر إكمال المصالحة المالية التاريخية")
+            }
+        }
+
+        /** Atomic, station-scoped historical repair with a permanent workpaper. */
+        @JavascriptInterface
+        fun repairHistoricalFinancialData(): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+                if (!checkPermission("accounting", "write")) return errorResponse("لا تملك صلاحية تنفيذ إصلاحات المصالحة المالية")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                HistoricalFinancialReconciliationRepair(db.writableDatabase).run(stationId, activity.currentUserId).toString()
+            } catch (e: SecurityException) {
+                errorResponse("تعذر التحقق من نطاق المحطة")
+            } catch (e: Exception) {
+                DebugLogger.logException("HistoricalFinancialRepair", e)
+                errorResponse("فشل إصلاح المصالحة المالية؛ راجع سجل الأخطاء")
+            }
+        }
+
         @JavascriptInterface
         fun getCurrentStationIdForReports(): Int {
             return try {

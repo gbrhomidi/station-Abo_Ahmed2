@@ -3498,7 +3498,7 @@ tr:last-child td { border-bottom:0; }
             'openMonitoringReport','clearLogs','clearMetrics','securityFields',
             'backupFields','createBackup','chooseBackupLocation','restoreDatabaseBackup','backupLocationStatus','refreshBackups','backupsBody',
             'maintenanceFields','optimizeDb','checkIntegrity','refreshDbInfo',
-            'maintenanceRuntimeStatus','databaseInfoResult','integrityResult','userSearchBadge','usersBody','displayFields'
+            'maintenanceRuntimeStatus','databaseInfoResult','integrityResult','historicalFinanceAudit','historicalFinanceRepair','historicalFinancialResult','userSearchBadge','usersBody','displayFields'
         ];
         const missing = requiredIds.filter(id => !loadedIds.has(id));
         if (missing.length) {
@@ -4591,6 +4591,71 @@ tr:last-child td { border-bottom:0; }
         }
     }
 
+    function renderHistoricalFinancialResult(value) {
+        const target = el('historicalFinancialResult');
+        if (!target) return;
+        target.replaceChildren();
+        const summary = value && value.after ? value.after : (value || {});
+        const blocked = Number(summary.blocking_issue_count || 0);
+        const repaired = Number(value && value.repaired_action_count || 0);
+        const skipped = Number(value && value.skipped_action_count || 0);
+        [
+            ['حالة العملية', String(value && value.status || summary.status || 'غير معروف')],
+            ['إصلاحات منفذة', String(repaired)],
+            ['حالات متروكة للدليل', String(skipped)],
+            ['عوائق متبقية', String(blocked)],
+            ['اعتماد القوائم المالية', summary.ready_for_financial_statement_approval ? 'جاهزة للتقييم النهائي' : 'محظور — توجد عوائق']
+        ].forEach(([label, text]) => {
+            const card = document.createElement('div'); card.className = 'status-card';
+            const title = document.createElement('span'); title.textContent = label;
+            const body = document.createElement('strong'); body.textContent = text;
+            if (label === 'اعتماد القوائم المالية') body.className = summary.ready_for_financial_statement_approval ? 'ok' : 'bad';
+            card.append(title, body); target.appendChild(card);
+        });
+        const details = document.createElement('pre');
+        details.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto;grid-column:1/-1;font-size:.75rem;direction:ltr;text-align:left';
+        const acts = Array.isArray(value && value.actions) ? value.actions : [];
+        const issues = Array.isArray(summary.issues) ? summary.issues : [];
+        details.textContent = [
+            'Run ID: ' + String(value && value.run_id || '—'), '', 'الإجراءات:',
+            ...acts.slice(0, 60).map(a => '[' + String(a.status || '') + '] ' + String(a.action_code || '') + ' — ' + String(a.entity_type || '') + ' #' + String(a.entity_id || '') + ' — ' + String(a.explanation || '')),
+            '', 'العوائق المتبقية:',
+            ...issues.slice(0, 40).map(i => '[' + String(i.severity || '') + '] ' + String(i.code || '') + ' — ' + String(i.message || '') + ' (' + String(i.count || 0) + ')')
+        ].join('\\n');
+        target.appendChild(details);
+    }
+
+    async function runHistoricalFinanceAudit() {
+        showLoading(true);
+        try {
+            const result = dataOf(await bridgeCall('runHistoricalFinancialReconciliation')) || {};
+            renderHistoricalFinancialResult(result);
+            toast(result.ready_for_financial_statement_approval ? 'التدقيق التاريخي لم يرصد عوائق' : 'اكتمل التدقيق؛ توجد فروقات تحتاج إلى مصالحة',
+                result.ready_for_financial_statement_approval ? 'ok' : 'bad');
+        } catch (error) {
+            toast(error.message || 'تعذر التدقيق المالي التاريخي', 'bad');
+        } finally { showLoading(false); }
+    }
+
+    async function repairHistoricalFinance() {
+        ask(
+            'إصلاح ومصالحة البيانات المالية التجريبية',
+            'سينفذ إصلاحات موثقة داخل معاملة SQLite واحدة للمحطة الحالية. تُعاد بناء الأرصدة المشتقة وتُنشأ القيود فقط عندما يكون مستند المصدر والحساب والفترة قابلين للتحقق. أي فشل يلغي العملية بالكامل. هل تريد المتابعة؟',
+            async () => {
+                closeModal('confirmModal'); showLoading(true);
+                try {
+                    const result = dataOf(await bridgeCall('repairHistoricalFinancialData')) || {};
+                    renderHistoricalFinancialResult(result);
+                    toast(result.success ? (result.message || 'اكتملت المصالحة') : (result.message || 'أُلغيت العملية ولم تُحفظ إصلاحات جزئية'),
+                        result.success ? 'ok' : 'bad');
+                    await refreshDatabaseInfo();
+                } catch (error) {
+                    toast(error.message || 'فشل إصلاح المصالحة المالية', 'bad');
+                } finally { showLoading(false); }
+            }
+        );
+    }
+
     async function checkIntegrity() {
         showLoading(true);
         try {
@@ -4864,6 +4929,8 @@ tr:last-child td { border-bottom:0; }
         el('refreshBackups').addEventListener('click', refreshBackups);
         el('optimizeDb').addEventListener('click', optimizeDb);
         el('checkIntegrity').addEventListener('click', checkIntegrity);
+        el('historicalFinanceAudit').addEventListener('click', runHistoricalFinanceAudit);
+        el('historicalFinanceRepair').addEventListener('click', repairHistoricalFinance);
         el('refreshDbInfo').addEventListener('click', refreshDatabaseInfo);
         const maintenanceFields = el('maintenanceFields');
         if (maintenanceFields) {

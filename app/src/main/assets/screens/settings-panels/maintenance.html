@@ -15,6 +15,13 @@
       <button type="button" class="btn" id="checkIntegrity">فحص السلامة</button>
       <button type="button" class="btn" id="refreshDbInfo">معلومات قاعدة البيانات</button>
     </div>
+    <h3 class="maintenance-section-title">المصالحة المالية التاريخية</h3>
+    <p class="maintenance-reconciliation-note">ابدأ بالتدقيق للعرض فقط، ثم نفّذ الإصلاحات الموثقة. تُصلح الأرصدة المشتقة والقيود فقط عندما تكون مصادرها وحساباتها والفترة المالية قابلة للتحقق، وتُسجّل الحالات الملتبسة دون تخمين.</p>
+    <div class="actions">
+      <button type="button" class="btn" id="historicalFinanceAudit">تدقيق مالي تاريخي</button>
+      <button type="button" class="btn warning" id="historicalFinanceRepair">إصلاح ومصالحة البيانات التجريبية</button>
+    </div>
+    <div id="historicalFinancialResult" class="status-grid" aria-live="polite"></div>
     <h3 class="maintenance-section-title">حالة تطبيق إعدادات الصيانة</h3>
     <div id="maintenanceRuntimeStatus" class="status-grid" aria-live="polite">
       <div class="status-card"><span>الحالة</span><strong>جارٍ قراءة الحالة الفعلية من Android…</strong></div>
@@ -30,6 +37,12 @@
     margin: 18px 0 10px;
     font-size: .9rem;
     font-weight: 850;
+  }
+  #panel-maintenance .maintenance-reconciliation-note {
+    margin: 8px 0 12px;
+    color: var(--text-muted, #64748b);
+    font-size: .82rem;
+    line-height: 1.65;
   }
   #panel-maintenance .status-card {
     min-width: 0;
