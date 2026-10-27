@@ -1218,6 +1218,37 @@ class MainActivity : AppCompatActivity() {
             ?: SecuritySettingsStore.DEFAULTS[key] ?: "0"
     }
 
+    /**
+     * Remove legacy plaintext copies from system_settings as well as the generic settings
+     * table. DatabaseHelper.getSetting() falls back to system_settings, so removing only
+     * the generic row can leave a readable plaintext copy behind.
+     */
+    private fun removeLegacySystemSetting(db: DatabaseHelper, key: String): Int {
+        val sqlite = db.writableDatabase
+        val tableExists = sqlite.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'system_settings' LIMIT 1",
+            null
+        ).use { it.moveToFirst() }
+        if (!tableExists) return 0
+
+        val removed = sqlite.delete("system_settings", "setting_key = ?", arrayOf(key))
+        val remains = sqlite.rawQuery(
+            "SELECT 1 FROM system_settings WHERE setting_key = ? LIMIT 1",
+            arrayOf(key)
+        ).use { it.moveToFirst() }
+        check(!remains) { "تعذر حذف النسخة القديمة من system_settings: $key" }
+        return removed
+    }
+
+    private fun removeLegacySecuritySetting(db: DatabaseHelper, key: String): Int {
+        val settingsRows = db.deleteSetting(key)
+        val systemRows = removeLegacySystemSetting(db, key)
+        check(db.getSetting(key).isBlank()) {
+            "بقيت نسخة غير مشفرة من إعداد الأمان في SQLite: $key"
+        }
+        return settingsRows + systemRows
+    }
+
     private fun normalizeSecuritySetting(key: String, value: String): String {
         return when (key) {
             "requireDeviceUnlock", "encryptStorage", "biometricLockEnabled",
@@ -1240,10 +1271,7 @@ class MainActivity : AppCompatActivity() {
             securitySettingsStore.putSetting(SecuritySettingsStore.KEY_ENCRYPT_STORAGE, initialMode)
         }
         if (legacyEncryption.isNotBlank()) {
-            db.deleteSetting(SecuritySettingsStore.KEY_ENCRYPT_STORAGE)
-            check(db.getSetting(SecuritySettingsStore.KEY_ENCRYPT_STORAGE).isBlank()) {
-                "تعذر ترحيل سياسة تشفير الإعدادات من SQLite القديمة"
-            }
+            removeLegacySecuritySetting(db, SecuritySettingsStore.KEY_ENCRYPT_STORAGE)
         }
 
         val legacyPin = runCatching { db.getSetting(SecuritySettingsStore.KEY_PIN_CODE) }.getOrDefault("")
@@ -1251,28 +1279,35 @@ class MainActivity : AppCompatActivity() {
             runCatching { securitySettingsStore.savePinCode(legacyPin) }
                 .onFailure { DebugLogger.warn("SecuritySettings", "Legacy PIN could not be migrated; it was not retained in plaintext") }
         }
-        if (legacyPin.isNotBlank()) runCatching { db.deleteSetting(SecuritySettingsStore.KEY_PIN_CODE) }
+        // PIN must never remain in either SQLite settings table, even if it was invalid or
+        // had been written by the older system-settings screen.
+        removeLegacySecuritySetting(db, SecuritySettingsStore.KEY_PIN_CODE)
 
         val encrypt = securitySettingsStore.encryptionEnabled()
         val migratable = SecuritySettingsStore.SETTING_KEYS - SecuritySettingsStore.KEY_ENCRYPT_STORAGE
         if (encrypt) {
             migratable.forEach { key ->
                 val legacy = runCatching { db.getSetting(key) }.getOrDefault("")
-                if (legacy.isNotBlank()) {
-                    if (!securitySettingsStore.hasStoredSetting(key)) {
-                        securitySettingsStore.putSetting(key, normalizeSecuritySetting(key, legacy))
-                    }
-                    db.deleteSetting(key)
-                    check(db.getSetting(key).isBlank()) { "تعذر حذف الإعداد القديم بعد تشفيره: $key" }
+                if (legacy.isNotBlank() && !securitySettingsStore.hasStoredSetting(key)) {
+                    securitySettingsStore.putSetting(key, normalizeSecuritySetting(key, legacy))
                 }
+                // Clear both historical storage paths after the encrypted write has committed.
+                removeLegacySecuritySetting(db, key)
             }
         } else {
             migratable.forEach { key ->
-                if (securitySettingsStore.hasStoredSetting(key)) {
-                    val stored = securitySettingsStore.getSetting(key)
-                    if (stored != null) runCatching { db.setSetting(key, stored) }
-                    securitySettingsStore.removeSetting(key)
+                val secureValue = if (securitySettingsStore.hasStoredSetting(key)) {
+                    securitySettingsStore.getSetting(key)
+                } else null
+                val legacy = runCatching { db.getSetting(key) }.getOrDefault("")
+                val effective = secureValue ?: legacy.takeIf { it.isNotBlank() }
+                if (effective != null) {
+                    check(db.setSetting(key, normalizeSecuritySetting(key, effective))) {
+                        "تعذر ترحيل الإعداد إلى SQLite: $key"
+                    }
                 }
+                removeLegacySystemSetting(db, key)
+                if (secureValue != null) securitySettingsStore.removeSetting(key)
             }
         }
     }
@@ -1286,20 +1321,26 @@ class MainActivity : AppCompatActivity() {
         if (enableEncryption) {
             migratable.forEach { key ->
                 val legacy = runCatching { db.getSetting(key) }.getOrDefault("")
-                if (legacy.isNotBlank()) {
+                if (legacy.isNotBlank() && !securitySettingsStore.hasStoredSetting(key)) {
                     securitySettingsStore.putSetting(key, normalizeSecuritySetting(key, legacy))
-                    db.deleteSetting(key)
-                    check(db.getSetting(key).isBlank()) { "تعذر حذف قيمة الإعداد القديم بعد تشفيره: $key" }
                 }
+                removeLegacySecuritySetting(db, key)
             }
             securitySettingsStore.putSetting(SecuritySettingsStore.KEY_ENCRYPT_STORAGE, "1")
         } else {
             migratable.forEach { key ->
-                if (securitySettingsStore.hasStoredSetting(key)) {
-                    val value = securitySettingsStore.getSetting(key)
-                    if (value != null) check(db.setSetting(key, value)) { "تعذر ترحيل الإعداد إلى SQLite: $key" }
-                    securitySettingsStore.removeSetting(key)
+                val secureValue = if (securitySettingsStore.hasStoredSetting(key)) {
+                    securitySettingsStore.getSetting(key)
+                } else null
+                val legacy = runCatching { db.getSetting(key) }.getOrDefault("")
+                val effective = secureValue ?: legacy.takeIf { it.isNotBlank() }
+                if (effective != null) {
+                    check(db.setSetting(key, normalizeSecuritySetting(key, effective))) {
+                        "تعذر ترحيل الإعداد إلى SQLite: $key"
+                    }
                 }
+                removeLegacySystemSetting(db, key)
+                if (secureValue != null) securitySettingsStore.removeSetting(key)
             }
             securitySettingsStore.putSetting(SecuritySettingsStore.KEY_ENCRYPT_STORAGE, "0")
         }
@@ -1309,7 +1350,7 @@ class MainActivity : AppCompatActivity() {
         when (key) {
             SecuritySettingsStore.KEY_PIN_CODE -> {
                 securitySettingsStore.savePinCode(value)
-                runCatching { db.deleteSetting(SecuritySettingsStore.KEY_PIN_CODE) }
+                removeLegacySecuritySetting(db, SecuritySettingsStore.KEY_PIN_CODE)
             }
             SecuritySettingsStore.KEY_ENCRYPT_STORAGE -> {
                 switchSecurityStorage(db, isTrueSetting(value))
@@ -1318,9 +1359,10 @@ class MainActivity : AppCompatActivity() {
                 val normalized = normalizeSecuritySetting(key, value)
                 if (securitySettingsStore.encryptionEnabled()) {
                     securitySettingsStore.putSetting(key, normalized)
-                    runCatching { db.deleteSetting(key) }
+                    removeLegacySecuritySetting(db, key)
                 } else {
                     check(db.setSetting(key, normalized)) { "تعذر حفظ إعداد الأمان في SQLite" }
+                    removeLegacySystemSetting(db, key)
                     securitySettingsStore.removeSetting(key)
                 }
             }
@@ -5605,18 +5647,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 if (isSecuritySettingKey(key)) {
                     if (key == SecuritySettingsStore.KEY_PIN_CODE) {
+                        removeLegacySecuritySetting(db, key)
                         securitySettingsStore.importPinCredential(emptyMap())
-                        runCatching { db.deleteSetting(key) }
                         return successResponse(true, "تم حذف PIN المحلي")
                     }
                     if (key == SecuritySettingsStore.KEY_ENCRYPT_STORAGE) {
                         return errorResponse("لا يمكن حذف سياسة تشفير الإعدادات؛ غيّر حالتها من شاشة الأمان")
                     }
                     if (securitySettingsStore.encryptionEnabled()) {
+                        val removed = removeLegacySecuritySetting(db, key)
                         securitySettingsStore.removeSetting(key)
-                        runCatching { db.deleteSetting(key) }
+                        applySecurityRuntimeSettings()
+                        return successResponse(removed > 0 || !securitySettingsStore.hasStoredSetting(key), "تم حذف إعداد الأمان")
                     } else {
-                        val removed = db.deleteSetting(key) > 0
+                        val removed = removeLegacySecuritySetting(db, key) > 0
                         securitySettingsStore.removeSetting(key)
                         return successResponse(removed, if (removed) "تم الحذف" else "لم يتم العثور على الإعداد")
                     }
