@@ -101,12 +101,7 @@ class SmsGeminiAiProvider : SmsAiProvider {
     private fun call(config: SmsAiRuntimeConfig, payload: JSONObject): JSONObject {
         val endpoint = config.endpoint.trimEnd('/')
         val url = if (endpoint.endsWith(":generateContent")) endpoint else "$endpoint/models/${config.model}:generateContent"
-        val client = OkHttpClient.Builder()
-            .connectTimeout(config.timeoutMs, TimeUnit.MILLISECONDS)
-            .readTimeout(config.timeoutMs, TimeUnit.MILLISECONDS)
-            .writeTimeout(config.timeoutMs, TimeUnit.MILLISECONDS)
-            .callTimeout(config.timeoutMs, TimeUnit.MILLISECONDS)
-            .build()
+        val client = SmsAiHttpClientFactory.create(config.timeoutMs)
         val request = Request.Builder()
             .url(url)
             .header("x-goog-api-key", config.apiKey)
