@@ -6185,8 +6185,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun optimizeSettingsDatabase(): String {
             return try {
-                runBlocking(Dispatchers.IO) { settingsModule.maintenanceRepository.optimizeDatabase() }
-                successResponse(true, "تم فحص وتحسين قاعدة البيانات")
+                val sizeBefore = dbHelper.getDatabaseSize()
+                runBlocking(Dispatchers.IO) {
+                    settingsModule.maintenanceRepository.optimizeDatabase()
+                }
+                val sizeAfter = dbHelper.getDatabaseSize()
+                JSONObject().apply {
+                    put("success", true)
+                    put("message", "اكتمل فحص السلامة واستدعاء VACUUM عبر DatabaseHelper")
+                    put("integrity_checked_before_optimization", true)
+                    put("vacuum_invoked", true)
+                    put("size_before_bytes", sizeBefore)
+                    put("size_after_bytes", sizeAfter)
+                    put("bytes_reclaimed", (sizeBefore - sizeAfter).coerceAtLeast(0L))
+                }.toString()
             } catch (e: Exception) {
                 DebugLogger.logException("SettingsMaintenance", e)
                 errorResponse(e.message)
@@ -6196,11 +6208,40 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getSettingsDatabaseIntegrity(): String {
             return try {
-                val valid = runBlocking(Dispatchers.IO) { dbHelper.checkIntegrity() }
+                val db = dbHelper.readableDatabase
+                val integrityRows = JSONArray()
+                db.rawQuery("PRAGMA integrity_check", null).use { cursor ->
+                    while (cursor.moveToNext()) integrityRows.put(cursor.getString(0))
+                }
+                var foreignKeyViolationCount = 0
+                val foreignKeyViolations = JSONArray()
+                db.rawQuery("PRAGMA foreign_key_check", null).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        foreignKeyViolationCount++
+                        if (foreignKeyViolations.length() < 50) {
+                            foreignKeyViolations.put(JSONObject().apply {
+                                put("table", cursor.getString(0))
+                                put("rowid", if (cursor.isNull(1)) JSONObject.NULL else cursor.getLong(1))
+                                put("parent", cursor.getString(2))
+                                put("foreign_key_index", cursor.getInt(3))
+                            })
+                        }
+                    }
+                }
+                val helperValid = runBlocking(Dispatchers.IO) { dbHelper.checkIntegrity() }
+                val pragmaValid = integrityRows.length() == 1 &&
+                    integrityRows.optString(0).equals("ok", ignoreCase = true)
+                val valid = dbHelper.isOpen() && helperValid && pragmaValid && foreignKeyViolationCount == 0
                 JSONObject().apply {
                     put("success", true)
                     put("valid", valid)
                     put("database_open", dbHelper.isOpen())
+                    put("helper_integrity_valid", helperValid)
+                    put("pragma_integrity_valid", pragmaValid)
+                    put("integrity_rows", integrityRows)
+                    put("foreign_key_violations_count", foreignKeyViolationCount)
+                    put("foreign_key_violations", foreignKeyViolations)
+                    put("foreign_key_violations_truncated", foreignKeyViolationCount > foreignKeyViolations.length())
                     put("size_bytes", dbHelper.getDatabaseSize())
                 }.toString()
             } catch (e: Exception) {
