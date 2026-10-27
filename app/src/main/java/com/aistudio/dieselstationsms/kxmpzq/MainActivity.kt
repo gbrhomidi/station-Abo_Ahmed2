@@ -135,13 +135,22 @@ class MainActivity : AppCompatActivity() {
         object DebugLogger {
             private const val TAG = "DebugLogger"
             private var webViewRef: WeakReference<WebView>? = null
-            private var isVConsoleReady = false
+            @Volatile private var developerModeEnabled = BuildConfig.DEBUG
+            @Volatile private var isVConsoleReady = BuildConfig.DEBUG
 
             fun attachWebView(webView: WebView?) {
                 webViewRef = WeakReference(webView)
-                isVConsoleReady = BuildConfig.DEBUG
+                isVConsoleReady = developerModeEnabled
                 info("DebugLogger", "Attached to WebView")
             }
+
+            fun setDeveloperModeEnabled(enabled: Boolean) {
+                developerModeEnabled = BuildConfig.DEBUG || enabled
+                isVConsoleReady = developerModeEnabled
+                info("DebugLogger", "Developer diagnostics ${if (developerModeEnabled) "enabled" else "disabled"}")
+            }
+
+            fun isDeveloperModeEnabled(): Boolean = developerModeEnabled
 
             fun detachWebView() {
                 webViewRef?.clear()
@@ -6200,6 +6209,110 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+        private fun maintenanceSettingEnabled(db: DatabaseHelper, key: String, defaultValue: Boolean): Boolean {
+            return when (db.getSetting(key).trim().lowercase(Locale.ROOT)) {
+                "1", "true", "yes", "on" -> true
+                "0", "false", "no", "off" -> false
+                else -> defaultValue
+            }
+        }
+
+        private fun maintenanceRuntimePayload(
+            db: DatabaseHelper,
+            activity: MainActivity,
+            requestBatteryPrompt: Boolean
+        ): JSONObject {
+            val autoCleanup = maintenanceSettingEnabled(db, "autoCleanupEnabled", true)
+            val cleanupIntervalDays = db.getSetting("cleanupIntervalDays").toIntOrNull()?.coerceIn(1, 3650) ?: 1
+            val autoRepair = maintenanceSettingEnabled(db, "autoRepairEnabled", true)
+            val batteryBackground = maintenanceSettingEnabled(db, "batteryOptimizationEnabled", false)
+            val networkOptimization = maintenanceSettingEnabled(db, "networkOptimizationEnabled", false)
+            val wakeLockEnabled = maintenanceSettingEnabled(db, "wakeLockEnabled", true)
+            val developerMode = maintenanceSettingEnabled(db, "developerMode", BuildConfig.DEBUG)
+            val advancedVisible = maintenanceSettingEnabled(db, "showAdvancedSettings", false)
+
+            // Apply the persisted choices to runtime policies instead of changing only UI state.
+            SmsAiHttpClientFactory.setNetworkOptimizationEnabled(networkOptimization)
+            DebugLogger.setDeveloperModeEnabled(developerMode)
+            val service = SMSService.getInstance()
+            service?.applyWakeLockPreference(wakeLockEnabled)
+
+            val powerManager = activity.getSystemService(Context.POWER_SERVICE) as PowerManager
+            val batteryExempt = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+                powerManager.isIgnoringBatteryOptimizations(activity.packageName)
+            var batteryPromptRequested = false
+            if (requestBatteryPrompt && batteryBackground && !batteryExempt && !activity.isFinishing) {
+                batteryPromptRequested = true
+                activity.runOnUiThread {
+                    try {
+                        activity.startActivity(
+                            Intent(
+                                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                Uri.parse("package:${activity.packageName}")
+                            )
+                        )
+                    } catch (error: Exception) {
+                        DebugLogger.logException("MaintenanceBatteryPolicy", error)
+                    }
+                }
+            }
+
+            val lastCleanupAt = db.getSetting("maintenanceLastCleanupAt").toLongOrNull() ?: 0L
+            val intervalMillis = cleanupIntervalDays.toLong() * 24L * 60L * 60L * 1000L
+            val cleanupDue = autoCleanup && (lastCleanupAt <= 0L ||
+                System.currentTimeMillis() - lastCleanupAt >= intervalMillis)
+            val wakeLockHeld = service?.isWakeLockHeld() == true
+
+            return JSONObject().apply {
+                put("auto_cleanup_enabled", autoCleanup)
+                put("cleanup_interval_days", cleanupIntervalDays)
+                put("auto_repair_enabled", autoRepair)
+                put("battery_background_enabled", batteryBackground)
+                put("battery_optimization_exempt", batteryExempt)
+                put("battery_prompt_requested", batteryPromptRequested)
+                put("network_optimization_enabled", networkOptimization)
+                put("network_optimization_active", SmsAiHttpClientFactory.isNetworkOptimizationEnabled())
+                put("wake_lock_enabled", wakeLockEnabled)
+                put("wake_lock_held", wakeLockHeld)
+                put("service_running", service != null)
+                put("developer_mode_enabled", developerMode)
+                put("developer_mode_active", DebugLogger.isDeveloperModeEnabled())
+                put("advanced_settings_visible", advancedVisible)
+                put("last_cleanup_at", if (lastCleanupAt > 0L) lastCleanupAt else JSONObject.NULL)
+                put("cleanup_due", cleanupDue)
+                put("battery_status", when {
+                    batteryExempt -> "مسموح بالتشغيل دون قيود تحسين البطارية"
+                    batteryPromptRequested -> "تم طلب موافقة Android؛ يلزم تأكيد المستخدم"
+                    batteryBackground -> "بانتظار موافقة Android من نافذة النظام"
+                    else -> "قيود البطارية كما يحددها Android"
+                })
+            }
+        }
+
+        @JavascriptInterface
+        fun applyMaintenanceSettings(): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("شاشة Android غير متاحة لتطبيق إعدادات الصيانة")
+            return try {
+                dataResponse(maintenanceRuntimePayload(db, activity, requestBatteryPrompt = true))
+            } catch (e: Exception) {
+                DebugLogger.logException("MaintenanceSettings", e)
+                errorResponse(e.message ?: "تعذر تطبيق إعدادات الصيانة")
+            }
+        }
+
+        @JavascriptInterface
+        fun getMaintenanceRuntimeStatus(): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("شاشة Android غير متاحة")
+            return try {
+                dataResponse(maintenanceRuntimePayload(db, activity, requestBatteryPrompt = false))
+            } catch (e: Exception) {
+                DebugLogger.logException("MaintenanceSettings", e)
+                errorResponse(e.message ?: "تعذر قراءة حالة إعدادات الصيانة")
+            }
+        }
+
         private fun applyApplicationSettings(settings: ApplicationSettings) {
             val smsEnabled = settings.smsServiceEnabled && settings.smsReceiveEnabled
             dbHelper.setSetting("sms_enabled", if (smsEnabled) "1" else "0")
@@ -7284,11 +7397,41 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getDatabaseInfo(): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
+                val sqlite = db.readableDatabase
+                val tables = JSONArray()
+                sqlite.rawQuery(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+                    null
+                ).use { cursor ->
+                    while (cursor.moveToNext()) tables.put(cursor.getString(0))
+                }
+                val context = contextRef.get()
+                val databaseFile = context?.getDatabasePath("diesel_station.db")
+                val databaseSizeBytes = if (databaseFile != null && databaseFile.exists()) {
+                    listOf(
+                        databaseFile,
+                        File(databaseFile.absolutePath + "-wal"),
+                        File(databaseFile.absolutePath + "-shm")
+                    ).sumOf { file -> if (file.exists()) file.length() else 0L }
+                } else {
+                    db.getDatabaseSize()
+                }
+                val journalMode = runCatching {
+                    sqlite.rawQuery("PRAGMA journal_mode", null).use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else "unknown"
+                    }
+                }.getOrDefault("unknown")
                 val json = JSONObject().apply {
-                    put("version", DatabaseHelper.VERSION)
-                    put("tables_count", db.getTableCounts().length())
+                    // sqlite.version is PRAGMA user_version: the version stored in this live DB.
+                    put("version", sqlite.version)
+                    put("helper_version", DatabaseHelper.VERSION)
+                    put("database_name", databaseFile?.name ?: "diesel_station.db")
+                    put("tables_count", tables.length())
+                    put("tables", tables)
+                    put("journal_mode", journalMode)
                     put("is_encrypted", false)
-                    put("size_bytes", db.getDatabaseSize())
+                    put("encryption_status", "غير مشفّر: SQLite القياسي دون SQLCipher")
+                    put("size_bytes", databaseSizeBytes)
                 }
                 dataResponse(json)
             } catch (e: Exception) {
