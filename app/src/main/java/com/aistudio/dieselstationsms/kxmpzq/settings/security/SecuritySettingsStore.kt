@@ -62,11 +62,9 @@ class SecuritySettingsStore private constructor(
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
-            val store = SecuritySettingsStore(encrypted)
-            if (!encrypted.contains(KEY_ENCRYPT_STORAGE)) {
-                encrypted.edit().putString(KEY_ENCRYPT_STORAGE, "1").apply()
-            }
-            return store
+            // Leave this key absent until legacy SQLite settings have been inspected. The
+            // runtime default is encrypted, but an existing explicit "0" must be preserved.
+            return SecuritySettingsStore(encrypted)
         }
     }
 
