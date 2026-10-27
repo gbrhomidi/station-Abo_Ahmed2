@@ -105,14 +105,20 @@ class JsonSettingsBackupManager(
                     )
                 }
             }
-            val restoredPin = if (pinObject != null && pinObject.has("salt") && pinObject.has("hash")) {
-                mapOf("salt" to pinObject.getString("salt"), "hash" to pinObject.getString("hash"))
+            val hasPinSalt = pinObject?.has("salt") == true
+            val hasPinHash = pinObject?.has("hash") == true
+            require(hasPinSalt == hasPinHash) { "بيانات PIN غير مكتملة داخل النسخة الاحتياطية" }
+            val restoredPin = if (hasPinSalt && hasPinHash) {
+                mapOf("salt" to pinObject!!.getString("salt"), "hash" to pinObject.getString("hash"))
             } else emptyMap()
 
             // Validate the sensitive payload before committing either settings collection.
             val targetEncrypted = isTrue(restoredSecurity[SecuritySettingsStore.KEY_ENCRYPT_STORAGE] ?: "1")
             restoredSecurity["autoLogoutMinutes"]?.let {
-                require(it.toIntOrNull() in 0..1440) { "مدة الخروج التلقائي في النسخة غير صالحة" }
+                val timeout = it.toIntOrNull()
+                require(timeout != null && timeout in 0..1440) {
+                    "مدة الخروج التلقائي في النسخة غير صالحة"
+                }
             }
             if (restoredPin.isNotEmpty()) {
                 require(restoredPin["salt"].orEmpty().isNotBlank() && restoredPin["hash"].orEmpty().isNotBlank()) {
