@@ -268,16 +268,16 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
     }
 
     private fun checkPeriodsAndCurrency(stationId: Int, checks: JSONObject, issues: JSONArray) {
-        val periodCount = if (tableExists("fiscal_periods")) scalar("SELECT COUNT(*) FROM fiscal_periods WHERE station_id=?", arrayOf(stationId.toString())) else 0
-        val unperioded = if (tableExists("journal_entries")) scalar(
+        val periodCount = if (hasColumn("fiscal_periods", "station_id")) scalar("SELECT COUNT(*) FROM fiscal_periods WHERE station_id=?", arrayOf(stationId.toString())) else 0
+        val unperioded = if (hasColumn("journal_entries", "station_id") && hasColumn("journal_entries", "status") && hasColumn("journal_entries", "fiscal_year") && hasColumn("journal_entries", "fiscal_period")) scalar(
             "SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND status='posted' AND COALESCE(is_deleted,0)=0 AND (fiscal_year IS NULL OR fiscal_period IS NULL)",
             arrayOf(stationId.toString())
         ) else 0
-        val noSalesCurrency = if (tableExists("sales_transactions")) scalar(
+        val noSalesCurrency = if (hasColumn("sales_transactions", "station_id") && hasColumn("sales_transactions", "status") && hasColumn("sales_transactions", "currency_id") && hasColumn("sales_transactions", "amount_in_default")) scalar(
             "SELECT COUNT(*) FROM sales_transactions WHERE station_id=? AND status='completed' AND COALESCE(is_deleted,0)=0 AND (currency_id IS NULL OR amount_in_default IS NULL)",
             arrayOf(stationId.toString())
         ) else 0
-        val noPaymentCurrency = if (tableExists("payments")) scalar(
+        val noPaymentCurrency = if (hasColumn("payments", "station_id") && hasColumn("payments", "status") && hasColumn("payments", "currency_id") && hasColumn("payments", "amount_in_default")) scalar(
             "SELECT COUNT(*) FROM payments WHERE station_id=? AND status='completed' AND COALESCE(is_deleted,0)=0 AND (currency_id IS NULL OR amount_in_default IS NULL)",
             arrayOf(stationId.toString())
         ) else 0
