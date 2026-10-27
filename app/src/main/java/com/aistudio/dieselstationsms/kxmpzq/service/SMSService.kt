@@ -28,6 +28,7 @@ import androidx.work.WorkManager
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManager
 import com.aistudio.dieselstationsms.kxmpzq.MainActivity
+import com.aistudio.dieselstationsms.kxmpzq.sms.SmsAiHttpClientFactory
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsReceiver
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsConversationManager
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsCustomerResolver
@@ -546,6 +547,10 @@ class SMSService : Service() {
     private fun initializeDatabase() {
         try {
             dbHelper = DatabaseHelper.getInstance(applicationContext)
+            SmsAiHttpClientFactory.setNetworkOptimizationEnabled(
+                dbHelper.getSetting("networkOptimizationEnabled").trim().lowercase(Locale.ROOT) in
+                    setOf("1", "true", "yes", "on")
+            )
             validateDatabase()
             Log.d(TAG, "DatabaseHelper initialized successfully (Singleton)")
         } catch (e: Exception) {
@@ -2496,19 +2501,44 @@ class SMSService : Service() {
      */
     private fun acquireWakeLock() {
         try {
+            val setting = runCatching {
+                val db = if (::dbHelper.isInitialized) dbHelper else DatabaseHelper.getInstance(applicationContext)
+                db.getSetting("wakeLockEnabled").trim().lowercase(Locale.ROOT)
+            }.getOrDefault("")
+            val enabled = when (setting) {
+                "0", "false", "no", "off" -> false
+                "1", "true", "yes", "on" -> true
+                else -> true // Preserve existing behavior on installations without this key.
+            }
+            if (!enabled) {
+                releaseWakeLock()
+                Log.i(TAG, "WakeLock disabled by maintenance settings")
+                return
+            }
+
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (wakeLock?.isHeld == true) return
             wakeLock = powerManager.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
                 WAKE_LOCK_TAG
             ).apply {
                 setReferenceCounted(false)
-                acquire(10 * 60 * 1000L) // 10 دقائق
+                acquire(10 * 60 * 1000L) // مدة محدودة لحماية البطارية
             }
             Log.d(TAG, "WakeLock acquired")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to acquire WakeLock: ${e.message}", e)
         }
     }
+
+    /**
+     * تطبيق إعداد WakeLock بعد حفظه في SQLite.
+     */
+    fun applyWakeLockPreference(enabled: Boolean) {
+        if (enabled) acquireWakeLock() else releaseWakeLock()
+    }
+
+    fun isWakeLockHeld(): Boolean = wakeLock?.isHeld == true
 
     /**
      * تحرير Wake Lock
