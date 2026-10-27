@@ -4615,12 +4615,17 @@ tr:last-child td { border-bottom:0; }
         const details = document.createElement('pre');
         details.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto;grid-column:1/-1;font-size:.75rem;direction:ltr;text-align:left';
         const acts = Array.isArray(value && value.actions) ? value.actions : [];
-        const issues = Array.isArray(summary.issues) ? summary.issues : [];
+        const historicalIssues = Array.isArray(summary.issues) ? summary.issues : [];
+        const gl = summary.financial_integrity_audit || {};
+        const glIssues = Array.isArray(gl.issues) ? gl.issues : [];
+        const issues = historicalIssues.concat(glIssues.map(i => ({...i, message: 'GL: ' + String(i.message || '')})));
         details.textContent = [
-            'Run ID: ' + String(value && value.run_id || '—'), '', 'الإجراءات:',
+            'Run ID: ' + String(value && value.run_id || '—'), '',
+            value && value.error ? ('خطأ: ' + String(value.error)) : '',
+            'الإجراءات:',
             ...acts.slice(0, 60).map(a => '[' + String(a.status || '') + '] ' + String(a.action_code || '') + ' — ' + String(a.entity_type || '') + ' #' + String(a.entity_id || '') + ' — ' + String(a.explanation || '')),
             '', 'العوائق المتبقية:',
-            ...issues.slice(0, 40).map(i => '[' + String(i.severity || '') + '] ' + String(i.code || '') + ' — ' + String(i.message || '') + ' (' + String(i.count || 0) + ')')
+            ...issues.slice(0, 60).map(i => '[' + String(i.severity || '') + '] ' + String(i.code || '') + ' — ' + String(i.message || '') + ' (' + String(i.count || 0) + ')')
         ].join('\\n');
         target.appendChild(details);
     }

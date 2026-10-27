@@ -6484,7 +6484,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-                if (!checkPermission("accounting", "write")) return errorResponse("لا تملك صلاحية تنفيذ إصلاحات المصالحة المالية")
+                if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية تنفيذ إصلاحات المصالحة المالية")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 HistoricalFinancialReconciliationRepair(db.writableDatabase).run(stationId, activity.currentUserId).toString()
             } catch (e: SecurityException) {
