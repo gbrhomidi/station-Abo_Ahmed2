@@ -1997,11 +1997,11 @@ tr:last-child td { border-bottom:0; }
             ['autoCleanupEnabled','تنظيف تلقائي','bool','التنظيف الدوري'],
             ['cleanupIntervalDays','فترة التنظيف (يوم)','number','الفترة'],
             ['autoRepairEnabled','إصلاح تلقائي','bool','الإصلاح عند الفشل'],
-            ['batteryOptimizationEnabled','تحسين البطارية','bool','إعداد التشغيل الخلفي'],
-            ['networkOptimizationEnabled','تحسين الشبكة','bool','تحسين الشبكة'],
-            ['wakeLockEnabled','WakeLock','bool','التحكم في WakeLock'],
-            ['developerMode','وضع المطور','bool','خيارات متقدمة'],
-            ['showAdvancedSettings','عرض الإعدادات المتقدمة','bool','إظهار الخيارات']
+            ['batteryOptimizationEnabled','السماح بالتشغيل الخلفي','bool','عند التفعيل يطلب التطبيق موافقة Android لتخفيف قيود البطارية؛ لا يمكن تغيير قرار النظام بصمت.'],
+            ['networkOptimizationEnabled','تحسين اتصالات الشبكة','bool','يعيد استخدام تجمع اتصالات HTTPS لطلبات AI الخارجية عند التفعيل.'],
+            ['wakeLockEnabled','WakeLock للخدمة','bool','يطبّق على قفل الطاقة الجزئي لخدمة SMS؛ يظل القفل محدود المدة لحماية البطارية.'],
+            ['developerMode','وضع المطور','bool','تشغيل أو إيقاف سجل التشخيص المرئي في الواجهة.'],
+            ['showAdvancedSettings','عرض الإعدادات المتقدمة','bool','إظهار أو إخفاء خيارات الصيانة المتقدمة أدناه.']
         ]
     };
 
@@ -2180,6 +2180,12 @@ tr:last-child td { border-bottom:0; }
                     break;
                 case 'getSettingsDatabaseIntegrity':
                     raw = bridge.getSettingsDatabaseIntegrity();
+                    break;
+                case 'getMaintenanceRuntimeStatus':
+                    raw = bridge.getMaintenanceRuntimeStatus();
+                    break;
+                case 'applyMaintenanceSettings':
+                    raw = bridge.applyMaintenanceSettings();
                     break;
                 case 'getDatabaseInfo':
                     raw = bridge.getDatabaseInfo();
@@ -2806,6 +2812,9 @@ tr:last-child td { border-bottom:0; }
         const ext = extras || {};
         const row = document.createElement('div');
         row.className = 'field' + (type === 'bool' ? ' switch-field' : '');
+        if (['autoRepairEnabled','batteryOptimizationEnabled','networkOptimizationEnabled','wakeLockEnabled','developerMode'].includes(key)) {
+            row.classList.add('maintenance-advanced-field');
+        }
         if (ext.fullWidth || type === 'slider' || type === 'color' || type === 'clock' || type === 'time') {
             row.classList.add('full');
         }
@@ -3484,7 +3493,7 @@ tr:last-child td { border-bottom:0; }
             'openMonitoringReport','clearLogs','clearMetrics','securityFields',
             'backupFields','createBackup','chooseBackupLocation','restoreDatabaseBackup','backupLocationStatus','refreshBackups','backupsBody',
             'maintenanceFields','optimizeDb','checkIntegrity','refreshDbInfo',
-            'integrityResult','userSearchBadge','usersBody','displayFields'
+            'maintenanceRuntimeStatus','integrityResult','userSearchBadge','usersBody','displayFields'
         ];
         const missing = requiredIds.filter(id => !loadedIds.has(id));
         if (missing.length) {
@@ -3523,6 +3532,11 @@ tr:last-child td { border-bottom:0; }
         el('resetBtn').classList.toggle('hidden', name !== 'general');
         if (name === 'monitoring') refreshMonitoring();
         if (name === 'display') loadSystemSettings();
+        if (name === 'maintenance') {
+            applyMaintenanceFieldVisibility();
+            void refreshDatabaseInfo();
+            void refreshMaintenanceRuntimeStatus();
+        }
         if (name === 'backup') {
             // A full SQLite snapshot necessarily includes every table, including logs.
             // Do not expose a misleading control that cannot exclude those rows safely.
@@ -3687,6 +3701,8 @@ tr:last-child td { border-bottom:0; }
                 String(settings.theme || '').toLowerCase() === 'dark');
 
             await loadSystemSettings();
+            applyMaintenanceFieldVisibility();
+            void refreshMaintenanceRuntimeStatus();
         } catch (error) {
             el('offlineBanner').classList.toggle('show', !bridge);
             toast(error.message, 'bad');
@@ -3947,6 +3963,31 @@ tr:last-child td { border-bottom:0; }
                 systemSettings[key] = readback.value;
             }
 
+            if (activeTab === 'maintenance') {
+                const applyResponse = await bridgeCall('applyMaintenanceSettings');
+                const runtime = dataOf(applyResponse) || {};
+                const asBool = value => value === true || value === 1 || value === '1' || String(value).toLowerCase() === 'true';
+                const checks = [
+                    ['autoCleanupEnabled', 'auto_cleanup_enabled'],
+                    ['autoRepairEnabled', 'auto_repair_enabled'],
+                    ['batteryOptimizationEnabled', 'battery_background_enabled'],
+                    ['networkOptimizationEnabled', 'network_optimization_enabled'],
+                    ['wakeLockEnabled', 'wake_lock_enabled'],
+                    ['developerMode', 'developer_mode_enabled'],
+                    ['showAdvancedSettings', 'advanced_settings_visible']
+                ];
+                for (const [settingKey, runtimeKey] of checks) {
+                    if (asBool(runtime[runtimeKey]) !== asBool(uiApplicationPayload[settingKey])) {
+                        throw new Error('تم حفظ الإعداد لكن لم يتم تأكيد تطبيقه: ' + settingKey);
+                    }
+                }
+                if (Number(runtime.cleanup_interval_days) !== Number(uiApplicationPayload.cleanupIntervalDays)) {
+                    throw new Error('لم يتم تأكيد فترة التنظيف المطبقة في Android.');
+                }
+                renderMaintenanceRuntimeStatus(runtime);
+                applyMaintenanceFieldVisibility();
+            }
+
             Object.keys(settings).forEach(key => delete settings[key]);
             Object.assign(settings, persistedLegacy, persistedApplication, applicationResult);
             if (defs[activeTab]) {
@@ -3964,7 +4005,9 @@ tr:last-child td { border-bottom:0; }
             if (activeTab === 'general' && Object.prototype.hasOwnProperty.call(settings, 'darkMode')) {
                 setDarkMode(settings.darkMode === true || settings.darkMode === 1 || settings.darkMode === '1' || String(settings.theme || '').toLowerCase() === 'dark');
             }
-            toast('تم حفظ إعدادات التبويب والتحقق من القيم المحفوظة في SQLite');
+            toast(activeTab === 'maintenance'
+                ? 'تم حفظ إعدادات الصيانة والتحقق من قيم SQLite والسياسات runtime؛ موافقة البطارية تخضع لقرار Android.'
+                : 'تم حفظ إعدادات التبويب والتحقق من القيم المحفوظة في SQLite');
         } catch (error) {
             // Avoid showing raw SQLite/JSON diagnostics or stored setting values
             // in a long toast. Native code retains technical details in its log.
@@ -4446,12 +4489,73 @@ tr:last-child td { border-bottom:0; }
         }
     };
 
+    function applyMaintenanceFieldVisibility() {
+        const container = el('maintenanceFields');
+        const advancedToggle = el('setting-showAdvancedSettings');
+        if (!container || !advancedToggle) return;
+        const showAdvanced = !!advancedToggle.checked;
+        container.querySelectorAll('.maintenance-advanced-field').forEach(row => {
+            row.hidden = !showAdvanced;
+            row.setAttribute('aria-hidden', String(!showAdvanced));
+        });
+    }
+
+    function renderMaintenanceRuntimeStatus(value) {
+        const target = el('maintenanceRuntimeStatus');
+        if (!target) return;
+        const boolText = value => value === true || value === 1 || value === '1' || String(value).toLowerCase() === 'true' ? 'مفعّل' : 'متوقف';
+        const lastCleanup = Number(value.last_cleanup_at || 0);
+        const lastCleanupText = lastCleanup > 0 ? new Date(lastCleanup).toLocaleString('ar') : 'لم تُسجّل عملية تنظيف حتى الآن';
+        const cells = [
+            ['التنظيف التلقائي', boolText(value.auto_cleanup_enabled)],
+            ['فترة التنظيف', Number(value.cleanup_interval_days || 1) + ' يوم'],
+            ['حالة موعد التنظيف', value.cleanup_due ? 'حان الموعد' : (value.auto_cleanup_enabled ? 'لم يحن الموعد' : 'معطّل بالإعداد')],
+            ['آخر تنظيف ناجح مسجل', lastCleanupText],
+            ['الإصلاح عند الأعطال', boolText(value.auto_repair_enabled)],
+            ['موافقة قيود البطارية', value.battery_status || 'غير متاحة'],
+            ['حالة النظام لتخفيف قيود البطارية', value.battery_optimization_exempt ? 'موافقة Android فعالة' : 'لا توجد موافقة فعالة'],
+            ['تحسين الشبكة', value.network_optimization_active ? 'تجمع اتصالات HTTPS المشترك فعال' : 'تجمع الاتصالات المشترك غير مفعل'],
+            ['WakeLock', value.service_running ? (value.wake_lock_held ? 'ممسوك فعلياً' : (value.wake_lock_enabled ? 'مفعّل بالإعداد والخدمة لا تمسكه حالياً' : 'معطّل')) : (value.wake_lock_enabled ? 'مفعّل بالإعداد؛ الخدمة غير نشطة' : 'معطّل')],
+            ['وضع المطور', value.developer_mode_active ? 'تشخيص الواجهة مفعّل' : 'تشخيص الواجهة متوقف'],
+            ['الإعدادات المتقدمة', value.advanced_settings_visible ? 'ظاهرة' : 'مخفية']
+        ];
+        target.innerHTML = cells.map(([label, text]) =>
+            '<div class="status-card"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(text) + '</strong></div>'
+        ).join('');
+        if (value.battery_prompt_requested) {
+            toast('طلب Android موافقتك على تخفيف قيود البطارية؛ الحالة لا تصبح فعالة إلا بعد موافقة النظام.');
+        }
+    }
+
+    async function refreshMaintenanceRuntimeStatus() {
+        try {
+            const value = dataOf(await bridgeCall('getMaintenanceRuntimeStatus')) || {};
+            renderMaintenanceRuntimeStatus(value);
+            return value;
+        } catch (error) {
+            const target = el('maintenanceRuntimeStatus');
+            if (target) {
+                target.innerHTML = '<div class="status-card"><span>حالة الصيانة</span><strong class="bad">' +
+                    escapeHtml(error.message || 'تعذر قراءة الحالة الفعلية') + '</strong></div>';
+            }
+            return null;
+        }
+    }
+
     async function optimizeDb() {
         showLoading(true);
         try {
-            await bridgeCall('optimizeSettingsDatabase');
-            toast('تم فحص وتحسين قاعدة البيانات');
+            const result = await bridgeCall('optimizeSettingsDatabase');
+            const before = Number(result.size_before_bytes || 0);
+            const after = Number(result.size_after_bytes || 0);
+            const reclaimed = Number(result.bytes_reclaimed || 0);
+            toast(
+                'اكتمل فحص السلامة واستدعاء VACUUM فعلياً. الحجم قبل/بعد: ' +
+                formatBytes(before) + ' / ' + formatBytes(after) +
+                (reclaimed > 0 ? '؛ مساحة مستعادة: ' + formatBytes(reclaimed) : '؛ لم يُسجّل تقلص في الحجم.')
+            );
             await refreshDatabaseInfo();
+            await refreshMaintenanceRuntimeStatus();
         } catch (error) {
             toast(error.message, 'bad');
         } finally {
@@ -4464,21 +4568,35 @@ tr:last-child td { border-bottom:0; }
         try {
             const value = dataOf(await bridgeCall('getSettingsDatabaseIntegrity')) || {};
             el('statIntegrity').textContent = value.valid ? 'سليمة' : 'فشل';
-
+            const integrityRows = Array.isArray(value.integrity_rows) ? value.integrity_rows : [];
+            const integrityDetail = integrityRows.length
+                ? integrityRows.slice(0, 10).join('، ')
+                : 'لم تُرجع PRAGMA integrity_check أي صفوف.';
             el('integrityResult').innerHTML = `
                 <div class="status-card">
-                    <span>سلامة SQLite</span>
-                    <strong class="${value.valid ? 'ok' : 'bad'}">${value.valid ? 'OK' : 'FAIL'}</strong>
+                    <span>سلامة SQLite (PRAGMA integrity_check)</span>
+                    <strong class="${value.valid ? 'ok' : 'bad'}">${value.pragma_integrity_valid ? 'OK' : 'FAIL'}</strong>
+                    <small>${escapeHtml(integrityDetail)}</small>
                 </div>
                 <div class="status-card">
-                    <span>قاعدة البيانات</span>
+                    <span>اتصال قاعدة البيانات</span>
                     <strong>${value.database_open ? 'مفتوحة' : 'مغلقة'}</strong>
+                </div>
+                <div class="status-card">
+                    <span>فحص DatabaseHelper</span>
+                    <strong class="${value.helper_integrity_valid ? 'ok' : 'bad'}">${value.helper_integrity_valid ? 'سليم' : 'فشل'}</strong>
+                </div>
+                <div class="status-card">
+                    <span>مخالفات المفاتيح الأجنبية</span>
+                    <strong class="${Number(value.foreign_key_violations_count || 0) === 0 ? 'ok' : 'bad'}">${escapeHtml(value.foreign_key_violations_count == null ? 'غير متاحة' : value.foreign_key_violations_count)}</strong>
+                    <small>${value.foreign_key_violations_truncated ? 'عُرضت أول 50 مخالفة فقط.' : 'العدد محسوب من نتيجة PRAGMA foreign_key_check.'}</small>
                 </div>
                 <div class="status-card">
                     <span>الحجم</span>
                     <strong>${escapeHtml(formatBytes(value.size_bytes))}</strong>
                 </div>
             `;
+            if (!value.valid) toast('فشل فحص فعلي لقاعدة البيانات؛ لا يتم ادعاء السلامة. راجع التفاصيل المعروضة.', 'bad');
         } catch (error) {
             toast(error.message, 'bad');
         } finally {
@@ -4489,22 +4607,36 @@ tr:last-child td { border-bottom:0; }
     async function refreshDatabaseInfo() {
         try {
             const value = dataOf(await bridgeCall('getDatabaseInfo')) || {};
+            const tables = Array.isArray(value.tables) ? value.tables : [];
+            const tableList = tables.length ? tables.join('، ') : 'لم تُرجع قائمة الجداول من SQLite.';
             el('integrityResult').innerHTML = `
                 <div class="status-card">
-                    <span>إصدار قاعدة البيانات</span>
+                    <span>إصدار SQLite المسجل (PRAGMA user_version)</span>
                     <strong>${escapeHtml(value.version == null ? '—' : value.version)}</strong>
                 </div>
                 <div class="status-card">
-                    <span>عدد الجداول المقروء</span>
+                    <span>إصدار DatabaseHelper المتوقع</span>
+                    <strong>${escapeHtml(value.helper_version == null ? '—' : value.helper_version)}</strong>
+                </div>
+                <div class="status-card">
+                    <span>عدد جداول التطبيق الفعلية</span>
                     <strong>${escapeHtml(value.tables_count == null ? '—' : value.tables_count)}</strong>
                 </div>
                 <div class="status-card">
-                    <span>الحجم</span>
+                    <span>الحجم (ملف DB وملفات WAL/SHM)</span>
                     <strong>${escapeHtml(formatBytes(value.size_bytes))}</strong>
                 </div>
                 <div class="status-card">
                     <span>التشفير</span>
-                    <strong>${value.is_encrypted ? 'مفعل' : 'غير مفعل'}</strong>
+                    <strong>${escapeHtml(value.encryption_status || (value.is_encrypted ? 'مفعّل' : 'غير مشفّر'))}</strong>
+                </div>
+                <div class="status-card">
+                    <span>وضع سجل SQLite</span>
+                    <strong>${escapeHtml(value.journal_mode || 'غير متاح')}</strong>
+                </div>
+                <div class="status-card full">
+                    <span>أسماء الجداول المكتشفة من sqlite_master</span>
+                    <strong>${escapeHtml(tableList)}</strong>
                 </div>
             `;
         } catch (error) {
@@ -4700,6 +4832,14 @@ tr:last-child td { border-bottom:0; }
         el('optimizeDb').addEventListener('click', optimizeDb);
         el('checkIntegrity').addEventListener('click', checkIntegrity);
         el('refreshDbInfo').addEventListener('click', refreshDatabaseInfo);
+        const maintenanceFields = el('maintenanceFields');
+        if (maintenanceFields) {
+            maintenanceFields.addEventListener('change', event => {
+                if (event.target && event.target.id === 'setting-showAdvancedSettings') {
+                    applyMaintenanceFieldVisibility();
+                }
+            });
+        }
 
         el('clearLogs').addEventListener('click', () =>
             ask(
@@ -4836,6 +4976,7 @@ tr:last-child td { border-bottom:0; }
     renderTabs();
     renderFields();
     bind();
+    applyMaintenanceFieldVisibility();
     el('bottomSave').classList.add('hidden');
     el('resetBtn').classList.add('hidden');
     loadSettings();
