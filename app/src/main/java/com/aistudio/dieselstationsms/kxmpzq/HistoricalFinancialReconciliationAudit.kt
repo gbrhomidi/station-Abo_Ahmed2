@@ -244,12 +244,16 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
             arrayOf(stationId.toString())
         ) else 0
         checks.put("completed_inventory_movement_count", movementCount).put("inventory_ledger_row_count", ledgerCount)
-        if (movementCount > 0 && ledgerCount <= 0)
-            add(issues, "inventory_ledger_missing_or_unscoped", "high",
-                if (ledgerCount == -1)
-                    "تعذر عزل دفتر المخزون للمحطة؛ لا يمكن إثبات اكتماله دون مفتاح نطاق واضح"
-                else "توجد حركات مخزون معتمدة لكن دفتر المخزون المساعد فارغ؛ يلزم إعادة بنائه من مستندات الحركة والتحقق من الكلفة",
-                1, null, null)
+        // inventory_ledger is not part of the app's currently used posting path. The
+        // authoritative inventory checks below reconcile inventory_movements, warehouse
+        // levels and product totals; an absent auxiliary projection is therefore recorded
+        // for diagnostics but must not by itself block statement approval.
+        checks.put("inventory_ledger_projection_status", when {
+            !tableExists("inventory_ledger") -> "not_configured_using_inventory_movements"
+            ledgerCount == -1 -> "available_but_not_station_scopable"
+            movementCount > 0 && ledgerCount == 0 -> "empty_auxiliary_projection"
+            else -> "available"
+        })
 
         if (tableExists("products") && tableExists("inventory_levels")) {
             val levels = rows(

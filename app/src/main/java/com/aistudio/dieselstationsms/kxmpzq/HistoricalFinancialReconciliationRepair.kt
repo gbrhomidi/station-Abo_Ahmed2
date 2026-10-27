@@ -430,7 +430,11 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
             Payment(it.getLong(0),it.getString(1),it.getDouble(2),it.getLong(3),it.getLong(4),it.getLong(5),it.getLong(6),it.getLong(7))
         }
         for(p in rows) {
-            if(referenceExists("payment",p.id)) continue
+            if(referenceExists("payment",p.id)) {
+                if(!postedReferenceExists("payment",p.id))
+                    skip("source_journal_not_posted","payment",p.id,"يوجد قيد سابق غير مرحّل أو ملغى لهذا التسديد؛ لم يُنشأ قيد مكرر تلقائياً",JSONObject().put("payment_code",p.code))
+                continue
+            }
             if(p.amount<=0 || !p.amount.isFinite() || ((p.customer>0)==(p.supplier>0)) || ((p.cash>0)==(p.bank>0))) {
                 skip("payment_source_ambiguous","payment",p.id,"مصدر الدفع أو الطرف أو وسيلة التسوية غير فريد",JSONObject().put("amount",p.amount));continue
             }
@@ -491,7 +495,11 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
             Refill(it.getLong(0),it.getString(1),it.getLong(2),it.getDouble(3),it.getString(4),it.getLong(5),it.getLong(6))
         }
         for(r in rows) {
-            if(referenceExists("fuel_supply",r.id)) continue
+            if(referenceExists("fuel_supply",r.id)) {
+                if(!postedReferenceExists("fuel_supply",r.id))
+                    skip("source_journal_not_posted","tank_refills",r.id,"يوجد قيد سابق غير مرحّل أو ملغى لهذا التوريد؛ لم يُنشأ قيد مكرر تلقائياً",JSONObject().put("refill_code",r.code))
+                continue
+            }
             val isCash=r.method=="cash"
             val validSource=r.amount>0 && r.amount.isFinite() && r.supplier>0
             val ledgerType=if(isCash) "fuel_supply_cash" else "fuel_supply_credit"
@@ -532,7 +540,11 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
             " FROM sales_transactions WHERE station_id=? AND status='completed'"+(if(c.contains("is_deleted")) " AND COALESCE(is_deleted,0)=0" else "")+" ORDER BY id",
             arrayOf(station.toString())) { Sale(it.getLong(0),it.getString(1),it.getDouble(2),it.getDouble(3),it.getDouble(4),it.getString(5),it.getLong(6),it.getString(7)) }
         for(s in rows) {
-            if(referenceExists("sale",s.id)) continue
+            if(referenceExists("sale",s.id)) {
+                if(!postedReferenceExists("sale",s.id))
+                    skip("source_journal_not_posted","sales_transactions",s.id,"يوجد قيد سابق غير مرحّل أو ملغى لهذه الفاتورة؛ يلزم فحصه بدلاً من إنشاء قيد مكرر",JSONObject().put("sale_code",s.code))
+                continue
+            }
             if(s.net<=0 || !s.net.isFinite() || s.paid< -eps || s.paid>s.net+eps) {
                 skip("sale_journal_source_invalid","sale",s.id,"صافي البيع/المدفوع غير صالح",JSONObject().put("net",s.net).put("paid",s.paid));continue
             }
@@ -604,7 +616,11 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
         val suffix=if(hasColumn("sales_transactions","is_deleted")) " AND COALESCE(is_deleted,0)=0" else ""
         val sales=query("SELECT id FROM sales_transactions WHERE station_id=? AND status='completed'"+suffix+" ORDER BY id",arrayOf(station.toString())){it.getLong(0)}
         for(id in sales) {
-            if(referenceExists("sale_cogs",id)) continue
+            if(referenceExists("sale_cogs",id)) {
+                if(!postedReferenceExists("sale_cogs",id))
+                    skip("source_journal_not_posted","sales_transactions",id,"يوجد قيد تكلفة سابق غير مرحّل أو ملغى؛ لم يُنشأ قيد آخر تلقائياً",JSONObject().put("sale_id",id))
+                continue
+            }
             val cost=historicalCost(id)
             if(cost<=eps || !cost.isFinite()) {skip("sale_cogs_cost_not_proven","sale",id,"لم تتوفر تكلفة تاريخية مؤكدة؛ لم تُستخدم تكلفة الشراء الحالية",JSONObject().put("cost",cost));continue}
             val inv=inventoryAccount(); val cogs=cogsAccount()
@@ -759,6 +775,14 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
             (if(hasColumn("journal_entries","is_deleted")) " AND COALESCE(is_deleted,0)=0" else ""),
             arrayOf(station.toString(),type,id.toString()))>0
     }
+    private fun postedReferenceExists(type:String,id:Long):Boolean {
+        if(!tableExists("journal_entries") ||
+            !columns("journal_entries").containsAll(setOf("station_id","reference_type","reference_id","status"))) return false
+        val deleted=if(hasColumn("journal_entries","is_deleted")) " AND COALESCE(is_deleted,0)=0" else ""
+        return scalar("SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND reference_type=? AND reference_id=? AND status='posted'"+deleted,
+            arrayOf(station.toString(),type,id.toString()))>0
+    }
+
     private fun accountStationFilter(): String =
         if (hasColumn("accounts", "station_id")) " AND station_id=?" else ""
 
