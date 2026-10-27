@@ -360,6 +360,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureManagementIdentitySchema(db)
         ensureScreenPermissionsSchema(db)
         ensureSalesPricingDefaults(db)
+        // Repair legacy COA-to-cash-box/bank links before any financial bridge can post.
+        repairSettlementAccountMappings(db)
     }
 
     /**
@@ -12113,6 +12115,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(warehouseId > 0L) { "المستودع مطلوب" }
             val signedAdjustment = data.optDouble("signed_quantity", 0.0)
             val subtype = data.optString("movement_subtype", "")
+            val financialPurchase = movementType == "in" && subtype == "in" && data.optBoolean("financial_purchase", false)
+            val purchasePaymentMethod = data.optString("payment_method", "").trim().lowercase(Locale.ROOT)
+            val purchaseCashBoxId = data.optLong("cash_box_id", 0L)
+            val purchaseIdempotencyKey = data.optString("idempotency_key", "").trim()
+            val movementCode = data.optString("movement_code", "INV-${System.currentTimeMillis()}").trim()
+                .ifBlank { "INV-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(6)}" }
             val referenceId = data.optLong(
                 "reference_id",
                 when (subtype) {
@@ -12135,6 +12143,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (movementType == "adjustment") {
                 require(signedAdjustment.isFinite() && signedAdjustment != 0.0) { "التسوية يجب أن تحتوي على كمية موجبة أو سالبة" }
             }
+            if (financialPurchase) {
+                require(unitCost > 0.0 && totalCost.isFinite() && totalCost > 0.0) { "شراء المنتجات يتطلب تكلفة وحدة ومبلغاً صحيحين" }
+                require(purchasePaymentMethod in setOf("cash", "credit")) { "حدد طريقة شراء المنتجات: نقداً أو بالأجل" }
+                require(data.optLong("supplier_id", 0L) > 0L) { "حدد المورد لإثبات فاتورة الشراء" }
+                require(purchaseIdempotencyKey.isNotBlank()) { "مفتاح عملية شراء فريد مطلوب لمنع التكرار" }
+                if (purchasePaymentMethod == "cash") require(purchaseCashBoxId > 0L) { "اختر صندوق الدفع النقدي للمشتريات" }
+                else require(purchaseCashBoxId <= 0L) { "لا يجوز تحديد صندوق مع الشراء الآجل" }
+            }
             if (referenceId > 0L && subtype in setOf("in", "return_supplier", "out", "return_customer")) {
                 db.rawQuery(
                     "SELECT id FROM parties WHERE id = ? AND (station_id = ? OR station_id IS NULL) AND is_deleted = 0 AND is_active = 1",
@@ -12145,12 +12161,48 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val ownsTransaction = !db.inTransaction()
             if (ownsTransaction) db.beginTransaction()
             try {
+                if (financialPurchase) {
+                    val previousPurchaseId = findFinancialIdempotency(
+                        db, "product_purchase", stationScopeId, purchaseIdempotencyKey
+                    )
+                    if (previousPurchaseId != null) return previousPurchaseId
+                    require(reserveFinancialIdempotency(
+                        db, "product_purchase", stationScopeId, purchaseIdempotencyKey
+                    )) { "مفتاح شراء المنتجات مستخدم مسبقاً" }
+                    val supplierType = db.rawQuery(
+                        """SELECT pt.type_code FROM parties p
+                           JOIN party_types pt ON pt.id=p.party_type_id
+                           WHERE p.id=? AND p.station_id=? AND p.is_deleted=0 AND p.is_active=1 AND pt.is_deleted=0
+                           LIMIT 1""",
+                        arrayOf(data.optLong("supplier_id").toString(), stationScopeId.toString())
+                    ).use { c ->
+                        require(c.moveToFirst()) { "المورد غير موجود أو غير نشط ضمن المحطة" }
+                        c.getString(0)
+                    }
+                    require(supplierType.equals("SUPPLIER", ignoreCase = true)) { "الطرف المحدد ليس مورداً" }
+                }
+                var purchaseCashBalanceBefore = 0.0
+                if (financialPurchase && purchasePaymentMethod == "cash") {
+                    purchaseCashBalanceBefore = db.rawQuery(
+                        "SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND status='active' AND is_deleted=0 LIMIT 1",
+                        arrayOf(purchaseCashBoxId.toString(), stationScopeId.toString())
+                    ).use { c ->
+                        require(c.moveToFirst()) { "صندوق الشراء غير موجود أو غير نشط أو خارج المحطة" }
+                        c.getDouble(0)
+                    }
+                    require(purchaseCashBalanceBefore + 0.000001 >= totalCost) { "رصيد الصندوق غير كافٍ لشراء المنتجات" }
+                }
+
                 var currentQty = 0.0
+                var currentAverageCost = 0.0
                 db.rawQuery(
-                    "SELECT quantity_on_hand FROM inventory_levels WHERE product_id = ? AND warehouse_id = ?",
+                    "SELECT quantity_on_hand, COALESCE(average_cost,0) FROM inventory_levels WHERE product_id = ? AND warehouse_id = ?",
                     arrayOf(productId.toString(), warehouseId.toString())
                 ).use { cursor ->
-                    if (cursor.moveToFirst()) currentQty = cursor.getDouble(0)
+                    if (cursor.moveToFirst()) {
+                        currentQty = cursor.getDouble(0)
+                        currentAverageCost = cursor.getDouble(1)
+                    }
                 }
 
                 val quantityBefore = currentQty
@@ -12163,7 +12215,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
                 val cv = ContentValues().apply {
                     put("uuid", UUID.randomUUID().toString())
-                    put("movement_code", data.optString("movement_code", "INV-${System.currentTimeMillis()}"))
+                    put("movement_code", movementCode)
                     put("product_id", productId)
                     put("station_id", stationScopeId)
                     put("warehouse_id", warehouseId)
@@ -12187,10 +12239,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     arrayOf(productId.toString(), warehouseId.toString())
                 ).use { exists ->
                     if (exists.moveToFirst()) {
-                        db.execSQL(
-                            "UPDATE inventory_levels SET quantity_on_hand = ? WHERE product_id = ? AND warehouse_id = ?",
-                            arrayOf(quantityAfter, productId, warehouseId)
-                        )
+                        if (financialPurchase) {
+                            val newAverageCost = if (quantityAfter > 0.000001)
+                                ((quantityBefore * currentAverageCost) + totalCost) / quantityAfter
+                            else unitCost
+                            db.execSQL(
+                                "UPDATE inventory_levels SET quantity_on_hand = ?, average_cost = ? WHERE product_id = ? AND warehouse_id = ?",
+                                arrayOf(quantityAfter, newAverageCost, productId, warehouseId)
+                            )
+                        } else {
+                            db.execSQL(
+                                "UPDATE inventory_levels SET quantity_on_hand = ? WHERE product_id = ? AND warehouse_id = ?",
+                                arrayOf(quantityAfter, productId, warehouseId)
+                            )
+                        }
                     } else {
                         val cvInv = ContentValues().apply {
                             put("product_id", productId)
@@ -12211,6 +12273,86 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     "id = ? AND station_id = ?",
                     arrayOf(productId.toString(), stationScopeId.toString())
                 )
+                if (financialPurchase) {
+                    val supplierId = data.optLong("supplier_id")
+                    val purchaseNow = getCurrentDateTime()
+                    if (purchasePaymentMethod == "cash") {
+                        val cashAfter = purchaseCashBalanceBefore - totalCost
+                        require(cashAfter >= -0.000001) { "رصيد الصندوق الناتج غير صالح" }
+                        require(db.update(
+                            "cash_boxes",
+                            ContentValues().apply { put("current_balance", cashAfter); put("updated_at", purchaseNow) },
+                            "id=? AND station_id=? AND status='active' AND is_deleted=0 AND current_balance>=?",
+                            arrayOf(purchaseCashBoxId.toString(), stationScopeId.toString(), totalCost.toString())
+                        ) == 1) { "تعذر خصم قيمة شراء المنتجات من الصندوق" }
+                        db.insertOrThrow("cash_movements", null, ContentValues().apply {
+                            put("uuid", UUID.randomUUID().toString())
+                            put("cash_box_id", purchaseCashBoxId)
+                            put("movement_type", "out")
+                            put("amount", totalCost)
+                            put("balance_before", purchaseCashBalanceBefore)
+                            put("balance_after", cashAfter)
+                            put("description", "شراء منتجات نقداً: $movementCode")
+                            put("reference_type", "product_purchase")
+                            put("reference_id", id)
+                            put("created_by", userId.toString())
+                            put("created_at", purchaseNow)
+                        })
+                    }
+
+                    val supplierBalances = db.rawQuery(
+                        """SELECT COALESCE(current_balance,0), COALESCE(total_due,0),
+                                  COALESCE(total_purchases,0), COALESCE(total_payments,0)
+                           FROM parties WHERE id=? AND station_id=? AND is_deleted=0 LIMIT 1""",
+                        arrayOf(supplierId.toString(), stationScopeId.toString())
+                    ).use { c ->
+                        require(c.moveToFirst()) { "المورد غير موجود" }
+                        doubleArrayOf(c.getDouble(0), c.getDouble(1), c.getDouble(2), c.getDouble(3))
+                    }
+                    if (purchasePaymentMethod == "credit") {
+                        val newBalance = supplierBalances[0] + totalCost
+                        require(db.update(
+                            "parties",
+                            ContentValues().apply {
+                                put("current_balance", newBalance)
+                                put("total_due", supplierBalances[1] + totalCost)
+                                put("total_purchases", supplierBalances[2] + totalCost)
+                                put("updated_at", purchaseNow)
+                            },
+                            "id=? AND station_id=? AND is_deleted=0",
+                            arrayOf(supplierId.toString(), stationScopeId.toString())
+                        ) == 1) { "تعذر تحديث دين المورد" }
+                        db.insertOrThrow("supplier_ledger", null, ContentValues().apply {
+                            put("uuid", UUID.randomUUID().toString())
+                            put("party_id", supplierId); put("transaction_date", purchaseNow)
+                            put("transaction_type", "product_supply_credit"); put("transaction_id", id)
+                            put("reference_number", movementCode); put("debit", 0.0); put("credit", totalCost)
+                            put("balance", newBalance); put("description", "شراء منتجات آجل: $movementCode")
+                            put("created_at", purchaseNow); put("created_by", userId)
+                        })
+                    } else {
+                        recordImmediateSupplierPurchaseLedger(
+                            db, supplierId, stationScopeId, totalCost, "product_supply_cash",
+                            id, movementCode, userId, "شراء منتجات نقداً $movementCode"
+                        )
+                    }
+
+                    val inventoryAccount = findSaleCostAccount(db, "inventory")
+                    val creditAccount = if (purchasePaymentMethod == "cash")
+                        findSettlementAccount(db, purchaseCashBoxId, 0L)
+                    else findPartyAccount(db, "payable")
+                    val journalId = postFinanceJournal(
+                        db, stationScopeId, userId, "purchase", "product_purchase", id, movementCode,
+                        "قيد شراء منتجات $movementCode", inventoryAccount, creditAccount, totalCost
+                    )
+                    if (purchasePaymentMethod == "cash") {
+                        insertSupplierCashPayment(
+                            db, stationScopeId, supplierId, purchaseCashBoxId, totalCost,
+                            "product", id, journalId, userId, "سداد شراء منتجات نقداً $movementCode"
+                        )
+                    }
+                    completeFinancialIdempotency(db, "product_purchase", stationScopeId, purchaseIdempotencyKey, id)
+                }
                 logActivity("system", "stock_movement", "$movementType: $quantity للمنتج $productId")
                 if (ownsTransaction) db.setTransactionSuccessful()
                 id
@@ -19307,7 +19449,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val tax = data.optDouble("tax_amount", 0.0).coerceAtLeast(0.0)
                 val totalAmount = delivered * unitPrice
                 val netAmount = (totalAmount + transport - discount + tax).coerceAtLeast(0.0)
-                require(netAmount.isFinite()) { "صافي المبلغ غير صالح" }
+                require(netAmount.isFinite() && netAmount > 0.0) { "صافي مبلغ التوريد يجب أن يكون أكبر من صفر" }
 
                 val now = getCurrentDateTime()
                 val refillCodeInput = data.optString("refill_code", "").trim()
@@ -19467,6 +19609,29 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("created_at", now)
                         put("created_by", actorId)
                     })
+                }
+
+                if (paymentMethod == "cash") {
+                    recordImmediateSupplierPurchaseLedger(
+                        db, supplierId, stationScopeId, netAmount, "fuel_supply_cash",
+                        refillId, refillCode, actorId, "توريد وقود نقدي $refillCode"
+                    )
+                }
+
+                // إثبات مالي موحد لتوريد الوقود: مدين المخزون، دائن الصندوق أو الموردين.
+                val inventoryAccount = findSaleCostAccount(db, "inventory")
+                val creditAccount = if (paymentMethod == "cash")
+                    findSettlementAccount(db, cashBoxId, 0L)
+                else findPartyAccount(db, "payable")
+                val supplyJournalId = postFinanceJournal(
+                    db, stationScopeId, actorId, "purchase", "fuel_supply", refillId, refillCode,
+                    "قيد توريد الوقود $refillCode", inventoryAccount, creditAccount, netAmount
+                )
+                if (paymentMethod == "cash") {
+                    insertSupplierCashPayment(
+                        db, stationScopeId, supplierId, cashBoxId, netAmount,
+                        "fuel", refillId, supplyJournalId, actorId, "سداد توريد وقود نقداً $refillCode"
+                    )
                 }
 
                 // سجل النشاط داخل نفس المعاملة حتى لا ينجح أحد طرفي العملية وحده.
@@ -21536,6 +21701,153 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
 
+
+    /**
+     * Repairs only unambiguous legacy settlement links. It never changes balances or
+     * journal history. A source (cash box/bank) may have exactly one active asset COA
+     * mapping; unrelated revenue/expense/header accounts are unlinked rather than
+     * guessed as a settlement account. Every mutation is recorded in account audit.
+     */
+    private fun repairSettlementAccountMappings(db: SQLiteDatabase) {
+        val hasAccounts = db.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='accounts' LIMIT 1", null
+        ).use { it.moveToFirst() }
+        val hasCashBoxes = db.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cash_boxes' LIMIT 1", null
+        ).use { it.moveToFirst() }
+        val hasBanks = db.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='bank_accounts' LIMIT 1", null
+        ).use { it.moveToFirst() }
+        if (!hasAccounts) return
+
+        val ownsTransaction = !db.inTransaction()
+        if (ownsTransaction) db.beginTransaction()
+        try {
+            fun repairAccount(id: Long, values: ContentValues, reason: String) {
+                val oldRow = getAccountRow(db, id, true) ?: return
+                val oldRemarks = oldRow.optString("remarks", "").trim()
+                val marker = "[settlement-map-repair] $reason"
+                values.put("remarks", if (oldRemarks.contains(marker)) oldRemarks else
+                    if (oldRemarks.isBlank()) marker else "$oldRemarks\n$marker")
+                values.put("updated_at", getCurrentDateTime())
+                val changed = db.update("accounts", values, "id=? AND is_deleted=0", arrayOf(id.toString()))
+                if (changed == 1) {
+                    writeAccountAudit(db, 0L, "repair_settlement_mapping", id, oldRow, getAccountRow(db, id, true))
+                }
+            }
+            fun linkedIds(sql: String, id: Long): List<Long> {
+                val result = mutableListOf<Long>()
+                db.rawQuery(sql, arrayOf(id.toString())).use { c ->
+                    while (c.moveToNext()) result += c.getLong(0)
+                }
+                return result
+            }
+            fun looksLikeCash(row: JSONObject): Boolean {
+                if (!row.optString("account_type").equals("asset", true)) return false
+                val code = row.optString("account_code").trim()
+                val name = row.optString("account_name").lowercase(Locale.ROOT)
+                val nameAr = row.optString("account_name_ar")
+                val category = row.optString("account_category").lowercase(Locale.ROOT)
+                return row.optInt("is_cash_account", 0) == 1 || code == "1101" ||
+                    name.contains("cash on hand") || name == "cash" ||
+                    nameAr.contains("النقدية بالصندوق") || nameAr.contains("صندوق نقدي") ||
+                    category.contains("cash")
+            }
+            fun looksLikeBank(row: JSONObject): Boolean {
+                if (!row.optString("account_type").equals("asset", true)) return false
+                val code = row.optString("account_code").trim()
+                val name = row.optString("account_name").lowercase(Locale.ROOT)
+                val nameAr = row.optString("account_name_ar")
+                val category = row.optString("account_category").lowercase(Locale.ROOT)
+                return row.optInt("is_bank_account", 0) == 1 || code == "1102" ||
+                    name.contains("bank") || nameAr.contains("البنك") ||
+                    nameAr.contains("حساب بنكي") || category.contains("bank")
+            }
+
+            if (hasCashBoxes) {
+                val cashBoxIds = mutableListOf<Long>()
+                db.rawQuery(
+                    "SELECT id FROM cash_boxes WHERE status='active' AND is_deleted=0 ORDER BY id", null
+                ).use { c -> while (c.moveToNext()) cashBoxIds += c.getLong(0) }
+                for (cashBoxId in cashBoxIds) {
+                    val candidates = linkedIds(
+                        """SELECT id FROM accounts
+                           WHERE cash_box_id=? AND account_type='asset' AND is_active=1 AND is_deleted=0
+                             AND (is_cash_account=1 OR account_code='1101'
+                                  OR lower(COALESCE(account_name,'')) LIKE '%cash on hand%'
+                                  OR lower(COALESCE(account_name,''))='cash'
+                                  OR COALESCE(account_name_ar,'') LIKE '%النقدية بالصندوق%'
+                                  OR COALESCE(account_name_ar,'') LIKE '%صندوق نقدي%'
+                                  OR lower(COALESCE(account_category,'')) LIKE '%cash%')
+                           ORDER BY id""".trimIndent(), cashBoxId
+                    )
+                    val chosen = candidates.singleOrNull()
+                    val related = linkedIds(
+                        "SELECT id FROM accounts WHERE cash_box_id=? AND is_deleted=0 ORDER BY id", cashBoxId
+                    )
+                    for (accountId in related) {
+                        val row = getAccountRow(db, accountId, true) ?: continue
+                        if (chosen != null && accountId == chosen) {
+                            if (row.optInt("is_cash_account", 0) != 1 ||
+                                row.optInt("is_bank_account", 0) != 0 ||
+                                row.optLong("bank_account_id", 0L) > 0L) {
+                                repairAccount(accountId, ContentValues().apply {
+                                    put("is_cash_account", 1); put("is_bank_account", 0)
+                                    putNull("bank_account_id"); put("cash_box_id", cashBoxId)
+                                }, "اعتماد حساب الصندوق #$cashBoxId بعد تطابق فريد مع حساب نقدي تفصيلي")
+                            }
+                        } else {
+                            // If no unique candidate exists, preserve semantically plausible
+                            // cash accounts for diagnosis; otherwise remove clearly wrong links.
+                            if (chosen != null || !looksLikeCash(row)) {
+                                repairAccount(accountId, ContentValues().apply {
+                                    putNull("cash_box_id"); put("is_cash_account", 0)
+                                }, "إزالة ربط صندوق #$cashBoxId غير الصحيح من حساب ${row.optString("account_code")}")
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (hasBanks) {
+                val bankIds = mutableListOf<Long>()
+                db.rawQuery(
+                    "SELECT id FROM bank_accounts WHERE status='active' AND is_deleted=0 ORDER BY id", null
+                ).use { c -> while (c.moveToNext()) bankIds += c.getLong(0) }
+                for (bankId in bankIds) {
+                    val linked = linkedIds(
+                        "SELECT id FROM accounts WHERE bank_account_id=? AND is_deleted=0 ORDER BY id", bankId
+                    )
+                    val plausible = linked.filter { id ->
+                        val row = getAccountRow(db, id, true)
+                        row != null && looksLikeBank(row) && row.optInt("is_active", 0) == 1
+                    }
+                    val chosen = plausible.singleOrNull()
+                    for (accountId in linked) {
+                        val row = getAccountRow(db, accountId, true) ?: continue
+                        if (chosen != null && accountId == chosen) {
+                            if (row.optInt("is_bank_account", 0) != 1 ||
+                                row.optInt("is_cash_account", 0) != 0 ||
+                                row.optLong("cash_box_id", 0L) > 0L) {
+                                repairAccount(accountId, ContentValues().apply {
+                                    put("is_bank_account", 1); put("is_cash_account", 0)
+                                    putNull("cash_box_id"); put("bank_account_id", bankId)
+                                }, "اعتماد حساب البنك #$bankId بعد تطابق فريد مع حساب بنكي تفصيلي")
+                            }
+                        } else if (!looksLikeBank(row) || !row.optString("account_type").equals("asset", true)) {
+                            repairAccount(accountId, ContentValues().apply {
+                                putNull("bank_account_id"); put("is_bank_account", 0)
+                            }, "إزالة ربط البنك #$bankId غير الصحيح من حساب ${row.optString("account_code")}")
+                        }
+                    }
+                }
+            }
+            if (ownsTransaction) db.setTransactionSuccessful()
+        } finally {
+            if (ownsTransaction) db.endTransaction()
+        }
+    }
+
     private fun findSettlementAccount(db: SQLiteDatabase, cashBoxId: Long, bankAccountId: Long): Long {
         require((cashBoxId > 0L) xor (bankAccountId > 0L)) { "يجب تحديد وسيلة تسوية مالية واحدة فقط" }
         val isCash = cashBoxId > 0L
@@ -21618,6 +21930,111 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(c.moveToFirst()) { "لا يوجد حساب مصروفات فعال" }
             c.getLong(0)
         }
+    }
+
+
+    /**
+     * Records an immediately paid supplier purchase in the auxiliary ledger without
+     * changing the supplier's outstanding balance: purchase credit is immediately
+     * offset by a debit/payment. Stock and GL entries are handled by the source flow.
+     */
+    private fun recordImmediateSupplierPurchaseLedger(
+        db: SQLiteDatabase,
+        supplierId: Long,
+        stationId: Int,
+        amount: Double,
+        transactionType: String,
+        transactionId: Long,
+        reference: String,
+        actorId: Long,
+        description: String
+    ) {
+        require(supplierId > 0L && stationId > 0 && amount > 0.0 && amount.isFinite()) {
+            "بيانات سجل المورد غير صالحة"
+        }
+        val balances = db.rawQuery(
+            """SELECT COALESCE(current_balance,0), COALESCE(total_due,0),
+                      COALESCE(total_purchases,0), COALESCE(total_payments,0)
+               FROM parties WHERE id=? AND station_id=? AND is_deleted=0 AND is_active=1 LIMIT 1""",
+            arrayOf(supplierId.toString(), stationId.toString())
+        ).use { c ->
+            require(c.moveToFirst()) { "المورد غير موجود أو غير نشط" }
+            doubleArrayOf(c.getDouble(0), c.getDouble(1), c.getDouble(2), c.getDouble(3))
+        }
+        val currentBalance = balances[0]
+        val now = getCurrentDateTime()
+        require(db.update(
+            "parties",
+            ContentValues().apply {
+                put("total_purchases", balances[2] + amount)
+                put("total_payments", balances[3] + amount)
+                put("updated_at", now)
+            },
+            "id=? AND station_id=? AND is_deleted=0",
+            arrayOf(supplierId.toString(), stationId.toString())
+        ) == 1) { "تعذر تحديث إجماليات المورد" }
+
+        db.insertOrThrow("supplier_ledger", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("party_id", supplierId)
+            put("transaction_date", now)
+            put("transaction_type", transactionType)
+            put("transaction_id", transactionId)
+            put("reference_number", reference)
+            put("debit", 0.0)
+            put("credit", amount)
+            put("balance", currentBalance + amount)
+            put("description", "$description — إثبات فاتورة")
+            put("created_at", now)
+            put("created_by", actorId)
+        })
+        db.insertOrThrow("supplier_ledger", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("party_id", supplierId)
+            put("transaction_date", now)
+            put("transaction_type", "${transactionType}_payment")
+            put("transaction_id", transactionId)
+            put("reference_number", reference)
+            put("debit", amount)
+            put("credit", 0.0)
+            put("balance", currentBalance)
+            put("description", "$description — سداد نقدي فوري")
+            put("created_at", now)
+            put("created_by", actorId)
+        })
+    }
+
+    private fun insertSupplierCashPayment(
+        db: SQLiteDatabase,
+        stationId: Int,
+        supplierId: Long,
+        cashBoxId: Long,
+        amount: Double,
+        sourceType: String,
+        sourceId: Long,
+        journalId: Long,
+        actorId: Long,
+        description: String
+    ): Long {
+        val code = "SP-${sourceType.take(5).uppercase(Locale.ROOT)}-$sourceId-${UUID.randomUUID().toString().take(6)}"
+        return db.insertOrThrow("payments", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("payment_code", code)
+            put("station_id", stationId)
+            put("journal_entry_id", journalId)
+            put("supplier_party_id", supplierId)
+            put("payment_type", "cash")
+            put("payment_method", "cash")
+            put("amount", amount)
+            put("cash_box_id", cashBoxId)
+            put("status", "completed")
+            put("operator", actorId.toString())
+            put("notes", description)
+            put("created_by", actorId)
+            put("created_at", getCurrentDateTime())
+            put("updated_at", getCurrentDateTime())
+            put("extra_data", JSONObject().put("source_type", sourceType).put("source_id", sourceId).toString())
+        })
     }
 
     private fun postFinanceJournal(

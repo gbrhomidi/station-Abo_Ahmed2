@@ -1351,9 +1351,22 @@
          </div>
 
          <div class="form-group hidden-field" id="supplier-group">
-          <label class="form-label">🏭 المورد</label>
+          <label class="form-label">🏭 المورد *</label>
           <select class="form-control" id="supplier-select">
            <option value="">اختر المورد</option>
+          </select>
+         </div>
+         <div class="form-group hidden-field" id="purchase-payment-group">
+          <label class="form-label">💳 طريقة الشراء *</label>
+          <select class="form-control" id="purchase-payment-method" onchange="toggleMovementFields()">
+           <option value="cash">نقداً من الصندوق</option>
+           <option value="credit">بالأجل على المورد</option>
+          </select>
+         </div>
+         <div class="form-group hidden-field" id="purchase-cashbox-group">
+          <label class="form-label">💵 صندوق دفع المورد *</label>
+          <select class="form-control" id="purchase-cashbox">
+           <option value="">اختر صندوق الدفع</option>
           </select>
          </div>
 
@@ -1553,6 +1566,7 @@ function apiCall(action, params = {}) {
         case 'ensureOperationalWarehouse': return invokeTypedBridge('ensureOperationalWarehouse');
         case 'getSuppliers': return invokeTypedBridge('getParties', ['supplier']);
         case 'getCustomers': return invokeTypedBridge('getParties', ['customer']);
+        case 'getActiveCashBoxes': return invokeTypedBridge('getActiveCashBoxes');
         case 'getMovements': return invokeTypedBridge('getInventoryMovementPage', [json]);
         case 'getMovementStats': return invokeTypedBridge('getInventoryMovementUnifiedStats', [json]);
         case 'getInventoryDetails': return invokeTypedBridge('getInventoryProductDetails', [Number(p.product_id)]);
@@ -1713,7 +1727,8 @@ async function loadInitialData() {
         loadTanks(),
         loadWarehouses(),
         loadSuppliers(),
-        loadCustomers()
+        loadCustomers(),
+        loadActiveCashBoxes()
     ]);
     results.forEach((r, i) => {
         if (r.status === 'rejected') console.warn('Initial data item failed at index', i, r.reason);
@@ -1833,6 +1848,28 @@ async function loadCustomers() {
         }
     } catch (e) {
         console.error('Error loading customers:', e);
+    }
+}
+
+async function loadActiveCashBoxes() {
+    const select = document.getElementById('purchase-cashbox');
+    if (!select) return;
+    try {
+        const result = await apiCall('getActiveCashBoxes', {});
+        if (!result || result.success !== true) throw new Error(result?.error || 'تعذر تحميل الصناديق');
+        const rows = bridgeDataArray(result);
+        const selected = select.value;
+        select.innerHTML = '<option value="">اختر صندوق الدفع</option>';
+        rows.forEach(box => {
+            const option = document.createElement('option');
+            option.value = String(box.id || box.cash_box_id || '');
+            option.textContent = box.box_name_ar || box.box_name || box.box_code || ('صندوق #' + option.value);
+            select.appendChild(option);
+        });
+        if (selected) select.value = selected;
+    } catch (e) {
+        select.innerHTML = '<option value="">تعذر تحميل الصناديق</option>';
+        console.error('loadActiveCashBoxes failed:', e);
     }
 }
 
@@ -2144,8 +2181,16 @@ function toggleMovementStockType() {
 function toggleMovementFields() {
     const type = document.getElementById('movement-type').value;
     const stockType = document.getElementById('movement-stock-type').value;
-    ['source-warehouse-group', 'target-warehouse-group', 'supplier-group', 'customer-group', 'adjustment-direction-group']
+    ['source-warehouse-group', 'target-warehouse-group', 'supplier-group', 'customer-group',
+     'adjustment-direction-group', 'purchase-payment-group', 'purchase-cashbox-group']
         .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden-field'); });
+
+    if (stockType === 'products' && type === 'in') {
+        document.getElementById('purchase-payment-group')?.classList.remove('hidden-field');
+        if (document.getElementById('purchase-payment-method')?.value === 'cash') {
+            document.getElementById('purchase-cashbox-group')?.classList.remove('hidden-field');
+        }
+    }
 
     if (stockType === 'fuel') {
         if (type === 'adjustment') {
@@ -2455,6 +2500,17 @@ async function loadProductInfo() {
     }
 }
 
+let activeProductPurchaseIdempotencyKey = '';
+function productPurchaseIdempotencyKey() {
+    if (!activeProductPurchaseIdempotencyKey) {
+        const token = (window.crypto && typeof window.crypto.randomUUID === 'function')
+            ? window.crypto.randomUUID()
+            : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+        activeProductPurchaseIdempotencyKey = 'product-purchase-' + token;
+    }
+    return activeProductPurchaseIdempotencyKey;
+}
+
 async function saveMovement() {
     const stockType = document.getElementById('movement-stock-type').value;
     const type = document.getElementById('movement-type').value;
@@ -2493,7 +2549,12 @@ async function saveMovement() {
         const targetWarehouse = Number(document.getElementById('target-warehouse').value || 0);
         const supplierId = Number(document.getElementById('supplier-select').value || 0);
         const customerId = Number(document.getElementById('customer-select').value || 0);
+        const purchasePaymentMethod = String(document.getElementById('purchase-payment-method')?.value || 'cash');
+        const purchaseCashBoxId = Number(document.getElementById('purchase-cashbox')?.value || 0);
         if (!productId) { showToast('اختر المنتج من SQLite', 'error'); return; }
+        if (type === 'in' && !supplierId) { showToast('اختر المورد لتوثيق فاتورة شراء المنتجات', 'error'); return; }
+        if (type === 'in' && (!Number.isFinite(unitPrice) || unitPrice <= 0)) { showToast('أدخل تكلفة شراء صحيحة للمنتج', 'error'); return; }
+        if (type === 'in' && purchasePaymentMethod === 'cash' && !purchaseCashBoxId) { showToast('اختر صندوق دفع المورد', 'error'); return; }
         if (type === 'transfer' && (!sourceWarehouse || !targetWarehouse || sourceWarehouse === targetWarehouse)) {
             showToast('اختر مستودعين مختلفين للتحويل', 'error'); return;
         }
@@ -2526,6 +2587,10 @@ async function saveMovement() {
             target_warehouse_id: targetWarehouse || null,
             supplier_id: supplierId || null,
             customer_id: customerId || null,
+            financial_purchase: type === 'in',
+            payment_method: type === 'in' ? purchasePaymentMethod : '',
+            cash_box_id: type === 'in' && purchasePaymentMethod === 'cash' ? purchaseCashBoxId : 0,
+            idempotency_key: type === 'in' ? productPurchaseIdempotencyKey() : '',
             reference_code: reference,
             reference_type: type,
             notes
@@ -2535,6 +2600,7 @@ async function saveMovement() {
     try {
         const result = await apiCall('saveMovement', data);
         showToast(result.message || 'تم حفظ الحركة وتحديث الرصيد بنجاح', 'success');
+        if (stockType === 'products' && type === 'in') activeProductPurchaseIdempotencyKey = '';
         if (window.bootstrap && window.bootstrap.Modal) {
             window.bootstrap.Modal.getInstance(document.getElementById('createModal'))?.hide();
         } else {

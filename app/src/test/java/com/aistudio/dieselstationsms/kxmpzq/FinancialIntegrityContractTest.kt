@@ -60,6 +60,40 @@ class FinancialIntegrityContractTest {
     }
 
     @Test
+    fun settlementMappingsAndSupplierPurchasesRemainFinanciallyAtomic() {
+        val source = locateDatabaseHelper().readText()
+        assertTrue("Existing databases must repair legacy settlement mappings on open",
+            source.contains("repairSettlementAccountMappings(db)"))
+        val mappingRepair = functionBody(source, "private fun repairSettlementAccountMappings")
+        assertTrue("Settlement auto-repair must only accept a unique canonical cash-account mapping",
+            mappingRepair.contains("singleOrNull()") && mappingRepair.contains("is_cash_account"))
+        assertTrue("Settlement mapping repairs must be audited",
+            mappingRepair.contains("writeAccountAudit") && mappingRepair.contains("repair_settlement_mapping"))
+
+        val customerPayment = functionBody(source, "fun processPayment")
+        assertTrue("Customer debt settlement must resolve an explicitly linked settlement account",
+            customerPayment.contains("findSettlementAccount(db, cashBoxId, bankAccountId)"))
+        assertTrue("Customer debt settlement must post the receivable journal atomically",
+            customerPayment.contains("postFinanceJournal(") && customerPayment.contains("db.setTransactionSuccessful()"))
+
+        val productMovement = functionBody(source, "fun addStockMovement")
+        assertTrue("Product purchase mode must be explicit and not treat every stock inflow as a purchase",
+            productMovement.contains("data.optBoolean(\"financial_purchase\", false)"))
+        assertTrue("Product purchases must post inventory against cash or supplier payable",
+            productMovement.contains("postFinanceJournal(") && productMovement.contains("findPartyAccount(db, \"payable\")"))
+        assertTrue("Product purchase retries must be protected by an idempotency key",
+            productMovement.contains("reserveFinancialIdempotency") && productMovement.contains("completeFinancialIdempotency"))
+        assertTrue("Product purchases must update weighted-average cost",
+            productMovement.contains("newAverageCost"))
+
+        val fuelPurchase = functionBody(source, "fun saveTankRefillWithPayment")
+        assertTrue("Fuel supply purchases must create a posted GL journal",
+            fuelPurchase.contains("postFinanceJournal(") && fuelPurchase.contains("\"fuel_supply\""))
+        assertTrue("Cash fuel purchases must have payment and supplier-ledger evidence",
+            fuelPurchase.contains("insertSupplierCashPayment") && fuelPurchase.contains("recordImmediateSupplierPurchaseLedger"))
+    }
+
+    @Test
     fun barcodeProductPayloadIncludesTheDatabaseDescriptionForPosDetails() {
         val source = locateDatabaseHelper().readText()
         val product = functionBody(source, "fun getProductByBarcode(barcode: String, stationScopeId")
