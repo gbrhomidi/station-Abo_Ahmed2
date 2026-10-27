@@ -3381,6 +3381,19 @@ tr:last-child td { border-bottom:0; }
         const input = el('setting-' + key);
         if (!input || input.dataset.source !== 'application') return;
 
+        if (key === 'pinCode') {
+            // Never prefill a password field with the PIN or its hash. A configured PIN
+            // is represented by a safe status placeholder; an empty save keeps it intact.
+            input.value = '';
+            input.inputMode = 'numeric';
+            input.autocomplete = 'new-password';
+            input.placeholder = String(value || '') === '••••••'
+                ? 'تم تعيين PIN؛ اترك الحقل فارغاً للاحتفاظ به'
+                : 'أدخل PIN من 4 إلى 12 رقماً';
+            input.dataset.pinConfigured = String(value || '') === '••••••' ? '1' : '0';
+            return;
+        }
+
         if (input.type === 'checkbox') {
             input.checked = value === true || value === 1 || value === '1' || value === 'true';
         } else if (Array.isArray(value)) {
@@ -3835,7 +3848,17 @@ tr:last-child td { border-bottom:0; }
             }
             const persistedSystem = dataOf(persistedSystemRaw) || {};
 
-            // Verify each written key through the single-key SQLite read path.
+            if (activeTab === 'security') {
+                const pinInput = el('setting-pinCode');
+                if (pinInput) {
+                    pinInput.value = '';
+                    pinInput.placeholder = String(verifiedLegacy.pinCode || '') === '••••••'
+                        ? 'تم تعيين PIN؛ اترك الحقل فارغاً للاحتفاظ به'
+                        : 'أدخل PIN من 4 إلى 12 رقماً';
+                }
+            }
+
+            // Verify each written key through the single-key bridge read path, including secure preferences.
             // The bulk settings map is retained for refreshing the screen only; it is not
             // accepted as proof that an individual write was persisted correctly.
             const verifiedLegacy = {};
@@ -3851,6 +3874,18 @@ tr:last-child td { border-bottom:0; }
                 }
 
                 const actual = String(readback.value ?? '');
+                if (key === 'pinCode') {
+                    const wantedPin = String(value ?? '').trim();
+                    const configured = actual === '••••••';
+                    if (wantedPin !== '' && wantedPin !== '••••••' && !configured) {
+                        throw new Error('لم يتم تأكيد حفظ PIN بطريقة آمنة.');
+                    }
+                    if (actual !== '' && !configured) {
+                        throw new Error('حالة PIN المحفوظ غير صالحة.');
+                    }
+                    verifiedLegacy[key] = actual;
+                    continue;
+                }
                 if (actual !== expected) {
                     throw new Error(
                         'اختلاف القيمة المحفوظة لإعداد التطبيق ' + key +
