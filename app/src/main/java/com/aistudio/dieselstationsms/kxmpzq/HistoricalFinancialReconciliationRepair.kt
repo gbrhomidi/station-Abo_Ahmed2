@@ -120,9 +120,13 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
             val supplier = kind.equals("SUPPLIER", true)
             val table = if (supplier) "supplier_ledger" else "customer_ledger"
             if (!tableExists(table) || !columns(table).containsAll(setOf("id","party_id","debit","credit","balance","transaction_date"))) continue
-            val entries = query("SELECT id,COALESCE(debit,0),COALESCE(credit,0),COALESCE(balance,0) FROM " + table +
-                " WHERE party_id=? ORDER BY transaction_date,id", arrayOf(partyId.toString())) {
-                Ledger(it.getLong(0),it.getDouble(1),it.getDouble(2),it.getDouble(3))
+            val ledgerCols = columns(table)
+            val ledgerScope = if (ledgerCols.contains("station_id")) " AND station_id=?" else ""
+            val ledgerArgs = if (ledgerCols.contains("station_id")) arrayOf(partyId.toString(), station.toString()) else arrayOf(partyId.toString())
+            val typeExpr = if (ledgerCols.contains("transaction_type")) "COALESCE(transaction_type,'')" else "''"
+            val entries = query("SELECT id,COALESCE(debit,0),COALESCE(credit,0),COALESCE(balance,0)," + typeExpr + " FROM " + table +
+                " WHERE party_id=?" + ledgerScope + " ORDER BY transaction_date,id", ledgerArgs) {
+                Ledger(it.getLong(0),it.getDouble(1),it.getDouble(2),it.getDouble(3),it.getString(4))
             }
             if (entries.isEmpty()) {
                 val bal = scalarD("SELECT COALESCE(current_balance,0) FROM parties WHERE id=? AND station_id=?",
@@ -150,28 +154,50 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
                 }
             }
             val balance=if(supplier) credits-debits else debits-credits
-            val old=JSONObject().put("current_balance",scalarD("SELECT COALESCE(current_balance,0) FROM parties WHERE id=?",
-                arrayOf(partyId.toString())))
+            val old=JSONObject().put("current_balance",scalarD("SELECT COALESCE(current_balance,0) FROM parties WHERE id=? AND station_id=?",
+                arrayOf(partyId.toString(),station.toString())))
+            val typeClasses = entries.map { it.type.trim().lowercase(Locale.ROOT) }.map { type ->
+                when (type) {
+                    "fuel_supply_cash", "fuel_supply_credit", "purchase", "supplier_purchase", "purchase_invoice",
+                    "inventory_purchase", "fuel_purchase" -> "purchase"
+                    "supplier_payment", "purchase_payment", "supplier_payment_voucher", "payment" -> "payment"
+                    "opening", "opening_balance", "balance_brought_forward" -> "opening"
+                    else -> "unknown"
+                }
+            }
+            val supplierTotalsProven = supplier && ledgerCols.contains("transaction_type") &&
+                typeClasses.isNotEmpty() && typeClasses.none { it == "unknown" }
+            val purchases = entries.indices.filter { typeClasses.getOrNull(it) == "purchase" }.sumOf { entries[it].credit }
+            val payments = entries.indices.filter { typeClasses.getOrNull(it) == "payment" }.sumOf { entries[it].debit }
             val cv=ContentValues().apply {
                 put("current_balance",balance)
                 if(supplier && hasColumn("parties","total_due")) put("total_due",balance)
-                if(supplier && hasColumn("parties","total_purchases")) put("total_purchases",credits)
-                if(supplier && hasColumn("parties","total_payments")) put("total_payments",debits)
+                if(supplierTotalsProven && hasColumn("parties","total_purchases")) put("total_purchases",purchases)
+                if(supplierTotalsProven && hasColumn("parties","total_payments")) put("total_payments",payments)
             }
             val changed=abs(old.optDouble("current_balance")-balance)>eps ||
-                (supplier && hasColumn("parties","total_due") && abs(scalarD("SELECT COALESCE(total_due,0) FROM parties WHERE id=?",arrayOf(partyId.toString()))-balance)>eps) ||
-                (supplier && hasColumn("parties","total_purchases") && abs(scalarD("SELECT COALESCE(total_purchases,0) FROM parties WHERE id=?",arrayOf(partyId.toString()))-credits)>eps) ||
-                (supplier && hasColumn("parties","total_payments") && abs(scalarD("SELECT COALESCE(total_payments,0) FROM parties WHERE id=?",arrayOf(partyId.toString()))-debits)>eps)
+                (supplier && hasColumn("parties","total_due") && abs(scalarD("SELECT COALESCE(total_due,0) FROM parties WHERE id=? AND station_id=?",arrayOf(partyId.toString(),station.toString()))-balance)>eps) ||
+                (supplierTotalsProven && hasColumn("parties","total_purchases") && abs(scalarD("SELECT COALESCE(total_purchases,0) FROM parties WHERE id=? AND station_id=?",arrayOf(partyId.toString(),station.toString()))-purchases)>eps) ||
+                (supplierTotalsProven && hasColumn("parties","total_payments") && abs(scalarD("SELECT COALESCE(total_payments,0) FROM parties WHERE id=? AND station_id=?",arrayOf(partyId.toString(),station.toString()))-payments)>eps)
             if(changed) {
                 db.update("parties",cv,"id=? AND station_id=?",arrayOf(partyId.toString(),station.toString()))
                 val next=JSONObject().put("current_balance",balance)
-                if(supplier) next.put("total_due",balance).put("total_purchases",credits).put("total_payments",debits)
+                if(supplier && hasColumn("parties","total_due")) next.put("total_due",balance)
+                if(supplierTotalsProven && hasColumn("parties","total_purchases")) next.put("total_purchases",purchases)
+                if(supplierTotalsProven && hasColumn("parties","total_payments")) next.put("total_payments",payments)
                 action("reconcile_party_totals_from_ledger","parties",partyId,"repaired",
-                    if(supplier) "تحديث رصيد المورد وإجماليات الدفتر من دفتر المورد" else "تحديث رصيد العميل من دفتر العميل",old,next)
+                    if(supplier) "تحديث رصيد المورد؛ إجماليات الشراء/السداد لا تتغير إلا إذا صُنفت أنواع كل الحركات" else "تحديث رصيد العميل من دفتر العميل",old,next)
+            }
+            if (supplier && !supplierTotalsProven &&
+                ((hasColumn("parties","total_purchases") && abs(scalarD("SELECT COALESCE(total_purchases,0) FROM parties WHERE id=? AND station_id=?",arrayOf(partyId.toString(),station.toString()))-credits)>eps) ||
+                 (hasColumn("parties","total_payments") && abs(scalarD("SELECT COALESCE(total_payments,0) FROM parties WHERE id=? AND station_id=?",arrayOf(partyId.toString(),station.toString()))-debits)>eps)) {
+                skip("supplier_totals_source_types_ambiguous","party",partyId,
+                    "أنواع حركات المورد لا تكفي لإثبات إجمالي المشتريات والمدفوعات؛ لم تُغيّر الإجماليات",
+                    JSONObject().put("ledger_credits",credits).put("ledger_debits",debits))
             }
         }
     }
-    private data class Ledger(val id:Long,val debit:Double,val credit:Double,val balance:Double)
+    private data class Ledger(val id:Long,val debit:Double,val credit:Double,val balance:Double,val type:String)
 
     private fun repairSaleArithmetic() {
         if(!tableExists("sales_transactions")) return
@@ -231,8 +257,12 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
             Triple(it.getLong(0),it.getDouble(1),it.getDouble(2))
         }
         for((id,opening,current) in boxes) {
+            val movementScope = (if (hasColumn("cash_movements", "station_id")) " AND station_id=?" else "") +
+                (if (hasColumn("cash_movements", "is_deleted")) " AND COALESCE(is_deleted,0)=0" else "") +
+                (if (hasColumn("cash_movements", "status")) " AND lower(status) IN ('completed','posted','approved')" else "")
+            val movementArgs = if (hasColumn("cash_movements", "station_id")) arrayOf(id.toString(), station.toString()) else arrayOf(id.toString())
             val ms=query("SELECT movement_type,COALESCE(amount,0),balance_before,balance_after FROM cash_movements WHERE cash_box_id=?"+
-                (if(hasColumn("cash_movements","is_deleted")) " AND COALESCE(is_deleted,0)=0" else "")+" ORDER BY id",arrayOf(id.toString())) {
+                movementScope+" ORDER BY id",movementArgs) {
                 Movement(it.getString(0).lowercase(Locale.ROOT),it.getDouble(1),
                     if(it.isNull(2)) Double.NaN else it.getDouble(2),if(it.isNull(3)) Double.NaN else it.getDouble(3))
             }
@@ -264,8 +294,12 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
             Triple(it.getLong(0),it.getDouble(1),it.getDouble(2))
         }
         for((id,opening,current) in accounts) {
-            val entries=query("SELECT COALESCE(debit,0),COALESCE(credit,0),COALESCE(balance,0) FROM bank_ledger WHERE bank_account_id=? ORDER BY id",
-                arrayOf(id.toString())) { BankLine(it.getDouble(0),it.getDouble(1),it.getDouble(2)) }
+            val bankLedgerScope = (if (hasColumn("bank_ledger", "station_id")) " AND station_id=?" else "") +
+                (if (hasColumn("bank_ledger", "is_deleted")) " AND COALESCE(is_deleted,0)=0" else "") +
+                (if (hasColumn("bank_ledger", "status")) " AND lower(status) IN ('completed','posted','approved')" else "")
+            val bankLedgerArgs = if (hasColumn("bank_ledger", "station_id")) arrayOf(id.toString(), station.toString()) else arrayOf(id.toString())
+            val entries=query("SELECT COALESCE(debit,0),COALESCE(credit,0),COALESCE(balance,0) FROM bank_ledger WHERE bank_account_id=?"+bankLedgerScope+" ORDER BY id",
+                bankLedgerArgs) { BankLine(it.getDouble(0),it.getDouble(1),it.getDouble(2)) }
             if(entries.isEmpty()) continue
             var expected=opening; var valid=true
             for(e in entries) {
@@ -304,8 +338,10 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
         if(!tableExists("accounts")) return
         val ac=columns("accounts")
         if(!ac.containsAll(setOf("id","account_type","is_active","is_deleted","cash_box_id","bank_account_id","is_cash_account","is_bank_account"))) return
+        val accountScope = if (ac.contains("station_id")) " AND station_id=?" else ""
+        val accountArgs = if (ac.contains("station_id")) arrayOf(station.toString()) else emptyArray()
         val links=query("SELECT id,COALESCE(account_code,''),COALESCE(account_type,''),COALESCE(cash_box_id,0),COALESCE(bank_account_id,0),COALESCE(is_cash_account,0),COALESCE(is_bank_account,0) " +
-            "FROM accounts WHERE is_active=1 AND is_deleted=0 AND (COALESCE(cash_box_id,0)>0 OR COALESCE(bank_account_id,0)>0)",emptyArray()) {
+            "FROM accounts WHERE is_active=1 AND is_deleted=0 AND (COALESCE(cash_box_id,0)>0 OR COALESCE(bank_account_id,0)>0)" + accountScope,accountArgs) {
             AccountLink(it.getLong(0),it.getString(1),it.getString(2),it.getLong(3),it.getLong(4),it.getInt(5),it.getInt(6))
         }
         for(a in links) {
@@ -315,9 +351,11 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
                     scalar("SELECT COUNT(*) FROM cash_boxes WHERE id=? AND station_id=?"+
                         (if(hasColumn("cash_boxes","is_deleted")) " AND COALESCE(is_deleted,0)=0" else ""),
                         arrayOf(a.cash.toString(),station.toString()))>0)
-                if(existsAnywhere && !belongsHere && a.type=="asset" && a.isCash==1 && a.bank==0L && a.isBank!=1) {
-                    skip("foreign_station_cash_mapping","accounts",a.id,"رابط الحساب يشير إلى صندوق محطة أخرى؛ حُفظ دون تعديل لتجنب كسر عزل المحطات",
+                if (existsAnywhere && !belongsHere) {
+                    skip("foreign_station_cash_mapping","accounts",a.id,
+                        "رابط الحساب يشير إلى صندوق محطة أخرى؛ حُفظ دون تعديل لتجنب كسر عزل المحطات",
                         JSONObject().put("account_code",a.code).put("cash_box_id",a.cash))
+                    continue
                 }
                 val invalid=(!existsAnywhere || a.type!="asset" || a.isCash!=1 || a.bank>0 || a.isBank==1)
                 if(invalid) {
@@ -333,9 +371,11 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
                     scalar("SELECT COUNT(*) FROM bank_accounts WHERE id=? AND station_id=?"+
                         (if(hasColumn("bank_accounts","is_deleted")) " AND COALESCE(is_deleted,0)=0" else ""),
                         arrayOf(a.bank.toString(),station.toString()))>0)
-                if(existsAnywhere && !belongsHere && a.type=="asset" && a.isBank==1 && a.cash==0L && a.isCash!=1) {
-                    skip("foreign_station_bank_mapping","accounts",a.id,"رابط الحساب يشير إلى بنك محطة أخرى؛ حُفظ دون تعديل لتجنب كسر عزل المحطات",
+                if (existsAnywhere && !belongsHere) {
+                    skip("foreign_station_bank_mapping","accounts",a.id,
+                        "رابط الحساب يشير إلى بنك محطة أخرى؛ حُفظ دون تعديل لتجنب كسر عزل المحطات",
                         JSONObject().put("account_code",a.code).put("bank_account_id",a.bank))
+                    continue
                 }
                 val invalid=(!existsAnywhere || a.type!="asset" || a.isBank!=1 || a.cash>0 || a.isCash==1)
                 if(invalid) {
@@ -630,6 +670,12 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
             (if(hasColumn("journal_entries","is_deleted")) " AND COALESCE(is_deleted,0)=0" else ""),
             arrayOf(station.toString(),type,id.toString()))>0
     }
+    private fun accountStationFilter(): String =
+        if (hasColumn("accounts", "station_id")) " AND station_id=?" else ""
+
+    private fun accountStationArgs(args: Array<String>): Array<String> =
+        if (hasColumn("accounts", "station_id")) args + station.toString() else args
+
     private fun settlement(cashId:Long,bankId:Long):Long {
         if((cashId>0)==(bankId>0) || !tableExists("accounts")) return 0L
         val isCash = cashId > 0L
@@ -639,8 +685,8 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
         if(scalar("SELECT COUNT(*) FROM "+table+" WHERE id=? AND station_id=?"+
             (if(hasColumn(table,"is_deleted")) " AND COALESCE(is_deleted,0)=0" else ""),
             arrayOf(id.toString(),station.toString())) != 1) return 0L
-        return if(isCash) uniqueId("SELECT id FROM accounts WHERE cash_box_id=? AND account_type='asset' AND is_cash_account=1 AND is_active=1 AND is_deleted=0",arrayOf(cashId.toString()))
-            else uniqueId("SELECT id FROM accounts WHERE bank_account_id=? AND account_type='asset' AND is_bank_account=1 AND is_active=1 AND is_deleted=0",arrayOf(bankId.toString()))
+        return if(isCash) uniqueId("SELECT id FROM accounts WHERE cash_box_id=? AND account_type='asset' AND is_cash_account=1 AND is_active=1 AND is_deleted=0" + accountStationFilter(),accountStationArgs(arrayOf(cashId.toString())))
+            else uniqueId("SELECT id FROM accounts WHERE bank_account_id=? AND account_type='asset' AND is_bank_account=1 AND is_active=1 AND is_deleted=0" + accountStationFilter(),accountStationArgs(arrayOf(bankId.toString())))
     }
     private fun saleSettlementFromSource(saleId:Long, method:String, amount:Double):Long {
         if(!amount.isFinite() || amount<=0) return 0L
@@ -667,25 +713,26 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
 
     private fun uniqueGenericSettlement(cash:Boolean):Long {
         if(!tableExists("accounts")) return 0
-        val canonical=if(cash) "SELECT id FROM accounts WHERE account_code='1101' AND account_type='asset' AND is_cash_account=1 AND is_active=1 AND is_deleted=0"
-            else "SELECT id FROM accounts WHERE is_bank_account=1 AND account_type='asset' AND is_active=1 AND is_deleted=0"
-        val preferred=uniqueId(canonical,emptyArray())
+        val canonical=if(cash) "SELECT id FROM accounts WHERE account_code='1101' AND account_type='asset' AND is_cash_account=1 AND is_active=1 AND is_deleted=0" + accountStationFilter()
+            else "SELECT id FROM accounts WHERE is_bank_account=1 AND account_type='asset' AND is_active=1 AND is_deleted=0" + accountStationFilter()
+        val preferred=uniqueId(canonical,accountStationArgs(emptyArray()))
         if(preferred>0) return preferred
-        return uniqueId(if(cash) "SELECT id FROM accounts WHERE account_type='asset' AND is_cash_account=1 AND is_active=1 AND is_deleted=0"
-            else "SELECT id FROM accounts WHERE account_type='asset' AND is_bank_account=1 AND is_active=1 AND is_deleted=0",emptyArray())
+        val fallback=if(cash) "SELECT id FROM accounts WHERE account_type='asset' AND is_cash_account=1 AND is_active=1 AND is_deleted=0"
+            else "SELECT id FROM accounts WHERE account_type='asset' AND is_bank_account=1 AND is_active=1 AND is_deleted=0"
+        return uniqueId(fallback+accountStationFilter(),accountStationArgs(emptyArray()))
     }
     private fun uniqueCode(code:String,type:String):Long =
         if(!tableExists("accounts") || !columns("accounts").containsAll(setOf("account_code","account_type","is_active","is_deleted"))) 0
-        else uniqueId("SELECT id FROM accounts WHERE account_code=? AND account_type=? AND is_active=1 AND is_deleted=0",arrayOf(code,type))
+        else uniqueId("SELECT id FROM accounts WHERE account_code=? AND account_type=? AND is_active=1 AND is_deleted=0" + accountStationFilter(),accountStationArgs(arrayOf(code,type)))
     private fun inventoryAccount():Long = if(!tableExists("accounts")) 0 else uniqueId(
         """SELECT id FROM accounts WHERE account_type='asset' AND is_active=1 AND is_deleted=0 AND (
            account_code='1201' OR lower(COALESCE(account_category,'')) LIKE '%inventory%' OR
            lower(COALESCE(account_category,'')) LIKE '%stock%' OR lower(COALESCE(account_name,'')) LIKE '%inventory%' OR
-           COALESCE(account_name_ar,'') LIKE '%المخزون%' OR COALESCE(account_name_ar,'') LIKE '%البضاعة%')""",emptyArray())
+           COALESCE(account_name_ar,'') LIKE '%المخزون%' OR COALESCE(account_name_ar,'') LIKE '%البضاعة%')""" + accountStationFilter(),accountStationArgs(emptyArray()))
     private fun cogsAccount():Long = if(!tableExists("accounts")) 0 else uniqueId(
         """SELECT id FROM accounts WHERE account_type='expense' AND is_active=1 AND is_deleted=0 AND (
            account_code='5101' OR lower(COALESCE(account_category,'')) LIKE '%cogs%' OR
-           lower(COALESCE(account_name,'')) LIKE '%cost of goods sold%' OR COALESCE(account_name_ar,'') LIKE '%تكلفة البضاعة%')""",emptyArray())
+           lower(COALESCE(account_name,'')) LIKE '%cost of goods sold%' OR COALESCE(account_name_ar,'') LIKE '%تكلفة البضاعة%')""" + accountStationFilter(),accountStationArgs(emptyArray()))
 
     private fun periodOpen(date:String):Boolean {
         if (!date.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) return false
@@ -713,9 +760,10 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
         val integrity=FinancialIntegrityAuditor(db).audit(station)
         val histCount=historical.optInt("blocking_issue_count",1)
         val glCount=integrity.optInt("issue_count",1)
-        val ready=historical.optBoolean("ready_for_financial_statement_approval",false) && glCount==0
+        val glOnlyCount=(glCount-histCount).coerceAtLeast(0)
+        val ready=historical.optBoolean("ready_for_financial_statement_approval",false) && glOnlyCount==0
         historical.put("financial_integrity_audit",integrity)
-            .put("blocking_issue_count",histCount+glCount)
+            .put("blocking_issue_count",histCount+glOnlyCount)
             .put("ready_for_financial_statement_approval",ready)
             .put("approval_status",if(ready) "ready" else "blocked")
             .put("status",if(ready) "reconciled" else "reconciliation_required")
