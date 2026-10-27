@@ -475,6 +475,7 @@ class MainActivity : AppCompatActivity() {
             ::dbHelper.isInitialized && requiresSecurityReauthentication()
         ) {
             securityLockPending = true
+            webView?.visibility = View.INVISIBLE
         }
         super.onPause()
         webView?.onPause()
@@ -1375,6 +1376,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun requestSecurityReauthentication() {
         if (!securityLockPending || securityPromptActive || currentAuthToken.isNullOrBlank() || isFinishing) return
+        webView?.visibility = View.INVISIBLE
         securityPromptActive = true
         if (isTrueSetting(securitySettingValue("biometricLockEnabled"))) {
             showBiometricPrompt(
@@ -1382,6 +1384,8 @@ class MainActivity : AppCompatActivity() {
                     securityPromptActive = false
                     securityLockPending = false
                     lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
+                    applySecurityRuntimeSettings()
+                    webView?.visibility = View.VISIBLE
                 },
                 onError = { reason ->
                     // A failed fingerprint touch is non-terminal: BiometricPrompt remains
@@ -1448,6 +1452,8 @@ class MainActivity : AppCompatActivity() {
                     securityLockPending = false
                     securityPromptActive = false
                     lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
+                    applySecurityRuntimeSettings()
+                    webView?.visibility = View.VISIBLE
                     dialog.dismiss()
                 } else {
                     input.error = "رمز PIN غير صحيح أو المحاولات مقفلة مؤقتاً"
@@ -1473,7 +1479,10 @@ class MainActivity : AppCompatActivity() {
         securityPromptActive = false
         lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
         webView?.post {
-            if (!isDestroyed.get()) webView?.loadUrl("file:///android_asset/screens/login.html")
+            if (!isDestroyed.get()) {
+                webView?.visibility = View.VISIBLE
+                webView?.loadUrl("file:///android_asset/screens/login.html")
+            }
         }
     }
 
@@ -1482,6 +1491,8 @@ class MainActivity : AppCompatActivity() {
         if (resultCode == RESULT_OK) {
             securityLockPending = false
             lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
+            applySecurityRuntimeSettings()
+            webView?.visibility = View.VISIBLE
         } else {
             showSecurityPinFallback()
         }
@@ -1530,6 +1541,7 @@ class MainActivity : AppCompatActivity() {
 
                     val wv = if (this@MainActivity.webView == null) {
                         WebView(context).apply {
+                            if (securityLockPending) visibility = View.INVISIBLE
                             WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
                             isFocusable = true
                             isFocusableInTouchMode = true
