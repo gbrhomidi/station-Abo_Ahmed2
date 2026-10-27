@@ -5874,10 +5874,16 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val database = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val treeUri = FullDatabaseBackupManager.selectedTreeUri(context)
                 ?: return errorResponse("حدد «مكان النسخة الاحتياطية» أولاً")
-            val encrypted = when (database.getSetting("encryptBackup").trim().lowercase()) {
+            // Security policy wins over the legacy backup toggle: secureBackupEnabled
+            // cannot produce a plaintext full-database backup.
+            val secureBackupRequired = activity.isTrueSetting(
+                activity.securitySettingValue("secureBackupEnabled")
+            )
+            val legacyEncryptionEnabled = when (database.getSetting("encryptBackup").trim().lowercase()) {
                 "0", "false", "no", "off" -> false
                 else -> true
             }
+            val encrypted = secureBackupRequired || legacyEncryptionEnabled
             val keepCount = database.getSetting("keepDatabaseBackupCount").toIntOrNull()?.coerceIn(1, 100) ?: 10
             activity.lifecycleScope.launch(Dispatchers.IO) {
                 val result = try {
