@@ -11,6 +11,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.settings.security.SecuritySettingsStore
 import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 
@@ -27,7 +28,13 @@ class FullDatabaseBackupWorker(
             }
             val folderUri = FullDatabaseBackupManager.selectedTreeUri(applicationContext)
                 ?: return Result.failure(Data.Builder().putString("error", "لم يتم تحديد مجلد النسخ الاحتياطي").build())
-            val encrypted = isEnabled(database.getSetting("encryptBackup"), true)
+            val secureSettings = SecuritySettingsStore.open(applicationContext)
+            val secureBackupRequired = if (secureSettings.encryptionEnabled()) {
+                isEnabled(secureSettings.getSetting("secureBackupEnabled"), true)
+            } else {
+                isEnabled(database.getSetting("secureBackupEnabled"), true)
+            }
+            val encrypted = secureBackupRequired || isEnabled(database.getSetting("encryptBackup"), true)
             val keepCount = database.getSetting("keepDatabaseBackupCount").toIntOrNull()?.coerceIn(1, 100) ?: 10
             val result = FullDatabaseBackupManager(applicationContext, database)
                 .createBackup(folderUri, encrypted, keepCount)
