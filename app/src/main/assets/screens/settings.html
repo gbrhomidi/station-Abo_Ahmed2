@@ -1906,6 +1906,9 @@ tr:last-child td { border-bottom:0; }
     let pendingConfirm = null;
     let lastMonitoring = null;
     let cachedUsers = [];
+    let usersLoaded = false;
+    let lastLoadedUserQuery = null;
+    let usersSearchRequest = 0;
     let activeTab = null;
 
     // ============================================================
@@ -3542,8 +3545,17 @@ tr:last-child td { border-bottom:0; }
             refreshBackups();
         }
         if (name === 'maintenance') refreshDatabaseInfo();
-        if (name === 'users' && cachedUsers.length) renderUsers(cachedUsers, el('searchInput').value.trim());
-        if (el('searchInput').value.trim()) runGlobalSearch();
+        if (name === 'users') {
+            const query = el('searchInput').value.trim();
+            if (!usersLoaded || query !== lastLoadedUserQuery) {
+                // Load real SQLite rows as soon as the users panel is opened; a search term is optional.
+                void searchUsers();
+            } else {
+                renderUsers(cachedUsers, '');
+            }
+        } else if (el('searchInput').value.trim()) {
+            runGlobalSearch();
+        }
         window.scrollTo({top:0, behavior:'smooth'});
     }
 
@@ -4047,25 +4059,53 @@ tr:last-child td { border-bottom:0; }
 
     async function searchUsers() {
         const query = el('searchInput').value.trim();
+        const requestId = ++usersSearchRequest;
+        const body = el('usersBody');
 
+        if (body) {
+            body.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="fas fa-spinner fa-spin"></i>جارٍ تحميل بيانات المستخدمين الفعلية...</div></td></tr>';
+        }
         showLoading(true);
         try {
             const result = await bridgeCall('searchUsers', {query, page: 1, pageSize: 100});
-            cachedUsers = dataOf(result)?.data || [];
+
+            // searchUsers returns { data: [...], total, stats }; dataOf already unwraps the data array.
+            // Accept the supported envelope variants without dereferencing data twice.
+            const payload = dataOf(result);
+            const rows = Array.isArray(payload)
+                ? payload
+                : (Array.isArray(result?.data) ? result.data
+                    : (Array.isArray(payload?.data) ? payload.data : null));
+            if (!rows) {
+                throw new Error('استجابة قاعدة البيانات لا تحتوي قائمة مستخدمين صالحة');
+            }
+            if (requestId !== usersSearchRequest) return;
+
+            cachedUsers = rows;
+            usersLoaded = true;
+            lastLoadedUserQuery = query;
             renderUsers(cachedUsers, '');
             el('statUsers').textContent = cachedUsers.length;
             el('userSearchBadge').textContent = cachedUsers.length;
-            selectTab('users');
+
+            if (activeTab !== 'users') selectTab('users');
 
             if (!query) {
-                toast('تم جلب المستخدمين الفعليين من جدول users');
+                toast('تم جلب المستخدمين الفعليين من SQLite');
             } else {
-                toast('تم تنفيذ البحث على بيانات users الفعلية');
+                toast('تم تنفيذ البحث على بيانات المستخدمين الفعلية');
             }
         } catch (error) {
-            toast('تعذر جلب المستخدمين: ' + error.message, 'bad');
+            if (requestId === usersSearchRequest) {
+                usersLoaded = false;
+                if (body) {
+                    body.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="fas fa-exclamation-triangle"></i>' +
+                        escapeHtml(error.message || 'تعذر تحميل بيانات المستخدمين') + '</div></td></tr>';
+                }
+                toast('تعذر جلب المستخدمين: ' + (error.message || 'خطأ غير معروف'), 'bad');
+            }
         } finally {
-            showLoading(false);
+            if (requestId === usersSearchRequest) showLoading(false);
         }
     }
 
