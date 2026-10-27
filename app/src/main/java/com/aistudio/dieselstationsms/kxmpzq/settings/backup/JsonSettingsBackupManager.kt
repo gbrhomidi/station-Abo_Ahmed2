@@ -41,8 +41,17 @@ class JsonSettingsBackupManager(
     override suspend fun importSettings(data: String): ApplicationSettings =
         json.decodeFromString(data)
 
+    private fun readSecuritySetting(key: String): String {
+        val fallback = SecuritySettingsStore.DEFAULTS[key] ?: "0"
+        return if (securitySettings.encryptionEnabled()) {
+            securitySettings.getSetting(key) ?: fallback
+        } else {
+            database.getSetting(key).takeIf { it.isNotBlank() } ?: fallback
+        }
+    }
+
     override suspend fun createBackup(): String = withContext(Dispatchers.IO) {
-        check(isTrue(securitySettings.getSetting("secureBackupEnabled") ?: "1")) {
+        check(isTrue(readSecuritySetting("secureBackupEnabled"))) {
             "النسخ الاحتياطي الآمن معطل؛ لم يتم إنشاء نسخة غير مشفرة"
         }
         val engine = requireNotNull(encryption) {
@@ -51,13 +60,10 @@ class JsonSettingsBackupManager(
         val settings = repository.getSettings()
         val securitySnapshot = JSONObject()
         SecuritySettingsStore.SETTING_KEYS.forEach { key ->
-            val value = when {
-                key == SecuritySettingsStore.KEY_ENCRYPT_STORAGE ->
-                    if (securitySettings.encryptionEnabled()) "1" else "0"
-                securitySettings.encryptionEnabled() ->
-                    securitySettings.getSetting(key) ?: SecuritySettingsStore.DEFAULTS[key] ?: "0"
-                else -> database.getSetting(key).takeIf { it.isNotBlank() }
-                    ?: SecuritySettingsStore.DEFAULTS[key] ?: "0"
+            val value = if (key == SecuritySettingsStore.KEY_ENCRYPT_STORAGE) {
+                if (securitySettings.encryptionEnabled()) "1" else "0"
+            } else {
+                readSecuritySetting(key)
             }
             securitySnapshot.put(key, value)
         }
