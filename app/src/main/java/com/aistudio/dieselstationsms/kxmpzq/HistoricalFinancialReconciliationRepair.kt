@@ -188,9 +188,14 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
                 action("reconcile_party_totals_from_ledger","parties",partyId,"repaired",
                     if(supplier) "تحديث رصيد المورد؛ إجماليات الشراء/السداد لا تتغير إلا إذا صُنفت أنواع كل الحركات" else "تحديث رصيد العميل من دفتر العميل",old,next)
             }
-            if (supplier && !supplierTotalsProven &&
-                ((hasColumn("parties","total_purchases") && abs(scalarD("SELECT COALESCE(total_purchases,0) FROM parties WHERE id=? AND station_id=?",arrayOf(partyId.toString(),station.toString()))-credits)>eps) ||
-                 (hasColumn("parties","total_payments") && abs(scalarD("SELECT COALESCE(total_payments,0) FROM parties WHERE id=? AND station_id=?",arrayOf(partyId.toString(),station.toString()))-debits)>eps)) {
+            val supplierAggregatesDiffer =
+                (hasColumn("parties","total_purchases") &&
+                    abs(scalarD("SELECT COALESCE(total_purchases,0) FROM parties WHERE id=? AND station_id=?",
+                        arrayOf(partyId.toString(),station.toString())) - credits) > eps) ||
+                (hasColumn("parties","total_payments") &&
+                    abs(scalarD("SELECT COALESCE(total_payments,0) FROM parties WHERE id=? AND station_id=?",
+                        arrayOf(partyId.toString(),station.toString())) - debits) > eps)
+            if (supplier && !supplierTotalsProven && supplierAggregatesDiffer) {
                 skip("supplier_totals_source_types_ambiguous","party",partyId,
                     "أنواع حركات المورد لا تكفي لإثبات إجمالي المشتريات والمدفوعات؛ لم تُغيّر الإجماليات",
                     JSONObject().put("ledger_credits",credits).put("ledger_debits",debits))
