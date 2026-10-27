@@ -4626,7 +4626,7 @@ tr:last-child td { border-bottom:0; }
             ...acts.slice(0, 60).map(a => '[' + String(a.status || '') + '] ' + String(a.action_code || '') + ' — ' + String(a.entity_type || '') + ' #' + String(a.entity_id || '') + ' — ' + String(a.explanation || '')),
             '', 'العوائق المتبقية:',
             ...issues.slice(0, 60).map(i => '[' + String(i.severity || '') + '] ' + String(i.code || '') + ' — ' + String(i.message || '') + ' (' + String(i.count || 0) + ')')
-        ].join('\\n');
+        ].join('\n');
         target.appendChild(details);
     }
 
