@@ -4074,8 +4074,8 @@ tr:last-child td { border-bottom:0; }
             const payload = dataOf(result);
             const rows = Array.isArray(payload)
                 ? payload
-                : (Array.isArray(result?.data) ? result.data
-                    : (Array.isArray(payload?.data) ? payload.data : null));
+                : (result && Array.isArray(result.data) ? result.data
+                    : (payload && Array.isArray(payload.data) ? payload.data : null));
             if (!rows) {
                 throw new Error('استجابة قاعدة البيانات لا تحتوي قائمة مستخدمين صالحة');
             }
