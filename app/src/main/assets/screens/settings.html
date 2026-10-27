@@ -4083,50 +4083,120 @@ tr:last-child td { border-bottom:0; }
 
     async function refreshMonitoring() {
         showLoading(true);
+        el('monitoringBadge').textContent = 'جارٍ القراءة…';
         try {
-            const value = dataOf(await bridgeCall('getSettingsMonitoring')) || {};
+            const envelope = await bridgeCall('getSettingsMonitoring');
+            const value = dataOf(envelope) || {};
+            if (envelope.success !== true || !Object.prototype.hasOwnProperty.call(value, 'captured_at_ms')) {
+                throw new Error('استجابة المراقبة لا تحتوي على عينة فعلية مؤرخة');
+            }
             lastMonitoring = value;
             renderMonitoring(value);
-            el('monitoringBadge').textContent = 'محدّثة';
+            const capturedAt = new Date(Number(value.captured_at_ms));
+            el('monitoringBadge').textContent = 'آخر قراءة: ' + capturedAt.toLocaleTimeString('ar');
+            return true;
         } catch (error) {
-            toast(error.message, 'bad');
+            el('monitoringBadge').textContent = 'تعذر التحديث';
+            toast('تعذر قراءة الحالة الفعلية: ' + (error.message || 'خطأ غير معروف'), 'bad');
+            return false;
         } finally {
             showLoading(false);
         }
     }
 
+    function monitoringSourceLabel(status) {
+        return status === 'available' ? 'متاح' : status === 'unavailable' ? 'غير متاح' : status === 'error' ? 'فشل القراءة' : 'لم يتم فحصه';
+    }
+
+    function monitoringMetricLabel(key) {
+        const known = {
+            'database.active_users': 'قاعدة البيانات · المستخدمون النشطون',
+            'database.today_sales': 'قاعدة البيانات · عمليات البيع اليوم',
+            'database.db_size_bytes': 'قاعدة البيانات · حجم SQLite (بايت)',
+            'database.parties_count': 'قاعدة البيانات · عدد الأطراف',
+            'database.products_count': 'قاعدة البيانات · عدد المنتجات',
+            'database.tanks_count': 'قاعدة البيانات · عدد الخزانات',
+            'database.pumps_count': 'قاعدة البيانات · عدد المضخات',
+            'sms.timestamp': 'SMS · وقت قياس المقاييس (ms)',
+            'service.total_messages_processed': 'SMS · الرسائل المعالجة منذ بدء الخدمة',
+            'service.total_errors': 'SMS · عدد الأخطاء منذ بدء الخدمة',
+            'service.restart_attempts': 'SMS · محاولات إعادة التشغيل',
+            'service.is_healthy': 'SMS · تقرير صحة الخدمة',
+            'service.is_receiver_registered': 'SMS · تسجيل مستقبل الرسائل',
+            'service.has_all_permissions': 'SMS · توفر الصلاحيات المطلوبة'
+        };
+        if (known[key]) return known[key];
+        if (key.indexOf('database.') === 0) return 'قاعدة البيانات · ' + key.slice(9);
+        if (key.indexOf('sms.') === 0) return 'مقاييس SMS · ' + key.slice(4);
+        if (key.indexOf('service.') === 0) return 'إحصاءات الخدمة · ' + key.slice(8);
+        return key;
+    }
+
+    function monitoringValueText(value) {
+        if (value === true) return 'نعم';
+        if (value === false) return 'لا';
+        if (value == null) return '—';
+        if (typeof value === 'object') return JSON.stringify(value);
+        return String(value);
+    }
+
     function renderMonitoring(value) {
-        const state = el('monitoringState');
-
+        const healthLabels = {
+            HEALTHY: 'سليمة',
+            UNHEALTHY: 'غير سليمة',
+            STOPPED: 'الخدمة متوقفة',
+            UNAVAILABLE: 'غير متاحة'
+        };
+        const serviceHealth = healthLabels[value.service_health_status] || 'غير متاح';
+        const databaseIntegrity = value.database_integrity_ok === true
+            ? 'سليم'
+            : value.database_integrity_ok === false ? 'فشل الفحص' : 'غير متاح';
+        const capturedAt = Number(value.captured_at_ms || 0);
         const items = [
-            ['الخدمة', value.service_running, 'تعمل', 'متوقفة'],
-            ['الصحة', value.service_healthy, 'سليمة', 'غير سليمة'],
-            ['الحالة', value.current_startup_state, null, null],
-            ['الطور النشط', value.active_phase || '—', null, null],
-            ['وقت التشغيل', value.uptime || '—', null, null],
-            ['الأحداث', value.events_count == null ? '—' : value.events_count, null, null],
-            ['الذاكرة', value.memory_usage || '—', null, null],
-            ['CPU', value.cpu_usage || '—', null, null]
+            ['خدمة SMS', value.service_running === true ? 'تعمل' : value.service_running === false ? 'متوقفة' : 'غير متاح'],
+            ['صحة خدمة SMS', serviceHealth],
+            ['حالة فحص الخدمة', value.current_startup_state || 'غير متاح'],
+            ['وضع خدمة SMS', value.active_phase || 'غير متاح'],
+            ['وقت تشغيل الخدمة', value.uptime || 'غير متاح'],
+            ['السجلات المقروءة (حد أقصى 10)', value.events_count == null ? 'غير متاح' : value.events_count],
+            ['ذاكرة عملية التطبيق (PSS)', value.memory_usage || 'غير متاح'],
+            ['CPU لعملية التطبيق (عينة 250 ms)', value.cpu_usage || 'غير متاح'],
+            ['مستوى البطارية', Number(value.battery_level) >= 0 ? String(value.battery_level) + '%' : 'غير متاح'],
+            ['SQLite', value.database_available === true ? 'متاحة' : 'غير متاحة'],
+            ['سلامة SQLite (integrity_check)', databaseIntegrity],
+            ['وقت أخذ العينة', capturedAt > 0 ? new Date(capturedAt).toLocaleString('ar') : 'غير متاح']
         ];
-
-        state.innerHTML = items.map(item => {
-            const [label, raw, okText, badText] = item;
-            const booleanValue = typeof raw === 'boolean';
-            const text = booleanValue ? (raw ? okText : badText) : raw;
-            const cls = booleanValue ? (raw ? 'ok' : 'bad') : '';
-            return `<div class="status-card"><span>${escapeHtml(label)}</span><strong class="${cls}">${escapeHtml(text == null ? '—' : text)}</strong></div>`;
-        }).join('');
-
+        el('monitoringState').innerHTML = items.map(([label, text]) =>
+            `<div class="status-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(text == null ? '—' : String(text))}</strong></div>`
+        ).join('');
         el('statService').textContent = value.service_running ? 'تعمل' : 'متوقفة';
 
-        const metrics = el('metrics');
+        const sources = Object.entries(value.source_status || {});
+        const sourceCards = sources.map(([key, status]) =>
+            `<div class="status-card"><span>مصدر البيانات · ${escapeHtml(key)}</span><strong>${escapeHtml(monitoringSourceLabel(status))}</strong></div>`
+        );
         const metricEntries = Object.entries(value.metrics || {});
-
-        metrics.innerHTML = metricEntries.length
-            ? metricEntries.map(([key,val]) =>
-                `<div class="status-card"><span>${escapeHtml(key)}</span><strong>${escapeHtml(val)}</strong></div>`
-              ).join('')
+        const metricCards = metricEntries.map(([key, metricValue]) =>
+            `<div class="status-card"><span>${escapeHtml(monitoringMetricLabel(key))}</span><strong>${escapeHtml(monitoringValueText(metricValue))}</strong></div>`
+        );
+        const errors = Array.isArray(value.collection_errors) ? value.collection_errors : [];
+        const errorCards = errors.map(message =>
+            `<div class="status-card"><span>تعذر جمع البيانات</span><strong class="bad">${escapeHtml(message)}</strong></div>`
+        );
+        const noMetrics = !metricCards.length
+            ? '<div class="empty-state">لم تُرجع مصادر المقاييس قيماً قابلة للقراءة في هذه العينة.</div>'
             : '';
+        el('metrics').innerHTML = '<h3 class="monitoring-section-title">حالة مصادر البيانات</h3>' +
+            (sourceCards.join('') || '<div class="empty-state">لا توجد حالة مصدر متاحة.</div>') +
+            '<h3 class="monitoring-section-title">المقاييس المسترجعة من المصادر الفعلية</h3>' +
+            noMetrics + metricCards.join('') + errorCards.join('');
+
+        const badge = el('monitoringBadge');
+        if (value.database_integrity_ok === false || value.service_health_status === 'UNHEALTHY' || errors.length > 0) {
+            badge.classList.add('bad');
+        } else {
+            badge.classList.remove('bad');
+        }
     }
 
     async function refreshBackups() {
@@ -4144,18 +4214,18 @@ tr:last-child td { border-bottom:0; }
             body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="fas fa-folder-open"></i>لا توجد نسخ كاملة في المجلد المحدد. اختر «مكان النسخة الاحتياطية» أولاً.</div></td></tr>';
             return;
         }
-        body.innerHTML = items.map(item => \`
+        body.innerHTML = items.map(item => `
             <tr>
-                <td>\${escapeHtml(item.file_name || item.id)}</td>
-                <td>\${escapeHtml(formatDate(item.created_at))}</td>
-                <td>\${escapeHtml(formatBytes(item.size))}</td>
-                <td>\${item.is_encrypted ? 'نعم' : 'لا'}</td>
+                <td>${escapeHtml(item.file_name || item.id)}</td>
+                <td>${escapeHtml(formatDate(item.created_at))}</td>
+                <td>${escapeHtml(formatBytes(item.size))}</td>
+                <td>${item.is_encrypted ? 'نعم' : 'لا'}</td>
                 <td>
-                    <button class="btn" type="button" data-restore="\${escapeAttr(item.id)}">استعادة كاملة</button>
-                    <button class="btn danger" type="button" data-delete="\${escapeAttr(item.id)}">حذف</button>
+                    <button class="btn" type="button" data-restore="${escapeAttr(item.id)}">استعادة كاملة</button>
+                    <button class="btn danger" type="button" data-delete="${escapeAttr(item.id)}">حذف</button>
                 </td>
             </tr>
-        \`).join('');
+        `).join('');
         body.querySelectorAll('[data-restore]').forEach(button => button.addEventListener('click', () =>
             ask(
                 'استعادة قاعدة البيانات كاملة',
@@ -4365,26 +4435,64 @@ tr:last-child td { border-bottom:0; }
         }
     }
 
-    function openMonitoringReport() {
-        if (!lastMonitoring) {
-            toast('حدّث الحالة أولاً', 'warn');
+    async function openMonitoringReport() {
+        const refreshed = await refreshMonitoring();
+        if (!refreshed || !lastMonitoring) {
+            toast('لم يتم إنشاء التقرير لأن تحديث البيانات الفعلية فشل.', 'bad');
             return;
         }
-
         const value = lastMonitoring;
-
-        el('monitoringReportBody').innerHTML = [
-            ['الخدمة', value.service_running ? 'تعمل' : 'متوقفة'],
-            ['الصحة', value.service_healthy ? 'سليمة' : 'غير سليمة'],
-            ['الحالة', value.current_startup_state || '—'],
-            ['الطور', value.active_phase || '—'],
-            ['وقت التشغيل', value.uptime || '—'],
-            ['عدد الأحداث', value.events_count == null ? '—' : value.events_count],
-            ['آخر خطأ', value.last_error || 'لا يوجد']
-        ].map(item =>
-            `<div class="status-card"><span>${escapeHtml(item[0])}</span><strong>${escapeHtml(item[1])}</strong></div>`
+        const healthLabels = {
+            HEALTHY: 'سليمة',
+            UNHEALTHY: 'غير سليمة',
+            STOPPED: 'الخدمة متوقفة',
+            UNAVAILABLE: 'غير متاحة'
+        };
+        const fields = [
+            ['وقت أخذ العينة', value.captured_at_ms ? new Date(Number(value.captured_at_ms)).toLocaleString('ar') : 'غير متاح'],
+            ['حالة خدمة SMS', value.service_running ? 'تعمل' : 'متوقفة'],
+            ['صحة خدمة SMS', healthLabels[value.service_health_status] || 'غير متاح'],
+            ['حالة آخر فحص للخدمة', value.current_startup_state || 'غير متاح'],
+            ['وضع خدمة SMS', value.active_phase || 'غير متاح'],
+            ['مدة التشغيل منذ البدء', value.uptime || 'غير متاح'],
+            ['أخطاء الخدمة منذ بدء التشغيل', value.service_error_count == null ? 'غير متاح من عقد الخدمة' : value.service_error_count],
+            ['السجلات المعروضة', (value.events_count == null ? 'غير متاح' : value.events_count) + ' (حد أقصى 10، وليست إجمالي السجلات)'],
+            ['ذاكرة عملية التطبيق', value.memory_usage || 'غير متاح'],
+            ['CPU لعملية التطبيق', value.cpu_usage || 'غير متاح'],
+            ['البطارية', Number(value.battery_level) >= 0 ? value.battery_level + '%' : 'غير متاح'],
+            ['قاعدة البيانات', value.database_available ? 'متاحة' : 'غير متاحة'],
+            ['فحص SQLite', value.database_integrity_ok === true ? 'سليم' : value.database_integrity_ok === false ? 'فشل' : 'غير متاح'],
+            ['آخر خطأ تفصيلي', value.last_error || 'عقد SMSService الحالي لا يوفر حقل آخر خطأ تفصيلياً؛ لا يمكن استنتاج عدم وجود أخطاء من غياب الحقل.']
+        ];
+        const fieldCards = fields.map(([label, text]) =>
+            `<div class="status-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(text))}</strong></div>`
         ).join('');
-
+        const sources = Object.entries(value.source_status || {}).map(([key, status]) =>
+            `<div class="status-card"><span>${escapeHtml(key)}</span><strong>${escapeHtml(monitoringSourceLabel(status))}</strong></div>`
+        ).join('');
+        const errors = (value.collection_errors || []).map(message =>
+            `<div class="status-card"><span>خطأ جمع</span><strong class="bad">${escapeHtml(message)}</strong></div>`
+        ).join('');
+        const metrics = Object.entries(value.metrics || {}).map(([key, metricValue]) =>
+            `<div class="status-card"><span>${escapeHtml(monitoringMetricLabel(key))}</span><strong>${escapeHtml(monitoringValueText(metricValue))}</strong></div>`
+        ).join('');
+        const logs = (value.logs || []).map(raw => {
+            let display = String(raw);
+            try {
+                const row = JSON.parse(raw);
+                if (row && typeof row === 'object') {
+                    display = Object.entries(row).map(([key, item]) => key + ': ' + monitoringValueText(item)).join(' · ');
+                }
+            } catch (_) {}
+            return `<div class="status-card"><span>سجل نشاط فعلي</span><strong>${escapeHtml(display)}</strong></div>`;
+        }).join('');
+        el('monitoringReportBody').innerHTML =
+            '<h3>ملخص الحالة</h3><div class="status-grid">' + fieldCards + '</div>' +
+            '<h3>مصادر القراءة</h3><div class="status-grid">' + sources + errors + '</div>' +
+            '<h3>المقاييس المسترجعة</h3><div class="status-grid">' + metrics + '</div>' +
+            '<h3>أحدث سجلات النشاط (حتى 10)</h3><div class="status-grid">' +
+            (logs || '<div class="empty-state">لا توجد سجلات لعرضها، أو تعذرت قراءتها؛ راجع حالة المصدر أعلاه.</div>') +
+            '</div>';
         el('monitoringModal').classList.add('show');
     }
 
@@ -4518,14 +4626,16 @@ tr:last-child td { border-bottom:0; }
 
         el('clearLogs').addEventListener('click', () =>
             ask(
-                'تنظيف السجلات',
-                'سيتم تنفيذ عملية التنظيف الفعلية من Android Monitoring Repository.',
+                'تنظيف سجلات التشغيل القديمة',
+                'سيحذف التطبيق سجلات التشغيل التي تجاوزت فترة الاحتفاظ المحددة (keepLogsDays)، بما في ذلك سجلات النشاط والنظام المحلولة وSMS والمزامنة. لا يحذف هذا الإجراء audit_logs. ستعرض النتيجة العدد الفعلي للصفوف المحذوفة.',
                 async () => {
                     closeModal('confirmModal');
                     showLoading(true);
                     try {
-                        await bridgeCall('clearSettingsLogs');
-                        toast('تم تنظيف السجلات القديمة');
+                        const result = await bridgeCall('clearSettingsLogs');
+                        const count = Number(result.deleted_count || 0);
+                        const days = Number(result.retention_days || 30);
+                        toast('انتهى تنظيف السجلات الأقدم من ' + days + ' يومًا. الصفوف المحذوفة فعليًا: ' + count + '. سجلات التدقيق محفوظة.');
                         await refreshMonitoring();
                     } catch (error) {
                         toast(error.message, 'bad');
@@ -4538,14 +4648,16 @@ tr:last-child td { border-bottom:0; }
 
         el('clearMetrics').addEventListener('click', () =>
             ask(
-                'تنظيف المقاييس',
-                'سيتم حذف المقاييس القديمة عبر الجسر الفعلي.',
+                'تنظيف مقاييس SMS القديمة',
+                'سيحذف التطبيق فقط صفوف جدول sms_metrics التي تجاوزت فترة الاحتفاظ المحددة (metricsRetentionDays). لن يحذف المقاييس الحديثة. ستعرض النتيجة العدد الفعلي للصفوف المحذوفة.',
                 async () => {
                     closeModal('confirmModal');
                     showLoading(true);
                     try {
-                        await bridgeCall('clearSettingsMetrics');
-                        toast('تم تنظيف المقاييس القديمة');
+                        const result = await bridgeCall('clearSettingsMetrics');
+                        const count = Number(result.deleted_count || 0);
+                        const days = Number(result.retention_days || 90);
+                        toast('انتهى تنظيف مقاييس SMS الأقدم من ' + days + ' يومًا. الصفوف المحذوفة فعليًا: ' + count + '.');
                         await refreshMonitoring();
                     } catch (error) {
                         toast(error.message, 'bad');

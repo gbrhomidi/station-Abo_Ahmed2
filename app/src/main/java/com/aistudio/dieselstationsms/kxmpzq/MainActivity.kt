@@ -2221,18 +2221,26 @@ class MainActivity : AppCompatActivity() {
             return JSONObject().apply {
                 put("service_running", state.serviceRunning)
                 put("service_healthy", state.serviceHealthy)
+                put("service_health_status", state.serviceHealthStatus)
                 put("current_startup_state", state.currentStartupState)
                 put("active_phase", state.activePhase ?: JSONObject.NULL)
                 put("completed_phases", JSONArray(state.completedPhases))
                 put("failed_phases", JSONArray(state.failedPhases))
+                // This count is the number of recent rows returned, not a database-wide event total.
                 put("events_count", state.eventsCount)
                 put("metrics", JSONObject(state.metrics))
+                put("source_status", JSONObject(state.sourceStatus))
+                put("collection_errors", JSONArray(state.collectionErrors))
                 put("logs", JSONArray(state.logs))
                 put("last_error", state.lastError ?: JSONObject.NULL)
+                put("service_error_count", state.serviceErrorCount ?: JSONObject.NULL)
                 put("uptime", state.uptime)
                 put("memory_usage", state.memoryUsage)
                 put("cpu_usage", state.cpuUsage)
                 put("battery_level", state.batteryLevel)
+                put("database_available", state.databaseAvailable)
+                put("database_integrity_ok", state.databaseIntegrityOk ?: JSONObject.NULL)
+                put("captured_at_ms", state.capturedAtMillis)
             }
         }
 
@@ -5679,8 +5687,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun clearSettingsLogs(): String {
             return try {
-                runBlocking(Dispatchers.IO) { settingsModule.monitoringRepository.clearLogs() }
-                successResponse(true, "تم تنظيف السجلات القديمة")
+                val deletedCount = runBlocking(Dispatchers.IO) { settingsModule.monitoringRepository.clearLogs() }
+                val retentionDays = dbHelper.getSetting("keepLogsDays").toIntOrNull()?.coerceIn(1, 3650) ?: 30
+                JSONObject().apply {
+                    put("success", true)
+                    put("deleted_count", deletedCount)
+                    put("retention_days", retentionDays)
+                    put("audit_logs_preserved", true)
+                    put("message", "اكتمل تنظيف السجلات التشغيلية الأقدم من فترة الاحتفاظ")
+                }.toString()
             } catch (e: Exception) {
                 DebugLogger.logException("SettingsMonitoring", e)
                 errorResponse(e.message)
@@ -5690,8 +5705,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun clearSettingsMetrics(): String {
             return try {
-                runBlocking(Dispatchers.IO) { settingsModule.monitoringRepository.clearMetrics() }
-                successResponse(true, "تم تنظيف المقاييس القديمة")
+                val deletedCount = runBlocking(Dispatchers.IO) { settingsModule.monitoringRepository.clearMetrics() }
+                val retentionDays = dbHelper.getSetting("metricsRetentionDays").toIntOrNull()?.coerceIn(1, 3650) ?: 90
+                JSONObject().apply {
+                    put("success", true)
+                    put("deleted_count", deletedCount)
+                    put("retention_days", retentionDays)
+                    put("source_table", "sms_metrics")
+                    put("message", "اكتمل تنظيف مقاييس SMS القديمة")
+                }.toString()
             } catch (e: Exception) {
                 DebugLogger.logException("SettingsMonitoring", e)
                 errorResponse(e.message)
