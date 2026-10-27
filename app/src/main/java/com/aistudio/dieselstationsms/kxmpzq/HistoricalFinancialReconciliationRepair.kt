@@ -315,7 +315,7 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
                     scalar("SELECT COUNT(*) FROM cash_boxes WHERE id=? AND station_id=?"+
                         (if(hasColumn("cash_boxes","is_deleted")) " AND COALESCE(is_deleted,0)=0" else ""),
                         arrayOf(a.cash.toString(),station.toString()))>0)
-                if(existsAnywhere && !belongsHere && a.type=="asset" && a.isCash==1 && a.bank==0 && a.isBank!=1) {
+                if(existsAnywhere && !belongsHere && a.type=="asset" && a.isCash==1 && a.bank==0L && a.isBank!=1) {
                     skip("foreign_station_cash_mapping","accounts",a.id,"رابط الحساب يشير إلى صندوق محطة أخرى؛ حُفظ دون تعديل لتجنب كسر عزل المحطات",
                         JSONObject().put("account_code",a.code).put("cash_box_id",a.cash))
                 }
@@ -333,7 +333,7 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
                     scalar("SELECT COUNT(*) FROM bank_accounts WHERE id=? AND station_id=?"+
                         (if(hasColumn("bank_accounts","is_deleted")) " AND COALESCE(is_deleted,0)=0" else ""),
                         arrayOf(a.bank.toString(),station.toString()))>0)
-                if(existsAnywhere && !belongsHere && a.type=="asset" && a.isBank==1 && a.cash==0 && a.isCash!=1) {
+                if(existsAnywhere && !belongsHere && a.type=="asset" && a.isBank==1 && a.cash==0L && a.isCash!=1) {
                     skip("foreign_station_bank_mapping","accounts",a.id,"رابط الحساب يشير إلى بنك محطة أخرى؛ حُفظ دون تعديل لتجنب كسر عزل المحطات",
                         JSONObject().put("account_code",a.code).put("bank_account_id",a.bank))
                 }
