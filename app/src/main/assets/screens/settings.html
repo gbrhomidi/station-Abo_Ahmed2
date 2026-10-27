@@ -3848,16 +3848,6 @@ tr:last-child td { border-bottom:0; }
             }
             const persistedSystem = dataOf(persistedSystemRaw) || {};
 
-            if (activeTab === 'security') {
-                const pinInput = el('setting-pinCode');
-                if (pinInput) {
-                    pinInput.value = '';
-                    pinInput.placeholder = String(verifiedLegacy.pinCode || '') === '••••••'
-                        ? 'تم تعيين PIN؛ اترك الحقل فارغاً للاحتفاظ به'
-                        : 'أدخل PIN من 4 إلى 12 رقماً';
-                }
-            }
-
             // Verify each written key through the single-key bridge read path, including secure preferences.
             // The bulk settings map is retained for refreshing the screen only; it is not
             // accepted as proof that an individual write was persisted correctly.
@@ -3893,6 +3883,18 @@ tr:last-child td { border-bottom:0; }
                     );
                 }
                 verifiedLegacy[key] = readback.value;
+            }
+
+            // PIN verification is complete now; clear the entered secret and leave
+            // only a non-secret configured/not-configured placeholder.
+            if (activeTab === 'security') {
+                const pinInput = el('setting-pinCode');
+                if (pinInput) {
+                    pinInput.value = '';
+                    pinInput.placeholder = String(verifiedLegacy.pinCode || '') === '••••••'
+                        ? 'تم تعيين PIN؛ اترك الحقل فارغاً للاحتفاظ به'
+                        : 'أدخل PIN من 4 إلى 12 رقماً';
+                }
             }
 
             if (activeTab === 'backup') {
