@@ -1229,6 +1229,22 @@ class MainActivity : AppCompatActivity() {
 
     /** Moves only the security panel's allowlisted settings; the operational SQLite database is untouched. */
     private fun migrateLegacySecuritySettings(db: DatabaseHelper) {
+        val legacyEncryption = runCatching {
+            db.getSetting(SecuritySettingsStore.KEY_ENCRYPT_STORAGE)
+        }.getOrDefault("")
+        if (!securitySettingsStore.hasStoredSetting(SecuritySettingsStore.KEY_ENCRYPT_STORAGE)) {
+            val initialMode = if (legacyEncryption.isBlank()) "1" else normalizeSecuritySetting(
+                SecuritySettingsStore.KEY_ENCRYPT_STORAGE, legacyEncryption
+            )
+            securitySettingsStore.putSetting(SecuritySettingsStore.KEY_ENCRYPT_STORAGE, initialMode)
+        }
+        if (legacyEncryption.isNotBlank()) {
+            db.deleteSetting(SecuritySettingsStore.KEY_ENCRYPT_STORAGE)
+            check(db.getSetting(SecuritySettingsStore.KEY_ENCRYPT_STORAGE).isBlank()) {
+                "تعذر ترحيل سياسة تشفير الإعدادات من SQLite القديمة"
+            }
+        }
+
         val legacyPin = runCatching { db.getSetting(SecuritySettingsStore.KEY_PIN_CODE) }.getOrDefault("")
         if (legacyPin.isNotBlank() && !securitySettingsStore.isPinConfigured()) {
             runCatching { securitySettingsStore.savePinCode(legacyPin) }
@@ -1245,7 +1261,8 @@ class MainActivity : AppCompatActivity() {
                     if (!securitySettingsStore.hasStoredSetting(key)) {
                         securitySettingsStore.putSetting(key, normalizeSecuritySetting(key, legacy))
                     }
-                    runCatching { db.deleteSetting(key) }
+                    db.deleteSetting(key)
+                    check(db.getSetting(key).isBlank()) { "تعذر حذف الإعداد القديم بعد تشفيره: $key" }
                 }
             }
         } else {
@@ -1270,7 +1287,8 @@ class MainActivity : AppCompatActivity() {
                 val legacy = runCatching { db.getSetting(key) }.getOrDefault("")
                 if (legacy.isNotBlank()) {
                     securitySettingsStore.putSetting(key, normalizeSecuritySetting(key, legacy))
-                    check(db.deleteSetting(key) >= 0) { "تعذر حذف قيمة الإعداد القديم: $key" }
+                    db.deleteSetting(key)
+                    check(db.getSetting(key).isBlank()) { "تعذر حذف قيمة الإعداد القديم بعد تشفيره: $key" }
                 }
             }
             securitySettingsStore.putSetting(SecuritySettingsStore.KEY_ENCRYPT_STORAGE, "1")
@@ -1322,9 +1340,31 @@ class MainActivity : AppCompatActivity() {
         }
         val hideSensitive = isTrueSetting(securitySettingValue("hideSensitiveData"))
         val script = if (hideSensitive) {
-            """(function(){var id='__station_sensitive_mask';var s=document.getElementById(id);if(!s){s=document.createElement('style');s.id=id;(document.head||document.documentElement).appendChild(s);}s.textContent='[data-sensitive], [data-sensitive="true"], .sensitive, .sensitive-data, .sensitive-value, .customer-phone, .customer-id, .account-number, .bank-account-number, .national-id { filter: blur(7px) !important; user-select: none !important; }';})();"""
+            """(function(){
+                var id='__station_sensitive_mask', style=document.getElementById(id);
+                if(!style){style=document.createElement('style');style.id=id;(document.head||document.documentElement).appendChild(style);}
+                style.textContent='[data-sensitive], [data-sensitive="true"], .sensitive, .sensitive-data, .sensitive-value, .customer-phone, .customer-id, .account-number, .bank-account-number, .national-id, input[type="tel"], input[type="email"], input[autocomplete*="tel"], input[autocomplete*="email"], input[autocomplete*="cc-number"], input[autocomplete*="off"][name*="phone" i], input[autocomplete*="off"][name*="mobile" i], input[autocomplete*="off"][name*="account" i], input[autocomplete*="off"][name*="identity" i] { filter: blur(7px) !important; user-select: none !important; }';
+                function maskSensitiveNodes(root){
+                  (root||document).querySelectorAll('table').forEach(function(table){
+                    var rows=Array.from(table.rows||[]); if(!rows.length)return;
+                    var headers=Array.from(rows[0].cells||[]).map(function(c){return (c.innerText||c.textContent||'').trim().toLowerCase();});
+                    var sensitive=headers.map(function(h){return /phone|mobile|contact|customer|client|account|bank|identity|national|رقم الهاتف|الجوال|العميل|الحساب|الهوية|البطاقة/.test(h);});
+                    rows.slice(1).forEach(function(row){Array.from(row.cells||[]).forEach(function(cell,index){if(sensitive[index])cell.classList.add('__station_sensitive_runtime');});});
+                  });
+                  (root||document).querySelectorAll('input,textarea,[data-sensitive],[data-sensitive="true"],.sensitive,.sensitive-data,.sensitive-value').forEach(function(node){
+                    var name=[node.id,node.name,node.getAttribute('placeholder'),node.getAttribute('aria-label'),node.getAttribute('autocomplete')].filter(Boolean).join(' ').toLowerCase();
+                    if(/phone|mobile|email|account|bank|identity|national|customer.?id|رقم الهاتف|الجوال|البريد|الحساب|الهوية|العميل/.test(name))node.classList.add('__station_sensitive_runtime');
+                  });
+                }
+                var extra=document.createElement('style');extra.id='__station_sensitive_runtime_style';
+                extra.textContent='.__station_sensitive_runtime { filter: blur(7px) !important; user-select:none !important; }';(document.head||document.documentElement).appendChild(extra);
+                maskSensitiveNodes(document);
+                if(window.__stationSecurityMaskObserver)window.__stationSecurityMaskObserver.disconnect();
+                window.__stationSecurityMaskObserver=new MutationObserver(function(records){records.forEach(function(record){record.addedNodes&&record.addedNodes.forEach(function(node){if(node.nodeType===1)maskSensitiveNodes(node.parentNode||document);});});});
+                window.__stationSecurityMaskObserver.observe(document.documentElement,{childList:true,subtree:true});
+              })();"""
         } else {
-            """(function(){var s=document.getElementById('__station_sensitive_mask');if(s)s.remove();})();"""
+            """(function(){var s=document.getElementById('__station_sensitive_mask');if(s)s.remove();var extra=document.getElementById('__station_sensitive_runtime_style');if(extra)extra.remove();document.querySelectorAll('.__station_sensitive_runtime').forEach(function(node){node.classList.remove('__station_sensitive_runtime');});if(window.__stationSecurityMaskObserver){window.__stationSecurityMaskObserver.disconnect();window.__stationSecurityMaskObserver=null;}})();"""
         }
         runCatching { target?.evaluateJavascript(script, null) }
     }
@@ -1343,9 +1383,15 @@ class MainActivity : AppCompatActivity() {
                     securityLockPending = false
                     lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
                 },
-                onError = {
-                    securityPromptActive = false
-                    showSecurityPinFallback()
+                onError = { reason ->
+                    // A failed fingerprint touch is non-terminal: BiometricPrompt remains
+                    // visible for another attempt. Only terminal errors fall back to PIN.
+                    if (reason == "failed") {
+                        securityPromptActive = true
+                    } else {
+                        securityPromptActive = false
+                        showSecurityPinFallback()
+                    }
                 }
             )
             return
