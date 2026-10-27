@@ -3507,7 +3507,27 @@ tr:last-child td { border-bottom:0; }
         el('resetBtn').classList.toggle('hidden', name !== 'general');
         if (name === 'monitoring') refreshMonitoring();
         if (name === 'display') loadSystemSettings();
-        if (name === 'backup') refreshBackups();
+        if (name === 'backup') {
+            // A full SQLite snapshot necessarily includes every table, including logs.
+            // Do not expose a misleading control that cannot exclude those rows safely.
+            const logsToggle = el('setting-includeLogsInBackup');
+            if (logsToggle) {
+                logsToggle.checked = true;
+                logsToggle.disabled = true;
+                logsToggle.title = 'النسخة الكاملة تحفظ جميع جداول SQLite، بما فيها سجلات التطبيق؛ لا يمكن استبعاد هذه الجداول من نسخة قاعدة البيانات الكاملة.';
+            }
+
+            // The location is a SAF tree URI, not a free-form filesystem path.
+            // Tapping the field itself must launch Android's system folder picker.
+            const locationInput = el('setting-backupLocation');
+            if (locationInput) {
+                locationInput.readOnly = true;
+                locationInput.title = 'انقر لاختيار مجلد من مدير تخزين الهاتف';
+                locationInput.setAttribute('aria-label', 'مكان النسخة الاحتياطية؛ انقر لاختيار مجلد');
+                locationInput.onclick = chooseBackupLocation;
+            }
+            refreshBackups();
+        }
         if (name === 'maintenance') refreshDatabaseInfo();
         if (name === 'users' && cachedUsers.length) renderUsers(cachedUsers, el('searchInput').value.trim());
         if (el('searchInput').value.trim()) runGlobalSearch();
