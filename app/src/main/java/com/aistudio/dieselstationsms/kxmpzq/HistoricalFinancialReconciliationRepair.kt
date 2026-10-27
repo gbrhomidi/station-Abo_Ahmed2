@@ -131,14 +131,14 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
                     "رصيد افتتاحي بلا حركة دفترية؛ لم يُصفّر ولم يُنشأ سند تخميني", JSONObject().put("current_balance",bal))
                 continue
             }
+            val invalid = entries.firstOrNull { it.debit < -eps || it.credit < -eps || (it.debit > eps && it.credit > eps) }
+            if (invalid != null) {
+                skip("party_ledger_line_invalid", table, invalid.id, "حركة دفترية غير صالحة؛ لم يُعد بناء أي رصيد لهذا الطرف",
+                    JSONObject().put("debit",invalid.debit).put("credit",invalid.credit))
+                continue
+            }
             var running=0.0; var debits=0.0; var credits=0.0
             for (e in entries) {
-                if (e.debit < -eps || e.credit < -eps || (e.debit > eps && e.credit > eps)) {
-                    skip("party_ledger_line_invalid", table, e.id, "حركة دفترية غير صالحة؛ لم يُعاد بناء أرصدة الطرف من دفتر معيب",
-                        JSONObject().put("debit",e.debit).put("credit",e.credit))
-                    running = Double.NaN
-                    break
-                }
                 debits+=e.debit; credits+=e.credit
                 running += if (supplier) e.credit-e.debit else e.debit-e.credit
                 if (abs(e.balance-running)>eps) {
@@ -149,7 +149,6 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
                         JSONObject().put("balance",e.balance),JSONObject().put("balance",running))
                 }
             }
-            if (!running.isFinite()) continue
             val balance=if(supplier) credits-debits else debits-credits
             val old=JSONObject().put("current_balance",scalarD("SELECT COALESCE(current_balance,0) FROM parties WHERE id=?",
                 arrayOf(partyId.toString())))
@@ -162,7 +161,7 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
             val changed=abs(old.optDouble("current_balance")-balance)>eps ||
                 (supplier && hasColumn("parties","total_due") && abs(scalarD("SELECT COALESCE(total_due,0) FROM parties WHERE id=?",arrayOf(partyId.toString()))-balance)>eps) ||
                 (supplier && hasColumn("parties","total_purchases") && abs(scalarD("SELECT COALESCE(total_purchases,0) FROM parties WHERE id=?",arrayOf(partyId.toString()))-credits)>eps) ||
-                (supplier && hasColumn("parties","total_payments") && abs(scalarD("SELECT COALESCE(total_payments,0) FROM parties WHERE id=?",arrayOf(partyId.toString()))-debits)>eps
+                (supplier && hasColumn("parties","total_payments") && abs(scalarD("SELECT COALESCE(total_payments,0) FROM parties WHERE id=?",arrayOf(partyId.toString()))-debits)>eps)
             if(changed) {
                 db.update("parties",cv,"id=? AND station_id=?",arrayOf(partyId.toString(),station.toString()))
                 val next=JSONObject().put("current_balance",balance)
