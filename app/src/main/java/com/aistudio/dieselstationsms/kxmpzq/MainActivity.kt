@@ -6469,7 +6469,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
                 if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة المصالحة المالية")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
-                HistoricalFinancialReconciliationAudit(db.readableDatabase).run(stationId).toString()
+                val sqlite = db.readableDatabase
+                val historical = HistoricalFinancialReconciliationAudit(sqlite).run(stationId)
+                val integrity = FinancialIntegrityAuditor(sqlite).audit(stationId)
+                val historyCount = historical.optInt("blocking_issue_count", 1)
+                val glCount = integrity.optInt("issue_count", 1)
+                val ready = historical.optBoolean("ready_for_financial_statement_approval", false) && glCount == 0
+                historical.put("financial_integrity_audit", integrity)
+                    .put("blocking_issue_count", historyCount + glCount)
+                    .put("ready_for_financial_statement_approval", ready)
+                    .put("approval_status", if (ready) "ready" else "blocked")
+                    .put("status", if (ready) "reconciled" else "reconciliation_required")
+                historical.toString()
             } catch (e: SecurityException) {
                 errorResponse("تعذر التحقق من نطاق المحطة")
             } catch (e: Exception) {
