@@ -2318,6 +2318,19 @@ class MainActivity : AppCompatActivity() {
         private val contextRef = WeakReference(context)
         private val activityRef = WeakReference(activity)
 
+        init {
+            // Restore developer diagnostics from the persisted setting on every WebView startup.
+            val enabled = runCatching {
+                when (DatabaseHelper.getInstance(context.applicationContext)
+                    .getSetting("developerMode").trim().lowercase(Locale.ROOT)) {
+                    "1", "true", "yes", "on" -> true
+                    "0", "false", "no", "off" -> false
+                    else -> false
+                }
+            }.getOrDefault(false)
+            DebugLogger.setDeveloperModeEnabled(enabled)
+        }
+
         /**
          * Loads only the nine allowlisted settings panel templates bundled in this APK.
          * The whitelist prevents JavaScript from using this bridge as an arbitrary asset reader.
