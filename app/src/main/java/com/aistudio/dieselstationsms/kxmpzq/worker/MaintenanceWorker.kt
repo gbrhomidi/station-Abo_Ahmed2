@@ -846,9 +846,12 @@ class MaintenanceWorker(
         results += runMaintenanceTask(db, TaskId.FINAL_FLUSH, "Final Flush", retryable = true) {
             db.flush()
         }
+        val finalFlushSucceeded = results.lastOrNull()?.let {
+            it.taskId == TaskId.FINAL_FLUSH && it.success && !it.skipped
+        } == true
 
-        // A cleanup period advances only after all cleanup tasks and both integrity checks succeeded.
-        if (cleanupDue && cleanupBatchSucceeded) {
+        // A cleanup period advances only after all cleanup tasks, integrity checks and final flush succeeded.
+        if (cleanupDue && cleanupBatchSucceeded && finalFlushSucceeded) {
             check(db.setSetting("maintenanceLastCleanupAt", System.currentTimeMillis().toString())) {
                 "تعذر تسجيل وقت التنظيف الناجح في SQLite"
             }
