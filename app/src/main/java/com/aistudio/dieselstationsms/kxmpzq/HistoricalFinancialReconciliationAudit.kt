@@ -1,6 +1,5 @@
 package com.aistudio.dieselstationsms.kxmpzq
 
-import android.content.ContentValues
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import org.json.JSONArray
@@ -8,7 +7,6 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.UUID
 import kotlin.math.abs
 
 /**
@@ -42,224 +40,6 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
             .put("checks", checks)
             .put("issues", issues)
             .put("automatic_repairs", false)
-    }
-
-    /**
-     * Repair only a missing fuel-supply GL posting where a matching supplier-ledger
-     * credit independently proves the supplier, source ID and amount.
-     */
-    fun applyProvableFuelSupplyRepairs(stationId: Int, actorUserId: Long): JSONObject {
-        require(stationId > 0) { "A valid station scope is required" }
-        require(actorUserId > 0L) { "A valid authenticated user is required" }
-        require(tableExists("tank_refills") && tableExists("supplier_ledger") && tableExists("journal_entries") &&
-            tableExists("journal_entry_items") && tableExists("accounts") && tableExists("parties") &&
-            tableExists("party_types") && tableExists("audit_logs")) {
-            "المخطط لا يحتوي على جميع جداول المصالحة المطلوبة؛ لم تُجرَ أي تغييرات."
-        }
-
-        val before = run(stationId)
-        ensureRunTables()
-        val runUuid = UUID.randomUUID().toString()
-        val started = now()
-        val runValues = ContentValues().apply {
-            put("uuid", runUuid)
-            put("station_id", stationId)
-            put("run_mode", "provable_fuel_supply_gl_repair")
-            put("started_at", started)
-            put("created_by", actorUserId)
-            put("status", "running")
-            put("approval_status_before", before.optString("approval_status", "blocked"))
-            put("before_json", before.toString())
-            put("remarks", "Source-proven repair only: exact supplier subledger credit + completed fuel receipt + unique control accounts + no existing source journal.")
-        }
-        val runId = db.insertOrThrow("historical_reconciliation_runs", null, runValues)
-        val repaired = JSONArray()
-        val skipped = JSONArray()
-        val refills = rows(
-            "SELECT id,COALESCE(refill_code,''),COALESCE(supplier_id,0),COALESCE(net_amount,0)," +
-                "COALESCE(total_amount,0),COALESCE(transport_cost,0),COALESCE(discount,0),COALESCE(tax_amount,0)," +
-                "COALESCE(arrival_date,order_date,created_at,''),COALESCE(currency_id,0) " +
-                "FROM tank_refills WHERE station_id=? AND status='completed' AND COALESCE(is_deleted,0)=0 ORDER BY id",
-            arrayOf(stationId.toString())
-        ) { c ->
-            JSONObject().put("refill_id", c.getLong(0)).put("refill_code", c.getString(1))
-                .put("supplier_id", c.getLong(2)).put("net_amount", c.getDouble(3))
-                .put("total_amount", c.getDouble(4)).put("transport_cost", c.getDouble(5))
-                .put("discount", c.getDouble(6)).put("tax_amount", c.getDouble(7))
-                .put("source_date", c.getString(8)).put("currency_id", c.getLong(9))
-        }
-
-        val inventoryAccount = uniqueAccountId("1104", "asset")
-        val payableAccount = uniqueAccountId("2101", "liability")
-        for (i in 0 until refills.length()) {
-            val source = refills.getJSONObject(i)
-            val refillId = source.getLong("refill_id")
-            val supplierId = source.getLong("supplier_id")
-            val amount = source.getDouble("net_amount")
-            val code = source.optString("refill_code")
-            val expectedAmount = source.getDouble("total_amount") + source.getDouble("transport_cost") -
-                source.getDouble("discount") + source.getDouble("tax_amount")
-            var skipReason: String? = null
-
-            if (amount <= 0.0 || abs(amount - expectedAmount) > 0.01)
-                skipReason = "صافي التوريد لا يطابق إجمالي الفاتورة والنقل والخصم والضريبة؛ يلزم مستند المصدر."
-            if (skipReason == null && !validSupplier(supplierId, stationId))
-                skipReason = "المورد غير نشط أو ليس مورداً للمحطة؛ لا يمكن إثبات الطرف المقابل."
-            if (skipReason == null && (inventoryAccount == null || payableAccount == null))
-                skipReason = "حساب المخزون 1104 أو الدائنين 2101 غير فريد/غير نشط؛ لم يُنشأ القيد."
-            if (skipReason == null && journalSourceCount(stationId, refillId) > 0)
-                skipReason = "يوجد قيد سابق لهذا المصدر (حتى لو كان غير مرحّل)؛ منعاً للتكرار لم يُنشأ قيد."
-            if (skipReason == null && isDateInClosedPeriod(stationId, source.optString("source_date")))
-                skipReason = "تاريخ التوريد في فترة مالية مغلقة/قيد الإغلاق؛ يلزم قيد تسوية في فترة مفتوحة."
-            if (skipReason == null && !oneExactSupplierCredit(supplierId, refillId, amount))
-                skipReason = "دفتر المورد لا يحتوي على قيد دائن وحيد مطابق تماماً للمورد والمصدر والمبلغ."
-            
-            if (skipReason != null) {
-                val finding = JSONObject().put("source_table", "tank_refills").put("source_id", refillId)
-                    .put("reference_code", code).put("amount", amount).put("status", "skipped").put("reason", skipReason)
-                skipped.put(finding)
-                persistItem(runId, stationId, refillId, "create_missing_fuel_supply_journal", "skipped", amount, finding, skipReason)
-                continue
-            }
-
-            var journalId = 0L
-            var failure: String? = null
-            db.beginTransaction()
-            try {
-                // Recheck within the transaction to keep retries idempotent.
-                check(journalSourceCount(stationId, refillId) == 0) { "تم إنشاء قيد لهذا المصدر أثناء المصالحة." }
-                check(oneExactSupplierCredit(supplierId, refillId, amount)) { "تغير دفتر المورد؛ أُلغيت المصالحة." }
-                val date = normalizeDate(source.optString("source_date"))
-                val yy = date.substring(0, 4).toIntOrNull()
-                val mm = date.substring(5, 7).toIntOrNull()
-                val entryNumber = "HFRS-S" + stationId + "-R" + refillId
-                check(scalar("SELECT COUNT(*) FROM journal_entries WHERE entry_number=?", arrayOf(entryNumber)) == 0) {
-                    "رقم قيد المصالحة مستخدم مسبقاً."
-                }
-                val header = ContentValues().apply {
-                    put("uuid", UUID.randomUUID().toString())
-                    put("entry_number", entryNumber)
-                    put("entry_date", date)
-                    put("entry_type", "purchase")
-                    put("reference_type", "fuel_supply")
-                    put("reference_id", refillId)
-                    put("reference_code", code)
-                    put("description", "Historical reconciliation - fuel receipt " + code)
-                    put("description_ar", "قيد مصالحة تاريخية لتوريد وقود مكتمل")
-                    put("total_debit", amount)
-                    put("total_credit", amount)
-                    put("is_balanced", 1)
-                    put("status", "posted")
-                    put("posted_at", started)
-                    put("posted_by", actorUserId)
-                    put("fiscal_year", yy)
-                    put("fiscal_period", mm)
-                    put("station_id", stationId)
-                    put("created_at", started)
-                    put("updated_at", started)
-                    put("created_by", actorUserId)
-                    put("updated_by", actorUserId)
-                    put("is_deleted", 0)
-                    put("remarks", "[historical-reconciliation] source=tank_refills#" + refillId +
-                        "; amount verified against supplier_ledger fuel_supply_credit")
-                    put("extra_data", JSONObject().put("reconciliation_run_uuid", runUuid)
-                        .put("source_table", "tank_refills").put("source_id", refillId)
-                        .put("evidence", "one exact supplier ledger credit").toString())
-                }
-                journalId = db.insertOrThrow("journal_entries", null, header)
-                val inventoryLine = ContentValues().apply {
-                    put("uuid", UUID.randomUUID().toString())
-                    put("journal_entry_id", journalId)
-                    put("line_number", 1)
-                    put("account_id", inventoryAccount!!)
-                    put("debit", amount)
-                    put("credit", 0.0)
-                    put("exchange_rate", 1.0)
-                    put("description", "Fuel inventory received from " + code)
-                    put("description_ar", "مخزون الوقود المستلم من " + code)
-                    if (source.optLong("currency_id") > 0L) put("currency_id", source.optLong("currency_id"))
-                }
-                db.insertOrThrow("journal_entry_items", null, inventoryLine)
-                val payableLine = ContentValues().apply {
-                    put("uuid", UUID.randomUUID().toString())
-                    put("journal_entry_id", journalId)
-                    put("line_number", 2)
-                    put("account_id", payableAccount!!)
-                    put("debit", 0.0)
-                    put("credit", amount)
-                    put("exchange_rate", 1.0)
-                    put("supplier_party_id", supplierId)
-                    put("description", "Accounts payable - supplier " + code)
-                    put("description_ar", "ذمم المورد - " + code)
-                    if (source.optLong("currency_id") > 0L) put("currency_id", source.optLong("currency_id"))
-                }
-                db.insertOrThrow("journal_entry_items", null, payableLine)
-
-                val totals = queryOne(
-                    "SELECT COALESCE(SUM(debit),0),COALESCE(SUM(credit),0) FROM journal_entry_items WHERE journal_entry_id=?",
-                    arrayOf(journalId.toString())
-                ) { c -> c.getDouble(0) to c.getDouble(1) }
-                check(totals != null && abs(totals.first - amount) <= 0.01 && abs(totals.second - amount) <= 0.01) {
-                    "قيد المصالحة لا يتوازن مع بنوده."
-                }
-                val log = ContentValues().apply {
-                    put("uuid", UUID.randomUUID().toString())
-                    put("user_id", actorUserId)
-                    put("action_type", "historical_financial_reconciliation")
-                    put("table_name", "journal_entries")
-                    put("record_id", journalId)
-                    put("old_row_json", JSONObject().put("missing_source_journal", true)
-                        .put("source_table", "tank_refills").put("source_id", refillId).toString())
-                    put("new_row_json", JSONObject().put("journal_id", journalId).put("source_id", refillId)
-                        .put("amount", amount).put("debit_account_id", inventoryAccount)
-                        .put("credit_account_id", payableAccount).toString())
-                    put("changed_columns", "journal_entries,journal_entry_items")
-                    put("request_id", runUuid)
-                    put("created_at", now())
-                }
-                db.insertOrThrow("audit_logs", null, log)
-                db.setTransactionSuccessful()
-            } catch (e: Exception) {
-                failure = e.message ?: "تعذر إنشاء القيد."
-            } finally {
-                db.endTransaction()
-            }
-
-            if (failure == null && journalId > 0L) {
-                val finding = JSONObject().put("source_table", "tank_refills").put("source_id", refillId)
-                    .put("reference_code", code).put("journal_id", journalId)
-                    .put("debit_account_id", inventoryAccount).put("credit_account_id", payableAccount)
-                    .put("amount", amount).put("status", "repaired")
-                repaired.put(finding)
-                persistItem(runId, stationId, refillId, "create_missing_fuel_supply_journal", "repaired", amount, finding,
-                    "Exact supplier-ledger source match; posted inventory / payable journal and audit log in one transaction.")
-            } else {
-                val finding = JSONObject().put("source_table", "tank_refills").put("source_id", refillId)
-                    .put("reference_code", code).put("amount", amount).put("status", "failed").put("reason", failure)
-                skipped.put(finding)
-                persistItem(runId, stationId, refillId, "create_missing_fuel_supply_journal", "failed", amount, finding,
-                    failure ?: "Unknown failure")
-            }
-        }
-
-        val after = run(stationId)
-        val finished = now()
-        db.update("historical_reconciliation_runs", ContentValues().apply {
-            put("completed_at", finished)
-            put("status", "completed")
-            put("approval_status_after", after.optString("approval_status", "blocked"))
-            put("repaired_count", repaired.length())
-            put("skipped_count", skipped.length())
-            put("after_json", after.toString())
-            put("remarks", "Safe repair pass complete. Unproven differences remain blocking and were not guessed.")
-        }, "id=?", arrayOf(runId.toString()))
-
-        return JSONObject().put("success", true).put("run_id", runId).put("run_uuid", runUuid)
-            .put("station_id", stationId).put("started_at", started).put("completed_at", finished)
-            .put("repaired_count", repaired.length()).put("skipped_count", skipped.length())
-            .put("repaired", repaired).put("skipped", skipped).put("before", before).put("after", after)
-            .put("ready_for_financial_statement_approval", after.optBoolean("ready_for_financial_statement_approval"))
-            .put("approval_status", after.optString("approval_status", "blocked"))
     }
 
     private fun checkSales(stationId: Int, checks: JSONObject, issues: JSONArray) {
@@ -376,7 +156,7 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
     }
 
     private fun controlAccount(stationId: Int, code: String, accountType: String, supplier: Boolean): JSONObject {
-        val ids = rows(
+        val ids = query(
             "SELECT id,COALESCE(opening_balance,0) FROM accounts WHERE account_code=? AND account_type=? AND is_active=1 AND COALESCE(is_deleted,0)=0",
             arrayOf(code, accountType)
         ) { c -> c.getLong(0) to c.getDouble(1) }
@@ -528,61 +308,13 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
             "أرصدة افتتاحية مسجلة في حساب أب وتفاصيله معاً؛ لا يمكن احتساب الميزانية قبل تحديد الرصيد المعتمد", overlaps.length(), null, overlaps)
     }
 
-    private fun validSupplier(supplierId: Long, stationId: Int) = scalar(
-        "SELECT COUNT(*) FROM parties p JOIN party_types t ON t.id=p.party_type_id WHERE p.id=? AND p.station_id=? " +
-            "AND t.type_code='SUPPLIER' AND COALESCE(p.is_active,1)=1 AND COALESCE(p.is_deleted,0)=0",
-        arrayOf(supplierId.toString(), stationId.toString())
-    ) == 1
-
     private fun oneExactSupplierCredit(supplierId: Long, refillId: Long, amount: Double): Boolean {
         if (!tableExists("supplier_ledger")) return false
-        val matches = rows(
+        val matches = query(
             "SELECT COALESCE(debit,0),COALESCE(credit,0) FROM supplier_ledger WHERE party_id=? AND transaction_type='fuel_supply_credit' AND transaction_id=?",
             arrayOf(supplierId.toString(), refillId.toString())
         ) { c -> c.getDouble(0) to c.getDouble(1) }
         return matches.size == 1 && abs(matches[0].first) <= 0.01 && abs(matches[0].second - amount) <= 0.01
-    }
-
-    private fun uniqueAccountId(code: String, type: String): Long? {
-        val matches = rows(
-            "SELECT id FROM accounts WHERE account_code=? AND account_type=? AND is_active=1 AND COALESCE(is_deleted,0)=0",
-            arrayOf(code, type)
-        ) { c -> c.getLong(0) }
-        return if (matches.size == 1) matches[0] else null
-    }
-
-    private fun journalSourceCount(stationId: Int, refillId: Long) = scalar(
-        "SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND reference_type='fuel_supply' AND reference_id=? AND COALESCE(is_deleted,0)=0",
-        arrayOf(stationId.toString(), refillId.toString())
-    )
-
-    private fun isDateInClosedPeriod(stationId: Int, input: String): Boolean {
-        if (!tableExists("fiscal_periods")) return false
-        return scalar(
-            "SELECT COUNT(*) FROM fiscal_periods WHERE station_id=? AND date(?) BETWEEN date(period_start) AND date(period_end) AND status IN ('closing','closed')",
-            arrayOf(stationId.toString(), normalizeDate(input))
-        ) > 0
-    }
-
-    private fun persistItem(runId: Long, stationId: Int, sourceId: Long, action: String, status: String,
-                            amount: Double, detail: JSONObject, note: String) {
-        db.insertOrThrow("historical_reconciliation_items", null, ContentValues().apply {
-            put("run_id", runId); put("station_id", stationId); put("source_table", "tank_refills")
-            put("source_id", sourceId); put("action_type", action); put("action_status", status)
-            put("amount", amount); put("after_json", detail.toString()); put("note", note); put("created_at", now())
-        })
-    }
-
-    private fun ensureRunTables() {
-        db.execSQL("CREATE TABLE IF NOT EXISTS historical_reconciliation_runs (" +
-            "id INTEGER PRIMARY KEY AUTOINCREMENT,uuid TEXT NOT NULL UNIQUE,station_id INTEGER NOT NULL," +
-            "run_mode TEXT NOT NULL,started_at TEXT NOT NULL,completed_at TEXT,created_by INTEGER,status TEXT NOT NULL," +
-            "approval_status_before TEXT,approval_status_after TEXT,repaired_count INTEGER NOT NULL DEFAULT 0," +
-            "skipped_count INTEGER NOT NULL DEFAULT 0,before_json TEXT,after_json TEXT,remarks TEXT)")
-        db.execSQL("CREATE TABLE IF NOT EXISTS historical_reconciliation_items (" +
-            "id INTEGER PRIMARY KEY AUTOINCREMENT,run_id INTEGER NOT NULL,station_id INTEGER NOT NULL," +
-            "source_table TEXT NOT NULL,source_id INTEGER,action_type TEXT NOT NULL,action_status TEXT NOT NULL," +
-            "amount REAL,before_json TEXT,after_json TEXT,note TEXT,created_at TEXT NOT NULL)")
     }
 
     private fun add(target: JSONArray, code: String, severity: String, message: String, count: Int, amount: Double?, records: JSONArray?) {
@@ -609,13 +341,15 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
     private fun scalarDouble(sql: String, args: Array<String>): Double {
         db.rawQuery(sql, args).use { c -> return if (c.moveToFirst()) c.getDouble(0) else 0.0 }
     }
-    private fun <T> rows(sql: String, args: Array<String>, mapper: (Cursor) -> T): List<T> {
+    private fun rows(sql: String, args: Array<String>, mapper: (Cursor) -> JSONObject): JSONArray {
+        val out = JSONArray()
+        db.rawQuery(sql, args).use { c -> while (c.moveToNext()) out.put(mapper(c)) }
+        return out
+    }
+    private fun <T> query(sql: String, args: Array<String>, mapper: (Cursor) -> T): List<T> {
         val out = ArrayList<T>()
         db.rawQuery(sql, args).use { c -> while (c.moveToNext()) out.add(mapper(c)) }
         return out
-    }
-    private fun <T> queryOne(sql: String, args: Array<String>, mapper: (Cursor) -> T): T? {
-        db.rawQuery(sql, args).use { c -> return if (c.moveToFirst()) mapper(c) else null }
     }
     private fun normalizeDate(input: String): String {
         val value = input.trim().take(10)
