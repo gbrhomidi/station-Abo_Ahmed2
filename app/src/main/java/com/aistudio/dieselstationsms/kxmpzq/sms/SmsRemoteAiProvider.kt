@@ -103,12 +103,7 @@ class SmsRemoteAiProvider : SmsAiProvider {
     }
 
     private fun call(config: SmsAiRuntimeConfig, payload: JSONObject): JSONObject {
-        val client = OkHttpClient.Builder()
-            .connectTimeout(config.timeoutMs, TimeUnit.MILLISECONDS)
-            .readTimeout(config.timeoutMs, TimeUnit.MILLISECONDS)
-            .writeTimeout(config.timeoutMs, TimeUnit.MILLISECONDS)
-            .callTimeout(config.timeoutMs, TimeUnit.MILLISECONDS)
-            .build()
+        val client = SmsAiHttpClientFactory.create(config.timeoutMs)
         val request = Request.Builder()
             .url(config.endpoint)
             .header("Authorization", "Bearer ${config.apiKey}")
