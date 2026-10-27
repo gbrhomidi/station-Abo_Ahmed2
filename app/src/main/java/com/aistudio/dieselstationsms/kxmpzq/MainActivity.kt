@@ -24,6 +24,7 @@ import android.print.PrintAttributes
 import android.print.PrintManager
 import android.provider.Settings
 import android.provider.OpenableColumns
+import android.provider.DocumentsContract
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -55,6 +56,8 @@ import com.aistudio.dieselstationsms.kxmpzq.startup.SmsServiceLauncher
 import com.aistudio.dieselstationsms.kxmpzq.startup.StartupReason
 import com.aistudio.dieselstationsms.kxmpzq.sms.*
 import com.aistudio.dieselstationsms.kxmpzq.settings.backup.BackupEntry
+import com.aistudio.dieselstationsms.kxmpzq.settings.backup.FullDatabaseBackupManager
+import com.aistudio.dieselstationsms.kxmpzq.settings.backup.FullDatabaseBackupScheduler
 import com.aistudio.dieselstationsms.kxmpzq.settings.di.SettingsModule
 import com.aistudio.dieselstationsms.kxmpzq.settings.model.ApplicationSettings
 import com.aistudio.dieselstationsms.kxmpzq.ui.theme.MyApplicationTheme
@@ -89,6 +92,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingInvoiceFolderHtml: String? = null
     private var pendingInvoiceFolderPhone: String = ""
     private var pendingInvoiceFolderAction: String = ""
+    private var isDatabaseBackupPickerActive: Boolean = false
 
     private fun currentDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
@@ -118,6 +122,8 @@ class MainActivity : AppCompatActivity() {
         private val vehicleFilePickerRequestCode = 4209
         private val stationFilePickerRequestCode = 4210
         private val invoiceFolderPickerRequestCode = 4211
+        private val databaseBackupFolderPickerRequestCode = 4212
+        private val databaseBackupRestorePickerRequestCode = 4213
         private var pendingVehicleFileKind: String? = null
         private var pendingStationFileKind: String? = null
 
@@ -426,6 +432,28 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
         webView?.onPause()
         DebugLogger.logEvent("app_paused", "Application paused")
+    }
+
+    override fun onStop() {
+        // Don't treat opening the system document picker as leaving the app.
+        if (!isChangingConfigurations && !isDatabaseBackupPickerActive) {
+            runCatching {
+                if (::dbHelper.isInitialized &&
+                    dbHelper.getSetting("automaticBackupOnExit").trim().lowercase() in setOf("1", "true", "yes", "on") &&
+                    dbHelper.getSetting("includeDatabaseBackup").trim().lowercase() !in setOf("0", "false", "no", "off") &&
+                    FullDatabaseBackupManager.selectedTreeUri(this) != null
+                ) {
+                    val lifecyclePrefs = getSharedPreferences("database_backup_lifecycle", Context.MODE_PRIVATE)
+                    val now = System.currentTimeMillis()
+                    val lastQueued = lifecyclePrefs.getLong("last_exit_backup_at", 0L)
+                    if (now - lastQueued >= 5 * 60 * 1000L) {
+                        lifecyclePrefs.edit().putLong("last_exit_backup_at", now).apply()
+                        FullDatabaseBackupScheduler.scheduleOnExit(applicationContext)
+                    }
+                }
+            }.onFailure { DebugLogger.logException("DatabaseBackupOnExit", it) }
+        }
+        super.onStop()
     }
 
     override fun onDestroy() {
@@ -1310,7 +1338,71 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun notifyDatabaseBackupJs(callbackExpression: String, payload: JSONObject) {
+        val javascript = callbackExpression + "(" + JSONObject.quote(payload.toString()) + ");"
+        webView?.post { safeEvaluateJs(javascript) }
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == databaseBackupFolderPickerRequestCode) {
+            isDatabaseBackupPickerActive = false
+            val uri = data?.data
+            if (resultCode == RESULT_OK && data != null && uri != null) {
+                try {
+                    val allowedFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    val grantFlags = data.flags and allowedFlags
+                    require(
+                        grantFlags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0 &&
+                            grantFlags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION != 0
+                    ) { "مدير التخزين لم يمنح صلاحية القراءة والكتابة إلى المجلد" }
+                    contentResolver.takePersistableUriPermission(uri, grantFlags)
+                    getSharedPreferences(FullDatabaseBackupManager.PREFS_NAME, Context.MODE_PRIVATE)
+                        .edit().putString(FullDatabaseBackupManager.TREE_URI_KEY, uri.toString()).apply()
+                    if (::dbHelper.isInitialized) dbHelper.setSetting("backupLocation", uri.toString())
+                    val treeId = DocumentsContract.getTreeDocumentId(uri)
+                    notifyDatabaseBackupJs(
+                        "window.onDatabaseBackupFolderSelected",
+                        JSONObject().put("success", true).put("uri", uri.toString())
+                            .put("folder_name", treeId.substringAfterLast(':').substringAfterLast('/').ifBlank { "المجلد المحدد" })
+                            .put("message", "تم حفظ صلاحية المجلد المختار")
+                    )
+                    DebugLogger.info("DatabaseBackupPicker", "Persisted selected backup tree URI")
+                } catch (error: Exception) {
+                    DebugLogger.logException("DatabaseBackupPicker", error)
+                    notifyDatabaseBackupJs("window.onDatabaseBackupFolderSelected",
+                        JSONObject().put("success", false).put("error", error.message ?: "تعذر حفظ المجلد المختار"))
+                }
+            } else {
+                notifyDatabaseBackupJs("window.onDatabaseBackupFolderSelected",
+                    JSONObject().put("success", false).put("cancelled", true).put("error", "تم إلغاء تحديد مكان النسخة الاحتياطية"))
+            }
+            return
+        }
+
+        if (requestCode == databaseBackupRestorePickerRequestCode) {
+            isDatabaseBackupPickerActive = false
+            val uri = data?.data
+            if (resultCode == RESULT_OK && data != null && uri != null) {
+                try {
+                    val readFlag = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    if (readFlag != 0) runCatching { contentResolver.takePersistableUriPermission(uri, readFlag) }
+                    val name = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) else null
+                    } ?: uri.lastPathSegment?.substringAfterLast('/') ?: "ملف النسخة"
+                    notifyDatabaseBackupJs("window.onDatabaseBackupRestoreFileSelected",
+                        JSONObject().put("success", true).put("uri", uri.toString()).put("file_name", name))
+                } catch (error: Exception) {
+                    DebugLogger.logException("DatabaseBackupRestorePicker", error)
+                    notifyDatabaseBackupJs("window.onDatabaseBackupRestoreFileSelected",
+                        JSONObject().put("success", false).put("error", error.message ?: "تعذر قراءة الملف المحدد"))
+                }
+            } else {
+                notifyDatabaseBackupJs("window.onDatabaseBackupRestoreFileSelected",
+                    JSONObject().put("success", false).put("cancelled", true).put("error", "تم إلغاء اختيار النسخة الاحتياطية"))
+            }
+            return
+        }
+
         if (requestCode == invoiceFolderPickerRequestCode) {
             val html = pendingInvoiceFolderHtml
             val phone = pendingInvoiceFolderPhone
@@ -5351,6 +5443,156 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             } catch (e: Exception) {
                 DebugLogger.logException("Settings", e)
                 errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun chooseDatabaseBackupFolder(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val context = contextRef.get() ?: return errorResponse("سياق التطبيق غير متاح")
+            return try {
+                activity.runOnUiThread {
+                    try {
+                        activity.isDatabaseBackupPickerActive = true
+                        val picker = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                            FullDatabaseBackupManager.selectedTreeUri(context)?.let { uri ->
+                                putExtra(DocumentsContract.EXTRA_INITIAL_URI,
+                                    DocumentsContract.buildDocumentUriUsingTree(uri, DocumentsContract.getTreeDocumentId(uri)))
+                            }
+                        }
+                        activity.startActivityForResult(picker, databaseBackupFolderPickerRequestCode)
+                    } catch (error: Exception) {
+                        activity.isDatabaseBackupPickerActive = false
+                        activity.notifyDatabaseBackupJs("window.onDatabaseBackupFolderSelected",
+                            JSONObject().put("success", false).put("error", error.message ?: "تعذر فتح مدير التخزين"))
+                    }
+                }
+                JSONObject().put("success", true).put("status", "processing").toString()
+            } catch (error: Exception) {
+                activity.isDatabaseBackupPickerActive = false
+                errorResponse(error.message ?: "تعذر فتح مدير التخزين")
+            }
+        }
+
+        @JavascriptInterface
+        fun createDatabaseBackup(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val context = contextRef.get() ?: return errorResponse("سياق التطبيق غير متاح")
+            val database = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val treeUri = FullDatabaseBackupManager.selectedTreeUri(context)
+                ?: return errorResponse("حدد «مكان النسخة الاحتياطية» أولاً")
+            val encrypted = when (database.getSetting("encryptBackup").trim().lowercase()) {
+                "0", "false", "no", "off" -> false
+                else -> true
+            }
+            val keepCount = database.getSetting("keepDatabaseBackupCount").toIntOrNull()?.coerceIn(1, 100) ?: 10
+            activity.lifecycleScope.launch(Dispatchers.IO) {
+                val result = try {
+                    FullDatabaseBackupManager(context.applicationContext, database).createBackup(treeUri, encrypted, keepCount)
+                } catch (error: Exception) {
+                    DebugLogger.logException("FullDatabaseBackup", error)
+                    JSONObject().put("success", false).put("error", error.message ?: "فشل إنشاء النسخة الكاملة")
+                }
+                withContext(Dispatchers.Main) {
+                    activity.notifyDatabaseBackupJs("window.onFullDatabaseBackupResult", result)
+                }
+            }
+            return JSONObject().put("success", true).put("status", "processing").toString()
+        }
+
+        @JavascriptInterface
+        fun listDatabaseBackups(): String {
+            val context = contextRef.get() ?: return errorResponse("سياق التطبيق غير متاح")
+            val treeUri = FullDatabaseBackupManager.selectedTreeUri(context) ?: return dataResponse(JSONArray())
+            return try {
+                dataResponse(FullDatabaseBackupManager(context, db).listBackups(treeUri))
+            } catch (error: Exception) {
+                DebugLogger.logException("FullDatabaseBackupList", error)
+                errorResponse(error.message ?: "تعذر قراءة النسخ الموجودة في المجلد المحدد")
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteDatabaseBackup(uriString: String): String {
+            val context = contextRef.get() ?: return errorResponse("سياق التطبيق غير متاح")
+            val treeUri = FullDatabaseBackupManager.selectedTreeUri(context)
+                ?: return errorResponse("لم يتم تحديد مجلد النسخ")
+            return try {
+                val deleted = FullDatabaseBackupManager(context, db).deleteBackup(treeUri, Uri.parse(uriString))
+                successResponse(deleted, if (deleted) "تم حذف ملف النسخة المحدد" else "لم يتم حذف ملف النسخة")
+            } catch (error: Exception) {
+                DebugLogger.logException("FullDatabaseBackupDelete", error)
+                errorResponse(error.message ?: "تعذر حذف ملف النسخة")
+            }
+        }
+
+        @JavascriptInterface
+        fun restoreDatabaseBackup(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val context = contextRef.get() ?: return errorResponse("سياق التطبيق غير متاح")
+            return try {
+                activity.runOnUiThread {
+                    try {
+                        activity.isDatabaseBackupPickerActive = true
+                        val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = "*/*"
+                            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/octet-stream", "application/vnd.sqlite3", "application/x-sqlite3"))
+                            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                            FullDatabaseBackupManager.selectedTreeUri(context)?.let { uri ->
+                                putExtra(DocumentsContract.EXTRA_INITIAL_URI,
+                                    DocumentsContract.buildDocumentUriUsingTree(uri, DocumentsContract.getTreeDocumentId(uri)))
+                            }
+                        }
+                        activity.startActivityForResult(picker, databaseBackupRestorePickerRequestCode)
+                    } catch (error: Exception) {
+                        activity.isDatabaseBackupPickerActive = false
+                        activity.notifyDatabaseBackupJs("window.onDatabaseBackupRestoreFileSelected",
+                            JSONObject().put("success", false).put("error", error.message ?: "تعذر فتح مدير التخزين"))
+                    }
+                }
+                JSONObject().put("success", true).put("status", "processing").toString()
+            } catch (error: Exception) {
+                activity.isDatabaseBackupPickerActive = false
+                errorResponse(error.message ?: "تعذر فتح مدير التخزين")
+            }
+        }
+
+        @JavascriptInterface
+        fun restoreDatabaseBackupByUri(uriString: String): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val context = contextRef.get() ?: return errorResponse("سياق التطبيق غير متاح")
+            val database = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val uri = Uri.parse(uriString)
+            if (uri.scheme != "content") return errorResponse("يجب تحديد نسخة من مدير التخزين")
+            activity.lifecycleScope.launch(Dispatchers.IO) {
+                val result = try {
+                    FullDatabaseBackupManager(context.applicationContext, database).restoreBackup(uri)
+                } catch (error: Exception) {
+                    DebugLogger.logException("FullDatabaseRestore", error)
+                    JSONObject().put("success", false).put("error", error.message ?: "فشلت استعادة قاعدة البيانات")
+                }
+                withContext(Dispatchers.Main) {
+                    activity.notifyDatabaseBackupJs("window.onDatabaseBackupRestored", result)
+                }
+            }
+            return JSONObject().put("success", true).put("status", "processing").toString()
+        }
+
+        @JavascriptInterface
+        fun applyDatabaseBackupSettings(): String {
+            val context = contextRef.get() ?: return errorResponse("سياق التطبيق غير متاح")
+            val database = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val treeUri = FullDatabaseBackupManager.selectedTreeUri(context)?.toString()
+                val result = FullDatabaseBackupScheduler.configure(context, database, treeUri)
+                if (result.optBoolean("success", false)) result.toString()
+                else errorResponse(result.optString("error", "تعذر تطبيق إعدادات النسخ الاحتياطي"))
+            } catch (error: Exception) {
+                DebugLogger.logException("DatabaseBackupSettings", error)
+                errorResponse(error.message ?: "تعذر تطبيق إعدادات النسخ الاحتياطي")
             }
         }
 

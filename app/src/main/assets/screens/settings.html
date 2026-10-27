@@ -1983,12 +1983,12 @@ tr:last-child td { border-bottom:0; }
         backup: [
             ['autoBackupEnabled','نسخ احتياطي تلقائي','bool','النسخ الدوري'],
             ['backupIntervalHours','فترة النسخ (ساعة)','number','الفترة'],
-            ['backupLocation','موقع النسخ','text','موقع داخل مساحة التطبيق'],
-            ['includeLogsInBackup','إدراج السجلات','bool','تضمين سجلات النظام'],
-            ['includeDatabaseBackup','إدراج قاعدة البيانات','bool','يُرسل إلى BackupManager فقط'],
+            ['backupLocation','موقع النسخ','text','يتم اختياره من مدير تخزين الهاتف؛ تُحفظ النسخة الكاملة في المجلد المحدد'],
+            ['includeLogsInBackup','إدراج السجلات','bool','النسخة الكاملة تشمل سجلات التطبيق المخزنة داخل SQLite'],
+            ['includeDatabaseBackup','إدراج قاعدة البيانات','bool','يشمل قاعدة البيانات في النسخ التلقائي؛ النسخ اليدوية دائماً كاملة'],
             ['encryptBackup','تشفير النسخ','bool','التشفير عند توفره'],
             ['automaticBackupOnExit','نسخ عند الخروج','bool','النسخ عند الإغلاق'],
-            ['keepDatabaseBackupCount','عدد نسخ قاعدة البيانات','number','الحد']
+            ['keepDatabaseBackupCount','عدد نسخ قاعدة البيانات','number','عدد النسخ التي يحتفظ بها التطبيق في المجلد المختار'],
         ],
         maintenance: [
             ['autoCleanupEnabled','تنظيف تلقائي','bool','التنظيف الدوري'],
@@ -2129,6 +2129,27 @@ tr:last-child td { border-bottom:0; }
                     break;
                 case 'getUsers':
                     raw = bridge.getUsers();
+                    break;
+                case 'createDatabaseBackup':
+                    raw = bridge.createDatabaseBackup();
+                    break;
+                case 'chooseDatabaseBackupFolder':
+                    raw = bridge.chooseDatabaseBackupFolder();
+                    break;
+                case 'restoreDatabaseBackup':
+                    raw = bridge.restoreDatabaseBackup();
+                    break;
+                case 'restoreDatabaseBackupByUri':
+                    raw = bridge.restoreDatabaseBackupByUri(String(payload.id));
+                    break;
+                case 'listDatabaseBackups':
+                    raw = bridge.listDatabaseBackups();
+                    break;
+                case 'deleteDatabaseBackup':
+                    raw = bridge.deleteDatabaseBackup(String(payload.id));
+                    break;
+                case 'applyDatabaseBackupSettings':
+                    raw = bridge.applyDatabaseBackupSettings();
                     break;
                 case 'createSettingsBackup':
                     raw = bridge.createSettingsBackup();
@@ -3445,7 +3466,7 @@ tr:last-child td { border-bottom:0; }
             'generalFields','systemFields','startupFields','smsFields',
             'monitoringBadge','monitoringState','metrics','refreshMonitoring',
             'openMonitoringReport','clearLogs','clearMetrics','securityFields',
-            'backupFields','createBackup','refreshBackups','backupsBody',
+            'backupFields','createBackup','chooseBackupLocation','restoreDatabaseBackup','backupLocationStatus','refreshBackups','backupsBody',
             'maintenanceFields','optimizeDb','checkIntegrity','refreshDbInfo',
             'integrityResult','userSearchBadge','usersBody','displayFields'
         ];
@@ -3819,6 +3840,13 @@ tr:last-child td { border-bottom:0; }
                 verifiedLegacy[key] = readback.value;
             }
 
+            if (activeTab === 'backup') {
+                const appliedBackupSettings = await bridgeCall('applyDatabaseBackupSettings');
+                if (!appliedBackupSettings || appliedBackupSettings.success !== true) {
+                    throw new Error('تعذر تطبيق إعدادات النسخ الاحتياطي فعلياً');
+                }
+            }
+
             // Render the values that were individually verified, not a possibly stale
             // or differently shaped bulk-map snapshot.
             Object.assign(persistedLegacy, verifiedLegacy);
@@ -4083,7 +4111,7 @@ tr:last-child td { border-bottom:0; }
 
     async function refreshBackups() {
         try {
-            const value = dataOf(await bridgeCall('listSettingsBackups'));
+            const value = dataOf(await bridgeCall('listDatabaseBackups'));
             renderBackups(Array.isArray(value) ? value : []);
         } catch (error) {
             toast(error.message, 'bad');
@@ -4092,80 +4120,92 @@ tr:last-child td { border-bottom:0; }
 
     function renderBackups(items) {
         const body = el('backupsBody');
-
         if (!items.length) {
-            body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="fas fa-folder-open"></i>لا توجد نسخ محفوظة.</div></td></tr>';
+            body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="fas fa-folder-open"></i>لا توجد نسخ كاملة في المجلد المحدد. اختر «مكان النسخة الاحتياطية» أولاً.</div></td></tr>';
             return;
         }
-
-        body.innerHTML = items.map(item => `
+        body.innerHTML = items.map(item => \`
             <tr>
-                <td>${escapeHtml(item.id)}</td>
-                <td>${escapeHtml(formatDate(item.created_at))}</td>
-                <td>${escapeHtml(formatBytes(item.size))}</td>
-                <td>${item.is_encrypted ? 'نعم' : 'لا'}</td>
+                <td>\${escapeHtml(item.file_name || item.id)}</td>
+                <td>\${escapeHtml(formatDate(item.created_at))}</td>
+                <td>\${escapeHtml(formatBytes(item.size))}</td>
+                <td>\${item.is_encrypted ? 'نعم' : 'لا'}</td>
                 <td>
-                    <button class="btn" type="button" data-restore="${escapeAttr(item.id)}">استعادة</button>
-                    <button class="btn danger" type="button" data-delete="${escapeAttr(item.id)}">حذف</button>
+                    <button class="btn" type="button" data-restore="\${escapeAttr(item.id)}">استعادة كاملة</button>
+                    <button class="btn danger" type="button" data-delete="\${escapeAttr(item.id)}">حذف</button>
                 </td>
             </tr>
-        `).join('');
-
-        body.querySelectorAll('[data-restore]').forEach(button => {
-            button.addEventListener('click', () =>
-                ask(
-                    'استعادة النسخة',
-                    'سيتم استبدال إعدادات التطبيق بالقيم الموجودة في النسخة المحددة.',
-                    () => restoreBackup(button.dataset.restore)
-                )
-            );
-        });
-
-        body.querySelectorAll('[data-delete]').forEach(button => {
-            button.addEventListener('click', () =>
-                ask(
-                    'حذف النسخة',
-                    'لا يمكن التراجع عن حذف النسخة المحددة.',
-                    () => deleteBackup(button.dataset.delete)
-                )
-            );
-        });
+        \`).join('');
+        body.querySelectorAll('[data-restore]').forEach(button => button.addEventListener('click', () =>
+            ask(
+                'استعادة قاعدة البيانات كاملة',
+                'سيتم استبدال قاعدة البيانات الحالية بالنسخة المحددة. ينشئ التطبيق نسخة طوارئ أولاً ويتحقق من سلامة SQLite وإصدار المخطط.',
+                () => restoreBackup(button.dataset.restore)
+            )
+        ));
+        body.querySelectorAll('[data-delete]').forEach(button => button.addEventListener('click', () =>
+            ask('حذف النسخة', 'لا يمكن التراجع عن حذف ملف النسخة الاحتياطية.', () => deleteBackup(button.dataset.delete))
+        ));
     }
 
     async function createBackup() {
+        let waitingForNativeResult = false;
         showLoading(true);
         try {
-            const result = await bridgeCall('createSettingsBackup');
-            toast('تم إنشاء النسخة: ' + (result.id || '—'));
+            const result = await bridgeCall('createDatabaseBackup');
+            if (result.status === 'processing') {
+                waitingForNativeResult = true;
+                toast('بدأ إنشاء نسخة SQLite كاملة؛ سيتم التحقق من الملف قبل إعلان النجاح.');
+                return;
+            }
+            if (result.success !== true) throw new Error(result.error || 'فشل إنشاء النسخة الكاملة');
+            toast(result.message || ('تم إنشاء النسخة: ' + (result.file_name || '—')));
             await refreshBackups();
         } catch (error) {
             toast(error.message, 'bad');
         } finally {
-            showLoading(false);
+            if (!waitingForNativeResult) showLoading(false);
+        }
+    }
+
+    async function chooseBackupLocation() {
+        try {
+            const result = await bridgeCall('chooseDatabaseBackupFolder');
+            if (result.status !== 'processing') throw new Error('لم يتم فتح مدير التخزين');
+            toast('اختر مجلداً أو أنشئ مجلداً جديداً من مدير التخزين.');
+        } catch (error) {
+            toast(error.message, 'bad');
+        }
+    }
+
+    async function restoreDatabaseBackup() {
+        try {
+            const result = await bridgeCall('restoreDatabaseBackup');
+            if (result.status !== 'processing') throw new Error('لم يتم فتح مدير التخزين');
+            toast('اختر ملف النسخة الاحتياطية؛ ستظهر مطالبة تأكيد قبل استبدال قاعدة البيانات.');
+        } catch (error) {
+            toast(error.message, 'bad');
         }
     }
 
     async function restoreBackup(id) {
         closeModal('confirmModal');
+        let waitingForNativeResult = false;
         showLoading(true);
         try {
-            const value = dataOf(await bridgeCall('restoreSettingsBackup', {id})) || {};
-
-            Object.keys(settings).forEach(key => delete settings[key]);
-            Object.assign(settings, value);
-
-            Object.keys(settings).forEach(key => setApplicationField(key, settings[key]));
-            setDarkMode(
-                settings.darkMode === true ||
-                settings.darkMode === 1 ||
-                settings.darkMode === '1'
-            );
-
-            toast('تمت استعادة الإعدادات فعلياً');
+            const result = await bridgeCall('restoreDatabaseBackupByUri', {id});
+            if (result.status === 'processing') {
+                waitingForNativeResult = true;
+                toast('بدأ فحص النسخة ثم استعادتها بأمان.');
+                return;
+            }
+            if (result.success !== true) throw new Error(result.error || 'فشلت الاستعادة');
+            toast(result.message || 'تمت استعادة قاعدة البيانات');
+            await refreshBackups();
         } catch (error) {
             toast(error.message, 'bad');
         } finally {
-            showLoading(false);
+            if (!waitingForNativeResult) showLoading(false);
         }
     }
 
@@ -4173,8 +4213,8 @@ tr:last-child td { border-bottom:0; }
         closeModal('confirmModal');
         showLoading(true);
         try {
-            await bridgeCall('deleteSettingsBackup', {id});
-            toast('تم حذف النسخة');
+            await bridgeCall('deleteDatabaseBackup', {id});
+            toast('تم حذف ملف النسخة الاحتياطية');
             await refreshBackups();
         } catch (error) {
             toast(error.message, 'bad');
@@ -4182,6 +4222,62 @@ tr:last-child td { border-bottom:0; }
             showLoading(false);
         }
     }
+
+    window.onDatabaseBackupFolderSelected = function(payload) {
+        try {
+            const result = typeof payload === 'string' ? JSON.parse(payload) : payload;
+            if (result && result.cancelled) return;
+            if (!result || result.success !== true) throw new Error((result && result.error) || 'لم يتم اختيار المجلد');
+            const input = el('setting-backupLocation');
+            if (input) input.value = result.uri || '';
+            const status = el('backupLocationStatus');
+            if (status) status.textContent = 'مجلد النسخ المحدد: ' + (result.folder_name || result.uri || 'تم تحديد المجلد');
+            toast(result.message || 'تم حفظ مكان النسخة الاحتياطية');
+        } catch (error) {
+            toast(error.message, 'bad');
+        }
+    };
+
+    window.onDatabaseBackupRestoreFileSelected = function(payload) {
+        try {
+            const result = typeof payload === 'string' ? JSON.parse(payload) : payload;
+            if (result && result.cancelled) return;
+            if (!result || result.success !== true) throw new Error((result && result.error) || 'تعذر اختيار ملف النسخة');
+            ask(
+                'تأكيد استعادة قاعدة البيانات',
+                'الملف المحدد: ' + (result.file_name || 'نسخة احتياطية') + '. ستُستبدل قاعدة البيانات الحالية. ينشئ التطبيق نسخة طوارئ أولاً ويتحقق من سلامة SQLite وتوافق المخطط قبل تطبيقها.',
+                function() { restoreBackup(result.uri); }
+            );
+        } catch (error) {
+            toast(error.message, 'bad');
+        }
+    };
+
+    window.onFullDatabaseBackupResult = function(payload) {
+        try {
+            const result = typeof payload === 'string' ? JSON.parse(payload) : payload;
+            if (!result || result.success !== true) throw new Error((result && result.error) || 'فشل إنشاء النسخة الكاملة');
+            toast((result.message || 'اكتمل النسخ الكامل') + ' (' + (result.file_name || '') + ', ' + formatBytes(result.size || 0) + ')');
+            refreshBackups();
+        } catch (error) {
+            toast(error.message, 'bad');
+        } finally {
+            showLoading(false);
+        }
+    };
+
+    window.onDatabaseBackupRestored = function(payload) {
+        try {
+            const result = typeof payload === 'string' ? JSON.parse(payload) : payload;
+            if (!result || result.success !== true) throw new Error((result && result.error) || 'فشلت استعادة قاعدة البيانات');
+            toast(result.message || 'تمت استعادة قاعدة البيانات والتحقق منها؛ سيُعاد تحميل الشاشة لتحديث البيانات.');
+            setTimeout(() => window.location.reload(), 1200);
+        } catch (error) {
+            toast(error.message, 'bad');
+        } finally {
+            showLoading(false);
+        }
+    };
 
     async function optimizeDb() {
         showLoading(true);
@@ -4393,6 +4489,8 @@ tr:last-child td { border-bottom:0; }
         el('refreshMonitoring').addEventListener('click', refreshMonitoring);
         el('openMonitoringReport').addEventListener('click', openMonitoringReport);
         el('createBackup').addEventListener('click', createBackup);
+        el('chooseBackupLocation').addEventListener('click', chooseBackupLocation);
+        el('restoreDatabaseBackup').addEventListener('click', restoreDatabaseBackup);
         el('refreshBackups').addEventListener('click', refreshBackups);
         el('optimizeDb').addEventListener('click', optimizeDb);
         el('checkIntegrity').addEventListener('click', checkIntegrity);

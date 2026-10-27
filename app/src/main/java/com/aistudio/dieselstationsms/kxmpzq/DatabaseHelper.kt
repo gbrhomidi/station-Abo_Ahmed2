@@ -23528,24 +23528,59 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val dbFile = contextRef.getDatabasePath(DB_NAME)
             require(dbFile.exists()) { "ملف قاعدة البيانات غير موجود" }
+
+            // Committed pages can still live in -wal; copying only the .db file loses them.
+            val liveDatabase = writableDatabase
+            val checkpoint = liveDatabase.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { cursor ->
+                require(cursor.moveToFirst()) { "لم يُرجع SQLite نتيجة WAL checkpoint" }
+                Triple(cursor.getInt(0), cursor.getInt(1), cursor.getInt(2))
+            }
+            require(checkpoint.first == 0 && (checkpoint.second < 0 || checkpoint.third >= checkpoint.second)) {
+                "تعذر إكمال WAL checkpoint؛ busy=" + checkpoint.first +
+                    ", log=" + checkpoint.second + ", checkpointed=" + checkpoint.third
+            }
+
+            // Close SQLiteOpenHelper connections after checkpoint and before snapshotting.
+            close()
+            val walFile = File(dbFile.absolutePath + "-wal")
+            require(!walFile.exists() || walFile.length() == 0L) {
+                "لا يمكن ضمان اكتمال النسخة: ملف WAL ما زال يحتوي بيانات بعد checkpoint"
+            }
+
             val backupDir = File(contextRef.getExternalFilesDir(null), "backups")
             require(backupDir.exists() || backupDir.mkdirs()) { "تعذر إنشاء مجلد النسخ" }
             val stamp = System.currentTimeMillis()
-            val tempFile = File(backupDir, ".backup_${stamp}.tmp")
-            val backupFile = File(backupDir, "backup_${stamp}.db")
+            val tempFile = File(backupDir, ".backup_" + stamp + ".tmp")
+            val backupFile = File(backupDir, "backup_" + stamp + ".db")
             dbFile.copyTo(tempFile, overwrite = true)
             if (!tempFile.renameTo(backupFile)) {
                 tempFile.copyTo(backupFile, overwrite = true)
                 tempFile.delete()
             }
             require(backupFile.exists() && backupFile.length() > 0L) { "فشل إنشاء ملف النسخة" }
-            recordBackupHistory(backupFile.absolutePath, checksum = sha256File(backupFile), startedAtMillis = stamp, completedAtMillis = System.currentTimeMillis())
+
+            SQLiteDatabase.openDatabase(backupFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { snapshot ->
+                val integrityOk = snapshot.rawQuery("PRAGMA integrity_check", null).use { cursor ->
+                    cursor.moveToFirst() && cursor.getString(0).equals("ok", true)
+                }
+                require(integrityOk) { "فشل integrity_check لملف النسخة الذي تم إنشاؤه" }
+                val version = snapshot.rawQuery("PRAGMA user_version", null).use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getInt(0) else -1
+                }
+                require(version == VERSION) { "إصدار قاعدة البيانات في النسخة غير متوافق: " + version }
+            }
+
+            recordBackupHistory(
+                backupFile.absolutePath,
+                checksum = sha256File(backupFile),
+                startedAtMillis = stamp,
+                completedAtMillis = System.currentTimeMillis()
+            )
             backupFile.absolutePath
         } finally {
             dbLock.unlock()
         }
     }
-
     fun restoreDatabase(path: String): Boolean = restoreDatabaseSafe(path).optBoolean("success", false)
 
     fun exportOperationalCsv(screenKey: String, params: JSONObject = JSONObject(), stationScopeId: Int): String {
