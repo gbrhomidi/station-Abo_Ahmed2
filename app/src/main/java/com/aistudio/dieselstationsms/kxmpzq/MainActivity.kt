@@ -5655,14 +5655,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         return errorResponse("لا يمكن حذف سياسة تشفير الإعدادات؛ غيّر حالتها من شاشة الأمان")
                     }
                     if (securitySettingsStore.encryptionEnabled()) {
+                        val existed = securitySettingsStore.hasStoredSetting(key) || db.getSetting(key).isNotBlank()
                         val removed = removeLegacySecuritySetting(db, key)
                         securitySettingsStore.removeSetting(key)
                         applySecurityRuntimeSettings()
-                        return successResponse(removed > 0 || !securitySettingsStore.hasStoredSetting(key), "تم حذف إعداد الأمان")
+                        val success = existed || removed > 0
+                        return successResponse(success, if (success) "تم حذف إعداد الأمان" else "لم يتم العثور على الإعداد")
                     } else {
-                        val removed = removeLegacySecuritySetting(db, key) > 0
+                        val existed = securitySettingsStore.hasStoredSetting(key) || db.getSetting(key).isNotBlank()
+                        val removed = removeLegacySecuritySetting(db, key)
                         securitySettingsStore.removeSetting(key)
-                        return successResponse(removed, if (removed) "تم الحذف" else "لم يتم العثور على الإعداد")
+                        val success = existed || removed > 0
+                        return successResponse(success, if (success) "تم الحذف" else "لم يتم العثور على الإعداد")
                     }
                     applySecurityRuntimeSettings()
                     return successResponse(true, "تم حذف إعداد الأمان")
