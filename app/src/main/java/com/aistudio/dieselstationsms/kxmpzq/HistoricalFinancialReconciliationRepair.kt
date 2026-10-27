@@ -329,7 +329,7 @@ internal class HistoricalFinancialReconciliationRepair(private val db: SQLiteDat
         if(!hasColumn("accounts","station_id")) {
             val possible = scalar("SELECT COUNT(*) FROM accounts p JOIN accounts c ON c.parent_account_id=p.id " +
                 "WHERE p.is_active=1 AND c.is_active=1 AND COALESCE(p.is_deleted,0)=0 AND COALESCE(c.is_deleted,0)=0 " +
-                "AND ABS(COALESCE(p.opening_balance,0))>0.01 AND ABS(COALESCE(c.opening_balance,0))>0.01")
+                "AND ABS(COALESCE(p.opening_balance,0))>0.01 AND ABS(COALESCE(c.opening_balance,0))>0.01", emptyArray())
             if(possible>0) skip("parent_opening_chart_not_station_scoped","accounts",0,
                 "الحسابات ليست معزولة حسب المحطة؛ لم تُعدّل أرصدة افتتاحية مشتركة تلقائياً",
                 JSONObject().put("candidate_parent_count",possible))
