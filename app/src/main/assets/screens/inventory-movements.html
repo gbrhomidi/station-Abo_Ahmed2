@@ -2501,11 +2501,12 @@ async function loadProductInfo() {
 }
 
 let activeProductPurchaseIdempotencyKey = '';
+let productPurchaseKeySequence = 0;
 function productPurchaseIdempotencyKey() {
     if (!activeProductPurchaseIdempotencyKey) {
         const token = (window.crypto && typeof window.crypto.randomUUID === 'function')
             ? window.crypto.randomUUID()
-            : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+            : Date.now().toString(36) + '-' + (++productPurchaseKeySequence).toString(36);
         activeProductPurchaseIdempotencyKey = 'product-purchase-' + token;
     }
     return activeProductPurchaseIdempotencyKey;
