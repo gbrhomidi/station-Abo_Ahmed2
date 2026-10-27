@@ -6198,11 +6198,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun optimizeSettingsDatabase(): String {
             return try {
-                val sizeBefore = dbHelper.getDatabaseSize()
+                val sizeBefore = databaseSizeIncludingSidecars(dbHelper)
                 runBlocking(Dispatchers.IO) {
                     settingsModule.maintenanceRepository.optimizeDatabase()
                 }
-                val sizeAfter = dbHelper.getDatabaseSize()
+                val sizeAfter = databaseSizeIncludingSidecars(dbHelper)
                 JSONObject().apply {
                     put("success", true)
                     put("message", "اكتمل فحص السلامة واستدعاء VACUUM عبر DatabaseHelper")
@@ -6255,7 +6255,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     put("foreign_key_violations_count", foreignKeyViolationCount)
                     put("foreign_key_violations", foreignKeyViolations)
                     put("foreign_key_violations_truncated", foreignKeyViolationCount > foreignKeyViolations.length())
-                    put("size_bytes", dbHelper.getDatabaseSize())
+                    put("size_bytes", databaseSizeIncludingSidecars(dbHelper))
                 }.toString()
             } catch (e: Exception) {
                 DebugLogger.logException("SettingsMaintenance", e)
@@ -7447,6 +7447,17 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+        private fun databaseSizeIncludingSidecars(db: DatabaseHelper): Long {
+            val databaseFile = contextRef.get()?.getDatabasePath("diesel_station.db")
+                ?: return db.getDatabaseSize()
+            if (!databaseFile.exists()) return db.getDatabaseSize()
+            return listOf(
+                databaseFile,
+                File(databaseFile.absolutePath + "-wal"),
+                File(databaseFile.absolutePath + "-shm")
+            ).sumOf { file -> if (file.exists()) file.length() else 0L }
+        }
+
         @JavascriptInterface
         fun getDatabaseInfo(): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
@@ -7459,17 +7470,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 ).use { cursor ->
                     while (cursor.moveToNext()) tables.put(cursor.getString(0))
                 }
-                val context = contextRef.get()
-                val databaseFile = context?.getDatabasePath("diesel_station.db")
-                val databaseSizeBytes = if (databaseFile != null && databaseFile.exists()) {
-                    listOf(
-                        databaseFile,
-                        File(databaseFile.absolutePath + "-wal"),
-                        File(databaseFile.absolutePath + "-shm")
-                    ).sumOf { file -> if (file.exists()) file.length() else 0L }
-                } else {
-                    db.getDatabaseSize()
-                }
+                val databaseFile = contextRef.get()?.getDatabasePath("diesel_station.db")
+                val databaseSizeBytes = databaseSizeIncludingSidecars(db)
                 val journalMode = runCatching {
                     sqlite.rawQuery("PRAGMA journal_mode", null).use { cursor ->
                         if (cursor.moveToFirst()) cursor.getString(0) else "unknown"
