@@ -170,6 +170,8 @@ SECURITY_CASES = {
             'showBiometricPrompt(', 'securityIdleRunnable', 'forceSecurityLogout(',
             'Keep Remember-Me material intact', 'applySecurityRuntimeSettings(view)',
             'webView?.visibility = View.INVISIBLE', 'secureBackupRequired',
+            'removeLegacySecuritySetting', 'removeLegacySystemSetting',
+            'system_settings', 'بقيت نسخة غير مشفرة من إعداد الأمان في SQLite',
         ],
     ),
     'encrypted-settings-backup': (
