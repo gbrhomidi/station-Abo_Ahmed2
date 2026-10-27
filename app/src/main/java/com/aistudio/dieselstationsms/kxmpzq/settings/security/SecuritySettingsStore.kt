@@ -14,7 +14,7 @@ import javax.crypto.spec.PBEKeySpec
  * Stores security controls only in AndroidX EncryptedSharedPreferences.
  * PIN values are never persisted as text and are never returned to JavaScript.
  */
-class SecuritySettingsStore private constructor(
+class SecuritySettingsStore internal constructor(
     private val preferences: SharedPreferences
 ) {
     companion object {
