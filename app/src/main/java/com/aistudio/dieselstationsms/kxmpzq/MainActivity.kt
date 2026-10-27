@@ -145,7 +145,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             fun setDeveloperModeEnabled(enabled: Boolean) {
-                developerModeEnabled = BuildConfig.DEBUG || enabled
+                developerModeEnabled = enabled
                 isVConsoleReady = developerModeEnabled
                 info("DebugLogger", "Developer diagnostics ${if (developerModeEnabled) "enabled" else "disabled"}")
             }
@@ -6269,7 +6269,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val batteryBackground = maintenanceSettingEnabled(db, "batteryOptimizationEnabled", false)
             val networkOptimization = maintenanceSettingEnabled(db, "networkOptimizationEnabled", false)
             val wakeLockEnabled = maintenanceSettingEnabled(db, "wakeLockEnabled", true)
-            val developerMode = maintenanceSettingEnabled(db, "developerMode", BuildConfig.DEBUG)
+            val developerMode = maintenanceSettingEnabled(db, "developerMode", false)
             val advancedVisible = maintenanceSettingEnabled(db, "showAdvancedSettings", false)
 
             // Apply the persisted choices to runtime policies instead of changing only UI state.
