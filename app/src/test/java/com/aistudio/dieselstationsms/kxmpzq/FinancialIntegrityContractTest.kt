@@ -64,7 +64,10 @@ class FinancialIntegrityContractTest {
         val source = locateDatabaseHelper().readText()
         assertTrue("Existing databases must repair legacy settlement mappings on open",
             source.contains("repairSettlementAccountMappings(db)"))
-        val mappingRepair = functionBody(source, "private fun repairSettlementAccountMappings")
+        val mappingStart = source.indexOf("private fun repairSettlementAccountMappings")
+        val mappingEnd = source.indexOf("private fun findSettlementAccount", mappingStart)
+        assertTrue("Settlement mapping repair implementation must be present", mappingStart >= 0 && mappingEnd > mappingStart)
+        val mappingRepair = source.substring(mappingStart, mappingEnd)
         assertTrue("Settlement auto-repair must only accept a unique canonical cash-account mapping",
             mappingRepair.contains("singleOrNull()") && mappingRepair.contains("is_cash_account"))
         assertTrue("Settlement mapping repairs must be audited",
