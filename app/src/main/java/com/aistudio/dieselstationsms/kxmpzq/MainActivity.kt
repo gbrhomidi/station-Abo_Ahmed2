@@ -59,6 +59,7 @@ import com.aistudio.dieselstationsms.kxmpzq.settings.backup.BackupEntry
 import com.aistudio.dieselstationsms.kxmpzq.settings.backup.FullDatabaseBackupManager
 import com.aistudio.dieselstationsms.kxmpzq.settings.backup.FullDatabaseBackupScheduler
 import com.aistudio.dieselstationsms.kxmpzq.settings.di.SettingsModule
+import com.aistudio.dieselstationsms.kxmpzq.settings.security.SecuritySettingsStore
 import com.aistudio.dieselstationsms.kxmpzq.settings.model.ApplicationSettings
 import com.aistudio.dieselstationsms.kxmpzq.ui.theme.MyApplicationTheme
 import com.aistudio.dieselstationsms.kxmpzq.utils.*
@@ -124,6 +125,7 @@ class MainActivity : AppCompatActivity() {
         private val invoiceFolderPickerRequestCode = 4211
         private val databaseBackupFolderPickerRequestCode = 4212
         private val databaseBackupRestorePickerRequestCode = 4213
+        private val SECURITY_DEVICE_UNLOCK_REQUEST = 4214
         private var pendingVehicleFileKind: String? = null
         private var pendingStationFileKind: String? = null
 
@@ -241,6 +243,27 @@ class MainActivity : AppCompatActivity() {
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     private lateinit var dbHelper: DatabaseHelper
+    private lateinit var securitySettingsStore: SecuritySettingsStore
+    private var securityLockPending: Boolean = false
+    private var securityPromptActive: Boolean = false
+    private var lastSecurityInteractionElapsed: Long = android.os.SystemClock.elapsedRealtime()
+
+    private val securityIdleRunnable = object : Runnable {
+        override fun run() {
+            if (isDestroyed.get()) return
+            if (::dbHelper.isInitialized && hasWindowFocus() && !securityPromptActive &&
+                !currentAuthToken.isNullOrBlank()
+            ) {
+                val timeoutMinutes = securitySettingValue("autoLogoutMinutes").toIntOrNull()?.coerceIn(0, 1440) ?: 0
+                if (timeoutMinutes > 0 &&
+                    android.os.SystemClock.elapsedRealtime() - lastSecurityInteractionElapsed >= timeoutMinutes * 60_000L
+                ) {
+                    forceSecurityLogout("security_auto_logout")
+                }
+            }
+            if (!isDestroyed.get()) handler.postDelayed(this, 5_000L)
+        }
+    }
     private val settingsModule: SettingsModule by lazy {
         SettingsModule(applicationContext)
     }
@@ -293,6 +316,11 @@ class MainActivity : AppCompatActivity() {
 
         try {
             dbHelper = DatabaseHelper.getInstance(applicationContext)
+            migrateLegacySecuritySettings(dbHelper)
+            applySecurityRuntimeSettings()
+            if (!currentAuthToken.isNullOrBlank() && requiresSecurityReauthentication()) {
+                securityLockPending = true
+            }
             smsServiceLauncher = SmsServiceLauncher(
                 applicationContext,
                 ServiceStatusRepository(applicationContext)
@@ -408,6 +436,19 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (::dbHelper.isInitialized) {
+            applySecurityRuntimeSettings()
+            val timeoutMinutes = securitySettingValue("autoLogoutMinutes").toIntOrNull()?.coerceIn(0, 1440) ?: 0
+            if (timeoutMinutes > 0 && !currentAuthToken.isNullOrBlank() &&
+                android.os.SystemClock.elapsedRealtime() - lastSecurityInteractionElapsed >= timeoutMinutes * 60_000L
+            ) {
+                forceSecurityLogout("security_auto_logout")
+            } else if (securityLockPending && !currentAuthToken.isNullOrBlank()) {
+                handler.post { requestSecurityReauthentication() }
+            }
+            handler.removeCallbacks(securityIdleRunnable)
+            handler.postDelayed(securityIdleRunnable, 5_000L)
+        }
         webView?.onResume()
         updateUIState()
         val businessDayPayload = JSONObject().apply {
@@ -429,9 +470,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        if (!isChangingConfigurations && !isDatabaseBackupPickerActive &&
+            !securityPromptActive && !currentAuthToken.isNullOrBlank() &&
+            ::dbHelper.isInitialized && requiresSecurityReauthentication()
+        ) {
+            securityLockPending = true
+        }
         super.onPause()
         webView?.onPause()
         DebugLogger.logEvent("app_paused", "Application paused")
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        if (!securityLockPending && !securityPromptActive) {
+            lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
+        }
     }
 
     override fun onStop() {
@@ -1142,6 +1196,251 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+
+    private fun isSecuritySettingKey(key: String): Boolean =
+        key in SecuritySettingsStore.SETTING_KEYS || key == SecuritySettingsStore.KEY_PIN_CODE
+
+    private fun isTrueSetting(value: String?): Boolean =
+        value?.trim()?.lowercase() in setOf("1", "true", "yes", "on")
+
+    private fun securitySettingValue(key: String): String {
+        if (!::securitySettingsStore.isInitialized) return SecuritySettingsStore.DEFAULTS[key] ?: ""
+        if (key == SecuritySettingsStore.KEY_PIN_CODE) return securitySettingsStore.pinValueForUi()
+        if (key == SecuritySettingsStore.KEY_ENCRYPT_STORAGE) {
+            return if (securitySettingsStore.encryptionEnabled()) "1" else "0"
+        }
+        if (securitySettingsStore.encryptionEnabled()) {
+            return securitySettingsStore.getSetting(key) ?: SecuritySettingsStore.DEFAULTS[key] ?: "0"
+        }
+        if (!::dbHelper.isInitialized) return SecuritySettingsStore.DEFAULTS[key] ?: "0"
+        return dbHelper.getSetting(key).takeIf { it.isNotBlank() }
+            ?: SecuritySettingsStore.DEFAULTS[key] ?: "0"
+    }
+
+    private fun normalizeSecuritySetting(key: String, value: String): String {
+        return when (key) {
+            "requireDeviceUnlock", "encryptStorage", "biometricLockEnabled",
+            "hideSensitiveData", "preventScreenshots", "secureBackupEnabled" ->
+                if (isTrueSetting(value)) "1" else "0"
+            "autoLogoutMinutes" -> (value.trim().toIntOrNull() ?: 0).coerceIn(0, 1440).toString()
+            else -> value
+        }
+    }
+
+    /** Moves only the security panel's allowlisted settings; the operational SQLite database is untouched. */
+    private fun migrateLegacySecuritySettings(db: DatabaseHelper) {
+        val legacyPin = runCatching { db.getSetting(SecuritySettingsStore.KEY_PIN_CODE) }.getOrDefault("")
+        if (legacyPin.isNotBlank() && !securitySettingsStore.isPinConfigured()) {
+            runCatching { securitySettingsStore.savePinCode(legacyPin) }
+                .onFailure { DebugLogger.warn("SecuritySettings", "Legacy PIN could not be migrated; it was not retained in plaintext") }
+        }
+        if (legacyPin.isNotBlank()) runCatching { db.deleteSetting(SecuritySettingsStore.KEY_PIN_CODE) }
+
+        val encrypt = securitySettingsStore.encryptionEnabled()
+        val migratable = SecuritySettingsStore.SETTING_KEYS - SecuritySettingsStore.KEY_ENCRYPT_STORAGE
+        if (encrypt) {
+            migratable.forEach { key ->
+                val legacy = runCatching { db.getSetting(key) }.getOrDefault("")
+                if (legacy.isNotBlank()) {
+                    if (!securitySettingsStore.hasStoredSetting(key)) {
+                        securitySettingsStore.putSetting(key, normalizeSecuritySetting(key, legacy))
+                    }
+                    runCatching { db.deleteSetting(key) }
+                }
+            }
+        } else {
+            migratable.forEach { key ->
+                if (securitySettingsStore.hasStoredSetting(key)) {
+                    val stored = securitySettingsStore.getSetting(key)
+                    if (stored != null) runCatching { db.setSetting(key, stored) }
+                    securitySettingsStore.removeSetting(key)
+                }
+            }
+        }
+    }
+
+    private fun switchSecurityStorage(db: DatabaseHelper, enableEncryption: Boolean) {
+        if (securitySettingsStore.encryptionEnabled() == enableEncryption) {
+            securitySettingsStore.putSetting(SecuritySettingsStore.KEY_ENCRYPT_STORAGE, if (enableEncryption) "1" else "0")
+            return
+        }
+        val migratable = SecuritySettingsStore.SETTING_KEYS - SecuritySettingsStore.KEY_ENCRYPT_STORAGE
+        if (enableEncryption) {
+            migratable.forEach { key ->
+                val legacy = runCatching { db.getSetting(key) }.getOrDefault("")
+                if (legacy.isNotBlank()) {
+                    securitySettingsStore.putSetting(key, normalizeSecuritySetting(key, legacy))
+                    check(db.deleteSetting(key) >= 0) { "تعذر حذف قيمة الإعداد القديم: $key" }
+                }
+            }
+            securitySettingsStore.putSetting(SecuritySettingsStore.KEY_ENCRYPT_STORAGE, "1")
+        } else {
+            migratable.forEach { key ->
+                if (securitySettingsStore.hasStoredSetting(key)) {
+                    val value = securitySettingsStore.getSetting(key)
+                    if (value != null) check(db.setSetting(key, value)) { "تعذر ترحيل الإعداد إلى SQLite: $key" }
+                    securitySettingsStore.removeSetting(key)
+                }
+            }
+            securitySettingsStore.putSetting(SecuritySettingsStore.KEY_ENCRYPT_STORAGE, "0")
+        }
+    }
+
+    private fun saveSecuritySetting(db: DatabaseHelper, key: String, value: String) {
+        when (key) {
+            SecuritySettingsStore.KEY_PIN_CODE -> {
+                securitySettingsStore.savePinCode(value)
+                runCatching { db.deleteSetting(SecuritySettingsStore.KEY_PIN_CODE) }
+            }
+            SecuritySettingsStore.KEY_ENCRYPT_STORAGE -> {
+                switchSecurityStorage(db, isTrueSetting(value))
+            }
+            else -> {
+                val normalized = normalizeSecuritySetting(key, value)
+                if (securitySettingsStore.encryptionEnabled()) {
+                    securitySettingsStore.putSetting(key, normalized)
+                    runCatching { db.deleteSetting(key) }
+                } else {
+                    check(db.setSetting(key, normalized)) { "تعذر حفظ إعداد الأمان في SQLite" }
+                    securitySettingsStore.removeSetting(key)
+                }
+            }
+        }
+        applySecurityRuntimeSettings()
+    }
+
+    private fun applySecurityRuntimeSettings(target: WebView? = webView) {
+        if (!::securitySettingsStore.isInitialized) return
+        val blockScreenshots = isTrueSetting(securitySettingValue("preventScreenshots"))
+        if (blockScreenshots) {
+            window.setFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SECURE,
+                android.view.WindowManager.LayoutParams.FLAG_SECURE
+            )
+        } else {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        val hideSensitive = isTrueSetting(securitySettingValue("hideSensitiveData"))
+        val script = if (hideSensitive) {
+            """(function(){var id='__station_sensitive_mask';var s=document.getElementById(id);if(!s){s=document.createElement('style');s.id=id;(document.head||document.documentElement).appendChild(s);}s.textContent='[data-sensitive], [data-sensitive="true"], .sensitive, .sensitive-data, .sensitive-value, .customer-phone, .customer-id, .account-number, .bank-account-number, .national-id { filter: blur(7px) !important; user-select: none !important; }';})();"""
+        } else {
+            """(function(){var s=document.getElementById('__station_sensitive_mask');if(s)s.remove();})();"""
+        }
+        runCatching { target?.evaluateJavascript(script, null) }
+    }
+
+    private fun requiresSecurityReauthentication(): Boolean =
+        isTrueSetting(securitySettingValue("requireDeviceUnlock")) ||
+            isTrueSetting(securitySettingValue("biometricLockEnabled"))
+
+    private fun requestSecurityReauthentication() {
+        if (!securityLockPending || securityPromptActive || currentAuthToken.isNullOrBlank() || isFinishing) return
+        securityPromptActive = true
+        if (isTrueSetting(securitySettingValue("biometricLockEnabled"))) {
+            showBiometricPrompt(
+                onSuccess = {
+                    securityPromptActive = false
+                    securityLockPending = false
+                    lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
+                },
+                onError = {
+                    securityPromptActive = false
+                    showSecurityPinFallback()
+                }
+            )
+            return
+        }
+
+        val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+        val credentialIntent = runCatching {
+            if (keyguard?.isKeyguardSecure == true) {
+                keyguard.createConfirmDeviceCredentialIntent("فتح محطة أبو أحمد", "أكد هويتك للمتابعة")
+            } else null
+        }.getOrNull()
+        if (credentialIntent != null) {
+            try {
+                startActivityForResult(credentialIntent, SECURITY_DEVICE_UNLOCK_REQUEST)
+            } catch (_: Exception) {
+                securityPromptActive = false
+                showSecurityPinFallback()
+            }
+        } else {
+            securityPromptActive = false
+            showSecurityPinFallback()
+        }
+    }
+
+    private fun showSecurityPinFallback() {
+        if (isFinishing) return
+        if (!securitySettingsStore.isPinConfigured()) {
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("التحقق مطلوب")
+                .setMessage("تعذر التحقق البيومتري أو بواسطة قفل الجهاز، ولم يتم إعداد PIN. سجّل الدخول مجدداً للمتابعة.")
+                .setPositiveButton("العودة لتسجيل الدخول") { _, _ -> forceSecurityLogout("security_unlock_fallback") }
+                .setCancelable(false)
+                .show()
+            return
+        }
+        val input = android.widget.EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            hint = "رمز PIN"
+            isSingleLine = true
+        }
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("فتح محطة أبو أحمد")
+            .setMessage("أدخل رمز PIN للمتابعة.")
+            .setView(input)
+            .setPositiveButton("فتح", null)
+            .setNegativeButton("استخدام تسجيل الدخول") { _, _ -> forceSecurityLogout("security_password_fallback") }
+            .setCancelable(false)
+            .create()
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.setOnShowListener {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val verified = runCatching { securitySettingsStore.verifyPinCode(input.text?.toString().orEmpty()) }.getOrDefault(false)
+                if (verified) {
+                    securityLockPending = false
+                    securityPromptActive = false
+                    lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
+                    dialog.dismiss()
+                } else {
+                    input.error = "رمز PIN غير صحيح أو المحاولات مقفلة مؤقتاً"
+                    input.text?.clear()
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun forceSecurityLogout(reason: String) {
+        val token = currentAuthToken
+        if (!token.isNullOrBlank() && ::dbHelper.isInitialized) {
+            runCatching { dbHelper.invalidateUserSession(token, reason.take(50)) }
+        }
+        currentAuthToken = null
+        currentUserId = 0L
+        currentUserRole = ""
+        currentUserName = ""
+        // Keep Remember-Me material intact; only the active session token is removed.
+        sharedPrefs.edit().remove(KEY_TOKEN).apply()
+        securityLockPending = false
+        securityPromptActive = false
+        lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
+        webView?.post {
+            if (!isDestroyed.get()) webView?.loadUrl("file:///android_asset/screens/login.html")
+        }
+    }
+
+    private fun onSecurityDeviceUnlockResult(resultCode: Int) {
+        securityPromptActive = false
+        if (resultCode == RESULT_OK) {
+            securityLockPending = false
+            lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
+        } else {
+            showSecurityPinFallback()
+        }
+    }
+
     private fun initEncryptedPrefs() {
         try {
             val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
@@ -1152,7 +1451,8 @@ class MainActivity : AppCompatActivity() {
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
-            DebugLogger.info("Prefs", "Encrypted prefs initialized")
+            securitySettingsStore = SecuritySettingsStore.open(applicationContext)
+            DebugLogger.info("Prefs", "Encrypted authentication and security settings initialized")
         } catch (e: Exception) {
             // لا نسمح بالتراجع إلى SharedPreferences غير مشفرة؛ قد تحتوي هذه القيم على رمز الجلسة.
             DebugLogger.error("Prefs", "Encrypted prefs initialization failed", e)
@@ -1344,6 +1644,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == SECURITY_DEVICE_UNLOCK_REQUEST) {
+            onSecurityDeviceUnlockResult(resultCode)
+            return
+        }
         if (requestCode == databaseBackupFolderPickerRequestCode) {
             isDatabaseBackupPickerActive = false
             val uri = data?.data
@@ -1604,6 +1908,7 @@ class MainActivity : AppCompatActivity() {
                 serverReady = true
                 isErrorPageShown = false
                 DebugLogger.info("WebView", "PAGE_FINISHED: $url")
+                applySecurityRuntimeSettings(view)
                     if (url?.endsWith("/main.html") == true || url?.endsWith("main.html") == true) {
                     val taskId = pendingNotificationTaskId
                     if (taskId != null) {
@@ -5237,6 +5542,26 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "deleteSetting called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
+                if (isSecuritySettingKey(key)) {
+                    if (key == SecuritySettingsStore.KEY_PIN_CODE) {
+                        securitySettingsStore.importPinCredential(emptyMap())
+                        runCatching { db.deleteSetting(key) }
+                        return successResponse(true, "تم حذف PIN المحلي")
+                    }
+                    if (key == SecuritySettingsStore.KEY_ENCRYPT_STORAGE) {
+                        return errorResponse("لا يمكن حذف سياسة تشفير الإعدادات؛ غيّر حالتها من شاشة الأمان")
+                    }
+                    if (securitySettingsStore.encryptionEnabled()) {
+                        securitySettingsStore.removeSetting(key)
+                        runCatching { db.deleteSetting(key) }
+                    } else {
+                        val removed = db.deleteSetting(key) > 0
+                        securitySettingsStore.removeSetting(key)
+                        return successResponse(removed, if (removed) "تم الحذف" else "لم يتم العثور على الإعداد")
+                    }
+                    applySecurityRuntimeSettings()
+                    return successResponse(true, "تم حذف إعداد الأمان")
+                }
                 val rows = db.deleteSetting(key)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على الإعداد")
             } catch (e: Exception) {
@@ -5250,7 +5575,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getSetting called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val value = db.getSetting(key)
+                val value = if (isSecuritySettingKey(key)) securitySettingValue(key) else db.getSetting(key)
                 JSONObject().apply {
                     put("success", true)
                     put("value", value)
@@ -5265,6 +5590,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun setSetting(key: String, value: String): String {
             DebugLogger.info("WebAppInterface", "setSetting called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            if (isSecuritySettingKey(key)) {
+                return try {
+                    saveSecuritySetting(db, key.trim(), value)
+                    successResponse(true, "تم حفظ إعداد الأمان في مسار التخزين المعتمد والتحقق منه")
+                } catch (e: Exception) {
+                    DebugLogger.logException("SecuritySettings", e)
+                    errorResponse(e.message ?: "تعذر حفظ إعداد الأمان")
+                }
+            }
             return try {
                 // Never report success when the SQLite helper explicitly rejects a write.
                 check(db.setSetting(key, value)) { "تعذر حفظ الإعداد في SQLite" }
@@ -5290,7 +5624,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getAllSettingsMap called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val settings = db.getAllSettingsMap()
+                val settings = db.getAllSettingsMap().toMutableMap()
+                SecuritySettingsStore.SETTING_KEYS.forEach { key ->
+                    settings[key] = securitySettingValue(key)
+                }
+                settings[SecuritySettingsStore.KEY_PIN_CODE] = securitySettingValue(SecuritySettingsStore.KEY_PIN_CODE)
                 dataResponse(settings)
             } catch (e: Exception) {
                 DebugLogger.logException("Setting", e)
