@@ -83,6 +83,32 @@ class HistoricalFinancialReconciliationRepairTest {
         assertTrue(scalar("SELECT COUNT(*) FROM financial_reconciliation_actions WHERE action_code='parent_opening_allocation_ambiguous' AND status='skipped'")>=1)
     }
 
+    @Test fun repairsOnlyCashAndBankBalancesProvenByConsistentLedgers() {
+        db.execSQL("""CREATE TABLE cash_boxes(id INTEGER PRIMARY KEY,station_id INTEGER,opening_balance REAL,
+            current_balance REAL,is_deleted INTEGER DEFAULT 0)""")
+        db.execSQL("""CREATE TABLE cash_movements(id INTEGER PRIMARY KEY,station_id INTEGER,cash_box_id INTEGER,
+            movement_type TEXT,amount REAL,balance_before REAL,balance_after REAL,status TEXT,is_deleted INTEGER DEFAULT 0)""")
+        db.execSQL("""CREATE TABLE bank_accounts(id INTEGER PRIMARY KEY,station_id INTEGER,opening_balance REAL,
+            current_balance REAL,is_deleted INTEGER DEFAULT 0)""")
+        db.execSQL("""CREATE TABLE bank_ledger(id INTEGER PRIMARY KEY,station_id INTEGER,bank_account_id INTEGER,
+            debit REAL,credit REAL,balance REAL,status TEXT,is_deleted INTEGER DEFAULT 0)""")
+        db.execSQL("INSERT INTO cash_boxes(id,station_id,opening_balance,current_balance) VALUES(1,1,100,0),(2,1,100,25)")
+        db.execSQL("INSERT INTO cash_movements(id,station_id,cash_box_id,movement_type,amount,balance_before,balance_after,status) VALUES" +
+            "(1,1,1,'in',50,100,150,'completed'),(2,1,1,'out',20,150,130,'posted')," +
+            "(3,1,2,'transfer',75,100,25,'completed')")
+        db.execSQL("INSERT INTO bank_accounts(id,station_id,opening_balance,current_balance) VALUES(1,1,50,-500),(2,1,100,0)")
+        db.execSQL("INSERT INTO bank_ledger(id,station_id,bank_account_id,debit,credit,balance,status) VALUES" +
+            "(1,1,1,25,0,75,'posted'),(2,1,1,0,10,65,'completed'),(3,1,2,10,0,999,'posted')")
+        val result=HistoricalFinancialReconciliationRepair(db).run(1,77L)
+        assertTrue(result.getBoolean("success"))
+        assertEquals(130.0,scalar("SELECT current_balance FROM cash_boxes WHERE id=1"),0.001)
+        assertEquals(25.0,scalar("SELECT current_balance FROM cash_boxes WHERE id=2"),0.001)
+        assertEquals(65.0,scalar("SELECT current_balance FROM bank_accounts WHERE id=1"),0.001)
+        assertEquals(0.0,scalar("SELECT current_balance FROM bank_accounts WHERE id=2"),0.001)
+        assertTrue(scalar("SELECT COUNT(*) FROM financial_reconciliation_actions WHERE action_code='cash_movement_chain_ambiguous' AND status='skipped'")>=1)
+        assertTrue(scalar("SELECT COUNT(*) FROM financial_reconciliation_actions WHERE action_code='bank_ledger_chain_ambiguous' AND status='skipped'")>=1)
+    }
+
     @Test fun incompleteSchemaBlocksFinancialStatementApproval() {
         val result = HistoricalFinancialReconciliationAudit(db).run(1)
         assertEquals(false, result.getBoolean("ready_for_financial_statement_approval"))
