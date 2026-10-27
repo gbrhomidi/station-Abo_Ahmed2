@@ -79,7 +79,7 @@ class FinancialIntegrityContractTest {
         assertTrue("Customer debt settlement must post the receivable journal atomically",
             customerPayment.contains("postFinanceJournal(") && customerPayment.contains("db.setTransactionSuccessful()"))
 
-        val productMovement = functionBody(source, "fun addStockMovement")
+        val productMovement = functionBody(source, "fun addStockMovement(data: JSONObject")
         assertTrue("Product purchase mode must be explicit and not treat every stock inflow as a purchase",
             productMovement.contains("data.optBoolean(\"financial_purchase\", false)"))
         assertTrue("Product purchases must post inventory against cash or supplier payable",
