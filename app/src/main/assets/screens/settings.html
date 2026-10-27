@@ -1996,7 +1996,7 @@ tr:last-child td { border-bottom:0; }
         maintenance: [
             ['autoCleanupEnabled','تنظيف تلقائي','bool','التنظيف الدوري'],
             ['cleanupIntervalDays','فترة التنظيف (يوم)','number','الفترة'],
-            ['autoRepairEnabled','إصلاح تلقائي','bool','الإصلاح عند الفشل'],
+            ['autoRepairEnabled','إصلاح تلقائي آمن','bool','يحاول استرداد SQLite دون حذف بيانات عند القفل أو التزاحم؛ لا يجري إصلاحاً إتلافياً عند فساد القاعدة.'],
             ['batteryOptimizationEnabled','السماح بالتشغيل الخلفي','bool','عند التفعيل يطلب التطبيق موافقة Android لتخفيف قيود البطارية؛ لا يمكن تغيير قرار النظام بصمت.'],
             ['networkOptimizationEnabled','تحسين اتصالات الشبكة','bool','يعيد استخدام تجمع اتصالات HTTPS لطلبات AI الخارجية عند التفعيل.'],
             ['wakeLockEnabled','WakeLock للخدمة','bool','يطبّق على قفل الطاقة الجزئي لخدمة SMS؛ يظل القفل محدود المدة لحماية البطارية.'],
