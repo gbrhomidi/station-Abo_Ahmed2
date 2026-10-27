@@ -25,6 +25,7 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
         if (schemaComplete) {
             checkSales(stationId, checks, issues)
             checkPayments(stationId, checks, issues)
+            checkCashAndBanks(stationId, checks, issues)
             checkCustomerAndSupplierLedgers(stationId, checks, issues)
             checkInventory(stationId, checks, issues)
             checkFuelAndRefills(stationId, checks, issues)
@@ -57,7 +58,11 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
             "party_types" to setOf("id","type_code"),
             "customer_ledger" to setOf("id","party_id","debit","credit"),
             "supplier_ledger" to setOf("id","party_id","debit","credit","transaction_type","transaction_id"),
-            "accounts" to setOf("id","account_code","account_type","is_active","is_deleted","opening_balance","parent_account_id"),
+            "accounts" to setOf("id","account_code","account_type","is_active","is_deleted","opening_balance","parent_account_id","cash_box_id","bank_account_id","is_cash_account","is_bank_account"),
+            "cash_boxes" to setOf("id","station_id","opening_balance","current_balance"),
+            "cash_movements" to setOf("id","cash_box_id","movement_type","amount","balance_before","balance_after"),
+            "bank_accounts" to setOf("id","station_id","opening_balance","current_balance"),
+            "bank_ledger" to setOf("id","bank_account_id","debit","credit","balance"),
             "products" to setOf("id","station_id","product_name","product_name_ar","quantity","is_deleted"),
             "inventory_levels" to setOf("product_id","quantity_on_hand"),
             "inventory_movements" to setOf("id","station_id","status","is_deleted","product_id","quantity_before","quantity_change","quantity_after"),
@@ -152,6 +157,130 @@ internal class HistoricalFinancialReconciliationAudit(private val db: SQLiteData
         checks.put("completed_payments_missing_station_scope", unscoped)
         add(issues, "completed_payments_missing_station_scope", "critical",
             "مدفوعات مكتملة بلا نطاق محطة؛ لا يجوز إسنادها تلقائياً إلى هذه المحطة", unscoped, null, null)
+    }
+
+    /**
+     * Reconcile physical cash and bank control balances against the exact source-ledger
+     * chain used by the repair service. Broken/unknown chains are blockers, never guessed.
+     */
+    private fun checkCashAndBanks(stationId: Int, checks: JSONObject, issues: JSONArray) {
+        val cashIssues = JSONArray()
+        val cashCols = columns("cash_movements")
+        val cashScope = (if (cashCols.contains("station_id")) " AND station_id=?" else "") +
+            (if (cashCols.contains("is_deleted")) " AND COALESCE(is_deleted,0)=0" else "") +
+            (if (cashCols.contains("status")) " AND lower(status) IN ('completed','posted','approved')" else "")
+        val boxes = rows(
+            "SELECT id,COALESCE(opening_balance,0),COALESCE(current_balance,0) FROM cash_boxes WHERE station_id=?" +
+                (if (hasColumn("cash_boxes","is_deleted")) " AND COALESCE(is_deleted,0)=0" else "") + " ORDER BY id",
+            arrayOf(stationId.toString())
+        ) { c -> JSONObject().put("cash_box_id",c.getLong(0)).put("opening_balance",c.getDouble(1)).put("current_balance",c.getDouble(2)) }
+        for (box in 0 until boxes.length()) {
+            val b=boxes.getJSONObject(box)
+            val id=b.getLong("cash_box_id")
+            val opening=b.getDouble("opening_balance")
+            val current=b.getDouble("current_balance")
+            val args=if (cashCols.contains("station_id")) arrayOf(id.toString(),stationId.toString()) else arrayOf(id.toString())
+            val movements=rows(
+                "SELECT lower(movement_type),COALESCE(amount,0),balance_before,balance_after FROM cash_movements " +
+                    "WHERE cash_box_id=?"+cashScope+" ORDER BY id",args
+            ) { c -> JSONObject().put("type",c.getString(0)).put("amount",c.getDouble(1))
+                .put("before",if(c.isNull(2)) JSONObject.NULL else c.getDouble(2))
+                .put("after",if(c.isNull(3)) JSONObject.NULL else c.getDouble(3)) }
+            var expected=opening
+            var previous=opening
+            var valid=true
+            var reason=""
+            for (i in 0 until movements.length()) {
+                val m=movements.getJSONObject(i)
+                val type=m.optString("type").lowercase(Locale.ROOT)
+                val amount=m.optDouble("amount",Double.NaN)
+                val before=if(m.isNull("before")) Double.NaN else m.optDouble("before",Double.NaN)
+                val after=if(m.isNull("after")) Double.NaN else m.optDouble("after",Double.NaN)
+                val delta=when(type) { "in"->amount; "out","refund"-> -amount; else->Double.NaN }
+                if(!amount.isFinite() || amount<0 || !before.isFinite() || !after.isFinite() ||
+                    !delta.isFinite() || abs(before-previous)>0.01 || abs(before+delta-after)>0.01) {
+                    valid=false
+                    reason="cash_movement_chain_invalid_or_unknown_type"
+                    break
+                }
+                expected+=delta
+                previous=after
+            }
+            if(!valid || abs(current-expected)>0.01) {
+                cashIssues.put(JSONObject().put("cash_box_id",id).put("opening_balance",opening)
+                    .put("current_balance",current).put("movement_count",movements.length())
+                    .put("source_calculation",if(valid) expected else JSONObject.NULL)
+                    .put("difference",if(valid) current-expected else JSONObject.NULL)
+                    .put("reason",if(!valid) reason else if(movements.length()==0) "no_movements_to_prove_current_balance" else "current_balance_differs_from_movement_chain"))
+            }
+            val mapScope=if(hasColumn("accounts","station_id")) " AND station_id=?" else ""
+            val mapArgs=if(hasColumn("accounts","station_id")) arrayOf(id.toString(),stationId.toString()) else arrayOf(id.toString())
+            val mapCount=scalar("SELECT COUNT(*) FROM accounts WHERE cash_box_id=? AND account_type='asset' AND is_cash_account=1 AND is_active=1 AND COALESCE(is_deleted,0)=0"+mapScope,mapArgs)
+            if((abs(opening)>0.01 || abs(current)>0.01 || movements.length()>0) && mapCount!=1) {
+                add(issues,"cash_box_account_mapping","critical",
+                    "الصندوق المستخدم مالياً يجب أن يرتبط بحساب أستاذ عام نقدي واحد فقط",
+                    1,null,JSONArray().put(JSONObject().put("cash_box_id",id).put("matching_cash_accounts",mapCount)
+                        .put("opening_balance",opening).put("current_balance",current)))
+            }
+        }
+        checks.put("cash_balance_chain_mismatches",cashIssues)
+        add(issues,"cash_balance_chain_mismatches","critical",
+            "الرصيد الحالي للصندوق لا يمكن إثباته من رصيد الافتتاح وسلسلة حركات صحيحة",
+            cashIssues.length(),null,cashIssues)
+
+        val bankIssues = JSONArray()
+        val bankCols=columns("bank_ledger")
+        val bankScope=(if(bankCols.contains("station_id")) " AND station_id=?" else "")+
+            (if(bankCols.contains("is_deleted")) " AND COALESCE(is_deleted,0)=0" else "")+
+            (if(bankCols.contains("status")) " AND lower(status) IN ('completed','posted','approved')" else "")
+        val banks=rows(
+            "SELECT id,COALESCE(opening_balance,0),COALESCE(current_balance,0) FROM bank_accounts WHERE station_id=?"+
+                (if(hasColumn("bank_accounts","is_deleted")) " AND COALESCE(is_deleted,0)=0" else "")+" ORDER BY id",
+            arrayOf(stationId.toString())
+        ) { c -> JSONObject().put("bank_account_id",c.getLong(0)).put("opening_balance",c.getDouble(1)).put("current_balance",c.getDouble(2)) }
+        for (i in 0 until banks.length()) {
+            val b=banks.getJSONObject(i)
+            val id=b.getLong("bank_account_id")
+            val opening=b.getDouble("opening_balance")
+            val current=b.getDouble("current_balance")
+            val args=if(bankCols.contains("station_id")) arrayOf(id.toString(),stationId.toString()) else arrayOf(id.toString())
+            val entries=rows(
+                "SELECT COALESCE(debit,0),COALESCE(credit,0),COALESCE(balance,0) FROM bank_ledger " +
+                    "WHERE bank_account_id=?"+bankScope+" ORDER BY id",args
+            ) { c -> JSONObject().put("debit",c.getDouble(0)).put("credit",c.getDouble(1)).put("balance",c.getDouble(2)) }
+            var expected=opening
+            var valid=true
+            for (j in 0 until entries.length()) {
+                val e=entries.getJSONObject(j)
+                val debit=e.getDouble("debit")
+                val credit=e.getDouble("credit")
+                val balance=e.getDouble("balance")
+                val after=expected+debit-credit
+                if(!debit.isFinite() || !credit.isFinite() || !balance.isFinite() || debit< -0.01 || credit< -0.01 ||
+                    (debit>0.01 && credit>0.01) || abs(after-balance)>0.01) { valid=false; break }
+                expected=after
+            }
+            if(!valid || abs(current-expected)>0.01) {
+                bankIssues.put(JSONObject().put("bank_account_id",id).put("opening_balance",opening)
+                    .put("current_balance",current).put("ledger_row_count",entries.length())
+                    .put("source_calculation",if(valid) expected else JSONObject.NULL)
+                    .put("difference",if(valid) current-expected else JSONObject.NULL)
+                    .put("reason",if(!valid) "bank_ledger_chain_invalid" else if(entries.length()==0) "no_ledger_rows_to_prove_current_balance" else "current_balance_differs_from_ledger_chain"))
+            }
+            val mapScope=if(hasColumn("accounts","station_id")) " AND station_id=?" else ""
+            val mapArgs=if(hasColumn("accounts","station_id")) arrayOf(id.toString(),stationId.toString()) else arrayOf(id.toString())
+            val mapCount=scalar("SELECT COUNT(*) FROM accounts WHERE bank_account_id=? AND account_type='asset' AND is_bank_account=1 AND is_active=1 AND COALESCE(is_deleted,0)=0"+mapScope,mapArgs)
+            if((abs(opening)>0.01 || abs(current)>0.01 || entries.length()>0) && mapCount!=1) {
+                add(issues,"bank_account_gl_mapping","critical",
+                    "الحساب البنكي المستخدم مالياً يجب أن يرتبط بحساب أستاذ عام بنكي واحد فقط",
+                    1,null,JSONArray().put(JSONObject().put("bank_account_id",id).put("matching_bank_accounts",mapCount)
+                        .put("opening_balance",opening).put("current_balance",current)))
+            }
+        }
+        checks.put("bank_balance_chain_mismatches",bankIssues)
+        add(issues,"bank_balance_chain_mismatches","critical",
+            "الرصيد الحالي للبنك لا يمكن إثباته من رصيد الافتتاح ودفتر البنك المتسلسل",
+            bankIssues.length(),null,bankIssues)
     }
 
     private fun checkCustomerAndSupplierLedgers(stationId: Int, checks: JSONObject, issues: JSONArray) {
