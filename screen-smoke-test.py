@@ -197,6 +197,17 @@ SECURITY_CASES = {
         ],
     ),
 }
+# Protect the save path against a temporal-dead-zone regression: PIN UI handling
+# may read verifiedLegacy only after per-key readback has populated that object.
+security_settings_source = SECURITY_CASES['security-panel'][0].read_text(encoding='utf-8', errors='replace')
+verified_legacy_declaration = security_settings_source.find('const verifiedLegacy = {}')
+pin_clear_block = security_settings_source.find('PIN verification is complete')
+if verified_legacy_declaration < 0 or pin_clear_block < verified_legacy_declaration:
+    print('FAIL security-panel: PIN UI is cleared only after verifiedLegacy is initialized and verified')
+    failed += 1
+else:
+    print('PASS security-panel: PIN UI is cleared only after verifiedLegacy is initialized and verified')
+
 for case_name, (case_path, tokens) in SECURITY_CASES.items():
     if not case_path.exists():
         print(f'FAIL {case_name}: source file missing ({case_path.relative_to(PROJECT_ROOT)})')
