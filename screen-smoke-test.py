@@ -169,6 +169,7 @@ SECURITY_CASES = {
             'WindowManager.LayoutParams.FLAG_SECURE', 'createConfirmDeviceCredentialIntent',
             'showBiometricPrompt(', 'securityIdleRunnable', 'forceSecurityLogout(',
             'Keep Remember-Me material intact', 'applySecurityRuntimeSettings(view)',
+            'webView?.visibility = View.INVISIBLE', 'secureBackupRequired',
         ],
     ),
     'encrypted-settings-backup': (
