@@ -139,6 +139,75 @@ for name, required in CASES.items():
     for ok, label in checks:
         print(f'{"PASS" if ok else "FAIL"} {name}: {label}')
         if not ok: failed += 1
+
+# Security settings contract checks: these ensure all eight controls are wired
+# to the native secure store/runtime and that both backup paths fail closed.
+PROJECT_ROOT = Path(__file__).parent
+SECURITY_CASES = {
+    'security-panel': (
+        PROJECT_ROOT / 'app/src/main/assets/screens/settings.html',
+        [
+            'requireDeviceUnlock', 'encryptStorage', 'biometricLockEnabled',
+            'hideSensitiveData', 'autoLogoutMinutes', 'preventScreenshots',
+            'secureBackupEnabled', 'pinCode',
+            "if (key === 'pinCode')", 'تم تعيين PIN',
+        ],
+    ),
+    'security-store': (
+        PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/settings/security/SecuritySettingsStore.kt',
+        [
+            'EncryptedSharedPreferences.create', 'PBKDF2WithHmacSHA256',
+            'PBKDF2_ITERATIONS = 150_000', 'PBEKeySpec', 'PIN_HASH',
+            'PIN_SALT', 'MessageDigest.isEqual', 'MAX_PIN_FAILURES = 5',
+            'LOCKOUT_MS = 60_000L', 'fun exportPinCredential()', 'fun importPinCredential',
+        ],
+    ),
+    'security-runtime': (
+        PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt',
+        [
+            'saveSecuritySetting(db, key.trim(), value)', 'getAllSettingsMap().toMutableMap()',
+            'WindowManager.LayoutParams.FLAG_SECURE', 'createConfirmDeviceCredentialIntent',
+            'showBiometricPrompt(', 'securityIdleRunnable', 'forceSecurityLogout(',
+            'Keep Remember-Me material intact', 'applySecurityRuntimeSettings(view)',
+        ],
+    ),
+    'encrypted-settings-backup': (
+        PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/settings/backup/JsonSettingsBackupManager.kt',
+        [
+            'secureBackupEnabled', 'requireNotNull(encryption)',
+            'settings_backup_${System.currentTimeMillis()}.json.enc',
+            'station-secure-settings', 'pinCredential', 'importPinCredential(restoredPin)',
+            'decrypt(raw)', 'Backward compatibility for existing plain/encrypted',
+        ],
+    ),
+    'encrypted-database-backup': (
+        PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/settings/backup/FullDatabaseBackupManager.kt',
+        [
+            'station_full_database_backup_v1', 'AES/GCM/NoPadding',
+            'fun createBackup(treeUri: Uri, encrypt: Boolean', 'decryptDatabaseStream',
+            'verifySnapshot(staging)', 'endsWith(".db.enc"',
+        ],
+    ),
+    'scheduled-backup-policy': (
+        PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/settings/backup/FullDatabaseBackupWorker.kt',
+        [
+            'SecuritySettingsStore.open(applicationContext)', 'secureBackupRequired',
+            'secureBackupRequired || isEnabled(database.getSetting("encryptBackup"), true)',
+        ],
+    ),
+}
+for case_name, (case_path, tokens) in SECURITY_CASES.items():
+    if not case_path.exists():
+        print(f'FAIL {case_name}: source file missing ({case_path.relative_to(PROJECT_ROOT)})')
+        failed += 1
+        continue
+    source = case_path.read_text(encoding='utf-8', errors='replace')
+    for token in tokens:
+        ok = token in source
+        print(f'{"PASS" if ok else "FAIL"} {case_name}: {token}')
+        if not ok:
+            failed += 1
+
 if failed:
-    raise SystemExit(f'{failed} screen smoke checks failed')
-print(f'All screen smoke checks passed: {len(CASES)} screens.')
+    raise SystemExit(f'{failed} screen/security smoke checks failed')
+print(f'All screen and security smoke checks passed: {len(CASES)} screens, {len(SECURITY_CASES)} security contracts.')
