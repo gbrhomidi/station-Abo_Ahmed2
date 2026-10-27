@@ -1,1 +1,38 @@
-<section class="panel" id="panel-maintenance"><div class="card"><div class="card-head"><div class="card-head-main"><div class="card-avatar"><i class="fas fa-tools"></i></div><div><h2>الصيانة وقاعدة البيانات</h2><p>فحص السلامة وتحسين SQLite دون حذف بيانات الأعمال</p></div></div></div><div id="maintenanceFields" class="form-grid"></div><div class="actions"><button class="btn warning" id="optimizeDb">فحص وتحسين</button><button class="btn" id="checkIntegrity">فحص السلامة</button><button class="btn" id="refreshDbInfo">معلومات قاعدة البيانات</button></div><div id="integrityResult" class="status-grid"></div></div></section>
+<section class="panel" id="panel-maintenance">
+  <div class="card">
+    <div class="card-head">
+      <div class="card-head-main">
+        <div class="card-avatar"><i class="fas fa-tools"></i></div>
+        <div>
+          <h2>الصيانة وقاعدة البيانات</h2>
+          <p>الإعدادات محفوظة في SQLite؛ تظهر حالة التنفيذ من Android ونتائج الفحص الفعلية فقط.</p>
+        </div>
+      </div>
+    </div>
+    <div id="maintenanceFields" class="form-grid"></div>
+    <div class="actions">
+      <button type="button" class="btn warning" id="optimizeDb">فحص وتحسين</button>
+      <button type="button" class="btn" id="checkIntegrity">فحص السلامة</button>
+      <button type="button" class="btn" id="refreshDbInfo">معلومات قاعدة البيانات</button>
+    </div>
+    <h3 class="maintenance-section-title">حالة تطبيق إعدادات الصيانة</h3>
+    <div id="maintenanceRuntimeStatus" class="status-grid" aria-live="polite">
+      <div class="status-card"><span>الحالة</span><strong>جارٍ قراءة الحالة الفعلية من Android…</strong></div>
+    </div>
+    <h3 class="maintenance-section-title">نتائج فحص قاعدة البيانات</h3>
+    <div id="integrityResult" class="status-grid" aria-live="polite"></div>
+  </div>
+</section>
+<style>
+  #panel-maintenance .maintenance-section-title {
+    margin: 18px 0 10px;
+    font-size: .9rem;
+    font-weight: 850;
+  }
+  #panel-maintenance .status-card {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  #panel-maintenance .status-card strong.ok { color: var(--success, #16803d); }
+  #panel-maintenance .status-card strong.bad { color: var(--error, #b91c1c); }
+</style>
