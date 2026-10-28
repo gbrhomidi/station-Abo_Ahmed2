@@ -482,6 +482,19 @@ internal class ExpandedAccountingService(
         val status = invoice.optString("status")
         if (status == "posted") return JSONObject().put("success", true).put("invoice_id", invoiceId).put("status", status).put("journal_entry_id", invoice.optLong("journal_entry_id"))
         var journalId = invoice.optLong("journal_entry_id", 0L)
+        if (journalId <= 0L) journalId = findSourceJournal("general_purchase_invoice", invoiceId)
+        if (journalId > 0L && status != "posted") {
+            val payableId = p.optLong("payable_account_id", invoice.optLong("payable_account_id", 0L))
+            val inputVatId = p.optLong("input_vat_account_id", invoice.optLong("input_vat_account_id", 0L))
+            requireValidAccount(payableId, setOf("liability"))
+            if (invoice.optDouble("vat_amount") > 0.005) requireValidAccount(inputVatId, setOf("asset"))
+            db.update("expanded_purchase_invoices", ContentValues().apply {
+                put("journal_entry_id", journalId); put("payable_account_id", payableId)
+                if (inputVatId > 0L) put("input_vat_account_id", inputVatId)
+                put("status", "posting"); put("updated_at", now())
+            }, "id=? AND station_id=? AND is_deleted=0", arrayOf(invoiceId.toString(), stationId.toString()))
+            invoice = purchaseInvoice(invoiceId) ?: invoice
+        }
         if (journalId <= 0L) {
             val payableId = p.optLong("payable_account_id", 0L)
             requireValidAccount(payableId, setOf("liability"))
@@ -617,6 +630,13 @@ internal class ExpandedAccountingService(
         val invoice = purchaseInvoice(record.optLong("invoice_id")) ?: throw IllegalArgumentException("الفاتورة الأصلية غير موجودة")
         require(invoice.optString("status") == "posted") { "يجب أن تكون الفاتورة الأصلية مرحلة" }
         var journalId = record.optLong("journal_entry_id", 0L)
+        if (journalId <= 0L) journalId = findSourceJournal("general_purchase_return", returnId)
+        if (journalId > 0L && record.optString("status") != "posted") {
+            db.update("expanded_purchase_returns", ContentValues().apply {
+                put("journal_entry_id", journalId); put("status", "posting"); put("updated_at", now())
+            }, "id=? AND station_id=? AND is_deleted=0", arrayOf(returnId.toString(), stationId.toString()))
+            record = purchaseReturn(returnId) ?: record
+        }
         if (journalId <= 0L) {
             val payableId = invoice.optLong("payable_account_id", 0L)
             requireValidAccount(payableId, setOf("liability"))
@@ -864,7 +884,7 @@ internal class ExpandedAccountingService(
         val acols = columns("accounts")
         if (!jcols.containsAll(setOf("id", "station_id", "entry_date", "status", "is_deleted")) ||
             !icols.containsAll(setOf("journal_entry_id", "account_id", "debit", "credit")) ||
-            !acols.containsAll(setOf("id", "account_type", "is_cash_account", "is_bank_account"))) {
+            !acols.containsAll(setOf("id", "account_code", "account_type", "is_cash_account", "is_bank_account"))) {
             missing.put("حقول القيد أو السطور أو تعريف حسابات النقد/البنوك غير مكتملة")
             return JSONObject().put("success", true).put("ready_for_approval", false).put("schema_gaps", missing)
         }
@@ -906,19 +926,27 @@ internal class ExpandedAccountingService(
         val beginning = cashBalanceBefore(from)
         val net = money(sums.values.sum())
         val endingCalculated = money(beginning + net)
-        val currentPeriodIsToday = from <= today() && to >= today()
+        val currentPeriodIsToday = to == today()
         val currentBalance = if (currentPeriodIsToday) cashAndBankCurrentBalance() else JSONObject.NULL
-        val ready = unclassifiedCount == 0 && abs(unclassifiedAmount) <= 0.01
+        val closingVariance = if (currentPeriodIsToday) money((currentBalance as Double) - endingCalculated) else JSONObject.NULL
+        val ready = unclassifiedCount == 0 && abs(unclassifiedAmount) <= 0.01 &&
+            (!currentPeriodIsToday || abs(closingVariance as Double) <= 0.01)
         return JSONObject().put("success", true).put("station_id", stationId).put("from_date", from).put("to_date", to)
             .put("operating_cash_flow", money(sums["operating"] ?: 0.0))
             .put("investing_cash_flow", money(sums["investing"] ?: 0.0))
             .put("financing_cash_flow", money(sums["financing"] ?: 0.0))
             .put("net_change_in_cash", net).put("beginning_cash_and_bank", money(beginning))
             .put("calculated_ending_cash_and_bank", endingCalculated).put("current_book_cash_and_bank", currentBalance)
+            .put("closing_cash_variance_against_current_books", closingVariance)
+            .put("current_book_comparison_applicable", currentPeriodIsToday)
             .put("unclassified_cash_amount", money(unclassifiedAmount)).put("unclassified_journal_count", unclassifiedCount)
             .put("classification_details", details).put("ready_for_approval", ready)
             .put("statement_basis", "قيود دفتر الأستاذ العامة المرحلة فقط؛ التحويلات الداخلية ذات صافي نقدي صفر مستبعدة")
-            .put("approval_block_reason", if (ready) JSONObject.NULL else "توجد حركات نقدية مقابلة لحسابات لم تُصنّف تشغيلياً أو استثمارياً أو تمويلياً")
+            .put("approval_block_reason", when {
+                unclassifiedCount > 0 || abs(unclassifiedAmount) > 0.01 -> "توجد حركات نقدية مقابلة لحسابات لم تُصنّف تشغيلياً أو استثمارياً أو تمويلياً"
+                currentPeriodIsToday && abs(closingVariance as Double) > 0.01 -> "الرصيد الختامي المحسوب لا يطابق إجمالي دفاتر الصندوق والبنك الحالية"
+                else -> JSONObject.NULL
+            })
     }
 
     private fun equityChanges(p: JSONObject): JSONObject {
@@ -1655,6 +1683,17 @@ internal class ExpandedAccountingService(
         arrayOf(invoiceId.toString(), stationId.toString())
     ) { c -> PurchaseLine(c.getString(0), c.getDouble(1), c.getDouble(2), c.getDouble(3),
         c.getDouble(4), c.getDouble(5), c.getDouble(6), c.getLong(7)) }
+
+    private fun findSourceJournal(referenceType: String, referenceId: Long): Long {
+        val cols = columns("journal_entries")
+        if (!cols.containsAll(setOf("id", "station_id", "reference_type", "reference_id", "status"))) return 0L
+        val deleted = if (cols.contains("is_deleted")) " AND COALESCE(is_deleted,0)=0" else ""
+        return scalarLong(
+            "SELECT id FROM journal_entries WHERE station_id=? AND reference_type=? AND reference_id=?" +
+                deleted + " ORDER BY CASE lower(status) WHEN 'posted' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,id DESC LIMIT 1",
+            arrayOf(stationId.toString(), referenceType, referenceId.toString())
+        )
+    }
 
     private fun journalStatus(id: Long): String {
         if (id <= 0L || !tableExists("journal_entries")) return ""
