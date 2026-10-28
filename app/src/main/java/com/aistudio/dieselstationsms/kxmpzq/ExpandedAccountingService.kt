@@ -244,8 +244,8 @@ internal class ExpandedAccountingService(
         var undated = 0.0
         var varianceTotal = 0.0
         var unknownDateRows = 0
-        for (i in 0 until rows.length()) {
-            val party = rows.getJSONObject(i)
+        for (i in 0 until rows.size) {
+            val party = rows[i]
             val id = party.getLong("supplier_id")
             val events = supplierLedgerEvents(id)
             val obligations = mutableListOf<OpenObligation>()
@@ -1270,7 +1270,7 @@ internal class ExpandedAccountingService(
         val importedTotal = lines.sumOf { it.getDouble("signed_amount") }
         val matched = lines.count { it.optString("match_status") == "matched" }
         val ignored = lines.count { it.optString("match_status") == "ignored" }
-        val unmatched = lines.length() - matched - ignored
+        val unmatched = lines.size - matched - ignored
         val bankAccountId = header.getLong("bank_account_id")
         val ledgerColumns = columns("bank_ledger")
         val dateCol = firstColumn(ledgerColumns, listOf("transaction_date", "entry_date", "posted_date", "date", "created_at"))
@@ -1300,8 +1300,8 @@ internal class ExpandedAccountingService(
         val bookBalance = scalarDouble("SELECT COALESCE(current_balance,0) FROM bank_accounts WHERE id=? AND station_id=?",
             arrayOf(bankAccountId.toString(), stationId.toString()))
         val candidates = JSONArray()
-        for (i in 0 until lines.length()) {
-            val line = lines.getJSONObject(i)
+        for (i in 0 until lines.size) {
+            val line = lines[i]
             if (line.optString("match_status") == "matched" || line.optString("match_status") == "ignored") continue
             val lineCandidates = findLedgerCandidates(bankAccountId, line.getString("date"),
                 line.getString("reference"), line.getDouble("signed_amount"))
@@ -1309,7 +1309,7 @@ internal class ExpandedAccountingService(
                 .put("candidates", lineCandidates))
         }
         return JSONObject().put("success", true).put("station_id", stationId).put("statement", header)
-            .put("transaction_count", lines.length()).put("matched_count", matched).put("unmatched_count", unmatched)
+             .put("transaction_count", lines.size).put("matched_count", matched).put("unmatched_count", unmatched)
             .put("ignored_count", ignored).put("unmatched_book_ledger_count", unmatchedLedger)
             .put("date_scoped_ledger_comparison_available", dateScopeAvailable)
             .put("opening_and_closing_balances_provided", !header.isNull("opening") && !header.isNull("closing"))
