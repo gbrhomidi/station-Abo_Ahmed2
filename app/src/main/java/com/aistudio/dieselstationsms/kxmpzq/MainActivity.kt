@@ -9116,6 +9116,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val userId = getActivity()?.currentUserId ?: 0L
             return try {
+                if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة الفترات المحاسبية")
                 val stationId = requireCurrentStationId(helper, userId)
                 JSONObject().put("success", true).put("data", helper.getFiscalPeriods(stationId, year)).toString()
             } catch (e: Exception) { DebugLogger.logException("FiscalPeriods", e); errorResponse(e.message) }
@@ -9126,6 +9127,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
+                if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية إقفال الفترة المحاسبية")
                 val stationId = requireCurrentStationId(helper, activity.currentUserId)
                 val periodId = helper.closeFiscalPeriod(stationId, year, month, activity.currentUserId, reason)
                 invalidateCurrentReportCache(helper, activity.currentUserId)
@@ -9138,6 +9140,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
+                if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية إعادة فتح الفترة المحاسبية")
                 val stationId = requireCurrentStationId(helper, activity.currentUserId)
                 helper.reopenFiscalPeriod(periodId, stationId, activity.currentUserId, reason)
                 invalidateCurrentReportCache(helper, activity.currentUserId)
