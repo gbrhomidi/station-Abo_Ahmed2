@@ -34,6 +34,7 @@ internal class ExpandedAccountingService(
         "supplier_aging" -> supplierAging(p)
         "supplier_statement" -> supplierStatement(p)
         "purchase_invoice_list" -> purchaseInvoiceList(p)
+        "purchase_invoice_detail" -> purchaseInvoiceDetail(p)
         "purchase_invoice_create" -> createPurchaseInvoice(p)
         "purchase_invoice_post" -> postPurchaseInvoice(p)
         "purchase_return_list" -> purchaseReturnList(p)
@@ -189,9 +190,29 @@ internal class ExpandedAccountingService(
                 matched_ledger_id INTEGER,
                 match_rule TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
+                updated_at TEXT,
+                updated_by INTEGER,
                 UNIQUE(bank_account_id, row_hash)
             )"""
         )
+        db.execSQL(
+            """CREATE TABLE IF NOT EXISTS expanded_bank_statement_match_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                station_id INTEGER NOT NULL,
+                statement_line_id INTEGER NOT NULL,
+                bank_account_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                previous_status TEXT NOT NULL,
+                new_status TEXT NOT NULL,
+                previous_ledger_id INTEGER,
+                new_ledger_id INTEGER,
+                reason TEXT NOT NULL DEFAULT '',
+                actor_user_id INTEGER NOT NULL,
+                occurred_at TEXT NOT NULL
+            )"""
+        )
+        ensureColumn("expanded_bank_statement_lines", "updated_at", "TEXT")
+        ensureColumn("expanded_bank_statement_lines", "updated_by", "INTEGER")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_exp_purchase_station_date ON expanded_purchase_invoices(station_id, invoice_date, status)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_exp_purchase_supplier ON expanded_purchase_invoices(station_id, supplier_id, due_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_exp_purchase_lines_invoice ON expanded_purchase_invoice_lines(invoice_id, station_id)")
@@ -686,6 +707,25 @@ internal class ExpandedAccountingService(
         return JSONObject().put("success", true).put("return_id", returnId)
             .put("status", "pending_approval").put("journal_entry_id", journalId)
             .put("message", "المرتجع بانتظار اعتماد القيد؛ لم يُعدّل رصيد المورد قبل الترحيل")
+    }
+
+    private fun purchaseInvoiceDetail(p: JSONObject): JSONObject {
+        syncPostedDocuments()
+        val invoiceId = p.optLong("invoice_id", 0L)
+        val invoice = purchaseInvoice(invoiceId) ?: throw IllegalArgumentException("فاتورة المشتريات غير موجودة في المحطة الحالية")
+        val lines = JSONArray()
+        invoiceLines(invoiceId).forEachIndexed { index, line ->
+            val lineId = scalarLong(
+                "SELECT id FROM expanded_purchase_invoice_lines WHERE invoice_id=? AND station_id=? AND line_no=?",
+                arrayOf(invoiceId.toString(), stationId.toString(), (index + 1).toString())
+            )
+            lines.put(JSONObject().put("invoice_line_id", lineId).put("line_no", index + 1)
+                .put("description", line.description).put("quantity", line.quantity)
+                .put("unit_price", line.unitPrice).put("vat_rate", line.vatRate)
+                .put("net_amount", line.net).put("vat_amount", line.vat)
+                .put("total_amount", line.total).put("account_id", line.accountId))
+        }
+        return JSONObject().put("success", true).put("invoice", invoice).put("lines", lines)
     }
 
     private fun purchaseInvoiceList(p: JSONObject): JSONObject {
@@ -1293,15 +1333,21 @@ internal class ExpandedAccountingService(
             .put("matched", if (c.isNull(4)) 0L else c.getLong(4)) }.firstOrNull()
             ?: throw IllegalArgumentException("سطر الكشف غير موجود في المحطة الحالية")
         val action = p.optString("action").lowercase(Locale.ROOT)
+        val reasonForAudit = clean(p.optString("reason"), 500)
+        var newLedgerId: Long? = null
         when (action) {
-            "unmatch" -> db.update("expanded_bank_statement_lines", ContentValues().apply {
-                put("match_status", "unmatched"); putNull("matched_ledger_id"); put("match_rule", "تم إلغاء المطابقة يدوياً")
-            }, "id=? AND station_id=?", arrayOf(lineId.toString(), stationId.toString()))
+            "unmatch" -> {
+                db.update("expanded_bank_statement_lines", ContentValues().apply {
+                    put("match_status", "unmatched"); putNull("matched_ledger_id"); put("match_rule", "تم إلغاء المطابقة يدوياً")
+                    put("updated_at", now()); put("updated_by", userId)
+                }, "id=? AND station_id=?", arrayOf(lineId.toString(), stationId.toString()))
+            }
             "ignore" -> {
                 val reason = clean(p.optString("reason"), 500)
                 require(reason.length >= 3) { "سبب استثناء السطر مطلوب" }
                 db.update("expanded_bank_statement_lines", ContentValues().apply {
                     put("match_status", "ignored"); putNull("matched_ledger_id"); put("match_rule", "استثناء: " + reason)
+                    put("updated_at", now()); put("updated_by", userId)
                 }, "id=? AND station_id=?", arrayOf(lineId.toString(), stationId.toString()))
             }
             "match" -> {
@@ -1322,14 +1368,31 @@ internal class ExpandedAccountingService(
                 val already = scalar("SELECT COUNT(*) FROM expanded_bank_statement_lines WHERE station_id=? AND matched_ledger_id=? AND match_status='matched' AND id<>?",
                     arrayOf(stationId.toString(), ledgerId.toString(), lineId.toString()))
                 require(already == 0) { "حركة دفتر البنك مطابقة بالفعل لسطر كشف آخر" }
+                newLedgerId = ledgerId
                 db.update("expanded_bank_statement_lines", ContentValues().apply {
                     put("match_status", "matched"); put("matched_ledger_id", ledgerId); put("match_rule", "مطابقة يدوية بعد التحقق من الحساب والقيمة والاتجاه")
+                    put("updated_at", now()); put("updated_by", userId)
                 }, "id=? AND station_id=?", arrayOf(lineId.toString(), stationId.toString()))
             }
             else -> throw IllegalArgumentException("إجراء المطابقة غير معروف")
         }
+        val resulting = query(
+            "SELECT match_status,matched_ledger_id FROM expanded_bank_statement_lines WHERE id=? AND station_id=?",
+            arrayOf(lineId.toString(), stationId.toString())
+        ) { c -> JSONObject().put("status", c.getString(0)).put("ledger_id", if (c.isNull(1)) JSONObject.NULL else c.getLong(1)) }
+            .firstOrNull() ?: throw IllegalStateException("تعذر إعادة قراءة سطر المطابقة بعد الحفظ")
+        val audit = ContentValues().apply {
+            put("station_id", stationId); put("statement_line_id", lineId)
+            put("bank_account_id", row.getLong("bank_account_id")); put("action", action)
+            put("previous_status", row.getString("status")); put("new_status", resulting.getString("status"))
+            if (row.optLong("matched", 0L) > 0L) put("previous_ledger_id", row.optLong("matched")) else putNull("previous_ledger_id")
+            if (!resulting.isNull("ledger_id")) put("new_ledger_id", resulting.getLong("ledger_id")) else putNull("new_ledger_id")
+            put("reason", reasonForAudit); put("actor_user_id", userId); put("occurred_at", now())
+        }
+        db.insertOrThrow("expanded_bank_statement_match_audit", null, audit)
         return JSONObject().put("success", true).put("line_id", lineId)
-            .put("action", action).put("message", "تم تحديث حالة مطابقة سطر الكشف في SQLite")
+            .put("action", action).put("new_status", resulting.getString("status"))
+            .put("message", "تم تحديث حالة المطابقة في SQLite وتسجيل حدث التدقيق الدائم")
     }
 
     private fun autoMatchStatementLine(lineId: Long, bankAccountId: Long, line: ImportedLine) {
@@ -1732,6 +1795,12 @@ internal class ExpandedAccountingService(
 
     private fun sourceDateColumn(table: String): String? = firstColumn(columns(table),
         listOf("transaction_date", "entry_date", "date", "created_at", "posting_date"))
+
+    private fun ensureColumn(table: String, column: String, definition: String) {
+        if (tableExists(table) && !columns(table).contains(column)) {
+            db.execSQL("ALTER TABLE " + q(table) + " ADD COLUMN " + q(column) + " " + definition)
+        }
+    }
 
     private fun firstColumn(cols: Set<String>, options: List<String>): String? = options.firstOrNull { cols.contains(it) }
 
