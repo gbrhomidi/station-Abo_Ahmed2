@@ -11186,7 +11186,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 "vat_return", "cash_flow_statement", "equity_changes", "bank_reconciliation", "bank_statement_batches"
             )
             val createActions = setOf("purchase_invoice_create", "purchase_return_create", "bank_statement_import")
-            val updateActions = setOf("purchase_invoice_post", "purchase_return_post", "bank_statement_match", "account_classification_save")
+            val updateActions = setOf("purchase_invoice_post", "purchase_return_post", "bank_statement_match", "account_classification_save", "tax_profile_save")
             val permissionAction = when {
                 action in readActions -> "read"
                 action in createActions -> "create"
