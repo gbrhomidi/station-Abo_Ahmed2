@@ -1,6 +1,8 @@
 from html.parser import HTMLParser
 from pathlib import Path
 import re
+import subprocess
+import sys
 
 ROOT = Path(__file__).parent / 'app/src/main/assets/screens'
 CASES = {
@@ -250,6 +252,14 @@ SECURITY_CASES = {
             '"updateMethod": ""', '"deleteMethod": ""', 'تنبيه محاسبي',
         ],
     ),
+    'maintenance-delete-permission-and-station-scope': (
+        PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt',
+        [
+            'checkPermission("maintenance", "delete")',
+            'id=? AND station_id=? AND is_deleted=0',
+            'requireCurrentStationId(db, activity.currentUserId)',
+        ],
+    ),
 }
 # Protect the save path against a temporal-dead-zone regression: PIN UI handling
 # may read verifiedLegacy only after per-key readback has populated that object.
@@ -274,6 +284,23 @@ for case_name, (case_path, tokens) in SECURITY_CASES.items():
         if not ok:
             failed += 1
 
+# Run the source-backed preflight for the 200 custody/workshop acceptance scenarios.
+# These are natural-language scenarios, not executable fixtures, so missing business
+# capabilities are reported as BLOCKED rather than falsely marked PASS.
+preflight_script = PROJECT_ROOT / 'all-test' / 'custody_workshop_preflight.py'
+if not preflight_script.exists():
+    print('FAIL custody/workshop preflight: runner missing')
+    failed += 1
+else:
+    preflight = subprocess.run(
+        [sys.executable, str(preflight_script), '--report', '/tmp/custody-workshop-preflight.json'],
+        cwd=PROJECT_ROOT,
+        check=False,
+    )
+    if preflight.returncode != 0:
+        print(f'FAIL custody/workshop preflight: runner exited {preflight.returncode}')
+        failed += 1
+
 if failed:
     raise SystemExit(f'{failed} screen/security smoke checks failed')
-print(f'All screen and security smoke checks passed: {len(CASES)} screens, {len(SECURITY_CASES)} security contracts.')
+print(f'All screen and security smoke checks passed: {len(CASES)} screens, {len(SECURITY_CASES)} security contracts. Acceptance preflight status is reported separately above.')

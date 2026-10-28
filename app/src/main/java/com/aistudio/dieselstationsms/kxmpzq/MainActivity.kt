@@ -6946,11 +6946,21 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "deleteMaintenance called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val dbWritable = db.writableDatabase
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                if (!checkPermission("maintenance", "delete")) {
+                    return errorResponse("لا تملك صلاحية حذف طلبات الصيانة")
+                }
+                if (requestId <= 0L) return errorResponse("معرف طلب الصيانة غير صالح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val cv = android.content.ContentValues().apply { put("is_deleted", 1) }
-                val rows = dbWritable.update("maintenance_requests", cv, "id=?", arrayOf(requestId.toString()))
+                val rows = db.writableDatabase.update(
+                    "maintenance_requests",
+                    cv,
+                    "id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(requestId.toString(), stationId.toString())
+                )
                 if (rows > 0) db.logActivity("system", "delete_maintenance", "حذف طلب صيانة $requestId")
-                successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على الطلب")
+                successResponse(rows > 0, if (rows > 0) "تم حذف الطلب ضمن المحطة الحالية" else "لم يتم العثور على الطلب ضمن المحطة الحالية")
             } catch (e: Exception) {
                 DebugLogger.logException("Maintenance", e)
                 errorResponse(e.message)
