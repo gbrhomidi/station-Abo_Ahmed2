@@ -11173,6 +11173,50 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+        /**
+         * Typed bridge for expanded accounts-payable, VAT, cash-flow, equity and bank-statement workflows.
+         * Every request is scoped to the authenticated station and uses an explicit permission gate.
+         */
+        @JavascriptInterface
+        fun runExpandedAccounting(action: String, jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val readActions = setOf(
+                "supplier_aging", "supplier_statement", "purchase_invoice_list", "purchase_return_list",
+                "vat_return", "cash_flow_statement", "equity_changes", "bank_reconciliation", "bank_statement_batches"
+            )
+            val createActions = setOf("purchase_invoice_create", "purchase_return_create", "bank_statement_import")
+            val updateActions = setOf("purchase_invoice_post", "purchase_return_post", "bank_statement_match", "account_classification_save")
+            val permissionAction = when {
+                action in readActions -> "read"
+                action in createActions -> "create"
+                action in updateActions -> "update"
+                else -> return errorResponse("وظيفة محاسبية غير مسموحة عبر هذا الجسر")
+            }
+            return try {
+                if (!checkPermission("accounting", permissionAction)) {
+                    return errorResponse("لا تملك صلاحية accounting." + permissionAction + " لهذه الوظيفة")
+                }
+                val request = try {
+                    JSONObject(jsonData.ifBlank { "{}" })
+                } catch (_: Exception) {
+                    return errorResponse("بيانات الوظيفة المحاسبية غير صالحة")
+                }
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val service = ExpandedAccountingService(db, db.writableDatabase, stationId, activity.currentUserId)
+                val result = service.execute(action, request)
+                if (result.optBoolean("success") && action !in readActions) {
+                    invalidateCurrentReportCache(db, activity.currentUserId)
+                }
+                result.toString()
+            } catch (e: SecurityException) {
+                errorResponse("تم رفض العملية بسبب الصلاحيات أو نطاق المحطة")
+            } catch (e: Exception) {
+                DebugLogger.logException("ExpandedAccounting-" + action, e)
+                errorResponse(e.message ?: "تعذر تنفيذ الوظيفة المحاسبية")
+            }
+        }
+
         @JavascriptInterface
         fun getSupplierOutstandingBalance(supplierId: Long): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
