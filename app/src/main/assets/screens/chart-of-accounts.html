@@ -1429,6 +1429,13 @@
                 </div>
             </div>
 
+            <div class="standard-chart-toolbar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin:12px 0 16px;padding:12px;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-secondary);" aria-live="polite">
+                <button type="button" class="btn primary" id="standardChartButton" onclick="ensureStandardStationAccounts({manual:true})" style="min-height:42px;">
+                    <i class="fas fa-sitemap"></i> <span id="standardChartButtonLabel">استكمال دليل الحسابات</span>
+                </button>
+                <span id="standardChartStatus" style="flex:1;min-width:180px;font-size:.78rem;color:var(--text-muted);text-align:right;">يضيف الحسابات القياسية الناقصة لمحطات الوقود دون تعديل الحسابات أو الأرصدة الحالية.</span>
+            </div>
+
             <!-- Tree View -->
             <div class="tree-container" id="treeContainer">
                 <!-- Rendered by JS -->
@@ -2788,6 +2795,354 @@
         }
 
         // ============================================================
+        // STANDARD_STATION_CHART_V2
+        // دليل حسابات ملائم لمحطات الوقود؛ إضافة تكرارية آمنة عبر SQLite Bridge.
+        // لا يُعدّل حساباً قائماً ولا يغيّر أرصدته، ويُعيد استخدام الحساب المطابق عند وجوده.
+        // ============================================================
+        const STANDARD_CHART_CATALOG_VERSION = '2';
+        const STANDARD_CHART_STORAGE_KEY = 'stationChartAccountsSeedVersion';
+        let standardChartEnsureInProgress = false;
+        let standardChartAutoQueued = false;
+
+        // code | parentCode | type | normal balance | Arabic name | English name
+        const STANDARD_STATION_CHART_V2 = [
+            ['1000', null, 'asset', 'debit', 'الأصول', 'Assets'],
+            ['1100', '1000', 'asset', 'debit', 'الأصول غير المتداولة', 'Non-current assets'],
+            ['1110', '1100', 'asset', 'debit', 'الأراضي', 'Land'],
+            ['1120', '1100', 'asset', 'debit', 'المباني والإنشاءات', 'Buildings and structures'],
+            ['1130', '1100', 'asset', 'debit', 'معدات المحطة ومضخات الوقود', 'Station equipment and fuel pumps'],
+            ['1140', '1100', 'asset', 'debit', 'خزانات الوقود', 'Fuel storage tanks'],
+            ['1150', '1100', 'asset', 'debit', 'وسائل النقل والمركبات', 'Vehicles'],
+            ['1160', '1100', 'asset', 'debit', 'الأثاث ومعدات المكاتب', 'Furniture and office equipment'],
+            ['1170', '1100', 'asset', 'credit', 'مجمع إهلاك الأصول الثابتة', 'Accumulated depreciation'],
+            ['1200', '1000', 'asset', 'debit', 'الأصول المتداولة', 'Current assets'],
+            ['1210', '1200', 'asset', 'debit', 'المخزون', 'Inventory'],
+            ['1211', '1210', 'asset', 'debit', 'مخزون الديزل', 'Diesel inventory'],
+            ['1212', '1210', 'asset', 'debit', 'مخزون البنزين', 'Gasoline inventory'],
+            ['1213', '1210', 'asset', 'debit', 'مخزون الزيوت ومواد التشحيم', 'Lubricants inventory'],
+            ['1214', '1210', 'asset', 'debit', 'مخزون البضائع والمنتجات الأخرى', 'Other merchandise inventory'],
+            ['1215', '1210', 'asset', 'debit', 'مخزون قطع الغيار والمواد التشغيلية', 'Spare parts and operating supplies'],
+            ['1220', '1200', 'asset', 'debit', 'العملاء والذمم المدينة التجارية', 'Trade receivables'],
+            ['1221', '1220', 'asset', 'debit', 'العملاء', 'Customer receivables'],
+            ['1222', '1220', 'asset', 'debit', 'أوراق القبض', 'Notes receivable'],
+            ['1223', '1220', 'asset', 'credit', 'مخصص خسائر الائتمان والديون المشكوك فيها', 'Allowance for credit losses'],
+            ['1230', '1200', 'asset', 'debit', 'النقدية وما في حكمها', 'Cash and cash equivalents'],
+            ['1231', '1230', 'asset', 'debit', 'الصناديق النقدية', 'Cash boxes'],
+            ['1232', '1230', 'asset', 'debit', 'البنوك والحسابات الجارية', 'Bank current accounts'],
+            ['1233', '1230', 'asset', 'debit', 'مدفوعات البطاقات قيد التسوية', 'Card payments in transit'],
+            ['1234', '1230', 'asset', 'debit', 'النقدية قيد التحويل', 'Cash in transit'],
+            ['1240', '1200', 'asset', 'debit', 'السلف والذمم المدينة الأخرى', 'Other receivables and advances'],
+            ['1241', '1240', 'asset', 'debit', 'سلف العاملين', 'Employee advances'],
+            ['1242', '1240', 'asset', 'debit', 'دفعات مقدمة للموردين', 'Supplier advances'],
+            ['1243', '1240', 'asset', 'debit', 'إيرادات مستحقة', 'Accrued income'],
+            ['1244', '1240', 'asset', 'debit', 'مصروفات مدفوعة مقدماً', 'Prepaid expenses'],
+            ['1250', '1200', 'asset', 'debit', 'الضرائب المدينة', 'Tax receivables'],
+            ['1251', '1250', 'asset', 'debit', 'ضريبة القيمة المضافة القابلة للاسترداد', 'Recoverable VAT'],
+            ['1260', '1200', 'asset', 'debit', 'التأمينات والودائع المستردة', 'Refundable deposits'],
+            ['1270', '1000', 'asset', 'debit', 'مشروعات وأصول تحت التنفيذ', 'Capital work in progress'],
+
+            ['2000', null, 'liability', 'credit', 'الالتزامات', 'Liabilities'],
+            ['2100', '2000', 'liability', 'credit', 'الموردون والذمم الدائنة', 'Trade payables'],
+            ['2110', '2100', 'liability', 'credit', 'موردو الوقود', 'Fuel suppliers'],
+            ['2120', '2100', 'liability', 'credit', 'موردو البضائع والخدمات الأخرى', 'Other suppliers'],
+            ['2130', '2100', 'liability', 'credit', 'أوراق الدفع', 'Notes payable'],
+            ['2200', '2000', 'liability', 'credit', 'المصروفات والالتزامات المستحقة', 'Accrued liabilities'],
+            ['2210', '2200', 'liability', 'credit', 'رواتب وأجور مستحقة', 'Accrued payroll'],
+            ['2220', '2200', 'liability', 'credit', 'إيجارات مستحقة', 'Rent payable'],
+            ['2230', '2200', 'liability', 'credit', 'مرافق وخدمات مستحقة', 'Utilities payable'],
+            ['2240', '2200', 'liability', 'credit', 'مصروفات مستحقة أخرى', 'Other accrued expenses'],
+            ['2300', '2000', 'liability', 'credit', 'الضرائب والرسوم المستحقة', 'Taxes and duties payable'],
+            ['2310', '2300', 'liability', 'credit', 'ضريبة القيمة المضافة المستحقة', 'VAT payable'],
+            ['2320', '2300', 'liability', 'credit', 'ضرائب ورسوم أخرى مستحقة', 'Other taxes payable'],
+            ['2400', '2000', 'liability', 'credit', 'دفعات مقدمة من العملاء', 'Customer advances'],
+            ['2500', '2000', 'liability', 'credit', 'القروض والتسهيلات الائتمانية', 'Loans and credit facilities'],
+            ['2510', '2500', 'liability', 'credit', 'قروض قصيرة الأجل', 'Short-term loans'],
+            ['2520', '2500', 'liability', 'credit', 'قروض طويلة الأجل', 'Long-term loans'],
+            ['2530', '2500', 'liability', 'credit', 'سحب على المكشوف وتسهيلات مصرفية', 'Bank overdrafts'],
+            ['2600', '2000', 'liability', 'credit', 'التزامات العاملين', 'Employee obligations'],
+            ['2610', '2600', 'liability', 'credit', 'مكافآت نهاية الخدمة المستحقة', 'End-of-service benefits payable'],
+            ['2700', '2000', 'liability', 'credit', 'التزامات عقود الإيجار عند انطباقها', 'Lease liabilities when applicable'],
+            ['2800', '2000', 'liability', 'credit', 'الحسابات الجارية بين الفروع عند الحاجة', 'Inter-branch current accounts when needed'],
+
+            ['3000', null, 'equity', 'credit', 'حقوق الملكية', 'Equity'],
+            ['3100', '3000', 'equity', 'credit', 'رأس المال', 'Capital'],
+            ['3110', '3100', 'equity', 'credit', 'رأس مال المالك أو الشركاء', 'Owner or shareholders capital'],
+            ['3120', '3100', 'equity', 'credit', 'مساهمات رأسمالية إضافية', 'Additional contributed capital'],
+            ['3200', '3000', 'equity', 'credit', 'الأرباح والخسائر المحتجزة', 'Retained earnings'],
+            ['3210', '3200', 'equity', 'credit', 'أرباح وخسائر السنوات السابقة', 'Prior-period retained results'],
+            ['3220', '3200', 'equity', 'credit', 'نتيجة السنة المالية الحالية', 'Current-year result'],
+            ['3300', '3000', 'equity', 'debit', 'المسحوبات والتوزيعات على المالك أو الشركاء', 'Owner drawings and distributions'],
+
+            ['4000', null, 'revenue', 'credit', 'الإيرادات', 'Revenue'],
+            ['4100', '4000', 'revenue', 'credit', 'إيرادات المبيعات والخدمات', 'Sales and service revenue'],
+            ['4110', '4100', 'revenue', 'credit', 'مبيعات الديزل', 'Diesel sales'],
+            ['4120', '4100', 'revenue', 'credit', 'مبيعات البنزين', 'Gasoline sales'],
+            ['4130', '4100', 'revenue', 'credit', 'مبيعات الزيوت ومواد التشحيم', 'Lubricants sales'],
+            ['4140', '4100', 'revenue', 'credit', 'مبيعات البضائع والمنتجات الأخرى', 'Other merchandise sales'],
+            ['4150', '4100', 'revenue', 'credit', 'إيرادات الخدمات الإضافية', 'Ancillary service revenue'],
+            ['4200', '4000', 'revenue', 'debit', 'مردودات وخصومات المبيعات', 'Sales returns and allowances'],
+            ['4210', '4200', 'revenue', 'debit', 'مردودات المبيعات', 'Sales returns'],
+            ['4220', '4200', 'revenue', 'debit', 'الخصومات المسموح بها على المبيعات', 'Sales discounts allowed'],
+            ['4300', '4000', 'revenue', 'credit', 'الإيرادات الأخرى', 'Other income'],
+            ['4310', '4300', 'revenue', 'credit', 'فوائد وإيرادات بنكية', 'Bank interest and income'],
+            ['4320', '4300', 'revenue', 'credit', 'أرباح بيع الأصول الثابتة', 'Gain on disposal of fixed assets'],
+            ['4330', '4300', 'revenue', 'credit', 'تعويضات وإيرادات متنوعة', 'Compensation and miscellaneous income'],
+
+            ['5000', null, 'expense', 'debit', 'تكلفة المبيعات', 'Cost of sales'],
+            ['5100', '5000', 'expense', 'debit', 'تكلفة الوقود المباع', 'Cost of fuel sold'],
+            ['5110', '5100', 'expense', 'debit', 'تكلفة الديزل المباع', 'Cost of diesel sold'],
+            ['5120', '5100', 'expense', 'debit', 'تكلفة البنزين المباع', 'Cost of gasoline sold'],
+            ['5200', '5000', 'expense', 'debit', 'تكلفة البضائع الأخرى المباعة', 'Cost of other goods sold'],
+            ['5210', '5200', 'expense', 'debit', 'تكلفة الزيوت ومواد التشحيم المباعة', 'Cost of lubricants sold'],
+            ['5220', '5200', 'expense', 'debit', 'تكلفة المنتجات الأخرى المباعة', 'Cost of other products sold'],
+            ['5300', '5000', 'expense', 'debit', 'فروق وخسائر المخزون', 'Inventory variances and losses'],
+            ['5310', '5300', 'expense', 'debit', 'عجز مخزون معتمد', 'Approved inventory shortage'],
+            ['5320', '5300', 'expense', 'debit', 'تلف أو انخفاض قيمة المخزون', 'Inventory damage or write-down'],
+
+            ['6000', null, 'expense', 'debit', 'المصروفات التشغيلية', 'Operating expenses'],
+            ['6100', '6000', 'expense', 'debit', 'مصروفات العاملين', 'Staff costs'],
+            ['6110', '6100', 'expense', 'debit', 'الرواتب والأجور', 'Salaries and wages'],
+            ['6120', '6100', 'expense', 'debit', 'البدلات والمزايا', 'Allowances and benefits'],
+            ['6130', '6100', 'expense', 'debit', 'حصة المنشأة في التأمينات الاجتماعية', 'Employer social insurance'],
+            ['6200', '6000', 'expense', 'debit', 'مصروفات الموقع والمرافق', 'Premises and utilities'],
+            ['6210', '6200', 'expense', 'debit', 'مصروفات الإيجار', 'Rent expense'],
+            ['6220', '6200', 'expense', 'debit', 'الكهرباء والمياه', 'Electricity and water'],
+            ['6230', '6200', 'expense', 'debit', 'الاتصالات والإنترنت', 'Communications and internet'],
+            ['6300', '6000', 'expense', 'debit', 'مصروفات الصيانة والتشغيل', 'Maintenance and operations'],
+            ['6310', '6300', 'expense', 'debit', 'صيانة المضخات والخزانات', 'Pumps and tanks maintenance'],
+            ['6320', '6300', 'expense', 'debit', 'صيانة المباني والمرافق', 'Buildings and premises maintenance'],
+            ['6330', '6300', 'expense', 'debit', 'صيانة المركبات والمعدات', 'Vehicles and equipment maintenance'],
+            ['6400', '6000', 'expense', 'debit', 'المصروفات الإدارية', 'Administrative expenses'],
+            ['6410', '6400', 'expense', 'debit', 'مستلزمات مكتبية ومطبوعات', 'Office supplies and printing'],
+            ['6420', '6400', 'expense', 'debit', 'أتعاب مهنية وقانونية ومحاسبية', 'Professional, legal and accounting fees'],
+            ['6430', '6400', 'expense', 'debit', 'تراخيص ورسوم تشغيل', 'Operating licences and fees'],
+            ['6440', '6400', 'expense', 'debit', 'الدعاية والتسويق', 'Advertising and marketing'],
+            ['6500', '6000', 'expense', 'debit', 'مصروفات الإهلاك', 'Depreciation expense'],
+            ['6510', '6500', 'expense', 'debit', 'إهلاك المباني والإنشاءات', 'Buildings depreciation'],
+            ['6520', '6500', 'expense', 'debit', 'إهلاك معدات المحطة والمضخات والخزانات', 'Station equipment, pumps and tanks depreciation'],
+            ['6530', '6500', 'expense', 'debit', 'إهلاك وسائل النقل', 'Vehicles depreciation'],
+            ['6540', '6500', 'expense', 'debit', 'إهلاك الأثاث والأجهزة', 'Furniture and devices depreciation'],
+            ['6600', '6000', 'expense', 'debit', 'رسوم البنوك والمدفوعات الإلكترونية', 'Banking and electronic payment fees'],
+            ['6610', '6600', 'expense', 'debit', 'العمولات والرسوم البنكية', 'Bank charges and commissions'],
+            ['6620', '6600', 'expense', 'debit', 'رسوم معالجة مدفوعات البطاقات', 'Card payment processing fees'],
+            ['6700', '6000', 'expense', 'debit', 'مصروفات تشغيلية أخرى', 'Other operating expenses'],
+
+            ['7000', null, 'expense', 'debit', 'المصروفات التمويلية وغير التشغيلية', 'Finance and non-operating expenses'],
+            ['7100', '7000', 'expense', 'debit', 'فوائد ومصاريف تمويلية', 'Interest and finance costs'],
+            ['7200', '7000', 'expense', 'debit', 'مصروف خسائر ائتمانية وديون معدومة', 'Credit losses and bad-debt expense'],
+            ['7300', '7000', 'expense', 'debit', 'خسائر بيع واستبعاد الأصول', 'Loss on disposal of assets'],
+            ['7400', '7000', 'expense', 'debit', 'خسائر فروق العملة عند وجودها', 'Foreign-exchange losses when applicable'],
+            ['7500', '7000', 'expense', 'debit', 'غرامات ومخالفات عند انطباقها', 'Fines and penalties when applicable'],
+            ['7600', '7000', 'expense', 'debit', 'مصروف ضريبة الدخل عند انطباقها', 'Income-tax expense when applicable']
+        ];
+
+        function normalizeSeedAccountName(value) {
+            return String(value || '')
+                .normalize('NFKC')
+                .replace(/[\u064B-\u065F\u0670]/g, '')
+                .replace(/[أإآ]/g, 'ا')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+        }
+
+        function seedAccountParentId(account) {
+            return Number(account && (account.parent_account_id ?? account.parent_id) || 0);
+        }
+
+        function seedAccountByNameAndParent(accounts, definition, parentId) {
+            const expectedParent = Number(parentId || 0);
+            return accounts.find(account =>
+                normalizeSeedAccountName(account.account_name_ar || account.account_name) === normalizeSeedAccountName(definition[4]) &&
+                String(account.account_type || '') === definition[2] &&
+                seedAccountParentId(account) === expectedParent
+            ) || null;
+        }
+
+        function selectUnusedSeedCode(preferredCode, accounts, reservedCodes) {
+            const occupied = new Set(accounts.map(account => String(account.account_code || '').trim()).filter(Boolean));
+            if (!occupied.has(preferredCode)) return preferredCode;
+            let candidate = preferredCode + '9';
+            while (occupied.has(candidate) || reservedCodes.has(candidate)) candidate += '9';
+            return candidate;
+        }
+
+        function safeReadChartSeedVersion() {
+            try { return window.localStorage.getItem(STANDARD_CHART_STORAGE_KEY) || ''; }
+            catch (_) { return ''; }
+        }
+
+        function safeWriteChartSeedVersion() {
+            try { window.localStorage.setItem(STANDARD_CHART_STORAGE_KEY, STANDARD_CHART_CATALOG_VERSION); }
+            catch (_) { /* SQLite remains the source of truth; a later open safely rechecks existing accounts. */ }
+        }
+
+        async function ensureStandardStationAccounts(options = {}) {
+            if (standardChartEnsureInProgress) return;
+            const automatic = options.automatic === true;
+            const button = document.getElementById('standardChartButton');
+            const label = document.getElementById('standardChartButtonLabel');
+            const status = document.getElementById('standardChartStatus');
+            if (!window.AndroidInterface) {
+                if (!automatic) showToast('تعذر الاتصال بقاعدة SQLite عبر جسر Android', 'error');
+                return;
+            }
+
+            standardChartEnsureInProgress = true;
+            const originalLabel = label ? label.textContent : 'استكمال دليل الحسابات';
+            if (button) button.disabled = true;
+            if (label) label.textContent = 'جاري التحقق...';
+            if (status) status.textContent = 'يجري التحقق من الحسابات الموجودة وإضافة الناقص فقط...';
+
+            const created = [];
+            const codeAdjustments = [];
+            const errors = [];
+            const mappedByStandardCode = new Map();
+            const reservedCodes = new Set(STANDARD_STATION_CHART_V2.map(item => item[0]));
+
+            try {
+                const snapshot = await apiCall('getChartAccounts');
+                if (!snapshot || !Array.isArray(snapshot.data)) {
+                    throw new Error('استجابة قاعدة البيانات لا تحتوي على قائمة حسابات صالحة');
+                }
+                const workingAccounts = snapshot.data.slice();
+
+                for (let index = 0; index < STANDARD_STATION_CHART_V2.length; index++) {
+                    const definition = STANDARD_STATION_CHART_V2[index];
+                    const [standardCode, parentCode, type, normalBalance, nameAr, nameEn] = definition;
+                    const parent = parentCode ? mappedByStandardCode.get(parentCode) : null;
+
+                    if (parentCode && !parent) {
+                        errors.push('تعذر إنشاء ' + nameAr + ': الحساب الأب ' + parentCode + ' غير متاح.');
+                        if (status) status.textContent = 'تعذّر استكمال بعض الفروع (' + (index + 1) + '/' + STANDARD_STATION_CHART_V2.length + ')';
+                        continue;
+                    }
+
+                    const parentId = parent ? Number(parent.id) : null;
+                    const equivalent = seedAccountByNameAndParent(workingAccounts, definition, parentId);
+                    if (equivalent) {
+                        mappedByStandardCode.set(standardCode, equivalent);
+                        continue;
+                    }
+
+                    const sameNameWrongType = workingAccounts.find(account =>
+                        normalizeSeedAccountName(account.account_name_ar || account.account_name) === normalizeSeedAccountName(nameAr) &&
+                        seedAccountParentId(account) === Number(parentId || 0) &&
+                        String(account.account_type || '') !== type
+                    );
+                    if (sameNameWrongType) {
+                        errors.push('لم يُعدّل الحساب الموجود "' + nameAr + '" لأن نوعه الحالي (' + sameNameWrongType.account_type + ') يختلف عن النوع المطلوب (' + type + ').');
+                        continue;
+                    }
+
+                    const actualCode = selectUnusedSeedCode(standardCode, workingAccounts, reservedCodes);
+                    if (actualCode !== standardCode) {
+                        codeAdjustments.push(standardCode + ' ← ' + actualCode);
+                    }
+
+                    const payload = {
+                        id: 0,
+                        account_code: actualCode,
+                        account_name_ar: nameAr,
+                        account_name: nameEn,
+                        account_type: type,
+                        parent_account_id: parentId,
+                        level: parent ? Number(parent.level || 1) + 1 : 1,
+                        normal_balance: normalBalance,
+                        opening_balance: 0,
+                        current_balance: 0,
+                        is_bank_account: 0,
+                        is_cash_account: 0,
+                        is_control_account: 0,
+                        is_active: 1,
+                        bank_account_id: null,
+                        cash_box_id: null,
+                        remarks: 'ضمن دليل الحسابات القياسي لمحطات الوقود v2؛ أُضيف برصيد افتتاحي صفري دون تعديل الأرصدة القائمة.'
+                    };
+
+                    try {
+                        const saved = await apiCall('saveChartAccount', payload);
+                        const newId = Number(saved && saved.id);
+                        if (!Number.isFinite(newId) || newId <= 0) {
+                            throw new Error('لم تُرجع SQLite معرّفاً صالحاً للحساب الجديد');
+                        }
+                        const inserted = {
+                            ...payload,
+                            id: newId,
+                            is_active: 1
+                        };
+                        workingAccounts.push(inserted);
+                        mappedByStandardCode.set(standardCode, inserted);
+                        created.push(inserted);
+                    } catch (saveError) {
+                        errors.push(nameAr + ' (' + actualCode + '): ' + (saveError && saveError.message ? saveError.message : 'فشل الحفظ'));
+                    }
+
+                    if (status) status.textContent = 'تمت مراجعة ' + (index + 1) + ' من ' + STANDARD_STATION_CHART_V2.length + ' حساباً؛ أضيف ' + created.length + '.';
+                    // Yield to WebView between SQLite calls so progress remains visible on low-resource Android devices.
+                    await new Promise(resolve => window.setTimeout(resolve, 0));
+                }
+
+                if (errors.length === 0) safeWriteChartSeedVersion();
+
+                if (created.length > 0) {
+                    await loadAccounts();
+                }
+
+                const finalMessage = 'اكتمل فحص دليل الحسابات: أضيف ' + created.length +
+                    ' حساباً جديداً، واستُخدم ' + (STANDARD_STATION_CHART_V2.length - created.length - errors.length) +
+                    ' حساباً موجوداً أو مكافئاً دون تعديله.';
+                if (status) {
+                    status.textContent = errors.length
+                        ? ('استكمال جزئي: أضيف ' + created.length + '، وتعذّر ' + errors.length + '. يمكنك إعادة المحاولة.')
+                        : ('الدليل محدّث؛ إجمالي الحسابات القياسية ' + STANDARD_STATION_CHART_V2.length + '.');
+                }
+
+                if ((!automatic || created.length > 0 || errors.length > 0) && (created.length > 0 || errors.length > 0 || !automatic)) {
+                    showToast(errors.length
+                        ? ('اكتمل جزئياً: أضيف ' + created.length + ' حساباً، وتعذّر ' + errors.length + '؛ راجع التفاصيل.')
+                        : (created.length > 0
+                            ? ('تمت إضافة ' + created.length + ' حساباً قياسياً إلى SQLite دون تغيير الأرصدة الحالية.')
+                            : 'شجرة الحسابات تحتوي بالفعل على الحسابات القياسية المطلوبة.'), errors.length ? 'warning' : 'success');
+                }
+
+                if (errors.length > 0) {
+                    console.warn('STANDARD_STATION_CHART_V2 issues:', errors);
+                    if (!automatic && window.Swal && typeof window.Swal.fire === 'function') {
+                        await Swal.fire({
+                            title: 'اكتمل استكمال الشجرة جزئياً',
+                            html: '<p>' + finalMessage + '</p><div style="text-align:right;max-height:45vh;overflow:auto;">' +
+                                errors.slice(0, 12).map(message => '<div style="padding:6px 0;border-bottom:1px solid #ddd;">' +
+                                    escapeHtml(message) + '</div>').join('') +
+                                (errors.length > 12 ? '<p>وأخطاء أخرى: ' + (errors.length - 12) + '</p>' : '') +
+                                '</div>' + (codeAdjustments.length ? '<p>تم تجنّب رموز مستخدمة مسبقاً وتخصيص رموز بديلة لعدد ' + codeAdjustments.length + ' حساباً.</p>' : ''),
+                            icon: 'warning',
+                            confirmButtonText: 'حسناً'
+                        });
+                    }
+                } else if (!automatic && codeAdjustments.length > 0 && window.Swal) {
+                    await Swal.fire({
+                        title: 'تم الاستكمال مع الحفاظ على الحسابات الموجودة',
+                        text: 'كانت بعض الرموز القياسية مستخدمة مسبقاً؛ تم تخصيص رموز رقمية بديلة بدلاً من الكتابة فوق أي حساب قائم. عدد الحالات: ' + codeAdjustments.length,
+                        icon: 'info',
+                        confirmButtonText: 'حسناً'
+                    });
+                }
+            } catch (error) {
+                console.error('STANDARD_STATION_CHART_V2 failed:', error);
+                if (status) status.textContent = 'تعذر إكمال الاستيراد؛ لم تُعلّم العملية كمكتملة ويمكن إعادة المحاولة.';
+                showToast('تعذر استكمال دليل الحسابات: ' + (error && error.message ? error.message : 'خطأ غير معروف'), 'error');
+            } finally {
+                standardChartEnsureInProgress = false;
+                if (button) button.disabled = false;
+                if (label) label.textContent = originalLabel;
+                if (status && status.textContent === 'يجري التحقق من الحسابات الموجودة وإضافة الناقص فقط...') {
+                    status.textContent = 'يضيف الحسابات القياسية الناقصة فقط، دون تعديل الحسابات أو الأرصدة الحالية.';
+                }
+            }
+        }
+
+        // ============================================================
         // 17. Load data — robust
         // ============================================================
         async function loadAccounts() {
@@ -2838,6 +3193,14 @@
                 analyzeChartOfAccounts();
                 isInitialLoad = false;
                 showLoading(false);
+            }
+
+            // One-time, idempotent SQLite seed. Existing accounts and balances are never overwritten.
+            if (!standardChartAutoQueued && accountsRes && Array.isArray(accountsRes.data)) {
+                standardChartAutoQueued = true;
+                if (safeReadChartSeedVersion() !== STANDARD_CHART_CATALOG_VERSION) {
+                    window.setTimeout(() => ensureStandardStationAccounts({ automatic: true }), 650);
+                }
             }
         }
 
