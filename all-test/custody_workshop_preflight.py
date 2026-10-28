@@ -150,7 +150,7 @@ def main() -> int:
         },
         "additional_findings": {
             "legacy_maintenance_delete_is_station_scoped": contains_any(main_source, [
-                r'id=? AND station_id=? AND is_deleted=0',
+                r'id=\? AND station_id=\? AND is_deleted=0',
             ]),
             "legacy_maintenance_delete_has_explicit_granular_permission_check": contains_any(main_source, [
                 r'checkPermission\("maintenance",\s*"delete"\)',
