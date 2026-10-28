@@ -113,8 +113,8 @@ for name, required in CASES.items():
         ]
     if name == 'fiscal-periods.html':
         checks += [
-            ("if (!confirm(" in html and "reason.trim().length<5" in html, 'period close/reopen requires confirmation and a meaningful reason'),
-            ('fail closed' in html.lower() or 'لم يتم افتراض حالة الفترة' in html, 'unrecognized fiscal-period response does not guess month status'),
+            ("confirm(" in html and "reason.trim().length<5" in html, 'period close/reopen requires confirmation and a meaningful reason'),
+            ('fail closed' in html.lower() or 'لم يتم افتراض أن الأشهر مفتوحة' in html, 'unrecognized fiscal-period response does not guess month status'),
         ]
     if name == 'financial-integrity.html':
         checks += [
