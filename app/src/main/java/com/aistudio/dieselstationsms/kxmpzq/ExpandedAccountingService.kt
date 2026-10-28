@@ -43,6 +43,7 @@ internal class ExpandedAccountingService(
         "cash_flow_statement" -> cashFlowStatement(p)
         "equity_changes" -> equityChanges(p)
         "account_classification_save" -> saveAccountClassification(p)
+        "tax_profile_save" -> saveTaxProfile(p)
         "bank_statement_import" -> importBankStatement(p)
         "bank_reconciliation" -> bankReconciliation(p)
         "bank_statement_match" -> matchBankStatementLine(p)
@@ -125,6 +126,20 @@ internal class ExpandedAccountingService(
                 total_amount REAL NOT NULL,
                 account_id INTEGER NOT NULL,
                 created_at TEXT NOT NULL
+            )"""
+        )
+        db.execSQL(
+            """CREATE TABLE IF NOT EXISTS expanded_tax_profiles (
+                station_id INTEGER PRIMARY KEY,
+                jurisdiction_code TEXT NOT NULL,
+                tax_registration_number TEXT NOT NULL,
+                filing_frequency TEXT NOT NULL,
+                tax_reporting_currency_id INTEGER NOT NULL DEFAULT 1,
+                tax_schema_version TEXT NOT NULL DEFAULT '',
+                is_confirmed INTEGER NOT NULL DEFAULT 0,
+                confirmed_by INTEGER,
+                confirmed_at TEXT,
+                updated_at TEXT NOT NULL
             )"""
         )
         db.execSQL(
@@ -767,17 +782,28 @@ internal class ExpandedAccountingService(
         val inputVatNet = money(purchaseVat - returnVat)
         val outputVat = sales.optDouble("output_vat", 0.0)
         val gaps = sales.optJSONArray("schema_gaps") ?: JSONArray()
-        val complete = sales.optBoolean("source_available") && gaps.length() == 0
+        val missingSalesJournals = sales.optInt("completed_sales_without_posted_journal", -1)
+        val hasTaxProfile = taxProfileConfigured()
+        val sourceComplete = sales.optBoolean("source_available") && gaps.length() == 0 && missingSalesJournals == 0
+        val readyForReview = sourceComplete && hasTaxProfile
         return JSONObject().put("success", true).put("station_id", stationId).put("from_date", from).put("to_date", to)
             .put("output_vat", money(outputVat)).put("posted_purchase_input_vat", money(purchaseVat))
             .put("posted_purchase_return_input_vat", money(returnVat)).put("net_recoverable_input_vat", inputVatNet)
             .put("net_vat_payable", money(outputVat - inputVatNet))
             .put("outbound_source", sales.optString("source", "unavailable"))
             .put("outbound_document_count", sales.optInt("document_count", 0))
+            .put("completed_sales_without_posted_journal", missingSalesJournals)
+            .put("tax_profile_configured", hasTaxProfile)
+            .put("calculation_is_preparatory_workpaper", true)
+            .put("ready_for_tax_review", readyForReview)
             .put("purchase_invoice_count", scalar("SELECT COUNT(*) FROM expanded_purchase_invoices WHERE station_id=? AND status='posted' AND is_deleted=0 AND invoice_date>=? AND invoice_date<=?", arrayOf(stationId.toString(), from, to)))
             .put("purchase_return_count", scalar("SELECT COUNT(*) FROM expanded_purchase_returns WHERE station_id=? AND status='posted' AND is_deleted=0 AND return_date>=? AND return_date<=?", arrayOf(stationId.toString(), from, to)))
-            .put("schema_gaps", gaps).put("ready_for_filing", complete)
-            .put("filing_block_reason", if (complete) JSONObject.NULL else "تعذر إثبات ضريبة المخرجات من مصدر مبيعات موثوق ذي نطاق محطة وتاريخ وحالة ترحيل؛ لا يجوز إنشاء إقرار نهائي من إجمالي المبيعات وحده")
+            .put("schema_gaps", gaps).put("ready_for_filing", false)
+            .put("filing_block_reason", when {
+                !sourceComplete -> "حقول مصدر الضريبة أو قيود المبيعات المرحلة غير مكتملة"
+                !hasTaxProfile -> "يجب ضبط ملف ضريبي مؤكد للمحطة"
+                else -> "هذه ورقة عمل ضريبية؛ لم يتم بعد ربط فئات الضرائب وصناديق الإقرار بالنموذج القانوني الوطني، لذلك لا تُعامل كإقرار جاهز للتقديم"
+            })
     }
 
     private fun findSalesVatSource(from: String, to: String): JSONObject {
@@ -793,21 +819,37 @@ internal class ExpandedAccountingService(
             .firstOrNull { c.contains(it) }
         if (vatCol == null) gaps.put("لا يوجد حقل صريح لضريبة المخرجات في sales_transactions")
         if (dateCol == null) gaps.put("لا يوجد حقل تاريخ موثوق في sales_transactions")
+        if (!c.contains("id")) gaps.put("لا يوجد معرف فاتورة sales_transactions.id")
         if (!c.contains("station_id")) gaps.put("لا يوجد station_id في sales_transactions")
         if (!c.contains("status")) gaps.put("لا يوجد status يسمح بتمييز المبيعات المرحلة")
-        if (vatCol == null || dateCol == null || !c.contains("station_id") || !c.contains("status")) {
+        if (!c.contains("is_deleted")) gaps.put("لا يوجد is_deleted لإثبات حالة السجل")
+        if (!tableExists("journal_entries")) gaps.put("جدول journal_entries غير موجود للتحقق من قيد المبيعات")
+        val jc = columns("journal_entries")
+        if (!jc.containsAll(setOf("id", "station_id", "reference_type", "reference_id", "status", "is_deleted"))) {
+            gaps.put("حقول journal_entries لا تكفي لإثبات قيد مبيعات مرحّل")
+        }
+        if (vatCol == null || dateCol == null || !c.containsAll(setOf("id", "station_id", "status", "is_deleted")) ||
+            !jc.containsAll(setOf("id", "station_id", "reference_type", "reference_id", "status", "is_deleted"))) {
             return JSONObject().put("source_available", false).put("source", "sales_transactions")
                 .put("schema_gaps", gaps).put("output_vat", 0.0).put("document_count", 0)
         }
         val dateExpression = "substr(COALESCE(" + q(dateCol) + ",'') ,1,10)"
-        val sql = "SELECT COALESCE(SUM(" + q(vatCol) + "),0),COUNT(*) FROM sales_transactions WHERE station_id=? " +
-            "AND COALESCE(is_deleted,0)=0 AND lower(status) IN ('completed','posted','approved','paid') AND " +
+        val where = " station_id=? AND COALESCE(is_deleted,0)=0 AND lower(status) IN ('completed','posted','approved','paid') AND " +
             dateExpression + ">=? AND " + dateExpression + "<=?"
-        val args = mutableListOf(stationId.toString(), from, to)
-        val sum = scalarDouble(sql, args.toTypedArray())
-        val count = scalar(sql.replace("SELECT COALESCE(SUM(" + q(vatCol) + "),0),COUNT(*)", "SELECT COUNT(*)"), args.toTypedArray())
+        val args = arrayOf(stationId.toString(), from, to)
+        val sum = scalarDouble("SELECT COALESCE(SUM(" + q(vatCol) + "),0) FROM sales_transactions WHERE " + where, args)
+        val count = scalar("SELECT COUNT(*) FROM sales_transactions WHERE " + where, args)
+        val missingJournals = scalar(
+            "SELECT COUNT(*) FROM sales_transactions s WHERE s.station_id=? AND COALESCE(s.is_deleted,0)=0 " +
+                "AND lower(s.status) IN ('completed','posted','approved','paid') AND " +
+                "substr(COALESCE(s." + q(dateCol) + ",'') ,1,10)>=? AND substr(COALESCE(s." + q(dateCol) + ",'') ,1,10)<=? " +
+                "AND NOT EXISTS(SELECT 1 FROM journal_entries j WHERE j.station_id=s.station_id AND j.reference_type='sale' " +
+                "AND j.reference_id=s.id AND j.status='posted' AND COALESCE(j.is_deleted,0)=0)",
+            args
+        )
         return JSONObject().put("source_available", true).put("source", "sales_transactions." + vatCol)
             .put("schema_gaps", gaps).put("output_vat", money(sum)).put("document_count", count)
+            .put("completed_sales_without_posted_journal", missingJournals)
     }
 
     private fun cashFlowStatement(p: JSONObject): JSONObject {
@@ -895,11 +937,13 @@ internal class ExpandedAccountingService(
                 .put("schema_gaps", JSONArray().put("حقول حسابات حقوق الملكية وتواريخ القيود غير مكتملة"))
         }
         val equityTypes = listOf("equity", "capital", "owner_equity")
+        val accountStationScope = if (acols.contains("station_id")) " AND station_id=?" else ""
+        val accountArgs = if (acols.contains("station_id")) arrayOf(stationId.toString()) else emptyArray()
         val accounts = query(
             "SELECT id,account_code,COALESCE(" + q(firstColumn(acols, listOf("account_name", "name", "account_name_ar")) ?: "account_code") + ",'') ," +
                 "lower(COALESCE(account_type,'')),COALESCE(opening_balance,0) FROM accounts " +
-                "WHERE COALESCE(is_active,1)=1 AND COALESCE(is_deleted,0)=0 ORDER BY account_code",
-            emptyArray()
+                "WHERE COALESCE(is_active,1)=1 AND COALESCE(is_deleted,0)=0" + accountStationScope + " ORDER BY account_code",
+            accountArgs
         ) { c -> EquityAccount(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getDouble(4)) }
             .filter { it.type in equityTypes }
         val details = JSONArray()
@@ -968,9 +1012,11 @@ internal class ExpandedAccountingService(
         val ac = columns("accounts")
         val jc = columns("journal_entries")
         if (!ac.containsAll(setOf("id", "account_type")) || !jc.containsAll(setOf("id", "station_id", "entry_date", "status", "is_deleted"))) return 0.0 to false
+        val accountScope = if (ac.contains("station_id")) " AND station_id=?" else ""
+        val accountArgs = if (ac.contains("station_id")) arrayOf(stationId.toString()) else emptyArray()
         val types = query(
-            "SELECT id,lower(COALESCE(account_type,'')) FROM accounts WHERE COALESCE(is_active,1)=1 AND COALESCE(is_deleted,0)=0",
-            emptyArray()
+            "SELECT id,lower(COALESCE(account_type,'')) FROM accounts WHERE COALESCE(is_active,1)=1 AND COALESCE(is_deleted,0)=0" + accountScope,
+            accountArgs
         ) { c -> c.getLong(0) to c.getString(1) }
         var income = 0.0
         var expense = 0.0
@@ -985,6 +1031,43 @@ internal class ExpandedAccountingService(
         }
         val hasPnl = types.any { it.second in listOf("income", "revenue", "sales", "other_income", "expense", "cost", "cogs", "cost_of_sales") }
         return money(income - expense) to hasPnl
+    }
+
+    private fun saveTaxProfile(p: JSONObject): JSONObject {
+        val jurisdiction = clean(p.optString("jurisdiction_code"), 30).uppercase(Locale.ROOT)
+        val registration = clean(p.optString("tax_registration_number"), 120)
+        val frequency = clean(p.optString("filing_frequency"), 30).lowercase(Locale.ROOT)
+        val currency = p.optLong("tax_reporting_currency_id", 1L)
+        val schemaVersion = clean(p.optString("tax_schema_version"), 80)
+        require(jurisdiction.matches(Regex("[A-Z0-9_-]{2,30}"))) { "رمز الولاية/الدولة الضريبية مطلوب" }
+        require(registration.isNotBlank()) { "رقم التسجيل الضريبي مطلوب" }
+        require(frequency in setOf("monthly", "quarterly", "annually")) { "دورية الإقرار غير صحيحة" }
+        require(currency > 0L) { "عملة الإقرار مطلوبة" }
+        require(schemaVersion.isNotBlank()) { "إصدار مخطط الإقرار/التصنيف مطلوب؛ لا يُفترض نموذج ضريبي وطني تلقائياً" }
+        val confirmed = p.optBoolean("confirm_tax_profile", false)
+        db.insertWithOnConflict("expanded_tax_profiles", null, ContentValues().apply {
+            put("station_id", stationId); put("jurisdiction_code", jurisdiction)
+            put("tax_registration_number", registration); put("filing_frequency", frequency)
+            put("tax_reporting_currency_id", currency); put("tax_schema_version", schemaVersion)
+            put("is_confirmed", if (confirmed) 1 else 0)
+            if (confirmed) { put("confirmed_by", userId); put("confirmed_at", now()) }
+            put("updated_at", now())
+        }, SQLiteDatabase.CONFLICT_REPLACE)
+        return JSONObject().put("success", true).put("jurisdiction_code", jurisdiction)
+            .put("filing_frequency", frequency).put("is_confirmed", confirmed)
+            .put("message", if (confirmed) "تم حفظ الملف الضريبي؛ يظل التقرير ورقة عمل حتى إضافة خرائط الإقرار الوطني" else "تم حفظ الملف الضريبي كمسودة غير معتمدة")
+    }
+
+    private fun taxProfileConfigured(): Boolean {
+        if (!tableExists("expanded_tax_profiles")) return false
+        val cols = columns("expanded_tax_profiles")
+        if (!cols.containsAll(setOf("station_id", "jurisdiction_code", "tax_registration_number", "filing_frequency", "tax_schema_version", "is_confirmed"))) return false
+        return scalar(
+            "SELECT COUNT(*) FROM expanded_tax_profiles WHERE station_id=? AND COALESCE(is_confirmed,0)=1 " +
+                "AND TRIM(COALESCE(jurisdiction_code,''))<>'' AND TRIM(COALESCE(tax_registration_number,''))<>'' " +
+                "AND TRIM(COALESCE(filing_frequency,''))<>'' AND TRIM(COALESCE(tax_schema_version,''))<>''",
+            arrayOf(stationId.toString())
+        ) == 1
     }
 
     private fun saveAccountClassification(p: JSONObject): JSONObject {
