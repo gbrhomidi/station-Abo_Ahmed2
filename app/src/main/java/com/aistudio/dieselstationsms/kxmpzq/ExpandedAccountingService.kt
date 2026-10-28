@@ -222,7 +222,7 @@ internal class ExpandedAccountingService(
                 if (credit > 0.005) {
                     val source = sourceDates(e.type, e.transactionId, e.eventDate)
                     val obligation = OpenObligation(
-                        e.id, credit, source.first, source.second, e.eventDate, e.type
+                        e.id, e.transactionId, credit, source.first, source.second, e.eventDate, e.type
                     )
                     if (advances > 0.005) {
                         val used = minOf(advances, obligation.remaining)
@@ -322,6 +322,7 @@ internal class ExpandedAccountingService(
     private fun supplierStatement(p: JSONObject): JSONObject {
         requireTable("supplier_ledger")
         requireTable("parties")
+        requireTable("party_types")
         val supplierId = p.optLong("supplier_id", 0L)
         require(supplierId > 0L) { "يجب تحديد المورد" }
         val supplier = query(
@@ -406,7 +407,9 @@ internal class ExpandedAccountingService(
             val price = line.optDouble("unit_price", Double.NaN)
             val rate = line.optDouble("vat_rate", 0.0)
             val accountId = line.optLong("account_id", 0L)
-            require(description.isNotBlank() && qty.isFinite() && qty > 0 && price.isFinite() && price >= 0)
+            require(description.isNotBlank() && qty.isFinite() && qty > 0 && price.isFinite() && price >= 0) {
+                "وصف البند والكمية وسعر الوحدة مطلوبة ويجب أن تكون القيم صحيحة"
+            }
             require(rate.isFinite() && rate in 0.0..100.0) { "نسبة ضريبة القيمة المضافة غير صحيحة" }
             requireValidAccount(accountId, setOf("asset", "expense", "cost", "inventory"))
             val net = money(qty * price)
@@ -418,31 +421,28 @@ internal class ExpandedAccountingService(
         subtotal = money(subtotal)
         vat = money(vat)
         val total = money(subtotal + vat)
-        val now = now()
-        val values = ContentValues().apply {
-            put("station_id", stationId); put("supplier_id", supplierId); put("invoice_number", number)
-            put("invoice_date", invoiceDate); put("due_date", dueDate); put("currency_id", currency)
-            put("subtotal", subtotal); put("vat_amount", vat); put("total_amount", total)
-            put("status", "draft"); put("notes", clean(p.optString("notes"), 2000))
-            put("created_by", userId); put("created_at", now); put("updated_at", now); put("is_deleted", 0)
-        }
-        val id = db.insertOrThrow("expanded_purchase_invoices", null, values)
+        val stamp = now()
+        var id = 0L
         db.beginTransaction()
         try {
+            id = db.insertOrThrow("expanded_purchase_invoices", null, ContentValues().apply {
+                put("station_id", stationId); put("supplier_id", supplierId); put("invoice_number", number)
+                put("invoice_date", invoiceDate); put("due_date", dueDate); put("currency_id", currency)
+                put("subtotal", subtotal); put("vat_amount", vat); put("total_amount", total)
+                put("status", "draft"); put("notes", clean(p.optString("notes"), 2000))
+                put("created_by", userId); put("created_at", stamp); put("updated_at", stamp); put("is_deleted", 0)
+            })
             prepared.forEachIndexed { index, line ->
                 val cv = ContentValues().apply {
                     put("station_id", stationId); put("invoice_id", id); put("line_no", index + 1)
                     put("description", line.description); put("quantity", line.quantity)
                     put("unit_price", line.unitPrice); put("vat_rate", line.vatRate)
                     put("net_amount", line.net); put("vat_amount", line.vat)
-                    put("total_amount", line.total); put("account_id", line.accountId); put("created_at", now)
+                    put("total_amount", line.total); put("account_id", line.accountId); put("created_at", stamp)
                 }
                 db.insertOrThrow("expanded_purchase_invoice_lines", null, cv)
             }
             db.setTransactionSuccessful()
-        } catch (e: Exception) {
-            db.delete("expanded_purchase_invoices", "id=? AND station_id=?", arrayOf(id.toString(), stationId.toString()))
-            throw e
         } finally {
             db.endTransaction()
         }
@@ -557,28 +557,26 @@ internal class ExpandedAccountingService(
         val returnNumber = clean(p.optString("return_number"), 100).ifBlank {
             "PR-" + stationId + "-" + System.currentTimeMillis()
         }
-        val now = now()
-        val returnId = db.insertOrThrow("expanded_purchase_returns", null, ContentValues().apply {
-            put("station_id", stationId); put("invoice_id", invoiceId)
-            put("supplier_id", invoice.optLong("supplier_id")); put("return_number", returnNumber)
-            put("return_date", returnDate); put("reason", reason); put("subtotal", netTotal)
-            put("vat_amount", vatTotal); put("total_amount", total); put("status", "draft")
-            put("created_by", userId); put("created_at", now); put("updated_at", now); put("is_deleted", 0)
-        })
+        val stamp = now()
+        var returnId = 0L
         db.beginTransaction()
         try {
+            returnId = db.insertOrThrow("expanded_purchase_returns", null, ContentValues().apply {
+                put("station_id", stationId); put("invoice_id", invoiceId)
+                put("supplier_id", invoice.optLong("supplier_id")); put("return_number", returnNumber)
+                put("return_date", returnDate); put("reason", reason); put("subtotal", netTotal)
+                put("vat_amount", vatTotal); put("total_amount", total); put("status", "draft")
+                put("created_by", userId); put("created_at", stamp); put("updated_at", stamp); put("is_deleted", 0)
+            })
             prepared.forEach { item ->
                 db.insertOrThrow("expanded_purchase_return_lines", null, ContentValues().apply {
                     put("station_id", stationId); put("return_id", returnId)
                     put("invoice_line_id", item.invoiceLineId); put("quantity", item.quantity)
                     put("net_amount", item.net); put("vat_amount", item.vat); put("total_amount", item.total)
-                    put("account_id", item.accountId); put("created_at", now)
+                    put("account_id", item.accountId); put("created_at", stamp)
                 })
             }
             db.setTransactionSuccessful()
-        } catch (e: Exception) {
-            db.delete("expanded_purchase_returns", "id=? AND station_id=?", arrayOf(returnId.toString(), stationId.toString()))
-            throw e
         } finally {
             db.endTransaction()
         }
@@ -647,6 +645,7 @@ internal class ExpandedAccountingService(
     }
 
     private fun purchaseInvoiceList(p: JSONObject): JSONObject {
+        syncPostedDocuments()
         val from = p.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { parseDate(it) }
         val to = p.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { parseDate(it) }
         var sql = "SELECT id,invoice_number,supplier_id,invoice_date,due_date,subtotal,vat_amount,total_amount,status,journal_entry_id,notes FROM expanded_purchase_invoices WHERE station_id=? AND is_deleted=0"
@@ -660,12 +659,12 @@ internal class ExpandedAccountingService(
                 .put("status", c.getString(8)).put("journal_entry_id", if (c.isNull(9)) JSONObject.NULL else c.getLong(9))
                 .put("notes", c.getString(10))
         }
-        syncPostedDocuments()
         return JSONObject().put("success", true).put("station_id", stationId).put("data", JSONArray(data))
             .put("count", data.size)
     }
 
     private fun purchaseReturnList(p: JSONObject): JSONObject {
+        syncPostedDocuments()
         val data = query(
             "SELECT id,return_number,invoice_id,supplier_id,return_date,subtotal,vat_amount,total_amount,status,journal_entry_id,reason " +
                 "FROM expanded_purchase_returns WHERE station_id=? AND is_deleted=0 ORDER BY return_date DESC,id DESC",
@@ -675,7 +674,6 @@ internal class ExpandedAccountingService(
             .put("subtotal", c.getDouble(5)).put("vat_amount", c.getDouble(6)).put("total_amount", c.getDouble(7))
             .put("status", c.getString(8)).put("journal_entry_id", if (c.isNull(9)) JSONObject.NULL else c.getLong(9))
             .put("reason", c.getString(10)) }
-        syncPostedDocuments()
         return JSONObject().put("success", true).put("station_id", stationId).put("data", JSONArray(data))
             .put("count", data.size)
     }
@@ -857,7 +855,7 @@ internal class ExpandedAccountingService(
         val beginning = cashBalanceBefore(from)
         val net = money(sums.values.sum())
         val endingCalculated = money(beginning + net)
-        val currentPeriodIsToday = to >= today()
+        val currentPeriodIsToday = from <= today() && to >= today()
         val currentBalance = if (currentPeriodIsToday) cashAndBankCurrentBalance() else JSONObject.NULL
         val ready = unclassifiedCount == 0 && abs(unclassifiedAmount) <= 0.01
         return JSONObject().put("success", true).put("station_id", stationId).put("from_date", from).put("to_date", to)
@@ -1070,8 +1068,11 @@ internal class ExpandedAccountingService(
     }
 
     private fun bankStatementBatches(p: JSONObject): JSONObject {
+        val bankCols = columns("bank_accounts")
+        val nameCol = firstColumn(bankCols, listOf("account_name", "name", "account_name_ar"))
+        val nameExpr = if (nameCol != null) "COALESCE(b." + q(nameCol) + ",'')" else "CAST(i.bank_account_id AS TEXT)"
         val rows = query(
-            "SELECT i.id,i.bank_account_id,COALESCE(b.account_name,b.name,''),i.statement_reference,i.file_name," +
+            "SELECT i.id,i.bank_account_id," + nameExpr + ",i.statement_reference,i.file_name," +
                 "i.statement_start_date,i.statement_end_date,i.declared_opening_balance,i.declared_closing_balance," +
                 "i.imported_count,i.duplicate_count,i.created_at FROM expanded_bank_statement_imports i " +
                 "LEFT JOIN bank_accounts b ON b.id=i.bank_account_id WHERE i.station_id=? ORDER BY i.id DESC LIMIT ?",
@@ -1126,8 +1127,8 @@ internal class ExpandedAccountingService(
             (args + stationId.toString()).toTypedArray()
         ) else 0
         val statementExpectedClosing = if (!header.isNull("opening")) money(header.getDouble("opening") + importedTotal) else JSONObject.NULL
-        val closingDifference = if (!header.isNull("closing") && statementExpectedClosing !is JSONObject) {
-            money(header.getDouble("closing") - (statementExpectedClosing as Double))
+        val closingDifference = if (!header.isNull("closing") && !header.isNull("opening")) {
+            money(header.getDouble("closing") - (header.getDouble("opening") + importedTotal))
         } else JSONObject.NULL
         val bookBalance = scalarDouble("SELECT COALESCE(current_balance,0) FROM bank_accounts WHERE id=? AND station_id=?",
             arrayOf(bankAccountId.toString(), stationId.toString()))
@@ -1454,7 +1455,7 @@ internal class ExpandedAccountingService(
             arrayOf(transactionId.toString(), stationId.toString()))
     }
 
-    private fun obligationInvoiceId(o: OpenObligation): Long = if (o.type == "general_purchase_invoice") o.id else 0L
+    private fun obligationInvoiceId(o: OpenObligation): Long = if (o.type == "general_purchase_invoice") o.transactionId else 0L
 
     private fun ledgerDescription(type: String, transactionId: Long): String = when (type) {
         "general_purchase_invoice" -> scalarText("SELECT invoice_number FROM expanded_purchase_invoices WHERE id=? AND station_id=?",
@@ -1663,7 +1664,7 @@ internal class ExpandedAccountingService(
         val transactionId: Long, val eventDate: String?
     )
     private data class OpenObligation(
-        val id: Long, val originalAmount: Double, val invoiceDate: String?, val dueDate: String?,
+        val id: Long, val transactionId: Long, val originalAmount: Double, val invoiceDate: String?, val dueDate: String?,
         val eventDate: String?, val type: String, var remaining: Double = originalAmount
     )
     private data class PurchaseLine(
