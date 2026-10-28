@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=3"><title>تدقيق النزاهة المالية</title>
+<link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+<style>
+*{box-sizing:border-box}body{margin:0;padding:12px 12px 84px;background:var(--bg-primary,#f5f7f6);color:var(--text-primary,#17211f);font-family:Cairo,Tajawal,Arial,sans-serif}
+.wrap{max-width:1100px;margin:auto}.top,.panel,.metric,.finding{background:var(--bg-card,#fff);border:1px solid var(--border-color,#dce5e0);border-radius:16px}.top{padding:14px;margin-bottom:12px;position:sticky;top:0;z-index:5}.head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}h1{font-size:1.15rem;margin:0}.buttons{display:flex;gap:7px;flex-wrap:wrap}.btn{font:inherit;font-weight:800;border-radius:10px;border:1px solid var(--border-color,#dce5e0);padding:9px 12px;background:var(--bg-secondary,#f5f7f6);color:inherit;cursor:pointer}.btn.primary{background:#176b53;color:#fff;border-color:#176b53}.btn.warn{background:#fff3d6;border-color:#e6c68b;color:#7b4a00}.btn:disabled{opacity:.5}
+.note{padding:10px 12px;border-radius:11px;background:rgba(23,107,83,.08);border:1px solid rgba(23,107,83,.2);line-height:1.7;margin-top:10px;font-size:.88rem}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}.metric{padding:12px}.metric small{display:block;color:var(--text-muted,#66756f)}.metric b{display:block;font-size:1.25rem;overflow-wrap:anywhere}.panel{padding:12px;margin-bottom:12px}.panel h2{font-size:1rem;margin:0 0 10px}.status{font-weight:900}.good{color:#15803d}.bad{color:#b91c1c}.muted{color:var(--text-muted,#66756f);font-size:.83rem;line-height:1.7}.findings{display:grid;gap:8px}.finding{padding:11px}.finding h3{margin:0;font-size:.95rem}.finding p{margin:7px 0;line-height:1.7}.code{font:700 .76rem monospace;direction:ltr;text-align:left;overflow-wrap:anywhere;color:var(--text-muted,#66756f)}details{margin-top:8px}summary{cursor:pointer;font-weight:800}pre{white-space:pre-wrap;overflow-wrap:anywhere;direction:ltr;text-align:left;background:rgba(100,116,139,.08);border-radius:9px;padding:10px;max-height:360px;overflow:auto;font-size:.76rem}.quick{display:flex;gap:8px;flex-wrap:wrap}.empty{padding:18px;border:1px dashed var(--border-color,#dce5e0);border-radius:12px;text-align:center;line-height:1.7}
+@media(max-width:700px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.top{position:static}}@media(max-width:420px){.metrics{grid-template-columns:1fr 1fr}.metric b{font-size:1.05rem}}
+</style></head>
+<body><div class="wrap">
+<header class="top"><div class="head"><h1>🛡️ تدقيق النزاهة المالية</h1><div class="buttons"><button class="btn" onclick="location.href='../main.html'">🏠 الرئيسية</button><button class="btn primary" id="refresh">إعادة الفحص</button></div></div>
+<div class="note">الفحص للقراءة فقط ومقيد بالمحطة الحالية. لا يجري تعديل الأرصدة أو القيود تلقائياً. زر الإصلاح أدناه عملية منفصلة، ولا يعمل إلا بعد تأكيد صريح وبصلاحية التحديث.</div>
+</header>
+<section class="metrics"><div class="metric"><small>نتيجة الفحص</small><b id="status">جاري الفحص…</b></div><div class="metric"><small>عدد الملاحظات الفريدة</small><b id="count">—</b></div><div class="metric"><small>العناصر المانعة للإقفال</small><b id="blocking">—</b></div><div class="metric"><small>المحطة</small><b id="station">—</b></div></section>
+<section class="panel"><h2>الوصول السريع</h2><div class="quick"><button class="btn" onclick="location.href='bank-reconciliation.html'">مطابقة أرصدة البنوك</button><button class="btn" onclick="location.href='fiscal-periods.html'">الفترات المحاسبية</button><button class="btn" onclick="location.href='accounting-reports.html'">التقارير المحاسبية</button></div></section>
+<section class="panel"><h2>الملاحظات المكتشفة</h2><div id="findings" class="findings"><div class="empty">جاري قراءة بيانات المحطة…</div></div></section>
+<section class="panel"><h2>فحوص الأرصدة والدفاتر</h2><div id="checks" class="empty">بانتظار نتائج الفحص…</div></section>
+<section class="panel"><h2>الإصلاح التاريخي المقيّد</h2><p class="muted">هذه العملية ليست جزءاً من الفحص. قد تغيّر السجلات التاريخية التجريبية التي يعالجها مسار الإصلاح وتُسجل ورقة عمل دائمة. لا تشغّلها إلا بعد مراجعة الملاحظات والتأكد من نطاق المحطة.</p>
+<button class="btn warn" id="repair">تنفيذ الإصلاح التاريخي بعد التأكيد</button><div id="repairResult"></div></section>
+</div>
+<script>
+(function(){
+'use strict';const $=id=>document.getElementById(id);const b=()=>window.AndroidInterface;
+function esc(v){return String(v===null||v===undefined?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function parse(raw){const x=typeof raw==='string'?JSON.parse(raw):raw;if(!x||typeof x!=='object')throw new Error('استجابة غير صالحة من الجسر');if(x.success===false)throw new Error(x.message||x.error||'فشلت العملية');return x;}
+function arr(v){return Array.isArray(v)?v:[];}
+function jsonPreview(v){let s='';try{s=JSON.stringify(v,null,2);}catch(e){s=String(v);}if(s.length>18000)s=s.slice(0,18000)+'\n… تم اختصار التفاصيل لحماية أداء الشاشة.';return esc(s);}
+function uniqueIssues(a){const seen=new Set();return a.filter(x=>{const key=String(x.code||x.exception_type||'')+'|'+String(x.message||x.description||'');if(seen.has(key))return false;seen.add(key);return true;});}
+function renderFindings(issues){if(!issues.length){$('findings').innerHTML='<div class="empty good">لم تظهر ملاحظات في قائمة الفحص المعروضة. راجع حالة جاهزية الإقفال ووقت الفحص قبل اعتماد القوائم.</div>';return;}
+  $('findings').innerHTML=issues.slice(0,150).map((x,i)=>{const rec=arr(x.records||x.rows||x.details);return '<article class="finding"><h3>'+esc(x.message||x.description||x.code||('ملاحظة '+(i+1)))+'</h3><div class="code">'+esc(x.code||x.exception_type||'financial_issue')+'</div><p>عدد السجلات: <b>'+esc(x.count!==undefined?x.count:rec.length)+'</b></p>'+(rec.length?'<details><summary>تفاصيل السجلات ('+rec.length+')</summary><pre>'+jsonPreview(rec.slice(0,30))+'</pre></details>':'<details><summary>تفاصيل الملاحظة</summary><pre>'+jsonPreview(x)+'</pre></details>')+'</article>';}).join('')+(issues.length>150?'<div class="empty">تم عرض أول 150 ملاحظة من أصل '+issues.length+'.</div>':'');
+}
+function renderChecks(checked){const keys=['posted_journals','unbalanced_posted_journals','journal_item_mismatches','duplicate_posted_source_journals','cash_box_reconciliation','bank_account_reconciliation','cash_box_reconciliation_issue_count','bank_account_reconciliation_issue_count','historical_reconciliation','historical_reconciliation_status'];const present=keys.filter(k=>Object.prototype.hasOwnProperty.call(checked,k));if(!present.length){$('checks').innerHTML='<div class="empty">لم تُرجع واجهة الجسر تفاصيل الفحوص المتوقعة.</div>';return;}$('checks').innerHTML=present.map(k=>'<details><summary>'+esc(k)+'</summary><pre>'+jsonPreview(checked[k])+'</pre></details>').join('');}
+async function load(){const bridge=b();if(!bridge||typeof bridge.runFinancialIntegrityAudit!=='function'){ $('findings').innerHTML='<div class="empty bad">واجهة runFinancialIntegrityAudit غير متاحة.</div>';return;}
+  $('findings').innerHTML='<div class="empty">يتم تشغيل الفحص للقراءة فقط…</div>';$('checks').textContent='جاري تحميل النتائج…';
+  try{
+    let audit=null,history=null,failures=[];
+    try{audit=parse(bridge.runFinancialIntegrityAudit());}catch(e){failures.push('فحص النزاهة: '+(e.message||e));}
+    if(typeof bridge.runHistoricalFinancialReconciliation==='function'){try{history=parse(bridge.runHistoricalFinancialReconciliation());}catch(e){failures.push('المصالحة التاريخية: '+(e.message||e));}}
+    if(!audit&&!history)throw new Error(failures.join(' | ')||'لم تُرجع عمليات الفحص بيانات');
+    const issues=uniqueIssues([...(audit?arr(audit.issues):[]),...(history?arr(history.issues):[])]);
+    const ready=!!(history&&history.ready_for_financial_statement_approval===true&&issues.length===0);
+    $('status').textContent=ready?'جاهز مبدئياً':'يلزم مراجعة';$('status').className=ready?'good':'bad';
+    $('count').textContent=String(issues.length);$('blocking').textContent=history?String(history.blocking_issue_count??issues.length):'—';
+    $('station').textContent=String((audit&&audit.station_id)||(history&&history.station_id)||'—');
+    renderFindings(issues);renderChecks((audit&&audit.checked)||{});
+    if(failures.length){const d=document.createElement('div');d.className='empty bad';d.textContent=failures.join(' | ');$('findings').prepend(d);}
+  }catch(e){$('status').textContent='فشل';$('status').className='bad';$('findings').innerHTML='<div class="empty bad">'+esc(e.message||e)+'</div>';}}
+async function repair(){const bridge=b();if(!bridge||typeof bridge.repairHistoricalFinancialData!=='function'){alert('واجهة الإصلاح التاريخي غير متاحة.');return;}
+  const typed=prompt('هذه عملية كتابة على بيانات تاريخية. اكتب كلمة إصلاح للمتابعة:','');if(typed===null)return;if(typed.trim()!=='إصلاح'){alert('لم تتطابق كلمة التأكيد؛ لم تُنفذ العملية.');return;}
+  if(!confirm('آخر تأكيد: سيتم تشغيل الإصلاح التاريخي المقيّد للمحطة الحالية. هل تريد التنفيذ؟'))return;
+  $('repair').disabled=true;$('repairResult').innerHTML='<p class="muted">جاري التنفيذ…</p>';
+  try{const result=parse(bridge.repairHistoricalFinancialData());$('repairResult').innerHTML='<pre>'+jsonPreview(result)+'</pre>';await load();}
+  catch(e){$('repairResult').innerHTML='<p class="bad">'+esc(e.message||e)+'</p>';}
+  finally{$('repair').disabled=false;}}
+$('refresh').addEventListener('click',load);$('repair').addEventListener('click',repair);load();
+})();
+</script>
+</body></html>

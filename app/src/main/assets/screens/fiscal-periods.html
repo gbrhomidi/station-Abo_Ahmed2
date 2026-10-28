@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=3">
+<title>الفترات المحاسبية</title>
+<link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+<style>
+:root{--fp-green:#176b53;--fp-gold:#b88b45}
+*{box-sizing:border-box}body{margin:0;padding:12px 12px 88px;background:var(--bg-primary,#f6f8f7);color:var(--text-primary,#17211f);font-family:Cairo,Tajawal,Arial,sans-serif}
+.wrap{max-width:1100px;margin:auto}.top,.panel,.period{background:var(--bg-card,#fff);border:1px solid var(--border-color,#dfe6e2);border-radius:16px;box-shadow:0 3px 12px #00000008}
+.top{position:sticky;top:0;z-index:5;padding:12px;margin-bottom:12px}.head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+h1{font-size:1.15rem;margin:0;color:var(--text-primary,#17211f)}.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--border-color,#d5ddd8);background:var(--bg-secondary,#f5f7f6);color:var(--text-primary,#17211f);border-radius:10px;padding:9px 12px;font-weight:800;cursor:pointer;font:inherit}
+.btn.primary{background:var(--fp-green);color:#fff;border-color:var(--fp-green)}.btn.warn{background:#fff5df;color:#80520a;border-color:#e7c98e}.btn:disabled{opacity:.45;cursor:not-allowed}
+.note{margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(184,139,69,.12);border:1px solid rgba(184,139,69,.35);line-height:1.7;font-size:.88rem}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}.controls label{font-weight:800}.controls select{font:inherit;padding:9px;border:1px solid var(--border-color,#ccd5d0);background:var(--bg-card,#fff);color:inherit;border-radius:10px;min-width:120px}
+.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.metric{padding:12px;border:1px solid var(--border-color,#dfe6e2);border-radius:13px;background:var(--bg-card,#fff)}.metric small{display:block;color:var(--text-muted,#60736b)}.metric b{font-size:1.35rem}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.period{padding:13px;min-width:0}.phead{display:flex;align-items:center;justify-content:space-between;gap:8px}.phead h2{font-size:1rem;margin:0}.badge{padding:4px 8px;border-radius:999px;font-size:.78rem;font-weight:900;white-space:nowrap}.badge.open{color:#166534;background:#dcfce7}.badge.closed{color:#991b1b;background:#fee2e2}.meta{font-size:.8rem;line-height:1.7;color:var(--text-muted,#60736b);margin:8px 0}.pactions{display:flex;gap:7px;flex-wrap:wrap}.statusline{margin:10px 0;color:var(--text-muted,#60736b);font-size:.86rem}.error{color:#b91c1c;font-weight:800}.empty{padding:18px;text-align:center;line-height:1.8;border:1px dashed var(--border-color,#ccd5d0);border-radius:12px}
+@media(max-width:760px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:480px){.grid{grid-template-columns:1fr}.metric{padding:9px}.metric b{font-size:1.1rem}.top{position:static}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top"><div class="head"><h1>🗓️ إدارة الفترات المحاسبية</h1><div class="actions"><button class="btn" onclick="location.href='../main.html'">🏠 الرئيسية</button><button class="btn primary" id="refresh">تحديث</button></div></div>
+  <div class="note">الإقفال يتم من خلال منطق SQLite الموجود، ولا يُنفذ قبل اجتياز فحوص السلامة المحاسبية. إعادة فتح فترة مغلقة تتطلب سبباً واضحاً وتُسجل عبر مسار النظام؛ لا تُستخدم هذه الشاشة لتعديل القيود المرحلة مباشرة.</div></header>
+  <section class="controls"><label for="year">السنة المالية</label><select id="year" aria-label="السنة المالية"></select><span class="statusline" id="message" aria-live="polite">جاري تحميل الفترات…</span></section>
+  <section class="metrics"><div class="metric"><small>عدد الفترات</small><b id="total">12</b></div><div class="metric"><small>مغلقة</small><b id="closed">—</b></div><div class="metric"><small>مفتوحة</small><b id="opened">—</b></div></section>
+  <main id="periods" class="grid"><div class="empty">جاري تحميل الفترات المحاسبية من SQLite…</div></main>
+</div>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const MONTHS=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+let records=[];
+const bridge=()=>window.AndroidInterface;
+function esc(v){return String(v===null||v===undefined?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function parse(raw){const x=typeof raw==='string'?JSON.parse(raw):raw;if(!x||typeof x!=='object')throw new Error('استجابة غير صالحة من Android Bridge');if(x.success===false)throw new Error(x.message||x.error||'فشلت العملية');return x;}
+function listFrom(raw){const x=parse(raw);const d=Object.prototype.hasOwnProperty.call(x,'data')?x.data:x;if(Array.isArray(d))return d;if(d&&Array.isArray(d.rows))return d.rows;if(d&&Array.isArray(d.periods))return d.periods;throw new Error('تنسيق قائمة الفترات غير معروف؛ تم إيقاف الإقفال منعاً لافتراض حالة الفترة.');}
+function periodMonth(r){let v=r.fiscal_period!==undefined?r.fiscal_period:(r.period_month!==undefined?r.period_month:(r.month!==undefined?r.month:(r.month_number!==undefined?r.month_number:(r.period!==undefined?r.period:r.period_no))));if(v===undefined||v===null)return 0;const s=String(v).trim();if(/^\d{6}$/.test(s))return Number(s.slice(-2));if(/[/-]/.test(s)){const a=s.split(/[/-]/);return Number(a[a.length-1])||0;}const n=Number(s);return Number.isInteger(n)&&n>=1&&n<=12?n:0;}
+function periodId(r){return Number(r.id||r.period_id||r.fiscal_period_id||r.id_period||0);}
+function isClosed(r){if(!r)return false;const s=String(r.status||r.period_status||r.close_status||'').trim().toLowerCase();return r.is_closed===true||Number(r.is_closed)===1||r.closed===true||Number(r.closed)===1||!!r.closed_at||['closed','close','locked','finalized','مغلق','مغلقة','مقفل','مقفلة','مقفل نهائياً'].includes(s);}
+function money(v){const n=Number(v);return Number.isFinite(n)?n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';}
+function toast(msg,bad){$('message').textContent=msg;$('message').className='statusline'+(bad?' error':'');}
+function yearValue(){const y=Number($('year').value);if(!Number.isInteger(y)||y<1900||y>2200)throw new Error('السنة المالية غير صالحة');return y;}
+function initYears(){const current=new Date().getFullYear();$('year').innerHTML='';for(let y=current+1;y>=current-8;y--){const op=document.createElement('option');op.value=String(y);op.textContent=String(y);if(y===current)op.selected=true;$('year').appendChild(op);}}
+function render(){
+  const y=yearValue(),byMonth=new Map();
+  records.forEach(r=>{const m=periodMonth(r);if(m>=1&&m<=12)byMonth.set(m,r);});
+  if(records.length&&byMonth.size===0){$('periods').innerHTML='<div class="empty error">وصلت سجلات فترات من SQLite لكن تعذر تحديد رقم الشهر من الحقول المرجعة. لم يتم افتراض أن الأشهر مفتوحة، ولذلك عُطلت أزرار التنفيذ. راجع عقد getFiscalPeriods قبل المتابعة.<pre style="white-space:pre-wrap;text-align:left;direction:ltr">'+esc(JSON.stringify(records.slice(0,5),null,2))+'</pre></div>';$('closed').textContent='—';$('opened').textContent='—';return;}
+  let closedCount=0,openCount=0;const parts=[];
+  for(let m=1;m<=12;m++){const r=byMonth.get(m)||null;const closed=isClosed(r);if(closed)closedCount++;else openCount++;const id=periodId(r);const status=closed?'مغلقة':'مفتوحة';const ref=r?(r.period_code||r.fiscal_year_period||r.fiscal_period||r.month||'مسجلة في قاعدة البيانات'):'لا يوجد سجل إقفال مسجل';const date=r?(r.closed_at||r.closed_date||r.updated_at||''):'';
+    const action=closed?'<button class="btn warn" '+(id>0?'':'disabled')+' onclick="reopenPeriod('+id+','+m+')">إعادة فتح</button>':'<button class="btn primary" onclick="closePeriod('+m+')">إقفال الفترة</button>';
+    parts.push('<article class="period"><div class="phead"><h2>'+esc(MONTHS[m-1])+' '+y+'</h2><span class="badge '+(closed?'closed':'open')+'">'+status+'</span></div><div class="meta">معرف الفترة: '+(id>0?esc(id):'—')+'<br>المرجع: '+esc(ref)+(date?'<br>آخر تاريخ إقفال/تحديث: '+esc(date):'')+'</div><div class="pactions">'+action+'</div></article>');
+  }
+  $('periods').innerHTML=parts.join('');$('total').textContent='12';$('closed').textContent=String(closedCount);$('opened').textContent=String(openCount);
+  if(!records.length)toast('لا توجد سجلات إقفال لهذه السنة؛ تظهر الأشهر كمفتوحة. سيحسم فحص SQLite إمكانية إقفال كل فترة.',false);
+  else toast('تم تحميل '+records.length+' سجل/سجلات للفترة المالية من SQLite.',false);
+}
+async function load(){try{const b=bridge();if(!b||typeof b.getFiscalPeriods!=='function')throw new Error('واجهة getFiscalPeriods غير متاحة.');const y=yearValue();$('periods').innerHTML='<div class="empty">جاري قراءة SQLite…</div>';records=listFrom(b.getFiscalPeriods(y));render();}catch(e){$('periods').innerHTML='<div class="empty error">'+esc(e.message||e)+'</div>';toast('تعذر تحميل الفترات المحاسبية',true);}}
+window.closePeriod=async function(m){try{const y=yearValue();if(!confirm('سيتم طلب إقفال الفترة '+MONTHS[m-1]+' '+y+'. لن يتم تجاوز فحوص السلامة المحاسبية. هل تريد المتابعة؟'))return;const reason=prompt('أدخل سبب الإقفال (5 أحرف على الأقل):','إقفال شهري بعد المراجعة');if(reason===null)return;if(reason.trim().length<5)throw new Error('سبب الإقفال قصير جداً.');const b=bridge();if(!b||typeof b.closeFiscalPeriod!=='function')throw new Error('واجهة closeFiscalPeriod غير متاحة.');const res=parse(b.closeFiscalPeriod(y,m,reason.trim()));toast(res.message||'تم طلب الإقفال بنجاح.',false);await load();}catch(e){toast(e.message||e,true);alert(e.message||e);}};
+window.reopenPeriod=async function(id,m){try{if(!(id>0))throw new Error('لا يوجد معرف فترة صالح لإعادة الفتح.');const y=yearValue();if(!confirm('إعادة فتح الفترة المغلقة '+MONTHS[m-1]+' '+y+' ستسمح بترحيلات جديدة بعد تسجيل السبب. هل تريد المتابعة؟'))return;const reason=prompt('أدخل سبب إعادة الفتح (5 أحرف على الأقل):','تصحيح محاسبي موثق');if(reason===null)return;if(reason.trim().length<5)throw new Error('سبب إعادة الفتح قصير جداً.');const b=bridge();if(!b||typeof b.reopenFiscalPeriod!=='function')throw new Error('واجهة reopenFiscalPeriod غير متاحة.');const res=parse(b.reopenFiscalPeriod(id,reason.trim()));toast(res.message||'تمت إعادة فتح الفترة.',false);await load();}catch(e){toast(e.message||e,true);alert(e.message||e);}};
+$('refresh').addEventListener('click',load);$('year').addEventListener('change',load);initYears();load();
+})();
+</script>
+</body></html>

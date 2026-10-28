@@ -1390,6 +1390,9 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
 <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
+    <div role="note" style="margin:10px 12px 0;padding:12px 14px;border:1px solid #c9a976;border-radius:12px;background:rgba(184,147,90,.12);color:var(--text-primary,#26241f);font-weight:700;line-height:1.7;text-align:right">
+      تنبيه محاسبي: الإيداع النقدي سجل مالي مرتبط بأرصدة الدفاتر؛ تم تعطيل التعديل والحذف المباشرين. عند وجود خطأ، راجع القيد المرتبط وسجّل تصحيحاً محاسبياً موثقاً بدلاً من تغيير التاريخ المالي.
+    </div>
     <div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> Android Bridge غير متاح؛ لن تُحفظ أو تُعرض بيانات تجارية بديلة</div>
     <div class="loading-indicator" id="loadingIndicator"><div class="spinner"></div></div>
 
@@ -1612,8 +1615,8 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             "titleFields": ["deposit_code", "customer_id", "amount"],
             "subtitleFields": ["deposit_code", "customer_id", "cash_box_id", "bank_account_id", "amount", "description", "status", "operator"],
             "createMethod": "saveCashDepositRecord",
-            "updateMethod": "updateCashDepositRecord",
-            "deleteMethod": "deleteCashDepositRecord",
+            "updateMethod": "",
+            "deleteMethod": "",
             "resolveMethod": "resolveCashDepositRecord",
             "reportKind": "operational:CashDeposit",
             "mode": "list",

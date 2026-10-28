@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=3"><title>مطابقة أرصدة البنوك</title>
+<link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+<style>
+*{box-sizing:border-box}body{margin:0;padding:12px 12px 84px;background:var(--bg-primary,#f5f7f6);color:var(--text-primary,#17211f);font-family:Cairo,Tajawal,Arial,sans-serif}.wrap{max-width:1100px;margin:auto}
+.top,.metric,.bank,.panel{background:var(--bg-card,#fff);border:1px solid var(--border-color,#dce5e0);border-radius:16px}.top{padding:13px;margin-bottom:12px}.head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}h1{margin:0;font-size:1.15rem}.actions{display:flex;gap:7px;flex-wrap:wrap}.btn{font:inherit;font-weight:800;padding:9px 12px;border-radius:10px;border:1px solid var(--border-color,#dce5e0);background:var(--bg-secondary,#f5f7f6);color:inherit;cursor:pointer}.btn.primary{background:#176b53;color:white;border-color:#176b53}
+.note{margin-top:10px;padding:10px;border-radius:10px;background:rgba(184,139,69,.12);border:1px solid rgba(184,139,69,.3);line-height:1.7;font-size:.87rem}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}.metric{padding:12px}.metric small{display:block;color:var(--text-muted,#65736d)}.metric b{font-size:1.3rem}.panel{padding:12px;margin-bottom:12px}.bank{padding:13px;margin-bottom:9px}.bank h2{font-size:1rem;margin:0 0 8px}.badge{display:inline-block;border-radius:99px;padding:4px 9px;font-weight:900;font-size:.78rem}.ok{background:#dcfce7;color:#166534}.bad{background:#fee2e2;color:#991b1b}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.cell{padding:8px;border-radius:9px;background:rgba(100,116,139,.08);min-width:0}.cell small{display:block;color:var(--text-muted,#65736d)}.cell b{overflow-wrap:anywhere}.empty{padding:18px;text-align:center;border:1px dashed var(--border-color,#dce5e0);border-radius:12px;line-height:1.7}.muted{font-size:.83rem;color:var(--text-muted,#65736d);line-height:1.7}
+@media(max-width:650px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.top{position:static}}@media(max-width:400px){.details{grid-template-columns:1fr}.metric b{font-size:1.1rem}}
+</style></head>
+<body><div class="wrap">
+<header class="top"><div class="head"><h1>🏦 مطابقة أرصدة البنوك</h1><div class="actions"><button class="btn" onclick="location.href='../main.html'">🏠 الرئيسية</button><button class="btn" onclick="location.href='banks-accounts.html'">الحسابات البنكية</button><button class="btn primary" id="refresh">إعادة الفحص</button></div></div>
+<div class="note">الفحص يقارن الرصيد الحالي المسجل لكل حساب مع الرصيد الافتتاحي وحركات دفتر البنك داخل SQLite، ويتحقق من تسلسل الأرصدة والقيود المدينة والدائنة. لا يستورد كشف حساب مصرفياً خارجياً ولا ينشئ تسويات تلقائية.</div></header>
+<section class="metrics"><div class="metric"><small>الحسابات المفحوصة</small><b id="total">—</b></div><div class="metric"><small>مطابقة</small><b id="matched">—</b></div><div class="metric"><small>بحاجة إلى مراجعة</small><b id="mismatches">—</b></div><div class="metric"><small>المحطة</small><b id="station">—</b></div></section>
+<section class="panel"><h2>تفاصيل الحسابات</h2><div id="accounts"><div class="empty">جاري مطابقة أرصدة SQLite…</div></div></section>
+<section class="panel"><h2>ملاحظات مرتبطة بالبنوك</h2><div id="issues" class="muted">جاري التحميل…</div></section>
+</div>
+<script>
+(function(){
+'use strict';const $=id=>document.getElementById(id);const b=()=>window.AndroidInterface;
+function esc(v){return String(v===null||v===undefined?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function parse(raw){const x=typeof raw==='string'?JSON.parse(raw):raw;if(!x||typeof x!=='object')throw new Error('استجابة غير صالحة');if(x.success===false)throw new Error(x.message||x.error||'فشل الفحص');return x;}
+function num(v){const n=Number(v);return Number.isFinite(n)?n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';}
+function detail(label,value){return '<div class="cell"><small>'+esc(label)+'</small><b>'+esc(value)+'</b></div>';}
+function bankCard(x){const ok=x.reconciled===true||x.reconciled===1;return '<article class="bank"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><h2>الحساب البنكي #'+esc(x.bank_account_id)+'</h2><span class="badge '+(ok?'ok':'bad')+'">'+(ok?'مطابق':'بحاجة إلى مراجعة')+'</span></div><div class="details">'+detail('الرصيد الافتتاحي',num(x.opening_balance))+detail('الرصيد الحالي المحفوظ',num(x.current_balance))+detail('الرصيد المتوقع من دفتر البنك',num(x.expected_balance_from_ledger))+detail('فرق الحالي عن المتوقع',num(x.current_vs_expected_delta))+detail('فرق الحالي عن آخر حركة',num(x.current_vs_last_ledger_delta))+detail('إجمالي المدين',num(x.debit_total))+detail('إجمالي الدائن',num(x.credit_total))+detail('عدد حركات الدفتر',x.ledger_entry_count)+detail('كسر تسلسل الرصيد',x.broken_ledger_chain_count)+detail('مبالغ غير صالحة',x.invalid_ledger_amount_count)+'</div></article>';}
+async function load(){const bridge=b();if(!bridge||typeof bridge.runFinancialIntegrityAudit!=='function'){$('accounts').innerHTML='<div class="empty bad">واجهة تدقيق النزاهة المالية غير متاحة.</div>';return;}
+  $('accounts').innerHTML='<div class="empty">جاري الفحص للقراءة فقط…</div>';
+  try{const a=parse(bridge.runFinancialIntegrityAudit());const checked=a.checked||{};const rows=Array.isArray(checked.bank_account_reconciliation)?checked.bank_account_reconciliation:[];const okCount=rows.filter(x=>x.reconciled===true||x.reconciled===1).length;const badCount=rows.length-okCount;
+    $('total').textContent=String(checked.bank_account_count!==undefined?checked.bank_account_count:rows.length);$('matched').textContent=String(okCount);$('mismatches').textContent=String(checked.bank_account_reconciliation_issue_count!==undefined?checked.bank_account_reconciliation_issue_count:badCount);$('station').textContent=String(a.station_id||'—');
+    $('accounts').innerHTML=rows.length?rows.map(bankCard).join(''):'<div class="empty">لم تُرجع قاعدة البيانات أي حسابات لمطابقتها، أو أن حقول المطابقة غير متاحة. راجع ملاحظات الفحص أدناه.</div>';
+    const issues=(Array.isArray(a.issues)?a.issues:[]).filter(x=>String(x.code||'').toLowerCase().includes('bank'));
+    $('issues').innerHTML=issues.length?issues.map(x=>'<article class="bank"><b>'+esc(x.message||x.code)+'</b><div class="muted">الرمز: '+esc(x.code)+' · العدد: '+esc(x.count===undefined?'—':x.count)+'</div><details><summary>التفاصيل</summary><pre style="white-space:pre-wrap;direction:ltr;text-align:left;overflow-wrap:anywhere">'+esc(JSON.stringify(x.records||x,null,2))+'</pre></details></article>').join(''):'لا توجد ملاحظات محددة تخص الحسابات البنكية في نتيجة الفحص الحالية.';
+  }catch(e){$('accounts').innerHTML='<div class="empty bad">'+esc(e.message||e)+'</div>';$('issues').textContent='تعذر تحميل تفاصيل المطابقة.';}}
+$('refresh').addEventListener('click',load);load();
+})();
+</script>
+</body></html>
