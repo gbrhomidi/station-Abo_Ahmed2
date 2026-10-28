@@ -18,6 +18,11 @@ CASES = {
     'stock-levels.html': ['getStockLevelsPage', 'loadPage', 'filterInventory', 'advancedFilter', 'searchStock'],
     'inventory-movements.html': ['getInventoryMovementPage', 'getInventoryMovementUnifiedStats', 'addStockMovement', 'archiveStockMovement'],
     'inventory-alerts.html': ['getStockAlertRecords', 'resolveStockAlertRecord', 'inventory-movements.html?product_id='],
+    'fiscal-periods.html': ['getFiscalPeriods', 'closeFiscalPeriod', 'reopenFiscalPeriod'],
+    'financial-integrity.html': ['runFinancialIntegrityAudit', 'runHistoricalFinancialReconciliation', 'repairHistoricalFinancialData'],
+    'bank-reconciliation.html': ['runFinancialIntegrityAudit', 'bank_account_reconciliation', 'expected_balance_from_ledger'],
+    'reports-reconciliation.html': ['runHistoricalFinancialReconciliation', 'runFinancialIntegrityAudit'],
+    'cash-deposits.html': ['getCashDepositRecords', 'saveCashDepositRecord', 'تنبيه محاسبي'],
 }
 
 class DOMAudit(HTMLParser):
@@ -93,6 +98,33 @@ for name, required in CASES.items():
             ('AndroidInterface.getStockLevelsPage' in html, 'single station-scoped SQLite page bridge'),
             ('applyPageData(data)' in html and 'data.stats' in html, 'statistics are bound from backend response'),
             (not any(x in html for x in ('Math.random(', 'Mock Data', 'Fake Data')), 'no fake/mock stock data'),
+        ]
+
+    if name == 'reports-reconciliation.html':
+        checks += [
+            ('getReportExceptions' not in html, 'no stale/unavailable reconciliation bridge method'),
+            ('runHistoricalFinancialReconciliation' in html and 'runFinancialIntegrityAudit' in html, 'actual financial audit bridge contracts'),
+        ]
+    if name == 'cash-deposits.html':
+        checks += [
+            ('"updateMethod": ""' in html, 'cash deposit direct edits disabled'),
+            ('"deleteMethod": ""' in html, 'cash deposit direct deletes disabled'),
+            ('"updateCashDepositRecord"' not in html and '"deleteCashDepositRecord"' not in html, 'no live generic cash-deposit CRUD route'),
+        ]
+    if name == 'fiscal-periods.html':
+        checks += [
+            ("if (!confirm(" in html and "reason.trim().length<5" in html, 'period close/reopen requires confirmation and a meaningful reason'),
+            ('fail closed' in html.lower() or 'لم يتم افتراض حالة الفترة' in html, 'unrecognized fiscal-period response does not guess month status'),
+        ]
+    if name == 'financial-integrity.html':
+        checks += [
+            ("typed.trim()!=='إصلاح'" in html, 'historical repair requires typed confirmation'),
+            ('runFinancialIntegrityAudit' in html and 'runHistoricalFinancialReconciliation' in html, 'audit and historical reconciliation use existing bridge contracts'),
+        ]
+    if name == 'bank-reconciliation.html':
+        checks += [
+            ('لا يستورد كشف حساب مصرفياً خارجياً' in html, 'internal ledger reconciliation scope disclosed'),
+            ('runFinancialIntegrityAudit' in html, 'bank reconciliation uses existing read-only audit'),
         ]
 
     if name == 'inventory-movements.html':
@@ -196,6 +228,26 @@ SECURITY_CASES = {
         [
             'SecuritySettingsStore.open(applicationContext)', 'secureBackupRequired',
             'secureBackupRequired || isEnabled(database.getSetting("encryptBackup"), true)',
+        ],
+    ),
+    'finance-period-permissions': (
+        PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt',
+        [
+            'if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة الفترات المحاسبية")',
+            'if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية إقفال الفترة المحاسبية")',
+            'if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية إعادة فتح الفترة المحاسبية")',
+        ],
+    ),
+    'cash-deposits-protected-crud': (
+        PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/SecurityValidator.kt',
+        [
+            '"fuel_sales", "payments", "cash_deposits", "invoices", "ledger"',
+        ],
+    ),
+    'cash-deposits-ui-read-only-history': (
+        PROJECT_ROOT / 'app/src/main/assets/screens/cash-deposits.html',
+        [
+            '"updateMethod": ""', '"deleteMethod": ""', 'تنبيه محاسبي',
         ],
     ),
 }
