@@ -1034,19 +1034,20 @@ internal class ExpandedAccountingService(
             .put("import_id", existing.getLong("id")).put("imported_count", existing.getInt("count"))
             .put("duplicate_count", existing.getInt("duplicates")).put("message", "هذا الكشف مستورد سابقاً ولم تُنشأ نسخة مكررة")
         val now = now()
-        val importId = db.insertOrThrow("expanded_bank_statement_imports", null, ContentValues().apply {
-            put("station_id", stationId); put("bank_account_id", bankAccountId); put("statement_reference", statementRef)
-            put("file_name", clean(p.optString("file_name"), 250)); put("file_hash", fileHash)
-            put("statement_start_date", p.optString("statement_start_date").takeIf { it.isNotBlank() }?.let { parseDate(it) })
-            put("statement_end_date", p.optString("statement_end_date").takeIf { it.isNotBlank() }?.let { parseDate(it) })
-            if (p.has("opening_balance") && !p.isNull("opening_balance")) put("declared_opening_balance", p.getDouble("opening_balance"))
-            if (p.has("closing_balance") && !p.isNull("closing_balance")) put("declared_closing_balance", p.getDouble("closing_balance"))
-            put("created_by", userId); put("created_at", now)
-        })
+        var importId = 0L
         var count = 0
         var duplicates = 0
         db.beginTransaction()
         try {
+            importId = db.insertOrThrow("expanded_bank_statement_imports", null, ContentValues().apply {
+                put("station_id", stationId); put("bank_account_id", bankAccountId); put("statement_reference", statementRef)
+                put("file_name", clean(p.optString("file_name"), 250)); put("file_hash", fileHash)
+                put("statement_start_date", p.optString("statement_start_date").takeIf { it.isNotBlank() }?.let { parseDate(it) })
+                put("statement_end_date", p.optString("statement_end_date").takeIf { it.isNotBlank() }?.let { parseDate(it) })
+                if (p.has("opening_balance") && !p.isNull("opening_balance")) put("declared_opening_balance", p.getDouble("opening_balance"))
+                if (p.has("closing_balance") && !p.isNull("closing_balance")) put("declared_closing_balance", p.getDouble("closing_balance"))
+                put("created_by", userId); put("created_at", now)
+            })
             parsed.forEachIndexed { index, line ->
                 val hash = sha256(bankAccountId.toString() + "|" + line.date + "|" + line.reference.trim().lowercase(Locale.ROOT) +
                     "|" + line.description.trim().lowercase(Locale.ROOT) + "|" + money(line.signedAmount).toString())
@@ -1126,15 +1127,21 @@ internal class ExpandedAccountingService(
             (if (ledgerColumns.contains("is_deleted")) " AND COALESCE(is_deleted,0)=0" else "")
         val args = mutableListOf(bankAccountId.toString())
         if (ledgerColumns.contains("station_id")) args.add(stationId.toString())
-        val ledgerWhereDate = if (dateCol != null && !header.isNull("start_date") && !header.isNull("end_date")) {
+        val dateScopeAvailable = dateCol != null && !header.isNull("start_date") && !header.isNull("end_date")
+        val ledgerWhereDate = if (dateScopeAvailable) {
             args.add(header.getString("start_date")); args.add(header.getString("end_date"))
-            " AND substr(COALESCE(" + q(dateCol) + ",'') ,1,10)>=? AND substr(COALESCE(" + q(dateCol) + ",'') ,1,10)<=?"
+            " AND substr(COALESCE(" + q(dateCol!!) + ",'') ,1,10)>=? AND substr(COALESCE(" + q(dateCol!!) + ",'') ,1,10)<=?"
         } else ""
-        val unmatchedLedger = if (tableExists("bank_ledger")) scalar(
-            "SELECT COUNT(*) FROM bank_ledger WHERE bank_account_id=?" + ledgerScope + ledgerWhereDate +
-                " AND id NOT IN (SELECT matched_ledger_id FROM expanded_bank_statement_lines WHERE station_id=? AND match_status='matched' AND matched_ledger_id IS NOT NULL)",
-            (args + stationId.toString()).toTypedArray()
-        ) else 0
+        val unmatchedLedger = if (!dateScopeAvailable || !tableExists("bank_ledger")) -1 else {
+            args.add(importId.toString())
+            args.add(stationId.toString())
+            scalar(
+                "SELECT COUNT(*) FROM bank_ledger WHERE bank_account_id=?" + ledgerScope + ledgerWhereDate +
+                    " AND id NOT IN (SELECT matched_ledger_id FROM expanded_bank_statement_lines " +
+                    "WHERE import_id=? AND station_id=? AND match_status='matched' AND matched_ledger_id IS NOT NULL)",
+                args.toTypedArray()
+            )
+        }
         val statementExpectedClosing = if (!header.isNull("opening")) money(header.getDouble("opening") + importedTotal) else JSONObject.NULL
         val closingDifference = if (!header.isNull("closing") && !header.isNull("opening")) {
             money(header.getDouble("closing") - (header.getDouble("opening") + importedTotal))
@@ -1153,11 +1160,14 @@ internal class ExpandedAccountingService(
         return JSONObject().put("success", true).put("station_id", stationId).put("statement", header)
             .put("transaction_count", lines.length()).put("matched_count", matched).put("unmatched_count", unmatched)
             .put("ignored_count", ignored).put("unmatched_book_ledger_count", unmatchedLedger)
+            .put("date_scoped_ledger_comparison_available", dateScopeAvailable)
+            .put("opening_and_closing_balances_provided", !header.isNull("opening") && !header.isNull("closing"))
             .put("statement_transaction_net", money(importedTotal)).put("calculated_statement_closing", statementExpectedClosing)
             .put("declared_closing_difference", closingDifference).put("current_book_balance", money(bookBalance))
             .put("book_balance_is_current_not_historical", true).put("match_candidates", candidates)
-            .put("lines", lines).put("fully_reconciled", unmatched == 0 && unmatchedLedger == 0 && header.optInt("duplicates") == 0 &&
-                (closingDifference === JSONObject.NULL || abs(closingDifference as Double) <= 0.01))
+            .put("lines", lines).put("fully_reconciled", unmatched == 0 && unmatchedLedger == 0 && dateScopeAvailable &&
+                !header.isNull("opening") && !header.isNull("closing") && header.optInt("duplicates") == 0 &&
+                closingDifference is Double && abs(closingDifference) <= 0.01)
             .put("message", "المطابقة سطر بسطر؛ رصيد الدفتر الحالي لا يُقارن مباشرة برصيد كشف تاريخي إلا بعد مراعاة الحركات اللاحقة")
     }
 
@@ -1186,8 +1196,13 @@ internal class ExpandedAccountingService(
             "match" -> {
                 val ledgerId = p.optLong("bank_ledger_id", 0L)
                 require(ledgerId > 0L) { "يجب تحديد حركة الدفتر المراد مطابقتها" }
-                val ledger = query("SELECT id,COALESCE(debit,0),COALESCE(credit,0) FROM bank_ledger WHERE id=? AND bank_account_id=?",
-                    arrayOf(ledgerId.toString(), row.getLong("bank_account_id").toString())) { c ->
+                val ledgerCols = columns("bank_ledger")
+                val scopeSql = (if (ledgerCols.contains("station_id")) " AND station_id=?" else "") +
+                    (if (ledgerCols.contains("is_deleted")) " AND COALESCE(is_deleted,0)=0" else "")
+                val ledgerArgs = mutableListOf(ledgerId.toString(), row.getLong("bank_account_id").toString())
+                if (ledgerCols.contains("station_id")) ledgerArgs.add(stationId.toString())
+                val ledger = query("SELECT id,COALESCE(debit,0),COALESCE(credit,0) FROM bank_ledger WHERE id=? AND bank_account_id=?" + scopeSql,
+                    ledgerArgs.toTypedArray()) { c ->
                     Triple(c.getLong(0), c.getDouble(1), c.getDouble(2))
                 }.firstOrNull() ?: throw IllegalArgumentException("حركة الدفتر لا تخص الحساب البنكي المحدد")
                 require(abs(money(ledger.second - ledger.third) - row.getDouble("amount")) <= 0.01) {
