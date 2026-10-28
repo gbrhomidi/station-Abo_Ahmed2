@@ -148,6 +148,15 @@ def main() -> int:
             "workshop": workshop_checks,
             "existing_maintenance_requests_are_not_treated_as_full_work_orders": True,
         },
+        "additional_findings": {
+            "legacy_maintenance_delete_is_station_scoped": contains_any(main_source, [
+                r'id=? AND station_id=? AND is_deleted=0',
+            ]),
+            "legacy_maintenance_delete_has_explicit_granular_permission_check": contains_any(main_source, [
+                r'checkPermission\("maintenance",\s*"delete"\)',
+            ]),
+            "legacy_maintenance_delete_permission_note": "No maintenance.delete permission seed was found in DatabaseHelper; this remains an access-control follow-up rather than installing a guard that would deny every user.",
+        },
         "results": results,
     }
     if args.report:

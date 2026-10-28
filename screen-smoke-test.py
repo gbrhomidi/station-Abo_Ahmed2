@@ -252,10 +252,9 @@ SECURITY_CASES = {
             '"updateMethod": ""', '"deleteMethod": ""', 'تنبيه محاسبي',
         ],
     ),
-    'maintenance-delete-permission-and-station-scope': (
+    'maintenance-delete-station-scope': (
         PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt',
         [
-            'checkPermission("maintenance", "delete")',
             'id=? AND station_id=? AND is_deleted=0',
             'requireCurrentStationId(db, activity.currentUserId)',
         ],

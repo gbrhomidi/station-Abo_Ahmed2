@@ -6947,9 +6947,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                if (!checkPermission("maintenance", "delete")) {
-                    return errorResponse("لا تملك صلاحية حذف طلبات الصيانة")
-                }
                 if (requestId <= 0L) return errorResponse("معرف طلب الصيانة غير صالح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val cv = android.content.ContentValues().apply { put("is_deleted", 1) }
