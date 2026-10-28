@@ -216,6 +216,13 @@ internal class ExpandedAccountingService(
             var advances = 0.0
             var ledgerBalance = 0.0
             for (e in events) {
+                val eventDate = e.eventDate
+                if (eventDate.isNullOrBlank()) {
+                    unknownDateRows++
+                    continue
+                }
+                // An as-of aging report must not pull in transactions after the requested date.
+                if (eventDate > asOf) continue
                 val credit = e.credit.coerceAtLeast(0.0)
                 val debit = e.debit.coerceAtLeast(0.0)
                 ledgerBalance += credit - debit
@@ -252,7 +259,6 @@ internal class ExpandedAccountingService(
                     }
                     if (remaining > 0.005) advances += remaining
                 }
-                if (e.eventDate.isNullOrBlank()) unknownDateRows++
             }
             val supplier = JSONObject()
                 .put("supplier_id", id)
@@ -290,12 +296,14 @@ internal class ExpandedAccountingService(
                 )
             }
             val agingBalance = money(sCurrent + s1 + s2 + s3 + s4 + sUndated)
-            val variance = money(party.getDouble("party_balance") - ledgerBalance)
+            val currentBalanceComparable = asOf >= today()
+            val variance = if (currentBalanceComparable) money(party.getDouble("party_balance") - ledgerBalance) else JSONObject.NULL
             supplier.put("not_overdue", money(sCurrent)).put("overdue_1_30", money(s1))
                 .put("overdue_31_60", money(s2)).put("overdue_61_90", money(s3))
                 .put("overdue_over_90", money(s4)).put("undated_or_no_terms", money(sUndated))
                 .put("unallocated_supplier_advances", money(advances)).put("aging_balance", agingBalance)
-                .put("ledger_balance", money(ledgerBalance)).put("ledger_vs_party_variance", variance)
+                .put("ledger_balance_as_of", money(ledgerBalance)).put("ledger_vs_current_party_balance_variance", variance)
+                .put("current_party_balance_comparison_available", currentBalanceComparable)
                 .put("details", details)
             output.put(supplier)
             totalBalance += party.getDouble("party_balance")
@@ -305,7 +313,7 @@ internal class ExpandedAccountingService(
             d3 += s3
             d4 += s4
             undated += sUndated
-            varianceTotal += variance
+            if (currentBalanceComparable) varianceTotal += (variance as Double)
         }
         return JSONObject().put("success", true).put("as_of_date", asOf).put("station_id", stationId)
             .put("allocation_policy", "توزيع الدفعات غير المخصصة على أقدم الفواتير المفتوحة؛ تظهر السجلات ذات تاريخ/أجل مفقود في بند مستقل")
@@ -315,7 +323,8 @@ internal class ExpandedAccountingService(
             .put("overdue_over_90_total", money(d4)).put("undated_total", money(undated))
             .put("ledger_party_variance_total", money(varianceTotal))
             .put("undated_ledger_row_count", unknownDateRows)
-            .put("aging_complete", unknownDateRows == 0 && abs(varianceTotal) <= 0.01 && undated <= 0.01)
+            .put("party_balance_variance_is_current_only", asOf >= today())
+            .put("aging_complete", unknownDateRows == 0 && (asOf < today() || abs(varianceTotal) <= 0.01) && undated <= 0.01)
             .put("data", output)
     }
 
@@ -476,7 +485,7 @@ internal class ExpandedAccountingService(
                 .put("credit", invoice.optDouble("total_amount")).put("description", "ذمم دائنة - مورد"))
             val journal = JSONObject().put("entry_date", invoice.optString("invoice_date"))
                 .put("description", "فاتورة مشتريات عامة " + invoice.optString("invoice_number"))
-                .put("entry_type", "purchase").put("reference_type", "general_purchase_invoice")
+                .put("entry_type", "general").put("reference_type", "general_purchase_invoice")
                 .put("reference_id", invoiceId).put("currency_id", invoice.optLong("currency_id", 1L))
                 .put("items", items)
             journalId = helper.saveJournalEntry(journal, userId, stationId)
@@ -617,7 +626,7 @@ internal class ExpandedAccountingService(
             }
             val journal = JSONObject().put("entry_date", record.optString("return_date"))
                 .put("description", "مرتجع مشتريات " + record.optString("return_number"))
-                .put("entry_type", "purchase_return").put("reference_type", "general_purchase_return")
+                .put("entry_type", "general").put("reference_type", "general_purchase_return")
                 .put("reference_id", returnId).put("currency_id", invoice.optLong("currency_id", 1L))
                 .put("items", items)
             journalId = helper.saveJournalEntry(journal, userId, stationId)
@@ -708,7 +717,7 @@ internal class ExpandedAccountingService(
             if (!exists) {
                 insertSupplierLedger(inv.optLong("supplier_id"), 0.0, inv.optDouble("total_amount"),
                     "general_purchase_invoice", id, inv.optString("invoice_date"), "فاتورة مشتريات " + inv.optString("invoice_number"))
-                updateSupplierTotals(inv.optLong("supplier_id"), inv.optDouble("total_amount"), inv.optDouble("total_amount"), 0.0)
+                updateSupplierTotals(inv.optLong("supplier_id"), inv.optDouble("total_amount"), inv.optDouble("total_amount"), inv.optDouble("total_amount"))
             }
             db.update("expanded_purchase_invoices", ContentValues().apply {
                 put("status", "posted"); put("updated_at", now())
@@ -731,7 +740,7 @@ internal class ExpandedAccountingService(
                 insertSupplierLedger(ret.optLong("supplier_id"), ret.optDouble("total_amount"), 0.0,
                     "general_purchase_return", id, ret.optString("return_date"), "مرتجع مشتريات " + ret.optString("return_number"))
                 updateSupplierTotals(ret.optLong("supplier_id"), -ret.optDouble("total_amount"),
-                    -ret.optDouble("total_amount"), 0.0)
+                    -ret.optDouble("total_amount"), -ret.optDouble("total_amount"))
             }
             db.update("expanded_purchase_returns", ContentValues().apply {
                 put("status", "posted"); put("updated_at", now())
@@ -1414,10 +1423,12 @@ internal class ExpandedAccountingService(
             "حقول دفتر المورد لا تكفي لإثبات كشف الحساب"
         }
         val dateCol = firstColumn(cols, listOf("transaction_date", "entry_date", "date", "created_at", "posting_date"))
+        val stationScope = if (cols.contains("station_id")) " AND station_id=?" else ""
+        val args = if (cols.contains("station_id")) arrayOf(supplierId.toString(), stationId.toString()) else arrayOf(supplierId.toString())
         val sql = "SELECT id,COALESCE(debit,0),COALESCE(credit,0),COALESCE(transaction_type,'')," +
             "COALESCE(transaction_id,0)," + (if (dateCol != null) "COALESCE(" + q(dateCol) + ",'')" else "''") +
-            " FROM supplier_ledger WHERE party_id=? ORDER BY " + (if (dateCol != null) q(dateCol) + ",id" else "id")
-        return query(sql, arrayOf(supplierId.toString())) { c ->
+            " FROM supplier_ledger WHERE party_id=?" + stationScope + " ORDER BY " + (if (dateCol != null) q(dateCol) + ",id" else "id")
+        return query(sql, args) { c ->
             val rawType = c.getString(3)
             val txId = c.getLong(4)
             val rawDate = c.getString(5).takeIf { it.isNotBlank() }?.let { normalizeDateMaybe(it) }
