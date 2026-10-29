@@ -1562,7 +1562,7 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">شروط الدفع (أيام)</label>
-                        <input type="number" class="form-input" id="paymentTerms" placeholder="0">
+                        <input type="text" class="form-input" id="paymentTerms" placeholder="صافي 30 يوم" value="صافي 30 يوم">
                     </div>
                 </div>
                 <div class="form-row">
@@ -2700,7 +2700,7 @@ let pullStartY = 0,
                 tax_number: document.getElementById('taxNumber').value.trim(),
                 commercial_register: document.getElementById('commercialRegister').value.trim(),
                 credit_limit: parseFloat(document.getElementById('creditLimit').value) || 0,
-                payment_terms: parseInt(document.getElementById('paymentTerms').value, 10) || 0,
+                payment_terms: document.getElementById('paymentTerms').value.trim() || 'صافي 30 يوم',
                 is_active: parseInt(document.getElementById('isActive').value, 10),
                 notes: document.getElementById('notes').value.trim(),
                 extra_data: JSON.stringify({
@@ -2741,7 +2741,7 @@ let pullStartY = 0,
             document.getElementById('taxNumber').value = bundle.tax_number || '';
             document.getElementById('commercialRegister').value = bundle.commercial_register || '';
             document.getElementById('creditLimit').value = bundle.credit_limit || '';
-            document.getElementById('paymentTerms').value = bundle.payment_terms || '';
+            document.getElementById('paymentTerms').value = bundle.payment_terms || 'صافي 30 يوم';
             document.getElementById('isActive').value = String(bundle.is_active ?? 1);
             document.getElementById('notes').value = bundle.notes || '';
             const meta = getPartyMeta(bundle);
