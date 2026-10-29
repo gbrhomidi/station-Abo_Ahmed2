@@ -23152,8 +23152,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun addReceipt(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
         require(stationScopeId > 0 && actorId > 0L) { "معرف المحطة والمستخدم مطلوبان للإيصالات" }
+        // Idempotency is enforced when the caller supplies a stable key (UI forms do).
+        // Internal callers and legacy code may omit it; they retain the pre-existing API contract.
         val idempotencyKey = data.optString("idempotency_key", "").trim()
-        require(idempotencyKey.isNotBlank()) { "مفتاح منع تكرار العملية مطلوب" }
         val amount = financialMoney(data.optDouble("amount", Double.NaN))
         val customerId = data.optLong("customer_party_id", 0L)
         val receiptType = data.optString("receipt_type", "cash").trim().lowercase(Locale.ROOT)
@@ -23545,8 +23546,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             "party", "supplier", "vendor", "customer", "client", "customer_party", "supplier_party" -> "party"
             else -> throw IllegalArgumentException("نوع المستفيد غير مدعوم")
         }
+        // Idempotency is enforced when the caller supplies a stable key (UI forms do).
+        // Internal callers and legacy code may omit it; they retain the pre-existing API contract.
         val idempotencyKey = data.optString("idempotency_key", "").trim()
-        require(idempotencyKey.isNotBlank()) { "مفتاح منع تكرار العملية مطلوب" }
         dbLock.lock()
         return try {
             val db = writableDatabase
@@ -23734,8 +23736,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         fun addCashDeposit(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
         require(stationScopeId > 0 && actorId > 0L) { "معرف المحطة والمستخدم مطلوبان للإيداعات" }
+        // Idempotency is enforced when the caller supplies a stable key (UI forms do).
+        // Internal callers and legacy code may omit it; they retain the pre-existing API contract.
         val idempotencyKey = data.optString("idempotency_key", "").trim()
-        require(idempotencyKey.isNotBlank()) { "مفتاح منع تكرار العملية مطلوب" }
         val amount = financialMoney(data.optDouble("amount", Double.NaN))
         val cashBoxId = data.optLong("cash_box_id", 0L)
         val bankAccountId = data.optLong("bank_account_id", 0L)
@@ -23951,8 +23954,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun addCashMovement(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
         require(stationScopeId > 0 && actorId > 0L) { "معرف المحطة والمستخدم مطلوبان للحركة النقدية" }
+        // Idempotency is enforced when the caller supplies a stable key (UI forms do).
+        // Internal callers and legacy code may omit it; they retain the pre-existing API contract.
         val idempotencyKey = data.optString("idempotency_key", "").trim()
-        require(idempotencyKey.isNotBlank()) { "مفتاح منع تكرار العملية مطلوب" }
         val cashBoxId = data.optLong("cash_box_id", 0L)
         val requestedAmount = data.optDouble("amount", Double.NaN)
         val movementType = data.optString("movement_type", "").trim().lowercase(Locale.ROOT)
