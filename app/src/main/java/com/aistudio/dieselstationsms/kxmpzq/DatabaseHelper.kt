@@ -22562,11 +22562,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
             require(rows == 1) { "تعذر تحديث حالة الإيصال بعد العكس" }
             db.setTransactionSuccessful()
-            rows
+            return rows
         } finally { db.endTransaction() }
     }
 
-        fun updateExpenseRecord(id: Long, data: JSONObject, stationScopeId: Int, actorId: Long): Int {
+    fun updateExpenseRecord(id: Long, data: JSONObject, stationScopeId: Int, actorId: Long): Int {
         require(stationScopeId > 0){"معرف المحطة مطلوب"}; val db=writableDatabase; db.beginTransaction()
         try {
             val status=db.rawQuery("SELECT status FROM expenses WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(id.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "المصروف غير موجود" };c.getString(0)}
