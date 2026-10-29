@@ -3359,7 +3359,7 @@
                 email: document.getElementById('email').value.trim(),
                 address: document.getElementById('address').value.trim(),
                 credit_limit: creditLimit,
-                payment_terms: document.getElementById('paymentTerms').value.trim(),
+                payment_terms: document.getElementById('paymentTerms').value.trim() || 'صافي 30 يوم',
                 currency_id: document.getElementById('currencyId').value ? Number(document.getElementById('currencyId').value) : null,
                 assigned_to: document.getElementById('assignedTo').value ? Number(document.getElementById('assignedTo').value) : null,
                 fuel_type_preference_id: document.getElementById('fuelPreference').value ? Number(document.getElementById('fuelPreference').value) : null,
