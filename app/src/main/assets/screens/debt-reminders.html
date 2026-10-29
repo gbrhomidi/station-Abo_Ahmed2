@@ -2338,7 +2338,7 @@ function statusOf(debt) {
     if (debt.remaining_amount <= 0.000001) return { key: 'paid', label: 'مدفوع', icon: 'fa-check-circle', cls: 'paid' };
     const risk = String(debt.risk_level || '').toLowerCase();
     const highRisk = ['high','critical','blacklisted','مرتفع','محظور'].includes(risk) ||
-        risk.includes('blacklist') || risk.includes('مرتفع') || risk.includes('محظور');
+        risk.includes('high') || risk.includes('critical') || risk.includes('blacklist') || risk.includes('مرتفع') || risk.includes('محظور');
     const days = debt.days_remaining === undefined ? calendarDayDelta(debt.due_date) : debt.days_remaining;
     if (String(debt.payment_status || debt.status || '').toLowerCase() === 'doubtful' ||
         highRisk || (days !== null && days <= -90)) {
