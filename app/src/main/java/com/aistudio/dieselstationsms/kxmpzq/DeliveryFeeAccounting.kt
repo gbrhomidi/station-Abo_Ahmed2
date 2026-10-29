@@ -167,7 +167,10 @@ object DeliveryFeeAccounting {
         if (referenceId <= 0L) return null
         val requestedKind = saleKind.orEmpty().trim().lowercase(Locale.ROOT)
         if (requestedKind in setOf("product", "products", "منتجات", "منتج")) {
-            return findProductSale(db, stationId, referenceId) ?: findFuelSale(db, stationId, referenceId)
+            return findProductSale(db, stationId, referenceId)
+        }
+        if (requestedKind in setOf("fuel", "fuel_sale", "وقود")) {
+            return findFuelSale(db, stationId, referenceId)
         }
         return findFuelSale(db, stationId, referenceId) ?: findProductSale(db, stationId, referenceId)
     }
@@ -345,6 +348,24 @@ object DeliveryFeeAccounting {
             })
         }
         db.update("fuel_sales", values, "id=? AND station_id=?", arrayOf(fuelSaleId.toString(), stationId.toString()))
+        if (sale.parentSaleId > 0L && tableExists(db, "sales_transactions")) {
+            val transactionColumns = columns(db, "sales_transactions")
+            val transactionValues = ContentValues()
+            if ("delivery_service_fee" in transactionColumns) transactionValues.put("delivery_service_fee", amount)
+            if ("delivery_fee_mode" in transactionColumns) transactionValues.put("delivery_fee_mode", mode)
+            if ("delivery_location" in transactionColumns) transactionValues.put("delivery_location", cleanLocation)
+            if ("cash_customer_name" in transactionColumns) transactionValues.put("cash_customer_name", cleanCashName)
+            if ("delivery_fee_display_total" in transactionColumns) {
+                transactionValues.put("delivery_fee_display_total", when (mode) {
+                    ADD_TO_SALES -> sale.amount + amount
+                    DEDUCT_FROM_SALES -> (sale.amount - amount).coerceAtLeast(0.0)
+                    else -> sale.amount
+                })
+            }
+            if (transactionValues.size() > 0) {
+                db.update("sales_transactions", transactionValues, "id=? AND station_id=?", arrayOf(sale.parentSaleId.toString(), stationId.toString()))
+            }
+        }
 
         val ledgerId = upsertLedger(
             db, stationId, sale.id, sale.parentSaleId, 0L, 0L, amount, mode, userId,
@@ -578,7 +599,11 @@ object DeliveryFeeAccounting {
         ensureSchema(helper)
         val saleJson = context.optJSONObject("sale") ?: context
         val reference = saleJson.optLong("sale_id", saleJson.optLong("id", 0L))
-        val kind = saleJson.optString("sale_kind", saleJson.optString("order_type", saleJson.optString("sale_type", "")))
+        val kind = listOf(
+            saleJson.optString("sale_kind"),
+            saleJson.optString("order_type"),
+            saleJson.optString("sale_type")
+        ).firstOrNull { it.isNotBlank() }.orEmpty()
         val sale = findSale(helper.readableDatabase, stationId, reference, kind) ?: return context
         saleJson.put("fuel_sale_id", if (sale.isFuelSale) sale.id else JSONObject.NULL)
         saleJson.put("sale_kind", if (sale.isFuelSale) "fuel" else "product")
@@ -621,11 +646,15 @@ object DeliveryFeeAccounting {
             if (!c.moveToFirst()) null else cursorObject(c)
         }
         val delivery = deliveryRow ?: return original
-        val originalKind = original.optString("sale_kind", original.optString("sale_type", ""))
-        val storedKind = delivery.optString("sale_kind", delivery.optString("sale_type", ""))
+        val originalKind = listOf(original.optString("sale_kind"), original.optString("sale_type"))
+            .firstOrNull { it.isNotBlank() }.orEmpty()
+        val storedKind = listOf(delivery.optString("sale_kind"), delivery.optString("sale_type"))
+            .firstOrNull { it.isNotBlank() }.orEmpty()
         val kind = when {
-            originalKind.equals("product", true) || originalKind.equals("products", true) -> "product"
-            storedKind.equals("product", true) || storedKind.equals("products", true) -> "product"
+            originalKind.equals("product", true) || originalKind.equals("products", true) ||
+                originalKind.equals("منتجات", true) -> "product"
+            storedKind.equals("product", true) || storedKind.equals("products", true) ||
+                storedKind.equals("منتجات", true) -> "product"
             else -> "fuel"
         }
         val sale = findSale(db, stationId, saleRef, kind)
