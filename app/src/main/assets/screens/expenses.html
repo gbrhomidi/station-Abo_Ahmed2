@@ -1853,6 +1853,7 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             rows: [],
             filtered: [],
             editing: null,
+            pendingCreateKey: null,
             approving: false,
             filter: 'all',
             amountFilter: null,
@@ -2437,6 +2438,7 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
                 return;
             }
             state.editing = row;
+            if (!row) state.pendingCreateKey = null;
             $('formTitle').innerHTML = row
                 ? '<i class="fas fa-edit"></i> تعديل المصروف'
                 : '<i class="fas fa-plus-circle"></i> إضافة مصروف جديد';
@@ -2663,6 +2665,13 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             const form = $('recordForm');
             if (!form.reportValidity()) return;
             const payload = collectForm();
+            if (!state.editing && CFG.createMethod) {
+                if (!state.pendingCreateKey) {
+                    const suffix = Math.random().toString(36).slice(2, 12);
+                    state.pendingCreateKey = `expense-${Date.now()}-${suffix}`;
+                }
+                payload.idempotency_key = state.pendingCreateKey;
+            }
             setLoading(true);
             try {
                 let result;
@@ -2682,6 +2691,7 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
                 parse(result);
                 toast(state.approving ? 'تم اعتماد المصروف وترحيله' : 'تم حفظ المصروف بنجاح');
                 state.approving = false;
+                state.pendingCreateKey = null;
                 closeModal(null, 'formModal');
                 await reloadData();
             } catch (error) {
