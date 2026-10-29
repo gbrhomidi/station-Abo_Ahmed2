@@ -11608,11 +11608,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val stationScopeId = requireCurrentStationId(
                     db, activity.currentUserId
                 )
-                dataResponse(
-                    db.getLatestCustomerSaleForDelivery(
-                        partyId, stationScopeId
-                    )
-                )
+                DeliveryFeeAccounting.ensureSchema(db)
+                val saleContext = db.getLatestCustomerSaleForDelivery(partyId, stationScopeId)
+                dataResponse(DeliveryFeeAccounting.enrichSaleContext(db, stationScopeId, saleContext))
             } catch (e: Exception) {
                 DebugLogger.logException(
                     "LatestCustomerSaleForDelivery", e
@@ -11628,7 +11626,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                dataResponse(db.getDeliverySaleContext(saleId, requireCurrentStationId(db, activity.currentUserId)))
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                DeliveryFeeAccounting.ensureSchema(db)
+                dataResponse(DeliveryFeeAccounting.enrichSaleContext(db, stationId, db.getDeliverySaleContext(saleId, stationId)))
             } catch (e: Exception) {
                 DebugLogger.logException("DeliverySaleContext", e)
                 errorResponse(e.message ?: "تعذر استرجاع عملية البيع الأصلية")
@@ -11867,7 +11867,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
-                val payload = db.getDeliverySmsPayload(deliveryId, stationId)
+                DeliveryFeeAccounting.ensureSchema(db)
+                val payload = DeliveryFeeAccounting.enrichDeliverySmsPayload(
+                    db, deliveryId, stationId, db.getDeliverySmsPayload(deliveryId, stationId)
+                )
                 val phone = payload.optString("driver_phone").trim()
                 require(phone.isNotBlank()) { "رقم هاتف السائق غير موجود" }
                 val message = DeliverySmsScheduler.buildMessage(payload)
@@ -11892,23 +11895,67 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
+                DeliveryFeeAccounting.ensureSchema(db)
                 val input = JSONObject(jsonData.ifBlank { "{}" }).apply {
                     put("station_id", stationId)
                     put("cashier_id", activity.currentUserId)
                 }
-                val deliveryId = db.addDelivery(input, stationId, activity.currentUserId)
-                val persisted = db.getOperationalRecord("deliveries", deliveryId)
-                    ?: throw IllegalStateException("فشل إعادة قراءة سجل التوصيل بعد الحفظ")
-                require(persisted.optLong("id", deliveryId) == deliveryId) {
-                    "فشل التحقق من معرف التوصيل المحفوظ في SQLite"
+                val saleReferenceId = input.optLong("sale_id", 0L)
+                val driverId = input.optLong("driver_id", 0L)
+                val fee = input.optDouble("delivery_service_fee", input.optDouble("service_fee", 0.0))
+                val feeMode = DeliveryFeeAccounting.normalizeMode(input.optString("delivery_fee_mode", "exempt"))
+                val deliveryLocation = input.optString("delivery_location", input.optString("location", "")).trim()
+                val cashCustomerName = input.optString("cash_customer_name", "").trim()
+
+                // The older addDelivery writer can fold service_fee into a sale total.
+                // Save the delivery row with zero legacy fee, then persist the fee through
+                // the separate ledger/journal path inside the same SQLite transaction.
+                val deliveryForLegacyWriter = JSONObject(input.toString()).apply {
+                    put("delivery_service_fee", 0.0)
+                    put("service_fee", 0.0)
+                    put("delivery_fee_mode", DeliveryFeeAccounting.EXEMPT)
+                    put("delivery_location", deliveryLocation)
+                    put("cash_customer_name", cashCustomerName)
                 }
-                val saleId = persisted.optLong("sale_id", 0L)
+                val database = db.writableDatabase
+                var deliveryId = 0L
+                var feeResult = JSONObject()
+                database.beginTransaction()
+                try {
+                    deliveryId = db.addDelivery(deliveryForLegacyWriter, stationId, activity.currentUserId)
+                    val persisted = db.getOperationalRecord("deliveries", deliveryId)
+                        ?: throw IllegalStateException("فشل إعادة قراءة سجل التوصيل بعد الحفظ")
+                    require(persisted.optLong("id", deliveryId) == deliveryId) {
+                        "فشل التحقق من معرف التوصيل المحفوظ في SQLite"
+                    }
+                    feeResult = DeliveryFeeAccounting.persistDeliveryFee(
+                        helper = db,
+                        deliveryId = deliveryId,
+                        saleReferenceId = saleReferenceId,
+                        stationId = stationId,
+                        userId = activity.currentUserId,
+                        driverId = driverId,
+                        requestedAmount = fee,
+                        requestedMode = feeMode,
+                        location = deliveryLocation,
+                        cashCustomerName = cashCustomerName
+                    )
+                    database.setTransactionSuccessful()
+                } finally {
+                    database.endTransaction()
+                }
+
+                val persisted = db.getOperationalRecord("deliveries", deliveryId)
+                    ?: throw IllegalStateException("تعذر إعادة قراءة التوصيل بعد اعتماد المعاملة")
+                val savedSaleId = persisted.optLong("sale_id", saleReferenceId)
                 val scheduledAt = db.getDeliverySmsScheduledAt(deliveryId, stationId)
                 if (scheduledAt > 0L) DeliverySmsScheduler.schedule(activity, deliveryId, stationId, scheduledAt)
                 if (input.optBoolean("send_new_task_after_save", false)) {
                     activity.lifecycleScope.launch(Dispatchers.IO) {
                         try {
-                            val payload = db.getDeliverySmsPayload(deliveryId, stationId)
+                            val payload = DeliveryFeeAccounting.enrichDeliverySmsPayload(
+                                db, deliveryId, stationId, db.getDeliverySmsPayload(deliveryId, stationId)
+                            )
                             val phone = payload.optString("driver_phone").trim()
                             if (phone.isNotBlank()) {
                                 val sent = SmsReplyManager(activity.applicationContext, db).sendReplyOnce(
@@ -11926,14 +11973,17 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     put("data", JSONObject().apply {
                         put("id", deliveryId)
                         put("delivery_id", deliveryId)
-                        put("sale_id", saleId)
+                        put("sale_id", savedSaleId)
+                        put("delivery_service_fee", fee)
+                        put("delivery_fee_mode", feeMode)
+                        put("delivery_fee_accounting", feeResult)
                         put("sms_scheduled_at", if (scheduledAt > 0L) scheduledAt else JSONObject.NULL)
-                        put("message", "تم حفظ التوصيل فعلياً والتحقق من SQLite")
+                        put("message", "تم حفظ التوصيل ورسوم الخدمة والتحقق من SQLite والمحاسبة")
                     })
                 }.toString()
             } catch (e: Exception) {
                 DebugLogger.logException("SaveDeliveryRecord", e)
-                errorResponse(e.message ?: "فشل حفظ التوصيل")
+                errorResponse(e.message ?: "فشل حفظ التوصيل أو ترحيل رسوم الخدمة؛ تم التراجع عن المعاملة")
             }
         }
         @JavascriptInterface
@@ -11984,39 +12034,49 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     ?: return errorResponse("النشاط غير متاح")
 
                 val currentUserId = activity.currentUserId
-                if (currentUserId <= 0L) {
-                    return errorResponse("لا توجد جلسة مستخدم صالحة")
+                if (currentUserId <= 0L) return errorResponse("لا توجد جلسة مستخدم صالحة")
+                val stationScopeId = requireCurrentStationId(db, currentUserId)
+                val input = JSONObject(jsonData.ifBlank { "{}" }).apply {
+                    put("cashier_id", currentUserId)
+                    put("station_id", stationScopeId)
                 }
 
-                val stationScopeId = requireCurrentStationId(
-                    db,
-                    currentUserId
-                )
-
-                val input = JSONObject(
-                    jsonData.ifBlank { "{}" }
-                )
-
-                // لا نسمح لـHTML بفرض معرف أمين الصندوق أو المحطة.
-                // كلاهما يحددان من جلسة Android الحالية.
-                input.put("cashier_id", currentUserId)
-                input.put("station_id", stationScopeId)
-
-                // addFuelSale() يسترجع الوردية المفتوحة الفعلية للمحطة.
-                val saleId = db.addFuelSale(
-                    input,
-                    stationScopeId,
-                    currentUserId
-                )
+                DeliveryFeeAccounting.ensureSchema(db)
                 PumpMeterSmsRepository(activity.applicationContext, db).ensureSchema()
-                val nozzleId = input.optLong("nozzle_id", 0L)
-                if (nozzleId > 0L) {
-                    db.writableDatabase.execSQL(
-                        "UPDATE fuel_sales SET nozzle_id=? WHERE id=?",
-                        arrayOf(nozzleId, saleId)
+                val database = db.writableDatabase
+                var saleId = 0L
+                var feeResult = JSONObject()
+
+                // Sale, delivery-fee ledger, and fee journal are atomic. If the selected
+                // accounting mode has no valid mapped accounts, the sale rolls back instead
+                // of being stored with an incomplete financial treatment.
+                database.beginTransaction()
+                try {
+                    saleId = db.addFuelSale(input, stationScopeId, currentUserId)
+                    val nozzleId = input.optLong("nozzle_id", 0L)
+                    if (nozzleId > 0L) {
+                        database.execSQL(
+                            "UPDATE fuel_sales SET nozzle_id=? WHERE id=? AND station_id=?",
+                            arrayOf(nozzleId, saleId, stationScopeId)
+                        )
+                    }
+                    feeResult = DeliveryFeeAccounting.persistFuelSaleFee(
+                        helper = db,
+                        fuelSaleId = saleId,
+                        stationId = stationScopeId,
+                        userId = currentUserId,
+                        amount = input.optDouble("delivery_service_fee", 0.0),
+                        rawMode = input.optString("delivery_fee_mode", "exempt"),
+                        location = input.optString("delivery_location", ""),
+                        cashCustomerName = input.optString("cash_customer_name", ""),
+                        paymentMethod = input.optString("payment_method", "cash")
                     )
+                    database.setTransactionSuccessful()
+                } finally {
+                    database.endTransaction()
                 }
 
+                // External SMS scheduling happens only after SQLite sale+accounting commit.
                 val smsResult = if (input.optString("payment_method").trim() in setOf("credit", "آجل", "credit_sale", "credit_account")) {
                     queueCreditSaleSms(db, saleId, stationScopeId, currentUserId)
                 } else JSONObject().put("queued", false).put("reason", "not_credit")
@@ -12025,18 +12085,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     put("success", true)
                     put("id", saleId)
                     put("sale_id", saleId)
-                    put("message", "تم حفظ مبيعات الوقود فعلياً")
+                    put("message", "تم حفظ مبيعات الوقود ورسوم الخدمة والتحقق من القيود المحاسبية")
+                    put("delivery_fee_accounting", feeResult)
                     put("sms", smsResult)
                 }.toString()
 
             } catch (e: Exception) {
-                DebugLogger.logException(
-                    "SaveFuelSaleRecord",
-                    e
-                )
-                errorResponse(
-                    e.message ?: "فشل حفظ مبيعات الوقود"
-                )
+                DebugLogger.logException("SaveFuelSaleRecord", e)
+                errorResponse(e.message ?: "فشل حفظ مبيعات الوقود أو رسوم التوصيل؛ تم التراجع عن المعاملة")
             }
         }
 
