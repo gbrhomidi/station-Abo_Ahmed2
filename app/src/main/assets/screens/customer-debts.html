@@ -3087,10 +3087,6 @@ function updateDebtViewButtons() {
                     time: 'الآن'
                 });
             }
-            const doubtfulItems = data.filter(item => item.status === 'doubtful');
-            if (doubtfulItems.length > 0) {
-                alerts.push({type:'danger', icon:'fa-triangle-exclamation', title:'⚠️ ديون مشكوك في تحصيلها', desc:doubtfulItems.length + ' فاتورة متأخرة 90 يوماً أو أعلى المخاطر', time:'الآن'});
-            }
             const overdueItems = data.filter(item => item.status === 'overdue');
             if (overdueItems.length > 0) {
                 alerts.push({
