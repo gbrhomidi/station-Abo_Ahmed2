@@ -497,9 +497,9 @@ object DeliveryFeeAccounting {
             DEDUCT_FROM_SALES -> {
                 val saleForAdjustment = sale ?: throw IllegalArgumentException("لا يمكن خصم رسوم التوصيل دون بيع أصلي مرتبط")
                 require(amount - saleForAdjustment.amount <= 0.000001) { "رسوم خدمة التوصيل لا يمكن أن تتجاوز قيمة المبيعات" }
-                val referenceType = if (sale.isFuelSale) "fuel_sale" else "sales_transaction"
-                val referenceId = if (sale.isFuelSale) sale.id else sale.parentSaleId
-                val id = postFeeJournal(helper, db, stationId, userId, ledgerId, "خصم رسوم التوصيل للتوصيل رقم $deliveryId", salesRevenueAccount(db), settlementAccount(db, stationId, sale.paymentMethod), amount, referenceType, referenceId)
+                val referenceType = if (saleForAdjustment.isFuelSale) "fuel_sale" else "sales_transaction"
+                val referenceId = if (saleForAdjustment.isFuelSale) saleForAdjustment.id else saleForAdjustment.parentSaleId
+                val id = postFeeJournal(helper, db, stationId, userId, ledgerId, "خصم رسوم التوصيل للتوصيل رقم $deliveryId", salesRevenueAccount(db), settlementAccount(db, stationId, saleForAdjustment.paymentMethod), amount, referenceType, referenceId)
                 updateSaleAmountsForDeduction(db, saleForAdjustment, amount)
                 id
             }
