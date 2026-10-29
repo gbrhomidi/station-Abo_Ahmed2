@@ -12315,7 +12315,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updateReceiptRecord(id: Long, jsonData: String): String {
             val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); val activity=getActivity()?:return errorResponse("النشاط غير متاح")
-            return try { successResponse(db.updateReceiptRecord(id,JSONObject(jsonData.ifBlank{"{}"}),requireCurrentStationId(db,activity.currentUserId),activity.currentUserId)>0,"تم تحديث بيانات الإيصال فعلياً") } catch(e:Exception){ DebugLogger.logException("ReceiptUpdate",e);errorResponse(e.message)}
+            return try { successResponse(db.updateReceiptRecord(id,JSONObject(jsonData.ifBlank{"{}"}),requireCurrentStationId(db,activity.currentUserId),activity.currentUserId)>0,"تم تحديث البيانات الوصفية فقط؛ لا يمكن تعديل مبالغ الإيصال المرحّل") } catch(e:Exception){ DebugLogger.logException("ReceiptUpdate",e);errorResponse(e.message)}
         }
         @JavascriptInterface
         fun deleteReceiptRecord(id: Long): String {
@@ -12376,7 +12376,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updateCashMovementRecord(id: Long, jsonData: String): String = errorResponse("الحركة النقدية المثبتة غير قابلة لإعادة كتابة تاريخها؛ استخدم العكس المالي")
         @JavascriptInterface
-        fun deleteCashMovementRecord(id: Long): String { val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity()?:return errorResponse("النشاط غير متاح"); return try{ successResponse(db.reverseCashMovementRecord(id,requireCurrentStationId(db,a.currentUserId),a.currentUserId,"عكس من شاشة الحركات النقدية")>0,"تم عكس الحركة النقدية وتسجيل الحركة المقابلة") }catch(e:Exception){DebugLogger.logException("CashMovementReverse",e);errorResponse(e.message)} }
+        fun deleteCashMovementRecord(id: Long): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                if (!checkPermission("finance", "delete")) return errorResponse("لا تملك صلاحية عكس الحركات النقدية")
+                val rows = db.reverseCashMovementRecord(id, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId, "عكس من شاشة الحركات النقدية")
+                invalidateCurrentReportCache(db, activity.currentUserId)
+                successResponse(rows > 0, "تم عكس الحركة النقدية وتسجيل الحركة المقابلة")
+            } catch (e: Exception) {
+                DebugLogger.logException("CashMovementReverse", e)
+                errorResponse(e.message)
+            }
+        }
         @JavascriptInterface
         fun resolveCashMovementRecord(id: Long, note: String = "") = operationalResolve("finance", "cash_movements", id, note)
 

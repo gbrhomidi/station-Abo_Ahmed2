@@ -23195,6 +23195,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             db.beginTransaction()
             try {
+                val normalizedIdempotencyKey = data.optString("idempotency_key", "").trim()
+                val existingResourceId = findFinancialIdempotency(db, "receipt", stationScopeId, normalizedIdempotencyKey)
+                if (existingResourceId != null) return existingResourceId
+                require(reserveFinancialIdempotency(db, "receipt", stationScopeId, normalizedIdempotencyKey)) {
+                    "مفتاح العملية المالية مستخدم مسبقاً"
+                }
                 if (customerId > 0L) requirePartyInStation(db, customerId, stationScopeId)
                 val cashBefore = if (cashAmount > 0.0) db.rawQuery(
                     "SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'",
@@ -23311,6 +23317,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     "id=? AND reference_type='receipt' AND reference_id=?",
                     arrayOf(cashMovementId.toString(), receiptId.toString())
                 )
+                completeFinancialIdempotency(db, "receipt", stationScopeId, normalizedIdempotencyKey, receiptId)
                 db.setTransactionSuccessful()
                 receiptId
             } finally { db.endTransaction() }
@@ -23535,6 +23542,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             db.beginTransaction()
             try {
+                val normalizedIdempotencyKey = data.optString("idempotency_key", "").trim()
+                val existingResourceId = findFinancialIdempotency(db, "expense", stationScopeId, normalizedIdempotencyKey)
+                if (existingResourceId != null) return existingResourceId
+                require(reserveFinancialIdempotency(db, "expense", stationScopeId, normalizedIdempotencyKey)) {
+                    "مفتاح العملية المالية مستخدم مسبقاً"
+                }
                 val now = getCurrentDateTime()
                 val expenseId = db.insertOrThrow("expenses", null, ContentValues().apply {
                     put("uuid", UUID.randomUUID().toString())
@@ -23544,7 +23557,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     val payeeName = data.optString("payee_name", "").trim()
                     put("payee_name", payeeName)
                     put("payee_name_ar", data.optString("payee_name_ar", payeeName))
-                    put("payee_type", data.optString("payee_type", ""))
+                    put("payee_type", data.optString("payee_type", "other").trim().lowercase(Locale.ROOT).ifBlank { "other" })
                     if (data.optLong("payee_id", 0L) > 0L) put("payee_id", data.optLong("payee_id"))
                     put("amount", baseAmount)
                     if (data.optLong("currency_id", 0L) > 0L) put("currency_id", data.optLong("currency_id"))
@@ -23579,6 +23592,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     postingRequest.put("paid_amount", paidAmount)
                     postExpenseRecordWithinTransaction(db, expenseId, postingRequest, stationScopeId, actorId)
                 }
+                completeFinancialIdempotency(db, "expense", stationScopeId, normalizedIdempotencyKey, expenseId)
                 db.setTransactionSuccessful()
                 expenseId
             } finally { db.endTransaction() }
@@ -23715,6 +23729,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             db.beginTransaction()
             try {
+                val normalizedIdempotencyKey = data.optString("idempotency_key", "").trim()
+                val existingResourceId = findFinancialIdempotency(db, "cash_deposit", stationScopeId, normalizedIdempotencyKey)
+                if (existingResourceId != null) return existingResourceId
+                require(reserveFinancialIdempotency(db, "cash_deposit", stationScopeId, normalizedIdempotencyKey)) {
+                    "مفتاح العملية المالية مستخدم مسبقاً"
+                }
                 val cashBefore = db.rawQuery(
                     "SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'",
                     arrayOf(cashBoxId.toString(), stationScopeId.toString())
@@ -23799,6 +23819,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     "id=? AND station_id=? AND is_deleted=0",
                     arrayOf(depositId.toString(), stationScopeId.toString())
                 ) == 1) { "تعذر ربط الإيداع بدفاتر النقدية والبنك" }
+                completeFinancialIdempotency(db, "cash_deposit", stationScopeId, normalizedIdempotencyKey, depositId)
                 db.setTransactionSuccessful()
                 depositId
             } finally { db.endTransaction() }
@@ -23929,6 +23950,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             db.beginTransaction()
             try {
+                val normalizedIdempotencyKey = data.optString("idempotency_key", "").trim()
+                val existingResourceId = findFinancialIdempotency(db, "cash_movement", stationScopeId, normalizedIdempotencyKey)
+                if (existingResourceId != null) return existingResourceId
+                require(reserveFinancialIdempotency(db, "cash_movement", stationScopeId, normalizedIdempotencyKey)) {
+                    "مفتاح العملية المالية مستخدم مسبقاً"
+                }
                 val balanceBefore = db.rawQuery(
                     "SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'",
                     arrayOf(cashBoxId.toString(), stationScopeId.toString())
@@ -23995,6 +24022,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     "id=? AND cash_box_id=? AND is_deleted=0",
                     arrayOf(movementId.toString(), cashBoxId.toString())
                 ) == 1) { "تعذر ربط الحركة النقدية بالقيد المحاسبي" }
+                completeFinancialIdempotency(db, "cash_movement", stationScopeId, normalizedIdempotencyKey, movementId)
                 db.setTransactionSuccessful()
                 movementId
             } finally { db.endTransaction() }
