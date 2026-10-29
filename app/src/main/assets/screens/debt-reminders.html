@@ -477,6 +477,8 @@ body {
 }
 .debt-card:hover::before { opacity: 1; width: 6px; }
 .debt-card.overdue { border-color: rgba(220, 38, 38, 0.45); }
+.debt-card.doubtful { border-color: rgba(190, 24, 93, 0.55); }
+.badge.doubtful { background: rgba(190, 24, 93, 0.13); color: #be185d; }
 .debt-card.overdue::before { background: var(--danger); }
 .debt-card.due-soon { border-color: rgba(217, 119, 6, 0.45); }
 .debt-card.due-soon::before { background: var(--warning); }
@@ -1604,6 +1606,9 @@ body {
         <button class="filter-chip" data-filter="overdue" onclick="setFilter('overdue', this)">
             <i class="fas fa-exclamation-circle"></i> متأخر
         </button>
+        <button class="filter-chip" data-filter="doubtful" onclick="setFilter('doubtful', this)">
+            <i class="fas fa-triangle-exclamation"></i> مشكوك في تحصيله
+        </button>
         <button class="filter-chip" data-filter="due_soon" onclick="setFilter('due_soon', this)">
             <i class="fas fa-clock"></i> مستحق قريباً
         </button>
@@ -1731,6 +1736,7 @@ body {
             <select id="allDebtsStatus" onchange="renderAllDebtsTable()">
                 <option value="">كل الحالات</option>
                 <option value="overdue">متأخر</option>
+                <option value="doubtful">مشكوك في تحصيله</option>
                 <option value="due_soon">مستحق قريباً</option>
                 <option value="paid">مدفوع</option>
                 <option value="partial">مدفوع جزئياً</option>
@@ -2645,6 +2651,7 @@ function filtered() {
     return state.debts.filter(d => {
         const s = statusOf(d);
         if (state.filter === 'overdue' && s.key !== 'overdue') return false;
+        if (state.filter === 'doubtful' && s.key !== 'doubtful') return false;
         if (state.filter === 'due_soon' && s.key !== 'due_soon') return false;
         if (state.filter === 'paid' && s.key !== 'paid') return false;
         if (state.filter === 'partial' && !(d.remaining_amount > 0 && d.remaining_amount < d.total_amount)) return false;
