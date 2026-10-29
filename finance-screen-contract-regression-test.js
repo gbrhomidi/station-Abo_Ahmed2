@@ -44,4 +44,50 @@ if (!db.includes('r.station_id = ?')) throw new Error('Receipts are not directly
 if (!db.includes('je.station_id=?')) throw new Error('Trial-balance station scope is missing');
 if (!db.includes('je.station_id = ?')) throw new Error('Balance-sheet station scope is missing');
 
-console.log('PASS: finance/accounting screen contracts and destructive-operation guards');
+
+// Additional contracts for the report-driven expansion of financial workflows.
+const accountingReports = fs.readFileSync(path.join(root, 'accounting-reports.html'), 'utf8');
+for (const required of [
+  'expandedAccountingWorkspace',
+  'supplier_aging',
+  'supplier_statement',
+  'purchase_invoice_create',
+  'purchase_invoice_post',
+  'purchase_return_create',
+  'purchase_return_post',
+  'cash_flow_statement',
+  'equity_changes',
+  'vat_return',
+  'tax_profile_save',
+  'account_classification_save'
+]) if (!accountingReports.includes(required)) {
+  throw new Error('Accounting reports UI is missing expanded workflow: ' + required);
+}
+
+const bankReconciliation = fs.readFileSync(path.join(root, 'bank-reconciliation.html'), 'utf8');
+for (const required of [
+  'bankStatementImportWorkspace',
+  'bank_statement_import',
+  'bank_statement_batches',
+  'bank_statement_match',
+  'FileReader',
+  'data-open-import'
+]) if (!bankReconciliation.includes(required)) {
+  throw new Error('Bank statement import/reconciliation UI is missing: ' + required);
+}
+if (bankReconciliation.includes("$('bsiStart').value=today")) {
+  throw new Error('Bank statement import must not assume imported statement dates are today');
+}
+
+for (const required of [
+  'val linkedPaymentId = data.optLong("payment_id", 0L)',
+  'sourceJournalValid',
+  'journalId = linkedPaymentJournalId',
+  'linkedPaymentId <= 0L && cashAmount > 0.0',
+  'تحصيل دين العميل يجب أن يمر عبر شاشة ديون العملاء',
+  'COALESCE(r.payment_id,0)>0 AND (p.id IS NULL OR pje.id IS NULL)'
+]) if (!db.includes(required)) {
+  throw new Error('Receipt/payment double-posting guard is missing: ' + required);
+}
+
+console.log('PASS: finance/accounting screen contracts, payment-receipt single-posting, expanded accounting UI, and bank-statement import/reconciliation guards');

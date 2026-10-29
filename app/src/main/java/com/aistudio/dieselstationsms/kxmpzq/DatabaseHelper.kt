@@ -22457,7 +22457,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val row = db.rawQuery(
                 """SELECT amount,COALESCE(cash_amount,0),COALESCE(cheque_amount,0),COALESCE(bank_amount,0),
                           COALESCE(other_amount,0),COALESCE(cash_box_id,0),COALESCE(bank_account_id,0),
-                          COALESCE(clearing_account_id,0),COALESCE(journal_entry_id,0),receipt_number,status
+                          COALESCE(clearing_account_id,0),COALESCE(journal_entry_id,0),receipt_number,status,
+                          COALESCE(payment_id,0)
                    FROM receipts WHERE id=? AND station_id=? AND is_deleted=0""",
                 arrayOf(id.toString(), stationScopeId.toString())
             ).use { c ->
@@ -22468,10 +22469,25 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("other_amount", c.getDouble(4)); put("cash_box_id", c.getLong(5))
                     put("bank_account_id", c.getLong(6)); put("clearing_account_id", c.getLong(7))
                     put("journal_entry_id", c.getLong(8)); put("receipt_number", c.getString(9))
-                    put("status", c.getString(10))
+                    put("status", c.getString(10)); put("payment_id", c.getLong(11))
                 }
             }
             require(row.optString("status") == "active") { "الإيصال غير نشط أو ملغى مسبقاً" }
+            if (row.optLong("payment_id") > 0L) {
+                val rows = db.update(
+                    "receipts",
+                    ContentValues().apply {
+                        put("status", "void"); put("void_reason", reason.trim())
+                        put("voided_by", actorId); put("voided_at", getCurrentDateTime())
+                        put("updated_at", getCurrentDateTime()); put("updated_by", actorId)
+                    },
+                    "id=? AND station_id=? AND is_deleted=0 AND status='active'",
+                    arrayOf(id.toString(), stationScopeId.toString())
+                )
+                require(rows == 1) { "تعذر إلغاء مستند الإيصال المرتبط بالدفعة" }
+                db.setTransactionSuccessful()
+                return rows
+            }
             var cashAmount = financialMoney(row.optDouble("cash_amount"))
             val chequeAmount = financialMoney(row.optDouble("cheque_amount"))
             val bankAmount = financialMoney(row.optDouble("bank_amount"))
@@ -22746,8 +22762,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        AND je.station_id=r.station_id AND je.is_deleted=0 AND je.status='posted'
                        AND je.reference_type='receipt' AND je.reference_id=r.id
                        AND ABS(je.total_debit-r.amount)<=0.01
+                   LEFT JOIN payments p ON p.id=r.payment_id AND p.station_id=r.station_id
+                       AND p.is_deleted=0 AND p.status='completed' AND ABS(p.amount-r.amount)<=0.01
+                   LEFT JOIN journal_entries pje ON pje.id=p.journal_entry_id
+                       AND pje.station_id=p.station_id AND pje.is_deleted=0 AND pje.status='posted'
+                       AND pje.reference_type='payment' AND pje.reference_id=p.id
+                       AND ABS(pje.total_debit-r.amount)<=0.01
                    WHERE r.station_id=? AND r.is_deleted=0 AND r.status='active'
-                       AND je.id IS NULL""" + sourceDateClause("r"),
+                     AND ((COALESCE(r.payment_id,0)=0 AND je.id IS NULL)
+                       OR (COALESCE(r.payment_id,0)>0 AND (p.id IS NULL OR pje.id IS NULL)))""" + sourceDateClause("r"),
                 sourceDateArgs()
             ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
             val missingExpenseJournals = db.rawQuery(
@@ -23146,40 +23169,46 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun addReceipt(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
         require(stationScopeId > 0 && actorId > 0L) { "معرف المحطة والمستخدم مطلوبان للإيصالات" }
         val amount = financialMoney(data.optDouble("amount", Double.NaN))
-        val customerId = data.optLong("customer_party_id", 0L)
-        val receiptType = data.optString("receipt_type", "cash").trim().lowercase(Locale.ROOT)
+        var customerId = data.optLong("customer_party_id", 0L)
+        val linkedPaymentId = data.optLong("payment_id", 0L)
+        var receiptType = data.optString("receipt_type", "cash").trim().lowercase(Locale.ROOT)
         var cashAmount = financialMoney(data.optDouble("cash_amount", 0.0))
         var chequeAmount = financialMoney(data.optDouble("cheque_amount", 0.0))
         var bankAmount = financialMoney(data.optDouble("bank_amount", 0.0))
         var otherAmount = financialMoney(data.optDouble("other_amount", 0.0))
-        val cashBoxId = data.optLong("cash_box_id", 0L)
-        val bankAccountId = data.optLong("bank_account_id", 0L)
-        val clearingAccountId = data.optLong("clearing_account_id", 0L)
+        var cashBoxId = data.optLong("cash_box_id", 0L)
+        var bankAccountId = data.optLong("bank_account_id", 0L)
+        var clearingAccountId = data.optLong("clearing_account_id", 0L)
         val counterAccountId = data.optLong("counter_account_id", 0L)
-        require(amount > 0.0) { "قيمة الإيصال غير صالحة" }
+        require(amount.isFinite() && amount > 0.0) { "قيمة الإيصال غير صالحة" }
         require(receiptType in setOf("cash", "cheque", "bank", "mixed")) { "نوع الإيصال غير صالح" }
-        require(listOf(cashAmount, chequeAmount, bankAmount, otherAmount).all { it.isFinite() && it >= 0.0 }) { "توزيع مبلغ الإيصال غير صالح" }
-        if (cashAmount + chequeAmount + bankAmount + otherAmount < 0.005) {
-            when (receiptType) {
-                "cash" -> cashAmount = amount
-                "cheque" -> chequeAmount = amount
-                "bank" -> bankAmount = amount
-                "mixed" -> throw IllegalArgumentException("الإيصال المختلط يتطلب توزيع المبلغ على النقد والشيكات والبنك والمبالغ الأخرى")
+        if (linkedPaymentId <= 0L) {
+            require(listOf(cashAmount, chequeAmount, bankAmount, otherAmount).all { it.isFinite() && it >= 0.0 }) {
+                "توزيع وسائل تحصيل الإيصال غير صالح"
             }
-        }
-        require(kotlin.math.abs(financialMoney(cashAmount + chequeAmount + bankAmount + otherAmount) - amount) <= 0.01) {
-            "مجموع وسائل التحصيل لا يساوي إجمالي الإيصال"
-        }
-        when (receiptType) {
-            "cash" -> require(cashAmount == amount && chequeAmount == 0.0 && bankAmount == 0.0 && otherAmount == 0.0) { "نوع الإيصال النقدي يجب أن يطابق توزيعه" }
-            "cheque" -> require(chequeAmount == amount && cashAmount == 0.0 && bankAmount == 0.0 && otherAmount == 0.0) { "نوع إيصال الشيك يجب أن يطابق توزيعه" }
-            "bank" -> require(bankAmount == amount && cashAmount == 0.0 && chequeAmount == 0.0 && otherAmount == 0.0) { "نوع الإيصال البنكي يجب أن يطابق توزيعه" }
-            "mixed" -> Unit
-        }
-        if (cashAmount > 0.0) require(cashBoxId > 0L) { "يجب تحديد صندوق عند وجود مبلغ نقدي" }
-        if (bankAmount > 0.0) require(bankAccountId > 0L) { "يجب تحديد الحساب البنكي عند وجود مبلغ بنكي" }
-        if (chequeAmount + otherAmount > 0.0) require(clearingAccountId > 0L) { "يجب تحديد حساب تسوية للشيكات والمبالغ الأخرى" }
-        if (customerId <= 0L) {
+            if (cashAmount + chequeAmount + bankAmount + otherAmount < 0.005) {
+                when (receiptType) {
+                    "cash" -> cashAmount = amount
+                    "cheque" -> chequeAmount = amount
+                    "bank" -> bankAmount = amount
+                    "mixed" -> throw IllegalArgumentException("الإيصال المختلط يتطلب توزيع المبلغ على النقد والشيكات والبنك والمبالغ الأخرى")
+                }
+            }
+            require(kotlin.math.abs(financialMoney(cashAmount + chequeAmount + bankAmount + otherAmount) - amount) <= 0.01) {
+                "مجموع وسائل التحصيل لا يساوي إجمالي الإيصال"
+            }
+            when (receiptType) {
+                "cash" -> require(cashAmount == amount && chequeAmount == 0.0 && bankAmount == 0.0 && otherAmount == 0.0) { "نوع الإيصال النقدي يجب أن يطابق توزيعه" }
+                "cheque" -> require(chequeAmount == amount && cashAmount == 0.0 && bankAmount == 0.0 && otherAmount == 0.0) { "نوع إيصال الشيك يجب أن يطابق توزيعه" }
+                "bank" -> require(bankAmount == amount && cashAmount == 0.0 && chequeAmount == 0.0 && otherAmount == 0.0) { "نوع إيصال البنك يجب أن يطابق توزيعه" }
+                "mixed" -> Unit
+            }
+            if (cashAmount > 0.0) require(cashBoxId > 0L) { "يجب تحديد صندوق عند وجود مبلغ نقدي" }
+            if (bankAmount > 0.0) require(bankAccountId > 0L) { "يجب تحديد الحساب البنكي عند وجود مبلغ بنكي" }
+            if (chequeAmount + otherAmount > 0.0) require(clearingAccountId > 0L) { "يجب تحديد حساب تسوية للشيكات والمبالغ الأخرى" }
+            if (customerId > 0L) {
+                throw IllegalArgumentException("تحصيل دين العميل يجب أن يمر عبر شاشة ديون العملاء لتخصيصه على الفواتير، ثم يُنشأ إيصال مرتبط برقم الدفعة. لا تنشئ إيصال قبض مستقلاً يقلل الذمم دون تخصيص.")
+            }
             require(counterAccountId > 0L) { "حدد الحساب المقابل للإيصال غير المرتبط بعميل؛ لا يُسجل المبلغ إيراداً افتراضياً" }
             requireActiveLeafAccount(readableDatabase, counterAccountId)
         }
@@ -23195,24 +23224,90 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 require(reserveFinancialIdempotency(db, "receipt", stationScopeId, normalizedIdempotencyKey)) {
                     "مفتاح العملية المالية مستخدم مسبقاً"
                 }
+                var linkedPaymentJournalId = 0L
+                if (linkedPaymentId > 0L) {
+                    val linked = db.rawQuery(
+                        """SELECT amount,COALESCE(customer_party_id,0),COALESCE(supplier_party_id,0),
+                                  COALESCE(cash_box_id,0),COALESCE(bank_account_id,0),
+                                  COALESCE(journal_entry_id,0),COALESCE(payment_method,''),status
+                           FROM payments WHERE id=? AND station_id=? AND is_deleted=0""",
+                        arrayOf(linkedPaymentId.toString(), stationScopeId.toString())
+                    ).use { c ->
+                        require(c.moveToFirst()) { "عملية الدفع المرتبطة غير موجودة ضمن المحطة الحالية" }
+                        JSONObject().apply {
+                            put("amount", c.getDouble(0)); put("customer_id", c.getLong(1))
+                            put("supplier_id", c.getLong(2)); put("cash_box_id", c.getLong(3))
+                            put("bank_account_id", c.getLong(4)); put("journal_entry_id", c.getLong(5))
+                            put("payment_method", c.getString(6)); put("status", c.getString(7))
+                        }
+                    }
+                    require(linked.optString("status") == "completed" &&
+                            linked.optLong("customer_id") > 0L && linked.optLong("supplier_id") <= 0L) {
+                        "يمكن ربط إيصال قبض فقط بدفعة تحصيل عميل مكتملة؛ لا تربط إيصالاً بدفعة مورد أو عملية غير مكتملة"
+                    }
+                    require(kotlin.math.abs(financialMoney(linked.optDouble("amount")) - amount) <= 0.01) {
+                        "مبلغ الإيصال يجب أن يساوي مبلغ دفعة العميل المرتبطة"
+                    }
+                    if (customerId > 0L) require(customerId == linked.optLong("customer_id")) {
+                        "العميل المحدد لا يطابق العميل في الدفعة المرتبطة"
+                    }
+                    customerId = linked.optLong("customer_id")
+                    cashBoxId = linked.optLong("cash_box_id")
+                    bankAccountId = linked.optLong("bank_account_id")
+                    require((cashBoxId > 0L) xor (bankAccountId > 0L)) {
+                        "الدفعة المرتبطة لا تحتوي وسيلة تحصيل نقدية/بنكية واحدة صحيحة"
+                    }
+                    cashAmount = if (cashBoxId > 0L) amount else 0.0
+                    bankAmount = if (bankAccountId > 0L) amount else 0.0
+                    chequeAmount = 0.0
+                    otherAmount = 0.0
+                    clearingAccountId = 0L
+                    receiptType = if (cashBoxId > 0L) "cash" else "bank"
+                    linkedPaymentJournalId = linked.optLong("journal_entry_id")
+                    if (linkedPaymentJournalId <= 0L) {
+                        linkedPaymentJournalId = db.rawQuery(
+                            """SELECT id FROM journal_entries
+                               WHERE station_id=? AND reference_type='payment' AND reference_id=?
+                                 AND status='posted' AND is_deleted=0 ORDER BY id DESC LIMIT 1""",
+                            arrayOf(stationScopeId.toString(), linkedPaymentId.toString())
+                        ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+                    }
+                    require(linkedPaymentJournalId > 0L) {
+                        "دفعة العميل المرتبطة ليس لها قيد محاسبي مرحّل؛ أصلح الدفعة قبل إصدار الإيصال"
+                    }
+                    val sourceJournalValid = db.rawQuery(
+                        """SELECT COUNT(*) FROM journal_entries
+                           WHERE id=? AND station_id=? AND reference_type='payment' AND reference_id=?
+                             AND status='posted' AND is_deleted=0 AND ABS(total_debit-?)<=0.01""",
+                        arrayOf(linkedPaymentJournalId.toString(), stationScopeId.toString(),
+                            linkedPaymentId.toString(), amount.toString())
+                    ).use { c -> c.moveToFirst() && c.getLong(0) == 1L }
+                    require(sourceJournalValid) { "القيد المرتبط لا يطابق دفعة العميل أو ليس مرحّلاً" }
+                    val activeReceiptId = db.rawQuery(
+                        """SELECT id FROM receipts WHERE station_id=? AND payment_id=?
+                           AND status='active' AND is_deleted=0 ORDER BY id LIMIT 1""",
+                        arrayOf(stationScopeId.toString(), linkedPaymentId.toString())
+                    ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+                    if (activeReceiptId > 0L) return activeReceiptId
+                }
                 if (customerId > 0L) requirePartyInStation(db, customerId, stationScopeId)
-                val cashBefore = if (cashAmount > 0.0) db.rawQuery(
+                val cashBefore = if (linkedPaymentId <= 0L && cashAmount > 0.0) db.rawQuery(
                     "SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'",
                     arrayOf(cashBoxId.toString(), stationScopeId.toString())
                 ).use { c -> require(c.moveToFirst()) { "الصندوق غير متاح أو خارج المحطة" }; c.getDouble(0) } else 0.0
-                val bankBefore = if (bankAmount > 0.0) db.rawQuery(
+                val bankBefore = if (linkedPaymentId <= 0L && bankAmount > 0.0) db.rawQuery(
                     "SELECT current_balance FROM bank_accounts WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'",
                     arrayOf(bankAccountId.toString(), stationScopeId.toString())
                 ).use { c -> require(c.moveToFirst()) { "الحساب البنكي غير متاح أو خارج المحطة" }; c.getDouble(0) } else 0.0
                 val cashAfter = financialMoney(cashBefore + cashAmount)
                 val bankAfter = financialMoney(bankBefore + bankAmount)
-                if (cashAmount > 0.0) require(db.update(
+                if (linkedPaymentId <= 0L && cashAmount > 0.0) require(db.update(
                     "cash_boxes",
                     ContentValues().apply { put("current_balance", cashAfter); put("updated_at", getCurrentDateTime()); put("updated_by", actorId) },
                     "id=? AND station_id=? AND is_deleted=0 AND status='active'",
                     arrayOf(cashBoxId.toString(), stationScopeId.toString())
                 ) == 1) { "فشل تحديث الصندوق" }
-                if (bankAmount > 0.0) require(db.update(
+                if (linkedPaymentId <= 0L && bankAmount > 0.0) require(db.update(
                     "bank_accounts",
                     ContentValues().apply { put("current_balance", bankAfter); put("updated_at", getCurrentDateTime()); put("updated_by", actorId) },
                     "id=? AND station_id=? AND is_deleted=0 AND status='active'",
@@ -23228,7 +23323,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("station_id", stationScopeId)
                     put("amount", amount)
                     if (customerId > 0L) put("customer_party_id", customerId)
-                    if (data.optLong("payment_id", 0L) > 0L) put("payment_id", data.optLong("payment_id"))
+                    if (linkedPaymentId > 0L) put("payment_id", linkedPaymentId)
+                    if (linkedPaymentJournalId > 0L) put("journal_entry_id", linkedPaymentJournalId)
                     put("receipt_type", receiptType)
                     put("received_from", data.optString("received_from", "").trim())
                     put("received_from_ar", data.optString("received_from_ar", "").trim())
@@ -23255,7 +23351,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 })
 
                 var cashMovementId = 0L
-                if (cashAmount > 0.0) {
+                if (linkedPaymentId <= 0L && cashAmount > 0.0) {
                     cashMovementId = db.insertOrThrow("cash_movements", null, ContentValues().apply {
                         put("uuid", UUID.randomUUID().toString())
                         put("cash_box_id", cashBoxId)
@@ -23272,12 +23368,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     })
                 }
                 var bankLedgerId = 0L
-                if (bankAmount > 0.0) {
+                if (linkedPaymentId <= 0L && bankAmount > 0.0) {
                     bankLedgerId = appendBankLedgerEntry(
                         db, bankAccountId, "receipt", receiptId, receiptNum,
                         bankAmount, 0.0, bankAfter, "مقبوضات بنكية للإيصال " + receiptNum, actorId
                     )
                 }
+                val journalId: Long
+                if (linkedPaymentId > 0L) {
+                    journalId = linkedPaymentJournalId
+                } else {
                 val debitLines = linkedMapOf<Long, Double>()
                 fun addReceiptDebit(accountId: Long, value: Double) {
                     if (value <= 0.0) return
@@ -23289,13 +23389,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     requireActiveLeafAccount(db, clearingAccountId, setOf("asset"))
                     addReceiptDebit(clearingAccountId, chequeAmount + otherAmount)
                 }
-                val creditAccountId = if (customerId > 0L) findPartyAccount(db, "receivable") else counterAccountId
+                val creditAccountId = counterAccountId
                 val journalLines = debitLines.map { Triple(it.key, it.value, 0.0) }.toMutableList()
                 journalLines.add(Triple(creditAccountId, 0.0, amount))
-                val journalId = postFinanceJournalLines(
+                journalId = postFinanceJournalLines(
                     db, stationScopeId, actorId, "general", "receipt", receiptId,
                     receiptNum, "قيد إيصال " + receiptNum, journalLines
                 )
+                }
                 require(db.update(
                     "receipts",
                     ContentValues().apply {
@@ -23306,7 +23407,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     "id=? AND station_id=? AND is_deleted=0",
                     arrayOf(receiptId.toString(), stationScopeId.toString())
                 ) == 1) { "تعذر ربط الإيصال بالقيد المحاسبي" }
-                if (cashMovementId > 0L) db.update(
+                if (linkedPaymentId <= 0L && cashMovementId > 0L) db.update(
                     "cash_movements", ContentValues().apply { put("journal_entry_id", journalId) },
                     "id=? AND reference_type='receipt' AND reference_id=?",
                     arrayOf(cashMovementId.toString(), receiptId.toString())

@@ -2546,5 +2546,188 @@ window.addEventListener('load', boot);
 })();
 </script>
 
+
+<style id="expandedAccountingStyles">
+.eac{margin:20px auto;padding:0 16px 20px;max-width:1400px;color:var(--text-primary,#1f2937);font-family:inherit}
+.eac *{box-sizing:border-box}.eac-card{background:var(--bg-card,#fff);border:1px solid var(--border-color,#dce5e0);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 5px 20px rgba(15,23,42,.05)}
+.eac-title{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}.eac-title h2{font-size:1.08rem;margin:0}
+.eac-note{font-size:.86rem;line-height:1.8;padding:10px 12px;border-radius:10px;background:rgba(184,139,69,.11);border:1px solid rgba(184,139,69,.28);margin:10px 0}
+.eac-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.eac-field{display:flex;flex-direction:column;gap:5px;min-width:0}.eac-field label{font-size:.8rem;font-weight:800}.eac-field input,.eac-field select,.eac-field textarea{width:100%;min-height:40px;padding:9px 10px;border:1px solid var(--border-color,#d1d5db);border-radius:9px;background:var(--bg-primary,#fff);color:inherit;font:inherit;font-size:.88rem}.eac-field textarea{min-height:95px;resize:vertical}
+.eac-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.eac-btn{font:inherit;font-size:.84rem;font-weight:800;cursor:pointer;border:1px solid var(--border-color,#d1d5db);border-radius:10px;padding:9px 13px;background:var(--bg-secondary,#f3f4f6);color:inherit}.eac-btn.primary{background:#176b53;color:#fff;border-color:#176b53}.eac-btn.gold{background:#946c25;color:#fff;border-color:#946c25}.eac-btn:disabled{opacity:.5;cursor:wait}
+.eac-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}.eac-metric{padding:10px;border:1px solid var(--border-color,#dce5e0);border-radius:11px;min-width:0}.eac-metric small{display:block;color:var(--text-muted,#667085);font-size:.75rem;line-height:1.5}.eac-metric b{display:block;margin-top:4px;overflow-wrap:anywhere}
+.eac-table-wrap{overflow:auto;border:1px solid var(--border-color,#dce5e0);border-radius:10px;margin-top:10px}.eac-table{border-collapse:collapse;width:100%;font-size:.82rem;min-width:650px}.eac-table th,.eac-table td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--border-color,#e5e7eb);vertical-align:top}.eac-table th{background:var(--bg-secondary,#f5f7f6);position:sticky;top:0}.eac-table tr:last-child td{border-bottom:0}.eac-status{padding:3px 8px;border-radius:99px;font-weight:800;display:inline-block;background:rgba(100,116,139,.12)}
+.eac-message{padding:10px 12px;margin:10px 0;border-radius:10px;border:1px solid var(--border-color,#dce5e0);white-space:pre-wrap;overflow-wrap:anywhere;font-size:.85rem;line-height:1.7}.eac-message.error{background:#fee2e2;color:#991b1b;border-color:#fecaca}.eac-empty{padding:14px;text-align:center;color:var(--text-muted,#667085);line-height:1.8}.eac-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.eac-columns>.eac-card{min-width:0}
+@media(max-width:900px){.eac-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.eac-columns{grid-template-columns:1fr}.eac-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.eac{padding:0 9px 16px}.eac-card{padding:12px}.eac-grid{grid-template-columns:1fr}.eac-title h2{font-size:1rem}}
+</style>
+<section class="eac" id="expandedAccountingWorkspace" aria-label="وظائف المحاسبة الموسعة">
+  <article class="eac-card">
+    <div class="eac-title"><h2>وظائف المحاسبة الموسعة</h2><span class="eac-status">SQLite · حسب المحطة المسجّلة</span></div>
+    <div class="eac-note">هذه الواجهات تستدعي خدمات المحاسبة الفعلية. لا يعلن النظام اكتمال الإقرار الضريبي أو المطابقة البنكية إلا إذا أعادت الخدمة أن شروط المراجعة مكتملة؛ تقرير VAT هنا ورقة عمل وليس إقراراً قانونياً جاهزاً للتقديم.</div>
+    <div class="eac-grid">
+      <div class="eac-field"><label for="eacAction">التقرير / الوظيفة</label><select id="eacAction">
+        <option value="profit_loss">قائمة الدخل / الأرباح والخسائر</option>
+        <option value="supplier_aging">أعمار ديون الموردين</option>
+        <option value="supplier_statement">كشف حساب مورد</option>
+        <option value="purchase_invoice_list">فواتير المشتريات العامة</option>
+        <option value="purchase_return_list">مرتجعات المشتريات</option>
+        <option value="cash_flow_statement">قائمة التدفقات النقدية</option>
+        <option value="equity_changes">التغيرات في حقوق الملكية</option>
+        <option value="vat_return">ورقة عمل VAT</option>
+        <option value="bank_statement_batches">كشوف البنوك المستوردة</option>
+      </select></div>
+      <div class="eac-field" id="eacSupplierField"><label for="eacSupplierId">المورد</label><select id="eacSupplierId"><option value="">جاري تحميل الموردين…</option></select></div>
+      <div class="eac-field"><label for="eacFrom">من تاريخ</label><input type="date" id="eacFrom"></div>
+      <div class="eac-field"><label for="eacTo">إلى تاريخ</label><input type="date" id="eacTo"></div>
+      <div class="eac-field" id="eacAsOfField"><label for="eacAsOf">تاريخ أعمار الموردين</label><input type="date" id="eacAsOf"></div>
+    </div>
+    <div class="eac-actions">
+      <button type="button" class="eac-btn primary" id="eacRun">تشغيل من SQLite</button>
+      <button type="button" class="eac-btn" id="eacReloadRefs">تحديث القوائم المرجعية</button>
+      <button type="button" class="eac-btn" id="eacExport">تصدير النتيجة JSON</button>
+    </div>
+    <div id="eacReportMessage" class="eac-message" hidden></div>
+    <div id="eacSummary" class="eac-metrics"></div>
+    <div id="eacRows"><div class="eac-empty">اختر وظيفة ثم اضغط «تشغيل من SQLite».</div></div>
+    <details class="eac-card" style="margin-top:12px"><summary>الاستجابة الخام للتدقيق والتتبع</summary><pre id="eacRaw" style="white-space:pre-wrap;overflow-wrap:anywhere;direction:ltr;text-align:left;font-size:.76rem"></pre></details>
+  </article>
+
+  <div class="eac-columns">
+    <article class="eac-card">
+      <div class="eac-title"><h2>إعداد ملف VAT للمحطة</h2></div>
+      <div class="eac-note">لا تؤكد الملف إلا بعد مراجعة الاختصاص الضريبي ورقم التسجيل وتواتر الإقرار وإصدار مخطط الإقرار الوطني. تأكيد الملف لا يحوّل ورقة العمل إلى إقرار قابل للتقديم.</div>
+      <div class="eac-grid">
+        <div class="eac-field"><label for="eacJurisdiction">رمز الدولة / الولاية</label><input id="eacJurisdiction" maxlength="30" placeholder="مثال: YE أو SA"></div>
+        <div class="eac-field"><label for="eacTaxNumber">رقم التسجيل الضريبي</label><input id="eacTaxNumber" maxlength="120"></div>
+        <div class="eac-field"><label for="eacFrequency">دورية الإقرار</label><select id="eacFrequency"><option value="monthly">شهري</option><option value="quarterly">ربع سنوي</option><option value="annually">سنوي</option></select></div>
+        <div class="eac-field"><label for="eacTaxCurrency">معرف عملة التقرير</label><input id="eacTaxCurrency" type="number" min="1" value="1"></div>
+        <div class="eac-field" style="grid-column:1/-1"><label for="eacTaxSchema">إصدار مخطط الإقرار / التصنيف الوطني</label><input id="eacTaxSchema" maxlength="80" placeholder="رقم إصدار مخطط معتمد"></div>
+      </div>
+      <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:.85rem;line-height:1.7"><input id="eacTaxConfirm" type="checkbox" style="margin-top:5px"> أؤكد أن بيانات الملف الضريبي ومخطط التصنيف تمت مراجعتها من المسؤول المختص.</label>
+      <div class="eac-actions"><button type="button" class="eac-btn gold" id="eacSaveTax">حفظ ملف VAT</button></div>
+      <div id="eacTaxMessage" class="eac-message" hidden></div>
+    </article>
+
+    <article class="eac-card">
+      <div class="eac-title"><h2>تصنيف الحسابات للتقارير</h2></div>
+      <div class="eac-note">تتطلب قائمة التدفقات النقدية تصنيف الحسابات المقابلة إلى تشغيلي أو استثماري أو تمويلي. الحسابات غير المصنفة تظهر كفجوة ولا تُخفى من التقرير.</div>
+      <div class="eac-grid">
+        <div class="eac-field" style="grid-column:1/-1"><label for="eacAccount">الحساب الورقي</label><select id="eacAccount"><option value="">جاري تحميل الحسابات…</option></select></div>
+        <div class="eac-field"><label for="eacClassType">نوع التصنيف</label><select id="eacClassType"><option value="cash_flow">التدفق النقدي</option><option value="equity">حقوق الملكية</option></select></div>
+        <div class="eac-field"><label for="eacClassCode">التصنيف</label><select id="eacClassCode"><option value="operating">تشغيلي</option><option value="investing">استثماري</option><option value="financing">تمويلي</option></select></div>
+      </div>
+      <div class="eac-actions"><button type="button" class="eac-btn primary" id="eacSaveClass">حفظ التصنيف</button></div>
+      <div id="eacClassMessage" class="eac-message" hidden></div>
+    </article>
+  </div>
+
+  <article class="eac-card">
+    <div class="eac-title"><h2>دورة فاتورة المشتريات العامة</h2><span class="eac-status">مسودة ← ترحيل واعتماد</span></div>
+    <div class="eac-note">هذا المسار مخصص لفواتير المشتريات العامة غير المرتبطة بحركات مخزون الوقود تلقائياً. يتم حفظ الفاتورة أولاً كمسودة، ثم إنشاء القيد عبر مسار الاعتماد. لا يُعدّل رصيد المورد قبل ترحيل القيد النهائي.</div>
+    <div class="eac-grid">
+      <div class="eac-field"><label for="eacInvoiceSupplier">المورد</label><select id="eacInvoiceSupplier"><option value="">اختر المورد</option></select></div>
+      <div class="eac-field"><label for="eacInvoiceNumber">رقم فاتورة المورد</label><input id="eacInvoiceNumber" maxlength="100"></div>
+      <div class="eac-field"><label for="eacInvoiceDate">تاريخ الفاتورة</label><input type="date" id="eacInvoiceDate"></div>
+      <div class="eac-field"><label for="eacDueDate">تاريخ الاستحقاق</label><input type="date" id="eacDueDate"></div>
+      <div class="eac-field" style="grid-column:1/-1"><label for="eacLineDescription">وصف بند المشتريات</label><input id="eacLineDescription" maxlength="500"></div>
+      <div class="eac-field"><label for="eacLineQty">الكمية</label><input id="eacLineQty" type="number" min="0.001" step="0.001" value="1"></div>
+      <div class="eac-field"><label for="eacLinePrice">سعر الوحدة</label><input id="eacLinePrice" type="number" min="0" step="0.01" value="0"></div>
+      <div class="eac-field"><label for="eacLineVat">VAT %</label><input id="eacLineVat" type="number" min="0" max="100" step="0.01" value="0"></div>
+      <div class="eac-field"><label for="eacLineAccount">حساب التكلفة / المصروف / الأصل</label><select id="eacLineAccount"><option value="">اختر الحساب</option></select></div>
+      <div class="eac-field"><label for="eacPayableAccount">حساب الذمم الدائنة</label><select id="eacPayableAccount"><option value="">اختر الحساب</option></select></div>
+      <div class="eac-field"><label for="eacInputVatAccount">حساب ضريبة المدخلات (عند وجود VAT)</label><select id="eacInputVatAccount"><option value="">اختر الحساب</option></select></div>
+      <div class="eac-field"><label for="eacInvoiceCurrency">معرف العملة</label><input id="eacInvoiceCurrency" type="number" min="1" value="1"></div>
+      <div class="eac-field"><label for="eacInvoiceId">معرف المسودة للترحيل</label><input id="eacInvoiceId" type="number" min="1" placeholder="يُملأ بعد الحفظ"></div>
+      <div class="eac-field" style="grid-column:1/-1"><label for="eacInvoiceNotes">ملاحظات</label><textarea id="eacInvoiceNotes"></textarea></div>
+    </div>
+    <div class="eac-actions">
+      <button type="button" class="eac-btn" id="eacCreateInvoice">حفظ مسودة فاتورة</button>
+      <button type="button" class="eac-btn primary" id="eacPostInvoice">ترحيل / طلب اعتماد الفاتورة المحددة</button>
+      <button type="button" class="eac-btn" id="eacListInvoices">عرض الفواتير</button>
+    </div>
+    <div id="eacInvoiceMessage" class="eac-message" hidden></div>
+    <div id="eacInvoiceRows"></div>
+  </article>
+
+  <article class="eac-card">
+    <div class="eac-title"><h2>مرتجعات المشتريات</h2></div>
+    <div class="eac-grid">
+      <div class="eac-field" style="grid-column:1/-1"><label for="eacReturnInvoice">الفاتورة الأصلية المرحّلة</label><select id="eacReturnInvoice"><option value="">حمّل الفواتير ثم اختر</option></select></div>
+      <div class="eac-field"><label for="eacReturnLine">بند الفاتورة</label><select id="eacReturnLine"><option value="">اختر الفاتورة أولاً</option></select></div>
+      <div class="eac-field"><label for="eacReturnQty">الكمية المرتجعة</label><input id="eacReturnQty" type="number" min="0.001" step="0.001" value="1"></div>
+      <div class="eac-field"><label for="eacReturnDate">تاريخ المرتجع</label><input id="eacReturnDate" type="date"></div>
+      <div class="eac-field"><label for="eacReturnNumber">رقم المرتجع</label><input id="eacReturnNumber" maxlength="100"></div>
+      <div class="eac-field" style="grid-column:1/-1"><label for="eacReturnReason">سبب المرتجع</label><input id="eacReturnReason" maxlength="1000"></div>
+      <div class="eac-field"><label for="eacReturnId">معرف مسودة المرتجع للترحيل</label><input id="eacReturnId" type="number" min="1" placeholder="يُملأ بعد الحفظ"></div>
+    </div>
+    <div class="eac-actions"><button type="button" class="eac-btn" id="eacLoadInvoiceLines">تحميل بنود الفاتورة</button><button type="button" class="eac-btn" id="eacCreateReturn">حفظ مسودة مرتجع</button><button type="button" class="eac-btn primary" id="eacPostReturn">ترحيل / طلب اعتماد المرتجع</button><button type="button" class="eac-btn" id="eacListReturns">عرض المرتجعات</button></div>
+    <div id="eacReturnMessage" class="eac-message" hidden></div><div id="eacReturnRows"></div>
+  </article>
+</section>
+
+<script id="expandedAccountingWorkspaceScript">
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const today=new Date().toISOString().slice(0,10);
+const formatNumber=v=>{const n=Number(v);return Number.isFinite(n)?n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):String(v??'—')};
+const esc=v=>String(v===null||v===undefined?'—':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let lastReport=null, suppliers=[], accounts=[], purchaseInvoices=[], purchaseInvoiceLines=[];
+function parse(raw){let v=typeof raw==='string'?JSON.parse(raw):raw;if(v&&v.success===false)throw new Error(v.error||v.message||'فشلت العملية');if(!v||typeof v!=='object')throw new Error('استجابة غير صالحة من SQLite');return v}
+function dataOf(v){return v&&Object.prototype.hasOwnProperty.call(v,'data')?v.data:v}
+function callExpanded(action,p={}){const b=window.AndroidInterface;if(!b||typeof b.runExpandedAccounting!=='function')throw new Error('جسر المحاسبة الموسعة غير متاح في هذه الشاشة');return parse(b.runExpandedAccounting(action,JSON.stringify(p)))}
+function reportMessage(id,msg,error=false){const el=$(id);if(!el)return;el.hidden=!msg;el.classList.toggle('error',!!error);el.textContent=msg||''}
+function callResult(id,fn){try{const r=fn();reportMessage(id,r.message||'تمت العملية بنجاح',false);return r}catch(e){reportMessage(id,e.message||String(e),true);throw e}}
+function table(rows){if(!Array.isArray(rows)||!rows.length)return '<div class="eac-empty">لا توجد سجلات في النطاق المحدد.</div>';const cols=[...new Set(rows.slice(0,40).flatMap(r=>Object.keys(r||{})))].slice(0,14);return '<div class="eac-table-wrap"><table class="eac-table"><thead><tr>'+cols.map(k=>'<th>'+esc(k)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+cols.map(k=>{const v=r[k];const text=v&&typeof v==='object'?JSON.stringify(v):typeof v==='number'?formatNumber(v):v;return '<td>'+esc(text)+'</td>'}).join('')+'</tr>').join('')+'</tbody></table></div>'}
+function summary(obj){const skip=new Set(['success','data','entries','lines','details','undated_entries','schema_gaps','classification_details','match_candidates','message','filing_block_reason','approval_block_reason','statement_basis','allocation_policy']);const pairs=Object.entries(obj||{}).filter(([k,v])=>!skip.has(k)&&v!==null&&typeof v!=='object').slice(0,20);return pairs.map(([k,v])=>'<div class="eac-metric"><small>'+esc(k)+'</small><b>'+esc(typeof v==='number'?formatNumber(v):String(v))+'</b></div>').join('')}
+function renderResult(targetId,obj){const target=$(targetId);const rows=Array.isArray(obj.data)?obj.data:Array.isArray(obj.entries)?obj.entries:Array.isArray(obj.lines)?obj.lines:Array.isArray(obj.returns)?obj.returns:null;const blocks=[];if(Array.isArray(obj.schema_gaps)&&obj.schema_gaps.length)blocks.push('<div class="eac-message error">فجوات المصدر:<br>'+obj.schema_gaps.map(esc).join('<br>')+'</div>');if(obj.message)blocks.push('<div class="eac-message">'+esc(obj.message)+'</div>');if(rows)blocks.push(table(rows));if(Array.isArray(obj.undated_entries)&&obj.undated_entries.length)blocks.push('<details><summary>سجلات بلا تاريخ موثوق</summary>'+table(obj.undated_entries)+'</details>');if(Array.isArray(obj.classification_details)&&obj.classification_details.length)blocks.push('<details><summary>تفاصيل تصنيف التدفقات</summary>'+table(obj.classification_details)+'</details>');target.innerHTML=blocks.join('')||'<div class="eac-empty">تم استلام الاستجابة؛ راجع حقول الملخص والتفاصيل الخام أدناه.</div>'}
+function normalizedRows(raw){const p=parse(raw);const d=dataOf(p);if(Array.isArray(d))return d;if(d&&Array.isArray(d.data))return d.data;if(d&&Array.isArray(d.items))return d.items;return []}
+async function loadReferences(){const b=window.AndroidInterface;if(!b)throw new Error('جسر Android غير متاح');const aging=callExpanded('supplier_aging',{as_of_date:$('eacAsOf').value||today});suppliers=Array.isArray(aging.data)?aging.data:[];const opts='<option value="">اختر المورد</option>'+suppliers.map(s=>'<option value="'+esc(s.supplier_id)+'">'+esc(s.supplier_name||('مورد #'+s.supplier_id))+' — '+esc(s.supplier_id)+'</option>').join('');$('eacSupplierId').innerHTML=opts;$('eacInvoiceSupplier').innerHTML=opts;
+  if(typeof b.getFinancialPostingAccounts==='function')accounts=normalizedRows(b.getFinancialPostingAccounts()).filter(a=>a&&a.id!=null);
+  const option=(a)=>'<option value="'+esc(a.id)+'">'+esc([a.account_code,a.account_name_ar||a.account_name,a.account_type].filter(Boolean).join(' · '))+'</option>';
+  $('eacAccount').innerHTML='<option value="">اختر الحساب</option>'+accounts.map(option).join('');
+  $('eacLineAccount').innerHTML='<option value="">اختر الحساب</option>'+accounts.filter(a=>['asset','expense','cost','inventory'].includes(String(a.account_type||'').toLowerCase())).map(option).join('');
+  $('eacPayableAccount').innerHTML='<option value="">اختر حساب الذمم</option>'+accounts.filter(a=>String(a.account_type||'').toLowerCase()==='liability').map(option).join('');
+  $('eacInputVatAccount').innerHTML='<option value="">اختر حساب VAT</option>'+accounts.filter(a=>String(a.account_type||'').toLowerCase()==='asset').map(option).join('');
+  reportMessage('eacReportMessage','تم تحديث الموردين والحسابات الورقية من SQLite.',false)}
+function selectedDates(){const f=$('eacFrom').value,t=$('eacTo').value;if(f&&t&&f>t)throw new Error('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية');return {from_date:f||today,to_date:t||today}}
+function runReport(){const action=$('eacAction').value;let result;switch(action){case 'profit_loss':{const b=window.AndroidInterface;if(!b||typeof b.getProfitReport!=='function')throw new Error('واجهة قائمة الدخل غير متاحة');const d=selectedDates();result=parse(b.getProfitReport(d.from_date,d.to_date));break}
+case 'supplier_aging':result=callExpanded(action,{as_of_date:$('eacAsOf').value||today});break;
+case 'supplier_statement':{const id=Number($('eacSupplierId').value);if(!id)throw new Error('حدد المورد أولاً');const d=selectedDates();result=callExpanded(action,{supplier_id:id,...d});break}
+case 'purchase_invoice_list':case 'purchase_return_list':case 'bank_statement_batches':result=callExpanded(action,action==='bank_statement_batches'?{limit:100}:selectedDates());break;
+case 'cash_flow_statement':case 'equity_changes':case 'vat_return':result=callExpanded(action,selectedDates());break;
+default:throw new Error('وظيفة التقرير غير معروفة')}
+lastReport=result;$('eacSummary').innerHTML=summary(result);renderResult('eacRows',result);$('eacRaw').textContent=JSON.stringify(result,null,2);reportMessage('eacReportMessage',result.message||'تم تحميل البيانات من SQLite.',false);return result}
+function runSafely(fn){try{fn()}catch(e){reportMessage('eacReportMessage',e.message||String(e),true)}}
+function setDateDefaults(){['eacFrom','eacTo','eacAsOf','eacInvoiceDate','eacDueDate','eacReturnDate'].forEach(id=>{if($(id)&&!$(id).value)$(id).value=today})}
+function updateClassOptions(){const equity=$('eacClassType').value==='equity';$('eacClassCode').innerHTML=(equity?[['capital_contribution','مساهمات رأس المال'],['owner_distribution','توزيعات المالك'],['retained_earnings','الأرباح المبقاة'],['other','أخرى']]:[['operating','تشغيلي'],['investing','استثماري'],['financing','تمويلي']]).map(x=>'<option value="'+x[0]+'">'+x[1]+'</option>').join('')}
+function saveTax(){const p={jurisdiction_code:$('eacJurisdiction').value.trim(),tax_registration_number:$('eacTaxNumber').value.trim(),filing_frequency:$('eacFrequency').value,tax_reporting_currency_id:Number($('eacTaxCurrency').value||1),tax_schema_version:$('eacTaxSchema').value.trim(),confirm_tax_profile:$('eacTaxConfirm').checked};const r=callExpanded('tax_profile_save',p);reportMessage('eacTaxMessage',r.message||'تم حفظ ملف VAT',false)}
+function saveClassification(){const p={account_id:Number($('eacAccount').value),classification_type:$('eacClassType').value,classification_code:$('eacClassCode').value};if(!p.account_id)throw new Error('حدد الحساب');const r=callExpanded('account_classification_save',p);reportMessage('eacClassMessage',r.message||'تم حفظ تصنيف الحساب',false)}
+function createInvoice(){const p={supplier_id:Number($('eacInvoiceSupplier').value),invoice_number:$('eacInvoiceNumber').value.trim(),invoice_date:$('eacInvoiceDate').value,due_date:$('eacDueDate').value,currency_id:Number($('eacInvoiceCurrency').value||1),notes:$('eacInvoiceNotes').value,lines:[{description:$('eacLineDescription').value.trim(),quantity:Number($('eacLineQty').value),unit_price:Number($('eacLinePrice').value),vat_rate:Number($('eacLineVat').value),account_id:Number($('eacLineAccount').value)}]};if(!p.supplier_id||!p.invoice_number||!p.lines[0].description||!p.lines[0].account_id)throw new Error('أكمل المورد ورقم الفاتورة ووصف البند وحساب البند');const r=callExpanded('purchase_invoice_create',p);$('eacInvoiceId').value=r.invoice_id||'';reportMessage('eacInvoiceMessage',r.message||('حُفظت المسودة #'+r.invoice_id),false);listInvoices()}
+function postInvoice(){const id=Number($('eacInvoiceId').value),pay=Number($('eacPayableAccount').value),vat=Number($('eacInputVatAccount').value);if(!id||!pay)throw new Error('أدخل معرف المسودة واختر حساب الذمم الدائنة');const r=callExpanded('purchase_invoice_post',{invoice_id:id,payable_account_id:pay,input_vat_account_id:vat||0});reportMessage('eacInvoiceMessage',r.message||('حالة الفاتورة: '+r.status),false);listInvoices()}
+function listInvoices(){const r=callExpanded('purchase_invoice_list',selectedDates());purchaseInvoices=Array.isArray(r.data)?r.data:[];$('eacInvoiceRows').innerHTML=table(purchaseInvoices);$('eacReturnInvoice').innerHTML='<option value="">اختر فاتورة مرحّلة</option>'+purchaseInvoices.filter(x=>String(x.status).toLowerCase()==='posted').map(x=>'<option value="'+esc(x.invoice_id)+'">'+esc(x.invoice_number)+' · '+esc(x.total_amount)+' · '+esc(x.invoice_id)+'</option>').join('')}
+function loadInvoiceLines(){const id=Number($('eacReturnInvoice').value);if(!id)throw new Error('حدد الفاتورة الأصلية');const r=callExpanded('purchase_invoice_detail',{invoice_id:id});purchaseInvoiceLines=Array.isArray(r.lines)?r.lines:[];$('eacReturnLine').innerHTML='<option value="">اختر البند</option>'+purchaseInvoiceLines.map(x=>'<option value="'+esc(x.invoice_line_id)+'">'+esc(x.description)+' · الكمية '+esc(x.quantity)+' · معرّف '+esc(x.invoice_line_id)+'</option>').join('');reportMessage('eacReturnMessage','تم تحميل بنود الفاتورة الأصلية.',false)}
+function createReturn(){const invoiceId=Number($('eacReturnInvoice').value),lineId=Number($('eacReturnLine').value),qty=Number($('eacReturnQty').value);if(!invoiceId||!lineId||!(qty>0))throw new Error('حدد فاتورة وبنداً وكمية صحيحة');const r=callExpanded('purchase_return_create',{invoice_id:invoiceId,return_date:$('eacReturnDate').value,return_number:$('eacReturnNumber').value.trim(),reason:$('eacReturnReason').value.trim(),lines:[{invoice_line_id:lineId,quantity:qty}]});$('eacReturnId').value=r.return_id||'';reportMessage('eacReturnMessage',r.message||('حُفظت مسودة المرتجع #'+r.return_id),false);listReturns()}
+function postReturn(){const id=Number($('eacReturnId').value);if(!id)throw new Error('أدخل معرف مسودة المرتجع');const r=callExpanded('purchase_return_post',{return_id:id});reportMessage('eacReturnMessage',r.message||('حالة المرتجع: '+r.status),false);listReturns()}
+function listReturns(){const r=callExpanded('purchase_return_list',{});const rows=Array.isArray(r.data)?r.data:[];$('eacReturnRows').innerHTML=table(rows)}
+$('eacRun').addEventListener('click',()=>runSafely(runReport));
+$('eacReloadRefs').addEventListener('click',()=>runSafely(loadReferences));
+$('eacExport').addEventListener('click',()=>{if(!lastReport){reportMessage('eacReportMessage','شغّل تقريراً أولاً قبل التصدير.',true);return}const blob=new Blob([JSON.stringify(lastReport,null,2)],{type:'application/json;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='finance-report-'+$('eacAction').value+'-'+today+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)});
+$('eacSaveTax').addEventListener('click',()=>{try{saveTax()}catch(e){reportMessage('eacTaxMessage',e.message||String(e),true)}});
+$('eacSaveClass').addEventListener('click',()=>{try{saveClassification()}catch(e){reportMessage('eacClassMessage',e.message||String(e),true)}});
+$('eacClassType').addEventListener('change',updateClassOptions);
+$('eacCreateInvoice').addEventListener('click',()=>{try{createInvoice()}catch(e){reportMessage('eacInvoiceMessage',e.message||String(e),true)}});
+$('eacPostInvoice').addEventListener('click',()=>{try{postInvoice()}catch(e){reportMessage('eacInvoiceMessage',e.message||String(e),true)}});
+$('eacListInvoices').addEventListener('click',()=>{try{listInvoices()}catch(e){reportMessage('eacInvoiceMessage',e.message||String(e),true)}});
+$('eacLoadInvoiceLines').addEventListener('click',()=>{try{loadInvoiceLines()}catch(e){reportMessage('eacReturnMessage',e.message||String(e),true)}});
+$('eacCreateReturn').addEventListener('click',()=>{try{createReturn()}catch(e){reportMessage('eacReturnMessage',e.message||String(e),true)}});
+$('eacPostReturn').addEventListener('click',()=>{try{postReturn()}catch(e){reportMessage('eacReturnMessage',e.message||String(e),true)}});
+$('eacListReturns').addEventListener('click',()=>{try{listReturns()}catch(e){reportMessage('eacReturnMessage',e.message||String(e),true)}});
+$('eacAction').addEventListener('change',()=>{const a=$('eacAction').value;$('eacSupplierField').style.display=a==='supplier_statement'?'':'none';$('eacAsOfField').style.display=a==='supplier_aging'?'':'none'});
+setDateDefaults();updateClassOptions();$('eacSupplierField').style.display='none';$('eacAsOfField').style.display='none';
+try{loadReferences()}catch(e){reportMessage('eacReportMessage','تعذر تحميل القوائم المرجعية: '+(e.message||e),true)}
+})();
+</script>
+
 </body>
 </html>
