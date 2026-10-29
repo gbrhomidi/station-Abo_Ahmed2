@@ -408,7 +408,10 @@ object DeliveryFeeAccounting {
             DRIVER -> {
                 val id = postFeeJournal(helper, db, stationId, userId, ledgerId, "رسوم خدمة التوصيل على السائق رقم $driverId للتوصيل $deliveryId", driverReceivableAccount(db), serviceRevenueAccount(db), amount, "fuel_sale", fuelSaleId.takeIf { it > 0L } ?: deliveryId)
                 val paymentId = createPayrollDeduction(db, stationId, driverId, amount, deliveryId)
-                updateLedger(db, ledgerId, stationId, ContentValues().apply { put("employee_payment_id", paymentId.takeIf { it > 0L }) })
+                require(paymentId > 0L) {
+                    "تعذر ربط السائق بموظف أو تسجيل الخصم في employee_payments؛ أُلغيت العملية لمنع تسجيل عهدة دون خصم راتبي"
+                }
+                updateLedger(db, ledgerId, stationId, ContentValues().apply { put("employee_payment_id", paymentId) })
                 id
             }
             else -> 0L
@@ -465,7 +468,7 @@ object DeliveryFeeAccounting {
         updateLedger(db, ledgerId, stationId, values)
         val deliveryCols = columns(db, "deliveries")
         if ("delivery_fee_status" in deliveryCols) {
-            db.update("deliveries", ContentValues().put("delivery_fee_status", "settled"), "id=? AND station_id=?", arrayOf(deliveryId.toString(), stationId.toString()))
+            db.update("deliveries", ContentValues().apply { put("delivery_fee_status", "settled") }, "id=? AND station_id=?", arrayOf(deliveryId.toString(), stationId.toString()))
         }
         cancelPayrollDeduction(db, record.optLong("employee_payment_id", 0L))
         return JSONObject().put("success", true).put("journal_entry_id", journalId).put("message", "تم إثبات تسديد رسوم التوصيل وإنقاص مديونية السائق بقيد محاسبي")
