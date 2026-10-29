@@ -113,6 +113,8 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_USER_ROLE = "user_role"
         private const val KEY_USER_NAME = "user_name"
         private const val KEY_SYSTEM_SETUP_COMPLETED = "system_setup_completed"
+        private const val KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH = "require_login_on_next_launch"
+        private const val KEY_LAST_BOOT_COUNT = "last_boot_count"
 
 
         private var webViewInstanceId = 0
@@ -233,6 +235,9 @@ class MainActivity : AppCompatActivity() {
 
     // ====== مكونات النشاط ======
     private var webView: WebView? = null
+    // Updating this Compose state recreates AndroidView when Chromium's renderer dies.
+    private val webViewRecoveryTrigger = androidx.compose.runtime.mutableIntStateOf(0)
+    private var lastKnownAssetUrl: String? = null
     private val liveUpdateListener: (String) -> Unit = { payload ->
         runOnUiThread { webView?.evaluateJavascript("window.dispatchEvent(new CustomEvent('sms-live-update',{detail:$payload}))", null) }
     }
@@ -326,8 +331,13 @@ class MainActivity : AppCompatActivity() {
         try {
             dbHelper = DatabaseHelper.getInstance(applicationContext)
             migrateLegacySecuritySettings(dbHelper)
+            clearSessionAfterDeviceRebootIfNeeded(dbHelper)
             applySecurityRuntimeSettings()
-            if (!currentAuthToken.isNullOrBlank() && requiresSecurityReauthentication()) {
+            // When the user explicitly closed the app, login.html performs the single
+            // Remember-Me biometric flow. Do not launch a second native lock prompt.
+            if (!sharedPrefs.getBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, false) &&
+                !currentAuthToken.isNullOrBlank() && requiresSecurityReauthentication()
+            ) {
                 securityLockPending = true
             }
             smsServiceLauncher = SmsServiceLauncher(
@@ -1114,6 +1124,60 @@ class MainActivity : AppCompatActivity() {
     // دوال مساعدة (WebView، تحميل الأصول، إلخ)
     // ============================================================
 
+    /**
+     * Clears authentication and Remember-Me only after Android reports a different
+     * device boot. Ordinary activity/process recreation and explicit app close preserve it.
+     * BOOT_COUNT is read when the app next starts because an app cannot reliably run at power-off.
+     */
+    private fun clearSessionAfterDeviceRebootIfNeeded(db: DatabaseHelper) {
+        val bootCount = try {
+            Settings.Global.getInt(contentResolver, Settings.Global.BOOT_COUNT, -1)
+        } catch (e: Exception) {
+            DebugLogger.warn("SessionBoot", "Unable to read Android BOOT_COUNT: ${e.javaClass.simpleName}")
+            -1
+        }
+        if (bootCount < 0) {
+            DebugLogger.warn("SessionBoot", "BOOT_COUNT unavailable; authentication state was preserved")
+            return
+        }
+
+        val previousBootCount = sharedPrefs.getInt(KEY_LAST_BOOT_COUNT, -1)
+        if (previousBootCount < 0) {
+            sharedPrefs.edit().putInt(KEY_LAST_BOOT_COUNT, bootCount).apply()
+            DebugLogger.info("SessionBoot", "Initialized boot marker=$bootCount without clearing authentication")
+            return
+        }
+        if (previousBootCount == bootCount) return
+
+        val tokens = listOf(
+            sharedPrefs.getString(KEY_TOKEN, null),
+            sharedPrefs.getString("saved_token", null)
+        ).filterNot { it.isNullOrBlank() }.distinct()
+
+        tokens.forEach { token ->
+            try {
+                db.invalidateUserSession(token!!, "device_reboot")
+            } catch (e: Exception) {
+                DebugLogger.warn("SessionBoot", "Session invalidation after reboot failed: ${e.javaClass.simpleName}")
+            }
+        }
+
+        sharedPrefs.edit()
+            .remove(KEY_TOKEN)
+            .remove(KEY_USER_ID)
+            .remove(KEY_USER_ROLE)
+            .remove(KEY_USER_NAME)
+            .remove("remember_me")
+            .remove("saved_username")
+            .remove("saved_token")
+            .remove("saved_user_id")
+            .remove("saved_timestamp")
+            .remove(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH)
+            .putInt(KEY_LAST_BOOT_COUNT, bootCount)
+            .apply()
+        DebugLogger.info("SessionBoot", "Device reboot detected ($previousBootCount -> $bootCount); authentication and Remember-Me cleared")
+    }
+
     private fun shouldOpenSystemSetupScreen(): Boolean {
         if (!::sharedPrefs.isInitialized || sharedPrefs.getBoolean(KEY_SYSTEM_SETUP_COMPLETED, false)) {
             return false
@@ -1138,8 +1202,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initialEntryAsset(): String {
-        return if (shouldOpenSystemSetupScreen()) {
-            "first-user-setup.html"
+        if (shouldOpenSystemSetupScreen()) return "first-user-setup.html"
+
+        // Explicit close requests a fresh biometric/password login on the next launch.
+        if (sharedPrefs.getBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, false)) return "login.html"
+
+        // A still-valid local session should resume the authenticated shell. This avoids
+        // login.html starting a second biometric prompt alongside native foreground re-auth.
+        return if (!currentAuthToken.isNullOrBlank() && currentUserId > 0L) {
+            "main.html"
         } else {
             "login.html"
         }
@@ -1584,8 +1655,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        AndroidView(
-            modifier = modifier.fillMaxSize(),
+        val recoveryGeneration = webViewRecoveryTrigger.intValue
+        androidx.compose.runtime.key(recoveryGeneration) {
+            AndroidView(
+                modifier = modifier.fillMaxSize(),
             factory = { context ->
                 FrameLayout(context).apply {
                     layoutParams = ViewGroup.LayoutParams(
@@ -1712,8 +1785,9 @@ class MainActivity : AppCompatActivity() {
                     DebugLogger.info("WebView", "CREATED instance=$instanceId hash=${wv.hashCode()}")
                 }
             },
-            update = { }
-        )
+                update = { }
+            )
+        }
     }
 
     private fun createStationImagePreviewDataUrl(uri: Uri): String? {
@@ -2005,6 +2079,9 @@ class MainActivity : AppCompatActivity() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 DebugLogger.info("WebView", "PAGE_STARTED: $url")
+                if (!url.isNullOrBlank() && url.startsWith("file:///android_asset/")) {
+                    lastKnownAssetUrl = url
+                }
                 if (url?.endsWith("/login.html") == true && shouldOpenSystemSetupScreen()) {
                     view?.post {
                         if (!isDestroyed.get()) {
@@ -2115,11 +2192,16 @@ class MainActivity : AppCompatActivity() {
                 if (!isDestroyed.get()) {
                     webView = null
                     isWebViewInitialized = false
+                    serverReady = false
+                    // A plain property becoming null does not rerun AndroidView.factory.
+                    // Changing this key disposes the dead subtree and creates a fresh WebView/bridge.
+                    webViewRecoveryTrigger.intValue += 1
                     handler.postDelayed({
                         if (!isDestroyed.get()) {
+                            isErrorPageShown = false
                             recreateWebView()
                         }
-                    }, 3000)
+                    }, 900)
                 }
                 return true
             }
@@ -2138,18 +2220,30 @@ class MainActivity : AppCompatActivity() {
     private fun recreateWebView() {
         if (isDestroyed.get()) return
 
+        val targetUrl = lastKnownAssetUrl
+            ?.takeIf { it.startsWith("file:///android_asset/") }
+            ?: "file:///android_asset/screens/${initialEntryAsset()}"
         val wv = webView
         if (wv != null && wv.isAttachedToWindow) {
-            val entryAsset = initialEntryAsset()
-            wv.loadUrl("file:///android_asset/screens/$entryAsset")
-            DebugLogger.info("WebView", "RELOADED via existing WebView: $entryAsset")
+            try {
+                wv.loadUrl(targetUrl)
+                DebugLogger.info("WebView", "RELOADED after renderer loss: $targetUrl")
+            } catch (e: Exception) {
+                DebugLogger.logException("WebViewRecovery", e)
+                showErrorPage()
+            }
         } else {
+            webViewRecoveryTrigger.intValue += 1
             handler.postDelayed({
-                if (!isDestroyed.get()) {
-                    isErrorPageShown = false
-                    loadWebViewFromAssets()
+                if (isDestroyed.get()) return@postDelayed
+                val recovered = webView
+                if (recovered != null && recovered.isAttachedToWindow) {
+                    recovered.loadUrl(targetUrl)
+                } else {
+                    DebugLogger.warn("WebViewRecovery", "New WebView was not attached after renderer loss")
+                    showErrorPage()
                 }
-            }, 500)
+            }, 900)
         }
     }
 
@@ -2979,6 +3073,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
                     activity?.let { act ->
                         act.currentAuthToken = token
+                        act.sharedPrefs.edit().remove(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH).apply()
 
                         act.currentUserId = userId
                         act.currentUserRole = role
@@ -8756,6 +8851,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             prefs.edit().apply {
                                 putString("saved_token", newToken)
                                 putLong("saved_timestamp", System.currentTimeMillis())
+                                remove(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH)
                                 apply()
                             }
 
@@ -8810,13 +8906,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun exitApplication(): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
-                activity.clearSessionState()
+                // "إغلاق" ends the app task but deliberately keeps the encrypted session
+                // and Remember-Me token. The next launch opens login.html for one biometric
+                // check; only a changed Android BOOT_COUNT clears these values.
+                activity.sharedPrefs.edit()
+                    .putBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, true)
+                    .apply()
                 activity.runOnUiThread {
                     if (!activity.isFinishing) {
                         activity.finishAndRemoveTask()
                     }
                 }
-                successResponse(0, "تم إنهاء التطبيق")
+                successResponse(0, "تم إنهاء التطبيق مع الاحتفاظ ببيانات تذكرني")
             } catch (e: Exception) {
                 DebugLogger.logException("ExitApplication", e)
                 errorResponse("تعذر إنهاء التطبيق")
@@ -13479,19 +13580,13 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 }
 
     private fun clearSessionState() {
-        val rememberedToken = sharedPrefs.getString("saved_token", null)
-        if (!rememberedToken.isNullOrBlank()) {
-            try {
-                if (::dbHelper.isInitialized) dbHelper.invalidateUserSession(rememberedToken, "application_exit")
-            } catch (e: Exception) {
-                DebugLogger.warn("Session", "Failed to invalidate remembered session on exit: ${e.message}")
-            }
-        }
+        // Clear only an invalid active session. Remember-Me remains available so a user
+        // can recover through biometric auto-login; device reboot has its own explicit reset.
         currentAuthToken?.let { token ->
             try {
-                if (::dbHelper.isInitialized) dbHelper.invalidateUserSession(token, "application_exit")
+                if (::dbHelper.isInitialized) dbHelper.invalidateUserSession(token, "invalid_active_session")
             } catch (e: Exception) {
-                DebugLogger.warn("Session", "Failed to invalidate active session on exit: ${e.message}")
+                DebugLogger.warn("Session", "Failed to invalidate active session: ${e.message}")
             }
         }
         currentAuthToken = null
@@ -13503,11 +13598,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             .remove(KEY_USER_ID)
             .remove(KEY_USER_ROLE)
             .remove(KEY_USER_NAME)
-            .remove("remember_me")
-            .remove("saved_username")
-            .remove("saved_token")
-            .remove("saved_user_id")
-            .remove("saved_timestamp")
             .apply()
     }
 
