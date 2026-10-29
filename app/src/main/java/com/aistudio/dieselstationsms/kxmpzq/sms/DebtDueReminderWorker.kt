@@ -1,6 +1,12 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.os.Build
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -8,6 +14,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.MainActivity
 import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
 import java.util.concurrent.TimeUnit
 
@@ -32,13 +39,16 @@ class DebtDueReminderWorker(
         return try {
             if (db.getSetting("sms_send_enabled") == "0") return Result.success()
 
-            // The native query is station-scoped and returns the actual due-date,
-            // outstanding balance, phone and eligibility state from SQLite.
-            val dueRows = db.getDueSoonDebtReminders(stationId, 0)
+            // Create/repair maturity dates before the reminder query runs. The same
+            // date calculation is used by the customer-debt screen and the UI banner.
+            DebtDueDateRepository.ensureSchema(db)
+            val dueRows = DebtDueDateRepository.getDueSoonDebtReminders(db, stationId, 0)
             var queuedCount = 0
+            val remindedNames = mutableListOf<String>()
             for (index in 0 until dueRows.length()) {
                 val row = dueRows.optJSONObject(index) ?: continue
                 if (row.optInt("days_remaining", Int.MAX_VALUE) != 0) continue
+                if (!row.optBoolean("eligible", false)) continue
 
                 val customerId = row.optLong("customer_party_id", 0L)
                 val transactionId = row.optLong("transaction_id", 0L)
@@ -83,15 +93,57 @@ class DebtDueReminderWorker(
                     customerId, transactionId, phone, message,
                     createdBy = userId, daysBeforeDue = 0
                 )
-                if (result.status == "QUEUED" || result.status == "RETRY_PENDING") queuedCount++
+                if (result.status == "QUEUED" || result.status == "RETRY_PENDING") {
+                    queuedCount++
+                    if (customerName !in remindedNames) remindedNames += customerName
+                }
             }
 
             if (queuedCount > 0 || SmsOutboxRepository.hasPending(db)) {
                 SmsOutboxWorker.schedule(applicationContext)
             }
+            if (queuedCount > 0) postDueReminderNotification(stationId, queuedCount, remindedNames)
             Result.success()
         } catch (exception: Exception) {
             Result.retry()
+        }
+    }
+
+    private fun postDueReminderNotification(stationId: Int, count: Int, names: List<String>) {
+        try {
+            val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channelId = "debt_due_reminders"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                manager.createNotificationChannel(
+                    NotificationChannel(channelId, "تذكيرات الديون المستحقة", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                        description = "إشعارات داخلية عند تجهيز رسائل تذكير الديون المستحقة"
+                    }
+                )
+            }
+            val openApp = PendingIntent.getActivity(
+                applicationContext,
+                0xD3B7 + (stationId and 0x0FFF),
+                Intent(applicationContext, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra("open_screen", "تذكيرات الديون")
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+            )
+            val detail = names.take(3).joinToString("، ")
+            val notification = Notification.Builder(applicationContext, channelId)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("تذكيرات الديون المستحقة")
+                .setContentText("تم تجهيز $count رسالة تذكير للعملاء المستحقة ديونهم اليوم" + if (detail.isBlank()) "" else ": $detail")
+                .setStyle(Notification.BigTextStyle().bigText("تمت إضافة $count رسالة تذكير إلى طابور SMS بسبب حلول تاريخ الاستحقاق اليوم. ستُرسل وفق إعدادات الرسائل وأذونات الجهاز."))
+                .setContentIntent(openApp)
+                .setAutoCancel(true)
+                .build()
+            manager.notify(0xD3B7 + (stationId and 0x0FFF), notification)
+        } catch (_: SecurityException) {
+            // Notification permission is optional; the durable SMS outbox still works.
+        } catch (_: Exception) {
+            // Never fail/retry the debt SMS batch solely because the UI notification failed.
         }
     }
 
