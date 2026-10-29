@@ -397,11 +397,18 @@ object DebtDueDateRepository {
     }
 
     private fun sqlDaysFromTerms(termsExpression: String): String {
-        // Descending order prevents a short token such as "5" from matching "15" first.
+        // Resolve an explicit day unit before looking at a pure numeric value. This avoids
+        // interpreting "50% upfront, Net 30 days" as 50 days.
+        val normalized = "lower(trim($termsExpression))"
         val parts = StringBuilder("CASE ")
-        parts.append("WHEN lower($termsExpression) LIKE '%cash%' OR lower($termsExpression) LIKE '%immediate%' OR lower($termsExpression) LIKE '%upon receipt%' OR lower($termsExpression) LIKE '%عند الاستلام%' OR lower($termsExpression) LIKE '%نقد%' OR lower($termsExpression) LIKE '%فوري%' THEN 0 ")
+        parts.append("WHEN $normalized LIKE '%cash%' OR $normalized LIKE '%immediate%' OR $normalized LIKE '%upon receipt%' OR $normalized LIKE '%عند الاستلام%' OR $normalized LIKE '%نقد%' OR $normalized LIKE '%فوري%' THEN 0 ")
         for (day in 365 downTo 1) {
-            parts.append("WHEN lower($termsExpression) LIKE '%$day%' THEN $day ")
+            parts.append(
+                "WHEN $normalized LIKE '%$day يوم%' OR $normalized LIKE '%$day يومًا%' " +
+                    "OR $normalized LIKE '%$day day%' OR $normalized LIKE '%$day days%' " +
+                    "OR $normalized LIKE '%net $day%' OR $normalized LIKE '%net$day%' " +
+                    "OR $normalized LIKE '%صافي $day%' OR $normalized = '$day' THEN $day "
+            )
         }
         parts.append("ELSE $DEFAULT_TERMS_DAYS END")
         return parts.toString()
@@ -417,10 +424,11 @@ object DebtDueDateRepository {
         val text = terms.orEmpty().trim().lowercase(Locale.ROOT)
         if (text.isBlank()) return DEFAULT_TERMS_DAYS
         if (listOf("cash", "immediate", "upon receipt", "عند الاستلام", "نقد", "فوري").any { text.contains(it) }) return 0
-        val number = Regex("(?<!\\d)(\\d{1,3})(?!\\d)").find(text)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        val explicitDayCount = Regex("(?:net\\s*|صافي\\s*|خلال\\s*|within\\s*)?(\\d{1,3})\\s*(?:days?|يوم(?:اً|ًا|ين)?|أيام)?").find(text)
+            ?.groupValues?.getOrNull(1)?.toIntOrNull()
         // A bare/legacy numeric 0 was the CRM's "unspecified" sentinel; treat it as Net 30.
         // Immediate payment is represented by an explicit cash/immediate term above.
-        return number?.takeIf { it > 0 }?.coerceIn(1, 365) ?: DEFAULT_TERMS_DAYS
+        return explicitDayCount?.takeIf { it > 0 }?.coerceIn(1, 365) ?: DEFAULT_TERMS_DAYS
     }
 
     private fun parseDate(value: String?): LocalDate? {
