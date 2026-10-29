@@ -2001,8 +2001,8 @@
             const buckets = [
                 { key: '0-30', label: '0–30 يوم', min: 0, max: 30 },
                 { key: '31-60', label: '31–60 يوم', min: 31, max: 60 },
-                { key: '61-90', label: '61–90 يوم', min: 61, max: 90 },
-                { key: '90+', label: 'أكثر من 90 يوم / مشكوك في تحصيله', min: 91, max: Number.MAX_SAFE_INTEGER }
+                { key: '61-90', label: '61–89 يوم', min: 61, max: 89 },
+                { key: '90+', label: '90 يومًا فأكثر / مشكوك في تحصيله', min: 90, max: Number.MAX_SAFE_INTEGER }
             ];
             const today = String((typeof businessDayDate === 'function' ? businessDayDate() : new Date().toISOString().slice(0,10))).slice(0,10);
             const groups = new Map();
