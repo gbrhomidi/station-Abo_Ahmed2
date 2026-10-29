@@ -23152,6 +23152,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun addReceipt(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
         require(stationScopeId > 0 && actorId > 0L) { "معرف المحطة والمستخدم مطلوبان للإيصالات" }
+        val idempotencyKey = data.optString("idempotency_key", "").trim()
+        require(idempotencyKey.isNotBlank()) { "مفتاح منع تكرار العملية مطلوب" }
         val amount = financialMoney(data.optDouble("amount", Double.NaN))
         val customerId = data.optLong("customer_party_id", 0L)
         val receiptType = data.optString("receipt_type", "cash").trim().lowercase(Locale.ROOT)
@@ -23195,6 +23197,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             db.beginTransaction()
             try {
+                val existingId = findFinancialIdempotency(db, "receipt", stationScopeId, idempotencyKey)
+                if (existingId != null) return existingId
+                require(reserveFinancialIdempotency(db, "receipt", stationScopeId, idempotencyKey)) {
+                    "مفتاح العملية المالية مستخدم مسبقاً؛ أعد تحميل السجل قبل المحاولة"
+                }
                 if (customerId > 0L) requirePartyInStation(db, customerId, stationScopeId)
                 val cashBefore = if (cashAmount > 0.0) db.rawQuery(
                     "SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'",
@@ -23311,6 +23318,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     "id=? AND reference_type='receipt' AND reference_id=?",
                     arrayOf(cashMovementId.toString(), receiptId.toString())
                 )
+                completeFinancialIdempotency(db, "receipt", stationScopeId, idempotencyKey, receiptId)
                 db.setTransactionSuccessful()
                 receiptId
             } finally { db.endTransaction() }
@@ -23530,11 +23538,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val expenseCode = data.optString("expense_code", "").trim().ifBlank {
             "EXP-" + System.currentTimeMillis().toString() + "-" + UUID.randomUUID().toString().take(6)
         }
+        val idempotencyKey = data.optString("idempotency_key", "").trim()
+        require(idempotencyKey.isNotBlank()) { "مفتاح منع تكرار العملية مطلوب" }
         dbLock.lock()
         return try {
             val db = writableDatabase
             db.beginTransaction()
             try {
+                val existingId = findFinancialIdempotency(db, "expense", stationScopeId, idempotencyKey)
+                if (existingId != null) return existingId
+                require(reserveFinancialIdempotency(db, "expense", stationScopeId, idempotencyKey)) {
+                    "مفتاح العملية المالية مستخدم مسبقاً؛ أعد تحميل السجل قبل المحاولة"
+                }
                 val now = getCurrentDateTime()
                 val expenseId = db.insertOrThrow("expenses", null, ContentValues().apply {
                     put("uuid", UUID.randomUUID().toString())
@@ -23579,6 +23594,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     postingRequest.put("paid_amount", paidAmount)
                     postExpenseRecordWithinTransaction(db, expenseId, postingRequest, stationScopeId, actorId)
                 }
+                completeFinancialIdempotency(db, "expense", stationScopeId, idempotencyKey, expenseId)
                 db.setTransactionSuccessful()
                 expenseId
             } finally { db.endTransaction() }
@@ -23711,6 +23727,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         fun addCashDeposit(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
         require(stationScopeId > 0 && actorId > 0L) { "معرف المحطة والمستخدم مطلوبان للإيداعات" }
+        val idempotencyKey = data.optString("idempotency_key", "").trim()
+        require(idempotencyKey.isNotBlank()) { "مفتاح منع تكرار العملية مطلوب" }
         val amount = financialMoney(data.optDouble("amount", Double.NaN))
         val cashBoxId = data.optLong("cash_box_id", 0L)
         val bankAccountId = data.optLong("bank_account_id", 0L)
@@ -23721,6 +23739,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             db.beginTransaction()
             try {
+                val existingId = findFinancialIdempotency(db, "cash_deposit", stationScopeId, idempotencyKey)
+                if (existingId != null) return existingId
+                require(reserveFinancialIdempotency(db, "cash_deposit", stationScopeId, idempotencyKey)) {
+                    "مفتاح العملية المالية مستخدم مسبقاً؛ أعد تحميل السجل قبل المحاولة"
+                }
                 val cashBefore = db.rawQuery(
                     "SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'",
                     arrayOf(cashBoxId.toString(), stationScopeId.toString())
@@ -23805,6 +23828,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     "id=? AND station_id=? AND is_deleted=0",
                     arrayOf(depositId.toString(), stationScopeId.toString())
                 ) == 1) { "تعذر ربط الإيداع بدفاتر النقدية والبنك" }
+                completeFinancialIdempotency(db, "cash_deposit", stationScopeId, idempotencyKey, depositId)
                 db.setTransactionSuccessful()
                 depositId
             } finally { db.endTransaction() }
@@ -23920,6 +23944,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun addCashMovement(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
         require(stationScopeId > 0 && actorId > 0L) { "معرف المحطة والمستخدم مطلوبان للحركة النقدية" }
+        val idempotencyKey = data.optString("idempotency_key", "").trim()
+        require(idempotencyKey.isNotBlank()) { "مفتاح منع تكرار العملية مطلوب" }
         val cashBoxId = data.optLong("cash_box_id", 0L)
         val requestedAmount = data.optDouble("amount", Double.NaN)
         val movementType = data.optString("movement_type", "").trim().lowercase(Locale.ROOT)
@@ -23934,6 +23960,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             db.beginTransaction()
             try {
+                val existingId = findFinancialIdempotency(db, "cash_movement", stationScopeId, idempotencyKey)
+                if (existingId != null) return existingId
+                require(reserveFinancialIdempotency(db, "cash_movement", stationScopeId, idempotencyKey)) {
+                    "مفتاح العملية المالية مستخدم مسبقاً؛ أعد تحميل السجل قبل المحاولة"
+                }
                 val balanceBefore = db.rawQuery(
                     "SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'",
                     arrayOf(cashBoxId.toString(), stationScopeId.toString())
@@ -24000,6 +24031,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     "id=? AND cash_box_id=? AND is_deleted=0",
                     arrayOf(movementId.toString(), cashBoxId.toString())
                 ) == 1) { "تعذر ربط الحركة النقدية بالقيد المحاسبي" }
+                completeFinancialIdempotency(db, "cash_movement", stationScopeId, idempotencyKey, movementId)
                 db.setTransactionSuccessful()
                 movementId
             } finally { db.endTransaction() }
