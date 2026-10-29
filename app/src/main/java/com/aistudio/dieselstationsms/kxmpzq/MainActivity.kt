@@ -11938,7 +11938,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         requestedAmount = fee,
                         requestedMode = feeMode,
                         location = deliveryLocation,
-                        cashCustomerName = cashCustomerName
+                        cashCustomerName = cashCustomerName,
+                        saleKind = input.optString("sale_type", input.optString("sale_kind", "fuel"))
                     )
                     database.setTransactionSuccessful()
                 } finally {
@@ -12048,7 +12049,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             requestedAmount = fee,
                             requestedMode = feeMode,
                             location = location,
-                            cashCustomerName = cashName
+                            cashCustomerName = cashName,
+                            saleKind = input.optString("sale_type", input.optString("sale_kind", "fuel"))
                         )
                         database.setTransactionSuccessful()
                     }
