@@ -1670,6 +1670,10 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             "fields": [
                 { "label": "كود المصروف", "key": "expense_code", "type": "text", "required": true, "placeholder": "" },
                 { "label": "فئة المصروف", "key": "expense_category_id", "type": "number", "required": true, "placeholder": "" },
+                { "label": "صندوق الدفع النقدي", "key": "cash_box_id", "type": "select", "required": false, "placeholder": "" },
+                { "label": "الحساب البنكي للدفع", "key": "bank_account_id", "type": "select", "required": false, "placeholder": "" },
+                { "label": "حساب البطاقة / التسوية", "key": "clearing_account_id", "type": "select", "required": false, "placeholder": "" },
+                { "label": "حساب ضريبة القيمة المضافة القابلة للاسترداد", "key": "input_vat_account_id", "type": "select", "required": false, "placeholder": "" },
                 { "label": "المحطة", "key": "station_id", "type": "number", "required": false, "placeholder": "" },
                 { "label": "المستفيد", "key": "payee_name", "type": "text", "required": true, "placeholder": "" },
                 { "label": "المستفيد بالعربية", "key": "payee_name_ar", "type": "text", "required": false, "placeholder": "" },
@@ -1683,7 +1687,7 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
                 { "label": "مبلغ الضريبة", "key": "tax_amount", "type": "number", "required": false, "placeholder": "" },
                 { "label": "معدل القيمة المضافة", "key": "vat_rate", "type": "number", "required": false, "placeholder": "" },
                 { "label": "مبلغ القيمة المضافة", "key": "vat_amount", "type": "number", "required": false, "placeholder": "" },
-                { "label": "الإجمالي", "key": "total_amount", "type": "number", "required": true, "placeholder": "" },
+                { "label": "الإجمالي المحسوب", "key": "total_amount", "type": "number", "required": true, "placeholder": "" },
                 { "label": "طريقة الدفع", "key": "payment_method", "type": "select", "required": false, "placeholder": "" },
                 { "label": "حالة الدفع", "key": "payment_status", "type": "select", "required": false, "placeholder": "" },
                 { "label": "المبلغ المدفوع", "key": "paid_amount", "type": "number", "required": false, "placeholder": "" },
@@ -1705,6 +1709,7 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             "titleFields": ["description"],
             "subtitleFields": ["expense_code", "payee_name", "payee_name_ar", "amount", "total_amount"],
             "createMethod": "saveExpenseRecord",
+            "approveMethod": "approveExpenseRecord",
             "updateMethod": "updateExpenseRecord",
             "deleteMethod": "deleteExpenseRecord",
             "mode": "list",
@@ -1730,6 +1735,10 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             "amount_in_default": "المبلغ بالعملة الافتراضية",
             "tax_rate": "معدل الضريبة",
             "tax_amount": "مبلغ الضريبة",
+            "cash_box_id": "صندوق الدفع النقدي",
+            "bank_account_id": "الحساب البنكي للدفع",
+            "clearing_account_id": "حساب البطاقة / التسوية",
+            "input_vat_account_id": "حساب ضريبة القيمة المضافة القابلة للاسترداد",
             "vat_rate": "معدل القيمة المضافة",
             "vat_amount": "مبلغ القيمة المضافة",
             "total_amount": "الإجمالي",
@@ -1792,7 +1801,11 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
         const REFERENCE_FIELDS = {
             "expense_category_id": { table: "expense_categories", value: "id", label: "category_name_ar", fallback: "category_name" },
             "station_id":          { table: "stations", value: "id", label: "station_name_ar", fallback: "station_name" },
-            "currency_id":         { table: "currencies", value: "id", label: "currency_name_ar", fallback: "currency_name" }
+            "currency_id":         { table: "currencies", value: "id", label: "currency_name_ar", fallback: "currency_name" },
+            "cash_box_id": { method: "getActiveCashBoxes", value: "id", label: "box_name_ar", fallback: "box_name" },
+            "bank_account_id": { method: "getBankAccounts", value: "id", label: "account_name_ar", fallback: "account_name" },
+            "clearing_account_id": { method: "getFinancialPostingAccounts", value: "id", label: "account_name_ar", fallback: "account_name" },
+            "input_vat_account_id": { method: "getFinancialPostingAccounts", value: "id", label: "account_name_ar", fallback: "account_name" },
         };
 
         /* بيانات وصفية لطرق الدفع */
@@ -1840,6 +1853,7 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             rows: [],
             filtered: [],
             editing: null,
+            approving: false,
             filter: 'all',
             amountFilter: null,
             dateFilter: null,
@@ -2226,6 +2240,7 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             box.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => openDetails(b.dataset.view)));
             box.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => openForm(findRow(b.dataset.edit))));
             box.querySelectorAll('[data-delete]').forEach(b => b.addEventListener('click', () => deleteRow(findRow(b.dataset.delete))));
+            box.querySelectorAll('[data-approve]').forEach(b => b.addEventListener('click', () => openApproveForm(findRow(b.dataset.approve))));
         }
 
         /* ============================================================
@@ -2277,6 +2292,7 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             tbody.querySelectorAll('[data-table-view]').forEach(b => b.addEventListener('click', () => openDetails(b.dataset.tableView)));
             tbody.querySelectorAll('[data-table-edit]').forEach(b => b.addEventListener('click', () => openForm(findRow(b.dataset.tableEdit))));
             tbody.querySelectorAll('[data-table-delete]').forEach(b => b.addEventListener('click', () => deleteRow(findRow(b.dataset.tableDelete))));
+            tbody.querySelectorAll('[data-table-approve]').forEach(b => b.addEventListener('click', () => openApproveForm(findRow(b.dataset.tableApprove))));
         }
 
         function findRow(id) {
@@ -2337,6 +2353,7 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             const value = row && row[key] !== undefined && row[key] !== null ? row[key] : '';
             const req = def.required ? 'required' : '';
             const placeholder = def.placeholder ? `placeholder="${esc(def.placeholder)}"` : '';
+            const computedReadOnly = key === 'total_amount' ? 'readonly aria-readonly="true"' : '';
             const wideAttr = WIDE_FIELDS.has(key) || def.type === 'textarea' ? 'data-wide="true"' : '';
             const hiddenClass = HIDDEN_FIELDS.has(key) ? 'hidden-field' : '';
 
@@ -2390,7 +2407,7 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             return `
                 <div class="form-group ${hiddenClass}" ${wideAttr}>
                     <label class="form-label">${esc(label)}${def.required ? ' *' : ''}</label>
-                    <input class="form-input" data-key="${esc(key)}" type="${esc(def.type)}" value="${esc(value)}" ${req} ${placeholder}>
+                    <input class="form-input" data-key="${esc(key)}" type="${esc(def.type)}" value="${esc(value)}" ${req} ${placeholder} ${computedReadOnly}>
                 </div>
             `;
         }
@@ -2398,6 +2415,22 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
         /* ============================================================
            فتح النموذج
            ============================================================ */
+        function openApproveForm(row) {
+            if (!row || String(row.status || '').toLowerCase() !== 'pending' || !CFG.approveMethod) {
+                toast('اختر مصروفاً معلقاً غير مرحّل', true);
+                return;
+            }
+            state.approving = true;
+            openForm(row);
+            $('formTitle').innerHTML = '<i class="fas fa-check-circle"></i> اعتماد وترحيل المصروف';
+            const statusField = document.querySelector('#recordForm [data-key="payment_status"]');
+            if (statusField) statusField.value = 'approved';
+            const paidField = document.querySelector('#recordForm [data-key="paid_amount"]');
+            if (paidField && !paidField.value) paidField.value = '0';
+            const statusLabel = document.querySelector('#recordForm [data-key="payment_status"]')?.closest('.form-group');
+            if (statusLabel) statusLabel.insertAdjacentHTML('beforeend', '<small>اعتماد المصروف يرحّل القيد؛ أدخل المدفوع فعلياً وحدد وسيلة التسوية. القيمة صفر تعني إثبات كامل الرصيد كذمم دائنة.</small>');
+        }
+
         function openForm(row = null) {
             if (!CFG.createMethod && !CFG.updateMethod) {
                 toast('لا توجد عملية كتابة مدعومة لهذه الشاشة', true);
@@ -2415,6 +2448,21 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             });
 
             $('recordForm').innerHTML = fieldsToRender.map(def => inputHtml(def, row)).join('');
+            const syncExpenseTotal = () => {
+                const read = key => Number(document.querySelector('#recordForm [data-key="' + key + '"]')?.value || 0);
+                const base = read('amount');
+                const taxInput = read('tax_amount');
+                const vatInput = read('vat_amount');
+                const tax = taxInput > 0 ? taxInput : base * read('tax_rate') / 100;
+                const vat = vatInput > 0 ? vatInput : base * read('vat_rate') / 100;
+                const totalField = document.querySelector('#recordForm [data-key="total_amount"]');
+                if (totalField) totalField.value = Math.max(0, base + tax + vat).toFixed(2);
+            };
+            ['amount','tax_rate','tax_amount','vat_rate','vat_amount'].forEach(key => {
+                const field = document.querySelector('#recordForm [data-key="' + key + '"]');
+                if (field) field.addEventListener('input', syncExpenseTotal);
+            });
+            syncExpenseTotal();
 
             // تعبئة القيم في وضع التعديل
             if (row) {
@@ -2495,8 +2543,25 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
         }
 
         async function fetchReferenceOptions(ref) {
-            const cacheKey = `${ref.table}:${ref.filter || ''}`;
+            const cacheKey = ref.method
+                ? ref.method
+                : `${ref.table}:${ref.filter || ''}`;
             if (state.referenceCache[cacheKey]) return state.referenceCache[cacheKey];
+            if (ref.method && bridge && typeof bridge[ref.method] === 'function') {
+                try {
+                    const raw = ref.method === 'getActiveCashBoxes' || ref.method === 'getBankAccounts' || ref.method === 'getFinancialPostingAccounts'
+                        ? bridge[ref.method]()
+                        : bridge[ref.method](...(ref.args || []));
+                    const parsed = parse(raw);
+                    const list = rowsFrom(parsed);
+                    const options = list.map(item => ({
+                        value: item[ref.value],
+                        label: item[ref.label] || item[ref.fallback] || item.account_code || `${ref.table || ref.method} #${item[ref.value]}`
+                    })).filter(o => o.value != null);
+                    state.referenceCache[cacheKey] = options;
+                    return options;
+                } catch (err) { /* leave empty if the authorized bridge is unavailable */ }
+            }
 
             // حالات خاصة لجداول معروفة
             if (ref.table === 'expense_categories' && bridge && typeof bridge.getExpenseCategoryRecords === 'function') {
@@ -2601,7 +2666,11 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             setLoading(true);
             try {
                 let result;
-                if (state.editing && CFG.updateMethod) {
+                if (state.approving && state.editing && CFG.approveMethod) {
+                    const id = idOf(state.editing);
+                    if (!id) throw new Error('معرف المصروف غير صالح');
+                    result = await invoke(CFG.approveMethod, [Number(id), JSON.stringify(payload)]);
+                } else if (state.editing && CFG.updateMethod) {
                     const id = idOf(state.editing);
                     if (!id) throw new Error('معرف السجل غير صالح');
                     result = await invoke(CFG.updateMethod, [Number(id), JSON.stringify(payload)]);
@@ -2611,10 +2680,12 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
                     throw new Error('لا توجد عملية حفظ مدعومة');
                 }
                 parse(result);
-                toast('تم حفظ المصروف بنجاح');
+                toast(state.approving ? 'تم اعتماد المصروف وترحيله' : 'تم حفظ المصروف بنجاح');
+                state.approving = false;
                 closeModal(null, 'formModal');
                 await reloadData();
             } catch (error) {
+                state.approving = false;
                 toast(error.message || 'فشل الحفظ', true);
             } finally {
                 setLoading(false);

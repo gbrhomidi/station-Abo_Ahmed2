@@ -1616,7 +1616,7 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             "subtitleFields": ["deposit_code", "customer_id", "cash_box_id", "bank_account_id", "amount", "description", "status", "operator"],
             "createMethod": "saveCashDepositRecord",
             "updateMethod": "",
-            "deleteMethod": "",
+            "deleteMethod": "reverseCashDepositRecord",
             "resolveMethod": "resolveCashDepositRecord",
             "reportKind": "operational:CashDeposit",
             "mode": "list",
@@ -1674,7 +1674,8 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
         };
 
         const AUTO_MANAGED_FIELDS = new Set([
-            "id", "uuid", "deposit_code", "station_id", "created_by", "created_at"
+            "id", "uuid", "deposit_code", "station_id", "created_by", "created_at",
+            "status", "balance_after", "operator", "date", "customer_id"
         ]);
 
         const WIDE_FIELDS = new Set(["notes", "description"]);
@@ -2314,12 +2315,12 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
         async function deleteRow(row) {
             const id = row && idOf(row);
             if (!id || !CFG.deleteMethod) return;
-            if (!confirm('هل تريد تنفيذ الحذف الفعلي لهذا الإيداع؟')) return;
+            if (!confirm('سيتم عكس القيد والإيداع، وإرجاع المبلغ للصندوق وخصمه من البنك. هل تريد المتابعة؟')) return;
             setLoading(true);
             try {
                 const result = await invoke(CFG.deleteMethod, [Number(id)]);
                 parse(result);
-                toast('تم حذف الإيداع فعلياً');
+                toast('تم عكس الإيداع واستعادة أثر الصندوق والبنك ودفتر الأستاذ');
                 await reloadData();
             } catch (error) {
                 toast(error.message || 'فشل الحذف', true);

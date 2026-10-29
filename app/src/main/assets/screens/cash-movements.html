@@ -2024,14 +2024,11 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             "listMethod": "getCashMovementRecords",
             "listArgs": ["{}"],
             "fields": [
-                { "label": "الصندوق", "key": "cash_box_id", "type": "number", "required": false, "placeholder": "" },
+                { "label": "الصندوق", "key": "cash_box_id", "type": "number", "required": true, "placeholder": "" },
                 { "label": "نوع الحركة", "key": "movement_type", "type": "select", "required": true, "placeholder": "" },
-                { "label": "المبلغ", "key": "amount", "type": "number", "required": true, "placeholder": "" },
-                { "label": "balance before", "key": "balance_before", "type": "number", "required": false, "placeholder": "" },
-                { "label": "balance after", "key": "balance_after", "type": "number", "required": false, "placeholder": "" },
-                { "label": "الوصف", "key": "description", "type": "textarea", "required": false, "placeholder": "" },
-                { "label": "reference type", "key": "reference_type", "type": "text", "required": false, "placeholder": "" },
-                { "label": "reference id", "key": "reference_id", "type": "number", "required": false, "placeholder": "" }
+                { "label": "المبلغ أو الرصيد المستهدف للتسوية", "key": "amount", "type": "number", "required": true, "placeholder": "" },
+                { "label": "الحساب المقابل في دفتر الأستاذ", "key": "counter_account_id", "type": "number", "required": true, "placeholder": "" },
+                { "label": "الوصف", "key": "description", "type": "textarea", "required": false, "placeholder": "" }
             ],
             "valueFields": ["amount", "balance_before", "balance_after"],
             "titleFields": ["description"],
@@ -2052,6 +2049,7 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             "cash_box_id": "الصندوق",
             "movement_type": "نوع الحركة",
             "amount": "المبلغ",
+            "counter_account_id": "الحساب المقابل في دفتر الأستاذ",
             "balance_before": "الرصيد قبل الحركة",
             "balance_after": "الرصيد بعد الحركة",
             "description": "الوصف",
@@ -2070,19 +2068,16 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
         /* خيارات القوائم المنسدلة — مرتبطة بجدول cash_movements */
         const SELECT_OPTIONS = {
             "movement_type": [
-                { value: "in",         label: "وارد (إيراد)" },
-                { value: "out",        label: "صادر (مصروف)" },
-                { value: "adjustment", label: "تسوية" },
-                { value: "deposit",    label: "إيداع" },
-                { value: "withdrawal", label: "سحب" },
-                { value: "refund",     label: "استرداد" },
-                { value: "transfer",   label: "تحويل" }
+                { value: "in",         label: "وارد" },
+                { value: "out",        label: "صادر" },
+                { value: "adjustment", label: "تسوية على الرصيد المستهدف" }
             ]
         };
 
         /* الحقول المرجعية — تُجلب قيمها من الجداول المرتبطة */
         const REFERENCE_FIELDS = {
-            "cash_box_id": { table: "cash_boxes", value: "id", label: "box_name_ar", fallback: "box_name" }
+            "cash_box_id": { method: "getActiveCashBoxes", value: "id", label: "box_name_ar", fallback: "box_name" },
+            "counter_account_id": { method: "getFinancialPostingAccounts", value: "id", label: "account_name_ar", fallback: "account_name" }
         };
 
         /* البيانات الوصفية لأنواع الحركات */
@@ -2737,8 +2732,21 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
         }
 
         async function fetchReferenceOptions(ref) {
-            const cacheKey = `${ref.table}:${ref.filter || ''}`;
+            const cacheKey = ref.method || `${ref.table}:${ref.filter || ''}`;
             if (state.referenceCache[cacheKey]) return state.referenceCache[cacheKey];
+            if (ref.method && bridge && typeof bridge[ref.method] === 'function') {
+                try {
+                    const raw = bridge[ref.method]();
+                    const parsed = parse(raw);
+                    const list = rowsFrom(parsed);
+                    const options = list.map(item => ({
+                        value: item[ref.value],
+                        label: item[ref.label] || item[ref.fallback] || item.account_code || `${ref.method} #${item[ref.value]}`
+                    })).filter(o => o.value != null);
+                    state.referenceCache[cacheKey] = options;
+                    return options;
+                } catch (err) { /* leave the reference empty */ }
+            }
 
             const candidateMethods = [
                 `get${capitalize(ref.table)}`,

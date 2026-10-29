@@ -17,6 +17,9 @@ CASES = {
     'shifts.html': ['getShiftFormContext', 'saveShiftRecordTyped', 'getOpenShiftForManagement', 'closeOpenShiftForManagement', 'closeOpenShiftBtn'],
     'orders.html': ['getProducts', 'getSalesTransactionRecords', 'getOpenShiftForManagement', 'saveSalesTransactionRecord', 'updateSalesTransactionRecord', 'generateSalesTransactionReport'],
     'deliveries.html': ['getDeliverySaleContext', 'getLatestCustomerSaleForDelivery', 'saveDeliveryRecord', 'updateDeliveryRecord', 'generateDeliveryManagementReport', 'getDeliveryReportOptions'],
+    'receipts.html': ['getReceiptRecords', 'saveReceiptRecord', 'cash_amount', 'cheque_amount', 'bank_amount', 'counter_account_id', 'getFinancialPostingAccounts'],
+    'cash-movements.html': ['getCashMovementRecords', 'saveCashMovementRecord', 'counter_account_id', 'getFinancialPostingAccounts'],
+    'expenses.html': ['getExpenseRecords', 'saveExpenseRecord', 'approveExpenseRecord', 'input_vat_account_id', 'syncExpenseTotal'],
     'stock-levels.html': ['getStockLevelsPage', 'loadPage', 'filterInventory', 'advancedFilter', 'searchStock'],
     'inventory-movements.html': ['getInventoryMovementPage', 'getInventoryMovementUnifiedStats', 'addStockMovement', 'archiveStockMovement'],
     'inventory-alerts.html': ['getStockAlertRecords', 'resolveStockAlertRecord', 'inventory-movements.html?product_id='],
@@ -109,9 +112,28 @@ for name, required in CASES.items():
         ]
     if name == 'cash-deposits.html':
         checks += [
-            ('"updateMethod": ""' in html, 'cash deposit direct edits disabled'),
-            ('"deleteMethod": ""' in html, 'cash deposit direct deletes disabled'),
-            ('"updateCashDepositRecord"' not in html and '"deleteCashDepositRecord"' not in html, 'no live generic cash-deposit CRUD route'),
+            ('"updateMethod": ""' in html, 'posted cash deposits cannot be edited'),
+            ('"deleteMethod": "reverseCashDepositRecord"' in html, 'deposit cancellation is a compensating reversal'),
+            ('"deleteCashDepositRecord"' not in html, 'no generic cash-deposit deletion route'),
+            ('سيتم عكس القيد والإيداع' in html and 'خصمه من البنك' in html, 'reversal warns that cash and bank balances will change'),
+        ]
+    if name == 'receipts.html':
+        checks += [
+            ('cash_amount' in html and 'cheque_amount' in html and 'bank_amount' in html and 'other_amount' in html, 'receipt validates its tender breakdown'),
+            ('counter_account_id' in html and 'getFinancialPostingAccounts' in html, 'non-customer receipt requires an explicit posting account'),
+            ('"deleteMethod": "deleteReceiptRecord"' in html, 'receipt cancellation routes to financial reversal'),
+        ]
+    if name == 'cash-movements.html':
+        checks += [
+            ('"counter_account_id": { method: "getFinancialPostingAccounts"' in html, 'movement requires an actual general-ledger counter-account'),
+            ('"deleteMethod": "deleteCashMovementRecord"' in html, 'movement cancellation routes to linked journal reversal'),
+            ('{ value: "deposit",' not in html and '{ value: "transfer",' not in html, 'no unsupported movements bypass deposit/transfer documents'),
+        ]
+    if name == 'expenses.html':
+        checks += [
+            ('"approveMethod": "approveExpenseRecord"' in html and 'data-table-approve' in html, 'pending expenses use an explicit approval and posting route'),
+            ('"input_vat_account_id": { method: "getFinancialPostingAccounts"' in html, 'recoverable VAT must select a GL account'),
+            ('readonly aria-readonly="true"' in html and 'syncExpenseTotal' in html, 'expense total is computed, not user-entered'),
         ]
     if name == 'fiscal-periods.html':
         checks += [
@@ -170,6 +192,31 @@ for name, required in CASES.items():
             (not any(x in html for x in ('Math.random(', 'Mock Data', 'Fake Data')), 'no fake/mock delivery data'),
         ]
 
+    if name in {"receipts.html", "cash-movements.html", "expenses.html", "cash-deposits.html"}:
+        # Parse each inline JavaScript block with Node's parser; Android WebView
+        # must never ship an HTML screen with a syntax error.
+        script_tags = re.finditer(r'<script\b([^>]*)>(.*?)</script\s*>', html, re.I | re.S)
+        inline_index = 0
+        for script_match in script_tags:
+            attrs, code = script_match.group(1), script_match.group(2)
+            if re.search(r'\bsrc\s*=', attrs, re.I) or not code.strip():
+                continue
+            inline_index += 1
+            try:
+                syntax = subprocess.run(
+                    ['node', '--check', '-'],
+                    input=code,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                ok = syntax.returncode == 0
+                label = f'inline JavaScript syntax #{inline_index}'
+                if not ok:
+                    label += ': ' + (syntax.stderr.strip().splitlines()[-1] if syntax.stderr.strip() else 'node --check failed')
+                checks.append((ok, label))
+            except FileNotFoundError:
+                checks.append((False, 'Node.js available for inline JavaScript syntax checks'))
     for ok, label in checks:
         print(f'{"PASS" if ok else "FAIL"} {name}: {label}')
         if not ok: failed += 1
@@ -246,10 +293,33 @@ SECURITY_CASES = {
             '"fuel_sales", "payments", "cash_deposits", "invoices", "ledger"',
         ],
     ),
-    'cash-deposits-ui-read-only-history': (
+    'cash-deposits-ui-reversal-safe': (
         PROJECT_ROOT / 'app/src/main/assets/screens/cash-deposits.html',
         [
-            '"updateMethod": ""', '"deleteMethod": ""', 'تنبيه محاسبي',
+            '"updateMethod": ""', '"deleteMethod": "reverseCashDepositRecord"',
+            'reverseCashDepositRecord', 'سيتم عكس القيد والإيداع',
+        ],
+    ),
+    'finance-posting-lifecycle': (
+        PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt',
+        [
+            'const val VERSION = 48', 'private fun postFinanceJournalLines',
+            'fun addCashMovement(data: JSONObject, stationScopeId: Int, actorId: Long)',
+            'fun addCashDeposit(data: JSONObject, stationScopeId: Int, actorId: Long)',
+            'fun reverseCashDepositRecord(', 'fun addReceipt(data: JSONObject, stationScopeId: Int, actorId: Long)',
+            'private fun postExpenseRecordWithinTransaction', 'fun approveExpenseRecord(',
+            'fun voidReceiptRecord(', 'fun reverseCashMovementRecord(',
+            'reversal_journal_entry_id', 'counter_account_id',
+        ],
+    ),
+    'finance-bridge-safety': (
+        PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt',
+        [
+            'fun getFinancialPostingAccounts(): String',
+            'fun approveExpenseRecord(id: Long, jsonData: String)',
+            'fun reverseCashDepositRecord(id: Long): String',
+            'لا تملك صلاحية عكس الحركات النقدية',
+            'تم تحديث البيانات الوصفية فقط؛ لا يمكن تعديل مبالغ الإيصال المرحّل',
         ],
     ),
     'maintenance-delete-station-scope': (

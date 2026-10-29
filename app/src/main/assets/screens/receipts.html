@@ -2164,6 +2164,9 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
                 { "label": "bank amount", "key": "bank_amount", "type": "number", "required": false, "placeholder": "" },
                 { "label": "other amount", "key": "other_amount", "type": "number", "required": false, "placeholder": "" },
                 { "label": "الصندوق", "key": "cash_box_id", "type": "number", "required": false, "placeholder": "" },
+                { "label": "الحساب البنكي", "key": "bank_account_id", "type": "number", "required": false, "placeholder": "" },
+                { "label": "حساب تسوية الشيكات والمبالغ الأخرى", "key": "clearing_account_id", "type": "number", "required": false, "placeholder": "" },
+                { "label": "الحساب المقابل (إيصال غير مرتبط بعميل)", "key": "counter_account_id", "type": "number", "required": false, "placeholder": "" },
                 { "label": "الحالة", "key": "status", "type": "select", "required": false, "placeholder": "" },
                 { "label": "void reason", "key": "void_reason", "type": "textarea", "required": false, "placeholder": "" },
                 { "label": "voided by", "key": "voided_by", "type": "number", "required": false, "placeholder": "" },
@@ -2202,6 +2205,9 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             "bank_amount": "المبلغ البنكي",
             "other_amount": "مبالغ أخرى",
             "cash_box_id": "الصندوق",
+            "bank_account_id": "الحساب البنكي",
+            "clearing_account_id": "حساب تسوية الشيكات والمبالغ الأخرى",
+            "counter_account_id": "الحساب المقابل للإيصال غير المرتبط بعميل",
             "status": "حالة الإيصال",
             "void_reason": "سبب الإلغاء",
             "voided_by": "ألغاه",
@@ -2235,6 +2241,9 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             "payment_id":       { table: "payments", value: "id", label: "payment_code" },
             "currency_id":      { table: "currencies", value: "id", label: "currency_name_ar" },
             "cash_box_id":      { table: "cash_boxes", value: "id", label: "box_name_ar" },
+            "bank_account_id":  { table: "bank_accounts", value: "id", label: "account_name_ar" },
+            "clearing_account_id": { table: "accounts", value: "id", label: "account_name_ar", fallback: "account_name" },
+            "counter_account_id": { table: "accounts", value: "id", label: "account_name_ar", fallback: "account_name" },
             "received_by":      { table: "users", value: "id", label: "full_name" },
             "accountant_id":    { table: "users", value: "id", label: "full_name" }
         };
@@ -2922,6 +2931,24 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
         async function fetchReferenceOptions(ref) {
             const cacheKey = `${ref.table}:${ref.filter || ''}`;
             if (state.referenceCache[cacheKey]) return state.referenceCache[cacheKey];
+            const direct = {
+                cash_boxes: () => bridge && typeof bridge.getActiveCashBoxes === 'function' ? bridge.getActiveCashBoxes() : null,
+                bank_accounts: () => bridge && typeof bridge.getBankAccounts === 'function' ? bridge.getBankAccounts() : null,
+                accounts: () => bridge && typeof bridge.getFinancialPostingAccounts === 'function' ? bridge.getFinancialPostingAccounts() : null
+            };
+            if (direct[ref.table]) {
+                try {
+                    const raw = direct[ref.table]();
+                    const parsed = parse(raw);
+                    const list = rowsFrom(parsed);
+                    const options = list.map(item => ({
+                        value: item[ref.value],
+                        label: item[ref.label] || item[ref.fallback] || item.account_code || `${ref.table} #${item[ref.value]}`
+                    })).filter(o => o.value != null);
+                    state.referenceCache[cacheKey] = options;
+                    return options;
+                } catch (err) { /* fail closed: keep the reference empty */ }
+            }
 
             const candidateMethods = [
                 `get${capitalize(ref.table)}`,

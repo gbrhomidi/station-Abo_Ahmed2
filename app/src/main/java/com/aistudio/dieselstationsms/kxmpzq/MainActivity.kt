@@ -11379,6 +11379,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+        @JavascriptInterface
+        fun getFinancialPostingAccounts(): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getFinancialPostingAccounts(requireCurrentStationId(db, activity.currentUserId)))
+            } catch (e: Exception) {
+                DebugLogger.logException("FinancialPostingAccounts", e)
+                errorResponse(e.message)
+            }
+        }
+
         /**
          * Typed bridge for expanded accounts-payable, VAT, cash-flow, equity and bank-statement workflows.
          * Every request is scoped to the authenticated station and uses an explicit permission gate.
@@ -12297,18 +12309,35 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun saveReceiptRecord(jsonData: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val obj = JSONObject(jsonData); val id = db.addReceipt(obj, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); val cid = obj.optLong("customer_party_id", 0L); if (cid > 0) enqueueFinanceSms(db, cid, "تم تسجيل مقبوضات بمبلغ ${obj.optString("amount")} بتاريخ ${db.currentDateForBridge()}.", "rec-$id"); successResponse(id, "تم حفظ الإيصال بنجاح") }
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val obj = JSONObject(jsonData); val id = db.addReceipt(obj, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); invalidateCurrentReportCache(db, activity.currentUserId); val cid = obj.optLong("customer_party_id", 0L); if (cid > 0) enqueueFinanceSms(db, cid, "تم تسجيل مقبوضات بمبلغ ${obj.optString("amount")} بتاريخ ${db.currentDateForBridge()}.", "rec-$id"); successResponse(id, "تم حفظ الإيصال بنجاح") }
             catch (e: Exception) { DebugLogger.logException("Receipt", e); errorResponse(e.message) }
         }
         @JavascriptInterface
         fun updateReceiptRecord(id: Long, jsonData: String): String {
-            val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); val activity=getActivity()?:return errorResponse("النشاط غير متاح")
-            return try { successResponse(db.updateReceiptRecord(id,JSONObject(jsonData.ifBlank{"{}"}),requireCurrentStationId(db,activity.currentUserId),activity.currentUserId)>0,"تم تحديث بيانات الإيصال فعلياً") } catch(e:Exception){ DebugLogger.logException("ReceiptUpdate",e);errorResponse(e.message)}
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                if (!checkPermission("finance", "update")) return errorResponse("لا تملك صلاحية تعديل بيانات الإيصالات")
+                val rows = db.updateReceiptRecord(id, JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId)
+                invalidateCurrentReportCache(db, activity.currentUserId)
+                successResponse(rows > 0, "تم تحديث البيانات الوصفية فقط؛ لا يمكن تعديل مبالغ الإيصال المرحّل")
+            } catch (e: Exception) {
+                DebugLogger.logException("ReceiptUpdate", e)
+                errorResponse(e.message)
+            }
         }
         @JavascriptInterface
         fun deleteReceiptRecord(id: Long): String {
             val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); val activity=getActivity()?:return errorResponse("النشاط غير متاح")
-            return try { val rows=db.voidReceiptRecord(id,"إلغاء من شاشة الإيصالات",requireCurrentStationId(db,activity.currentUserId),activity.currentUserId); successResponse(rows>0,"تم إلغاء الإيصال وعكس أثره المالي") } catch(e:Exception){ DebugLogger.logException("ReceiptVoid",e);errorResponse(e.message)}
+            return try {
+                if (!checkPermission("finance", "delete")) return errorResponse("لا تملك صلاحية إلغاء الإيصالات")
+                val rows = db.voidReceiptRecord(id, "إلغاء من شاشة الإيصالات", requireCurrentStationId(db, activity.currentUserId), activity.currentUserId)
+                invalidateCurrentReportCache(db, activity.currentUserId)
+                successResponse(rows > 0, "تم إلغاء الإيصال وعكس أثره المالي")
+            } catch (e: Exception) {
+                DebugLogger.logException("ReceiptVoid", e)
+                errorResponse(e.message)
+            }
         }
         @JavascriptInterface
         fun resolveReceiptRecord(id: Long, note: String = "") = operationalResolve("finance", "receipts", id, note)
@@ -12345,11 +12374,41 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun generateCashMovementReport(jsonData: String = "{}") = operationalReport("finance", "cash_movements", jsonData)
         @JavascriptInterface
-        fun saveCashMovementRecord(jsonData: String) = operationalSave("finance", "cash_movements", jsonData)
+        fun saveCashMovementRecord(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val movementId = db.addCashMovement(
+                    JSONObject(jsonData.ifBlank { "{}" }),
+                    requireCurrentStationId(db, activity.currentUserId),
+                    activity.currentUserId
+                )
+                invalidateCurrentReportCache(db, activity.currentUserId)
+                successResponse(movementId, "تم حفظ الحركة النقدية وترحيل قيدها المحاسبي")
+            } catch (e: Exception) {
+                DebugLogger.logException("CashMovementCreate", e)
+                errorResponse(e.message)
+            }
+        }
         @JavascriptInterface
         fun updateCashMovementRecord(id: Long, jsonData: String): String = errorResponse("الحركة النقدية المثبتة غير قابلة لإعادة كتابة تاريخها؛ استخدم العكس المالي")
         @JavascriptInterface
-        fun deleteCashMovementRecord(id: Long): String { val db=getDbHelper()?:return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity()?:return errorResponse("النشاط غير متاح"); return try{ successResponse(db.reverseCashMovementRecord(id,requireCurrentStationId(db,a.currentUserId),a.currentUserId,"عكس من شاشة الحركات النقدية")>0,"تم عكس الحركة النقدية وتسجيل الحركة المقابلة") }catch(e:Exception){DebugLogger.logException("CashMovementReverse",e);errorResponse(e.message)} }
+        fun deleteCashMovementRecord(id: Long): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                if (!checkPermission("finance", "delete")) return errorResponse("لا تملك صلاحية عكس الحركات النقدية")
+                val rows = db.reverseCashMovementRecord(
+                    id, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId,
+                    "عكس من شاشة الحركات النقدية"
+                )
+                invalidateCurrentReportCache(db, activity.currentUserId)
+                successResponse(rows > 0, "تم عكس الحركة النقدية وتسجيل الحركة والقيد المقابلين")
+            } catch (e: Exception) {
+                DebugLogger.logException("CashMovementReverse", e)
+                errorResponse(e.message)
+            }
+        }
         @JavascriptInterface
         fun resolveCashMovementRecord(id: Long, note: String = "") = operationalResolve("finance", "cash_movements", id, note)
 
@@ -12373,8 +12432,24 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun saveExpenseRecord(jsonData: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val id = db.addExpense(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); successResponse(id, "تم حفظ المصروف بنجاح") }
-            catch (e: Exception) { DebugLogger.logException("Expense", e); errorResponse(e.message) }
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val id = db.addExpense(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId)
+                invalidateCurrentReportCache(db, activity.currentUserId)
+                successResponse(id, "تم حفظ المصروف؛ المصروف المعلق لا يغيّر الأرصدة حتى اعتماده")
+            } catch (e: Exception) { DebugLogger.logException("Expense", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun approveExpenseRecord(id: Long, jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                if (!checkPermission("finance", "update")) return errorResponse("لا تملك صلاحية اعتماد المصروفات")
+                val journalId = db.approveExpenseRecord(id, JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId)
+                invalidateCurrentReportCache(db, activity.currentUserId)
+                successResponse(journalId, "تم اعتماد المصروف وترحيل قيده وربط التسوية النقدية أو البنكية")
+            } catch (e: Exception) { DebugLogger.logException("ExpenseApprove", e); errorResponse(e.message) }
         }
         @JavascriptInterface
         fun updateExpenseRecord(id: Long, jsonData: String): String {
@@ -12427,13 +12502,34 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun saveCashDepositRecord(jsonData: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val id = db.addCashDeposit(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); successResponse(id, "تم حفظ الإيداع بنجاح") }
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val id = db.addCashDeposit(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); invalidateCurrentReportCache(db, activity.currentUserId); successResponse(id, "تم حفظ الإيداع وترحيل قيده المحاسبي") }
             catch (e: Exception) { DebugLogger.logException("Deposit", e); errorResponse(e.message) }
         }
         @JavascriptInterface
         fun updateCashDepositRecord(id: Long, jsonData: String) = operationalUpdate("finance", "cash_deposits", id, jsonData)
         @JavascriptInterface
-        fun deleteCashDepositRecord(id: Long) = operationalDelete("finance", "cash_deposits", id)
+        fun deleteCashDepositRecord(id: Long): String =
+            errorResponse("الإيداعات المالية المرحلة لا تُحذف؛ استخدم إجراء العكس المالي")
+
+        @JavascriptInterface
+        fun reverseCashDepositRecord(id: Long): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                if (!checkPermission("finance", "delete")) return errorResponse("لا تملك صلاحية عكس الإيداعات")
+                val rows = db.reverseCashDepositRecord(
+                    id,
+                    requireCurrentStationId(db, activity.currentUserId),
+                    activity.currentUserId,
+                    "عكس الإيداع من شاشة الإيداعات النقدية"
+                )
+                invalidateCurrentReportCache(db, activity.currentUserId)
+                successResponse(rows > 0, "تم عكس الإيداع وتسجيل القيد العكسي")
+            } catch (e: Exception) {
+                DebugLogger.logException("CashDepositReverse", e)
+                errorResponse(e.message)
+            }
+        }
         @JavascriptInterface
         fun resolveCashDepositRecord(id: Long, note: String = "") = operationalResolve("finance", "cash_deposits", id, note)
 
