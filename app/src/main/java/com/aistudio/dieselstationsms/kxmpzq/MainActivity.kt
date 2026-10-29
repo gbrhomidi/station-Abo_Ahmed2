@@ -1178,6 +1178,55 @@ class MainActivity : AppCompatActivity() {
         DebugLogger.info("SessionBoot", "Device reboot detected ($previousBootCount -> $bootCount); authentication and Remember-Me cleared")
     }
 
+    /**
+     * All application screens are packaged assets backed by the Android/SQLite bridge.
+     * Normalize legacy banners that imply changes are merely queued for later syncing:
+     * local CRUD is committed to SQLite immediately; Internet-dependent integrations
+     * (for example external AI/SMS delivery) still report their own connection errors.
+     */
+    private fun normalizeOfflineFirstUi(target: WebView?) {
+        if (target == null || isDestroyed.get()) return
+        val script = """
+            (function () {
+                try {
+                    var replacement = ' لا يوجد اتصال بالإنترنت؛ يعمل النظام محلياً عبر SQLite، وتُحفظ التغييرات مباشرة على الجهاز.';
+                    var selector = '.offline-banner,.offline,.connection-bar,[role="alert"],.toast,.notification';
+                    function rewrite(node) {
+                        if (!node || !node.textContent) return;
+                        var text = String(node.textContent).replace(/\\s+/g, ' ').trim();
+                        var offline = /عدم\\s+الاتصال|غير\\s+متصل|لا\\s+يوجد\\s+اتصال/i.test(text);
+                        var suggestsQueue = /سيتم.{0,40}(?:حفظ|تخزين).{0,30}محلي.{0,8}/i.test(text);
+                        if (!offline || !suggestsQueue) return;
+                        var icon = node.querySelector ? node.querySelector('i') : null;
+                        node.textContent = '';
+                        if (icon) node.appendChild(icon);
+                        node.appendChild(document.createTextNode(replacement));
+                    }
+                    function scan(root) {
+                        if (!root) return;
+                        if (root.nodeType === 1 && root.matches && root.matches(selector)) rewrite(root);
+                        if (root.querySelectorAll) root.querySelectorAll(selector).forEach(rewrite);
+                    }
+                    scan(document);
+                    if (window.__stationOfflineUiObserver) window.__stationOfflineUiObserver.disconnect();
+                    window.__stationOfflineUiObserver = new MutationObserver(function (records) {
+                        records.forEach(function (record) {
+                            if (record.type === 'characterData') scan(record.target.parentNode);
+                            if (record.addedNodes) record.addedNodes.forEach(scan);
+                        });
+                    });
+                    if (document.body) {
+                        window.__stationOfflineUiObserver.observe(document.body, {
+                            childList: true, subtree: true, characterData: true
+                        });
+                    }
+                } catch (_) {}
+            })();
+        """.trimIndent()
+        runCatching { target.evaluateJavascript(script, null) }
+            .onFailure { DebugLogger.warn("OfflineUi", "Could not normalize offline banner: ${it.javaClass.simpleName}") }
+    }
+
     private fun shouldOpenSystemSetupScreen(): Boolean {
         if (!::sharedPrefs.isInitialized || sharedPrefs.getBoolean(KEY_SYSTEM_SETUP_COMPLETED, false)) {
             return false
@@ -2098,7 +2147,8 @@ class MainActivity : AppCompatActivity() {
                 isErrorPageShown = false
                 DebugLogger.info("WebView", "PAGE_FINISHED: $url")
                 applySecurityRuntimeSettings(view)
-                    if (url?.endsWith("/main.html") == true || url?.endsWith("main.html") == true) {
+                normalizeOfflineFirstUi(view)
+                if (url?.endsWith("/main.html") == true || url?.endsWith("main.html") == true) {
                     val taskId = pendingNotificationTaskId
                     if (taskId != null) {
                         pendingNotificationTaskId = null
