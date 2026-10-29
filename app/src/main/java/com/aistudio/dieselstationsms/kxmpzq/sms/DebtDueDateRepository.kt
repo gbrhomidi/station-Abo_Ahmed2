@@ -418,7 +418,9 @@ object DebtDueDateRepository {
         if (text.isBlank()) return DEFAULT_TERMS_DAYS
         if (listOf("cash", "immediate", "upon receipt", "عند الاستلام", "نقد", "فوري").any { text.contains(it) }) return 0
         val number = Regex("(?<!\\d)(\\d{1,3})(?!\\d)").find(text)?.groupValues?.getOrNull(1)?.toIntOrNull()
-        return number?.coerceIn(0, 365) ?: DEFAULT_TERMS_DAYS
+        // A bare/legacy numeric 0 was the CRM's "unspecified" sentinel; treat it as Net 30.
+        // Immediate payment is represented by an explicit cash/immediate term above.
+        return number?.takeIf { it > 0 }?.coerceIn(1, 365) ?: DEFAULT_TERMS_DAYS
     }
 
     private fun parseDate(value: String?): LocalDate? {
