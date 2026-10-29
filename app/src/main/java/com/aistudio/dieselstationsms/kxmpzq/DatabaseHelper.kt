@@ -23538,6 +23538,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val expenseCode = data.optString("expense_code", "").trim().ifBlank {
             "EXP-" + System.currentTimeMillis().toString() + "-" + UUID.randomUUID().toString().take(6)
         }
+        val requestedPayeeType = data.optString("payee_type", "other").trim().lowercase(Locale.ROOT)
+        val payeeType = when (requestedPayeeType) {
+            "", "other" -> "other"
+            "employee" -> "employee"
+            "party", "supplier", "vendor", "customer", "client", "customer_party", "supplier_party" -> "party"
+            else -> throw IllegalArgumentException("نوع المستفيد غير مدعوم")
+        }
         val idempotencyKey = data.optString("idempotency_key", "").trim()
         require(idempotencyKey.isNotBlank()) { "مفتاح منع تكرار العملية مطلوب" }
         dbLock.lock()
@@ -23559,7 +23566,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     val payeeName = data.optString("payee_name", "").trim()
                     put("payee_name", payeeName)
                     put("payee_name_ar", data.optString("payee_name_ar", payeeName))
-                    put("payee_type", data.optString("payee_type", ""))
+                    put("payee_type", payeeType)
                     if (data.optLong("payee_id", 0L) > 0L) put("payee_id", data.optLong("payee_id"))
                     put("amount", baseAmount)
                     if (data.optLong("currency_id", 0L) > 0L) put("currency_id", data.optLong("currency_id"))

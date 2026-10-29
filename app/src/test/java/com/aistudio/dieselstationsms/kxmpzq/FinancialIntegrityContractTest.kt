@@ -270,23 +270,28 @@ class FinancialIntegrityContractTest {
     }
 
     @Test
-    fun expenseReversalRequiresPaidSourceJournalAndRestoresCashOnlyForCashExpenses() {
+    fun expenseReversalRequiresPostedSourceJournalAndRestoresOnlySettledAmounts() {
         val source = locateDatabaseHelper().readText()
         val reversal = functionBody(source, "private fun reverseExpenseRecordCore")
-        assertTrue("Expense reversal must reject unpaid or merely approved expenses",
-            reversal.contains("row.optString(\"status\") == \"paid\" && row.optString(\"payment_status\") == \"paid\""))
+        assertTrue("Expense reversal must reject pending/unposted records but allow a posted payable balance",
+            reversal.contains("row.optString(\"status\") in setOf(\"paid\", \"approved\")") &&
+                reversal.contains("row.optString(\"payment_status\") in setOf(\"paid\", \"approved\")"))
         assertTrue("Expense reversal must require an original journal entry",
-            reversal.contains("require(journalId>0)"))
-        assertTrue("Original journal must match the expense reference and station",
+            reversal.contains("require(journalId > 0L)"))
+        assertTrue("Original journal must match the expense reference, station and posted status",
             reversal.contains("SELECT reference_type,reference_id,status FROM journal_entries WHERE id=? AND station_id=? AND is_deleted=0") &&
-                reversal.contains("originalJournal.first==\"expense\" && originalJournal.second==id && originalJournal.third==\"posted\""))
-        assertTrue("Cash-box restoration must only occur for cash expenses",
-            reversal.contains("if (row.optString(\"payment_method\") == \"cash\")"))
+                reversal.contains("originalJournal.first == \"expense\" && originalJournal.second == id && originalJournal.third == \"posted\""))
+        assertTrue("Cash-box restoration must only occur for the amount actually paid in cash",
+            reversal.contains("if (paidAmount > 0.0 && method == \"cash\")"))
         assertTrue("Every eligible expense reversal must reverse its posted journal",
-            reversal.contains("reverseJournalEntryWithinTransaction(db,journalId"))
+            reversal.contains("reverseJournalEntryWithinTransaction("))
+        assertTrue("Expense reversal restores only paid cash and leaves no unpaid portion behind",
+            reversal.contains("val paidAmount = financialMoney(row.optDouble(\"paid_amount\"))") &&
+                reversal.contains("before + paidAmount") &&
+                reversal.contains("reverseJournalEntryWithinTransaction("))
     }
 
-    @Test
+        @Test
     fun salesClassificationUsesFuelSalesAndSaleItemsInsteadOfHeaderOnly() {
         val source = locateDatabaseHelper().readText()
         assertTrue("Unified sales ledger must union fuel_sales and sale_items", source.contains("FROM fuel_sales fs") && source.contains("FROM sale_items si") && source.contains("getSalesLedgerPage"))
