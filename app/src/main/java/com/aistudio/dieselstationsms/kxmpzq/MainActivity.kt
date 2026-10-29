@@ -330,6 +330,7 @@ class MainActivity : AppCompatActivity() {
 
         try {
             dbHelper = DatabaseHelper.getInstance(applicationContext)
+            DebtDueDateRepository.ensureSchema(dbHelper)
             migrateLegacySecuritySettings(dbHelper)
             clearSessionAfterDeviceRebootIfNeeded(dbHelper)
             applySecurityRuntimeSettings()
@@ -3765,8 +3766,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
+                DebtDueDateRepository.ensureSchema(db)
                 val data = JSONObject(jsonData).apply { put("station_id", stationId) }
                 val id = db.insertParty(data, stationId)
+                if (data.has("payment_terms")) {
+                    val terms = DebtDueDateRepository.persistPartyTerms(
+                        db, id, stationId, data.optString("payment_terms").ifBlank { "صافي 30 يوم" }
+                    )
+                    data.put("payment_terms", terms)
+                }
                 DebugLogger.info("Party", "Added party id=$id")
                 successResponse(id, "تمت الإضافة بنجاح")
             } catch (e: Exception) {
@@ -3782,8 +3790,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
+                DebtDueDateRepository.ensureSchema(db)
                 val data = JSONObject(jsonData).apply { put("station_id", stationId) }
                 val rows = db.updateParty(id, data, stationId)
+                if (rows > 0 && data.has("payment_terms")) {
+                    DebtDueDateRepository.persistPartyTerms(
+                        db, id, stationId, data.optString("payment_terms").ifBlank { "صافي 30 يوم" }
+                    )
+                }
                 successResponse(rows > 0, if (rows > 0) "تم التحديث بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
                 DebugLogger.logException("Party", e)
@@ -6577,8 +6591,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
-                val payments = db.getOverduePayments(stationId)
-                dataResponse(payments)
+                DebtDueDateRepository.ensureSchema(db)
+                dataResponse(DebtDueDateRepository.getOverdueDebts(db, stationId))
             } catch (e: Exception) {
                 DebugLogger.logException("Payments", e)
                 errorResponse(e.message)
@@ -8710,8 +8724,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val debts = db.getCustomerDebts(fromDate, toDate, requireCurrentStationId(db, activity.currentUserId))
-                dataResponse(debts)
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                DebtDueDateRepository.ensureSchema(db)
+                dataResponse(DebtDueDateRepository.getCustomerDebts(db, stationId, fromDate, toDate))
             } catch (e: Exception) {
                 DebugLogger.logException("Debts", e)
                 errorResponse(e.message)
@@ -12786,12 +12801,13 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
-                val rows = db.getDueSoonDebtReminders(stationId, 10)
+                DebtDueDateRepository.ensureSchema(db)
+                val rows = DebtDueDateRepository.getDueSoonDebtReminders(db, stationId, 365)
                 var found: JSONObject? = null
                 for (i in 0 until rows.length()) {
                     val row = rows.getJSONObject(i)
                     if (row.optLong("transaction_id", 0L) == debtId ||
-                        row.optLong("customer_party_id", 0L) == obj.optLong("customer_party_id", -1L)) {
+                        row.optLong("sale_id", 0L) == debtId) {
                         found = row
                         break
                     }
@@ -12902,7 +12918,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
 
             val dueAmount = row.optDouble("due_soon_amount", total)
-            val message = if (days == 1) {
+            val message = if (days < 0) {
+                "مرحبا 🙋\nنذكّركم بأن موعد استحقاق الدين ($dueDate) قد مضى منذ ${-days} يوم.\nالمبلغ المتأخر: ${formatYER(dueAmount)}\nإجمالي الرصيد القائم: ${formatYER(total)}"
+            } else if (days == 1) {
                 "مرحبا 🙋\nنذكّركم بأن موعد استحقاق الدين يوم غد ($dueDate).\nالمبلغ المستحق: ${formatYER(dueAmount)}\nإجمالي الرصيد عليكم: ${formatYER(total)}"
             } else if (days == 0) {
                 "مرحبا 🙋\nنذكّركم بأن موعد استحقاق الدين اليوم ($dueDate).\nالمبلغ المستحق اليوم: ${formatYER(dueAmount)}\nإجمالي الرصيد عليكم: ${formatYER(total)}"
@@ -12926,7 +12944,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
                 val obj = JSONObject(jsonData.ifBlank { "{}" })
                 val days = obj.optInt("days", 10).coerceIn(0, 365)
-                dataResponse(db.getDueSoonDebtReminders(requireCurrentStationId(db, activity.currentUserId), days))
+                DebtDueDateRepository.ensureSchema(db)
+                dataResponse(DebtDueDateRepository.getDueSoonDebtReminders(db, requireCurrentStationId(db, activity.currentUserId), days))
             } catch (e: Exception) {
                 errorResponse(e.message ?: "تعذر تحميل مستحقات العملاء القريبة")
             }
@@ -12944,7 +12963,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 obj.optJSONArray("customer_party_ids")?.let { arr ->
                     for (i in 0 until arr.length()) requested += arr.optLong(i, 0L)
                 }
-                val rows = db.getDueSoonDebtReminders(stationId, obj.optInt("days", 10).coerceIn(0, 365))
+                DebtDueDateRepository.ensureSchema(db)
+                val rows = DebtDueDateRepository.getDueSoonDebtReminders(db, stationId, obj.optInt("days", 10).coerceIn(0, 365))
                 val results = JSONArray()
                 var queued = 0
                 var skipped = 0
