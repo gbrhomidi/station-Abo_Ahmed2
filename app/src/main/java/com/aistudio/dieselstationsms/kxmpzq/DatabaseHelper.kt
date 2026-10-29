@@ -22459,7 +22459,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         val db = writableDatabase
         var transactionStarted = false
-        try {
+        return try {
             db.beginTransaction()
             transactionStarted = true
             val row = db.rawQuery(
