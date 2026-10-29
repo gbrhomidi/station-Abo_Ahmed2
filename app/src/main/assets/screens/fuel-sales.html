@@ -2861,6 +2861,7 @@ async function refreshResolvedFuelPrice() {
         p.dataset.priceSource = String(resolved?.source||'');
         p.dataset.priceSourceId = String(resolved?.source_id??'');
         if (t) t.value = (numeric(q?.value)*price).toFixed(2);
+        updateDeliveryFeeDisplay();
     } catch (e) {
         if (seq === state.priceLookupSeq) {
             toast('تعذر احتساب سعر الوقود الفعلي: ' + (e.message||'خطأ'), true, 'form');
