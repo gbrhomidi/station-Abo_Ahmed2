@@ -789,6 +789,25 @@ object DeliveryFeeAccounting {
                 score = { a -> (if (a.allText.contains("ذمم مدينة") || a.allText.contains("accounts receivable")) 5 else 0) + (if (a.allText.contains("عملاء") || a.allText.contains("customer")) 2 else 0) }
             )
         }
+        if (method in setOf("credit_card", "card", "بطاقة", "بطاقات", "pos")) {
+            return chooseAccount(
+                db, "حساب تسوية البطاقات البنكية",
+                predicate = { a ->
+                    val t = a.allText
+                    val asset = a.typeText in setOf("asset", "assets", "أصل", "أصول") || t.contains("بنك") || t.contains("bank")
+                    val cardOrBank = t.contains("بطاقة") || t.contains("بطاقات") ||
+                        t.contains("نقاط البيع") || t.contains("pos") || t.contains("bank") ||
+                        t.contains("بنك") || t.contains("تسوية البطاقات") || t.contains("card clearing")
+                    asset && cardOrBank && !t.contains("ذمم") && !t.contains("عملاء") &&
+                        !t.contains("صندوق") && !t.contains("نقدية") && !t.contains("cash on hand")
+                },
+                score = { a ->
+                    (if (a.allText.contains("تسوية البطاقات") || a.allText.contains("card clearing") || a.allText.contains("نقاط البيع")) 6 else 0) +
+                    (if (a.allText.contains("بطاقة") || a.allText.contains("بطاقات") || a.allText.contains("card")) 3 else 0) +
+                    (if (a.allText.contains("بنك") || a.allText.contains("bank")) 2 else 0)
+                }
+            )
+        }
         val all = accounts(db)
         val mappedCashbox = findMappedCashboxAccount(db, stationId)
         if (mappedCashbox > 0L) all.firstOrNull { it.id == mappedCashbox }?.let { return it }
