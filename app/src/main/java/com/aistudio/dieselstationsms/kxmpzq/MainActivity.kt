@@ -11987,32 +11987,87 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
         @JavascriptInterface
+        fun settleDeliveryServiceFee(deliveryId: Long): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                JSONObject().put("success", true).put(
+                    "data",
+                    DeliveryFeeAccounting.settleDriverFee(db, deliveryId, stationId, activity.currentUserId)
+                ).toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("SettleDeliveryServiceFee", e)
+                errorResponse(e.message ?: "تعذر تسديد رسوم التوصيل على السائق")
+            }
+        }
+
+        @JavascriptInterface
         fun updateDeliveryRecord(id: Long, jsonData: String): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
+                DeliveryFeeAccounting.ensureSchema(db)
                 val input = JSONObject(jsonData.ifBlank { "{}" })
-                val rows = db.updateDeliveryRecord(id, input, stationId, activity.currentUserId)
+                val saleReferenceId = input.optLong("sale_id", 0L)
+                val driverId = input.optLong("driver_id", 0L)
+                val fee = input.optDouble("delivery_service_fee", input.optDouble("service_fee", 0.0))
+                val feeMode = DeliveryFeeAccounting.normalizeMode(input.optString("delivery_fee_mode", "exempt"))
+                val location = input.optString("delivery_location", input.optString("location", "")).trim()
+                val cashName = input.optString("cash_customer_name", "").trim()
+                val cleanInput = JSONObject(input.toString()).apply {
+                    put("delivery_service_fee", 0.0)
+                    put("service_fee", 0.0)
+                    put("delivery_fee_mode", DeliveryFeeAccounting.EXEMPT)
+                    put("delivery_location", location)
+                    put("cash_customer_name", cashName)
+                }
+
+                val database = db.writableDatabase
+                var rows = 0
+                var feeResult = JSONObject()
+                database.beginTransaction()
+                try {
+                    rows = db.updateDeliveryRecord(id, cleanInput, stationId, activity.currentUserId)
+                    if (rows > 0) {
+                        feeResult = DeliveryFeeAccounting.persistDeliveryFee(
+                            helper = db,
+                            deliveryId = id,
+                            saleReferenceId = saleReferenceId,
+                            stationId = stationId,
+                            userId = activity.currentUserId,
+                            driverId = driverId,
+                            requestedAmount = fee,
+                            requestedMode = feeMode,
+                            location = location,
+                            cashCustomerName = cashName
+                        )
+                        database.setTransactionSuccessful()
+                    }
+                } finally {
+                    database.endTransaction()
+                }
                 if (rows <= 0) {
                     errorResponse("لم يتم تعديل سجل التوصيل")
                 } else {
                     val persisted = db.getOperationalRecord("deliveries", id)
                         ?: throw IllegalStateException("فشل إعادة قراءة سجل التوصيل بعد التعديل")
                     require(persisted.optLong("id", id) == id) {
-                        "فشل التحقق من معرف التوصيل بعد التعديل"
+                        "فشل التحقق من سجل التوصيل بعد التعديل"
                     }
                     dataResponseObject(JSONObject().apply {
                         put("success", true)
                         put("id", id)
                         put("delivery_id", id)
-                        put("message", "تم تعديل التوصيل فعلياً والتحقق من SQLite")
+                        put("delivery_fee_accounting", feeResult)
+                        put("message", "تم تعديل التوصيل ورسوم الخدمة والتحقق من SQLite والمحاسبة")
                         put("record", persisted)
                     }).toString()
                 }
             } catch (e: Exception) {
                 DebugLogger.logException("UpdateDeliveryRecord", e)
-                errorResponse(e.message ?: "فشل تعديل التوصيل")
+                errorResponse(e.message ?: "فشل تعديل التوصيل أو رسوم الخدمة؛ لم يتم اعتماد التعديل")
             }
         }
         @JavascriptInterface
