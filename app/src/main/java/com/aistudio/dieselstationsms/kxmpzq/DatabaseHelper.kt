@@ -21894,7 +21894,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             """SELECT a.id, a.account_code, a.account_name, a.account_name_ar, a.account_type
                FROM accounts a
                WHERE a.is_active=1 AND a.is_deleted=0
-                 AND (a.station_id IS NULL OR a.station_id=0 OR a.station_id=?)
                  AND COALESCE(a.is_cash_account,0)=0
                  AND COALESCE(a.is_bank_account,0)=0
                  AND a.cash_box_id IS NULL AND a.bank_account_id IS NULL
@@ -21904,7 +21903,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                       AND child.is_active=1 AND child.is_deleted=0
                  )
                ORDER BY a.account_code, a.id""",
-            arrayOf(stationScopeId.toString())
+            null
         ).use { cursorToJsonArray(it) }
     }
 
@@ -21959,12 +21958,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "كل بند قيد يجب أن يكون مديناً أو دائناً فقط"
             }
             requireActiveLeafAccount(db, accountId)
-            val accountInStationScope = db.rawQuery(
-                """SELECT COUNT(*) FROM accounts
-                   WHERE id=? AND (station_id IS NULL OR station_id=0 OR station_id=?)""",
-                arrayOf(accountId.toString(), stationId.toString())
-            ).use { c -> c.moveToFirst() && c.getLong(0) == 1L }
-            require(accountInStationScope) { "الحساب المحاسبي خارج نطاق المحطة الحالية" }
+            // The chart of accounts is global in this schema; the posting journal itself
+            // is station-scoped. Do not filter accounts by a non-existent accounts.station_id.
             val previous = combined[accountId] ?: (0.0 to 0.0)
             combined[accountId] = (previous.first + debit) to (previous.second + credit)
         }
@@ -22632,8 +22627,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 require(c.moveToFirst()) { "القيد المحاسبي الأصلي غير موجود ضمن المحطة" }
                 Triple(c.getString(0), c.getLong(1), c.getString(2))
             }
-            require(originalJournal.first == "expense" && originalJournal.second == id &&
-                    originalJournal.third == "posted") {
+            require(originalJournal.first == "expense" && originalJournal.second == id && originalJournal.third == "posted") {
                 "القيد المرتبط لا يطابق المصروف أو سبق عكسه"
             }
 
@@ -23974,15 +23968,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val counterType = requireActiveLeafAccount(db, counterAccountId)
                 val validCounterAccount = db.rawQuery(
                     """SELECT COUNT(*) FROM accounts
-                       WHERE id=? AND (station_id IS NULL OR station_id=0 OR station_id=?)
-                         AND COALESCE(is_cash_account,0)=0 AND COALESCE(is_bank_account,0)=0
+                       WHERE id=? AND COALESCE(is_cash_account,0)=0 AND COALESCE(is_bank_account,0)=0
                          AND cash_box_id IS NULL AND bank_account_id IS NULL
                          AND NOT EXISTS (
                             SELECT 1 FROM accounts child
                             WHERE child.parent_account_id=accounts.id
                               AND child.is_active=1 AND child.is_deleted=0
                          )""",
-                    arrayOf(counterAccountId.toString(), stationScopeId.toString())
+                    arrayOf(counterAccountId.toString())
                 ).use { c -> c.moveToFirst() && c.getLong(0) == 1L }
                 require(validCounterAccount) { "الحساب المقابل يجب أن يكون حساب دفتر أستاذ ورقياً غير مرتبط بصندوق أو بنك" }
                 require(counterAccountId != cashAccountId) { "يجب أن يختلف الحساب المقابل عن حساب الصندوق" }
