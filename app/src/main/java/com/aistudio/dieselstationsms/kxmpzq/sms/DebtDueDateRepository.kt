@@ -116,7 +116,7 @@ object DebtDueDateRepository {
             if (debt.remaining <= 0.000001 || debt.customerId <= 0L || debt.dueDate.isBlank()) return@filter false
             val due = parseDate(debt.dueDate) ?: return@filter false
             val delta = java.time.temporal.ChronoUnit.DAYS.between(today, due)
-            delta in 0..maxDays
+            delta in 0L..maxDays.toLong()
         }.groupBy { it.customerId }
         val result = JSONArray()
         candidates.forEach { (customerId, dueRows) ->
