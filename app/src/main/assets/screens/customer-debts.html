@@ -2682,7 +2682,7 @@
                 : null;
             const risk = String(row.risk_level || row.risk_classification || '').trim().toLowerCase();
             const highRisk = ['high','critical','blacklisted','مرتفع','محظور'].includes(risk) ||
-                risk.includes('blacklist') || risk.includes('مرتفع') || risk.includes('محظور');
+                risk.includes('high') || risk.includes('critical') || risk.includes('blacklist') || risk.includes('مرتفع') || risk.includes('محظور');
             let status;
             if (remaining <= 0.000001) status = 'paid';
             else if (explicitStatus === 'doubtful' || highRisk || (dueDays !== null && dueDays <= -90)) status = 'doubtful';
