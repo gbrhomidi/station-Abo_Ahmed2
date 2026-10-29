@@ -2866,7 +2866,7 @@ function updateDebtViewButtons() {
                 const warning = debtScreenSettings.highlightOverdue && group.overdue ? ' style="border-color:var(--danger)"' : '';
                 const children = group.rows.map(function(item) {
                     const invoice = item.invoice_number || item.sale_code || ('فاتورة #' + item.id);
-                    const due = String(item.due_date || item.created_at || '').slice(0,10) || '---';
+                    const due = String(item.due_date || '').slice(0,10) || 'غير محدد';
                     return '<div class="debt-tree-item"><div class="debt-tree-item-main"><strong>' + escapeHtml(invoice) + '</strong>' +
                         '<small>الاستحقاق: ' + escapeHtml(due) + ' · الحالة: ' + escapeHtml(getStatusLabel(item.status)) + '</small>' +
                         '<strong>المتبقي: ' + formatCurrency(item.remaining_amount) + '</strong></div>' +
