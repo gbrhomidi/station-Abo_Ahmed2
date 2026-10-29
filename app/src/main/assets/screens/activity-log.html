@@ -1675,7 +1675,7 @@
 
     <!-- Offline Banner -->
     <div aria-live="polite" class="offline-banner" id="offlineBanner" role="alert">
-        <i aria-hidden="true" class="fas fa-wifi-slash"></i> أنت في وضع عدم الاتصال – سيتم حفظ التغييرات محلياً
+        <i aria-hidden="true" class="fas fa-wifi-slash"></i> لا يوجد اتصال بالإنترنت؛ يعمل سجل النشاط محلياً عبر SQLite وتُحفظ العمليات مباشرة على الجهاز
     </div>
 
     <!-- Loading -->
@@ -2278,7 +2278,7 @@
             const banner = document.getElementById('offlineBanner');
             if (!isOnline) {
                 banner.classList.add('show');
-                showToast('⚠️ وضع عدم الاتصال – سيتم حفظ التغييرات محلياً', 'warning');
+                showToast('لا يوجد اتصال بالإنترنت؛ يعمل سجل النشاط محلياً عبر SQLite وتُحفظ العمليات مباشرة على الجهاز', 'warning');
             } else {
                 banner.classList.remove('show');
                 if (hasAnnouncedNetworkStatus) showToast('✅ تم استعادة الاتصال', 'success');
@@ -2290,24 +2290,9 @@
         window.addEventListener('offline', updateOnlineStatus);
 
         async function syncPendingOperations() {
-            if (!isOnline) return;
-            const pending = LocalDB.get('pending_ops', []);
-            if (pending.length === 0) return;
-            // محاكاة المزامنة – يتم تنفيذ العمليات المعلقة
-            let synced = 0;
-            const remaining = [];
-            for (const op of pending) {
-                try {
-                    const result = await apiCall(op.action, op.data);
-                    if (result && result.success !== false) synced++;
-                    else remaining.push(op);
-                } catch (e) {
-                    remaining.push(op);
-                }
-            }
-            if (remaining.length > 0) LocalDB.set('pending_ops', remaining);
-            else LocalDB.remove('pending_ops');
-            if (synced > 0) showToast('✅ تمت مزامنة ' + synced + ' عملية معلقة', 'success');
+            // سجل النشاط والعمليات المحلية تُقرأ وتُعدّل مباشرة عبر Android Bridge/SQLite.
+            // لا توجد طوابير عمليات تجارية في المتصفح، لذلك لا ننفذ مزامنة صورية عند عودة الإنترنت.
+            return;
         }
 
         /* ============================================================
