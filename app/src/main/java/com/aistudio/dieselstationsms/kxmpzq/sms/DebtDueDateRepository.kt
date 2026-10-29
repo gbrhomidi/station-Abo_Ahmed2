@@ -46,10 +46,23 @@ object DebtDueDateRepository {
     fun ensureSchema(helper: DatabaseHelper) {
         val db = helper.writableDatabase
         if (!tableExists(db, "sales_transactions")) return
+        if (tableExists(db, "parties")) {
+            addColumn(db, "parties", "payment_terms", "TEXT NOT NULL DEFAULT '$DEFAULT_TERMS'")
+        }
         addColumn(db, "sales_transactions", "due_date", "TEXT")
         addColumn(db, "sales_transactions", "payment_terms_at_sale", "TEXT")
-        createDueDateTriggers(db)
-        backfillMissingDueDates(db)
+        if (!triggerExists(db, "trg_debt_due_date_sales_insert_v2") ||
+            !triggerExists(db, "trg_debt_due_date_sales_update_v2")
+        ) createDueDateTriggers(db)
+        db.execSQL("CREATE TABLE IF NOT EXISTS debt_due_date_migrations (migration_key TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+        val backfillApplied = db.rawQuery(
+            "SELECT 1 FROM debt_due_date_migrations WHERE migration_key='credit-sale-due-date-v2' LIMIT 1", null
+        ).use { it.moveToFirst() }
+        if (!backfillApplied) {
+            backfillMissingDueDates(db)
+            db.execSQL("INSERT OR IGNORE INTO debt_due_date_migrations(migration_key) VALUES('credit-sale-due-date-v2')")
+        }
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_debt_due_dates_station_date ON sales_transactions(station_id,due_date)")
     }
 
     /** Store the customer terms explicitly; blank terms always mean Net 30, not "no due date". */
@@ -113,6 +126,8 @@ object DebtDueDateRepository {
             val daysRemaining = java.time.temporal.ChronoUnit.DAYS.between(today, due).toInt()
             val customerRows = openByCustomer[customerId].orEmpty()
             val outstanding = customerRows.sumOf { it.remaining }.coerceAtLeast(0.0)
+            val dueDateKey = nearest.dueDate.take(10)
+            val dueAmount = dueRows.filter { it.dueDate.take(10) == dueDateKey }.sumOf { it.remaining }.coerceAtLeast(0.0)
             val phone = PhoneUtils.normalize(nearest.phone)
             val eventId = "debt-reminder:$stationId:$customerId:${nearest.dueDate.take(10)}"
             val dedupeKey = if (phone != null) "$eventId:$phone" else ""
@@ -134,7 +149,7 @@ object DebtDueDateRepository {
                 put("nearest_due_date", nearest.dueDate.take(10))
                 put("due_date", nearest.dueDate.take(10))
                 put("days_remaining", daysRemaining)
-                put("due_soon_amount", nearest.remaining)
+                put("due_soon_amount", dueAmount)
                 put("total_outstanding", outstanding)
                 put("remaining_amount", nearest.remaining)
                 put("last_reminder_at", if (alreadyQueued) nearest.dueDate.take(10) else "")
@@ -201,7 +216,8 @@ object DebtDueDateRepository {
         val partyNameExpr = listOf("commercial_name_ar", "commercial_name", "legal_name", "party_name").firstOrNull { it in p }
             ?.let { "COALESCE(p.`$it`,'')" } ?: "''"
         val phoneExpr = listOf("phone", "phone_number", "mobile", "phone1").firstOrNull { it in p }?.let { "COALESCE(p.`$it`,'')" } ?: "''"
-        val termsExpr = listOf("payment_terms", "payment_terms_text", "credit_terms").firstOrNull { it in p }?.let { "COALESCE(p.`$it`,'')" } ?: "'$DEFAULT_TERMS'"
+        val currentTermsExpr = listOf("payment_terms", "payment_terms_text", "credit_terms").firstOrNull { it in p }?.let { "COALESCE(p.`$it`,'')" } ?: "'$DEFAULT_TERMS'"
+        val termsExpr = if ("payment_terms_at_sale" in s) "COALESCE(NULLIF(s.payment_terms_at_sale,''),$currentTermsExpr,'$DEFAULT_TERMS')" else currentTermsExpr
         val riskExpr = listOf("risk_level", "credit_risk", "risk_category").firstOrNull { it in p }?.let { "COALESCE(p.`$it`,'')" } ?: "''"
         val stationJoin = if ("station_id" in p) " AND p.station_id=s.station_id" else ""
         val partyDeleted = if ("is_deleted" in p) " AND COALESCE(p.is_deleted,0)=0" else ""
@@ -298,6 +314,9 @@ object DebtDueDateRepository {
             put("payment_terms_at_sale", row.terms)
         }
     }
+
+    private fun triggerExists(db: SQLiteDatabase, name: String): Boolean =
+        db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=? LIMIT 1", arrayOf(name)).use { it.moveToFirst() }
 
     private fun createDueDateTriggers(db: SQLiteDatabase) {
         val s = columns(db, "sales_transactions")
