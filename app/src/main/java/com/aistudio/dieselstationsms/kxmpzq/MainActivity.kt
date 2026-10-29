@@ -489,7 +489,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
-        if (!isChangingConfigurations && !isDatabaseBackupPickerActive &&
+        // login.html and lock-screen.html launch their own bridge-driven biometric flow.
+        // Do not schedule a second native foreground prompt while either flow is active.
+        val loginRequested = ::sharedPrefs.isInitialized &&
+            sharedPrefs.getBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, false)
+        val currentPagePath = webView?.url?.substringBefore("?").orEmpty()
+        val pageOwnsAuthentication = loginRequested ||
+            currentPagePath.endsWith("/login.html") ||
+            currentPagePath.endsWith("/lock-screen.html")
+        if (!pageOwnsAuthentication &&
+            !isChangingConfigurations && !isDatabaseBackupPickerActive &&
             !securityPromptActive && !currentAuthToken.isNullOrBlank() &&
             ::dbHelper.isInitialized && requiresSecurityReauthentication()
         ) {
