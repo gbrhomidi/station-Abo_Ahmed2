@@ -2827,7 +2827,7 @@ function updateDebtViewButtons() {
                 const paid = finiteNumber(item.paid_amount);
                 const remaining = finiteNumber(item.remaining_amount);
                 const due = String(item.due_date || '').slice(0,10) || 'غير محدد';
-                const warning = debtScreenSettings.highlightOverdue && item.status === 'overdue' ? ' border-color:var(--danger);' : '';
+                const warning = debtScreenSettings.highlightOverdue && ['overdue','doubtful'].includes(item.status) ? ' border-color:var(--danger);' : '';
                 return '<article class="debt-card" style="' + warning + '">' +
                     '<div class="debt-card-head"><div><div class="debt-card-name">' + escapeHtml(item.customer_name || 'عميل غير مسمى') + '</div>' +
                     '<div class="debt-card-phone" dir="ltr">' + escapeHtml(item.customer_phone || '---') + '</div></div>' +
@@ -2860,7 +2860,7 @@ function updateDebtViewButtons() {
                 const group = groups.get(key);
                 group.rows.push(item);
                 group.total += finiteNumber(item.remaining_amount);
-                if (item.status === 'overdue') group.overdue = true;
+                if (item.status === 'overdue' || item.status === 'doubtful') group.overdue = true;
             });
             container.innerHTML = Array.from(groups.values()).sort(function(a,b){return b.total-a.total;}).map(function(group) {
                 const warning = debtScreenSettings.highlightOverdue && group.overdue ? ' style="border-color:var(--danger)"' : '';
@@ -2978,7 +2978,7 @@ function updateDebtViewButtons() {
             data.forEach(item => {
                 const remaining = finiteNumber(item.remaining_amount);
                 totalDebts += remaining;
-                if (item.status === 'overdue') overdue += remaining;
+                if (item.status === 'overdue' || item.status === 'doubtful') overdue += remaining;
                 if (item.customer_party_id > 0) debtors.add(item.customer_party_id);
             });
             document.getElementById('footerTotalDebts').textContent = formatCurrency(totalDebts);
@@ -3087,6 +3087,10 @@ function updateDebtViewButtons() {
                     time: 'الآن'
                 });
             }
+            const doubtfulItems = data.filter(item => item.status === 'doubtful');
+            if (doubtfulItems.length > 0) {
+                alerts.push({type:'danger', icon:'fa-triangle-exclamation', title:'⚠️ ديون مشكوك في تحصيلها', desc:doubtfulItems.length + ' فاتورة متأخرة 90 يوماً أو أعلى المخاطر', time:'الآن'});
+            }
             const overdueItems = data.filter(item => item.status === 'overdue');
             if (overdueItems.length > 0) {
                 alerts.push({
@@ -3151,13 +3155,14 @@ function updateDebtViewButtons() {
             const insights = [];
             const totalDebts = data.reduce((s, item) => s + parseFloat(item.remaining_amount || 0), 0);
             const overdue = data.filter(i => i.status === 'overdue').length;
+            const doubtful = data.filter(i => i.status === 'doubtful').length;
             const partial = data.filter(i => i.status === 'partial').length;
             const current = data.filter(i => i.status === 'current').length;
 
             insights.push({
                 title: '📊 نظرة عامة',
-                desc: 'إجمالي الديون: ' + formatCurrency(totalDebts) + ' - جاري: ' + current + ' - متأخر: ' + overdue +
-                    ' - مدفوع جزئياً: ' + partial
+                desc: 'إجمالي الديون: ' + formatCurrency(totalDebts) + ' - غير متأخر: ' + current + ' - متأخر: ' + overdue +
+                    ' - مشكوك في تحصيله: ' + doubtful + ' - مدفوع جزئياً: ' + partial
             });
 
             // أكثر عميل مدين
@@ -3778,7 +3783,7 @@ function updateDebtViewButtons() {
                 const paidToday=payments.filter(function(p){return String(p.created_at||p.payment_date||'').slice(0,10)===today;}).reduce(function(sum,p){return sum+finiteNumber(p.amount);},0);
                 const paidMonth=payments.filter(function(p){return String(p.created_at||p.payment_date||'').slice(0,7)===month;}).reduce(function(sum,p){return sum+finiteNumber(p.amount);},0);
                 const groups=new Map();
-                rows.forEach(function(r){const id=String(r.customer_party_id??r.customer_id??'');if(!groups.has(id))groups.set(id,{id:finiteNumber(id),name:r.customer_name||'---',phone:r.customer_phone||'---',count:0,total:0,overdue:0});const g=groups.get(id);g.count++;g.total+=finiteNumber(r.remaining_amount);if(r.status==='overdue')g.overdue+=finiteNumber(r.remaining_amount);});
+                rows.forEach(function(r){const id=String(r.customer_party_id??r.customer_id??'');if(!groups.has(id))groups.set(id,{id:finiteNumber(id),name:r.customer_name||'---',phone:r.customer_phone||'---',count:0,total:0,overdue:0});const g=groups.get(id);g.count++;g.total+=finiteNumber(r.remaining_amount);if(r.status==='overdue'||r.status==='doubtful')g.overdue+=finiteNumber(r.remaining_amount);});
                 const top=Array.from(groups.values()).sort(function(a,b){return b.total-a.total;}).slice(0,5);
                 const topRows=top.length?top.map(function(g){return '<tr><td>'+escapeHtml(g.name)+'</td><td>'+g.count+'</td><td class="amount">'+formatCurrency(g.total)+'</td><td class="amount">'+formatCurrency(g.overdue)+'</td><td><button class="btn-action view" onclick="viewCustomerDetails('+g.id+')" title="تفاصيل العميل"><i class="fas fa-eye"></i></button><button class="btn-action history" onclick="viewHistory('+g.id+')" title="السجل"><i class="fas fa-history"></i></button></td></tr>';}).join(''):'<tr><td colspan="5"><div class="empty-state">لا توجد أرصدة ديون مفتوحة.</div></td></tr>';
                 const recent=payments.slice().sort(function(a,b){return String(b.created_at||'').localeCompare(String(a.created_at||''));}).slice(0,5);
