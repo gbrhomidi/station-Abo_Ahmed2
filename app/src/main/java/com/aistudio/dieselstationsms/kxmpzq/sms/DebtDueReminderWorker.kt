@@ -43,11 +43,30 @@ class DebtDueReminderWorker(
             // date calculation is used by the customer-debt screen and the UI banner.
             DebtDueDateRepository.ensureSchema(db)
             val dueRows = DebtDueDateRepository.getDueSoonDebtReminders(db, stationId, 0)
-            var queuedCount = 0
-            val remindedNames = mutableListOf<String>()
+            val overdueRows = DebtDueDateRepository.getOverdueReminderCandidates(db, stationId)
+            val customersDueToday = (0 until dueRows.length())
+                .mapNotNull { dueRows.optJSONObject(it)?.optLong("customer_party_id", 0L) }
+                .filter { it > 0L }
+                .toSet()
+            val candidates = mutableListOf<org.json.JSONObject>()
             for (index in 0 until dueRows.length()) {
                 val row = dueRows.optJSONObject(index) ?: continue
-                if (row.optInt("days_remaining", Int.MAX_VALUE) != 0) continue
+                if (row.optInt("days_remaining", Int.MAX_VALUE) == 0) candidates += row
+            }
+            for (index in 0 until overdueRows.length()) {
+                val row = overdueRows.optJSONObject(index) ?: continue
+                val customerId = row.optLong("customer_party_id", 0L)
+                // Prefer today's due reminder over a catch-up reminder to prevent two texts
+                // to the same customer during the same worker cycle.
+                if (customerId > 0L && customerId !in customersDueToday) candidates += row
+            }
+
+            var queuedCount = 0
+            var overdueQueuedCount = 0
+            val remindedNames = mutableListOf<String>()
+            for (row in candidates) {
+                val daysRemaining = row.optInt("days_remaining", Int.MAX_VALUE)
+                if (daysRemaining > 0) continue
                 if (!row.optBoolean("eligible", false)) continue
 
                 val customerId = row.optLong("customer_party_id", 0L)
@@ -67,8 +86,14 @@ class DebtDueReminderWorker(
                 val balanceText = formatAmount(balance)
                 val dueAmountText = formatAmount(dueAmount)
                 val customerName = row.optString("customer_name").trim().ifBlank { "عميلنا الكريم" }
-                val message = "مرحباً $customerName، نذكّركم بأن موعد استحقاق الدين هو اليوم ($dueDate). " +
-                    "المبلغ المستحق اليوم $dueAmountText ر. ي، وإجمالي الرصيد القائم $balanceText ر. ي. شاكرين تعاونكم."
+                val overdueDays = (-daysRemaining).coerceAtLeast(0)
+                val message = if (daysRemaining < 0) {
+                    "مرحباً $customerName، نذكّركم بأن موعد استحقاق الدين ($dueDate) قد مضى منذ $overdueDays يوم. " +
+                        "المبلغ المتأخر $dueAmountText ر. ي، وإجمالي الرصيد القائم $balanceText ر. ي. شاكرين تعاونكم."
+                } else {
+                    "مرحباً $customerName، نذكّركم بأن موعد استحقاق الدين هو اليوم ($dueDate). " +
+                        "المبلغ المستحق اليوم $dueAmountText ر. ي، وإجمالي الرصيد القائم $balanceText ر. ي. شاكرين تعاونكم."
+                }
 
                 val eventId = "debt-reminder:$stationId:$customerId:$dueDate"
                 val dedupeKey = "$eventId:$phone"
@@ -95,6 +120,7 @@ class DebtDueReminderWorker(
                 )
                 if (result.status == "QUEUED" || result.status == "RETRY_PENDING") {
                     queuedCount++
+                    if (daysRemaining < 0) overdueQueuedCount++
                     if (customerName !in remindedNames) remindedNames += customerName
                 }
             }
@@ -102,14 +128,14 @@ class DebtDueReminderWorker(
             if (queuedCount > 0 || SmsOutboxRepository.hasPending(db)) {
                 SmsOutboxWorker.schedule(applicationContext)
             }
-            if (queuedCount > 0) postDueReminderNotification(stationId, queuedCount, remindedNames)
+            if (queuedCount > 0) postDueReminderNotification(stationId, queuedCount, remindedNames, overdueQueuedCount)
             Result.success()
         } catch (exception: Exception) {
             Result.retry()
         }
     }
 
-    private fun postDueReminderNotification(stationId: Int, count: Int, names: List<String>) {
+    private fun postDueReminderNotification(stationId: Int, count: Int, names: List<String>, overdueCount: Int) {
         try {
             val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val channelId = "debt_due_reminders"
@@ -134,8 +160,10 @@ class DebtDueReminderWorker(
             val notification = Notification.Builder(applicationContext, channelId)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle("تذكيرات الديون المستحقة")
-                .setContentText("تم تجهيز $count رسالة تذكير للعملاء المستحقة ديونهم اليوم" + if (detail.isBlank()) "" else ": $detail")
-                .setStyle(Notification.BigTextStyle().bigText("تمت إضافة $count رسالة تذكير إلى طابور SMS بسبب حلول تاريخ الاستحقاق اليوم. ستُرسل وفق إعدادات الرسائل وأذونات الجهاز."))
+                .setContentText("تم تجهيز $count تذكير دين" + if (detail.isBlank()) "" else ": $detail")
+                .setStyle(Notification.BigTextStyle().bigText(
+                    "تمت إضافة $count رسالة تذكير إلى طابور SMS. منها $overdueCount تذكير لمديونيات تجاوزت تاريخ الاستحقاق، والباقي لمستحقات اليوم. ستُرسل وفق إعدادات الرسائل وأذونات الجهاز."
+                ))
                 .setContentIntent(openApp)
                 .setAutoCancel(true)
                 .build()
