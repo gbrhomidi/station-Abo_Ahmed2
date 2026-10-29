@@ -2280,51 +2280,68 @@ async function safeInvoke(method, args = []) {
 /* ============================================================
    5. تطبيع الدين
    ============================================================ */
+function localDateKey(date = new Date()) {
+    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+}
+function calendarDayDelta(dateValue) {
+    const due = String(dateValue || '').trim().slice(0, 10);
+    const today = localDateKey();
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(due) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(today)) return null;
+    const dueTime = Date.parse(due + 'T00:00:00Z');
+    const todayTime = Date.parse(today + 'T00:00:00Z');
+    return Number.isFinite(dueTime) && Number.isFinite(todayTime) ? Math.round((dueTime - todayTime) / 86400000) : null;
+}
 function normalizedDebt(raw) {
     const d = { ...raw };
-    d.id = firstDefined(raw.id, raw.debt_id, raw.sale_id);
+    d.id = firstDefined(raw.transaction_id, raw.id, raw.debt_id, raw.sale_id);
+    d.transaction_id = firstDefined(raw.transaction_id, raw.id, raw.debt_id, raw.sale_id);
     d.customer_id = Number(firstDefined(raw.customer_party_id, raw.customer_id, 0));
-    d.customer_name = firstDefined(
-        raw.customer_name,
-        raw.commercial_name_ar,
-        raw.commercial_name,
-        raw.legal_name,
-        'عميل غير معروف'
-    );
+    d.customer_name = firstDefined(raw.customer_name, raw.commercial_name_ar, raw.commercial_name, raw.legal_name, 'عميل غير معروف');
     d.customer_name_ar = firstDefined(raw.commercial_name_ar, raw.customer_name);
     d.invoice_number = firstDefined(raw.invoice_number, '—');
     d.sale_code = firstDefined(raw.sale_code, '—');
-    d.due_date = raw.due_date || null;
+    // Creation time is not a maturity date. Missing due dates must never be marked overdue by age alone.
+    d.due_date = String(raw.due_date || '').slice(0, 10) || null;
     d.created_at = raw.created_at || null;
-    d.total_amount = Number(firstDefined(raw.net_amount, raw.gross_amount, raw.total_amount, 0));
-    d.paid_amount = Number(firstDefined(raw.paid_amount, 0));
-    d.remaining_amount = Number(firstDefined(raw.remaining_amount, 0));
+    d.total_amount = Math.max(0, Number(firstDefined(raw.net_amount, raw.gross_amount, raw.total_amount, 0)) || 0);
+    d.paid_amount = Math.max(0, Number(firstDefined(raw.paid_amount, 0)) || 0);
+    const rawRemaining = raw.remaining_amount;
+    d.remaining_amount = Math.max(0, rawRemaining === null || rawRemaining === undefined || rawRemaining === ''
+        ? d.total_amount - d.paid_amount
+        : Number(rawRemaining) || 0);
     d.fuel_type_id = raw.fuel_type_id || null;
     d.product_id = raw.product_id || null;
     d.liters = Number(raw.liters || 0);
     d.quantity = Number(raw.quantity || 0);
     d.order_type = raw.order_type || null;
     d.payment_method = raw.payment_method || null;
-    d.payment_status = raw.payment_status || null;
+    d.payment_status = raw.payment_status || raw.status || null;
     d.is_credit = raw.is_credit;
     d.station_id = raw.station_id || null;
-    d.customer_phone = firstDefined(raw.customer_phone, raw.phone, '');
-    d.days_overdue = computeDaysOverdue(d.due_date);
+    d.customer_phone = String(firstDefined(raw.customer_phone, raw.phone, '') || '').trim();
+    d.risk_level = String(raw.risk_level || raw.risk_classification || '').trim().toLowerCase();
+    d.days_remaining = calendarDayDelta(d.due_date);
+    d.days_overdue = d.days_remaining === null ? 0 : Math.max(0, -d.days_remaining);
     return d;
 }
 function computeDaysOverdue(due) {
-    if (!due) return 0;
-    const d = new Date(due);
-    if (isNaN(d.getTime())) return 0;
-    return Math.max(0, Math.ceil((Date.now() - d.getTime()) / 86400000));
+    const delta = calendarDayDelta(due);
+    return delta === null ? 0 : Math.max(0, -delta);
 }
 function statusOf(debt) {
-    if (debt.remaining_amount <= 0) return { key: 'paid', label: 'مدفوع', icon: 'fa-check-circle', cls: 'paid' };
-    if (!debt.due_date) return { key: 'pending', label: 'مستحق', icon: 'fa-hourglass-half', cls: 'pending' };
-    const days = Math.ceil((new Date(debt.due_date) - new Date()) / 86400000);
-    if (days < 0) return { key: 'overdue', label: 'متأخر', icon: 'fa-exclamation-circle', cls: 'overdue' };
-    if (days <= 3) return { key: 'due_soon', label: 'مستحق قريباً', icon: 'fa-clock', cls: 'due-soon' };
-    return { key: 'pending', label: 'مستحق', icon: 'fa-hourglass-half', cls: 'pending' };
+    if (debt.remaining_amount <= 0.000001) return { key: 'paid', label: 'مدفوع', icon: 'fa-check-circle', cls: 'paid' };
+    const risk = String(debt.risk_level || '').toLowerCase();
+    const highRisk = ['high','critical','blacklisted','مرتفع','محظور'].includes(risk) ||
+        risk.includes('blacklist') || risk.includes('مرتفع') || risk.includes('محظور');
+    const days = debt.days_remaining === undefined ? calendarDayDelta(debt.due_date) : debt.days_remaining;
+    if (String(debt.payment_status || debt.status || '').toLowerCase() === 'doubtful' ||
+        highRisk || (days !== null && days <= -90)) {
+        return { key: 'doubtful', label: 'مشكوك في تحصيله', icon: 'fa-triangle-exclamation', cls: 'doubtful' };
+    }
+    if (days !== null && days < 0) return { key: 'overdue', label: 'متأخر', icon: 'fa-exclamation-circle', cls: 'overdue' };
+    if (days !== null && days <= 3) return { key: 'due_soon', label: 'مستحق قريباً', icon: 'fa-clock', cls: 'due-soon' };
+    if (debt.paid_amount > 0.000001) return { key: 'partial', label: 'مدفوع جزئياً', icon: 'fa-coins', cls: 'pending' };
+    return { key: 'pending', label: debt.due_date ? 'مستحق' : 'تاريخ الاستحقاق غير محدد', icon: 'fa-hourglass-half', cls: 'pending' };
 }
 
 /* ============================================================
@@ -2565,13 +2582,15 @@ async function loadData() {
         const overdueRows = rowsFrom(results[5].result);
         const debtRows = rowsFrom(results[6].result);
         const merged = new Map();
-        [...overdueRows, ...debtRows].forEach(r => {
+        // The maturity-aware customer-debt query is authoritative; the old overdue
+        // endpoint is retained only as a fallback for rows absent from that query.
+        [...debtRows, ...overdueRows].forEach(r => {
             const d = normalizedDebt(r);
             if (!d.id) return;
-            const key = String(d.id);
+            const key = String(d.transaction_id || d.id);
             if (!merged.has(key)) merged.set(key, d);
         });
-        state.debts = [...merged.values()];
+        state.debts = [...merged.values()].filter(d => d.remaining_amount > 0.000001);
 
         state.notifications = rowsFrom(results[7].result);
         state.smsLogs = rowsFrom(results[8].result);
