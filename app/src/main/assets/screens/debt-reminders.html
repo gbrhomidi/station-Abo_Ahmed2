@@ -2654,7 +2654,7 @@ function filtered() {
         if (state.filter === 'doubtful' && s.key !== 'doubtful') return false;
         if (state.filter === 'due_soon' && s.key !== 'due_soon') return false;
         if (state.filter === 'paid' && s.key !== 'paid') return false;
-        if (state.filter === 'partial' && !(d.remaining_amount > 0 && d.remaining_amount < d.total_amount)) return false;
+        if (state.filter === 'partial' && s.key !== 'partial') return false;
         if (state.filter === 'reminded' && !hasReminder(d)) return false;
         if (q) {
             const hay = normalize([
@@ -2667,8 +2667,23 @@ function filtered() {
     });
 }
 function hasReminder(debt) {
-    return state.notifications.some(n => String(n.reference_id) === String(debt.id)) ||
-           state.smsLogs.some(s => String(s.transaction_id) === String(debt.id) || String(s.business_entity_id) === String(debt.id));
+    const customerId = Number(debt.customer_id || debt.customer_party_id || 0);
+    const dueDate = String(debt.due_date || '').slice(0, 10);
+    return state.notifications.some(n =>
+        String(n.reference_id) === String(debt.id) ||
+        String(n.reference_id) === String(debt.transaction_id)
+    ) || state.smsLogs.some(s => {
+        const entity = String(s.business_entity_id || '');
+        const transaction = String(s.transaction_id || '');
+        const event = String(s.event_id || s.dedupe_key || '');
+        return transaction === String(debt.id) ||
+            transaction === String(debt.transaction_id) ||
+            entity === String(debt.id) ||
+            // The automatic reminder intentionally carries a customer entity ID because
+            // it summarizes all open invoices due on the same calendar day.
+            (customerId > 0 && entity === 'party:' + customerId &&
+                (!dueDate || !event || event.includes(dueDate)));
+    });
 }
 
 function render() {
