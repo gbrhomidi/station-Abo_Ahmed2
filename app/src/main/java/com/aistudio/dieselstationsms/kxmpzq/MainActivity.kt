@@ -1211,7 +1211,13 @@ class MainActivity : AppCompatActivity() {
                     if (window.__stationOfflineUiObserver) window.__stationOfflineUiObserver.disconnect();
                     window.__stationOfflineUiObserver = new MutationObserver(function (records) {
                         records.forEach(function (record) {
-                            if (record.type === 'characterData') scan(record.target.parentNode);
+                            if (record.type === 'characterData') {
+                                scan(record.target.parentNode);
+                            } else {
+                                // Toast libraries often update textContent on an existing
+                                // container (a childList mutation), rather than add a new toast.
+                                scan(record.target);
+                            }
                             if (record.addedNodes) record.addedNodes.forEach(scan);
                         });
                     });
