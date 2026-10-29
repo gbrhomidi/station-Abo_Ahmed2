@@ -59,6 +59,8 @@
     function prepareModals(root) {
         var scope = root || document;
         collectElements(scope, modalSelector).forEach(function (node) {
+            // Real DOM elements expose style; guard partial/test nodes too.
+            if (!node || !node.style) return;
             if (node.style.webkitTapHighlightColor !== 'transparent') node.style.webkitTapHighlightColor = 'transparent';
             if (node.matches('.modal, .modal-content, [role="dialog"]')) {
                 if (node.style.webkitOverflowScrolling !== 'touch') node.style.webkitOverflowScrolling = 'touch';
