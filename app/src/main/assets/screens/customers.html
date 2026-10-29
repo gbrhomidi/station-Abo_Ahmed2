@@ -3638,15 +3638,21 @@
                 { label: '0–30 يوم', min: 0, max: 30, count: 0, amount: 0 },
                 { label: '31–60 يوم', min: 31, max: 60, count: 0, amount: 0 },
                 { label: '61–90 يوم', min: 61, max: 90, count: 0, amount: 0 },
-                { label: 'أكثر من 90 يوم', min: 91, max: Number.MAX_SAFE_INTEGER, count: 0, amount: 0 },
-                { label: 'تاريخ غير محدد', min: null, max: null, count: 0, amount: 0 }
+                { label: 'أكثر من 90 يوم / مشكوك في تحصيله', min: 91, max: Number.MAX_SAFE_INTEGER, count: 0, amount: 0 },
+                { label: 'تاريخ استحقاق غير محدد', min: null, max: null, count: 0, amount: 0 }
             ];
-            const now = Date.now();
+            const todayText = String(businessDayDate()).slice(0, 10);
+            const today = Date.parse(todayText + 'T00:00:00Z');
             data.forEach(item => {
                 const amount = Math.max(0, numberValue(item.remaining_amount));
                 if (!amount) return;
-                const due = Date.parse(item.due_date || item.created_at || '');
-                const age = Number.isFinite(due) ? Math.max(0, Math.floor((now - due) / 86400000)) : null;
+                // Never treat invoice creation as a contractual due date.
+                const dueText = String(item.due_date || '').slice(0, 10);
+                let age = null;
+                if (/^\\d{4}-\\d{2}-\\d{2}$/.test(dueText)) {
+                    const due = Date.parse(dueText + 'T00:00:00Z');
+                    if (Number.isFinite(due) && Number.isFinite(today)) age = Math.max(0, Math.round((today - due) / 86400000));
+                }
                 const bucket = age === null ? buckets[4] : buckets.find(entry => entry.min !== null && age >= entry.min && age <= entry.max);
                 if (bucket) { bucket.count += 1; bucket.amount += amount; }
             });
