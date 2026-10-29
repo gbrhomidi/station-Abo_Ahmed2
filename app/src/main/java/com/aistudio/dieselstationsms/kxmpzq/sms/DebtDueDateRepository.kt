@@ -162,6 +162,70 @@ object DebtDueDateRepository {
         return result
     }
 
+    /**
+     * Catch up on a missed due-day reminder once SMS permissions/network were unavailable.
+     * The event keeps the original invoice maturity date as its dedupe key, so reopening the
+     * app does not send a repeated daily reminder for the same maturity date.
+     */
+    fun getOverdueReminderCandidates(helper: DatabaseHelper, stationId: Int): JSONArray {
+        ensureSchema(helper)
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        val today = LocalDate.now()
+        val all = readDebts(helper.readableDatabase, stationId)
+        val openByCustomer = all.filter { it.remaining > 0.000001 && it.customerId > 0L }
+            .groupBy { it.customerId }
+        val overdueByCustomer = all.filter { debt ->
+            if (debt.remaining <= 0.000001 || debt.customerId <= 0L) return@filter false
+            val due = parseDate(debt.dueDate) ?: return@filter false
+            due.isBefore(today)
+        }.groupBy { it.customerId }
+        val output = JSONArray()
+        overdueByCustomer.forEach { (customerId, overdueRows) ->
+            // Use the most recent overdue maturity for context while including the customer's
+            // full open balance in the reminder message.
+            val nearest = overdueRows.maxByOrNull { parseDate(it.dueDate) ?: LocalDate.MIN } ?: return@forEach
+            val dueDate = nearest.dueDate.take(10)
+            val due = parseDate(dueDate) ?: return@forEach
+            val daysRemaining = java.time.temporal.ChronoUnit.DAYS.between(today, due).toInt()
+            if (daysRemaining >= 0) return@forEach
+            val customerRows = openByCustomer[customerId].orEmpty()
+            val totalOutstanding = customerRows.sumOf { it.remaining }.coerceAtLeast(0.0)
+            val dueAmount = overdueRows.filter { it.dueDate.take(10) == dueDate }
+                .sumOf { it.remaining }.coerceAtLeast(0.0)
+            val phone = PhoneUtils.normalize(nearest.phone)
+            val eventId = "debt-reminder:$stationId:$customerId:$dueDate"
+            val dedupeKey = if (phone != null) "$eventId:$phone" else ""
+            val alreadyQueued = dedupeKey.isNotBlank() && hasOutboxDedupeKey(helper.readableDatabase, dedupeKey)
+            output.put(JSONObject().apply {
+                put("id", nearest.transactionId)
+                put("transaction_id", nearest.transactionId)
+                put("sale_id", nearest.transactionId)
+                put("customer_party_id", customerId)
+                put("customer_id", customerId)
+                put("customer_name", nearest.customerName)
+                put("phone", nearest.phone)
+                put("customer_phone", nearest.phone)
+                put("invoice_number", nearest.invoiceNumber)
+                put("sale_code", nearest.saleCode)
+                put("order_type", nearest.orderType)
+                put("payment_method", nearest.paymentMethod)
+                put("nearest_due_date", dueDate)
+                put("due_date", dueDate)
+                put("days_remaining", daysRemaining)
+                put("due_soon_amount", dueAmount)
+                put("total_outstanding", totalOutstanding)
+                put("remaining_amount", nearest.remaining)
+                put("last_reminder_at", if (alreadyQueued) dueDate else "")
+                put("eligible", totalOutstanding > 0.000001 && phone != null && !alreadyQueued)
+                put("station_id", stationId)
+                put("event_id", eventId)
+                put("risk_level", nearest.riskLevel)
+                put("status", statusFor(nearest.remaining, nearest.paid, nearest.dueDate, nearest.riskLevel))
+            })
+        }
+        return output
+    }
+
     fun getOverdueDebts(helper: DatabaseHelper, stationId: Int): JSONArray {
         val all = getCustomerDebts(helper, stationId)
         val out = JSONArray()
