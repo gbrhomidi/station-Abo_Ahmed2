@@ -2437,7 +2437,6 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
                 return;
             }
             state.editing = row;
-            if (!row) state.pendingCreateKey = 'FIN-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
             $('formTitle').innerHTML = row
                 ? '<i class="fas fa-edit"></i> تعديل المصروف'
                 : '<i class="fas fa-plus-circle"></i> إضافة مصروف جديد';
@@ -2664,10 +2663,6 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
             const form = $('recordForm');
             if (!form.reportValidity()) return;
             const payload = collectForm();
-            if (!state.editing && CFG.createMethod && !state.approving) {
-                state.pendingCreateKey = state.pendingCreateKey || 'FIN-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
-                payload.idempotency_key = state.pendingCreateKey;
-            }
             setLoading(true);
             try {
                 let result;
@@ -2685,7 +2680,6 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
                     throw new Error('لا توجد عملية حفظ مدعومة');
                 }
                 parse(result);
-                if (!state.editing && CFG.createMethod && !state.approving) state.pendingCreateKey = null;
                 toast(state.approving ? 'تم اعتماد المصروف وترحيله' : 'تم حفظ المصروف بنجاح');
                 state.approving = false;
                 closeModal(null, 'formModal');
