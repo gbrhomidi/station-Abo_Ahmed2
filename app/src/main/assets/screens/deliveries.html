@@ -2526,6 +2526,18 @@
             <button
                 type="button"
                 class="btn"
+                id="settleFeeBtn"
+                style="display:none"
+                onclick="settleDeliveryFee()">
+
+                <i class="fas fa-money-bill-transfer"></i>
+                تسديد رسوم السائق
+
+            </button>
+
+            <button
+                type="button"
+                class="btn"
                 onclick="closeModal('formModal')">
 
                 إلغاء
@@ -4432,6 +4444,9 @@
         $('f_driver_display').value = '';
 
         $('f_delivery_service_fee').value = '0';
+        $('f_delivery_fee_mode').value = 'exempt';
+        $('f_cash_customer_name').value = '';
+        $('settleFeeBtn').style.display = 'none';
         $('vehiclePreview').classList.add('empty');
         $('vehiclePreviewImg').removeAttribute('src');
 
@@ -5529,6 +5544,10 @@
         );
 
         openModal('formModal');
+        const feeNeedsSettlement = String(row.delivery_fee_mode || '').toLowerCase() === 'driver' &&
+            number(row.delivery_service_fee ?? row.service_fee ?? 0) > 0 &&
+            !['settled','exempt','none'].includes(String(row.delivery_fee_status || '').toLowerCase());
+        $('settleFeeBtn').style.display = feeNeedsSettlement ? 'inline-flex' : 'none';
 
         /* Re-run availability checks after modal is open */
         if (Number(row.vehicle_id || 0) > 0) {
@@ -5560,7 +5579,7 @@
         $('f_status').value = row.status || 'pending';
         $('f_delivery_date').value = toLocalInput(row.delivery_date);
         $('f_created_at').value = toLocalInput(row.created_at);
-        $('f_location').value = row.location ?? '';
+        $('f_location').value = row.delivery_location ?? row.location ?? '';
         $('f_notes').value = row.notes ?? '';
 
         updateVehiclePreview(
@@ -5681,6 +5700,32 @@
     /* ================================================================
        SAVE DELIVERY
        ================================================================ */
+
+    async function settleDeliveryFee() {
+        const deliveryId = Number(state.editingId || $('f_id').value || 0);
+        if (!(deliveryId > 0)) return showNotification('warning', 'تسديد رسوم السائق', 'احفظ التوصيل أولاً.');
+        const button = $('settleFeeBtn');
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارٍ إثبات السداد...';
+        }
+        try {
+            const raw = await invoke('settleDeliveryServiceFee', [deliveryId]);
+            const result = dataOf(raw) || raw;
+            if (!result || result.success === false) throw new Error(result?.error || result?.message || 'فشل إثبات سداد رسوم السائق');
+            showNotification('success', 'تم تسديد رسوم السائق', result.message || 'تم إنشاء قيد التسوية المحاسبي وإلغاء الخصم المعلق من مسير الراتب.');
+            if (button) button.style.display = 'none';
+            await loadDeliveries();
+            closeModal('formModal');
+        } catch (error) {
+            showNotification('error', 'فشل تسديد رسوم السائق', error.message || 'تعذر إثبات السداد');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-money-bill-transfer"></i> تسديد رسوم السائق';
+            }
+        }
+    }
 
     async function saveDelivery() {
 
@@ -5907,8 +5952,11 @@
             return { valid: false, message: 'معرف البيع الأصلي مطلوب.' };
         }
 
+        const selectedCashSale = ['cash','نقدي','نقداً'].includes(String(state.selectedSalePaymentMethod || '').trim().toLowerCase());
+        const cashCustomerName = String($('f_cash_customer_name').value || '').trim();
         const isAnonymous =
-            String($('f_party_display').value || '').includes('غير مسجل');
+            String($('f_party_display').value || '').includes('غير مسجل') ||
+            (selectedCashSale && cashCustomerName.length > 0);
 
         if (!isProductSale && !partyId && !isAnonymous) {
             return {
@@ -5978,8 +6026,8 @@
         if (serviceFee > 0 && feeMode === 'deduct_from_sales' && serviceFee > total) {
             return { valid: false, message: 'رسوم التوصيل لا يمكن أن تتجاوز قيمة المبيعات.' };
         }
-        if (paymentMethod === 'cash' && deliveryLocation && !cashName) {
-            return { valid: false, message: 'اسم العميل النقدي مطلوب لرسالة السائق.' };
+        if (paymentMethod === 'cash' && !cashName) {
+            return { valid: false, message: 'أدخل اسم العميل النقدي حتى تظهر بيانات العميل الصحيحة في رسالة السائق.' };
         }
         if (feeMode === 'driver' && serviceFee > 0 && !(Number($('f_driver_id').value || 0) > 0)) {
             return { valid: false, message: 'حدد السائق قبل تسجيل رسوم التوصيل على حسابه.' };
