@@ -12802,18 +12802,33 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 DebtDueDateRepository.ensureSchema(db)
-                val rows = DebtDueDateRepository.getDueSoonDebtReminders(db, stationId, 365)
-                var found: JSONObject? = null
-                for (i in 0 until rows.length()) {
-                    val row = rows.getJSONObject(i)
-                    if (row.optLong("transaction_id", 0L) == debtId ||
-                        row.optLong("sale_id", 0L) == debtId) {
-                        found = row
-                        break
-                    }
+                val allRows = DebtDueDateRepository.getCustomerDebts(db, stationId)
+                val debt = (0 until allRows.length())
+                    .mapNotNull { allRows.optJSONObject(it) }
+                    .firstOrNull { it.optLong("transaction_id", 0L) == debtId || it.optLong("sale_id", 0L) == debtId }
+                requireNotNull(debt) { "الدين غير موجود ضمن ديون المحطة الحالية" }
+                require(debt.optDouble("remaining_amount", 0.0) > 0.000001) { "هذا الدين مسدد ولا يحتاج إلى تذكير" }
+                val dueDate = debt.optString("due_date").trim().take(10)
+                require(dueDate.isNotBlank()) { "لا يوجد تاريخ استحقاق صالح لهذا الدين؛ راجع شروط الدفع للعميل" }
+                val customerId = debt.optLong("customer_party_id", 0L)
+                val phone = PhoneUtils.normalize(debt.optString("customer_phone", debt.optString("phone")))
+                require(customerId > 0L && phone != null) { "بيانات العميل أو رقم الهاتف غير صالح" }
+                val totalOutstanding = (0 until allRows.length())
+                    .mapNotNull { allRows.optJSONObject(it) }
+                    .filter { it.optLong("customer_party_id", 0L) == customerId && it.optDouble("remaining_amount", 0.0) > 0.000001 }
+                    .sumOf { it.optDouble("remaining_amount", 0.0) }
+                val days = DebtDueDateRepository.daysUntil(dueDate) ?: 999
+                val candidate = JSONObject(debt.toString()).apply {
+                    put("transaction_id", debtId)
+                    put("customer_party_id", customerId)
+                    put("phone", phone)
+                    put("nearest_due_date", dueDate)
+                    put("days_remaining", days)
+                    put("due_soon_amount", debt.optDouble("remaining_amount", 0.0))
+                    put("total_outstanding", totalOutstanding)
+                    put("eligible", true)
                 }
-                requireNotNull(found) { "الدين غير موجود ضمن المستحقات القريبة" }
-                dataResponse(queueDueReminder(db, found, stationId, activity.currentUserId))
+                dataResponse(queueDueReminder(db, candidate, stationId, activity.currentUserId))
             } catch (e: Exception) { errorResponse(e.message ?: "تعذر إرسال تذكير الدين") }
         }
 
