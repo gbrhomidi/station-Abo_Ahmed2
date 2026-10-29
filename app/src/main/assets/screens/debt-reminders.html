@@ -3559,9 +3559,10 @@ function generateReports() {
     const from = $('reportFrom').value;
     const to = $('reportTo').value;
     let rows = state.debts.filter(d => {
-        const date = String(d.due_date || d.created_at || '').slice(0, 10);
-        if (from && date && date < from) return false;
-        if (to && date && date > to) return false;
+        const date = String(d.due_date || '').slice(0, 10);
+        if ((from || to) && !date) return false;
+        if (from && date < from) return false;
+        if (to && date > to) return false;
         return true;
     });
 
