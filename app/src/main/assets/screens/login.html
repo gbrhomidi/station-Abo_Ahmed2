@@ -2391,14 +2391,10 @@
                 if (hasAndroidBridge()) {
                     const result = await apiCall('load_credentials');
                     if (result.success && result.hasCredentials) {
-                        const timestamp = result.timestamp || 0;
-                        const maxAge = APP_CONFIG.CREDENTIALS_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
-                        if (Date.now() - timestamp > maxAge) {
-                            debugInfo("REMEMBER_ME_EXPIRED", { timestamp: timestamp });
-                            await clearRememberMeCredentials();
-                            return null;
-                        }
-                        debugInfo("REMEMBER_ME_LOADED", { username: result.username });
+                        // Remember-Me is cleared only by an explicit user action or a detected
+                        // Android device reboot. Merely leaving the app/backgrounding it must not
+                        // expire the local encrypted token and force password entry.
+                        debugInfo("REMEMBER_ME_LOADED", { username: result.username, timestamp: result.timestamp || 0 });
                         return {
                             username: result.username,
                             password: null,
