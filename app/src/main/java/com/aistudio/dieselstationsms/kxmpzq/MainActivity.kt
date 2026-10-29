@@ -11992,13 +11992,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
-                JSONObject().put("success", true).put(
-                    "data",
-                    DeliveryFeeAccounting.settleDriverFee(db, deliveryId, stationId, activity.currentUserId)
-                ).toString()
+                DeliveryFeeAccounting.ensureSchema(db)
+                val database = db.writableDatabase
+                var settlement = JSONObject()
+                database.beginTransaction()
+                try {
+                    settlement = DeliveryFeeAccounting.settleDriverFee(db, deliveryId, stationId, activity.currentUserId)
+                    database.setTransactionSuccessful()
+                } finally {
+                    database.endTransaction()
+                }
+                JSONObject().put("success", true).put("data", settlement).toString()
             } catch (e: Exception) {
                 DebugLogger.logException("SettleDeliveryServiceFee", e)
-                errorResponse(e.message ?: "تعذر تسديد رسوم التوصيل على السائق")
+                errorResponse(e.message ?: "تعذر تسديد رسوم التوصيل على السائق؛ لم يتم اعتماد التسوية")
             }
         }
 
