@@ -989,6 +989,12 @@ body.sidebar-is-open .sidebar-toggle {
     .delivery-fee-composite .form-label { font-size:.60rem; }
 }
 
+/* Match readable new-sale form controls to the payment-method field size. */
+#formModal #recordForm *:not(i):not(svg):not(path) {
+    font-size: 0.83rem !important;
+}
+#formModal .modal-footer button { font-size: 0.83rem !important; }
+
 .form-label {
     color: var(--text-secondary);
     font-size: 0.75rem;
@@ -2648,7 +2654,10 @@ function inputHtml(def, row) {
         return '<div class="form-group' + (def.full?' full':'') + '"><label class="form-label">' + esc(def.label) + (def.required?' *':'') + '</label>'
             + '<select class="form-input' + cls + '" data-key="' + esc(def.key) + '" ' + req + ' ' + ro + '><option value="">اختر...</option></select></div>';
     }
-    return '<div class="form-group' + (def.full?' full':'') + '"><label class="form-label">' + esc(def.label) + (def.required?' *':'') + '</label>'
+    const cashCustomerWrapper = def.key === 'cash_customer_name'
+        ? ' data-cash-customer-group="true" style="display:none"'
+        : '';
+    return '<div class="form-group' + (def.full?' full':'') + '"' + cashCustomerWrapper + '><label class="form-label">' + esc(def.label) + (def.required?' *':'') + '</label>'
         + '<input class="form-input' + cls + '" data-key="' + esc(def.key) + '" type="' + esc(def.type) + '" value="' + esc(value) + '" ' + req + ' ' + ro + '></div>';
 }
 
@@ -2762,8 +2771,14 @@ async function loadSaleFormLookups(row=null) {
     const customerEl = document.querySelector('[data-key="customer_id"]');
     if (customerEl) {
         customerEl.innerHTML = '<option value="">اختر العميل عند الحاجة...</option>'
+            + '<option value="cash_sale">مبيعات نقدية</option>'
             + customers.map(x => '<option value="' + esc(field(x,['id','party_id','customer_id'])) + '">' + esc(field(x,['commercial_name_ar','commercial_name','legal_name','name']) || 'عميل') + '</option>').join('');
-        customerEl.value = field(row,['customer_id','customer_party_id']) || '';
+        const existingCustomerId = field(row,['customer_id','customer_party_id']);
+        const hasCashName = String(field(row,['cash_customer_name']) || '').trim().length > 0;
+        if (existingCustomerId) customerEl.value = String(existingCustomerId);
+        else if (row && hasCashName && ['cash','نقدي','نقداً'].includes(String(field(row,['payment_method']) || '').trim().toLowerCase())) {
+            customerEl.value = 'cash_sale';
+        } else customerEl.value = '';
     }
     if (!row) {
         const now = new Date();
@@ -2807,7 +2822,10 @@ async function loadSaleFormLookups(row=null) {
     const fee = document.querySelector('[data-key="delivery_service_fee"]');
     const mode = document.querySelector('[data-key="delivery_fee_mode"]');
     if (fee) fee.oninput = updateDeliveryFeeDisplay;
-    if (mode) mode.onchange = updateDeliveryFeeDisplay;
+    if (mode) mode.onchange = () => {
+        if (mode.value === 'exempt' && fee) fee.value = '0';
+        updateDeliveryFeeDisplay();
+    };
     const location = document.querySelector('[data-key="delivery_location"]');
     const cashName = document.querySelector('[data-key="cash_customer_name"]');
     [location,cashName].forEach(el => { if (el) el.addEventListener('input', () => { state.lastSuccessfulSaleFingerprint = null; }); });
@@ -2873,13 +2891,15 @@ function updateDeliveryFeeDisplay() {
     const quantity = numeric(document.querySelector('[data-key="quantity"]')?.value);
     const price = numeric(document.querySelector('[data-key="price_per_liter"]')?.value);
     const base = quantity * price;
-    const fee = Math.max(0, numeric(document.querySelector('[data-key="delivery_service_fee"]')?.value));
-    const mode = document.querySelector('[data-key="delivery_fee_mode"]')?.value || 'exempt';
+    const feeInput = document.querySelector('[data-key="delivery_service_fee"]');
+    const modeInput = document.querySelector('[data-key="delivery_fee_mode"]');
+    const mode = modeInput?.value || 'exempt';
+    if (mode === 'exempt' && feeInput && numeric(feeInput.value) !== 0) feeInput.value = '0';
+    const fee = mode === 'exempt' ? 0 : Math.max(0, numeric(feeInput?.value));
     const display = document.querySelector('[data-key="delivery_fee_display_total"]');
     if (!display) return;
-    let total = base;
-    if (mode === 'add_to_sales') total = base + fee;
-    else if (mode === 'deduct_from_sales') total = Math.max(0, base - fee);
+    // Deduct mode reduces litres/fuel value, not the overall customer invoice.
+    const total = (mode === 'add_to_sales' || mode === 'driver') ? base + fee : base;
     display.value = total.toFixed(2);
 }
 
@@ -2889,6 +2909,17 @@ function bindFuelCalculation(resolveDynamic=true) {
     const t = document.querySelector('[data-key="total_amount"]');
     const f = document.querySelector('[data-key="fuel_type_id"]');
     const customer = document.querySelector('[data-key="customer_id"]');
+    const payment = document.querySelector('[data-key="payment_method"]');
+    const cashName = document.querySelector('[data-key="cash_customer_name"]');
+    const updateCashCustomerVisibility = () => {
+        const option = customer?.options?.[customer.selectedIndex];
+        const selectedCashSale = customer?.value === 'cash_sale' ||
+            String(option?.textContent || '').trim() === 'مبيعات نقدية';
+        const visible = Boolean(selectedCashSale && (!payment || payment.value === 'cash'));
+        const wrapper = cashName?.closest('[data-cash-customer-group]') || cashName?.closest('.form-group');
+        if (wrapper) wrapper.style.display = visible ? '' : 'none';
+        if (cashName && !visible) cashName.value = '';
+    };
     const calc = () => { if (t) t.value = (numeric(q?.value)*numeric(p?.value)).toFixed(2); };
     if (f) f.onchange = () => {
         const o = f.options[f.selectedIndex];
@@ -2899,8 +2930,15 @@ function bindFuelCalculation(resolveDynamic=true) {
     };
     if (q) q.oninput = () => { calc(); updateDeliveryFeeDisplay(); if (resolveDynamic) refreshResolvedFuelPrice(); };
     if (customer) customer.onchange = () => {
+        if (customer.value === 'cash_sale' && payment) payment.value = 'cash';
+        updateCashCustomerVisibility();
         if (resolveDynamic) { loadActivePromotions(); refreshResolvedFuelPrice(); }
     };
+    if (payment) payment.onchange = () => {
+        if (payment.value !== 'cash' && customer?.value === 'cash_sale') customer.value = '';
+        updateCashCustomerVisibility();
+    };
+    updateCashCustomerVisibility();
     const occ = document.querySelector('[data-key="occasion_code"]');
     if (occ) occ.addEventListener('change', () => refreshResolvedFuelPrice());
     calc();
@@ -2946,29 +2984,39 @@ function collectForm() {
     return payload;
 }
 
+function fuelSaleFingerprint(payload) {
+    const stable = {...payload};
+    delete stable.idempotency_key;
+    delete stable.created_at;
+    return JSON.stringify(stable);
+}
+
 async function saveForm() {
     const form = $('recordForm');
     if (!form.reportValidity()) return;
     const payload = collectForm();
     payload.transaction_time = String(payload.sale_date || localDate(new Date())) + ' ' + String(payload.sale_time || localTime(new Date()));
-    const customerId = Number(payload.customer_id || 0);
-    const deliveryFee = Number(payload.delivery_service_fee || 0);
+    const customerSelection = String(payload.customer_id || '');
+    const cashSaleSelected = customerSelection === 'cash_sale';
+    const customerId = cashSaleSelected ? 0 : (Number(customerSelection) || 0);
+    if (cashSaleSelected) payload.payment_method = 'cash';
     const deliveryFeeMode = String(payload.delivery_fee_mode || 'exempt');
+    const feeInput = document.querySelector('[data-key="delivery_service_fee"]');
+    if (deliveryFeeMode === 'exempt' && feeInput) feeInput.value = '0';
+    const deliveryFee = deliveryFeeMode === 'exempt' ? 0 : Number(payload.delivery_service_fee || 0);
     const deliveryLocation = String(payload.delivery_location || '').trim();
-    const cashCustomerName = String(payload.cash_customer_name || '').trim();
+    const cashCustomerName = cashSaleSelected ? String(payload.cash_customer_name || '').trim() : '';
     if (!Number.isFinite(deliveryFee) || deliveryFee < 0) return toast('رسوم خدمة التوصيل يجب أن تكون صفراً أو أكثر', true, 'form');
     if (!['exempt','add_to_sales','driver','deduct_from_sales'].includes(deliveryFeeMode)) return toast('اختر طريقة احتساب رسوم التوصيل', true, 'form');
     if (deliveryFee > 0 && deliveryFeeMode !== 'exempt' && !deliveryLocation) return toast('أدخل موقع التوصيل قبل احتساب رسوم الخدمة', true, 'form');
-    if (deliveryFee > 0 && deliveryFeeMode === 'deduct_from_sales' && deliveryFee > numeric(payload.quantity) * numeric(payload.price_per_liter)) return toast('رسوم التوصيل لا يمكن أن تتجاوز قيمة المبيعات', true, 'form');
-    if (payload.payment_method === 'cash' && deliveryLocation && !cashCustomerName) return toast('أدخل اسم العميل النقدي المرتبط بالتوصيل', true, 'form');
+    if (deliveryFee > 0 && deliveryFeeMode === 'deduct_from_sales' && deliveryFee >= numeric(payload.quantity) * numeric(payload.price_per_liter)) return toast('رسوم التوصيل يجب أن تكون أقل من قيمة المبيعات حتى تبقى كمية وقود موجبة', true, 'form');
+    if (cashSaleSelected && deliveryLocation && !cashCustomerName) return toast('أدخل اسم العميل النقدي المرتبط بالتوصيل', true, 'form');
     payload.delivery_service_fee = deliveryFee;
     payload.delivery_fee_mode = deliveryFeeMode;
     payload.delivery_location = deliveryLocation;
     payload.cash_customer_name = cashCustomerName;
     payload.delivery_fee_display_total = Number(document.querySelector('[data-key="delivery_fee_display_total"]')?.value || payload.total_amount || 0);
-    const fingerprintPayload = {...payload};
-    delete fingerprintPayload.idempotency_key;
-    const fingerprint = JSON.stringify(fingerprintPayload);
+    const fingerprint = fuelSaleFingerprint(payload);
     if (!state.editing && state.lastSuccessfulSaleFingerprint === fingerprint) {
         return toast('تم حفظ هذه البيانات بالفعل. عدّل الكمية أو الحقول المطلوبة قبل إنشاء عملية بيع جديدة.', true, 'form');
     }
@@ -3002,14 +3050,27 @@ async function saveForm() {
             state.lastSavedSaleId = saleId;
             state.pendingIdempotencyKey = null;
             state.lastSuccessfulSaleFingerprint = fingerprint;
+            if (deliveryFeeMode === 'deduct_from_sales') {
+                const savedQuantity = Number(saved.quantity);
+                const savedFuelAmount = Number(saved.total_amount);
+                const savedInvoiceTotal = Number(saved.delivery_fee_display_total);
+                const quantityEl = document.querySelector('[data-key="quantity"]');
+                const totalEl = document.querySelector('[data-key="total_amount"]');
+                const displayEl = document.querySelector('[data-key="delivery_fee_display_total"]');
+                if (quantityEl && Number.isFinite(savedQuantity) && savedQuantity > 0) quantityEl.value = String(savedQuantity);
+                if (totalEl && Number.isFinite(savedFuelAmount) && savedFuelAmount >= 0) totalEl.value = savedFuelAmount.toFixed(2);
+                if (displayEl && Number.isFinite(savedInvoiceTotal) && savedInvoiceTotal >= 0) displayEl.value = savedInvoiceTotal.toFixed(2);
+                state.lastSuccessfulSaleFingerprint = fuelSaleFingerprint(collectForm());
+            }
             const sms = saved.sms || {};
             const smsNote = sms.queued
                 ? ' — تم وضع SMS في طابور الإرسال'
                 : (payload.payment_method === 'credit' ? ' — تعذر تجهيز SMS: ' + (sms.reason||'غير معروف') : '');
             toast('تم حفظ عملية البيع رقم ' + saleId + ' وتحديث المخزون' + smsNote, false, 'form');
             showDeliveryAction(saleId);
-            await reloadData();
+            void reloadData().catch(refreshError => console.warn('[Fuel Sales] Background refresh failed:', refreshError));
             // Keep the form modal open for review; the operator closes it explicitly.
+            // The refresh no longer delays visible save-success feedback.
             return;
         }
     } catch (e) {

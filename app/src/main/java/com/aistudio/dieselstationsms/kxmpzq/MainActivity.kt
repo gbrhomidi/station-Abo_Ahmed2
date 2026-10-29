@@ -12157,15 +12157,58 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     put("station_id", stationScopeId)
                 }
 
+                // Run schema upgrades once; fee persistence skips duplicate schema/PRAGMA work.
                 DeliveryFeeAccounting.ensureSchema(db)
                 PumpMeterSmsRepository(activity.applicationContext, db).ensureSchema()
+
+                val originalQuantity = input.optDouble("quantity", 0.0)
+                val unitPrice = input.optDouble("price_per_liter", 0.0)
+                val requestedFee = input.optDouble("delivery_service_fee", 0.0)
+                require(originalQuantity.isFinite() && originalQuantity > 0.0) { "أدخل كمية وقود أكبر من صفر" }
+                require(unitPrice.isFinite() && unitPrice > 0.0) { "سعر اللتر غير صالح" }
+                require(requestedFee.isFinite() && requestedFee >= 0.0) { "رسوم خدمة التوصيل غير صالحة" }
+
+                val feeMode = DeliveryFeeAccounting.normalizeMode(input.optString("delivery_fee_mode", "exempt"))
+                val feeAmount = if (feeMode == DeliveryFeeAccounting.EXEMPT) 0.0 else requestedFee
+                val grossAmount = kotlin.math.round(originalQuantity * unitPrice * 100.0) / 100.0
+                require(grossAmount.isFinite() && grossAmount > 0.0) { "تعذر احتساب قيمة الوقود الأصلية" }
+
+                if (feeAmount > 0.0 && input.optString("delivery_location").trim().isBlank()) {
+                    throw IllegalArgumentException("أدخل موقع التوصيل عند احتساب رسوم خدمة التوصيل")
+                }
+                if (feeAmount > 0.0 && feeMode == DeliveryFeeAccounting.DEDUCT_FROM_SALES &&
+                    feeAmount >= grossAmount - 0.000001) {
+                    throw IllegalArgumentException("رسوم خدمة التوصيل يجب أن تكون أقل من قيمة الوقود كي تبقى كمية موجبة للبيع")
+                }
+
+                val netFuelAmount = kotlin.math.round((grossAmount - feeAmount) * 100.0) / 100.0
+                if (feeMode == DeliveryFeeAccounting.DEDUCT_FROM_SALES && feeAmount > 0.0) {
+                    // Convert the fee to equivalent litres before inventory is consumed.
+                    val netQuantity = netFuelAmount / unitPrice
+                    require(netQuantity.isFinite() && netQuantity > 0.0 && netQuantity < originalQuantity) {
+                        "تعذر تحويل رسوم التوصيل إلى كمية وقود موجبة؛ راجع الرسوم وسعر اللتر"
+                    }
+                    input.put("quantity", netQuantity)
+                    input.put("total_amount", netFuelAmount)
+                    input.put("net_amount", netFuelAmount)
+                } else {
+                    input.put("quantity", originalQuantity)
+                    input.put("total_amount", grossAmount)
+                    input.put("net_amount", grossAmount)
+                }
+                val invoiceTotal = when (feeMode) {
+                    DeliveryFeeAccounting.ADD_TO_SALES, DeliveryFeeAccounting.DRIVER -> grossAmount + feeAmount
+                    else -> grossAmount
+                }
+                input.put("delivery_service_fee", feeAmount)
+                input.put("delivery_fee_mode", feeMode)
+                input.put("gross_amount", grossAmount)
+                input.put("gross_quantity", originalQuantity)
+                input.put("delivery_fee_display_total", invoiceTotal)
+
                 val database = db.writableDatabase
                 var saleId = 0L
                 var feeResult = JSONObject()
-
-                // Sale, delivery-fee ledger, and fee journal are atomic. If the selected
-                // accounting mode has no valid mapped accounts, the sale rolls back instead
-                // of being stored with an incomplete financial treatment.
                 database.beginTransaction()
                 try {
                     saleId = db.addFuelSale(input, stationScopeId, currentUserId)
@@ -12181,26 +12224,38 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         fuelSaleId = saleId,
                         stationId = stationScopeId,
                         userId = currentUserId,
-                        amount = input.optDouble("delivery_service_fee", 0.0),
-                        rawMode = input.optString("delivery_fee_mode", "exempt"),
+                        amount = feeAmount,
+                        rawMode = feeMode,
                         location = input.optString("delivery_location", ""),
                         cashCustomerName = input.optString("cash_customer_name", ""),
-                        paymentMethod = input.optString("payment_method", "cash")
+                        paymentMethod = input.optString("payment_method", "cash"),
+                        originalQuantity = originalQuantity,
+                        originalAmount = grossAmount,
+                        schemaAlreadyEnsured = true
                     )
                     database.setTransactionSuccessful()
                 } finally {
                     database.endTransaction()
                 }
 
-                // External SMS scheduling happens only after SQLite sale+accounting commit.
+                // Post-commit SMS is isolated: a queue error must not report a committed sale as failed.
                 val smsResult = if (input.optString("payment_method").trim() in setOf("credit", "آجل", "credit_sale", "credit_account")) {
-                    queueCreditSaleSms(db, saleId, stationScopeId, currentUserId)
+                    try {
+                        queueCreditSaleSms(db, saleId, stationScopeId, currentUserId)
+                    } catch (smsError: Exception) {
+                        DebugLogger.logException("CreditSaleSmsQueue", smsError)
+                        JSONObject().put("queued", false).put("reason", "queue_exception")
+                            .put("message", smsError.message ?: "تعذر وضع رسالة البيع الآجل في طابور الإرسال")
+                    }
                 } else JSONObject().put("queued", false).put("reason", "not_credit")
 
                 JSONObject().apply {
                     put("success", true)
                     put("id", saleId)
                     put("sale_id", saleId)
+                    put("quantity", input.optDouble("quantity", 0.0))
+                    put("total_amount", invoiceTotal)
+                    put("delivery_fee_display_total", invoiceTotal)
                     put("message", "تم حفظ مبيعات الوقود ورسوم الخدمة والتحقق من القيود المحاسبية")
                     put("delivery_fee_accounting", feeResult)
                     put("sms", smsResult)

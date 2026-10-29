@@ -97,22 +97,21 @@ class DeliverySmsScheduler : BroadcastReceiver() {
             val typeText = if (type == "وقود" && fuelType.isNotBlank()) "$type - $fuelType" else type
             val quantity = payload.optDouble("quantity", 0.0).toString().trimEnd('0').trimEnd('.')
             val customer = payload.optString("customer_name", "العميل")
-            val paymentMethod = payload.optString("payment_method", "").trim().lowercase(Locale.ROOT)
-            val saleNotes = payload.optString("sale_notes", "").trim()
-            val customerLine = if (paymentMethod == "cash" && saleNotes.isNotBlank()) {
-                "$customer/$saleNotes"
-            } else {
-                customer
-            }
+            val cashCustomerName = payload.optString("cash_customer_name").trim()
+            val customerLine = cashCustomerName.ifBlank { customer }
             val location = payload.optString("location", "غير محدد")
-            val fee = payload.optDouble("service_fee", 0.0).toString().trimEnd('0').trimEnd('.')
+            val feeValue = if (payload.has("delivery_service_fee")) payload.optDouble("delivery_service_fee", 0.0) else payload.optDouble("service_fee", 0.0)
+            val fee = feeValue.toString().trimEnd('0').trimEnd('.')
+            val feeMode = DeliveryFeeAccounting.normalizeMode(payload.optString("delivery_fee_mode", "exempt"))
+            val feeInstruction = if (feeMode == DeliveryFeeAccounting.DRIVER && feeValue > 0.0) {
+                "\nقم باستلام قيمة رسوم خدمة التوصيل - \"$fee\" من العميل عند التوصيل؛ \"سيتم احتسابها عهدة عليك حتى تقوم بتوريدها\"."
+            } else ""
             return "مرحباً - \"$driver\"\n" +
                 "لديك مهمة توصيل جديدة رقمها - \"${payload.optLong("delivery_id")}\"\n" +
                 "نوع الحمولة - $typeText\n" +
                 "حجم الحمولة - \"$quantity\"\n" +
                 "للعميل - \"$customerLine\"\n" +
-                "موقع التوصيل - \"$location\"\n" +
-                "قم باستلام - \"$fee\" من العميل،"
+                "موقع التوصيل - \"$location\"$feeInstruction"
         }
     }
 }

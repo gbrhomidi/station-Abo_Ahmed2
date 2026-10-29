@@ -2340,13 +2340,13 @@
 
                 <div class="form-group">
                     <label class="form-label" for="f_delivery_service_fee">رسوم خدمة التوصيل</label>
-                    <input id="f_delivery_service_fee" name="delivery_service_fee" class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="0">
+                    <input id="f_delivery_service_fee" name="delivery_service_fee" class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="0" readonly aria-readonly="true" tabindex="-1">
                     <div class="form-help">تُسجّل منفصلة عن إجمالي الوقود؛ طريقة احتسابها تحدد القيد المحاسبي.</div>
                 </div>
 
                 <div class="form-group">
                     <label class="form-label" for="f_delivery_fee_mode">احتساب رسوم التوصيل</label>
-                    <select id="f_delivery_fee_mode" name="delivery_fee_mode" class="form-input">
+                    <select id="f_delivery_fee_mode" name="delivery_fee_mode" class="form-input" disabled aria-disabled="true" tabindex="-1">
                         <option value="exempt" selected>معفي منها</option>
                         <option value="add_to_sales">تُضاف لقيمة المبيعات</option>
                         <option value="driver">على حساب السائق</option>
@@ -2443,7 +2443,10 @@
                         class="form-input location-input"
                         type="text"
                         inputmode="text"
-                        placeholder="يُجلب من آخر عملية شراء ويمكن تعديله">
+                        placeholder="يُجلب من عملية البيع الأصلية"
+                        readonly
+                        aria-readonly="true"
+                        tabindex="-1">
 
                     <div
                         class="field-warning"
@@ -2454,7 +2457,7 @@
 
                 <div class="form-group full">
                     <label class="form-label" for="f_cash_customer_name">اسم العميل النقدي</label>
-                    <input id="f_cash_customer_name" name="cash_customer_name" class="form-input" type="text" inputmode="text" placeholder="يُجلب من عملية البيع النقدية">
+                    <input id="f_cash_customer_name" name="cash_customer_name" class="form-input" type="text" inputmode="text" placeholder="يُجلب من عملية البيع النقدية" readonly aria-readonly="true" tabindex="-1">
                 </div>
 
                 <!-- LATEST SALE -->
@@ -4402,7 +4405,7 @@
             : rawQuantity + (Number.isFinite(quantityNumber) && Math.abs(quantityNumber - 1) < 0.000001 ? ' لتر' : ' لترات');
         const cashName = $('f_cash_customer_name').value.trim();
         const isCashSale = ['cash','نقدي','نقداً'].includes(String(state.selectedSalePaymentMethod || '').trim().toLowerCase());
-        const customer = (isCashSale && cashName) ? cashName : ($('f_party_display').value.trim() || '—');
+        const customer = cashName || ($('f_party_display').value.trim() || '—');
         const location = $('f_location').value.trim() || '—';
         const fee = number($('f_delivery_service_fee').value);
         const feeMode = $('f_delivery_fee_mode').value || 'exempt';
@@ -4415,7 +4418,7 @@
             'حجم الحمولة - ' + quantity + '\n' +
             'للعميل - ' + customer + '\n' +
             'موقع التوصيل - ' + location +
-            (fee > 0 && feeMode === 'add_to_sales' ? '\nرسوم خدمة التوصيل - ' + feeText + ' (مضافة لقيمة المبيعات)' : '');
+            (fee > 0 && feeMode === 'driver' ? '\nقم باستلام قيمة رسوم خدمة التوصيل - "' + feeText + '" من العميل عند التوصيل؛ "سيتم احتسابها عهدة عليك حتى تقوم بتوريدها".' : '');
 
         body.textContent = message;
         box.classList.add('show');
@@ -4920,7 +4923,10 @@
 
             $('saleContextHelp').style.display = 'block';
             $('f_delivery_service_fee').value =
-                String(sale.service_fee ?? 0);
+                String(sale.delivery_service_fee ?? sale.service_fee ?? 0);
+            $('f_delivery_fee_mode').value = String(sale.delivery_fee_mode || 'exempt');
+            $('f_location').value = String(sale.delivery_location ?? sale.location ?? '');
+            $('f_cash_customer_name').value = String(sale.cash_customer_name || '');
 
             showLatestSale(sale);
 
@@ -5674,7 +5680,7 @@
         const partyText = $('f_party_display').value.trim() || 'عميل';
         const cashName = $('f_cash_customer_name').value.trim();
         const isCashSale = ['cash','نقدي','نقداً'].includes(String(state.selectedSalePaymentMethod || '').trim().toLowerCase());
-        const customerName = isCashSale && cashName ? cashName : partyText;
+        const customerName = cashName || partyText;
         const location = $('f_location').value.trim() || '—';
         const feeText = serviceFee > 0 ? serviceFee.toFixed(2) + ' ريال' : '0 ريال';
 
@@ -5685,7 +5691,7 @@
             'حجم الحمولة - ' + quantityText + '\n' +
             'للعميل - ' + customerName + '\n' +
             'موقع التوصيل - ' + location +
-            (serviceFee > 0 && feeMode === 'add_to_sales' ? '\nرسوم خدمة التوصيل - ' + feeText + ' (مضافة لقيمة المبيعات)' : '');
+            (serviceFee > 0 && feeMode === 'driver' ? '\nقم باستلام قيمة رسوم خدمة التوصيل - "' + feeText + '" من العميل عند التوصيل؛ "سيتم احتسابها عهدة عليك حتى تقوم بتوريدها".' : '');
 
         /*
          * The SMS is constructed and scheduled by DeliverySmsScheduler from the

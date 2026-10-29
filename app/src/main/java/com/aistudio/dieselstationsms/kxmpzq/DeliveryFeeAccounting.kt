@@ -80,11 +80,16 @@ object DeliveryFeeAccounting {
         addColumn(db, "fuel_sales", "delivery_location", "TEXT NOT NULL DEFAULT ''")
         addColumn(db, "fuel_sales", "cash_customer_name", "TEXT NOT NULL DEFAULT ''")
         addColumn(db, "fuel_sales", "delivery_fee_display_total", "REAL NOT NULL DEFAULT 0")
+        // Preserve the original fuel quantity/value for auditing and fee reconciliation.
+        addColumn(db, "fuel_sales", "gross_amount", "REAL NOT NULL DEFAULT 0")
+        addColumn(db, "fuel_sales", "gross_quantity", "REAL NOT NULL DEFAULT 0")
         addColumn(db, "sales_transactions", "delivery_service_fee", "REAL NOT NULL DEFAULT 0")
         addColumn(db, "sales_transactions", "delivery_fee_mode", "TEXT NOT NULL DEFAULT 'exempt'")
         addColumn(db, "sales_transactions", "delivery_location", "TEXT NOT NULL DEFAULT ''")
         addColumn(db, "sales_transactions", "cash_customer_name", "TEXT NOT NULL DEFAULT ''")
         addColumn(db, "sales_transactions", "delivery_fee_display_total", "REAL NOT NULL DEFAULT 0")
+        addColumn(db, "sales_transactions", "gross_amount", "REAL NOT NULL DEFAULT 0")
+        addColumn(db, "sales_transactions", "gross_quantity", "REAL NOT NULL DEFAULT 0")
         addColumn(db, "deliveries", "sale_kind", "TEXT NOT NULL DEFAULT 'fuel'")
         addColumn(db, "deliveries", "delivery_service_fee", "REAL NOT NULL DEFAULT 0")
         addColumn(db, "deliveries", "delivery_fee_mode", "TEXT NOT NULL DEFAULT 'exempt'")
@@ -202,7 +207,7 @@ object DeliveryFeeAccounting {
             val modeColumn = if ("delivery_fee_mode" in c) "COALESCE(delivery_fee_mode,'exempt')" else "'exempt'"
             val locationColumn = if ("delivery_location" in c) "COALESCE(delivery_location,'')" else "''"
             val cashNameColumn = if ("cash_customer_name" in c) "COALESCE(cash_customer_name,'')" else "''"
-            val grossColumn = if ("gross_amount" in c) "COALESCE(gross_amount,$amountColumn)" else amountColumn
+            val grossColumn = if ("gross_amount" in c) "COALESCE(NULLIF(gross_amount,0),$amountColumn)" else amountColumn
             return db.rawQuery(
                 "SELECT id,$parentColumn,$stationCol,$customerColumn,$paymentColumn,$fuelIdExpr," +
                     "$quantityColumn,$amountColumn,$feeColumn,$modeColumn,$locationColumn,$cashNameColumn,$grossColumn " +
@@ -265,7 +270,7 @@ object DeliveryFeeAccounting {
         val modeColumn = if ("delivery_fee_mode" in c) "COALESCE(delivery_fee_mode,'exempt')" else "'exempt'"
         val locationColumn = if ("delivery_location" in c) "COALESCE(delivery_location,'')" else "''"
         val cashNameColumn = if ("cash_customer_name" in c) "COALESCE(cash_customer_name,'')" else "''"
-        val grossColumn = if ("gross_amount" in c) "COALESCE(gross_amount,$amountColumn)" else amountColumn
+        val grossColumn = if ("gross_amount" in c) "COALESCE(NULLIF(gross_amount,0),$amountColumn)" else amountColumn
         val activeClause = if ("is_deleted" in c) "AND COALESCE(is_deleted,0)=0" else ""
         return db.rawQuery(
             "SELECT station_id,$customerColumn,$paymentColumn,$quantityColumn,$amountColumn,$feeColumn," +
@@ -316,80 +321,99 @@ object DeliveryFeeAccounting {
         rawMode: String?,
         location: String?,
         cashCustomerName: String?,
-        paymentMethod: String?
+        paymentMethod: String?,
+        originalQuantity: Double? = null,
+        originalAmount: Double? = null,
+        schemaAlreadyEnsured: Boolean = false
     ): JSONObject {
-        ensureSchema(helper)
+        if (!schemaAlreadyEnsured) ensureSchema(helper)
         val db = helper.writableDatabase
         require(fuelSaleId > 0L && stationId > 0) { "معرف البيع أو المحطة غير صالح" }
         require(amount.isFinite() && amount >= 0.0) { "رسوم خدمة التوصيل غير صالحة" }
+
+        if (originalAmount != null || originalQuantity != null) {
+            val cols = columns(db, "fuel_sales")
+            val grossValues = ContentValues()
+            if (originalAmount != null && originalAmount.isFinite() && "gross_amount" in cols) grossValues.put("gross_amount", originalAmount)
+            if (originalQuantity != null && originalQuantity.isFinite() && "gross_quantity" in cols) grossValues.put("gross_quantity", originalQuantity)
+            if (grossValues.size() > 0) db.update("fuel_sales", grossValues, "id=? AND station_id=?", arrayOf(fuelSaleId.toString(), stationId.toString()))
+        }
+
         val sale = findSale(db, stationId, fuelSaleId)
             ?: throw IllegalStateException("لم يتم العثور على عملية بيع الوقود في SQLite")
         val mode = normalizeMode(rawMode)
+        val feeAmount = if (mode == EXEMPT) 0.0 else amount
+        val grossAmount = (originalAmount ?: sale.grossAmount).takeIf { it.isFinite() && it > 0.0 } ?: sale.amount
+        val grossQuantity = (originalQuantity ?: sale.quantity).takeIf { it.isFinite() && it > 0.0 } ?: sale.quantity
         val cleanLocation = location.orEmpty().trim()
         val cleanCashName = cashCustomerName.orEmpty().trim()
         val salePayment = paymentMethod.orEmpty().ifBlank { sale.paymentMethod }.trim()
 
-        if (amount > 0.0 && mode != EXEMPT && cleanLocation.isBlank()) {
-            throw IllegalArgumentException("أدخل موقع التوصيل عند احتساب رسوم خدمة التوصيل")
-        }
-        if (amount > 0.0 && mode == DEDUCT_FROM_SALES && amount - sale.amount > 0.000001) {
-            throw IllegalArgumentException("رسوم خدمة التوصيل لا يمكن أن تتجاوز قيمة المبيعات")
+        if (feeAmount > 0.0 && cleanLocation.isBlank()) throw IllegalArgumentException("أدخل موقع التوصيل عند احتساب رسوم خدمة التوصيل")
+        if (feeAmount > 0.0 && mode == DEDUCT_FROM_SALES && feeAmount >= grossAmount - 0.000001) {
+            throw IllegalArgumentException("رسوم خدمة التوصيل يجب أن تكون أقل من قيمة الوقود كي تبقى كمية موجبة للبيع")
         }
 
-        val values = ContentValues().apply {
-            put("delivery_service_fee", amount)
+        val invoiceTotal = when (mode) {
+            ADD_TO_SALES, DRIVER -> grossAmount + feeAmount
+            DEDUCT_FROM_SALES, EXEMPT -> grossAmount
+            else -> grossAmount
+        }
+        val fuelColumns = columns(db, "fuel_sales")
+        val fuelValues = ContentValues().apply {
+            put("delivery_service_fee", feeAmount)
             put("delivery_fee_mode", mode)
             put("delivery_location", cleanLocation)
             put("cash_customer_name", cleanCashName)
-            put("delivery_fee_display_total", when (mode) {
-                ADD_TO_SALES -> sale.amount + amount
-                DEDUCT_FROM_SALES -> (sale.amount - amount).coerceAtLeast(0.0)
-                else -> sale.amount
-            })
+            put("delivery_fee_display_total", invoiceTotal)
+            if ("gross_amount" in fuelColumns) put("gross_amount", grossAmount)
+            if ("gross_quantity" in fuelColumns) put("gross_quantity", grossQuantity)
         }
-        db.update("fuel_sales", values, "id=? AND station_id=?", arrayOf(fuelSaleId.toString(), stationId.toString()))
+        db.update("fuel_sales", fuelValues, "id=? AND station_id=?", arrayOf(fuelSaleId.toString(), stationId.toString()))
+
+        // Parent transaction is the customer invoice; fuel_sales retains the fuel-only value.
         if (sale.parentSaleId > 0L && tableExists(db, "sales_transactions")) {
             val transactionColumns = columns(db, "sales_transactions")
             val transactionValues = ContentValues()
-            if ("delivery_service_fee" in transactionColumns) transactionValues.put("delivery_service_fee", amount)
+            if ("delivery_service_fee" in transactionColumns) transactionValues.put("delivery_service_fee", feeAmount)
             if ("delivery_fee_mode" in transactionColumns) transactionValues.put("delivery_fee_mode", mode)
             if ("delivery_location" in transactionColumns) transactionValues.put("delivery_location", cleanLocation)
             if ("cash_customer_name" in transactionColumns) transactionValues.put("cash_customer_name", cleanCashName)
-            if ("delivery_fee_display_total" in transactionColumns) {
-                transactionValues.put("delivery_fee_display_total", when (mode) {
-                    ADD_TO_SALES -> sale.amount + amount
-                    DEDUCT_FROM_SALES -> (sale.amount - amount).coerceAtLeast(0.0)
-                    else -> sale.amount
-                })
-            }
-            if (transactionValues.size() > 0) {
-                db.update("sales_transactions", transactionValues, "id=? AND station_id=?", arrayOf(sale.parentSaleId.toString(), stationId.toString()))
-            }
+            if ("delivery_fee_display_total" in transactionColumns) transactionValues.put("delivery_fee_display_total", invoiceTotal)
+            if ("total_amount" in transactionColumns) transactionValues.put("total_amount", invoiceTotal)
+            if ("net_amount" in transactionColumns) transactionValues.put("net_amount", invoiceTotal)
+            if ("gross_amount" in transactionColumns) transactionValues.put("gross_amount", grossAmount)
+            if ("gross_quantity" in transactionColumns) transactionValues.put("gross_quantity", grossQuantity)
+            if (transactionValues.size() > 0) db.update("sales_transactions", transactionValues, "id=? AND station_id=?", arrayOf(sale.parentSaleId.toString(), stationId.toString()))
         }
 
-        val ledgerId = upsertLedger(
-            db, stationId, sale.id, sale.parentSaleId, 0L, 0L, amount, mode, userId,
-            "fuel_sale=$fuelSaleId; payment_method=$salePayment"
-        )
+        val ledgerId = upsertLedger(db, stationId, sale.id, sale.parentSaleId, 0L, 0L, feeAmount, mode, userId,
+            "fuel_sale=$fuelSaleId; payment_method=$salePayment")
         val existing = ledgerRow(db, stationId, ledgerId)
-        if (amount <= 0.0 || mode == EXEMPT) {
+        if (feeAmount <= 0.0 || mode == EXEMPT) {
             updateLedger(db, ledgerId, stationId, ContentValues().apply { put("status", "exempt") })
-            return JSONObject().put("success", true).put("ledger_id", ledgerId).put("mode", mode).put("journal_entry_id", JSONObject.NULL)
+            return JSONObject().put("success", true).put("ledger_id", ledgerId).put("mode", mode)
+                .put("journal_entry_id", JSONObject.NULL).put("invoice_total", invoiceTotal)
+                .put("fuel_amount", sale.amount).put("fuel_quantity", sale.quantity).put("service_fee", 0.0)
         }
 
         val existingJournal = existing?.optLong("journal_entry_id", 0L) ?: 0L
         if (existingJournal > 0L) {
-            val existingAmount = existing?.optDouble("amount", amount) ?: amount
+            val existingAmount = existing?.optDouble("amount", feeAmount) ?: feeAmount
             val existingMode = normalizeMode(existing?.optString("mode", mode))
-            require(abs(existingAmount - amount) < 0.000001 && existingMode == mode) {
+            require(abs(existingAmount - feeAmount) < 0.000001 && existingMode == mode) {
                 "رسوم التوصيل مسجلة محاسبياً مسبقاً بقيمة أو طريقة مختلفة؛ استخدم قيد تسوية بدلاً من تغيير العملية"
             }
-            return JSONObject().put("success", true).put("ledger_id", ledgerId).put("mode", mode).put("journal_entry_id", existingJournal)
+            return JSONObject().put("success", true).put("ledger_id", ledgerId).put("mode", mode)
+                .put("journal_entry_id", existingJournal).put("invoice_total", invoiceTotal)
+                .put("fuel_amount", sale.amount).put("fuel_quantity", sale.quantity).put("service_fee", feeAmount)
         }
 
         if (mode == DRIVER) {
             updateLedger(db, ledgerId, stationId, ContentValues().apply { put("status", "pending_driver") })
-            return JSONObject().put("success", true).put("ledger_id", ledgerId).put("mode", mode).put("pending_driver", true)
+            return JSONObject().put("success", true).put("ledger_id", ledgerId).put("mode", mode)
+                .put("pending_driver", true).put("invoice_total", invoiceTotal)
+                .put("fuel_amount", sale.amount).put("fuel_quantity", sale.quantity).put("service_fee", feeAmount)
         }
 
         val journalId = when (mode) {
@@ -397,33 +421,27 @@ object DeliveryFeeAccounting {
                 helper, db, stationId, userId, ledgerId,
                 "رسوم خدمة التوصيل للبيع رقم $fuelSaleId",
                 debitAccount = settlementAccount(db, stationId, salePayment),
-                creditAccount = serviceRevenueAccount(db),
-                amount = amount,
-                referenceType = "fuel_sale",
-                referenceId = sale.id
+                creditAccount = serviceRevenueAccount(helper, db, stationId, userId),
+                amount = feeAmount, referenceType = "fuel_sale", referenceId = sale.id
             )
-            DEDUCT_FROM_SALES -> {
-                val salesAccount = salesRevenueAccount(db)
-                val settlement = settlementAccount(db, stationId, salePayment)
-                val id = postFeeJournal(
-                    helper, db, stationId, userId, ledgerId,
-                    "خصم رسوم خدمة التوصيل من المبيعات رقم $fuelSaleId",
-                    debitAccount = salesAccount,
-                    creditAccount = settlement,
-                    amount = amount,
-                    referenceType = "fuel_sale",
-                    referenceId = sale.id
-                )
-                updateSaleAmountsForDeduction(db, sale, amount)
-                id
-            }
+            DEDUCT_FROM_SALES -> postFeeJournal(
+                helper, db, stationId, userId, ledgerId,
+                "إعادة تصنيف قيمة الوقود المحولة إلى إيرادات خدمة التوصيل للبيع رقم $fuelSaleId",
+                // The fuel component was reduced before stock posting; debit the settlement
+                // account for the service component without deducting the settlement twice.
+                debitAccount = settlementAccount(db, stationId, salePayment),
+                creditAccount = serviceRevenueAccount(helper, db, stationId, userId),
+                amount = feeAmount, referenceType = "fuel_sale", referenceId = sale.id
+            )
             else -> 0L
         }
         updateLedger(db, ledgerId, stationId, ContentValues().apply {
             put("journal_entry_id", journalId)
             put("status", "posted")
         })
-        return JSONObject().put("success", true).put("ledger_id", ledgerId).put("mode", mode).put("journal_entry_id", journalId)
+        return JSONObject().put("success", true).put("ledger_id", ledgerId).put("mode", mode)
+            .put("journal_entry_id", journalId).put("invoice_total", invoiceTotal)
+            .put("fuel_amount", sale.amount).put("fuel_quantity", sale.quantity).put("service_fee", feeAmount)
     }
 
     fun persistDeliveryFee(
@@ -445,12 +463,11 @@ object DeliveryFeeAccounting {
         require(requestedAmount.isFinite() && requestedAmount >= 0.0) { "رسوم خدمة التوصيل غير صالحة" }
 
         val sale = findSale(db, stationId, saleReferenceId, saleKind)
-        val saleFee = sale?.deliveryFee ?: 0.0
-        val amount = if (saleFee > 0.0) saleFee else requestedAmount
-        val saleMode = sale?.deliveryFeeMode ?: EXEMPT
-        val mode = if (saleFee > 0.0 || sale?.deliveryFeeMode != null && sale.deliveryFeeMode != EXEMPT) saleMode else normalizeMode(requestedMode)
-        val cleanLocation = location.orEmpty().trim().ifBlank { sale?.deliveryLocation.orEmpty() }
-        val cleanCashName = cashCustomerName.orEmpty().trim().ifBlank { sale?.cashCustomerName.orEmpty() }
+        // Original SQLite sale values win even when the fee is zero or exempt.
+        val amount = if (sale != null) sale.deliveryFee else requestedAmount
+        val mode = if (sale != null) sale.deliveryFeeMode else normalizeMode(requestedMode)
+        val cleanLocation = if (sale != null) sale.deliveryLocation.trim() else location.orEmpty().trim()
+        val cleanCashName = if (sale != null) sale.cashCustomerName.trim() else cashCustomerName.orEmpty().trim()
         if (amount > 0.0 && mode != EXEMPT) {
             require(sale != null) { "تعذر ربط رسوم التوصيل بعملية بيع أصلية صالحة في SQLite؛ لم يتم تسجيل رسوم أو قيد غير مرتبط" }
         }
@@ -473,7 +490,7 @@ object DeliveryFeeAccounting {
             put("delivery_fee_status", if (mode == EXEMPT || amount <= 0.0) "none" else if (mode == DRIVER) "pending" else "posted")
         }
         val deliveryColumns = columns(db, "deliveries")
-        if ("location" in deliveryColumns && cleanLocation.isNotBlank()) deliveryValues.put("location", cleanLocation)
+        if ("location" in deliveryColumns) deliveryValues.put("location", cleanLocation)
         if ("fuel_type" in deliveryColumns && sale != null && sale.fuelTypeName.isNotBlank()) deliveryValues.put("fuel_type", sale.fuelTypeName)
         db.update("deliveries", deliveryValues, "id=? AND station_id=?", arrayOf(deliveryId.toString(), stationId.toString()))
 
@@ -510,24 +527,37 @@ object DeliveryFeeAccounting {
         val journalId = when (mode) {
             ADD_TO_SALES -> {
                 val account = settlementAccount(db, stationId, sale?.paymentMethod.orEmpty())
-                val income = serviceRevenueAccount(db)
+                val income = serviceRevenueAccount(helper, db, stationId, userId)
                 val referenceType = if (sale?.isFuelSale == false) "sales_transaction" else "fuel_sale"
                 val referenceId = if (sale?.isFuelSale == true) sale.id else (sale?.parentSaleId ?: deliveryId)
                 postFeeJournal(helper, db, stationId, userId, ledgerId, "رسوم خدمة التوصيل للتوصيل رقم $deliveryId", account, income, amount, referenceType, referenceId)
             }
             DEDUCT_FROM_SALES -> {
                 val saleForAdjustment = sale ?: throw IllegalArgumentException("لا يمكن خصم رسوم التوصيل دون بيع أصلي مرتبط")
-                require(amount - saleForAdjustment.amount <= 0.000001) { "رسوم خدمة التوصيل لا يمكن أن تتجاوز قيمة المبيعات" }
+                require(amount > 0.0 && amount.isFinite()) { "رسوم خدمة التوصيل غير صالحة" }
+                val gross = saleForAdjustment.grossAmount.takeIf { it.isFinite() && it > 0.0 } ?: saleForAdjustment.amount
+                require(amount < gross) { "رسوم خدمة التوصيل يجب أن تكون أقل من قيمة المبيعات" }
                 val referenceType = if (saleForAdjustment.isFuelSale) "fuel_sale" else "sales_transaction"
                 val referenceId = if (saleForAdjustment.isFuelSale) saleForAdjustment.id else saleForAdjustment.parentSaleId
-                val id = postFeeJournal(helper, db, stationId, userId, ledgerId, "خصم رسوم التوصيل للتوصيل رقم $deliveryId", salesRevenueAccount(db), settlementAccount(db, stationId, saleForAdjustment.paymentMethod), amount, referenceType, referenceId)
+                val id = if (saleForAdjustment.isFuelSale) {
+                    postFeeJournal(helper, db, stationId, userId, ledgerId,
+                        "إعادة تصنيف قيمة الوقود المحولة إلى إيرادات خدمة التوصيل للتوصيل رقم $deliveryId",
+                        salesRevenueAccount(db), serviceRevenueAccount(helper, db, stationId, userId),
+                        amount, referenceType, referenceId)
+                } else {
+                    // Product-sale logic remains unchanged; the litre conversion is fuel-only.
+                    postFeeJournal(helper, db, stationId, userId, ledgerId,
+                        "خصم رسوم التوصيل للتوصيل رقم $deliveryId",
+                        salesRevenueAccount(db), settlementAccount(db, stationId, saleForAdjustment.paymentMethod),
+                        amount, referenceType, referenceId)
+                }
                 updateSaleAmountsForDeduction(db, saleForAdjustment, amount)
                 id
             }
             DRIVER -> {
                 val referenceType = if (sale?.isFuelSale == false) "sales_transaction" else "fuel_sale"
                 val referenceId = if (sale?.isFuelSale == true) sale.id else (sale?.parentSaleId ?: deliveryId)
-                val id = postFeeJournal(helper, db, stationId, userId, ledgerId, "رسوم خدمة التوصيل على السائق رقم $driverId للتوصيل $deliveryId", driverReceivableAccount(db), serviceRevenueAccount(db), amount, referenceType, referenceId)
+                val id = postFeeJournal(helper, db, stationId, userId, ledgerId, "رسوم خدمة التوصيل على السائق رقم $driverId للتوصيل $deliveryId", driverReceivableAccount(db), serviceRevenueAccount(helper, db, stationId, userId), amount, referenceType, referenceId)
                 val paymentId = createPayrollDeduction(db, stationId, driverId, amount, deliveryId)
                 require(paymentId > 0L) {
                     "تعذر ربط السائق بموظف أو تسجيل الخصم في employee_payments؛ أُلغيت العملية لمنع تسجيل عهدة دون خصم راتبي"
@@ -660,8 +690,10 @@ object DeliveryFeeAccounting {
         val sale = findSale(db, stationId, saleRef, kind)
         val fuelSaleId = sale?.id?.takeIf { sale.isFuelSale } ?: 0L
 
-        delivery.optString("location").trim().ifBlank { delivery.optString("delivery_location").trim() }
-            .takeIf { it.isNotBlank() }?.let { original.put("location", it); original.put("delivery_location", it) }
+        val rowLocation = delivery.optString("location").trim().ifBlank { delivery.optString("delivery_location").trim() }
+        if (sale == null) {
+            rowLocation.takeIf { it.isNotBlank() }?.let { original.put("location", it); original.put("delivery_location", it) }
+        }
         if (sale != null) {
             if (sale.fuelTypeName.isNotBlank()) {
                 original.put("fuel_type_name", sale.fuelTypeName)
@@ -670,9 +702,11 @@ object DeliveryFeeAccounting {
             original.put("sale_kind", if (sale.isFuelSale) "fuel" else "product")
             original.put("payment_method", sale.paymentMethod)
             original.put("cash_sale", sale.paymentMethod.trim().lowercase(Locale.ROOT) in setOf("cash", "نقدي", "نقداً"))
-            original.put("delivery_service_fee", sale.deliveryFee.takeIf { it > 0.0 } ?: delivery.optDouble("delivery_service_fee", 0.0))
-            original.put("delivery_fee_mode", if (sale.deliveryFeeMode != EXEMPT) sale.deliveryFeeMode else delivery.optString("delivery_fee_mode", EXEMPT))
-            original.put("cash_customer_name", sale.cashCustomerName.ifBlank { delivery.optString("cash_customer_name") })
+            original.put("delivery_service_fee", sale.deliveryFee)
+            original.put("delivery_fee_mode", sale.deliveryFeeMode)
+            original.put("cash_customer_name", sale.cashCustomerName)
+            original.put("location", sale.deliveryLocation)
+            original.put("delivery_location", sale.deliveryLocation)
             if (sale.cashCustomerName.isNotBlank()) {
                 original.put("customer_display", sale.cashCustomerName)
                 original.put("customer_name", sale.cashCustomerName)
@@ -684,8 +718,8 @@ object DeliveryFeeAccounting {
             original.put("cash_customer_name", delivery.optString("cash_customer_name"))
         }
         if (delivery.has("quantity") && !delivery.isNull("quantity")) original.put("quantity", delivery.opt("quantity"))
-        if (delivery.optString("cash_customer_name").isNotBlank()) original.put("cash_customer_name", delivery.optString("cash_customer_name"))
-        if (delivery.optString("delivery_fee_mode").isNotBlank()) original.put("delivery_fee_mode", delivery.optString("delivery_fee_mode"))
+        if (sale == null && delivery.optString("cash_customer_name").isNotBlank()) original.put("cash_customer_name", delivery.optString("cash_customer_name"))
+        if (sale == null && delivery.optString("delivery_fee_mode").isNotBlank()) original.put("delivery_fee_mode", delivery.optString("delivery_fee_mode"))
         // Keep the bridge's authoritative delivery/customer labels when they already exist.
         original.put("delivery_id", deliveryId)
         original.put("fuel_sale_id", fuelSaleId)
@@ -774,27 +808,55 @@ object DeliveryFeeAccounting {
     }
 
     private fun updateSaleAmountsForDeduction(db: SQLiteDatabase, sale: FuelSale, amount: Double) {
-        val net = (sale.amount - amount).coerceAtLeast(0.0)
-        val fs = ContentValues()
-        val fCols = columns(db, "fuel_sales")
-        if (sale.isFuelSale && "gross_amount" in fCols) fs.put("gross_amount", sale.grossAmount)
-        if (sale.isFuelSale) {
-            if ("total_amount" in fCols) fs.put("total_amount", net)
-            if ("net_amount" in fCols) fs.put("net_amount", net)
-            if ("delivery_fee_display_total" in fCols) fs.put("delivery_fee_display_total", net)
-            db.update("fuel_sales", fs, "id=? AND station_id=?", arrayOf(sale.id.toString(), sale.stationId.toString()))
+        require(amount.isFinite() && amount > 0.0) { "مبلغ خصم رسوم التوصيل غير صالح" }
+        if (!sale.isFuelSale) {
+            val net = (sale.amount - amount).coerceAtLeast(0.0)
+            if (tableExists(db, "sales_transactions") && sale.parentSaleId > 0L) {
+                val cols = columns(db, "sales_transactions")
+                val values = ContentValues()
+                if ("total_amount" in cols) values.put("total_amount", net)
+                if ("net_amount" in cols) values.put("net_amount", net)
+                if ("delivery_service_fee" in cols) values.put("delivery_service_fee", amount)
+                db.update("sales_transactions", values, "id=? AND station_id=?", arrayOf(sale.parentSaleId.toString(), sale.stationId.toString()))
+            }
+            return
         }
 
-        // Preserve the gross original for audit where supported, while reports and the
-        // receivable reflect the net amount after the chosen sales reduction.
+        val gross = sale.grossAmount.takeIf { it.isFinite() && it > 0.0 } ?: sale.amount
+        val originalQuantity = sale.quantity
+        require(originalQuantity.isFinite() && originalQuantity > 0.0 && gross > amount) {
+            "تعذر خصم رسوم التوصيل لأن قيمة الوقود أو كميته الأصلية غير صالحة"
+        }
+        val unitPrice = gross / originalQuantity
+        require(unitPrice.isFinite() && unitPrice > 0.0) { "تعذر تحديد سعر اللتر لتحويل رسوم التوصيل إلى كمية وقود" }
+        val net = (gross - amount).coerceAtLeast(0.0)
+        val reducedQuantity = net / unitPrice
+        require(reducedQuantity.isFinite() && reducedQuantity > 0.0 && reducedQuantity < originalQuantity) {
+            "رسوم التوصيل ستستهلك كامل كمية الوقود؛ راجع المبلغ"
+        }
+
+        val fuelCols = columns(db, "fuel_sales")
+        val fuelValues = ContentValues()
+        if ("gross_amount" in fuelCols) fuelValues.put("gross_amount", gross)
+        if ("gross_quantity" in fuelCols) fuelValues.put("gross_quantity", originalQuantity)
+        if ("quantity" in fuelCols) fuelValues.put("quantity", reducedQuantity)
+        if ("total_amount" in fuelCols) fuelValues.put("total_amount", net)
+        if ("net_amount" in fuelCols) fuelValues.put("net_amount", net)
+        if ("delivery_fee_display_total" in fuelCols) fuelValues.put("delivery_fee_display_total", gross)
+        db.update("fuel_sales", fuelValues, "id=? AND station_id=?", arrayOf(sale.id.toString(), sale.stationId.toString()))
+
         if (tableExists(db, "sales_transactions") && sale.parentSaleId > 0L) {
             val cols = columns(db, "sales_transactions")
             val values = ContentValues()
-            if ("gross_amount" in cols) values.put("gross_amount", sale.grossAmount)
-            if ("total_amount" in cols) values.put("total_amount", net)
-            if ("net_amount" in cols) values.put("net_amount", net)
+            if ("gross_amount" in cols) values.put("gross_amount", gross)
+            if ("gross_quantity" in cols) values.put("gross_quantity", originalQuantity)
+            if ("quantity" in cols) values.put("quantity", reducedQuantity)
+            if ("liters" in cols) values.put("liters", reducedQuantity)
+            if ("total_amount" in cols) values.put("total_amount", gross)
+            if ("net_amount" in cols) values.put("net_amount", gross)
+            if ("delivery_fee_display_total" in cols) values.put("delivery_fee_display_total", gross)
             if ("delivery_service_fee" in cols) values.put("delivery_service_fee", amount)
-            if (values.size() > 0) db.update("sales_transactions", values, "id=? AND station_id=?", arrayOf(sale.parentSaleId.toString(), sale.stationId.toString()))
+            db.update("sales_transactions", values, "id=? AND station_id=?", arrayOf(sale.parentSaleId.toString(), sale.stationId.toString()))
         }
     }
 
@@ -869,18 +931,114 @@ object DeliveryFeeAccounting {
         return best.first().first
     }
 
-    private fun serviceRevenueAccount(db: SQLiteDatabase): Account = chooseAccount(
-        db, "إيرادات خدمة التوصيل",
-        predicate = { a ->
-            val txt = a.allText
-            val income = a.typeText in setOf("income", "revenue", "revenues", "إيراد", "إيرادات") ||
-                txt.contains("إيراد") || txt.contains("revenue")
-            val delivery = txt.contains("توصيل") || txt.contains("delivery")
-            val service = txt.contains("خدم") || txt.contains("service")
-            income && delivery && service
-        },
-        score = { a -> (if (a.allText.contains("توصيل") || a.allText.contains("delivery")) 4 else 0) + (if (a.allText.contains("خدمة التوصيل") || a.allText.contains("delivery service")) 4 else 0) }
-    )
+    private fun serviceRevenueAccount(
+        helper: DatabaseHelper,
+        db: SQLiteDatabase,
+        stationId: Int,
+        userId: Long
+    ): Account {
+        fun isIncome(account: Account): Boolean =
+            account.typeText in setOf("income", "revenue", "revenues", "إيراد", "إيرادات") ||
+                account.allText.contains("إيراد") || account.allText.contains("revenue")
+        fun isService(account: Account): Boolean =
+            account.allText.contains("خدم") || account.allText.contains("service")
+        fun isDeliveryService(account: Account): Boolean =
+            isIncome(account) && isService(account) &&
+                (account.allText.contains("توصيل") || account.allText.contains("delivery"))
+
+        val availableAccounts = accounts(db)
+        if (availableAccounts.any { isDeliveryService(it) }) {
+            return chooseAccount(db, "إيرادات خدمة التوصيل",
+                predicate = { isDeliveryService(it) },
+                score = { account ->
+                    (if (account.allText.contains("خدمة التوصيل") || account.allText.contains("delivery service")) 8 else 0) +
+                        (if (account.allText.contains("توصيل") || account.allText.contains("delivery")) 4 else 0)
+                })
+        }
+
+        val genericServiceAccounts = availableAccounts.filter { isIncome(it) && isService(it) }
+        val cols = columns(db, "accounts")
+        val treeSupported = cols.containsAll(setOf("id", "account_code", "account_name", "account_type", "parent_account_id", "level"))
+        if (treeSupported) {
+            val typeClause = "LOWER(COALESCE(account_type,'')) IN ('income','revenue','revenues','إيراد','إيرادات')"
+            val activeClause = if ("is_active" in cols) "AND COALESCE(is_active,1)=1" else ""
+            val deletedClause = if ("is_deleted" in cols) "AND COALESCE(is_deleted,0)=0" else ""
+            val stationClause = if ("station_id" in cols) "AND (COALESCE(station_id,0)=0 OR station_id=?)" else ""
+            val levelExpr = "COALESCE(level,1)"
+            val arabicNameExpr = if ("account_name_ar" in cols) "COALESCE(account_name_ar,'')" else "''"
+            val sql = "SELECT id,COALESCE(account_code,''),$levelExpr,$arabicNameExpr,COALESCE(account_name,'') " +
+                "FROM accounts WHERE $typeClause $activeClause $deletedClause AND COALESCE(parent_account_id,0)=0 " +
+                "AND $levelExpr<5 $stationClause ORDER BY account_code"
+            val roots = ArrayList<JSONObject>()
+            db.rawQuery(sql, if ("station_id" in cols) arrayOf(stationId.toString()) else null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    roots.add(JSONObject().put("id", cursor.getLong(0)).put("code", cursor.getString(1).orEmpty())
+                        .put("level", cursor.getInt(2))
+                        .put("name", (cursor.getString(3).orEmpty() + " " + cursor.getString(4).orEmpty()).trim()))
+                }
+            }
+            if (roots.isNotEmpty()) {
+                fun rootScore(root: JSONObject): Int {
+                    val name = root.optString("name").trim().lowercase(Locale.ROOT)
+                    val code = root.optString("code").trim()
+                    val hasChildren = db.rawQuery("SELECT 1 FROM accounts WHERE parent_account_id=? LIMIT 1",
+                        arrayOf(root.optLong("id").toString())).use { it.moveToFirst() }
+                    return (if (name in setOf("الإيرادات", "الايرادات", "revenues", "revenue", "income")) 10 else 0) +
+                        (if (name.contains("إيراد") || name.contains("revenue") || name.contains("income")) 4 else 0) +
+                        (if (code == "4") 3 else 0) + (if (hasChildren) 4 else 0)
+                }
+                val bestScore = roots.maxOf { rootScore(it) }
+                val bestRoots = roots.filter { rootScore(it) == bestScore }
+                if (bestRoots.size == 1) {
+                    val parent = bestRoots.first()
+                    val parentId = parent.optLong("id")
+                    val parentCode = parent.optString("code").trim()
+                    val level = parent.optInt("level", 1) + 1
+                    require(parentId > 0L && parentCode.isNotBlank() && level in 2..5) {
+                        "تعذر إنشاء حساب إيرادات خدمة التوصيل بسبب عدم صلاحية الحساب الرئيسي"
+                    }
+                    val usedCodes = HashSet<String>()
+                    db.rawQuery("SELECT COALESCE(account_code,'') FROM accounts", null).use { cursor ->
+                        while (cursor.moveToNext()) usedCodes.add(cursor.getString(0).orEmpty())
+                    }
+                    var sequence = 1
+                    var code: String
+                    do {
+                        code = parentCode.trimEnd('.') + "." + sequence.toString().padStart(2, '0')
+                        sequence++
+                    } while (usedCodes.contains(code))
+                    val payload = JSONObject()
+                        .put("id", 0)
+                        .put("account_code", code)
+                        .put("account_name_ar", "إيرادات خدمة التوصيل")
+                        .put("account_name", "Delivery Service Revenue")
+                        .put("account_type", "revenue")
+                        .put("parent_account_id", parentId)
+                        .put("level", level)
+                        .put("normal_balance", "credit")
+                        .put("opening_balance", 0.0)
+                        .put("current_balance", 0.0)
+                        .put("is_bank_account", 0)
+                        .put("is_cash_account", 0)
+                        .put("is_control_account", 0)
+                        .put("is_active", 1)
+                        .put("remarks", "حساب أنشئ تلقائياً عند ترحيل رسوم خدمة التوصيل؛ لا يغيّر أرصدة الحسابات الأخرى")
+                    val createdId = helper.saveChartAccount(payload, userId)
+                    check(createdId > 0L) { "تعذر إنشاء حساب إيرادات خدمة التوصيل في شجرة الحسابات" }
+                    return accounts(db).firstOrNull { it.id == createdId }
+                        ?: throw IllegalStateException("تعذر إعادة قراءة حساب إيرادات خدمة التوصيل من SQLite")
+                }
+            }
+        }
+        if (genericServiceAccounts.isNotEmpty()) {
+            return chooseAccount(db, "إيرادات الخدمات",
+                predicate = { isIncome(it) && isService(it) },
+                score = { account ->
+                    if (account.allText.contains("إيرادات الخدمات") || account.allText.contains("service revenue")) 5 else 0
+                })
+        }
+        throw IllegalStateException("لا يوجد حساب إيرادات خدمة التوصيل، وتعذر إنشاء حساب فرعي لأن شجرة الحسابات لا تحتوي على حساب إيرادات رئيسياً واضحاً")
+    }
 
     private fun salesRevenueAccount(db: SQLiteDatabase): Account = chooseAccount(
         db, "إيرادات المبيعات",
