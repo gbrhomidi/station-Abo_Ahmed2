@@ -278,6 +278,7 @@ object DebtDueDateRepository {
         val daysOverdue = days?.let { (-it).coerceAtLeast(0) } ?: 0
         val status = statusFor(row.remaining, row.paid, row.dueDate, row.riskLevel)
         val isCredit = row.paymentMethod.trim().lowercase(Locale.ROOT) in creditMethods
+        val overdueAmount = if (status == "overdue" || status == "doubtful") row.remaining else 0.0
         return JSONObject().apply {
             put("id", row.transactionId)
             put("transaction_id", row.transactionId)
@@ -305,6 +306,7 @@ object DebtDueDateRepository {
             put("paid_amount", row.paid)
             put("remaining_amount", row.remaining)
             put("total_due", row.remaining)
+            put("overdue_amount", overdueAmount)
             put("payment_status", status)
             put("status", status)
             put("days_remaining", days ?: JSONObject.NULL)
