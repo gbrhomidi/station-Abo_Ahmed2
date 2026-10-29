@@ -372,24 +372,24 @@ object DebtDueDateRepository {
         if ("payment_method" !in s || "due_date" !in s || !tableExists(db, "parties")) return
         val baseParts = listOf("business_day", "transaction_date", "sale_date", "created_at")
             .filter { it in s }
-            .map { "NULLIF(substr(s.`$it`,1,10),'')" }
+            .map { "NULLIF(substr(`$it`,1,10),'')" }
             .toMutableList()
         baseParts += "date('now','localtime')"
         val baseDate = "COALESCE(${baseParts.joinToString(",")})"
-        val stationScope = if ("station_id" in p && "station_id" in s) " AND p.station_id=s.station_id" else ""
+        val stationScope = if ("station_id" in p && "station_id" in s) " AND p.station_id=sales_transactions.station_id" else ""
         val notDeleted = if ("is_deleted" in p) " AND COALESCE(p.is_deleted,0)=0" else ""
         val termsColumn = listOf("payment_terms", "payment_terms_text", "credit_terms").firstOrNull { it in p }
         val terms = if (termsColumn != null) {
-            "COALESCE((SELECT NULLIF(TRIM(p.`$termsColumn`),'') FROM parties p WHERE p.id=s.`$customerColumn`$stationScope$notDeleted LIMIT 1),'$DEFAULT_TERMS')"
+            "COALESCE((SELECT NULLIF(TRIM(p.`$termsColumn`),'') FROM parties p WHERE p.id=sales_transactions.`$customerColumn`$stationScope$notDeleted LIMIT 1),'$DEFAULT_TERMS')"
         } else "'$DEFAULT_TERMS'"
         val days = sqlDaysFromTerms(terms)
-        val creditCondition = "LOWER(REPLACE(REPLACE(TRIM(COALESCE(s.payment_method,'')),' ',''),'-','_')) IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')"
-        val remainingCondition = if ("remaining_amount" in s) " AND COALESCE(s.remaining_amount,0)>0" else ""
+        val creditCondition = "LOWER(REPLACE(REPLACE(TRIM(COALESCE(payment_method,'')),' ',''),'-','_')) IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')"
+        val remainingCondition = if ("remaining_amount" in s) " AND COALESCE(remaining_amount,0)>0" else ""
         val snap = if ("payment_terms_at_sale" in s) ", payment_terms_at_sale=COALESCE(NULLIF(payment_terms_at_sale,''),$terms)" else ""
         db.execSQL("""
-            UPDATE sales_transactions AS s
+            UPDATE sales_transactions
             SET due_date=date($baseDate, '+' || ($days) || ' days')$snap
-            WHERE (s.due_date IS NULL OR TRIM(s.due_date)='')
+            WHERE (due_date IS NULL OR TRIM(due_date)='')
               AND $creditCondition$remainingCondition
         """.trimIndent())
     }
