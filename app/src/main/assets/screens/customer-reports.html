@@ -1999,24 +1999,38 @@
 
         function buildAgingRows(rows) {
             const buckets = [
-                { label: '0–30 يوم', min: 0, max: 30, count: 0, amount: 0 },
-                { label: '31–60 يوم', min: 31, max: 60, count: 0, amount: 0 },
-                { label: '61–90 يوم', min: 61, max: 90, count: 0, amount: 0 },
-                { label: 'أكثر من 90 يوم', min: 91, max: Number.MAX_SAFE_INTEGER, count: 0, amount: 0 },
-                { label: 'تاريخ غير محدد', min: null, max: null, count: 0, amount: 0 }
+                { key: '0-30', label: '0–30 يوم', min: 0, max: 30 },
+                { key: '31-60', label: '31–60 يوم', min: 31, max: 60 },
+                { key: '61-90', label: '61–90 يوم', min: 61, max: 90 },
+                { key: '90+', label: 'أكثر من 90 يوم / مشكوك في تحصيله', min: 91, max: Number.MAX_SAFE_INTEGER }
             ];
-            const now = Date.now();
+            const today = String((typeof businessDayDate === 'function' ? businessDayDate() : new Date().toISOString().slice(0,10))).slice(0,10);
+            const groups = new Map();
             (Array.isArray(rows) ? rows : []).forEach(row => {
                 const amount = Math.max(0, finiteNumber(row.remaining_amount));
                 if (amount <= 0) return;
-                const due = Date.parse(row.due_date || row.created_at || '');
-                const bucket = Number.isFinite(due) ? buckets.find(item => item.min !== null && Math.max(0, Math.floor((now - due) / 86400000)) >= item.min && Math.max(0, Math.floor((now - due) / 86400000)) <= item.max) : buckets[buckets.length - 1];
-                bucket.count += 1;
-                bucket.amount += amount;
+                // Age by explicit contractual maturity date only. A creation date is not due date.
+                const dueText = String(row.due_date || '').slice(0,10);
+                let age = null;
+                if (/^\\d{4}-\\d{2}-\\d{2}$/.test(dueText) && /^\\d{4}-\\d{2}-\\d{2}$/.test(today)) {
+                    const due = Date.parse(dueText + 'T00:00:00Z');
+                    const now = Date.parse(today + 'T00:00:00Z');
+                    if (Number.isFinite(due) && Number.isFinite(now)) age = Math.max(0, Math.round((now - due) / 86400000));
+                }
+                const bucket = age === null ? null : buckets.find(item => age >= item.min && age <= item.max);
+                const key = String(row.customer_party_id || row.customer_id || 0);
+                if (!groups.has(key)) groups.set(key, { customer_id: Number(key), customer_name: row.customer_name || row.commercial_name || '---', phone: row.customer_phone || row.phone || '', total: 0, buckets: Object.fromEntries(buckets.map(item => [item.key, 0])), undated: 0, doubtful: 0, overdue: 0 });
+                const group = groups.get(key);
+                group.total += amount;
+                if (age === null) group.undated += amount;
+                else {
+                    if (bucket) group.buckets[bucket.key] += amount;
+                    if (age > 0) group.overdue += amount;
+                    if (age >= 90 || ['high','critical','blacklisted','doubtful','مرتفع','محظور'].includes(String(row.risk_level || row.risk_classification || '').toLowerCase())) group.doubtful += amount;
+                }
             });
-            return buckets;
+            return Array.from(groups.values()).sort((a,b) => b.total - a.total);
         }
-
         function renderAgingTable() {
             const body = document.getElementById('agingTableBody');
             if (!body) return;
