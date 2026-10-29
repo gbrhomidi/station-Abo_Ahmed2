@@ -2663,6 +2663,17 @@ window.addEventListener('load', boot);
     <div class="eac-actions"><button type="button" class="eac-btn" id="eacLoadInvoiceLines">تحميل بنود الفاتورة</button><button type="button" class="eac-btn" id="eacCreateReturn">حفظ مسودة مرتجع</button><button type="button" class="eac-btn primary" id="eacPostReturn">ترحيل / طلب اعتماد المرتجع</button><button type="button" class="eac-btn" id="eacListReturns">عرض المرتجعات</button></div>
     <div id="eacReturnMessage" class="eac-message" hidden></div><div id="eacReturnRows"></div>
   </article>
+
+  <article class="eac-card" id="eacFiscalPeriodWorkspace">
+    <div class="eac-title"><h2>إقفال وفتح الفترات المالية</h2><span class="eac-status">بفحوص سلامة قبل الإقفال</span></div>
+    <div class="eac-note">لا يتم الإقفال إلا بعد التحقق من توازن القيود المرحلة وبنودها وروابط العكس وعدم بقاء قيود مسودة. إعادة الفتح تتطلب سبباً مسجلاً. إقفال الفترة لا يُنشئ قيود إقفال الأرباح أو الضرائب؛ إنه يمنع الترحيل إلى الفترة المغلقة عبر مسارات التحقق القائمة.</div>
+    <div class="eac-grid">
+      <div class="eac-field"><label for="eacFiscalYear">السنة المالية</label><input id="eacFiscalYear" type="number" min="2000" max="2200"></div>
+    </div>
+    <div class="eac-actions"><button type="button" class="eac-btn primary" id="eacLoadFiscalPeriods">تحميل الفترات</button></div>
+    <div id="eacFiscalPeriodMessage" class="eac-message" hidden></div>
+    <div id="eacFiscalPeriodRows"></div>
+  </article>
 </section>
 
 <script id="expandedAccountingWorkspaceScript">
@@ -2710,6 +2721,65 @@ function loadInvoiceLines(){const id=Number($('eacReturnInvoice').value);if(!id)
 function createReturn(){const invoiceId=Number($('eacReturnInvoice').value),lineId=Number($('eacReturnLine').value),qty=Number($('eacReturnQty').value);if(!invoiceId||!lineId||!(qty>0))throw new Error('حدد فاتورة وبنداً وكمية صحيحة');const r=callExpanded('purchase_return_create',{invoice_id:invoiceId,return_date:$('eacReturnDate').value,return_number:$('eacReturnNumber').value.trim(),reason:$('eacReturnReason').value.trim(),lines:[{invoice_line_id:lineId,quantity:qty}]});$('eacReturnId').value=r.return_id||'';reportMessage('eacReturnMessage',r.message||('حُفظت مسودة المرتجع #'+r.return_id),false);listReturns()}
 function postReturn(){const id=Number($('eacReturnId').value);if(!id)throw new Error('أدخل معرف مسودة المرتجع');const r=callExpanded('purchase_return_post',{return_id:id});reportMessage('eacReturnMessage',r.message||('حالة المرتجع: '+r.status),false);listReturns()}
 function listReturns(){const r=callExpanded('purchase_return_list',{});const rows=Array.isArray(r.data)?r.data:[];$('eacReturnRows').innerHTML=table(rows)}
+
+function fiscalBridge(){const b=window.AndroidInterface;if(!b)throw new Error('جسر Android غير متاح');return b}
+function fiscalRows(){
+  const year=Number($('eacFiscalYear').value);
+  if(!Number.isInteger(year)||year<2000||year>2200)throw new Error('أدخل سنة مالية بين 2000 و2200');
+  const b=fiscalBridge();if(typeof b.getFiscalPeriods!=='function')throw new Error('واجهة الفترات المالية غير متاحة');
+  const res=parse(b.getFiscalPeriods(year));
+  const existing=Array.isArray(res.data)?res.data:[];
+  const map=new Map(existing.map(x=>[Number(x.fiscal_month),x]));
+  const months=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  const rows=[];
+  for(let m=1;m<=12;m++){
+    const r=map.get(m)||{};
+    const last=new Date(year,m,0).getDate();
+    rows.push({
+      id:r.id||0,year,month:m,label:months[m-1],status:r.status||'open',
+      period_start:r.period_start||year+'-'+String(m).padStart(2,'0')+'-01',
+      period_end:r.period_end||year+'-'+String(m).padStart(2,'0')+'-'+String(last).padStart(2,'0'),
+      closed_at:r.closed_at||'',reopened_at:r.reopened_at||'',reopen_reason:r.reopen_reason||'',audit_count:r.audit_count||0
+    });
+  }
+  return rows;
+}
+function renderFiscalPeriods(){
+  const rows=fiscalRows();
+  $('eacFiscalPeriodRows').innerHTML='<div class="eac-table-wrap"><table class="eac-table"><thead><tr><th>الشهر</th><th>بداية الفترة</th><th>نهاية الفترة</th><th>الحالة</th><th>آخر إقفال</th><th>سبب إعادة الفتح</th><th>أحداث التدقيق</th><th>الإجراء</th></tr></thead><tbody>'+
+    rows.map(r=>{
+      const statusLabel=({open:'مفتوحة',reopened:'أُعيد فتحها',closed:'مغلقة',closing:'قيد الإقفال'})[r.status]||r.status;
+      const action=r.status==='closed'
+        ? '<button type="button" class="eac-btn" data-reopen-period="'+esc(r.id)+'">إعادة فتح</button>'
+        : (r.status==='open'||r.status==='reopened')
+          ? '<button type="button" class="eac-btn gold" data-close-period="'+esc(r.month)+'">إقفال الشهر</button>'
+          : '<span class="eac-status">قيد المعالجة</span>';
+      return '<tr><td>'+esc(r.label)+' '+esc(r.year)+'</td><td>'+esc(r.period_start)+'</td><td>'+esc(r.period_end)+'</td><td><span class="eac-status">'+esc(statusLabel)+'</span></td><td>'+esc(r.closed_at||'—')+'</td><td>'+esc(r.reopen_reason||'—')+'</td><td>'+esc(r.audit_count)+'</td><td>'+action+'</td></tr>';
+    }).join('')+'</tbody></table></div>';
+  $('eacFiscalPeriodRows').querySelectorAll('[data-close-period]').forEach(btn=>btn.addEventListener('click',()=>{
+    try{
+      const month=Number(btn.dataset.closePeriod);
+      const reason=prompt('اكتب سبب إقفال '+rows[month-1].label+' '+rows[month-1].year+' بعد مراجعة نتائج القيود.');
+      if(!reason||reason.trim().length<3)throw new Error('سبب الإقفال مطلوب (3 أحرف على الأقل)');
+      const b=fiscalBridge();if(typeof b.closeFiscalPeriod!=='function')throw new Error('واجهة إقفال الفترة غير متاحة');
+      const res=parse(b.closeFiscalPeriod(rows[month-1].year,month,reason.trim()));
+      reportMessage('eacFiscalPeriodMessage',res.message||'تم إقفال الفترة بعد اجتياز فحوص السلامة.',false);
+      renderFiscalPeriods();
+    }catch(e){reportMessage('eacFiscalPeriodMessage',e.message||String(e),true)}
+  }));
+  $('eacFiscalPeriodRows').querySelectorAll('[data-reopen-period]').forEach(btn=>btn.addEventListener('click',()=>{
+    try{
+      const periodId=Number(btn.dataset.reopenPeriod);if(!periodId)throw new Error('معرف الفترة المغلقة غير صالح');
+      const reason=prompt('اكتب سبب إعادة فتح الفترة المغلقة.');
+      if(!reason||reason.trim().length<3)throw new Error('سبب إعادة الفتح مطلوب (3 أحرف على الأقل)');
+      const b=fiscalBridge();if(typeof b.reopenFiscalPeriod!=='function')throw new Error('واجهة إعادة فتح الفترة غير متاحة');
+      const res=parse(b.reopenFiscalPeriod(periodId,reason.trim()));
+      reportMessage('eacFiscalPeriodMessage',res.message||'تمت إعادة فتح الفترة مع حفظ سبب التدقيق.',false);
+      renderFiscalPeriods();
+    }catch(e){reportMessage('eacFiscalPeriodMessage',e.message||String(e),true)}
+  }));
+}
+
 $('eacRun').addEventListener('click',()=>runSafely(runReport));
 $('eacReloadRefs').addEventListener('click',()=>runSafely(loadReferences));
 $('eacExport').addEventListener('click',()=>{if(!lastReport){reportMessage('eacReportMessage','شغّل تقريراً أولاً قبل التصدير.',true);return}const blob=new Blob([JSON.stringify(lastReport,null,2)],{type:'application/json;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='finance-report-'+$('eacAction').value+'-'+today+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)});
@@ -2725,7 +2795,10 @@ $('eacPostReturn').addEventListener('click',()=>{try{postReturn()}catch(e){repor
 $('eacListReturns').addEventListener('click',()=>{try{listReturns()}catch(e){reportMessage('eacReturnMessage',e.message||String(e),true)}});
 $('eacAction').addEventListener('change',()=>{const a=$('eacAction').value;$('eacSupplierField').style.display=a==='supplier_statement'?'':'none';$('eacAsOfField').style.display=a==='supplier_aging'?'':'none'});
 setDateDefaults();updateClassOptions();$('eacSupplierField').style.display='none';$('eacAsOfField').style.display='none';
+$('eacFiscalYear').value=String(new Date().getFullYear());
+$('eacLoadFiscalPeriods').addEventListener('click',()=>{try{renderFiscalPeriods();reportMessage('eacFiscalPeriodMessage','تم تحميل الفترات من SQLite.',false)}catch(e){reportMessage('eacFiscalPeriodMessage',e.message||String(e),true)}});
 try{loadReferences()}catch(e){reportMessage('eacReportMessage','تعذر تحميل القوائم المرجعية: '+(e.message||e),true)}
+try{renderFiscalPeriods()}catch(e){reportMessage('eacFiscalPeriodMessage',e.message||String(e),true)}
 })();
 </script>
 

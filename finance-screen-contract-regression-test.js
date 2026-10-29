@@ -59,7 +59,11 @@ for (const required of [
   'equity_changes',
   'vat_return',
   'tax_profile_save',
-  'account_classification_save'
+  'account_classification_save',
+  'eacFiscalPeriodWorkspace',
+  'eacLoadFiscalPeriods',
+  'closeFiscalPeriod',
+  'reopenFiscalPeriod'
 ]) if (!accountingReports.includes(required)) {
   throw new Error('Accounting reports UI is missing expanded workflow: ' + required);
 }
