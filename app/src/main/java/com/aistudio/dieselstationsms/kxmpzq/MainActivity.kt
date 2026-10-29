@@ -3124,6 +3124,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     activity?.let { act ->
                         act.currentAuthToken = token
                         act.sharedPrefs.edit().remove(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH).apply()
+                        // A successful password login completes any deferred foreground lock.
+                        act.securityLockPending = false
+                        act.securityPromptActive = false
+                        act.lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
 
                         act.currentUserId = userId
                         act.currentUserRole = role
@@ -8874,6 +8878,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             activity.currentAuthToken = newToken
                             activity.currentUserId = savedUserId
                             activity.currentUserRole = role
+                            // This web-driven biometric flow is the active unlock authority for
+                            // lock-screen.html; clear any stale native re-auth request from onPause.
+                            activity.securityLockPending = false
+                            activity.securityPromptActive = false
+                            activity.lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
                             activity.currentUserName = savedUsername
 
                             // 7. جلب الصلاحيات والشاشات بنفس آلية login التقليدية
