@@ -688,6 +688,7 @@
             color: var(--success);
             border-color: rgba(16, 185, 129, 0.3);
         }
+        .status-badge.doubtful { background: rgba(190, 24, 93, 0.13); color: #be185d; border: 1px solid rgba(190, 24, 93, 0.3); }
         .status-badge.overdue {
             background: rgba(239, 68, 68, 0.12);
             color: var(--danger);
@@ -1980,8 +1981,9 @@
                 <i class="fas fa-filter"></i>
                 <select id="filterStatus">
                     <option value="">جميع الحالات</option>
-                    <option value="current">جاري</option>
+                    <option value="current">غير متأخر</option>
                     <option value="overdue">متأخر</option>
+                    <option value="doubtful">مشكوك في تحصيله</option>
                     <option value="partial">مدفوع جزئياً</option>
                 </select>
             </div>
@@ -2591,8 +2593,9 @@
 
         function getStatusLabel(st) {
             const map = {
-                'current': 'جاري',
+                'current': 'غير متأخر',
                 'overdue': 'متأخر',
+                'doubtful': 'مشكوك في تحصيله',
                 'partial': 'مدفوع جزئياً',
                 'paid': 'مسدد'
             };
@@ -2603,7 +2606,9 @@
             const map = {
                 'current': 'current',
                 'overdue': 'overdue',
-                'partial': 'partial'
+                'doubtful': 'doubtful',
+                'partial': 'partial',
+                'paid': 'paid'
             };
             return map[st] || 'current';
         }
@@ -2660,29 +2665,45 @@
 
         function normalizeDebtRow(item) {
             const row = item && typeof item === 'object' ? item : {};
-            const total = finiteNumber(row.net_amount ?? row.total_debt ?? row.total_amount ?? row.remaining_amount);
-            const paid = finiteNumber(row.paid_amount);
-            const remaining = Math.max(0, finiteNumber(row.remaining_amount, Math.max(0, total - paid)));
+            const total = finiteNumber(row.net_amount ?? row.total_debt ?? row.total_amount ?? row.gross_amount ?? row.remaining_amount);
+            const paid = Math.max(0, finiteNumber(row.paid_amount));
+            const rawRemaining = row.remaining_amount;
+            const remaining = Math.max(0, rawRemaining === null || rawRemaining === undefined || rawRemaining === ''
+                ? total - paid
+                : finiteNumber(rawRemaining));
             const customerId = finiteNumber(row.customer_party_id ?? row.customer_id ?? row.party_id);
-            const dueDate = row.due_date || row.created_at || '';
+            // Never substitute invoice creation time for a missing maturity date:
+            // doing so incorrectly turns an undated current debt into an overdue debt.
+            const dueDate = String(row.due_date || '').slice(0, 10);
             const explicitStatus = String(row.payment_status ?? row.status ?? '').toLowerCase();
-            const today = businessDayDate();
-            let status = explicitStatus;
-            if (remaining <= 0) status = 'paid';
-            else if (explicitStatus === 'overdue' || (dueDate && dueDate.slice(0, 10) < today)) status = 'overdue';
-            else if (paid > 0 || explicitStatus === 'partial') status = 'partial';
+            const today = String(businessDayDate()).slice(0, 10);
+            const dueDays = /^\\d{4}-\\d{2}-\\d{2}$/.test(dueDate) && /^\\d{4}-\\d{2}-\\d{2}$/.test(today)
+                ? Math.round((Date.parse(dueDate + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / 86400000)
+                : null;
+            const risk = String(row.risk_level || row.risk_classification || '').trim().toLowerCase();
+            const highRisk = ['high','critical','blacklisted','مرتفع','محظور'].includes(risk) ||
+                risk.includes('blacklist') || risk.includes('مرتفع') || risk.includes('محظور');
+            let status;
+            if (remaining <= 0.000001) status = 'paid';
+            else if (explicitStatus === 'doubtful' || highRisk || (dueDays !== null && dueDays <= -90)) status = 'doubtful';
+            else if (dueDays !== null && dueDays < 0) status = 'overdue';
+            else if (paid > 0.000001) status = 'partial';
             else status = 'current';
             return {
                 ...row,
+                id: row.transaction_id ?? row.id ?? row.sale_id,
+                transaction_id: row.transaction_id ?? row.id ?? row.sale_id,
                 customer_party_id: customerId,
                 customer_id: customerId,
-                customer_name: row.customer_name || row.commercial_name || '---',
+                customer_name: row.customer_name || row.commercial_name_ar || row.commercial_name || row.legal_name || '---',
                 customer_phone: row.customer_phone || row.phone || '---',
                 total_debt: total,
                 net_amount: total,
                 paid_amount: paid,
                 remaining_amount: remaining,
                 due_date: dueDate,
+                days_remaining: dueDays,
+                days_overdue: dueDays === null ? 0 : Math.max(0, -dueDays),
                 payment_status: status,
                 status
             };
@@ -2801,7 +2822,7 @@ function updateDebtViewButtons() {
                 const total = finiteNumber(item.net_amount ?? item.total_debt);
                 const paid = finiteNumber(item.paid_amount);
                 const remaining = finiteNumber(item.remaining_amount);
-                const due = String(item.due_date || item.created_at || '').slice(0,10) || '---';
+                const due = String(item.due_date || '').slice(0,10) || 'غير محدد';
                 const warning = debtScreenSettings.highlightOverdue && item.status === 'overdue' ? ' border-color:var(--danger);' : '';
                 return '<article class="debt-card" style="' + warning + '">' +
                     '<div class="debt-card-head"><div><div class="debt-card-name">' + escapeHtml(item.customer_name || 'عميل غير مسمى') + '</div>' +
@@ -3050,6 +3071,16 @@ function updateDebtViewButtons() {
         // ===================================================================
         function generateAlerts(data) {
             const alerts = [];
+            const doubtfulItems = data.filter(item => item.status === 'doubtful');
+            if (doubtfulItems.length > 0) {
+                alerts.push({
+                    type: 'danger',
+                    icon: 'fa-triangle-exclamation',
+                    title: '⚠️ ديون مشكوك في تحصيلها',
+                    desc: doubtfulItems.length + ' فاتورة تجاوزت 90 يومًا من الاستحقاق أو تحمل تصنيف مخاطر مرتفعة',
+                    time: 'الآن'
+                });
+            }
             const overdueItems = data.filter(item => item.status === 'overdue');
             if (overdueItems.length > 0) {
                 alerts.push({
@@ -3467,8 +3498,9 @@ function updateDebtViewButtons() {
                 const totalDebt = sourceRows.reduce((sum, row) => sum + finiteNumber(row.net_amount ?? row.total_debt), 0);
                 const paidAmount = sourceRows.reduce((sum, row) => sum + finiteNumber(row.paid_amount), 0);
                 const remainingAmount = sourceRows.reduce((sum, row) => sum + finiteNumber(row.remaining_amount), 0);
+                const doubtful = sourceRows.some(row => row.status === 'doubtful');
                 const overdue = sourceRows.some(row => row.status === 'overdue');
-                const status = remainingAmount <= 0 ? 'paid' : overdue ? 'overdue' : paidAmount > 0 ? 'partial' : 'current';
+                const status = remainingAmount <= 0 ? 'paid' : doubtful ? 'doubtful' : overdue ? 'overdue' : paidAmount > 0 ? 'partial' : 'current';
                 const firstDebt = customerDebts[0] || {};
                 const name = c.commercial_name || c.customer_name || c.name || firstDebt.customer_name || 'عميل';
                 const partyReadWarning = !partyResult.success
@@ -3813,8 +3845,9 @@ function updateDebtViewButtons() {
             ];
             const now = Date.now();
             data.forEach((row) => {
-                const due = Date.parse(row.due_date || row.created_at || '');
-                const ageDays = Number.isFinite(due) ? Math.max(0, Math.floor((now - due) / 86400000)) : 0;
+                const due = Date.parse(String(row.due_date || '').slice(0,10) + 'T00:00:00Z');
+                const today = Date.parse(String(businessDayDate()).slice(0,10) + 'T00:00:00Z');
+                const ageDays = Number.isFinite(due) && Number.isFinite(today) ? Math.max(0, Math.floor((today - due) / 86400000)) : 0;
                 const bucket = buckets.find(item => ageDays >= item.min && ageDays <= item.max) || buckets[0];
                 bucket.count += 1;
                 bucket.amount += finiteNumber(row.remaining_amount);
