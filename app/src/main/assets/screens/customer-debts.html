@@ -2715,10 +2715,14 @@
             const customerId = document.getElementById('filterCustomer').value;
             const status = document.getElementById('filterStatus').value;
             return data.filter((row) => {
-                const date = String(row.due_date || row.created_at || '').slice(0, 10);
-                const dateMatch = (!from || !date || date >= from) && (!to || !date || date <= to);
+                // Filter by maturity only; invoice creation is not its due date.
+                const date = String(row.due_date || '').slice(0, 10);
+                const dateMatch = (!from || (!!date && date >= from)) && (!to || (!!date && date <= to));
                 const customerMatch = !customerId || String(row.customer_party_id) === String(customerId);
-                const statusMatch = !status || row.status === status;
+                const statusMatch = !status ||
+                    (status === 'current'
+                        ? row.status === 'current' || (row.status === 'partial' && (row.days_remaining === null || row.days_remaining === undefined || row.days_remaining >= 0))
+                        : row.status === status);
                 return dateMatch && customerMatch && statusMatch;
             });
         }
@@ -2937,7 +2941,7 @@ function updateDebtViewButtons() {
             data.forEach(item => {
                 const remaining = finiteNumber(item.remaining_amount);
                 totalDebts += remaining;
-                if (item.status === 'overdue') overdue += remaining;
+                if (item.status === 'overdue' || item.status === 'doubtful') overdue += remaining;
                 if (item.customer_party_id > 0) debtors.add(item.customer_party_id);
                 if (remaining > highest) highest = remaining;
             });
@@ -2988,10 +2992,12 @@ function updateDebtViewButtons() {
         function updateCharts(data) {
             let current = 0,
                 overdue = 0,
+                doubtful = 0,
                 partial = 0;
             data.forEach(item => {
                 if (item.status === 'current') current++;
                 else if (item.status === 'overdue') overdue++;
+                else if (item.status === 'doubtful') doubtful++;
                 else if (item.status === 'partial') partial++;
             });
 
@@ -3000,10 +3006,10 @@ function updateDebtViewButtons() {
             statusChart = new Chart(ctx1, {
                 type: 'doughnut',
                 data: {
-                    labels: ['جاري', 'متأخر', 'مدفوع جزئياً'],
+                    labels: ['غير متأخر', 'متأخر', 'مشكوك في تحصيله', 'مدفوع جزئياً'],
                     datasets: [{
-                        data: [current, overdue, partial],
-                        backgroundColor: ['#10b981', '#ef4444', '#f59e0b'],
+                        data: [current, overdue, doubtful, partial],
+                        backgroundColor: ['#10b981', '#ef4444', '#be185d', '#f59e0b'],
                         borderColor: 'transparent',
                         borderWidth: 0
                     }]
@@ -3841,14 +3847,18 @@ function updateDebtViewButtons() {
                 { key: '0-30', label: '0–30 يوم', min: 0, max: 30, count: 0, amount: 0 },
                 { key: '31-60', label: '31–60 يوم', min: 31, max: 60, count: 0, amount: 0 },
                 { key: '61-90', label: '61–90 يوم', min: 61, max: 90, count: 0, amount: 0 },
-                { key: '90+', label: 'أكثر من 90 يوم', min: 91, max: Number.MAX_SAFE_INTEGER, count: 0, amount: 0 }
+                { key: '90+', label: 'أكثر من 90 يوم / مشكوك في تحصيله', min: 91, max: Number.MAX_SAFE_INTEGER, count: 0, amount: 0 }
             ];
-            const now = Date.now();
+            const todayText = String(businessDayDate()).slice(0, 10);
+            const today = Date.parse(todayText + 'T00:00:00Z');
             data.forEach((row) => {
-                const due = Date.parse(String(row.due_date || '').slice(0,10) + 'T00:00:00Z');
-                const today = Date.parse(String(businessDayDate()).slice(0,10) + 'T00:00:00Z');
-                const ageDays = Number.isFinite(due) && Number.isFinite(today) ? Math.max(0, Math.floor((today - due) / 86400000)) : 0;
-                const bucket = buckets.find(item => ageDays >= item.min && ageDays <= item.max) || buckets[0];
+                const dueDate = String(row.due_date || '').slice(0,10);
+                if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(dueDate)) return;
+                const due = Date.parse(dueDate + 'T00:00:00Z');
+                if (!Number.isFinite(due) || !Number.isFinite(today)) return;
+                const ageDays = Math.max(0, Math.round((today - due) / 86400000));
+                const bucket = buckets.find(item => ageDays >= item.min && ageDays <= item.max);
+                if (!bucket) return;
                 bucket.count += 1;
                 bucket.amount += finiteNumber(row.remaining_amount);
             });
@@ -3866,7 +3876,7 @@ function updateDebtViewButtons() {
                 type:document.getElementById('reportType')?.value||'balances'};
         }
         function reportDateMatches(value,from,to){const date=String(value||'').slice(0,10);return (!from||!date||date>=from)&&(!to||!date||date<=to);}
-        function reportAgeDays(value){const timestamp=Date.parse(value||'');if(!Number.isFinite(timestamp))return 0;return Math.max(0,Math.floor((Date.now()-timestamp)/86400000));}
+        function reportAgeDays(value){const date=String(value||'').slice(0,10),today=String(businessDayDate()).slice(0,10);if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||!/^\\d{4}-\\d{2}-\\d{2}$/.test(today))return null;const a=Date.parse(date+'T00:00:00Z'),b=Date.parse(today+'T00:00:00Z');return Number.isFinite(a)&&Number.isFinite(b)?Math.max(0,Math.round((b-a)/86400000)):null;}
         function reportAgingMatches(age,bucket){if(!bucket)return true;if(bucket==='0-30')return age<=30;if(bucket==='31-60')return age>=31&&age<=60;if(bucket==='61-90')return age>=61&&age<=90;if(bucket==='90+')return age>=91;return true;}
         function validateReportAmountFilters(f){
             const min=f.min===''?null:finiteNumber(f.min,NaN),max=f.max===''?null:finiteNumber(f.max,NaN);
@@ -3879,14 +3889,21 @@ function updateDebtViewButtons() {
             const f=getReportFilters(),limits=validateReportAmountFilters(f);
             return debtReportState.debts.filter(function(row){
                 const remaining=finiteNumber(row.remaining_amount),status=String(row.status||row.payment_status||'').toLowerCase();
-                const age=reportAgeDays(row.due_date||row.created_at);
-                if(!reportDateMatches(row.due_date||row.created_at,f.from,f.to))return false;
+                const dueDate=String(row.due_date||'').slice(0,10);
+                const age=reportAgeDays(dueDate);
+                if(!reportDateMatches(dueDate,f.from,f.to))return false;
                 if(f.customerId&&String(row.customer_party_id??row.customer_id)!==String(f.customerId))return false;
-                if(['current','overdue','partial','paid'].indexOf(f.status)>=0&&status!==f.status)return false;
+                if(['current','overdue','doubtful','partial','paid'].indexOf(f.status)>=0) {
+                    const statusMatch = f.status==='current'
+                        ? status==='current'||(status==='partial'&&(age===null||age>=0))
+                        : status===f.status;
+                    if(!statusMatch)return false;
+                }
                 if(f.type==='overdue'&&status!=='overdue')return false;
+                if(f.type==='doubtful'&&status!=='doubtful')return false;
                 if(f.type==='invoices'&&remaining<=0)return false;
                 if(!reportAgingMatches(age,f.aging))return false;
-                if(limits.minOverdueDays!==null&&(status!=='overdue'||age<limits.minOverdueDays))return false;
+                if(limits.minOverdueDays!==null&&(!['overdue','doubtful'].includes(status)||age===null||age<limits.minOverdueDays))return false;
                 if(limits.min!==null&&remaining<limits.min)return false;
                 if(limits.max!==null&&remaining>limits.max)return false;
                 return true;
@@ -3919,7 +3936,7 @@ function updateDebtViewButtons() {
         function renderDebtReportKpis(rows,payments){
             const host=document.getElementById('reportKpis');if(!host)return;
             const total=rows.reduce(function(sum,r){return sum+finiteNumber(r.remaining_amount);},0);
-            const overdue=rows.filter(function(r){return r.status==='overdue';}).reduce(function(sum,r){return sum+finiteNumber(r.remaining_amount);},0);
+            const overdue=rows.filter(function(r){return r.status==='overdue'||r.status==='doubtful';}).reduce(function(sum,r){return sum+finiteNumber(r.remaining_amount);},0);
             const ids=new Set(rows.map(function(r){return finiteNumber(r.customer_party_id??r.customer_id);}).filter(function(id){return id>0;}));
             const collected=payments.reduce(function(sum,p){return sum+finiteNumber(p.amount);},0);
             const metrics=[['الرصيد المفتوح',formatCurrency(total)],['المتأخرات',formatCurrency(overdue)],['عملاء مدينون',String(ids.size)],['عمليات التحصيل',String(payments.length)],['المبالغ المحصلة ضمن الفلتر',formatCurrency(collected)]];
@@ -4032,10 +4049,10 @@ function updateDebtViewButtons() {
                 debtReportState.customers=reads[2].success&&Array.isArray(reads[2].data)?reads[2].data:[];
                 const customerOptions=debtReportState.customers.map(function(c){return '<option value="'+escapeHtml(c.id)+'">'+escapeHtml(c.commercial_name_ar||c.commercial_name||c.name||('عميل #'+c.id))+'</option>';}).join('');
                 body.innerHTML='<div class="report-workspace"><section class="report-panel"><div class="report-panel-title"><i class="fas fa-sliders-h"></i> معايير التقرير والفلترة</div><div class="report-filters">'+
-                    '<label class="report-field">نوع التقرير<select id="reportType" onchange="generateDebtReport()"><option value="balances">أرصدة ديون العملاء</option><option value="overdue">الديون المتأخرة</option><option value="aging">أعمار الديون (Aging)</option><option value="customers">ملخص حسب العميل</option><option value="invoices">الفواتير ذات الرصيد المتبقي</option><option value="payments">عمليات التحصيل والتسديد</option><option value="statement">كشف حركة عميل</option></select></label>'+
+                    '<label class="report-field">نوع التقرير<select id="reportType" onchange="generateDebtReport()"><option value="balances">أرصدة ديون العملاء</option><option value="overdue">الديون المتأخرة</option><option value="doubtful">الديون المشكوك في تحصيلها</option><option value="aging">أعمار الديون (Aging)</option><option value="customers">ملخص حسب العميل</option><option value="invoices">الفواتير ذات الرصيد المتبقي</option><option value="payments">عمليات التحصيل والتسديد</option><option value="statement">كشف حركة عميل</option></select></label>'+
                     '<label class="report-field">العميل<select id="reportCustomer"><option value="">جميع العملاء</option>'+customerOptions+'</select></label>'+
                     '<label class="report-field">من تاريخ<input id="reportDateFrom" type="date"></label><label class="report-field">إلى تاريخ<input id="reportDateTo" type="date"></label>'+
-                    '<label class="report-field">حالة السجل<select id="reportStatus"><option value="">كل الحالات</option><option value="current">جاري</option><option value="overdue">متأخر</option><option value="partial">مدفوع جزئياً</option><option value="completed">مكتمل</option><option value="pending">معلق</option><option value="cancelled">ملغى</option></select></label>'+
+                    '<label class="report-field">حالة السجل<select id="reportStatus"><option value="">كل الحالات</option><option value="current">غير متأخر</option><option value="overdue">متأخر</option><option value="doubtful">مشكوك في تحصيله</option><option value="partial">مدفوع جزئياً</option><option value="completed">مكتمل</option><option value="pending">معلق</option><option value="cancelled">ملغى</option></select></label>'+
                     '<label class="report-field">المبلغ من<input id="reportMinAmount" type="number" min="0" step="0.01" placeholder="بدون حد أدنى"></label><label class="report-field">المبلغ إلى<input id="reportMaxAmount" type="number" min="0" step="0.01" placeholder="بدون حد أعلى"></label>'+
                     '<label class="report-field">الفئة العمرية للدين<select id="reportAgingBucket"><option value="">كل الأعمار</option><option value="0-30">0–30 يوم</option><option value="31-60">31–60 يوم</option><option value="61-90">61–90 يوم</option><option value="90+">أكثر من 90 يوم</option></select></label>'+
                     '<label class="report-field">أيام التأخر على الأقل<input id="reportMinOverdueDays" type="number" min="0" step="1" placeholder="للمتأخرات فقط"></label>'+
@@ -4063,7 +4080,7 @@ async function loadCustomerDebtSettings() {
                 defaultView:['table','cards','tree'].indexOf(rawView)>=0?rawView:'table',
                 defaultStatus:['','current','overdue','partial'].indexOf(rawStatus)>=0?rawStatus:'',
                 dueSoonDays:Math.max(1,Math.min(365,Math.round(rawDays||10))),
-                defaultReport:['balances','overdue','aging','customers','invoices','payments','statement'].indexOf(rawReport)>=0?rawReport:'balances',
+                defaultReport:['balances','overdue','doubtful','aging','customers','invoices','payments','statement'].indexOf(rawReport)>=0?rawReport:'balances',
                 highlightOverdue:rawHighlight!=='0'
             };
             debtScreenSettingsLoaded=true;
@@ -4082,7 +4099,7 @@ async function loadCustomerDebtSettings() {
             const feedback=document.getElementById('debtSettingsFeedback');
             if(['table','cards','tree'].indexOf(view)<0||['','current','overdue','partial'].indexOf(status)<0||
                !Number.isInteger(days)||days<1||days>365||
-               ['balances','overdue','aging','customers','invoices','payments','statement'].indexOf(report)<0){
+               ['balances','overdue','doubtful','aging','customers','invoices','payments','statement'].indexOf(report)<0){
                 if(feedback){feedback.hidden=false;feedback.textContent='تحقق من القيم؛ عدد الأيام يجب أن يكون عدداً صحيحاً من 1 إلى 365.';feedback.style.color='var(--danger)';}return;
             }
             const pairs=[['customer_debts_default_view',view],['customer_debts_default_status',status],
@@ -4104,9 +4121,9 @@ async function loadCustomerDebtSettings() {
             loadCustomerDebtSettings().then(function(value){
                 body.innerHTML='<div class="report-workspace"><section class="report-panel"><div class="report-panel-title"><i class="fas fa-sliders-h"></i> تفضيلات شاشة ديون العملاء</div><div class="debt-settings-stack">'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">طريقة العرض الافتراضية</span><span class="debt-setting-desc">جدول أو بطاقات أو شجرة مجمعة حسب العميل.</span></div><select id="debtSettingDefaultView"><option value="table">جدول</option><option value="cards">بطاقات</option><option value="tree">شجرة</option></select></div>'+
-                    '<div class="debt-setting-row"><div><span class="debt-setting-label">حالة الديون الافتراضية</span><span class="debt-setting-desc">فلتر اختياري عند فتح الشاشة، ويمكن تغييره من شريط الفلاتر.</span></div><select id="debtSettingDefaultStatus"><option value="">جميع الحالات</option><option value="current">جاري</option><option value="overdue">متأخر</option><option value="partial">مدفوع جزئياً</option></select></div>'+
+                    '<div class="debt-setting-row"><div><span class="debt-setting-label">حالة الديون الافتراضية</span><span class="debt-setting-desc">فلتر اختياري عند فتح الشاشة، ويمكن تغييره من شريط الفلاتر.</span></div><select id="debtSettingDefaultStatus"><option value="">جميع الحالات</option><option value="current">غير متأخر</option><option value="overdue">متأخر</option><option value="doubtful">مشكوك في تحصيله</option><option value="partial">مدفوع جزئياً</option></select></div>'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">نافذة تذكير الاستحقاق بالأيام</span><span class="debt-setting-desc">نطاق قائمة تنبيهات الديون القريبة في هذه الشاشة.</span></div><input id="debtSettingDueDays" type="number" min="1" max="365" step="1" value="'+value.dueSoonDays+'"></div>'+
-                    '<div class="debt-setting-row"><div><span class="debt-setting-label">التقرير الافتراضي</span><span class="debt-setting-desc">التقرير الذي يظهر أولاً عند فتح التقارير.</span></div><select id="debtSettingDefaultReport"><option value="balances">أرصدة ديون العملاء</option><option value="overdue">الديون المتأخرة</option><option value="aging">أعمار الديون</option><option value="customers">ملخص حسب العميل</option><option value="invoices">الفواتير ذات الرصيد المتبقي</option><option value="payments">عمليات التحصيل والتسديد</option><option value="statement">كشف حركة عميل</option></select></div>'+
+                    '<div class="debt-setting-row"><div><span class="debt-setting-label">التقرير الافتراضي</span><span class="debt-setting-desc">التقرير الذي يظهر أولاً عند فتح التقارير.</span></div><select id="debtSettingDefaultReport"><option value="balances">أرصدة ديون العملاء</option><option value="overdue">الديون المتأخرة</option><option value="doubtful">الديون المشكوك في تحصيلها</option><option value="aging">أعمار الديون</option><option value="customers">ملخص حسب العميل</option><option value="invoices">الفواتير ذات الرصيد المتبقي</option><option value="payments">عمليات التحصيل والتسديد</option><option value="statement">كشف حركة عميل</option></select></div>'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">إبراز الديون المتأخرة</span><span class="debt-setting-desc">تنسيق تحذيري للديون المتأخرة في عرض البطاقات والشجرة.</span></div><label class="debt-setting-check"><input id="debtSettingHighlightOverdue" type="checkbox" '+(value.highlightOverdue?'checked':'')+'> تفعيل الإبراز</label></div>'+
                     '</div><div id="debtSettingsFeedback" class="debt-settings-feedback" hidden></div><div class="report-actions"><button class="btn-report primary" onclick="saveCustomerDebtSettings()"><i class="fas fa-save"></i> حفظ الإعدادات</button><button class="btn-report" onclick="loadCustomerDebtSettings().then(openSettingsModal)"><i class="fas fa-undo"></i> إعادة تحميل المحفوظ</button></div></section>'+
                     '<section class="report-panel"><div class="report-panel-title"><i class="fas fa-database"></i> التخزين والتحقق</div><p class="report-result-caption">تُحفظ التفضيلات في SQLite بمفاتيح خاصة بهذه الشاشة، ولا تستبدل إعدادات الضريبة أو المخزون أو المبيعات.</p></section></div>';
