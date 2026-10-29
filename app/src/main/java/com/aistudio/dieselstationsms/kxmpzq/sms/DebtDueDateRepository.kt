@@ -424,11 +424,15 @@ object DebtDueDateRepository {
         val text = terms.orEmpty().trim().lowercase(Locale.ROOT)
         if (text.isBlank()) return DEFAULT_TERMS_DAYS
         if (listOf("cash", "immediate", "upon receipt", "عند الاستلام", "نقد", "فوري").any { text.contains(it) }) return 0
-        val explicitDayCount = Regex("(?:net\\s*|صافي\\s*|خلال\\s*|within\\s*)?(\\d{1,3})\\s*(?:days?|يوم(?:اً|ًا|ين)?|أيام)?").find(text)
+        val withDayUnit = Regex("(?:net\\s*|صافي\\s*|خلال\\s*|within\\s*)?(\\d{1,3})\\s*(?:days?|يوم(?:اً|ًا|ين)?|أيام)").find(text)
             ?.groupValues?.getOrNull(1)?.toIntOrNull()
+        val netPrefix = Regex("(?:net|صافي|خلال|within)\\s*(\\d{1,3})").find(text)
+            ?.groupValues?.getOrNull(1)?.toIntOrNull()
+        val standaloneNumber = if (Regex("^\\d{1,3}$").matches(text)) text.toIntOrNull() else null
         // A bare/legacy numeric 0 was the CRM's "unspecified" sentinel; treat it as Net 30.
         // Immediate payment is represented by an explicit cash/immediate term above.
-        return explicitDayCount?.takeIf { it > 0 }?.coerceIn(1, 365) ?: DEFAULT_TERMS_DAYS
+        return (withDayUnit ?: netPrefix ?: standaloneNumber)
+            ?.takeIf { it > 0 }?.coerceIn(1, 365) ?: DEFAULT_TERMS_DAYS
     }
 
     private fun parseDate(value: String?): LocalDate? {
