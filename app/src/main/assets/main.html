@@ -1959,6 +1959,7 @@
         let useAndroidInterface = false;
         let isRefreshing = false;
         let dashboardRefreshQueued = false;
+        let dashboardResumeRefreshTimer = null;
         let clockInterval = null;
 
         let sidebarNavData = [];
@@ -3825,7 +3826,9 @@
                 return;
             }
             isRefreshing = true;
-            renderSkeletons();
+            // Preserve the last successful snapshot while refreshing; show skeletons only
+            // before the first successful load in this WebView session.
+            if (!dashboardCache) renderSkeletons();
 
             try {
                 const result = await apiCall('getDashboardStats');
@@ -3848,6 +3851,17 @@
                     setTimeout(() => loadDashboard(true), 0);
                 }
             }
+        }
+
+        function scheduleDashboardResumeRefresh() {
+            if (dashboardResumeRefreshTimer !== null) {
+                clearTimeout(dashboardResumeRefreshTimer);
+            }
+            dashboardResumeRefreshTimer = setTimeout(() => {
+                dashboardResumeRefreshTimer = null;
+                if (document.hidden || isSleeping || isRefreshing) return;
+                loadDashboard(false);
+            }, 180);
         }
 
         function manualRefresh() {
@@ -4081,18 +4095,18 @@
 
             window.addEventListener('pageshow', async function(e) {
                 await loadDisplaySettings();
-                loadDashboard(true);
+                scheduleDashboardResumeRefresh();
                 handleUserActivity();
             });
             document.addEventListener('visibilitychange', function() {
                 if (!document.hidden && !isSleeping) {
-                    loadDashboard(true);
+                    scheduleDashboardResumeRefresh();
                     handleUserActivity();
                 }
             });
             window.addEventListener('focus', function() {
                 if (!isSleeping) {
-                    loadDashboard(true);
+                    scheduleDashboardResumeRefresh();
                     handleUserActivity();
                 }
             });

@@ -2836,9 +2836,14 @@
             // التشغيل التلقائي للبصمة (إذا توفرت بيانات Remember Me)
             // ============================================================
             // نبدأ بعد فترة قصيرة بعد تحميل الصفحة
-            setTimeout(() => {
-                triggerBiometricLogin();
-            }, 1000); // تأخير 1 ثانية للسماح بتهيئة كل شيء
+            // A security fallback explicitly requesting password login must not immediately
+            // reopen the same biometric prompt. Remember-Me credentials remain untouched.
+            const skipBiometricOnce = /(?:^|[?&])skipBiometricOnce=1(?:&|$)/.test(window.location.search);
+            if (!skipBiometricOnce) {
+                setTimeout(() => {
+                    triggerBiometricLogin();
+                }, 1000); // تأخير قصير للسماح بتهيئة الصفحة
+            }
 
             // تسجيل انتهاء التحميل
             debugInfo("PAGE_READY", {});

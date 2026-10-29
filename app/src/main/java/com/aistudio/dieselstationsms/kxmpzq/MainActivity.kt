@@ -381,13 +381,8 @@ class MainActivity : AppCompatActivity() {
 
         requestAllPermissions()
 
-        // Enable whole-document WebView drawing before the invoice capture WebView is created.
-        // This is required for reliable off-screen rendering of long invoice documents on Android.
-        try {
-            WebView.enableSlowWholeDocumentDraw()
-        } catch (e: Exception) {
-            DebugLogger.warn("InvoicePdfRender", "Whole-document drawing setup failed: ${e.message}")
-        }
+        // Keep the interactive WebView on Android's viewport-optimized drawing path.
+        // Invoice capture measures and lays out its dedicated renderer explicitly before drawing.
 
         setContent {
             MyApplicationTheme {
@@ -399,11 +394,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        handler.postDelayed({
+        handler.post {
             if (!isDestroyed.get()) {
                 loadWebViewFromAssets()
             }
-        }, 2000)
+        }
 
         lifecycleScope.launch {
             initializeSystem()
@@ -457,7 +452,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (::dbHelper.isInitialized) {
-            applySecurityRuntimeSettings()
+            applySecurityRuntimeSettings(target = null)
             val timeoutMinutes = securitySettingValue("autoLogoutMinutes").toIntOrNull()?.coerceIn(0, 1440) ?: 0
             if (timeoutMinutes > 0 && !currentAuthToken.isNullOrBlank() &&
                 android.os.SystemClock.elapsedRealtime() - lastSecurityInteractionElapsed >= timeoutMinutes * 60_000L
@@ -468,6 +463,9 @@ class MainActivity : AppCompatActivity() {
             }
             handler.removeCallbacks(securityIdleRunnable)
             handler.postDelayed(securityIdleRunnable, 5_000L)
+        }
+        if (!securityLockPending && !securityPromptActive && webView?.visibility == View.INVISIBLE) {
+            webView?.visibility = View.VISIBLE
         }
         webView?.onResume()
         updateUIState()
@@ -1219,16 +1217,43 @@ class MainActivity : AppCompatActivity() {
                     }
                     scan(document);
                     if (window.__stationOfflineUiObserver) window.__stationOfflineUiObserver.disconnect();
+
+                    // Avoid whole-screen DOM walks for every notification/toast mutation.
+                    // Scan only the nearest candidate; inspect descendants only for new subtrees.
+                    var pendingOfflineNodes = new Set();
+                    var offlineScanScheduled = false;
+                    function scheduleOfflineRewrite(node, includeDescendants) {
+                        if (!node) return;
+                        var element = node.nodeType === 1 ? node : node.parentElement;
+                        if (!element) return;
+                        var nearest = element.closest ? element.closest(selector) : null;
+                        if (nearest) pendingOfflineNodes.add(nearest);
+                        if (element.matches && element.matches(selector)) pendingOfflineNodes.add(element);
+                        if (includeDescendants && element.querySelectorAll) {
+                            element.querySelectorAll(selector).forEach(function (candidate) {
+                                pendingOfflineNodes.add(candidate);
+                            });
+                        }
+                        if (offlineScanScheduled) return;
+                        offlineScanScheduled = true;
+                        var runOfflineRewrite = function () {
+                            offlineScanScheduled = false;
+                            var candidates = Array.from(pendingOfflineNodes);
+                            pendingOfflineNodes.clear();
+                            candidates.forEach(rewrite);
+                        };
+                        if (window.requestAnimationFrame) window.requestAnimationFrame(runOfflineRewrite);
+                        else setTimeout(runOfflineRewrite, 0);
+                    }
+
                     window.__stationOfflineUiObserver = new MutationObserver(function (records) {
                         records.forEach(function (record) {
-                            if (record.type === 'characterData') {
-                                scan(record.target.parentNode);
-                            } else {
-                                // Toast libraries often update textContent on an existing
-                                // container (a childList mutation), rather than add a new toast.
-                                scan(record.target);
+                            scheduleOfflineRewrite(record.target, false);
+                            if (record.addedNodes) {
+                                record.addedNodes.forEach(function (node) {
+                                    if (node && node.nodeType === 1) scheduleOfflineRewrite(node, true);
+                                });
                             }
-                            if (record.addedNodes) record.addedNodes.forEach(scan);
                         });
                     });
                     if (document.body) {
@@ -1680,7 +1705,7 @@ class MainActivity : AppCompatActivity() {
         webView?.post {
             if (!isDestroyed.get()) {
                 webView?.visibility = View.VISIBLE
-                webView?.loadUrl("file:///android_asset/screens/login.html")
+                webView?.loadUrl("file:///android_asset/screens/login.html?skipBiometricOnce=1")
             }
         }
     }
@@ -2156,7 +2181,7 @@ class MainActivity : AppCompatActivity() {
                 if (!url.isNullOrBlank() && url.startsWith("file:///android_asset/")) {
                     lastKnownAssetUrl = url
                 }
-                if (url?.endsWith("/login.html") == true && shouldOpenSystemSetupScreen()) {
+                if (url?.substringBefore('?')?.substringBefore('#')?.endsWith("/login.html") == true && shouldOpenSystemSetupScreen()) {
                     view?.post {
                         if (!isDestroyed.get()) {
                             view.loadUrl("file:///android_asset/screens/first-user-setup.html")

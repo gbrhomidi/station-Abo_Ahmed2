@@ -44,8 +44,21 @@
         return target && target.closest ? target.closest(selector) : null;
     }
 
-    function prepareModals() {
-        document.querySelectorAll(modalSelector).forEach(function (node) {
+    function collectElements(root, selector) {
+        var nodes = [];
+        if (!root) return nodes;
+        if (root.nodeType === 1 && root.matches && root.matches(selector)) nodes.push(root);
+        if (root.querySelectorAll) {
+            Array.prototype.forEach.call(root.querySelectorAll(selector), function (node) {
+                nodes.push(node);
+            });
+        }
+        return nodes;
+    }
+
+    function prepareModals(root) {
+        var scope = root || document;
+        collectElements(scope, modalSelector).forEach(function (node) {
             if (node.style.webkitTapHighlightColor !== 'transparent') node.style.webkitTapHighlightColor = 'transparent';
             if (node.matches('.modal, .modal-content, [role="dialog"]')) {
                 if (node.style.webkitOverflowScrolling !== 'touch') node.style.webkitOverflowScrolling = 'touch';
@@ -55,11 +68,11 @@
             }
         });
         syncBodyScrollLock();
-        localizeFieldLabels();
+        localizeFieldLabels(scope);
     }
 
-    function localizeFieldLabels() {
-        document.querySelectorAll('label, .form-label, .field-label, [placeholder]').forEach(function (node) {
+    function localizeFieldLabels(root) {
+        collectElements(root || document, 'label, .form-label, .field-label, [placeholder]').forEach(function (node) {
             if (node.hasAttribute && node.hasAttribute('placeholder')) {
                 var placeholder = (node.getAttribute('placeholder') || '').trim();
                 if (arabicFieldText[placeholder]) node.setAttribute('placeholder', arabicFieldText[placeholder]);
@@ -73,27 +86,43 @@
         });
     }
 
-    function queueModalPreparation() {
+    var pendingModalRoots = [];
+    function queueModalPreparation(root) {
+        var scope = root || document;
+        if (pendingModalRoots.indexOf(scope) === -1) pendingModalRoots.push(scope);
         if (modalPreparationScheduled) return;
         modalPreparationScheduled = true;
         var run = function () {
             modalPreparationScheduled = false;
-            prepareModals();
+            var roots = pendingModalRoots.slice();
+            pendingModalRoots.length = 0;
+            roots.forEach(function (pendingRoot) { prepareModals(pendingRoot); });
         };
         if (window.requestAnimationFrame) window.requestAnimationFrame(run);
         else window.setTimeout(run, 0);
     }
 
-    function mutationTouchesModal(record) {
-        var target = record.target;
-        if (target && (closest(target, modalSelector) || (target.matches && target.matches(modalSelector)))) return true;
-        if (record.type !== 'childList') return false;
-        return Array.prototype.some.call(record.addedNodes || [], function (node) {
-            return node && node.nodeType === 1 && (
-                (node.matches && node.matches(modalSelector)) ||
-                (node.querySelector && node.querySelector(modalSelector)) ||
-                closest(node, modalSelector)
-            );
+    function nearestModalRoot(node) {
+        var element = node && node.nodeType === 1 ? node : (node && node.parentElement);
+        if (!element) return null;
+        if (element.matches && element.matches(modalSelector)) return element;
+        return closest(element, modalSelector);
+    }
+
+    function mutationModalRoots(record, roots) {
+        var targetRoot = nearestModalRoot(record.target);
+        if (targetRoot) roots.add(targetRoot);
+        if (record.type !== 'childList') return;
+        Array.prototype.forEach.call(record.addedNodes || [], function (node) {
+            if (!node || node.nodeType !== 1) return;
+            var addedRoot = nearestModalRoot(node);
+            if (addedRoot) roots.add(addedRoot);
+            if (node.matches && node.matches(modalSelector)) roots.add(node);
+            if (node.querySelectorAll) {
+                node.querySelectorAll(modalSelector).forEach(function (modalNode) {
+                    roots.add(modalNode);
+                });
+            }
         });
     }
 
@@ -140,7 +169,11 @@
 
     if (window.MutationObserver) {
         modalObserver = new MutationObserver(function (records) {
-            if (Array.prototype.some.call(records, mutationTouchesModal)) queueModalPreparation();
+            var roots = new Set();
+            Array.prototype.forEach.call(records, function (record) {
+                mutationModalRoots(record, roots);
+            });
+            roots.forEach(function (root) { queueModalPreparation(root); });
         });
         modalObserver.observe(document.documentElement, {
             childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style']
@@ -154,5 +187,5 @@
         document.removeEventListener('touchmove', handleTouchMove, true);
         document.removeEventListener('focusin', handleFocusIn);
     }, { once: true });
-    prepareModals();
+    prepareModals(document);
 })();
