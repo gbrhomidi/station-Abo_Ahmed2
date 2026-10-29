@@ -3637,8 +3637,8 @@
             const buckets = [
                 { label: '0–30 يوم', min: 0, max: 30, count: 0, amount: 0 },
                 { label: '31–60 يوم', min: 31, max: 60, count: 0, amount: 0 },
-                { label: '61–90 يوم', min: 61, max: 90, count: 0, amount: 0 },
-                { label: 'أكثر من 90 يوم / مشكوك في تحصيله', min: 91, max: Number.MAX_SAFE_INTEGER, count: 0, amount: 0 },
+                { label: '61–89 يوم', min: 61, max: 89, count: 0, amount: 0 },
+                { label: '90 يومًا فأكثر / مشكوك في تحصيله', min: 90, max: Number.MAX_SAFE_INTEGER, count: 0, amount: 0 },
                 { label: 'تاريخ استحقاق غير محدد', min: null, max: null, count: 0, amount: 0 }
             ];
             const todayText = String(businessDayDate()).slice(0, 10);
