@@ -6067,6 +6067,8 @@
 
             sale_id: number($('f_sale_id').value) || null,
 
+            sale_type: state.saleKind === 'product' ? 'product' : 'fuel',
+
             shift_id: number($('f_shift_id').value) || null,
 
             party_id: number($('f_party_id').value),
