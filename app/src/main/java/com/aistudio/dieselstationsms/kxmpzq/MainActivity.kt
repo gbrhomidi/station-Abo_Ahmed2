@@ -1193,8 +1193,8 @@ class MainActivity : AppCompatActivity() {
                     var selector = '.offline-banner,.offline,.connection-bar,[role="alert"],.toast,.notification';
                     function rewrite(node) {
                         if (!node || !node.textContent) return;
-                        var text = String(node.textContent).replace(/\\s+/g, ' ').trim();
-                        var offline = /عدم\\s+الاتصال|غير\\s+متصل|لا\\s+يوجد\\s+اتصال/i.test(text);
+                        var text = String(node.textContent).replace(/\s+/g, ' ').trim();
+                        var offline = /عدم\s+الاتصال|غير\s+متصل|لا\s+يوجد\s+اتصال/i.test(text);
                         var suggestsQueue = /سيتم.{0,40}(?:حفظ|تخزين).{0,30}محلي.{0,8}/i.test(text);
                         if (!offline || !suggestsQueue) return;
                         var icon = node.querySelector ? node.querySelector('i') : null;
