@@ -1266,6 +1266,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun entryAssetUrl(entryAsset: String): String =
+        if (entryAsset == "main.html") {
+            "file:///android_asset/main.html"
+        } else {
+            "file:///android_asset/screens/$entryAsset"
+        }
+
     private fun loadWebViewFromAssets() {
         if (isDestroyed.get()) return
         val wv = webView ?: return
@@ -1273,8 +1280,9 @@ class MainActivity : AppCompatActivity() {
         try {
             if (wv.isAttachedToWindow) {
                 val entryAsset = initialEntryAsset()
-                DebugLogger.info("WebView", "Loading $entryAsset")
-                wv.loadUrl("file:///android_asset/screens/$entryAsset")
+                val entryUrl = entryAssetUrl(entryAsset)
+                DebugLogger.info("WebView", "Loading $entryUrl")
+                wv.loadUrl(entryUrl)
             } else {
                 handler.postDelayed({
                     if (!isDestroyed.get()) {
@@ -2273,7 +2281,7 @@ class MainActivity : AppCompatActivity() {
 
         val targetUrl = lastKnownAssetUrl
             ?.takeIf { it.startsWith("file:///android_asset/") }
-            ?: "file:///android_asset/screens/${initialEntryAsset()}"
+            ?: entryAssetUrl(initialEntryAsset())
         val wv = webView
         if (wv != null && wv.isAttachedToWindow) {
             try {
