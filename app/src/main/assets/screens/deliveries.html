@@ -2339,9 +2339,19 @@
                 <!-- DELIVERY SERVICE FEE -->
 
                 <div class="form-group">
-                    <label class="form-label">رسوم خدمة التوصيل</label>
+                    <label class="form-label" for="f_delivery_service_fee">رسوم خدمة التوصيل</label>
                     <input id="f_delivery_service_fee" name="delivery_service_fee" class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="0">
-                    <div class="form-help">تُرحّل كرسوم خدمة على البيع الأصلي فقط للبيوع الآجلة. يتم توثيقها كمديونية على السائق.</div>
+                    <div class="form-help">تُسجّل منفصلة عن إجمالي الوقود؛ طريقة احتسابها تحدد القيد المحاسبي.</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="f_delivery_fee_mode">احتساب رسوم التوصيل</label>
+                    <select id="f_delivery_fee_mode" name="delivery_fee_mode" class="form-input">
+                        <option value="exempt" selected>معفي منها</option>
+                        <option value="add_to_sales">تُضاف لقيمة المبيعات</option>
+                        <option value="driver">على حساب السائق</option>
+                        <option value="deduct_from_sales">تُنقص من المبيعات</option>
+                    </select>
                 </div>
 
                 <!-- STATUS -->
@@ -2440,6 +2450,11 @@
                         id="w_location">
                     </div>
 
+                </div>
+
+                <div class="form-group full">
+                    <label class="form-label" for="f_cash_customer_name">اسم العميل النقدي</label>
+                    <input id="f_cash_customer_name" name="cash_customer_name" class="form-input" type="text" inputmode="text" placeholder="يُجلب من عملية البيع النقدية">
                 </div>
 
                 <!-- LATEST SALE -->
@@ -4362,16 +4377,24 @@
                 : 'معرف جديد';
 
         const isProductSale = state.saleKind === 'product';
-        const cargoType = isProductSale ? 'منتجات' : 'وقود';
+        const fuelSource = String($('f_fuel_type').value || '').trim().toLowerCase();
+        const fuelName = fuelSource.includes('ديزل') || fuelSource.includes('diesel')
+            ? 'ديزل'
+            : (fuelSource.includes('بنزين') || fuelSource.includes('petrol') || fuelSource.includes('gasoline') ? 'بنزين' : (fuelSource || 'غير محدد'));
+        const cargoType = isProductSale ? 'منتجات' : "وقود '" + fuelName + "'";
 
-        const quantity = String($('f_quantity').value || '—').trim() || '—';
-        const customer = $('f_party_display').value.trim() || '—';
+        const rawQuantity = String($('f_quantity').value || '—').trim() || '—';
+        const quantityNumber = Number(rawQuantity.replace(',', '.'));
+        const quantity = isProductSale || rawQuantity === '—'
+            ? rawQuantity
+            : rawQuantity + (Number.isFinite(quantityNumber) && Math.abs(quantityNumber - 1) < 0.000001 ? ' لتر' : ' لترات');
+        const cashName = $('f_cash_customer_name').value.trim();
+        const isCashSale = ['cash','نقدي','نقداً'].includes(String(state.selectedSalePaymentMethod || '').trim().toLowerCase());
+        const customer = (isCashSale && cashName) ? cashName : ($('f_party_display').value.trim() || '—');
         const location = $('f_location').value.trim() || '—';
         const fee = number($('f_delivery_service_fee').value);
-
-        const feeText = fee > 0
-            ? fee.toFixed(2) + ' ريال'
-            : '0 ريال';
+        const feeMode = $('f_delivery_fee_mode').value || 'exempt';
+        const feeText = fee > 0 ? fee.toFixed(2) + ' ريال' : '0 ريال';
 
         const message =
             'مرحباً - ' + driverName + '\n' +
@@ -4379,8 +4402,8 @@
             'نوع الحمولة - ' + cargoType + '\n' +
             'حجم الحمولة - ' + quantity + '\n' +
             'للعميل - ' + customer + '\n' +
-            'موقع التوصيل - ' + location + '\n' +
-            'قم باستلام - ' + feeText + ' من العميل،';
+            'موقع التوصيل - ' + location +
+            (fee > 0 && feeMode === 'add_to_sales' ? '\nرسوم خدمة التوصيل - ' + feeText + ' (مضافة لقيمة المبيعات)' : '');
 
         body.textContent = message;
         box.classList.add('show');
@@ -4750,15 +4773,23 @@
         setIfValue('f_driver_id', sale.driver_id);
         setIfValue('f_vehicle_display', sale.vehicle_name);
         setIfValue('f_driver_display', sale.driver_name);
-        setIfValue('f_delivery_service_fee', sale.service_fee ?? 0);
+        setIfValue('f_delivery_service_fee', sale.delivery_service_fee ?? sale.service_fee ?? 0);
+        setIfValue('f_delivery_fee_mode', sale.delivery_fee_mode || 'exempt');
+        setIfValue('f_cash_customer_name', sale.cash_customer_name || '');
 
-        const partyId = Number(sale.customer_party_id || 0);
+        const partyId = Number(sale.customer_party_id || sale.party_id || 0);
+        const saleIsCash = ['cash','نقدي','نقداً'].includes(String(sale.payment_method || '').trim().toLowerCase()) || sale.cash_sale === true;
         if (partyId > 0) {
             $('f_party_id').value = String(partyId);
-            $('f_party_display').value = sale.customer_name || 'العميل المرتبط بالبيع';
+            $('f_party_display').value = sale.customer_name || sale.customer_display || 'العميل المرتبط بالبيع';
         } else {
             $('f_party_id').value = '';
-            $('f_party_display').value = 'عميل غير مسجل';
+            $('f_party_display').value = saleIsCash && sale.cash_customer_name
+                ? sale.cash_customer_name
+                : 'عميل غير مسجل';
+        }
+        if (saleIsCash && sale.cash_customer_name) {
+            $('f_cash_customer_name').value = sale.cash_customer_name;
         }
 
         const fuelGroup = $('f_fuel_type').closest('.form-group');
@@ -4788,7 +4819,8 @@
 
         updateVehiclePreview(linkedVehicle);
         calculateTotalIfNeeded();
-        validateLatestSaleFields();
+        // Do not interrupt customer selection with a premature "missing location" warning.
+        // Required location/fee rules are checked only when the user saves the delivery.
         validateVehicleQuantity();
         updateSmsPreview();
 
@@ -4825,7 +4857,7 @@
 
         for (const id of [
             'f_shift_id','f_quantity','f_fuel_type',
-            'f_price_per_liter','f_total_amount','f_location',
+            'f_price_per_liter','f_total_amount','f_location','f_cash_customer_name',
             'f_vehicle_id','f_driver_id',
             'f_vehicle_display','f_driver_display'
         ]) {
@@ -4834,6 +4866,7 @@
 
         updateVehiclePreview(null);
         $('f_delivery_service_fee').value = '0';
+        $('f_delivery_fee_mode').value = 'exempt';
         clearDriverAvailabilityChip();
         unlockStatus();
         hideSmsPreview();
@@ -5522,6 +5555,8 @@
         $('f_total_amount').value = row.total_amount ?? '';
         $('f_delivery_service_fee').value =
             row.delivery_service_fee ?? row.service_fee ?? 0;
+        $('f_delivery_fee_mode').value = row.delivery_fee_mode || 'exempt';
+        $('f_cash_customer_name').value = row.cash_customer_name || '';
         $('f_status').value = row.status || 'pending';
         $('f_delivery_date').value = toLocalInput(row.delivery_date);
         $('f_created_at').value = toLocalInput(row.created_at);
@@ -5603,56 +5638,44 @@
             'السائق';
 
         const serviceFee = number($('f_delivery_service_fee').value);
+        const feeMode = $('f_delivery_fee_mode').value || 'exempt';
         const isProductSale = state.saleKind === 'product';
-        const cargoType = isProductSale ? 'منتجات' : 'وقود';
+        const fuelSource = String($('f_fuel_type').value || '').trim().toLowerCase();
+        const fuelName = fuelSource.includes('ديزل') || fuelSource.includes('diesel')
+            ? 'ديزل'
+            : (fuelSource.includes('بنزين') || fuelSource.includes('petrol') || fuelSource.includes('gasoline') ? 'بنزين' : (fuelSource || 'غير محدد'));
+        const cargoType = isProductSale ? 'منتجات' : "وقود '" + fuelName + "'";
 
-        const quantityText =
-            String($('f_quantity').value || '—').trim() || '—';
+        const rawQuantity = String($('f_quantity').value || '—').trim() || '—';
+        const quantityNumber = Number(rawQuantity.replace(',', '.'));
+        const quantityText = isProductSale || rawQuantity === '—'
+            ? rawQuantity
+            : rawQuantity + (Number.isFinite(quantityNumber) && Math.abs(quantityNumber - 1) < 0.000001 ? ' لتر' : ' لترات');
 
-        const customerName =
-            $('f_party_display').value.trim() || 'عميل';
-
-        const location =
-            $('f_location').value.trim() || '—';
-
-        const feeText = serviceFee > 0
-            ? serviceFee.toFixed(2) + ' ريال'
-            : '0 ريال';
-
-        const saleNotes = String(state.selectedSaleNotes || '').trim();
-        const isCashSale =
-            String(state.selectedSalePaymentMethod || '').trim().toLowerCase() === 'cash' ||
-            customerName.includes('مبيعات نقدية');
-        const customerLine = isCashSale && saleNotes
-            ? customerName + '/' + saleNotes
-            : customerName;
+        const partyText = $('f_party_display').value.trim() || 'عميل';
+        const cashName = $('f_cash_customer_name').value.trim();
+        const isCashSale = ['cash','نقدي','نقداً'].includes(String(state.selectedSalePaymentMethod || '').trim().toLowerCase());
+        const customerName = isCashSale && cashName ? cashName : partyText;
+        const location = $('f_location').value.trim() || '—';
+        const feeText = serviceFee > 0 ? serviceFee.toFixed(2) + ' ريال' : '0 ريال';
 
         const message =
             'مرحباً - ' + driverNameText + '\n' +
             'لديك مهمة توصيل جديدة رقمها - ' + savedId + '\n' +
             'نوع الحمولة - ' + cargoType + '\n' +
             'حجم الحمولة - ' + quantityText + '\n' +
-            'للعميل - ' + customerLine + '\n' +
-            'موقع التوصيل - ' + location + '\n' +
-            'قم باستلام - ' + feeText + ' من العميل،';
+            'للعميل - ' + customerName + '\n' +
+            'موقع التوصيل - ' + location +
+            (serviceFee > 0 && feeMode === 'add_to_sales' ? '\nرسوم خدمة التوصيل - ' + feeText + ' (مضافة لقيمة المبيعات)' : '');
 
         /*
-         * DeliverySmsScheduler is scheduled by saveDeliveryRecord from the
-         * authoritative SQLite delivery time. Keeping scheduling server-side
-         * avoids a second, divergent scheduling path in the WebView.
+         * The SMS is constructed and scheduled by DeliverySmsScheduler from the
+         * authoritative SQLite row. The fee/accounting is committed atomically by
+         * saveDeliveryRecord; this UI callback must not create a second fee entry.
          */
-        /* 2. Record service fee on driver as pending payroll deduction */
-        if (serviceFee > 0 && driverId > 0) {
-            try {
-                await invoke('recordDeliveryServiceFee', [JSON.stringify({
-                    delivery_id: savedId,
-                    driver_id: driverId,
-                    amount: serviceFee
-                })]);
-            } catch (feeError) {
-                console.warn('Service fee recording failed:', feeError.message);
-            }
-        }
+        void payload;
+        void driverId;
+        void driverPhone;
     }
 
     /* ================================================================
@@ -5938,9 +5961,28 @@
 
         const total = number($('f_total_amount').value);
         const serviceFee = number($('f_delivery_service_fee').value);
+        const feeMode = String($('f_delivery_fee_mode').value || 'exempt');
+        const deliveryLocation = String($('f_location').value || '').trim();
+        const cashName = String($('f_cash_customer_name').value || '').trim();
+        const paymentMethod = String(state.selectedSalePaymentMethod || '').trim().toLowerCase();
 
-        if (serviceFee < 0) {
-            return { valid: false, message: 'رسوم خدمة التوصيل لا يمكن أن تكون سالبة.' };
+        if (!Number.isFinite(serviceFee) || serviceFee < 0) {
+            return { valid: false, message: 'رسوم خدمة التوصيل يجب أن تكون صفراً أو أكثر.' };
+        }
+        if (!['exempt','add_to_sales','driver','deduct_from_sales'].includes(feeMode)) {
+            return { valid: false, message: 'اختر طريقة احتساب رسوم التوصيل.' };
+        }
+        if (serviceFee > 0 && feeMode !== 'exempt' && !deliveryLocation) {
+            return { valid: false, message: 'موقع التوصيل مطلوب عند احتساب رسوم الخدمة.' };
+        }
+        if (serviceFee > 0 && feeMode === 'deduct_from_sales' && serviceFee > total) {
+            return { valid: false, message: 'رسوم التوصيل لا يمكن أن تتجاوز قيمة المبيعات.' };
+        }
+        if (paymentMethod === 'cash' && deliveryLocation && !cashName) {
+            return { valid: false, message: 'اسم العميل النقدي مطلوب لرسالة السائق.' };
+        }
+        if (feeMode === 'driver' && serviceFee > 0 && !(Number($('f_driver_id').value || 0) > 0)) {
+            return { valid: false, message: 'حدد السائق قبل تسجيل رسوم التوصيل على حسابه.' };
         }
 
         if (total < 0) {
@@ -5994,6 +6036,12 @@
             total_amount: number($('f_total_amount').value),
 
             delivery_service_fee: number($('f_delivery_service_fee').value),
+
+            delivery_fee_mode: $('f_delivery_fee_mode').value || 'exempt',
+
+            delivery_location: $('f_location').value.trim(),
+
+            cash_customer_name: $('f_cash_customer_name').value.trim(),
 
             location: $('f_location').value.trim(),
 
@@ -6422,7 +6470,9 @@
     });
 
     $('f_delivery_service_fee').addEventListener('input', updateSmsPreview);
+    $('f_delivery_fee_mode').addEventListener('change', updateSmsPreview);
     $('f_location').addEventListener('input', updateSmsPreview);
+    $('f_cash_customer_name').addEventListener('input', updateSmsPreview);
 
     /* ================================================================
        INITIALIZATION
