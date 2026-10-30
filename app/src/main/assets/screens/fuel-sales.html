@@ -882,15 +882,14 @@ body.sidebar-is-open .sidebar-toggle {
 .modal-overlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    /* Full-screen backdrop blur forced expensive repaints on older Android WebView devices. */
+    background: rgba(0, 0, 0, 0.68);
     z-index: 1200;
     display: none;
     align-items: flex-end;
     justify-content: center;
     opacity: 0;
-    transition: opacity 0.3s;
+    transition: opacity 0.18s ease-out;
 }
 
 .modal-overlay.show { display: flex; opacity: 1; }
@@ -904,7 +903,7 @@ body.sidebar-is-open .sidebar-toggle {
     -webkit-overflow-scrolling: touch;
     padding: 18px 14px;
     transform: translateY(100%);
-    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     border: var(--silver-border-strong);
     border-bottom: none;
     box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.2);
@@ -2230,6 +2229,11 @@ const state = {
     pendingIdempotencyKey: null,
     lastSuccessfulSaleFingerprint: null,
     priceLookupSeq: 0,
+    formOpenSequence: 0,
+    saleFormLookupCache: { loadedAt: 0, shift: null, pumps: [], fuels: [], customers: [] },
+    saleFormLookupPromise: null,
+    activePromotionCache: { loadedAt: 0, rows: [] },
+    pumpNozzleCache: Object.create(null),
     viewMode: 'cards',
     fuelAdjustmentCache: [],
     // report state
@@ -2308,6 +2312,20 @@ function clearFormToast() {
     clearTimeout(node._timer);
     node.textContent = '';
     node.className = 'toast form-toast';
+}
+
+function showFormToast(message, type='success') {
+    const node = $('formToast');
+    if (!node) {
+        toast(message, type === 'error', 'global');
+        return;
+    }
+    clearTimeout(node._timer);
+    node.textContent = String(message || '');
+    node.className = 'toast form-toast show ' + (type === 'error' ? 'error' : 'success');
+    node.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+    const body = node.closest('.modal-body');
+    if (body) body.scrollTop = 0;
 }
 
 let _advTimeout = null;
@@ -2706,14 +2724,21 @@ function promotionIsValidAt(row, at) {
     return (!from || from <= instant) && (!to || to >= instant);
 }
 
-async function loadActivePromotions(row=null) {
+async function loadActivePromotions(row=null, openToken=state.formOpenSequence) {
     const select = document.querySelector('[data-key="occasion_code"]');
     if (!select || !bridge || typeof bridge.getPriceListRecords !== 'function') return;
     try {
+        let promotionRows = state.activePromotionCache.rows;
+        const cacheFresh = state.activePromotionCache.loadedAt &&
+            Date.now() - state.activePromotionCache.loadedAt < 60000;
+        if (!cacheFresh) {
+            const result = await invoke('getPriceListRecords', [JSON.stringify({})]);
+            promotionRows = rowsFrom(result);
+            state.activePromotionCache = { loadedAt: Date.now(), rows: promotionRows };
+        }
+        if (openToken !== state.formOpenSequence || !$('formModal').classList.contains('show')) return;
+
         const at = selectedFuelSaleDateTime();
-        const customerId = Number(document.querySelector('[data-key="customer_id"]')?.value || 0);
-        const result = await invoke('getPriceListRecords', [JSON.stringify({})]);
-        if (result && result.success === false) throw new Error(result.message || result.error || 'تعذر قراءة قوائم الأسعار');
         const isActive = (r) => {
             if (!r) return false;
             const v = r.is_active;
@@ -2730,7 +2755,7 @@ async function loadActivePromotions(row=null) {
             if (v === false || v === 'false' || v === '0') return false;
             const n = Number(v); return Number.isFinite(n) ? n === 1 : false;
         };
-        const active = rowsFrom(result).filter(r => r && isActive(r) && !isDeleted(r) && promotionIsValidAt(r, at));
+        const active = promotionRows.filter(r => r && isActive(r) && !isDeleted(r) && promotionIsValidAt(r, at));
         const occasionOptions = new Map();
         active.forEach(r => {
             const code = String(r.occasion_code || '').trim();
@@ -2747,34 +2772,81 @@ async function loadActivePromotions(row=null) {
     }
 }
 
-async function loadSaleFormLookups(row=null) {
-    const results = await Promise.all([
-        (bridge && typeof bridge.getCurrentShift === 'function') ? invoke('getCurrentShift', []).catch(()=>null) : Promise.resolve(null),
-        (bridge && typeof bridge.getPumps === 'function') ? invoke('getPumps', []).catch(()=>null) : Promise.resolve(null),
-        (bridge && typeof bridge.getFuelTypes === 'function') ? invoke('getFuelTypes', []).catch(()=>null) : Promise.resolve(null),
-        (bridge && typeof bridge.getCustomers === 'function') ? invoke('getCustomers', []).catch(()=>null) : Promise.resolve(null)
-    ]);
-    const shift = dataOf(results[0]);
-    const pumps = rowsFrom(results[1]);
-    const fuels = rowsFrom(results[2]);
-    const customers = rowsFrom(results[3]);
-    const shiftId = field(shift,['shift_id','id']);
+async function getSaleFormLookupData() {
+    const cache = state.saleFormLookupCache;
+    if (cache.loadedAt && Date.now() - cache.loadedAt < 15000) return cache;
+    if (state.saleFormLookupPromise) return state.saleFormLookupPromise;
+
+    state.saleFormLookupPromise = (async () => {
+        const results = await Promise.all([
+            (bridge && typeof bridge.getCurrentShift === 'function') ? invoke('getCurrentShift', []).catch(() => null) : Promise.resolve(null),
+            (bridge && typeof bridge.getPumps === 'function') ? invoke('getPumps', []).catch(() => null) : Promise.resolve(null),
+            (bridge && typeof bridge.getFuelTypes === 'function') ? invoke('getFuelTypes', []).catch(() => null) : Promise.resolve(null),
+            (bridge && typeof bridge.getCustomers === 'function') ? invoke('getCustomers', []).catch(() => null) : Promise.resolve(null)
+        ]);
+        state.saleFormLookupCache = {
+            loadedAt: Date.now(),
+            shift: dataOf(results[0]),
+            pumps: rowsFrom(results[1]),
+            fuels: rowsFrom(results[2]),
+            customers: rowsFrom(results[3])
+        };
+        return state.saleFormLookupCache;
+    })().finally(() => {
+        state.saleFormLookupPromise = null;
+    });
+    return state.saleFormLookupPromise;
+}
+
+function isCurrentFuelForm(openToken) {
+    return Number(openToken) === Number(state.formOpenSequence) &&
+        Boolean($('formModal') && $('formModal').classList.contains('show'));
+}
+
+async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
+    const lookups = await getSaleFormLookupData();
+    if (!isCurrentFuelForm(openToken)) return;
+
+    const shiftId = field(lookups.shift,['shift_id','id']);
     const shiftEl = document.querySelector('[data-key="shift_id"]');
-    if (shiftEl && !row) shiftEl.value = shiftId||'';
+    if (shiftEl && !row) shiftEl.value = shiftId || '';
+
     const pumpEl = document.querySelector('[data-key="pump_id"]');
     if (pumpEl) {
         pumpEl.innerHTML = '<option value="">اختر المضخة...</option>'
-            + pumps.map(x => '<option value="' + esc(field(x,['id','pump_id'])) + '">' + esc(field(x,['id','pump_id'])) + ' — ' + esc(field(x,['pump_name_ar','pump_name','pump_code','name'])||'مضخة') + '</option>').join('');
-        if (row) pumpEl.value = field(row,['pump_id'])||'';
+            + lookups.pumps.map(x => '<option value="' + esc(field(x,['id','pump_id'])) + '">' + esc(field(x,['id','pump_id'])) + ' — ' + esc(field(x,['pump_name_ar','pump_name','pump_code','name'])||'مضخة') + '</option>').join('');
+        if (row) pumpEl.value = field(row,['pump_id']) || '';
     }
-    await loadPumpNozzles(row ? field(row,['pump_id']) : (document.querySelector('[data-key="pump_id"]')?.value||''), row ? field(row,['nozzle_id']) : '');
+
     const fuelEl = document.querySelector('[data-key="fuel_type_id"]');
     if (fuelEl) {
         fuelEl.innerHTML = '<option value="">اختر نوع الوقود...</option>'
-            + fuels.map(x => '<option value="' + esc(field(x,['id','fuel_type_id'])) + '" data-price="' + esc(field(x,['default_sale_price','sale_price','price_per_liter'])||'') + '">'
+            + lookups.fuels.map(x => '<option value="' + esc(field(x,['id','fuel_type_id'])) + '" data-price="' + esc(field(x,['default_sale_price','sale_price','price_per_liter'])||'') + '">'
                 + esc(field(x,['id','fuel_type_id'])) + ' — ' + esc(field(x,['fuel_name_ar','fuel_name','name'])||'وقود') + '</option>').join('');
-        if (row) fuelEl.value = field(row,['fuel_type_id'])||'';
+        if (row) fuelEl.value = field(row,['fuel_type_id']) || '';
     }
+
+    const pay = document.querySelector('[data-key="payment_method"]');
+    if (pay) {
+        pay.innerHTML = '<option value="cash">نقدي</option>'
+            + '<option value="credit">آجل</option>'
+            + '<option value="credit_card">بطاقة</option>';
+        pay.value = field(row,['payment_method']) || 'cash';
+    }
+
+    const customerEl = document.querySelector('[data-key="customer_id"]');
+    if (customerEl) {
+        customerEl.innerHTML = '<option value="">اختر العميل عند الحاجة...</option>'
+            + '<option value="cash_sale">مبيعات نقدية</option>'
+            + lookups.customers.map(x => '<option value="' + esc(field(x,['id','party_id','customer_id'])) + '">' + esc(field(x,['commercial_name_ar','commercial_name','legal_name','name']) || 'عميل') + '</option>').join('');
+        const existingCustomerId = field(row,['customer_id','customer_party_id']);
+        const hasCashName = String(field(row,['cash_customer_name']) || '').trim().length > 0;
+        if (existingCustomerId) customerEl.value = String(existingCustomerId);
+        else if (row && hasCashName && ['cash','نقدي','نقداً'].includes(String(field(row,['payment_method']) || '').trim().toLowerCase())) {
+            customerEl.value = 'cash_sale';
+        } else customerEl.value = '';
+    }
+
     const feeModeEl = document.querySelector('[data-key="delivery_fee_mode"]');
     if (feeModeEl) {
         feeModeEl.value = String(field(row,['delivery_fee_mode']) || 'exempt');
@@ -2786,25 +2858,7 @@ async function loadSaleFormLookups(row=null) {
     if (cashNameEl) cashNameEl.value = String(field(row,['cash_customer_name','cash_customer_display_name']) || '');
     const displayTotalEl = document.querySelector('[data-key="delivery_fee_display_total"]');
     if (displayTotalEl && row) displayTotalEl.value = Number(field(row,['delivery_fee_display_total','total_amount']) || 0).toFixed(2);
-    const pay = document.querySelector('[data-key="payment_method"]');
-    if (pay) {
-        pay.innerHTML = '<option value="cash">نقدي</option>'
-            + '<option value="credit">آجل</option>'
-            + '<option value="credit_card">بطاقة</option>';
-        pay.value = field(row,['payment_method']) || 'cash';
-    }
-    const customerEl = document.querySelector('[data-key="customer_id"]');
-    if (customerEl) {
-        customerEl.innerHTML = '<option value="">اختر العميل عند الحاجة...</option>'
-            + '<option value="cash_sale">مبيعات نقدية</option>'
-            + customers.map(x => '<option value="' + esc(field(x,['id','party_id','customer_id'])) + '">' + esc(field(x,['commercial_name_ar','commercial_name','legal_name','name']) || 'عميل') + '</option>').join('');
-        const existingCustomerId = field(row,['customer_id','customer_party_id']);
-        const hasCashName = String(field(row,['cash_customer_name']) || '').trim().length > 0;
-        if (existingCustomerId) customerEl.value = String(existingCustomerId);
-        else if (row && hasCashName && ['cash','نقدي','نقداً'].includes(String(field(row,['payment_method']) || '').trim().toLowerCase())) {
-            customerEl.value = 'cash_sale';
-        } else customerEl.value = '';
-    }
+
     if (!row) {
         const now = new Date();
         const dateEl = document.querySelector('[data-key="sale_date"]');
@@ -2812,12 +2866,12 @@ async function loadSaleFormLookups(row=null) {
         const timeEl = document.querySelector('[data-key="sale_time"]');
         if (timeEl) timeEl.value = localTime(now);
     }
-    await loadActivePromotions(row);
-    bindFuelCalculation(!row);
+
     const pumpSelect = document.querySelector('[data-key="pump_id"]');
     if (pumpSelect) {
         pumpSelect.onchange = async () => {
-            await loadPumpNozzles(pumpSelect.value, '');
+            await loadPumpNozzles(pumpSelect.value, '', openToken);
+            if (!isCurrentFuelForm(openToken)) return;
             const fuel = document.querySelector('[data-key="fuel_type_id"]');
             const price = document.querySelector('[data-key="price_per_liter"]');
             const total = document.querySelector('[data-key="total_amount"]');
@@ -2827,6 +2881,13 @@ async function loadSaleFormLookups(row=null) {
             updateDeliveryFeeDisplay();
         };
     }
+
+    const selectedPumpId = row ? field(row,['pump_id']) : (pumpSelect?.value || '');
+    if (selectedPumpId) {
+        await loadPumpNozzles(selectedPumpId, row ? field(row,['nozzle_id']) : '', openToken);
+    }
+    if (!isCurrentFuelForm(openToken)) return;
+
     const nozzleSelect = document.querySelector('[data-key="nozzle_id"]');
     if (nozzleSelect) nozzleSelect.onchange = () => {
         const option = nozzleSelect.options[nozzleSelect.selectedIndex];
@@ -2844,6 +2905,7 @@ async function loadSaleFormLookups(row=null) {
             toast('هذه الفوهة غير مرتبطة بنوع وقود صالح في قاعدة البيانات؛ تحقق من إعداد الفوهة.', true, 'form');
         }
     };
+
     const fee = document.querySelector('[data-key="delivery_service_fee"]');
     const mode = document.querySelector('[data-key="delivery_fee_mode"]');
     if (fee) fee.oninput = updateDeliveryFeeDisplay;
@@ -2853,27 +2915,44 @@ async function loadSaleFormLookups(row=null) {
     };
     const location = document.querySelector('[data-key="delivery_location"]');
     const cashName = document.querySelector('[data-key="cash_customer_name"]');
-    [location,cashName].forEach(el => { if (el) el.addEventListener('input', () => { state.lastSuccessfulSaleFingerprint = null; }); });
-    if (pumpSelect?.value) await loadPumpNozzles(pumpSelect.value, row ? field(row,['nozzle_id']) : '');
+    [location,cashName].forEach(el => {
+        if (el) el.addEventListener('input', () => { state.lastSuccessfulSaleFingerprint = null; });
+    });
+
+    bindFuelCalculation(!row);
     updateDeliveryFeeDisplay();
+
+    // Promotions do not need to block the initial form paint or field interaction.
+    window.setTimeout(() => {
+        if (isCurrentFuelForm(openToken)) {
+            loadActivePromotions(row, openToken);
+        }
+    }, 80);
 }
 
 function localDate(d=new Date()) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function localTime(d=new Date()) { return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
 
-async function loadPumpNozzles(pumpId='', selectedId='') {
+async function loadPumpNozzles(pumpId='', selectedId='', openToken=state.formOpenSequence) {
     const nozzleEl = document.querySelector('[data-key="nozzle_id"]');
     if (!nozzleEl) return;
     nozzleEl.innerHTML = '<option value="">اختر الفوهة...</option>';
     if (!pumpId || !bridge || typeof bridge.getPumpNozzles !== 'function') return;
     try {
-        const result = parse(bridge.getPumpNozzles(JSON.stringify({pump_id: Number(pumpId)})));
-        const nozzles = rowsFrom(result);
+        const key = String(pumpId);
+        const cached = state.pumpNozzleCache[key];
+        let nozzles = cached && Date.now() - cached.loadedAt < 60000 ? cached.rows : null;
+        if (!nozzles) {
+            const result = parse(bridge.getPumpNozzles(JSON.stringify({pump_id: Number(pumpId)})));
+            nozzles = rowsFrom(result);
+            state.pumpNozzleCache[key] = { loadedAt: Date.now(), rows: nozzles };
+        }
+        if (!isCurrentFuelForm(openToken)) return;
         nozzleEl.innerHTML = '<option value="">اختر الفوهة...</option>'
             + nozzles.map(n => '<option value="' + esc(n.id) + '" data-fuel-type-id="' + esc(n.fuel_type_id || '') + '">' + esc(n.nozzle_number||n.nozzle_code||n.id) + ' — ' + esc(n.nozzle_code||'فوهة') + '</option>').join('');
         nozzleEl.value = String(selectedId||'');
     } catch (e) {
-        toast('تعذر تحميل فوهات المضخة: ' + e.message, true, 'form');
+        if (isCurrentFuelForm(openToken)) toast('تعذر تحميل فوهات المضخة: ' + e.message, true, 'form');
     }
 }
 
@@ -2973,28 +3052,46 @@ function bindFuelCalculation(resolveDynamic=true) {
 /* ============================================================
    Open form
    ============================================================ */
-async function openForm(row=null) {
+function openForm(row=null) {
     if (!CFG.createMethod && !CFG.updateMethod) {
         toast('لا توجد عملية كتابة مدعومة لهذه الشاشة', true, 'global');
         return;
     }
+
     clearFormToast();
     state.editing = row;
+    const openToken = ++state.formOpenSequence;
     const deliveryBtn = $('deliveryBtn');
     if (deliveryBtn) {
         deliveryBtn.disabled = true;
         delete deliveryBtn.dataset.saleId;
         deliveryBtn.title = 'يتاح بعد حفظ عملية البيع بنجاح';
     }
+
     $('formTitle').textContent = row ? 'تعديل مبيعات الوقود' : 'إضافة عملية بيع وقود';
-    $('recordForm').innerHTML = (CFG.fields||[]).map(def => inputHtml(def, row)).join('');
-    $('formModal').classList.add('show');
+    const modal = $('formModal');
+    const form = $('recordForm');
+
+    // Reveal first; avoid doing template work or synchronous Android Bridge calls before the first paint.
+    modal.classList.add('show');
     document.body.classList.add('modal-open');
+    form.setAttribute('aria-busy', 'true');
+    form.innerHTML = '<div role="status" style="grid-column:1/-1;padding:22px 8px;text-align:center;color:var(--text-secondary);font-weight:700;">جارٍ تجهيز نموذج البيع...</div>';
+
     state.lastSuccessfulSaleFingerprint = null;
-    try {
-        await loadSaleFormLookups(row);
-    } catch (e) {
-        toast(e.message||'تعذر تحميل بيانات النموذج', true, 'form');
+    const prepareForm = () => window.setTimeout(() => {
+        if (!isCurrentFuelForm(openToken)) return;
+        form.innerHTML = (CFG.fields || []).map(def => inputHtml(def, row)).join('');
+        form.removeAttribute('aria-busy');
+        loadSaleFormLookups(row, openToken).catch(error => {
+            if (isCurrentFuelForm(openToken)) toast(error.message || 'تعذر تحميل بيانات النموذج', true, 'form');
+        });
+    }, 0);
+
+    if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(prepareForm);
+    } else {
+        window.setTimeout(prepareForm, 16);
     }
 }
 
@@ -3096,7 +3193,7 @@ async function saveForm() {
                     ? ' — تم وضع رسالة SMS للعميل ' + (sms.customer_name || 'المحدد') + ' في طابور الإرسال'
                     : ' — لم تُجدول رسالة SMS للعميل: ' + (sms.reason || sms.message || 'سبب غير معروف'))
                 : '';
-            toast('تم حفظ عملية البيع رقم ' + saleId + ' وتحديث المخزون' + smsNote, false, 'form');
+            showFormToast('تم حفظ عملية البيع رقم ' + saleId + ' وتحديث المخزون' + smsNote, 'success');
             showDeliveryAction(saleId);
             void reloadData().catch(refreshError => console.warn('[Fuel Sales] Background refresh failed:', refreshError));
             // Keep the form modal open for review; the operator closes it explicitly.
@@ -3179,6 +3276,7 @@ function closeModal(event, id) {
     if (event && event.target !== event.currentTarget) return;
     const el = $(id);
     if (!el) return;
+    if (id === 'formModal') state.formOpenSequence++;
     el.classList.remove('show');
     // التحقق من عدم وجود مودالات أخرى مفتوحة قبل إزالة الكلاس
     const openModals = document.querySelectorAll('.modal-overlay.show');
@@ -4042,6 +4140,7 @@ $('deliveryBtn').addEventListener('click', () => openDelivery($('deliveryBtn').d
 
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+        if ($('formModal')?.classList.contains('show')) state.formOpenSequence++;
         document.querySelectorAll('.modal-overlay').forEach(x => x.classList.remove('show'));
         const es = $('exportSheet');
         if (es) es.classList.remove('show');
