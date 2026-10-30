@@ -1962,7 +1962,7 @@
         let dashboardResumeRefreshTimer = null;
         let displaySettingsLoadedAt = 0;
         let displaySettingsLoadPromise = null;
-        let dueReminderRefreshAt = 0;
+        const DUE_REMINDER_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
         let clockInterval = null;
 
         let sidebarNavData = [];
@@ -3600,11 +3600,32 @@
             }
         }
 
+        function dueReminderRefreshStorageKey() {
+            const userId = currentUser?.id ?? currentUser?.user_id ?? currentUser?.userId ?? 'anonymous';
+            const stationId = currentUser?.station_id ?? currentUser?.stationId ?? 'default';
+            return `mainDueReminderRefreshAt:${String(stationId)}:${String(userId)}`;
+        }
+
+        function shouldRefreshMainDueReminders(now = Date.now()) {
+            try {
+                const last = Number.parseInt(localStorage.getItem(dueReminderRefreshStorageKey()) || '0', 10);
+                return !Number.isFinite(last) || last <= 0 || now - last >= DUE_REMINDER_REFRESH_INTERVAL_MS;
+            } catch (_) {
+                // If storage is unavailable, retain one check per WebView instance.
+                return !window.__mainDueReminderRefreshAt || now - window.__mainDueReminderRefreshAt >= DUE_REMINDER_REFRESH_INTERVAL_MS;
+            }
+        }
+
+        function markMainDueRemindersRefreshed(now = Date.now()) {
+            window.__mainDueReminderRefreshAt = now;
+            try { localStorage.setItem(dueReminderRefreshStorageKey(), String(now)); } catch (_) {}
+        }
+
         async function refreshMainDueReminders() {
             ensureMainDueReminderUI();
             try {
                 const result = await apiCall('getDueSoonDebtRemindersTyped', JSON.stringify({days: 10}));
-                if (!result.success) return;
+                if (!result.success) return false;
                 mainDueReminderRows = Array.isArray(result.data) ? result.data : [];
                 const eligible = mainDueReminderRows.filter(r => r.eligible && Number(r.days_remaining) <= 10);
                 const b = document.getElementById('mainDueReminderButton');
@@ -3624,8 +3645,10 @@
                     sessionStorage.setItem('mainDueReminderShownDate', new Date().toISOString().slice(0, 10));
                     openMainDueReminderNotice();
                 }
+                return true;
             } catch (e) {
                 console.warn('Main due reminders:', e);
+                return false;
             }
         }
 
@@ -3854,11 +3877,12 @@
                 try { localStorage.setItem('dashboardCache', JSON.stringify(stats)); } catch (e) {}
                 updateStatsCards(stats);
                 if (stats.notifications) showRealNotifications(stats);
-                // Reminder refresh performs multiple synchronous bridge calls. Keep its
-                // behavior while avoiding a burst from pageshow + visibilitychange + focus.
-                if (Date.now() - dueReminderRefreshAt >= 300000) {
-                    dueReminderRefreshAt = Date.now();
-                    await refreshMainDueReminders();
+                // Reminder refresh performs multiple synchronous bridge calls. Run it only
+                // once per 24 hours after the first successful dashboard load for this
+                // authenticated user/station, instead of on every resume/focus refresh.
+                const reminderCheckAt = Date.now();
+                if (shouldRefreshMainDueReminders(reminderCheckAt)) {
+                    if (await refreshMainDueReminders()) markMainDueRemindersRefreshed(reminderCheckAt);
                 }
             } catch (e) {
                 console.error('Dashboard error:', e);
