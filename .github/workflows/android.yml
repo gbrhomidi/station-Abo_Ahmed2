@@ -249,8 +249,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          if ! command -v gh >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
-            echo "::error::GitHub CLI and jq are required for ordered build execution."
+          if ! command -v curl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+            echo "::error::curl and jq are required for ordered build execution."
             exit 1
           fi
 
