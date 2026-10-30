@@ -74,7 +74,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
 
         val result = DeliveryFeeAccounting.latestFuelSaleForCustomer(helper, targetCustomer, stationId)
 
-        assertTrue("Latest-sale lookup response: $result", result.getBoolean("found"))
+        assertTrue("Latest-sale lookup response: $result; ${saleLookupDiagnostics(targetCustomer)}", result.getBoolean("found"))
         val sale = result.getJSONObject("sale")
         assertEquals(expectedFuelSaleId, sale.getLong("fuel_sale_id"))
         assertEquals(expectedFuelSaleId, sale.getLong("sale_id"))
@@ -95,7 +95,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
         val onlySaleId = insertFuelSale(customer, stationId, "2026-10-30 11:20:00")
         val result = DeliveryFeeAccounting.latestFuelSaleForCustomer(helper, customer, stationId)
 
-        assertTrue(result.getBoolean("found"))
+        assertTrue("Latest-sale lookup response: $result; ${saleLookupDiagnostics(customer)}", result.getBoolean("found"))
         assertEquals(onlySaleId, result.getJSONObject("sale").getLong("fuel_sale_id"))
     }
 
@@ -122,6 +122,59 @@ class LatestFuelSaleForCustomerRobolectricTest {
 
         assertTrue(result.getBoolean("found"))
         assertEquals(expectedFuelSaleId, result.getJSONObject("sale").getLong("fuel_sale_id"))
+    }
+
+
+    private fun saleLookupDiagnostics(customerId: Long): String {
+        val childColumns = tableColumns("fuel_sales")
+        val parentColumns = tableColumns("sales_transactions")
+        val canJoinParent = "sale_id" in childColumns && "id" in parentColumns
+        fun expression(alias: String, columns: Set<String>, name: String): String =
+            if (name in columns) "COALESCE(CAST($alias.`$name` AS TEXT),'NULL')" else "'<missing>'"
+
+        val from = if (canJoinParent) {
+            "fuel_sales fs LEFT JOIN sales_transactions st ON st.id=fs.sale_id"
+        } else {
+            "fuel_sales fs"
+        }
+        val where = mutableListOf<String>()
+        val args = mutableListOf<String>()
+        for ((alias, columns) in listOf("fs" to childColumns, "st" to parentColumns)) {
+            if (alias == "st" && !canJoinParent) continue
+            for (column in listOf("customer_party_id", "customer_id")) {
+                if (column in columns) {
+                    where += "$alias.`$column`=?"
+                    args += customerId.toString()
+                }
+            }
+        }
+        if (where.isEmpty()) return "customerId=$customerId childColumns=$childColumns parentColumns=$parentColumns"
+
+        val fields = mutableListOf(
+            "fs.id AS fuel_sale_id",
+            expression("fs", childColumns, "sale_id") + " AS child_parent_id",
+            expression("fs", childColumns, "station_id") + " AS child_station",
+            expression("fs", childColumns, "customer_party_id") + " AS child_party",
+            expression("fs", childColumns, "customer_id") + " AS child_customer",
+            expression("st", parentColumns, "station_id") + " AS parent_station",
+            expression("st", parentColumns, "customer_party_id") + " AS parent_party",
+            expression("st", parentColumns, "customer_id") + " AS parent_customer"
+        )
+        for (column in listOf("is_deleted", "deleted_at", "is_valid", "is_void", "is_cancelled", "is_canceled", "is_reversed", "status", "sale_status", "transaction_status", "cancelled_at", "canceled_at")) {
+            fields += expression("fs", childColumns, column) + " AS child_$column"
+            if (canJoinParent) fields += expression("st", parentColumns, column) + " AS parent_$column"
+        }
+        val sql = "SELECT ${fields.joinToString(",")} FROM $from WHERE ${where.joinToString(" OR ")} ORDER BY fs.id DESC LIMIT 20"
+        val rows = mutableListOf<String>()
+        db.rawQuery(sql, args.toTypedArray()).use { cursor ->
+            while (cursor.moveToNext()) {
+                val values = (0 until cursor.columnCount).map { index ->
+                    "${cursor.getColumnName(index)}=${cursor.getString(index) ?: "NULL"}"
+                }
+                rows += values.joinToString(",")
+            }
+        }
+        return "customerId=$customerId stationId=$stationId rows=$rows"
     }
 
     private fun insertCustomer(name: String): Long {
