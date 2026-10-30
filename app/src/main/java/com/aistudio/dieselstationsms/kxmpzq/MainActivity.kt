@@ -272,6 +272,9 @@ class MainActivity : AppCompatActivity() {
     private var biometricCancellationExpected: Boolean = false
     private var securityFallbackDialog: androidx.appcompat.app.AlertDialog? = null
     private var lastSecurityInteractionElapsed: Long = android.os.SystemClock.elapsedRealtime()
+    // Monotonic timestamp captured only when the Activity actually leaves the foreground.
+    private var appBackgroundedAtElapsedRealtime: Long? = null
+    private val securityReauthenticationBackgroundDelayMs = 60_000L
 
     private val securityIdleRunnable = object : Runnable {
         override fun run() {
@@ -520,11 +523,33 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        val nowElapsed = android.os.SystemClock.elapsedRealtime()
+        val backgroundedAt = appBackgroundedAtElapsedRealtime
+        appBackgroundedAtElapsedRealtime = null
+        val backgroundDuration = backgroundedAt?.let { (nowElapsed - it).coerceAtLeast(0L) } ?: 0L
+
         if (startupDatabaseReady) {
             applySecurityRuntimeSettings(target = null)
             val timeoutMinutes = securitySettingValue("autoLogoutMinutes").toIntOrNull()?.coerceIn(0, 1440) ?: 0
+
+            // The biometric/device-unlock gate is based on continuous time spent fully
+            // outside the app, not on every onPause callback (dialogs and brief app
+            // switches can pause an Activity for only a few seconds).
+            if (backgroundedAt != null &&
+                backgroundDuration >= securityReauthenticationBackgroundDelayMs &&
+                !currentAuthToken.isNullOrBlank() &&
+                requiresSecurityReauthentication()
+            ) {
+                securityLockPending = true
+                webView?.visibility = View.INVISIBLE
+                DebugLogger.logEvent(
+                    "security_background_timeout",
+                    "Background duration reached ${backgroundDuration}ms; reauthentication required"
+                )
+            }
+
             if (timeoutMinutes > 0 && !currentAuthToken.isNullOrBlank() &&
-                android.os.SystemClock.elapsedRealtime() - lastSecurityInteractionElapsed >= timeoutMinutes * 60_000L
+                nowElapsed - lastSecurityInteractionElapsed >= timeoutMinutes * 60_000L
             ) {
                 forceSecurityLogout("security_auto_logout")
             } else if (securityLockPending && !currentAuthToken.isNullOrBlank()) {
@@ -557,22 +582,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
-        // login.html and lock-screen.html launch their own bridge-driven biometric flow.
-        // Do not schedule a second native foreground prompt while either flow is active.
-        val loginRequested = ::sharedPrefs.isInitialized &&
-            sharedPrefs.getBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, false)
-        val currentPagePath = webView?.url?.substringBefore("?").orEmpty()
-        val pageOwnsAuthentication = loginRequested ||
-            currentPagePath.endsWith("/login.html") ||
-            currentPagePath.endsWith("/lock-screen.html")
-        if (!pageOwnsAuthentication &&
-            !isChangingConfigurations && !isDatabaseBackupPickerActive &&
-            !securityPromptActive && !currentAuthToken.isNullOrBlank() &&
-            startupDatabaseReady && requiresSecurityReauthentication()
-        ) {
-            securityLockPending = true
-            webView?.visibility = View.INVISIBLE
-        }
+        // onPause also fires for transient system UI and short interruptions. It must
+        // not lock the user; the 60-second timer starts only from onStop.
         super.onPause()
         webView?.onPause()
         DebugLogger.logEvent("app_paused", "Application paused")
@@ -587,18 +598,22 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         appInForeground = false
-        // A biometric sheet can be dismissed when another application comes forward.
-        // Clear stale prompt state and retry once from onResume instead of leaving the
-        // WebView invisible or stacking a second fallback dialog on top of the sheet.
+        // Record the actual background interval once. elapsedRealtime is monotonic,
+        // so changing the wall clock cannot shorten or extend the 60-second threshold.
+        if (!isChangingConfigurations && !isDatabaseBackupPickerActive &&
+            appBackgroundedAtElapsedRealtime == null
+        ) {
+            appBackgroundedAtElapsedRealtime = android.os.SystemClock.elapsedRealtime()
+        }
+
+        // A biometric sheet may be cancelled when another app comes forward. Preserve
+        // the existing pending-lock state, but do not create a new lock just because
+        // the Activity stopped; onResume applies the exact 60-second threshold.
         if (securityPromptActive && !isChangingConfigurations && !isDatabaseBackupPickerActive) {
             biometricCancellationExpected = true
             biometricPrompt?.cancelAuthentication()
             biometricPrompt = null
             securityPromptActive = false
-            if (!currentAuthToken.isNullOrBlank() && startupDatabaseReady && requiresSecurityReauthentication()) {
-                securityLockPending = true
-                webView?.visibility = View.INVISIBLE
-            }
             securityFallbackDialog?.dismiss()
             securityFallbackDialog = null
         }
