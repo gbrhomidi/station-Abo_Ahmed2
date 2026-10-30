@@ -11861,6 +11861,32 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun getSavedDeliveryLocations(): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                dataResponse(DeliveryFeeAccounting.savedDeliveryLocations(db, stationId))
+            } catch (e: Exception) {
+                DebugLogger.logException("SavedDeliveryLocations", e)
+                errorResponse(e.message ?: "تعذر استرجاع مواقع التوصيل المحفوظة")
+            }
+        }
+
+        @JavascriptInterface
+        fun getRecentFuelSaleCustomerIds(): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                dataResponse(DeliveryFeeAccounting.recentFuelSaleCustomerIds(db, stationId))
+            } catch (e: Exception) {
+                DebugLogger.logException("RecentFuelSaleCustomerIds", e)
+                errorResponse(e.message ?: "تعذر استرجاع ترتيب العملاء حسب أحدث المبيعات")
+            }
+        }
+
+        @JavascriptInterface
         fun getDeliverySaleContext(saleId: Long): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
