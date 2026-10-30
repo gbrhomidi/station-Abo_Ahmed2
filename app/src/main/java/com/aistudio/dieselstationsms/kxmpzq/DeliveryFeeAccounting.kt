@@ -674,14 +674,14 @@ object DeliveryFeeAccounting {
             else -> return JSONObject().put("found", false).put("message", "لا يوجد حقل يربط مبيعات الوقود بالعميل")
         }
 
-        val predicates = mutableListOf("$customerExpression=?")
+        val predicates = mutableListOf("CAST($customerExpression AS INTEGER)=CAST(? AS INTEGER)")
         val arguments = mutableListOf(partyId.toString())
         val fromClause = if (joinParentSale) {
             predicates += "st.station_id=?"
             arguments += stationId.toString()
             if ("station_id" in saleColumns) {
                 // A duplicated child station scope must not contradict its owning invoice.
-                predicates += "COALESCE(NULLIF(CAST(fs.station_id AS INTEGER),0),st.station_id)=?"
+                predicates += "CAST(COALESCE(NULLIF(CAST(fs.station_id AS INTEGER),0),CAST(st.station_id AS INTEGER)) AS INTEGER)=CAST(? AS INTEGER)"
                 arguments += stationId.toString()
             }
             "fuel_sales fs INNER JOIN sales_transactions st ON st.id=fs.sale_id"
