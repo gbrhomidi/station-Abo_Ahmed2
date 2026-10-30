@@ -97,6 +97,7 @@ class MainActivity : AppCompatActivity() {
     private var isDatabaseBackupPickerActive: Boolean = false
     // Bundle restoration marks an Activity recreation (e.g. rotation), not a fresh launch.
     private var isActivityRecreation: Boolean = false
+    private var wasAuthenticatedShellAtRecreation: Boolean = false
 
     private fun currentDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
@@ -120,6 +121,7 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_LAST_BOOT_COUNT = "last_boot_count"
         private const val KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME = "security_background_at_elapsed_realtime"
         private const val KEY_SECURITY_REAUTH_PENDING = "security_reauthentication_pending"
+        private const val STATE_WAS_AUTHENTICATED_SHELL = "state_was_authenticated_shell"
 
 
         private var webViewInstanceId = 0
@@ -332,6 +334,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         isActivityRecreation = savedInstanceState != null
+        wasAuthenticatedShellAtRecreation =
+            savedInstanceState?.getBoolean(STATE_WAS_AUTHENTICATED_SHELL, false) == true
         captureNotificationIntent(intent)
 
         installGlobalExceptionHandler()
@@ -445,6 +449,7 @@ class MainActivity : AppCompatActivity() {
                     loginRequiredOnLaunch = loginRequiredOnLaunch,
                     previouslyPending = previouslyPending,
                     isActivityRecreation = isActivityRecreation,
+                    wasAuthenticatedShell = wasAuthenticatedShellAtRecreation,
                     backgroundTimeoutReached = backgroundTimeoutReached,
                     securityReauthenticationEnabled = requiresSecurityReauthentication()
                 )
@@ -567,7 +572,9 @@ class MainActivity : AppCompatActivity() {
 
             // onStop records the actual background transition. onPause is intentionally
             // ignored because it also runs for temporary system UI and short interruptions.
+            val authenticationPageOwnsFlow = webPageOwnsAuthentication()
             if (backgroundDurationExceeded &&
+                !authenticationPageOwnsFlow &&
                 !currentAuthToken.isNullOrBlank() &&
                 requiresSecurityReauthentication()
             ) {
@@ -583,7 +590,10 @@ class MainActivity : AppCompatActivity() {
                 nowElapsed - lastSecurityInteractionElapsed >= timeoutMinutes * 60_000L
             ) {
                 forceSecurityLogout("security_auto_logout")
-            } else if (securityLockPending && !currentAuthToken.isNullOrBlank()) {
+            } else if (securityLockPending &&
+                !authenticationPageOwnsFlow &&
+                !currentAuthToken.isNullOrBlank()
+            ) {
                 handler.post { requestSecurityReauthentication() }
             }
             handler.removeCallbacks(securityIdleRunnable)
@@ -610,6 +620,22 @@ class MainActivity : AppCompatActivity() {
             }
         }
         DebugLogger.logEvent("app_resumed", "Application resumed")
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        val currentPage = webView?.url
+            ?.substringBefore('?')
+            ?.substringBefore('#')
+            ?.substringAfterLast('/')
+            .orEmpty()
+        val hasAuthenticatedSession = !currentAuthToken.isNullOrBlank() && currentUserId > 0L
+        val wasAuthenticatedShell = hasAuthenticatedSession && (
+            currentPage.isNotBlank() &&
+                currentPage !in setOf("login.html", "lock-screen.html", "first-user-setup.html") ||
+                securityLockPending
+            )
+        outState.putBoolean(STATE_WAS_AUTHENTICATED_SHELL, wasAuthenticatedShell)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onPause() {
@@ -1455,7 +1481,7 @@ class MainActivity : AppCompatActivity() {
         return if (BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
                 hasActiveSession = hasActiveSession,
                 loginRequiredOnLaunch = sharedPrefs.getBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, false),
-                isActivityRecreation = isActivityRecreation,
+                wasAuthenticatedShell = wasAuthenticatedShellAtRecreation,
                 securityLockPending = securityLockPending
             )
         ) {
@@ -1795,6 +1821,17 @@ class MainActivity : AppCompatActivity() {
     private fun requiresSecurityReauthentication(): Boolean =
         isTrueSetting(securitySettingValue("requireDeviceUnlock")) ||
             isTrueSetting(securitySettingValue("biometricLockEnabled"))
+
+    /**
+     * login.html and lock-screen.html own their Remember-Me / session authentication.
+     * The native foreground gate must not stack another prompt over those flows.
+     */
+    private fun webPageOwnsAuthentication(): Boolean {
+        if (!::sharedPrefs.isInitialized) return false
+        if (sharedPrefs.getBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, false)) return true
+        val pagePath = webView?.url?.substringBefore('?')?.substringBefore('#').orEmpty()
+        return pagePath.endsWith("/login.html") || pagePath.endsWith("/lock-screen.html")
+    }
 
     /**
      * Keep a pending foreground lock across Activity recreation. Clearing a successful
