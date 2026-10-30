@@ -179,7 +179,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
         putExisting("sales_transactions", parentValues, "deleted_at", if (parentDeleted) timestamp else null)
         putExisting("sales_transactions", parentValues, "cashier_id", userId)
         putExisting("sales_transactions", parentValues, "order_type", "sale")
-        putExisting("sales_transactions", parentValues, "sale_type", "fuel")
+        putExisting("sales_transactions", parentValues, "sale_type", "retail")
         putExisting("sales_transactions", parentValues, "created_at", timestamp)
         putExisting("sales_transactions", parentValues, "updated_at", timestamp)
         completeRequiredColumns("sales_transactions", parentValues, customerId, saleStationId, 0L)
