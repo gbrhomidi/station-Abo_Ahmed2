@@ -4581,6 +4581,8 @@
 
     function selectAnonymousCustomer() {
 
+        // Invalidate an in-flight customer-sale request before changing the selection.
+        state.latestSaleRequestId++;
         $('f_party_id').value = '';
         $('f_party_display').value = 'عميل غير مسجل';
 
@@ -4667,17 +4669,16 @@
                     c => String(c.id ?? c.party_id) === String(id)
                 );
 
+                // Remove any previous customer's sale data immediately; never leave stale fees/names visible.
+                state.latestSaleRequestId++;
                 $('f_party_id').value = id;
-
-                $('f_party_display').value = customer
-                    ? customerName(customer)
-                    : '';
-
+                $('f_party_display').value = customer ? customerName(customer) : '';
+                $('f_sale_id').value = '';
                 $('saleIdGroup').style.display = 'none';
                 $('saleContextHelp').style.display = 'none';
-
+                clearSaleContextFields();
+                hideLatestSale();
                 menu.classList.remove('show');
-
                 loadLatestCustomerSale(Number(id));
             }));
     }
@@ -4686,83 +4687,102 @@
        LATEST CUSTOMER SALE (EXACT MATCH BY PARTY)
        ================================================================ */
 
+    function firstSaleValue(sale, keys, fallback = '') {
+        for (const key of keys) {
+            const value = sale ? sale[key] : undefined;
+            if (value === null || value === undefined) continue;
+            if (typeof value === 'string' && value.trim() === '') continue;
+            return value;
+        }
+        return fallback;
+    }
+
+    function normalizeLatestFuelSale(source) {
+        const sale = source && typeof source === 'object' ? { ...source } : {};
+        const saleId = Number(firstSaleValue(sale, ['sale_id', 'fuel_sale_id', 'id'], 0));
+        const fee = firstSaleValue(sale, ['delivery_service_fee', 'service_fee', 'delivery_fee_amount'], 0);
+        const feeMode = String(firstSaleValue(sale, ['delivery_fee_mode', 'fee_mode', 'delivery_fee_calculation'], 'exempt')).trim();
+        const location = firstSaleValue(sale, ['delivery_location', 'location', 'delivery_address'], '');
+        const cashName = firstSaleValue(sale, ['cash_customer_name', 'cash_customer_display_name', 'customer_cash_name'], '');
+        const partyId = Number(firstSaleValue(sale, ['customer_party_id', 'party_id', 'customer_id'], 0));
+
+        sale.sale_id = saleId;
+        sale.fuel_sale_id = Number(firstSaleValue(sale, ['fuel_sale_id', 'id'], saleId)) || saleId;
+        sale.customer_party_id = partyId;
+        sale.delivery_service_fee = Number(fee) || 0;
+        sale.delivery_fee_mode = ['exempt', 'add_to_sales', 'driver', 'deduct_from_sales'].includes(feeMode)
+            ? feeMode
+            : 'exempt';
+        sale.delivery_location = String(location || '');
+        sale.location = String(location || '');
+        sale.cash_customer_name = String(cashName || '');
+        sale.payment_method = String(firstSaleValue(sale, ['payment_method', 'payment_type'], 'cash')).trim().toLowerCase();
+        sale.sale_kind = 'fuel';
+        return sale;
+    }
+
     async function loadLatestCustomerSale(partyId) {
 
-        if (!partyId) return;
+        if (!(Number(partyId) > 0)) return;
 
         const requestId = ++state.latestSaleRequestId;
-
         clearFieldWarnings();
-
-        showFormNotice(
-            'جارٍ استرجاع آخر عملية شراء فعلية للعميل...',
-            'info'
-        );
+        hideLatestSale();
+        showFormNotice('جارٍ استرجاع آخر عملية بيع وقود فعلية للعميل من SQLite...', 'info');
 
         try {
-
             const response = await invoke(
                 'getLatestCustomerSaleForDelivery',
                 [Number(partyId)]
             );
 
-            /* stale request guard */
+            // Ignore a slow response if the operator selected another customer meanwhile.
             if (
                 requestId !== state.latestSaleRequestId ||
                 Number($('f_party_id').value || 0) !== Number(partyId)
-            ) {
-                return;
-            }
+            ) return;
 
             const payload = dataOf(response);
-            const sale = payload && payload.sale ? payload.sale : payload;
+            const rawSale = payload && payload.sale ? payload.sale : payload;
+            const sale = normalizeLatestFuelSale(rawSale);
 
-            if (
-                !payload ||
-                payload.found === false ||
-                !sale ||
-                !sale.sale_id
-            ) {
+            if (!payload || payload.found === false || !rawSale || !(sale.sale_id > 0)) {
+                clearSaleContextFields();
                 hideLatestSale();
                 $('saleIdGroup').style.display = 'block';
                 $('f_sale_id').removeAttribute('readonly');
-
                 showFormNotice(
-                    'لم يتم العثور على طلب سابق. أدخل معرف الطلب/البيع المرتبط بالتوصيل يدوياً.',
+                    (payload && payload.message) ||
+                    'لم يتم العثور على عملية بيع وقود سابقة لهذا العميل. أدخل معرف البيع الأصلي يدوياً.',
                     'warning'
                 );
-
                 return;
             }
 
             $('saleIdGroup').style.display = 'none';
             $('saleContextHelp').style.display = 'none';
-
             fillFromLatestSale(sale);
             showLatestSale(sale);
-
             showFormNotice(
-                'تم جلب آخر عملية شراء فعلية للعميل بنجاح. راجع الحقول وأكمل أي بيانات ناقصة.',
+                'تم جلب آخر عملية بيع وقود للعميل وبيانات رسوم التوصيل واسمه النقدي وطريقة احتساب الرسوم من SQLite.',
                 'success'
             );
 
         } catch (error) {
-
             if (requestId !== state.latestSaleRequestId) return;
-
+            clearSaleContextFields();
             hideLatestSale();
             $('saleIdGroup').style.display = 'block';
             $('f_sale_id').removeAttribute('readonly');
-
             showFormNotice(
-                error.message ||
-                'تعذر جلب آخر عملية شراء للعميل.',
+                error.message || 'تعذر جلب آخر عملية بيع وقود للعميل.',
                 'error'
             );
         }
     }
 
     function fillFromLatestSale(sale) {
+        sale = normalizeLatestFuelSale(sale);
 
         const isProductSale =
             String(sale.sale_kind || sale.order_type || '')
@@ -4795,20 +4815,27 @@
         setIfValue('f_delivery_fee_mode', sale.delivery_fee_mode || 'exempt');
         setIfValue('f_cash_customer_name', sale.cash_customer_name || '');
 
-        const partyId = Number(sale.customer_party_id || sale.party_id || 0);
+        const selectedPartyId = Number($('f_party_id').value || 0);
+        const partyId = Number(sale.customer_party_id || sale.party_id || sale.customer_id || selectedPartyId || 0);
+        const selectedPartyName = String($('f_party_display').value || '').trim();
         const saleIsCash = ['cash','نقدي','نقداً'].includes(String(sale.payment_method || '').trim().toLowerCase()) || sale.cash_sale === true;
         if (partyId > 0) {
             $('f_party_id').value = String(partyId);
-            $('f_party_display').value = sale.customer_name || sale.customer_display || 'العميل المرتبط بالبيع';
+            $('f_party_display').value =
+                sale.customer_name || sale.customer_display ||
+                (partyId === selectedPartyId && selectedPartyName ? selectedPartyName : 'العميل المرتبط بالبيع');
         } else {
             $('f_party_id').value = '';
             $('f_party_display').value = saleIsCash && sale.cash_customer_name
                 ? sale.cash_customer_name
                 : 'عميل غير مسجل';
         }
-        if (saleIsCash && sale.cash_customer_name) {
-            $('f_cash_customer_name').value = sale.cash_customer_name;
-        }
+        // Always assign these fields explicitly so a legitimate zero fee or "exempt" mode is not skipped.
+        $('f_delivery_service_fee').value = String(Number(sale.delivery_service_fee || 0));
+        $('f_delivery_fee_mode').value = sale.delivery_fee_mode || 'exempt';
+        $('f_cash_customer_name').value = String(sale.cash_customer_name || '');
+        $('f_location').value = String(sale.delivery_location || sale.location || '');
+
 
         const fuelGroup = $('f_fuel_type').closest('.form-group');
         const priceGroup = $('f_price_per_liter').closest('.form-group');
