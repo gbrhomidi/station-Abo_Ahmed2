@@ -2822,9 +2822,9 @@
 
         loadedAt: null,
         latestSaleRequestId: 0,
-        recentFuelSaleCustomerIds: [],
-        recentFuelSaleCustomersLoadedAt: 0,
-        recentFuelSaleCustomersPromise: null,
+        recentSaleCustomerIds: [],
+        recentSaleCustomersLoadedAt: 0,
+        recentSaleCustomersPromise: null,
         saleKind: 'fuel',
         saleItems: [],
 
@@ -4595,19 +4595,19 @@
         }
     }
 
-    async function loadRecentFuelSaleCustomerOrder(force = false) {
-        const cacheAge = Date.now() - Number(state.recentFuelSaleCustomersLoadedAt || 0);
-        if (!force && state.recentFuelSaleCustomersLoadedAt && cacheAge < 30000) {
-            return state.recentFuelSaleCustomerIds;
+    async function loadRecentCustomerSaleOrder(force = false) {
+        const cacheAge = Date.now() - Number(state.recentSaleCustomersLoadedAt || 0);
+        if (!force && state.recentSaleCustomersLoadedAt && cacheAge < 30000) {
+            return state.recentSaleCustomerIds;
         }
-        if (state.recentFuelSaleCustomersPromise) return state.recentFuelSaleCustomersPromise;
-        if (!bridge || typeof bridge.getRecentFuelSaleCustomerIds !== 'function') {
-            return state.recentFuelSaleCustomerIds;
+        if (state.recentSaleCustomersPromise) return state.recentSaleCustomersPromise;
+        if (!bridge || typeof bridge.getRecentSaleCustomerIds !== 'function') {
+            return state.recentSaleCustomerIds;
         }
 
-        state.recentFuelSaleCustomersPromise = (async () => {
+        state.recentSaleCustomersPromise = (async () => {
             try {
-                const response = await invoke('getRecentFuelSaleCustomerIds');
+                const response = await invoke('getRecentSaleCustomerIds');
                 const raw = dataOf(response);
                 const values = Array.isArray(raw)
                     ? raw
@@ -4619,17 +4619,17 @@
                     return Number(value || 0);
                 }).filter(id => Number.isSafeInteger(id) && id > 0);
 
-                state.recentFuelSaleCustomerIds = Array.from(new Set(ids));
-                state.recentFuelSaleCustomersLoadedAt = Date.now();
+                state.recentSaleCustomerIds = Array.from(new Set(ids));
+                state.recentSaleCustomersLoadedAt = Date.now();
             } catch (error) {
                 console.warn('[Deliveries] Recent customer-sale order unavailable:', error.message || error);
             } finally {
-                state.recentFuelSaleCustomersPromise = null;
+                state.recentSaleCustomersPromise = null;
             }
-            return state.recentFuelSaleCustomerIds;
+            return state.recentSaleCustomerIds;
         })();
 
-        return state.recentFuelSaleCustomersPromise;
+        return state.recentSaleCustomersPromise;
     }
 
     function selectAnonymousCustomer() {
@@ -4655,7 +4655,7 @@
 
     $('f_party_display').addEventListener('focus', () => {
         renderCustomerMenu('');
-        loadRecentFuelSaleCustomerOrder().then(() => {
+        loadRecentCustomerSaleOrder().then(() => {
             const field = $('f_party_display');
             if (document.activeElement === field && $('partyMenu').classList.contains('show')) {
                 renderCustomerMenu(field.value);
@@ -4675,7 +4675,7 @@
             .toLowerCase();
 
         const recentRank = new Map(
-            state.recentFuelSaleCustomerIds.map((id, index) => [String(id), index])
+            state.recentSaleCustomerIds.map((id, index) => [String(id), index])
         );
         const orderedCustomers = state.customers.slice().sort((a, b) => {
             const aId = String(a.id ?? a.party_id ?? '');
@@ -5592,7 +5592,7 @@
             loadCustomers(),
             loadVehicles(),
             loadShifts(),
-            loadRecentFuelSaleCustomerOrder(true)
+            loadRecentCustomerSaleOrder(true)
         ]);
     }
 
