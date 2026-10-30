@@ -260,6 +260,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var securitySettingsStore: SecuritySettingsStore
     private var securityLockPending: Boolean = false
     private var securityPromptActive: Boolean = false
+    private var appInForeground: Boolean = false
+    private var biometricPrompt: androidx.biometric.BiometricPrompt? = null
+    private var biometricCancellationExpected: Boolean = false
+    private var securityFallbackDialog: androidx.appcompat.app.AlertDialog? = null
     private var lastSecurityInteractionElapsed: Long = android.os.SystemClock.elapsedRealtime()
 
     private val securityIdleRunnable = object : Runnable {
@@ -443,9 +447,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        appInForeground = true
         updateUIState()
         if (!isDestroyed.get()) {
-            checkSmsSystemHealth()
+            // Health checks touch SQLite and are diagnostic only; keep them off the UI thread.
+            lifecycleScope.launch(Dispatchers.IO) { checkSmsSystemHealth() }
         }
     }
 
@@ -517,23 +523,41 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
+        appInForeground = false
+        // A biometric sheet can be dismissed when another application comes forward.
+        // Clear stale prompt state and retry once from onResume instead of leaving the
+        // WebView invisible or stacking a second fallback dialog on top of the sheet.
+        if (securityPromptActive && !isChangingConfigurations && !isDatabaseBackupPickerActive) {
+            biometricCancellationExpected = true
+            biometricPrompt?.cancelAuthentication()
+            biometricPrompt = null
+            securityPromptActive = false
+            if (!currentAuthToken.isNullOrBlank() && ::dbHelper.isInitialized && requiresSecurityReauthentication()) {
+                securityLockPending = true
+                webView?.visibility = View.INVISIBLE
+            }
+            securityFallbackDialog?.dismiss()
+            securityFallbackDialog = null
+        }
         // Don't treat opening the system document picker as leaving the app.
         if (!isChangingConfigurations && !isDatabaseBackupPickerActive) {
-            runCatching {
-                if (::dbHelper.isInitialized &&
-                    dbHelper.getSetting("automaticBackupOnExit").trim().lowercase() in setOf("1", "true", "yes", "on") &&
-                    dbHelper.getSetting("includeDatabaseBackup").trim().lowercase() !in setOf("0", "false", "no", "off") &&
-                    FullDatabaseBackupManager.selectedTreeUri(this) != null
-                ) {
-                    val lifecyclePrefs = getSharedPreferences("database_backup_lifecycle", Context.MODE_PRIVATE)
-                    val now = System.currentTimeMillis()
-                    val lastQueued = lifecyclePrefs.getLong("last_exit_backup_at", 0L)
-                    if (now - lastQueued >= 5 * 60 * 1000L) {
-                        lifecyclePrefs.edit().putLong("last_exit_backup_at", now).apply()
-                        FullDatabaseBackupScheduler.scheduleOnExit(applicationContext)
+            lifecycleScope.launch(Dispatchers.IO) {
+                runCatching {
+                    if (::dbHelper.isInitialized &&
+                        dbHelper.getSetting("automaticBackupOnExit").trim().lowercase() in setOf("1", "true", "yes", "on") &&
+                        dbHelper.getSetting("includeDatabaseBackup").trim().lowercase() !in setOf("0", "false", "no", "off") &&
+                        FullDatabaseBackupManager.selectedTreeUri(this@MainActivity) != null
+                    ) {
+                        val lifecyclePrefs = getSharedPreferences("database_backup_lifecycle", Context.MODE_PRIVATE)
+                        val now = System.currentTimeMillis()
+                        val lastQueued = lifecyclePrefs.getLong("last_exit_backup_at", 0L)
+                        if (now - lastQueued >= 5 * 60 * 1000L) {
+                            lifecyclePrefs.edit().putLong("last_exit_backup_at", now).apply()
+                            FullDatabaseBackupScheduler.scheduleOnExit(applicationContext)
+                        }
                     }
-                }
-            }.onFailure { DebugLogger.logException("DatabaseBackupOnExit", it) }
+                }.onFailure { DebugLogger.logException("DatabaseBackupOnExit", it) }
+            }
         }
         super.onStop()
     }
@@ -1599,7 +1623,7 @@ class MainActivity : AppCompatActivity() {
             isTrueSetting(securitySettingValue("biometricLockEnabled"))
 
     private fun requestSecurityReauthentication() {
-        if (!securityLockPending || securityPromptActive || currentAuthToken.isNullOrBlank() || isFinishing) return
+        if (!appInForeground || !securityLockPending || securityPromptActive || currentAuthToken.isNullOrBlank() || isFinishing) return
         webView?.visibility = View.INVISIBLE
         securityPromptActive = true
         if (isTrueSetting(securitySettingValue("biometricLockEnabled"))) {
@@ -1645,9 +1669,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSecurityPinFallback() {
-        if (isFinishing) return
+        if (isFinishing || isDestroyed.get() || securityFallbackDialog?.isShowing == true) return
         if (!securitySettingsStore.isPinConfigured()) {
-            androidx.appcompat.app.AlertDialog.Builder(this)
+            securityFallbackDialog = androidx.appcompat.app.AlertDialog.Builder(this)
                 .setTitle("التحقق مطلوب")
                 .setMessage("تعذر التحقق البيومتري أو بواسطة قفل الجهاز، ولم يتم إعداد PIN. سجّل الدخول مجدداً للمتابعة.")
                 .setPositiveButton("العودة لتسجيل الدخول") { _, _ -> forceSecurityLogout("security_unlock_fallback") }
@@ -1685,10 +1709,17 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        securityFallbackDialog = dialog
+        dialog.setOnDismissListener { if (securityFallbackDialog === dialog) securityFallbackDialog = null }
         dialog.show()
     }
 
     private fun forceSecurityLogout(reason: String) {
+        biometricCancellationExpected = true
+        biometricPrompt?.cancelAuthentication()
+        biometricPrompt = null
+        securityFallbackDialog?.dismiss()
+        securityFallbackDialog = null
         val token = currentAuthToken
         if (!token.isNullOrBlank() && ::dbHelper.isInitialized) {
             runCatching { dbHelper.invalidateUserSession(token, reason.take(50)) }
@@ -2437,23 +2468,28 @@ class MainActivity : AppCompatActivity() {
 
     fun showBiometricPrompt(onSuccess: () -> Unit, onError: (String) -> Unit) {
         DebugLogger.info("Biometric", "showBiometricPrompt START")
+        if (securityPromptActive && biometricPrompt != null) return
+        securityPromptActive = true
+        biometricCancellationExpected = false
         try {
             Class.forName("androidx.biometric.BiometricPrompt")
         } catch (e: ClassNotFoundException) {
             DebugLogger.warn("Biometric", "BiometricPrompt not available")
+            securityPromptActive = false
             onError("unsupported")
             return
         }
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             DebugLogger.warn("Biometric", "Android version < P")
+            securityPromptActive = false
             onError("unsupported")
             return
         }
 
         try {
             val executor = ContextCompat.getMainExecutor(this)
-            val biometricPrompt = androidx.biometric.BiometricPrompt(
+            val prompt = androidx.biometric.BiometricPrompt(
                 this,
                 executor,
                 object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
@@ -2462,6 +2498,7 @@ class MainActivity : AppCompatActivity() {
                     ) {
                         super.onAuthenticationSucceeded(result)
                         DebugLogger.info("Biometric", "Authentication SUCCEEDED")
+                        biometricPrompt = null
                         onSuccess()
                     }
 
@@ -2474,6 +2511,12 @@ class MainActivity : AppCompatActivity() {
                     override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                         super.onAuthenticationError(errorCode, errString)
                         DebugLogger.warn("Biometric", "Authentication ERROR: code=$errorCode, message=$errString")
+                        biometricPrompt = null
+                        if (biometricCancellationExpected) {
+                            biometricCancellationExpected = false
+                            securityPromptActive = false
+                            return
+                        }
                         when (errorCode) {
                             androidx.biometric.BiometricPrompt.ERROR_USER_CANCELED,
                             androidx.biometric.BiometricPrompt.ERROR_NEGATIVE_BUTTON -> {
@@ -2493,9 +2536,12 @@ class MainActivity : AppCompatActivity() {
                 .build()
 
             DebugLogger.info("Biometric", "PromptInfo built, calling authenticate")
-            biometricPrompt.authenticate(promptInfo)
+            biometricPrompt = prompt
+            prompt.authenticate(promptInfo)
         } catch (e: Exception) {
             DebugLogger.logException("Biometric", e)
+            biometricPrompt = null
+            securityPromptActive = false
             onError("unsupported")
         }
     }

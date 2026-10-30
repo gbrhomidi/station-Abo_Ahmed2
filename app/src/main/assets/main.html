@@ -1960,6 +1960,9 @@
         let isRefreshing = false;
         let dashboardRefreshQueued = false;
         let dashboardResumeRefreshTimer = null;
+        let displaySettingsLoadedAt = 0;
+        let displaySettingsLoadPromise = null;
+        let dueReminderRefreshAt = 0;
         let clockInterval = null;
 
         let sidebarNavData = [];
@@ -2148,7 +2151,11 @@
             return useAndroidInterface && !!androidInterface;
         }
 
-        async function loadDisplaySettings() {
+        async function loadDisplaySettings(force = false) {
+            const now = Date.now();
+            if (!force && displaySettingsLoadedAt && now - displaySettingsLoadedAt < 30000) return;
+            if (displaySettingsLoadPromise) return displaySettingsLoadPromise;
+            displaySettingsLoadPromise = (async function () {
             try {
                 if (!await waitForAndroidBridge()) {
                     throw new Error('AndroidInterface غير متاح بعد عدة محاولات');
@@ -2164,6 +2171,7 @@
                         displaySettings[key] = String(values[key] ?? '');
                     }
                 }
+                displaySettingsLoadedAt = Date.now();
             } catch (error) {
                 console.warn('تعذر تحميل إعدادات العرض المحفوظة؛ ستستخدم القيم الآمنة الافتراضية:', error);
                 displaySettings = { ...DEFAULT_DISPLAY_SETTINGS };
@@ -2177,6 +2185,12 @@
 
             // تحديث ساعة السكون
             syncSleepClock();
+            })();
+            try {
+                await displaySettingsLoadPromise;
+            } finally {
+                displaySettingsLoadPromise = null;
+            }
         }
 
         function applySleepTextStyle() {
@@ -3840,7 +3854,12 @@
                 try { localStorage.setItem('dashboardCache', JSON.stringify(stats)); } catch (e) {}
                 updateStatsCards(stats);
                 if (stats.notifications) showRealNotifications(stats);
-                await refreshMainDueReminders();
+                // Reminder refresh performs multiple synchronous bridge calls. Keep its
+                // behavior while avoiding a burst from pageshow + visibilitychange + focus.
+                if (Date.now() - dueReminderRefreshAt >= 300000) {
+                    dueReminderRefreshAt = Date.now();
+                    await refreshMainDueReminders();
+                }
             } catch (e) {
                 console.error('Dashboard error:', e);
                 showToast(e.message || 'تعذر تحميل بيانات SQLite', 'error');
