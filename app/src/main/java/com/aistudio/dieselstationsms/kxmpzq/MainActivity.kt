@@ -1442,10 +1442,18 @@ class MainActivity : AppCompatActivity() {
         // Explicit close requests a fresh biometric/password login on the next launch.
         if (sharedPrefs.getBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, false)) return "login.html"
 
-        // Use the authenticated shell only when this launch is already protected by
-        // the native foreground re-authentication flow. Otherwise let login.html handle
-        // Remember-Me, including after Android recreates a killed Activity/process.
-        return if (securityLockPending && !currentAuthToken.isNullOrBlank() && currentUserId > 0L) {
+        // Restore the authenticated shell after Activity recreation. A rotation must
+        // not send an already-authenticated user through login.html / Remember-Me again.
+        // Fresh launches retain the existing login and Remember-Me behavior; explicit
+        // logout and invalid sessions still route to login.html.
+        val hasActiveSession = !currentAuthToken.isNullOrBlank() && currentUserId > 0L
+        return if (BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
+                hasActiveSession = hasActiveSession,
+                loginRequiredOnLaunch = sharedPrefs.getBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, false),
+                isActivityRecreation = isActivityRecreation,
+                securityLockPending = securityLockPending
+            )
+        ) {
             "main.html"
         } else {
             "login.html"
