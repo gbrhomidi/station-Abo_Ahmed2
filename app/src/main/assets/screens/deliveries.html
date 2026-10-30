@@ -2340,7 +2340,7 @@
 
                 <div class="form-group">
                     <label class="form-label" for="f_delivery_service_fee">رسوم خدمة التوصيل</label>
-                    <input id="f_delivery_service_fee" name="delivery_service_fee" class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="0" readonly aria-readonly="true" tabindex="-1">
+                    <input id="f_delivery_service_fee" name="delivery_service_fee" class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="0.00" readonly aria-readonly="true" tabindex="-1">
                     <div class="form-help">تُسجّل منفصلة عن إجمالي الوقود؛ طريقة احتسابها تحدد القيد المحاسبي.</div>
                 </div>
 
@@ -2822,6 +2822,9 @@
 
         loadedAt: null,
         latestSaleRequestId: 0,
+        recentFuelSaleCustomerIds: [],
+        recentFuelSaleCustomersLoadedAt: 0,
+        recentFuelSaleCustomersPromise: null,
         saleKind: 'fuel',
         saleItems: [],
 
@@ -2873,6 +2876,19 @@
         return Number.isFinite(n)
             ? n
             : 0;
+    }
+
+    function normalizeDeliveryFeeInput(value) {
+        const raw = String(value === null || value === undefined ? '' : value).trim();
+        if (!raw || raw === '.' || raw === ',' || raw === '-.' || raw === '-,') return '0.00';
+        const numericValue = Number(raw.replace(/,/g, ''));
+        if (!Number.isFinite(numericValue) || numericValue < 0) return '0.00';
+        return numericValue.toFixed(2);
+    }
+
+    function setDeliveryFeeInput(value) {
+        const input = $('f_delivery_service_fee');
+        if (input) input.value = normalizeDeliveryFeeInput(value);
     }
 
     function money(value) {
@@ -4446,7 +4462,7 @@
         $('f_driver_id').value = '';
         $('f_driver_display').value = '';
 
-        $('f_delivery_service_fee').value = '0';
+        setDeliveryFeeInput(0);
         $('f_delivery_fee_mode').value = 'exempt';
         $('f_cash_customer_name').value = '';
         $('settleFeeBtn').style.display = 'none';
@@ -4579,6 +4595,43 @@
         }
     }
 
+    async function loadRecentFuelSaleCustomerOrder(force = false) {
+        const cacheAge = Date.now() - Number(state.recentFuelSaleCustomersLoadedAt || 0);
+        if (!force && state.recentFuelSaleCustomersLoadedAt && cacheAge < 30000) {
+            return state.recentFuelSaleCustomerIds;
+        }
+        if (state.recentFuelSaleCustomersPromise) return state.recentFuelSaleCustomersPromise;
+        if (!bridge || typeof bridge.getRecentFuelSaleCustomerIds !== 'function') {
+            return state.recentFuelSaleCustomerIds;
+        }
+
+        state.recentFuelSaleCustomersPromise = (async () => {
+            try {
+                const response = await invoke('getRecentFuelSaleCustomerIds');
+                const raw = dataOf(response);
+                const values = Array.isArray(raw)
+                    ? raw
+                    : (raw && Array.isArray(raw.data) ? raw.data : []);
+                const ids = values.map(value => {
+                    if (value && typeof value === 'object') {
+                        return Number(value.party_id || value.customer_party_id || value.customer_id || value.id || 0);
+                    }
+                    return Number(value || 0);
+                }).filter(id => Number.isSafeInteger(id) && id > 0);
+
+                state.recentFuelSaleCustomerIds = Array.from(new Set(ids));
+                state.recentFuelSaleCustomersLoadedAt = Date.now();
+            } catch (error) {
+                console.warn('[Deliveries] Recent customer-sale order unavailable:', error.message || error);
+            } finally {
+                state.recentFuelSaleCustomersPromise = null;
+            }
+            return state.recentFuelSaleCustomerIds;
+        })();
+
+        return state.recentFuelSaleCustomersPromise;
+    }
+
     function selectAnonymousCustomer() {
 
         // Invalidate an in-flight customer-sale request before changing the selection.
@@ -4600,8 +4653,15 @@
         );
     }
 
-    $('f_party_display').addEventListener('focus', () =>
-        renderCustomerMenu(''));
+    $('f_party_display').addEventListener('focus', () => {
+        renderCustomerMenu('');
+        loadRecentFuelSaleCustomerOrder().then(() => {
+            const field = $('f_party_display');
+            if (document.activeElement === field && $('partyMenu').classList.contains('show')) {
+                renderCustomerMenu(field.value);
+            }
+        });
+    });
 
     $('f_party_display').addEventListener('input', event =>
         renderCustomerMenu(event.target.value));
@@ -4614,15 +4674,23 @@
             .trim()
             .toLowerCase();
 
-        const rows = state.customers
+        const recentRank = new Map(
+            state.recentFuelSaleCustomerIds.map((id, index) => [String(id), index])
+        );
+        const orderedCustomers = state.customers.slice().sort((a, b) => {
+            const aId = String(a.id ?? a.party_id ?? '');
+            const bId = String(b.id ?? b.party_id ?? '');
+            const aRank = recentRank.has(aId) ? recentRank.get(aId) : Number.MAX_SAFE_INTEGER;
+            const bRank = recentRank.has(bId) ? recentRank.get(bId) : Number.MAX_SAFE_INTEGER;
+            return aRank - bRank;
+        });
+        const rows = orderedCustomers
             .filter(customer => {
-
                 const text = (
                     customerName(customer) +
                     ' ' +
                     (customer.id || customer.party_id || '')
                 ).toLowerCase();
-
                 return !q || text.includes(q);
             })
             .slice(0, 50);
@@ -4811,7 +4879,7 @@
         setIfValue('f_driver_id', sale.driver_id);
         setIfValue('f_vehicle_display', sale.vehicle_name);
         setIfValue('f_driver_display', sale.driver_name);
-        setIfValue('f_delivery_service_fee', sale.delivery_service_fee ?? sale.service_fee ?? 0);
+        setDeliveryFeeInput(sale.delivery_service_fee ?? sale.service_fee ?? 0);
         setIfValue('f_delivery_fee_mode', sale.delivery_fee_mode || 'exempt');
         setIfValue('f_cash_customer_name', sale.cash_customer_name || '');
 
@@ -4831,7 +4899,7 @@
                 : 'عميل غير مسجل';
         }
         // Always assign these fields explicitly so a legitimate zero fee or "exempt" mode is not skipped.
-        $('f_delivery_service_fee').value = String(Number(sale.delivery_service_fee || 0));
+        setDeliveryFeeInput(sale.delivery_service_fee ?? sale.service_fee ?? 0);
         $('f_delivery_fee_mode').value = sale.delivery_fee_mode || 'exempt';
         $('f_cash_customer_name').value = String(sale.cash_customer_name || '');
         $('f_location').value = String(sale.delivery_location || sale.location || '');
@@ -4949,8 +5017,7 @@
             fillFromLatestSale(sale);
 
             $('saleContextHelp').style.display = 'block';
-            $('f_delivery_service_fee').value =
-                String(sale.delivery_service_fee ?? sale.service_fee ?? 0);
+            setDeliveryFeeInput(sale.delivery_service_fee ?? sale.service_fee ?? 0);
             $('f_delivery_fee_mode').value = String(sale.delivery_fee_mode || 'exempt');
             $('f_location').value = String(sale.delivery_location ?? sale.location ?? '');
             $('f_cash_customer_name').value = String(sale.cash_customer_name || '');
@@ -5524,7 +5591,8 @@
         await Promise.all([
             loadCustomers(),
             loadVehicles(),
-            loadShifts()
+            loadShifts(),
+            loadRecentFuelSaleCustomerOrder(true)
         ]);
     }
 
@@ -5605,8 +5673,7 @@
         $('f_fuel_type').value = row.fuel_type ?? '';
         $('f_price_per_liter').value = row.price_per_liter ?? '';
         $('f_total_amount').value = row.total_amount ?? '';
-        $('f_delivery_service_fee').value =
-            row.delivery_service_fee ?? row.service_fee ?? 0;
+        setDeliveryFeeInput(row.delivery_service_fee ?? row.service_fee ?? 0);
         $('f_delivery_fee_mode').value = row.delivery_fee_mode || 'exempt';
         $('f_cash_customer_name').value = row.cash_customer_name || '';
         $('f_status').value = row.status || 'pending';
@@ -6553,6 +6620,9 @@
     });
 
     $('f_delivery_service_fee').addEventListener('input', updateSmsPreview);
+    $('f_delivery_service_fee').addEventListener('blur', () => {
+        setDeliveryFeeInput($('f_delivery_service_fee').value);
+    });
     $('f_delivery_fee_mode').addEventListener('change', updateSmsPreview);
     $('f_location').addEventListener('input', updateSmsPreview);
     $('f_cash_customer_name').addEventListener('input', updateSmsPreview);
