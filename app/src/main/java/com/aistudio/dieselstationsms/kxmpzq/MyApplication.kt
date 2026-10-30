@@ -4,6 +4,7 @@ import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManager
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 
+import android.app.Activity
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -53,6 +54,17 @@ class MyApplication : Application() {
         private const val MIN_FREE_SPACE_MB = 5
         private const val DATE_FORMAT = "yyyy-MM-dd HH:mm:ss"
         private val crashLock = ReentrantLock()
+        private val startedActivityLock = Any()
+        private val startedActivities: MutableSet<Activity> =
+            Collections.newSetFromMap(IdentityHashMap<Activity, Boolean>())
+
+        /**
+         * True while another Activity from this same application is started.
+         * MainActivity uses this to distinguish a real app background transition
+         * from opening an internal screen such as MapPickerActivity.
+         */
+        fun hasOtherStartedActivity(activity: Activity): Boolean =
+            synchronized(startedActivityLock) { startedActivities.any { it !== activity } }
 
         private const val PREFS_NAME = "secure_prefs"
         private const val MASTER_KEY_ALIAS = "my_app_master_key"
@@ -110,6 +122,22 @@ class MyApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) = Unit
+            override fun onActivityStarted(activity: Activity) {
+                synchronized(startedActivityLock) { startedActivities.add(activity) }
+            }
+            override fun onActivityResumed(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) = Unit
+            override fun onActivityStopped(activity: Activity) {
+                synchronized(startedActivityLock) { startedActivities.remove(activity) }
+            }
+            override fun onActivityDestroyed(activity: Activity) {
+                synchronized(startedActivityLock) { startedActivities.remove(activity) }
+            }
+        })
 
         // تهيئة معالج الأعطال العالمي
         setupCrashHandler()
