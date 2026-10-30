@@ -1470,6 +1470,23 @@ textarea.form-input { text-align: right; min-height: 64px; resize: vertical; }
 .toast.error { border-color: var(--danger-token); color: var(--danger-token); }
 .toast.warning { border-color: var(--warning-token); color: var(--warning-token); }
 .toast.info { border-color: var(--info-token); color: var(--info-token); }
+.form-toast {
+    position: relative;
+    top: auto;
+    left: auto;
+    z-index: auto;
+    width: 100%;
+    max-width: none;
+    margin: 0 0 10px;
+    justify-content: flex-start;
+    display: none;
+    opacity: 1;
+    transform: none;
+    transition: none;
+    pointer-events: auto;
+    box-shadow: none;
+}
+.form-toast.show { display: flex; transform: none; }
 
 .advanced-notification {
     position: fixed;
@@ -1858,9 +1875,9 @@ textarea.form-input { text-align: right; min-height: 64px; resize: vertical; }
             <button type="button" class="modal-close" onclick="closeModal(null,'formModal')"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
+            <div class="toast form-toast" id="formToast" role="status" aria-live="polite"></div>
             <form id="recordForm" class="form-grid"></form>
         </div>
-        <div class="toast" id="formToast" role="alert" aria-live="polite"></div>
         <div class="modal-footer">
             <button type="button" class="btn primary" id="saveBtn">
                 <i class="fas fa-save"></i> حفظ فعلي
@@ -2279,10 +2296,18 @@ function toast(message, bad=false, context='auto') {
     else node = ($('formModal') && $('formModal').classList.contains('show')) ? $('formToast') : $('toast');
     if (!node) node = $('toast');
     if (!node) return;
+    const isFormFeedback = node.id === 'formToast';
     node.textContent = message;
-    node.className = 'toast show ' + (bad ? 'error' : 'success');
+    node.className = 'toast' + (isFormFeedback ? ' form-toast' : '') + ' show ' + (bad ? 'error' : 'success');
     clearTimeout(node._timer);
-    node._timer = setTimeout(() => node.classList.remove('show'), 3200);
+    if (!isFormFeedback) node._timer = setTimeout(() => node.classList.remove('show'), 3200);
+}
+function clearFormToast() {
+    const node = $('formToast');
+    if (!node) return;
+    clearTimeout(node._timer);
+    node.textContent = '';
+    node.className = 'toast form-toast';
 }
 
 let _advTimeout = null;
@@ -2953,6 +2978,7 @@ async function openForm(row=null) {
         toast('لا توجد عملية كتابة مدعومة لهذه الشاشة', true, 'global');
         return;
     }
+    clearFormToast();
     state.editing = row;
     const deliveryBtn = $('deliveryBtn');
     if (deliveryBtn) {
@@ -3063,9 +3089,13 @@ async function saveForm() {
                 state.lastSuccessfulSaleFingerprint = fuelSaleFingerprint(collectForm());
             }
             const sms = saved.sms || {};
-            const smsNote = sms.queued
-                ? ' — تم وضع SMS في طابور الإرسال'
-                : (payload.payment_method === 'credit' ? ' — تعذر تجهيز SMS: ' + (sms.reason||'غير معروف') : '');
+            const isCreditSale = ['credit', 'آجل', 'credit_sale', 'credit_account']
+                .includes(String(payload.payment_method || '').trim().toLowerCase());
+            const smsNote = isCreditSale
+                ? (sms.queued
+                    ? ' — تم وضع رسالة SMS للعميل ' + (sms.customer_name || 'المحدد') + ' في طابور الإرسال'
+                    : ' — لم تُجدول رسالة SMS للعميل: ' + (sms.reason || sms.message || 'سبب غير معروف'))
+                : '';
             toast('تم حفظ عملية البيع رقم ' + saleId + ' وتحديث المخزون' + smsNote, false, 'form');
             showDeliveryAction(saleId);
             void reloadData().catch(refreshError => console.warn('[Fuel Sales] Background refresh failed:', refreshError));

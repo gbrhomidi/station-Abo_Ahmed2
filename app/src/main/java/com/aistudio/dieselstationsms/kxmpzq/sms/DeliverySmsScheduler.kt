@@ -56,8 +56,7 @@ object DeliverySmsScheduler {
                 .ifBlank { payload.optString("customer_name").trim() }
                 .ifBlank { if (cashSale) "مبيعات نقدية" else "العميل" }
         }
-        val note = payload.optString("sms_note").trim()
-        val customerText = if (cashSale && note.isNotBlank() && !customer.contains(note)) "$customer / $note" else customer
+        val customerText = customer
 
         val fee = payload.optDouble("delivery_service_fee", payload.optDouble("service_fee", 0.0)).coerceAtLeast(0.0)
         val feeMode = normalizeFeeMode(payload.optString("delivery_fee_mode", payload.optString("fee_mode", "exempt")))
@@ -69,12 +68,13 @@ object DeliverySmsScheduler {
             append("حجم الحمولة - ").append(quantity).append('\n')
             append("للعميل - ").append(customerText).append('\n')
             append("موقع التوصيل - ").append(location)
-            // Ask the driver to collect a fee from the customer only when the chosen
-            // accounting policy explicitly adds the service fee to the customer's sale.
-            if (fee > 0.0 && feeMode == "add_to_sales") {
+            // The driver collects the service fee only when it is explicitly assigned
+            // to the driver; other fee modes must not add collection instructions.
+            if (fee > 0.0 && feeMode == "driver") {
                 val symbols = DecimalFormatSymbols(Locale.US)
                 val formatted = DecimalFormat("0.##", symbols).format(fee)
-                append('\n').append("رسوم خدمة التوصيل - ").append(formatted).append(" ريال (تُضاف إلى قيمة المبيعات)")
+                append('\n').append("قم باستلام رسوم خدمة التوصيل - \"")
+                    .append(formatted).append(" ريال\" من العميل عند التوصيل، وسيتم احتسابها عهدة عليك حتى تقوم بتوريدها.")
             }
         }
     }

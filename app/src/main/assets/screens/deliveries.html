@@ -4418,7 +4418,7 @@
             'حجم الحمولة - ' + quantity + '\n' +
             'للعميل - ' + customer + '\n' +
             'موقع التوصيل - ' + location +
-            (fee > 0 && feeMode === 'driver' ? '\nقم باستلام قيمة رسوم خدمة التوصيل - "' + feeText + '" من العميل عند التوصيل؛ "سيتم احتسابها عهدة عليك حتى تقوم بتوريدها".' : '');
+            (fee > 0 && feeMode === 'driver' ? '\nقم باستلام رسوم خدمة التوصيل - "' + feeText + '" من العميل عند التوصيل، وسيتم احتسابها عهدة عليك حتى تقوم بتوريدها.' : '');
 
         body.textContent = message;
         box.classList.add('show');
@@ -5691,7 +5691,7 @@
             'حجم الحمولة - ' + quantityText + '\n' +
             'للعميل - ' + customerName + '\n' +
             'موقع التوصيل - ' + location +
-            (serviceFee > 0 && feeMode === 'driver' ? '\nقم باستلام قيمة رسوم خدمة التوصيل - "' + feeText + '" من العميل عند التوصيل؛ "سيتم احتسابها عهدة عليك حتى تقوم بتوريدها".' : '');
+            (serviceFee > 0 && feeMode === 'driver' ? '\nقم باستلام رسوم خدمة التوصيل - "' + feeText + '" من العميل عند التوصيل، وسيتم احتسابها عهدة عليك حتى تقوم بتوريدها.' : '');
 
         /*
          * The SMS is constructed and scheduled by DeliverySmsScheduler from the

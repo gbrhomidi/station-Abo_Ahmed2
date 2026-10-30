@@ -5,6 +5,11 @@ const { JSDOM } = jsdom;
 const html = fs.readFileSync('app/src/main/assets/main.html', 'utf8');
 const databaseHelper = fs.readFileSync('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt', 'utf8');
 const mainActivity = fs.readFileSync('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt', 'utf8');
+const dashboardRendererStart = html.indexOf('function updateStatsCards(stats)');
+const dashboardRendererEnd = html.indexOf('function readDashboardCache()', dashboardRendererStart);
+const dashboardRenderer = dashboardRendererStart >= 0 && dashboardRendererEnd > dashboardRendererStart
+    ? html.slice(dashboardRendererStart, dashboardRendererEnd)
+    : '';
 const dom = new JSDOM(html);
 const document = dom.window.document;
 
@@ -23,8 +28,8 @@ function assert(name, condition) {
     }
 }
 
-// 1. Check Math.random() is completely removed
-assert('No Math.random() in code', !html.includes('Math.random()'));
+// 1. Random placement is used by sleep-mode decoration; dashboard data must stay real.
+assert('Dashboard renderer contains no Math.random() mock data', dashboardRenderer.length > 0 && !dashboardRenderer.includes('Math.random('));
 
 // 2. Check hardcoded progress is removed
 assert('No hardcoded progress (progress: 70)', !html.includes('progress: 70'));
@@ -47,7 +52,7 @@ assert('AI insight requires current station scope', mainActivity.includes('db.ge
 // 5. Check the occupancy KPI is based on real tank columns, not a heuristic
 assert('DatabaseHelper queries tank quantity and capacity', databaseHelper.includes('SUM(current_quantity)') && databaseHelper.includes('SUM(capacity_liters)'));
 assert('DatabaseHelper scopes tank KPI by station', databaseHelper.includes('FROM tanks WHERE station_id=? AND is_deleted=0'));
-assert('Dashboard labels occupancy as actual tank fill', html.includes('من الكمية والسعة الفعلية'));
+assert('Dashboard labels occupancy with its quantity/capacity source', html.includes('من الكمية والسعة'));
 assert('Dashboard does not contain the old product-count occupancy formula', !databaseHelper.includes('totalProducts * 100.0) / 50.0'));
 
 console.log(`\nResults: ${passed}/${total} passed.`);

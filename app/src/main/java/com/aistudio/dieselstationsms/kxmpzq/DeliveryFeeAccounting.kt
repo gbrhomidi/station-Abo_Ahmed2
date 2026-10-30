@@ -26,6 +26,7 @@ object DeliveryFeeAccounting {
     const val ADD_TO_SALES = "add_to_sales"
     const val DRIVER = "driver"
     const val DEDUCT_FROM_SALES = "deduct_from_sales"
+    private val ensuredSchemaVersions = mutableSetOf<String>()
 
     private data class Account(
         val id: Long,
@@ -73,8 +74,11 @@ object DeliveryFeeAccounting {
         else -> "معفي منها"
     }
 
+    @Synchronized
     fun ensureSchema(helper: DatabaseHelper) {
         val db = helper.writableDatabase
+        val schemaKey = "${db.path}:${db.version}"
+        if (schemaKey in ensuredSchemaVersions) return
         addColumn(db, "fuel_sales", "delivery_service_fee", "REAL NOT NULL DEFAULT 0")
         addColumn(db, "fuel_sales", "delivery_fee_mode", "TEXT NOT NULL DEFAULT 'exempt'")
         addColumn(db, "fuel_sales", "delivery_location", "TEXT NOT NULL DEFAULT ''")
@@ -128,6 +132,7 @@ object DeliveryFeeAccounting {
             "CREATE UNIQUE INDEX IF NOT EXISTS ux_delivery_fee_station_delivery " +
                 "ON delivery_service_fee_ledger(station_id,delivery_id) WHERE delivery_id > 0"
         )
+        ensuredSchemaVersions += schemaKey
     }
 
     private fun columns(db: SQLiteDatabase, table: String): Set<String> {

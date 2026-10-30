@@ -14,11 +14,23 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
         private const val TAG = "PumpMeterSms"
         private const val WARNING = "معذرة - القراءة التي ارسلتها لا تتطابق مع القراءة للترات المباعة، لذلك قم بمراجعة الامر مالم سيتم احتساب الفارق على حسابك"
         private val FORMAT = Regex("^\\s*(\\d+)\\s*[-–—]\\s*(\\d+(?:[.,]\\d+)?)\\s*[-–—]\\s*([فخFKfk])\\s*[-–—]\\s*(\\d+)\\s*$")
+        private val schemaLock = Any()
+        private val initializedSchemaKeys = mutableSetOf<String>()
     }
     data class Parsed(val pumpNumber:Int,val reading:Double,val kind:Char,val nozzleNumber:Int)
     private data class Employee(val id:Long,val code:String,val stationId:Int,val phone:String)
 
     fun ensureSchema(database: SQLiteDatabase = db.writableDatabase) {
+        val schemaKey = "${database.path}:${database.version}"
+        synchronized(schemaLock) {
+            if (schemaKey !in initializedSchemaKeys) {
+                ensureSchemaTables(database)
+                initializedSchemaKeys += schemaKey
+            }
+        }
+    }
+
+    private fun ensureSchemaTables(database: SQLiteDatabase) {
         addColumn(database,"pumps","employee_id INTEGER")
         addColumn(database,"fuel_sales","nozzle_id INTEGER")
         addColumn(database,"pump_nozzles","station_id INTEGER NOT NULL DEFAULT 0")
