@@ -123,7 +123,7 @@ class MyApplication : Application() {
         super.onCreate()
         instance = this
 
-        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+        registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) = Unit
             override fun onActivityStarted(activity: Activity) {
                 synchronized(startedActivityLock) { startedActivities.add(activity) }
