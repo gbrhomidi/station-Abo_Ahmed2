@@ -10,48 +10,18 @@ class BackgroundReauthenticationPolicyTest {
     fun backgroundThresholdDoesNotLockBeforeSixtySeconds() {
         val backgroundedAt = 10_000L
 
-        assertFalse(
-            BackgroundReauthenticationPolicy.shouldRequireReauthentication(
-                backgroundedAt,
-                backgroundedAt
-            )
-        )
-        assertFalse(
-            BackgroundReauthenticationPolicy.shouldRequireReauthentication(
-                backgroundedAt,
-                backgroundedAt + 59_000L
-            )
-        )
-        assertFalse(
-            BackgroundReauthenticationPolicy.shouldRequireReauthentication(
-                backgroundedAt,
-                backgroundedAt + 59_999L
-            )
-        )
+        assertFalse(BackgroundReauthenticationPolicy.shouldRequireReauthentication(backgroundedAt, backgroundedAt))
+        assertFalse(BackgroundReauthenticationPolicy.shouldRequireReauthentication(backgroundedAt, backgroundedAt + 59_000L))
+        assertFalse(BackgroundReauthenticationPolicy.shouldRequireReauthentication(backgroundedAt, backgroundedAt + 59_999L))
     }
 
     @Test
     fun backgroundThresholdLocksAtExactlySixtySecondsAndAfterwards() {
         val backgroundedAt = 5_000L
 
-        assertTrue(
-            BackgroundReauthenticationPolicy.shouldRequireReauthentication(
-                backgroundedAt,
-                backgroundedAt + 60_000L
-            )
-        )
-        assertTrue(
-            BackgroundReauthenticationPolicy.shouldRequireReauthentication(
-                backgroundedAt,
-                backgroundedAt + 60_001L
-            )
-        )
-        assertTrue(
-            BackgroundReauthenticationPolicy.shouldRequireReauthentication(
-                backgroundedAt,
-                backgroundedAt + 5 * 60_000L
-            )
-        )
+        assertTrue(BackgroundReauthenticationPolicy.shouldRequireReauthentication(backgroundedAt, backgroundedAt + 60_000L))
+        assertTrue(BackgroundReauthenticationPolicy.shouldRequireReauthentication(backgroundedAt, backgroundedAt + 60_001L))
+        assertTrue(BackgroundReauthenticationPolicy.shouldRequireReauthentication(backgroundedAt, backgroundedAt + 5 * 60_000L))
     }
 
     @Test
@@ -71,54 +41,65 @@ class BackgroundReauthenticationPolicyTest {
     }
 
     @Test
-    fun restoredActivityDoesNotPromptBeforeThresholdEvenWhenBiometricLockIsEnabled() {
+    fun restoredAuthenticatedActivityDoesNotPromptBeforeThreshold() {
         val pending = BackgroundReauthenticationPolicy.shouldLockOnStartup(
             hasActiveSession = true,
             loginRequiredOnLaunch = false,
             previouslyPending = false,
             isActivityRecreation = true,
+            wasAuthenticatedShell = true,
             backgroundTimeoutReached = false,
             securityReauthenticationEnabled = true
         )
-
         assertFalse(pending)
     }
 
     @Test
-    fun restoredActivityPromptsAtSixtySecondsButNotAtFiftyNineSeconds() {
-        val common = mapOf(
-            "hasActiveSession" to true,
-            "loginRequiredOnLaunch" to false,
-            "previouslyPending" to false,
-            "isActivityRecreation" to true,
-            "securityReauthenticationEnabled" to true
-        )
-
+    fun restoredAuthenticatedActivityPromptsAtSixtySecondsButNotAtFiftyNineSeconds() {
         val beforeThreshold = BackgroundReauthenticationPolicy.shouldLockOnStartup(
-            hasActiveSession = common.getValue("hasActiveSession"),
-            loginRequiredOnLaunch = common.getValue("loginRequiredOnLaunch"),
-            previouslyPending = common.getValue("previouslyPending"),
-            isActivityRecreation = common.getValue("isActivityRecreation"),
-            backgroundTimeoutReached = BackgroundReauthenticationPolicy.shouldRequireReauthentication(
-                1_000L,
-                60_999L
-            ),
-            securityReauthenticationEnabled = common.getValue("securityReauthenticationEnabled")
+            hasActiveSession = true,
+            loginRequiredOnLaunch = false,
+            previouslyPending = false,
+            isActivityRecreation = true,
+            wasAuthenticatedShell = true,
+            backgroundTimeoutReached = BackgroundReauthenticationPolicy.shouldRequireReauthentication(1_000L, 60_999L),
+            securityReauthenticationEnabled = true
         )
         val atThreshold = BackgroundReauthenticationPolicy.shouldLockOnStartup(
             hasActiveSession = true,
             loginRequiredOnLaunch = false,
             previouslyPending = false,
             isActivityRecreation = true,
-            backgroundTimeoutReached = BackgroundReauthenticationPolicy.shouldRequireReauthentication(
-                1_000L,
-                61_000L
-            ),
+            wasAuthenticatedShell = true,
+            backgroundTimeoutReached = BackgroundReauthenticationPolicy.shouldRequireReauthentication(1_000L, 61_000L),
             securityReauthenticationEnabled = true
         )
 
         assertFalse(beforeThreshold)
         assertTrue(atThreshold)
+    }
+
+    @Test
+    fun restoredLoginPageKeepsRememberMeAuthenticationWhenBackgroundThresholdReached() {
+        val shouldLock = BackgroundReauthenticationPolicy.shouldLockOnStartup(
+            hasActiveSession = true,
+            loginRequiredOnLaunch = false,
+            previouslyPending = false,
+            isActivityRecreation = true,
+            wasAuthenticatedShell = false,
+            backgroundTimeoutReached = true,
+            securityReauthenticationEnabled = true
+        )
+
+        assertFalse(shouldLock)
+        assertFalse(
+            BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
+                hasActiveSession = true,
+                loginRequiredOnLaunch = false,
+                wasAuthenticatedShell = false,
+                securityLockPending = false
+            )
+        )
     }
 
     @Test
@@ -129,6 +110,7 @@ class BackgroundReauthenticationPolicyTest {
                 loginRequiredOnLaunch = false,
                 previouslyPending = true,
                 isActivityRecreation = true,
+                wasAuthenticatedShell = true,
                 backgroundTimeoutReached = false,
                 securityReauthenticationEnabled = true
             )
@@ -139,6 +121,7 @@ class BackgroundReauthenticationPolicyTest {
                 loginRequiredOnLaunch = false,
                 previouslyPending = false,
                 isActivityRecreation = false,
+                wasAuthenticatedShell = false,
                 backgroundTimeoutReached = false,
                 securityReauthenticationEnabled = true
             )
@@ -146,12 +129,12 @@ class BackgroundReauthenticationPolicyTest {
     }
 
     @Test
-    fun ActivityRecreationRestoresAuthenticatedShellWithoutStartingRememberMeLogin() {
+    fun ActivityRecreationRestoresOnlyThePreviouslyAuthenticatedShell() {
         assertTrue(
             BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
                 hasActiveSession = true,
                 loginRequiredOnLaunch = false,
-                isActivityRecreation = true,
+                wasAuthenticatedShell = true,
                 securityLockPending = false
             )
         )
@@ -159,7 +142,35 @@ class BackgroundReauthenticationPolicyTest {
             BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
                 hasActiveSession = true,
                 loginRequiredOnLaunch = false,
-                isActivityRecreation = true,
+                wasAuthenticatedShell = true,
+                securityLockPending = true
+            )
+        )
+        assertFalse(
+            BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
+                hasActiveSession = true,
+                loginRequiredOnLaunch = false,
+                wasAuthenticatedShell = false,
+                securityLockPending = false
+            )
+        )
+    }
+
+    @Test
+    fun explicitLogoutOrMissingSessionStillRoutesToLogin() {
+        assertFalse(
+            BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
+                hasActiveSession = true,
+                loginRequiredOnLaunch = true,
+                wasAuthenticatedShell = true,
+                securityLockPending = true
+            )
+        )
+        assertFalse(
+            BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
+                hasActiveSession = false,
+                loginRequiredOnLaunch = false,
+                wasAuthenticatedShell = true,
                 securityLockPending = true
             )
         )
@@ -202,26 +213,6 @@ class BackgroundReauthenticationPolicyTest {
     }
 
     @Test
-    fun explicitLogoutOrMissingSessionStillRoutesToLogin() {
-        assertFalse(
-            BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
-                hasActiveSession = true,
-                loginRequiredOnLaunch = true,
-                isActivityRecreation = true,
-                securityLockPending = false
-            )
-        )
-        assertFalse(
-            BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
-                hasActiveSession = false,
-                loginRequiredOnLaunch = false,
-                isActivityRecreation = true,
-                securityLockPending = false
-            )
-        )
-    }
-
-    @Test
     fun missingSessionOrExplicitLoginRequirementDoesNotStartNativeReauthentication() {
         assertFalse(
             BackgroundReauthenticationPolicy.shouldLockOnStartup(
@@ -229,6 +220,7 @@ class BackgroundReauthenticationPolicyTest {
                 loginRequiredOnLaunch = false,
                 previouslyPending = true,
                 isActivityRecreation = false,
+                wasAuthenticatedShell = false,
                 backgroundTimeoutReached = true,
                 securityReauthenticationEnabled = true
             )
@@ -239,6 +231,7 @@ class BackgroundReauthenticationPolicyTest {
                 loginRequiredOnLaunch = true,
                 previouslyPending = true,
                 isActivityRecreation = false,
+                wasAuthenticatedShell = true,
                 backgroundTimeoutReached = true,
                 securityReauthenticationEnabled = true
             )
