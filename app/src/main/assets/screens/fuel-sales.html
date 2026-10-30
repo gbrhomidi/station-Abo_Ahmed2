@@ -2795,33 +2795,21 @@ async function getSaleFormLookupData() {
     if (cache.loadedAt && Date.now() - cache.loadedAt < 15000) return cache;
     if (state.saleFormLookupPromise) return state.saleFormLookupPromise;
 
+    // Keep the four essential lookups together. The optional location autocomplete
+    // is loaded after the inputs are wired so it cannot delay the usable form.
     state.saleFormLookupPromise = (async () => {
-        const cachedLocations = state.savedDeliveryLocationsCache;
-        const locationsPromise = cachedLocations.loadedAt && Date.now() - cachedLocations.loadedAt < 60000
-            ? Promise.resolve(cachedLocations.rows)
-            : ((bridge && typeof bridge.getSavedDeliveryLocations === 'function')
-                ? invoke('getSavedDeliveryLocations', []).then(result => rowsFrom(result)).catch(() => [])
-                : Promise.resolve([]));
         const results = await Promise.all([
             (bridge && typeof bridge.getCurrentShift === 'function') ? invoke('getCurrentShift', []).catch(() => null) : Promise.resolve(null),
             (bridge && typeof bridge.getPumps === 'function') ? invoke('getPumps', []).catch(() => null) : Promise.resolve(null),
             (bridge && typeof bridge.getFuelTypes === 'function') ? invoke('getFuelTypes', []).catch(() => null) : Promise.resolve(null),
-            (bridge && typeof bridge.getCustomers === 'function') ? invoke('getCustomers', []).catch(() => null) : Promise.resolve(null),
-            locationsPromise
+            (bridge && typeof bridge.getCustomers === 'function') ? invoke('getCustomers', []).catch(() => null) : Promise.resolve(null)
         ]);
         state.saleFormLookupCache = {
             loadedAt: Date.now(),
             shift: dataOf(results[0]),
             pumps: rowsFrom(results[1]),
             fuels: rowsFrom(results[2]),
-            customers: rowsFrom(results[3]),
-            deliveryLocations: (results[4] || []).map(item =>
-                String(typeof item === 'string' ? item : (item.location || item.delivery_location || '')).trim()
-            ).filter(Boolean)
-        };
-        state.savedDeliveryLocationsCache = {
-            loadedAt: Date.now(),
-            rows: state.saleFormLookupCache.deliveryLocations
+            customers: rowsFrom(results[3])
         };
         return state.saleFormLookupCache;
     })().finally(() => {
@@ -2839,9 +2827,6 @@ function rememberSavedDeliveryLocation(value) {
     const rows = Array.from(locations).sort((a, b) => a.localeCompare(b, 'ar'));
     state.savedDeliveryLocationsCache = { loadedAt: Date.now(), rows };
 
-    if (state.saleFormLookupCache) {
-        state.saleFormLookupCache.deliveryLocations = rows;
-    }
     const datalist = document.getElementById('savedDeliveryLocations');
     if (datalist) {
         datalist.innerHTML = rows
@@ -2853,6 +2838,42 @@ function rememberSavedDeliveryLocation(value) {
 function isCurrentFuelForm(openToken) {
     return Number(openToken) === Number(state.formOpenSequence) &&
         Boolean($('formModal') && $('formModal').classList.contains('show'));
+}
+
+async function loadSavedDeliveryLocationSuggestions(openToken, row=null) {
+    const datalist = document.getElementById('savedDeliveryLocations');
+    if (!datalist) return;
+
+    let locations = state.savedDeliveryLocationsCache.rows || [];
+    const cacheFresh = state.savedDeliveryLocationsCache.loadedAt &&
+        Date.now() - state.savedDeliveryLocationsCache.loadedAt < 60000;
+
+    if (!cacheFresh && bridge && typeof bridge.getSavedDeliveryLocations === 'function') {
+        try {
+            const response = await invoke('getSavedDeliveryLocations', []);
+            locations = rowsFrom(response).map(item =>
+                String(typeof item === 'string' ? item : (item.location || item.delivery_location || '')).trim()
+            ).filter(Boolean);
+            state.savedDeliveryLocationsCache = { loadedAt: Date.now(), rows: locations };
+        } catch (error) {
+            console.warn('[Fuel Sales] Saved delivery locations unavailable:', error.message || error);
+        }
+    }
+
+    if (!isCurrentFuelForm(openToken)) return;
+    const locationInput = document.querySelector('[data-key="delivery_location"]');
+    const currentLocation = String(
+        field(row, ['delivery_location','location']) ||
+        locationInput?.value ||
+        ''
+    ).trim();
+    const suggestions = Array.from(new Set([
+        ...locations,
+        ...(currentLocation ? [currentLocation] : [])
+    ]));
+    datalist.innerHTML = suggestions
+        .map(location => '<option value="' + esc(location) + '"></option>')
+        .join('');
 }
 
 async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
@@ -2909,18 +2930,7 @@ async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
     const cashNameEl = document.querySelector('[data-key="cash_customer_name"]');
     if (cashNameEl) cashNameEl.value = String(field(row,['cash_customer_name','cash_customer_display_name']) || '');
 
-    const locationList = document.getElementById('savedDeliveryLocations');
     const locationInput = document.querySelector('[data-key="delivery_location"]');
-    if (locationList) {
-        const currentLocation = String(field(row,['delivery_location','location']) || '').trim();
-        const savedLocations = Array.from(new Set([
-            ...(lookups.deliveryLocations || []),
-            ...(currentLocation ? [currentLocation] : [])
-        ]));
-        locationList.innerHTML = savedLocations
-            .map(location => '<option value="' + esc(location) + '"></option>')
-            .join('');
-    }
     if (locationInput && row) {
         locationInput.value = String(field(row,['delivery_location','location']) || '');
     }
@@ -2987,6 +2997,12 @@ async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
 
     bindFuelCalculation(!row);
     updateDeliveryFeeDisplay();
+
+    window.setTimeout(() => {
+        if (isCurrentFuelForm(openToken)) {
+            loadSavedDeliveryLocationSuggestions(openToken, row);
+        }
+    }, 0);
 
     // Promotions do not need to block the initial form paint or field interaction.
     window.setTimeout(() => {
