@@ -631,7 +631,12 @@ class MainActivity : AppCompatActivity() {
         appInForeground = false
         // Persist the monotonic start time in encrypted preferences. This survives
         // Activity recreation while avoiding wall-clock changes and Activity-age timing.
-        if (!isChangingConfigurations && !isDatabaseBackupPickerActive &&
+        val shouldStartBackgroundClock = BackgroundReauthenticationPolicy.shouldRecordBackgroundTransition(
+            isChangingConfigurations = isChangingConfigurations,
+            isExternalPickerActive = isDatabaseBackupPickerActive,
+            hasOtherStartedActivity = MyApplication.hasOtherStartedActivity(this)
+        )
+        if (shouldStartBackgroundClock &&
             sharedPrefs.getLong(KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME, -1L) < 0L
         ) {
             sharedPrefs.edit()
