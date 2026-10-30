@@ -737,8 +737,9 @@ object DeliveryFeeAccounting {
                     "COALESCE(NULLIF(customer_party_id,0),customer_id,0)"
                 "customer_party_id" in saleColumns -> "COALESCE(customer_party_id,0)"
                 "customer_id" in saleColumns -> "COALESCE(customer_id,0)"
-                else -> continue
+                else -> ""
             }
+            if (customerExpression.isBlank()) continue
 
             val predicates = mutableListOf(
                 "station_id=?",
@@ -758,8 +759,9 @@ object DeliveryFeeAccounting {
                     "order_type" in saleColumns -> "order_type"
                     "sale_type" in saleColumns -> "sale_type"
                     "transaction_type" in saleColumns -> "transaction_type"
-                    else -> continue
+                    else -> ""
                 }
+                if (typeColumn.isBlank()) continue
                 predicates += "LOWER(COALESCE(`$typeColumn`,'')) IN ('product','products')"
             }
 
