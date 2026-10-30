@@ -150,6 +150,26 @@
             padding: 20px 25px;
         }
 
+        .startup-status {
+            display: none;
+            margin: 0 0 16px;
+            padding: 11px 14px;
+            border: 1px solid #b8d9ec;
+            border-radius: 10px;
+            background: #edf7fc;
+            color: #24536b;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            text-align: center;
+        }
+
+        .startup-status.show { display: block; }
+        body.dark-mode .startup-status {
+            border-color: #3f6177;
+            background: #243c4c;
+            color: #d9edf8;
+        }
+
         .input-group {
             position: relative;
             margin-bottom: 20px;
@@ -1476,6 +1496,7 @@
 
         <div class="login-body">
             <div id="successMessage" class="success-message"></div>
+            <div id="startupStatus" class="startup-status" role="status" aria-live="polite"></div>
 
             <div id="attemptsCounter" class="attempts-counter">
                 <i class="fas fa-exclamation-triangle"></i>
@@ -2016,6 +2037,60 @@
             }
         }
 
+        let nativeStartupWaitPromise = null;
+        function waitForNativeStartup() {
+            if (!hasAndroidBridge() || typeof AndroidInterface.getStartupState !== 'function') {
+                return Promise.resolve('ready');
+            }
+            if (nativeStartupWaitPromise) return nativeStartupWaitPromise;
+
+            nativeStartupWaitPromise = (async function() {
+                const status = document.getElementById('startupStatus');
+                const deadline = Date.now() + 180000;
+                while (Date.now() < deadline) {
+                    let state = 'failed';
+                    try { state = String(AndroidInterface.getStartupState() || 'initializing'); }
+                    catch (_) { state = 'initializing'; }
+
+                    if (state === 'ready') {
+                        if (status) status.classList.remove('show');
+                        return state;
+                    }
+                    if (state === 'setup_required' || state === 'protected') {
+                        if (status) {
+                            status.textContent = state === 'setup_required'
+                                ? 'يتم فتح شاشة إعداد المستخدم الأول…'
+                                : 'يتم استكمال التحقق الأمني…';
+                            status.classList.add('show');
+                        }
+                        return state;
+                    }
+                    if (state === 'failed') {
+                        let error = 'تعذر تجهيز قاعدة البيانات المحلية. أعد تشغيل التطبيق أو تحقق من مساحة التخزين.';
+                        try { error = String(AndroidInterface.getStartupError() || error); } catch (_) {}
+                        if (status) {
+                            status.textContent = error;
+                            status.classList.add('show');
+                        }
+                        return state;
+                    }
+
+                    if (status) {
+                        status.textContent = 'يتم تجهيز قاعدة البيانات المحلية لأول تشغيل. ستصبح شاشة الدخول متاحة تلقائياً…';
+                        status.classList.add('show');
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+
+                if (status) {
+                    status.textContent = 'استغرق تجهيز قاعدة البيانات وقتاً أطول من المعتاد. لا تغلق التطبيق؛ ستتم إعادة المحاولة تلقائياً عند إعادة فتحه.';
+                    status.classList.add('show');
+                }
+                return 'failed';
+            })();
+            return nativeStartupWaitPromise;
+        }
+
         function logToAndroid(action, details) {
             try {
                 if (hasAndroidBridge() && typeof AndroidInterface.logFromJS === 'function') {
@@ -2073,6 +2148,15 @@
                 if (!hasAndroidBridge()) {
                     debugError("API_CALL_FAILED", { action: action, reason: "AndroidInterface not available" });
                     return { success: false, error: 'AndroidBridge not available' };
+                }
+
+                const startupState = await waitForNativeStartup();
+                if (startupState !== 'ready') {
+                    return {
+                        success: false,
+                        startupRedirect: startupState === 'setup_required' || startupState === 'protected',
+                        error: startupState === 'failed' ? 'تعذر تهيئة قاعدة البيانات' : 'يتم فتح شاشة بدء التشغيل المطلوبة'
+                    };
                 }
 
                 // Map actions to method names
@@ -2441,6 +2525,7 @@
         // ============================================================
         document.addEventListener('DOMContentLoaded', async function() {
             debugInfo("DOM_LOADED", { timestamp: Date.now() });
+            void waitForNativeStartup();
             // عناصر DOM
             const loginForm = document.getElementById('loginForm');
             const usernameInput = document.getElementById('username');
@@ -2775,6 +2860,9 @@
                         setTimeout(() => {
                             window.location.replace('../main.html');
                         }, 1000);
+                    } else if (result.startupRedirect) {
+                        debugInfo("LOGIN_DEFERRED_FOR_STARTUP_ROUTE", {});
+                        return;
                     } else {
                         const attemptCount = incrementLoginAttempt(username);
                         showError(result.error || 'اسم المستخدم أو كلمة المرور غير صحيحة', 'usernameError');

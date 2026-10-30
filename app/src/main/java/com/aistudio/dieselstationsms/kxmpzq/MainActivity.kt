@@ -243,6 +243,12 @@ class MainActivity : AppCompatActivity() {
     }
     private var geminiApiKey: String = ""
     private var serverReady = false
+    @Volatile private var startupDatabaseReady = false
+    @Volatile private var startupSetupRequired = false
+    @Volatile private var startupUiState = "initializing"
+    @Volatile private var startupErrorMessage = ""
+    private var startupExpectedAsset = "login.html"
+    private var startupPermissionsRequested = false
     private val isDestroyed = AtomicBoolean(false)
     private val handler = Handler(Looper.getMainLooper())
     private var isWebViewInitialized = false
@@ -269,7 +275,7 @@ class MainActivity : AppCompatActivity() {
     private val securityIdleRunnable = object : Runnable {
         override fun run() {
             if (isDestroyed.get()) return
-            if (::dbHelper.isInitialized && hasWindowFocus() && !securityPromptActive &&
+            if (startupDatabaseReady && hasWindowFocus() && !securityPromptActive &&
                 !currentAuthToken.isNullOrBlank()
             ) {
                 val timeoutMinutes = securitySettingValue("autoLogoutMinutes").toIntOrNull()?.coerceIn(0, 1440) ?: 0
@@ -334,17 +340,6 @@ class MainActivity : AppCompatActivity() {
 
         try {
             dbHelper = DatabaseHelper.getInstance(applicationContext)
-            DebtDueDateRepository.ensureSchema(dbHelper)
-            migrateLegacySecuritySettings(dbHelper)
-            clearSessionAfterDeviceRebootIfNeeded(dbHelper)
-            applySecurityRuntimeSettings()
-            // When the user explicitly closed the app, login.html performs the single
-            // Remember-Me biometric flow. Do not launch a second native lock prompt.
-            if (!sharedPrefs.getBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, false) &&
-                !currentAuthToken.isNullOrBlank() && requiresSecurityReauthentication()
-            ) {
-                securityLockPending = true
-            }
             smsServiceLauncher = SmsServiceLauncher(
                 applicationContext,
                 ServiceStatusRepository(applicationContext)
@@ -353,7 +348,9 @@ class MainActivity : AppCompatActivity() {
             DebugLogger.info("Database", "DatabaseHelper initialized")
         } catch (e: Exception) {
             DebugLogger.logException("Database", e)
-            Toast.makeText(this, "فشل تهيئة قاعدة البيانات", Toast.LENGTH_LONG).show()
+            startupErrorMessage = e.message ?: "تعذر تجهيز قاعدة البيانات"
+            startupUiState = "failed"
+            Toast.makeText(this, "تعذر بدء التطبيق", Toast.LENGTH_LONG).show()
             finish()
             return
         }
@@ -383,8 +380,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        requestAllPermissions()
-
         // Keep the interactive WebView on Android's viewport-optimized drawing path.
         // Invoice capture measures and lays out its dedicated renderer explicitly before drawing.
 
@@ -398,20 +393,87 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        handler.post {
-            if (!isDestroyed.get()) {
-                loadWebViewFromAssets()
-            }
-        }
-
         lifecycleScope.launch {
-            initializeSystem()
+            if (initializeStartupDatabase()) {
+                initializeSystem()
+            }
         }
 
         scheduleBackgroundTasks()
         TaskNotificationManager.reschedulePendingTasksAsync(applicationContext)
 
         DebugLogger.info("MainActivity", "onCreate finished")
+    }
+
+    private data class StartupPreparation(
+        val setupRequired: Boolean,
+        val securityLockPending: Boolean,
+        val developerModeEnabled: Boolean
+    )
+
+    /**
+     * Opening/upgrading SQLite can create many tables and indexes. Keep that work off
+     * the UI thread so the bundled login screen can render immediately on cold start.
+     */
+    private suspend fun initializeStartupDatabase(): Boolean {
+        val startedAt = android.os.SystemClock.elapsedRealtime()
+        return try {
+            val preparation = withContext(Dispatchers.IO) {
+                DebtDueDateRepository.ensureSchema(dbHelper)
+                migrateLegacySecuritySettings(dbHelper)
+                clearSessionAfterDeviceRebootIfNeeded(dbHelper)
+
+                val setupRequired = querySystemSetupRequired()
+                val lockPending = !sharedPrefs.getBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, false) &&
+                    !currentAuthToken.isNullOrBlank() && requiresSecurityReauthentication()
+                val developerModeEnabled = dbHelper.getSetting("developerMode").trim().lowercase(Locale.ROOT) in
+                    setOf("1", "true", "yes", "on")
+                StartupPreparation(setupRequired, lockPending, developerModeEnabled)
+            }
+
+            withContext(Dispatchers.Main) {
+                startupSetupRequired = preparation.setupRequired
+                securityLockPending = preparation.securityLockPending
+                startupDatabaseReady = true
+                startupErrorMessage = ""
+                DebugLogger.setDeveloperModeEnabled(preparation.developerModeEnabled)
+                startupExpectedAsset = initialEntryAsset()
+                startupUiState = if (startupExpectedAsset == "login.html") "ready" else "redirecting"
+
+                if (startupExpectedAsset == "main.html" && securityLockPending) {
+                    webView?.visibility = View.INVISIBLE
+                }
+                if (startupExpectedAsset != "login.html") {
+                    loadWebViewFromAssets()
+                } else if (webView?.url?.substringBefore('?')?.substringBefore('#')
+                        ?.endsWith("/login.html") == true
+                ) {
+                    applySecurityRuntimeSettings()
+                }
+                if (startupExpectedAsset == "login.html") {
+                    startupUiState = "ready"
+                }
+                scheduleStartupPermissionsRequest()
+                handler.removeCallbacks(securityIdleRunnable)
+                handler.postDelayed(securityIdleRunnable, 5_000L)
+            }
+
+            DebugLogger.info(
+                "Startup",
+                "SQLite startup preparation completed in ${android.os.SystemClock.elapsedRealtime() - startedAt}ms; " +
+                    "entry=$startupExpectedAsset"
+            )
+            true
+        } catch (e: Exception) {
+            DebugLogger.logException("StartupDatabase", e)
+            withContext(Dispatchers.Main) {
+                startupDatabaseReady = false
+                startupErrorMessage = e.message?.takeIf { it.isNotBlank() } ?: "تعذر تجهيز قاعدة البيانات المحلية"
+                startupUiState = "failed"
+                webView?.evaluateJavascript("window.onAppStartupFailed && window.onAppStartupFailed()", null)
+            }
+            false
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -457,7 +519,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::dbHelper.isInitialized) {
+        if (startupDatabaseReady) {
             applySecurityRuntimeSettings(target = null)
             val timeoutMinutes = securitySettingValue("autoLogoutMinutes").toIntOrNull()?.coerceIn(0, 1440) ?: 0
             if (timeoutMinutes > 0 && !currentAuthToken.isNullOrBlank() &&
@@ -505,7 +567,7 @@ class MainActivity : AppCompatActivity() {
         if (!pageOwnsAuthentication &&
             !isChangingConfigurations && !isDatabaseBackupPickerActive &&
             !securityPromptActive && !currentAuthToken.isNullOrBlank() &&
-            ::dbHelper.isInitialized && requiresSecurityReauthentication()
+            startupDatabaseReady && requiresSecurityReauthentication()
         ) {
             securityLockPending = true
             webView?.visibility = View.INVISIBLE
@@ -532,7 +594,7 @@ class MainActivity : AppCompatActivity() {
             biometricPrompt?.cancelAuthentication()
             biometricPrompt = null
             securityPromptActive = false
-            if (!currentAuthToken.isNullOrBlank() && ::dbHelper.isInitialized && requiresSecurityReauthentication()) {
+            if (!currentAuthToken.isNullOrBlank() && startupDatabaseReady && requiresSecurityReauthentication()) {
                 securityLockPending = true
                 webView?.visibility = View.INVISIBLE
             }
@@ -1296,6 +1358,14 @@ class MainActivity : AppCompatActivity() {
         if (!::sharedPrefs.isInitialized || sharedPrefs.getBoolean(KEY_SYSTEM_SETUP_COMPLETED, false)) {
             return false
         }
+        return startupDatabaseReady && startupSetupRequired
+    }
+
+    /** Called only from the startup IO dispatcher after the database schema is ready. */
+    private fun querySystemSetupRequired(): Boolean {
+        if (!::sharedPrefs.isInitialized || sharedPrefs.getBoolean(KEY_SYSTEM_SETUP_COMPLETED, false)) {
+            return false
+        }
         return try {
             val realUserCount = dbHelper.readableDatabase.rawQuery(
                 """
@@ -1316,6 +1386,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initialEntryAsset(): String {
+        if (!startupDatabaseReady) return "login.html"
         if (shouldOpenSystemSetupScreen()) return "first-user-setup.html"
 
         // Explicit close requests a fresh biometric/password login on the next launch.
@@ -1330,6 +1401,44 @@ class MainActivity : AppCompatActivity() {
             "login.html"
         }
     }
+
+    private fun updateStartupRouteAfterPageFinished(url: String?) {
+        if (!startupDatabaseReady || url.isNullOrBlank()) return
+        val page = url.substringBefore('?').substringBefore('#').substringAfterLast('/')
+        val completedSetupLogin = page == "login.html" && !shouldOpenSystemSetupScreen()
+        if (page != startupExpectedAsset && !completedSetupLogin) return
+        if (completedSetupLogin) startupExpectedAsset = "login.html"
+
+        startupUiState = when (page) {
+            "login.html" -> if (shouldOpenSystemSetupScreen()) "redirecting" else "ready"
+            "first-user-setup.html" -> if (shouldOpenSystemSetupScreen()) "setup_required" else "ready"
+            "main.html" -> "protected"
+            else -> startupUiState
+        }
+
+        if (page == "login.html" && shouldOpenSystemSetupScreen()) {
+            startupExpectedAsset = "first-user-setup.html"
+            startupUiState = "redirecting"
+            webView?.post { webView?.loadUrl(entryAssetUrl(startupExpectedAsset)) }
+        } else if (page == "main.html" && securityLockPending && !currentAuthToken.isNullOrBlank()) {
+            webView?.visibility = View.INVISIBLE
+            handler.post { requestSecurityReauthentication() }
+        }
+    }
+
+    private fun scheduleStartupPermissionsRequest() {
+        if (startupPermissionsRequested || !startupDatabaseReady || !serverReady ||
+            startupUiState == "initializing" || startupUiState == "redirecting"
+        ) return
+        startupPermissionsRequested = true
+        handler.postDelayed({
+            if (!isDestroyed.get()) requestAllPermissions()
+        }, 1_200L)
+    }
+
+    private fun startupStateForBridge(): String = startupUiState
+
+    private fun startupErrorForBridge(): String = startupErrorMessage
 
     private fun entryAssetUrl(entryAsset: String): String =
         if (entryAsset == "main.html") {
@@ -1346,6 +1455,8 @@ class MainActivity : AppCompatActivity() {
             if (wv.isAttachedToWindow) {
                 val entryAsset = initialEntryAsset()
                 val entryUrl = entryAssetUrl(entryAsset)
+                val currentUrl = wv.url?.substringBefore('?')?.substringBefore('#')
+                if (currentUrl == entryUrl) return
                 DebugLogger.info("WebView", "Loading $entryUrl")
                 wv.loadUrl(entryUrl)
             } else {
@@ -1911,6 +2022,15 @@ class MainActivity : AppCompatActivity() {
 
                     DebugLogger.attachWebView(wv)
 
+                    // setContent may be scheduled before Compose has created this view.
+                    // Start the initial asset from the attached WebView rather than relying
+                    // on a one-shot Activity post that can run while webView is still null.
+                    wv.post {
+                        if (!isDestroyed.get() && this@MainActivity.webView === wv) {
+                            loadWebViewFromAssets()
+                        }
+                    }
+
                     val instanceId = ++webViewInstanceId
                     DebugLogger.info("WebView", "CREATED instance=$instanceId hash=${wv.hashCode()}")
                 }
@@ -2212,7 +2332,9 @@ class MainActivity : AppCompatActivity() {
                 if (!url.isNullOrBlank() && url.startsWith("file:///android_asset/")) {
                     lastKnownAssetUrl = url
                 }
-                if (url?.substringBefore('?')?.substringBefore('#')?.endsWith("/login.html") == true && shouldOpenSystemSetupScreen()) {
+                if (url?.substringBefore('?')?.substringBefore('#')?.endsWith("/login.html") == true &&
+                    shouldOpenSystemSetupScreen() && startupExpectedAsset != "first-user-setup.html"
+                ) {
                     view?.post {
                         if (!isDestroyed.get()) {
                             view.loadUrl("file:///android_asset/screens/first-user-setup.html")
@@ -2227,7 +2349,11 @@ class MainActivity : AppCompatActivity() {
                 serverReady = true
                 isErrorPageShown = false
                 DebugLogger.info("WebView", "PAGE_FINISHED: $url")
-                applySecurityRuntimeSettings(view)
+                if (startupDatabaseReady) {
+                    updateStartupRouteAfterPageFinished(url)
+                    applySecurityRuntimeSettings(view)
+                    scheduleStartupPermissionsRequest()
+                }
                 normalizeOfflineFirstUi(view)
                 if (url?.endsWith("/main.html") == true || url?.endsWith("main.html") == true) {
                     val taskId = pendingNotificationTaskId
@@ -2559,16 +2685,8 @@ class MainActivity : AppCompatActivity() {
         private val activityRef = WeakReference(activity)
 
         init {
-            // Restore developer diagnostics from the persisted setting on every WebView startup.
-            val enabled = runCatching {
-                when (DatabaseHelper.getInstance(context.applicationContext)
-                    .getSetting("developerMode").trim().lowercase(Locale.ROOT)) {
-                    "1", "true", "yes", "on" -> true
-                    "0", "false", "no", "off" -> false
-                    else -> false
-                }
-            }.getOrDefault(false)
-            DebugLogger.setDeveloperModeEnabled(enabled)
+            // The persisted setting is restored after SQLite is prepared on Dispatchers.IO.
+            DebugLogger.setDeveloperModeEnabled(this@MainActivity.isDebugMode)
         }
 
         /**
@@ -2613,6 +2731,12 @@ class MainActivity : AppCompatActivity() {
         private fun getDbHelper(): DatabaseHelper? = dbHelperRef.get()
         private fun getGeminiHelper(): GeminiAIHelper? = geminiHelperRef.get()
         private fun getActivity(): MainActivity? = activityRef.get()
+
+        @JavascriptInterface
+        fun getStartupState(): String = getActivity()?.startupStateForBridge() ?: "failed"
+
+        @JavascriptInterface
+        fun getStartupError(): String = getActivity()?.startupErrorForBridge() ?: "تعذر الوصول إلى النشاط"
 
         /** Opens the real Google Maps SDK picker; no API key or map state is exposed to JavaScript. */
         @JavascriptInterface
