@@ -95,6 +95,8 @@ class MainActivity : AppCompatActivity() {
     private var pendingInvoiceFolderPhone: String = ""
     private var pendingInvoiceFolderAction: String = ""
     private var isDatabaseBackupPickerActive: Boolean = false
+    // Bundle restoration marks an Activity recreation (e.g. rotation), not a fresh launch.
+    private var isActivityRecreation: Boolean = false
 
     private fun currentDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
@@ -329,6 +331,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        isActivityRecreation = savedInstanceState != null
         captureNotificationIntent(intent)
 
         installGlobalExceptionHandler()
@@ -431,8 +434,20 @@ class MainActivity : AppCompatActivity() {
                 val loginRequiredOnLaunch = sharedPrefs.getBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, false)
                 val hasActiveSession = !currentAuthToken.isNullOrBlank()
                 val previouslyPending = sharedPrefs.getBoolean(KEY_SECURITY_REAUTH_PENDING, false)
-                val lockPending = !loginRequiredOnLaunch && hasActiveSession &&
-                    (previouslyPending || requiresSecurityReauthentication())
+                val backgroundedAt = sharedPrefs.getLong(KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME, -1L)
+                    .takeIf { it >= 0L }
+                val backgroundTimeoutReached = BackgroundReauthenticationPolicy.shouldRequireReauthentication(
+                    backgroundedAtElapsedRealtime = backgroundedAt,
+                    resumedAtElapsedRealtime = android.os.SystemClock.elapsedRealtime()
+                )
+                val lockPending = BackgroundReauthenticationPolicy.shouldLockOnStartup(
+                    hasActiveSession = hasActiveSession,
+                    loginRequiredOnLaunch = loginRequiredOnLaunch,
+                    previouslyPending = previouslyPending,
+                    isActivityRecreation = isActivityRecreation,
+                    backgroundTimeoutReached = backgroundTimeoutReached,
+                    securityReauthenticationEnabled = requiresSecurityReauthentication()
+                )
                 // Consume an elapsed-realtime background marker only after startup security
                 // settings and the current session have both been read successfully.
                 sharedPrefs.edit()
