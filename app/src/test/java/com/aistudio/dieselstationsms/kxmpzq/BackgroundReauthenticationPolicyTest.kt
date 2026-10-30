@@ -166,6 +166,42 @@ class BackgroundReauthenticationPolicyTest {
     }
 
     @Test
+    fun internalActivityTransitionsAndConfigurationChangesDoNotStartBackgroundClock() {
+        assertFalse(
+            BackgroundReauthenticationPolicy.shouldRecordBackgroundTransition(
+                isChangingConfigurations = false,
+                isExternalPickerActive = false,
+                hasOtherStartedActivity = true
+            )
+        )
+        assertFalse(
+            BackgroundReauthenticationPolicy.shouldRecordBackgroundTransition(
+                isChangingConfigurations = true,
+                isExternalPickerActive = false,
+                hasOtherStartedActivity = false
+            )
+        )
+        assertFalse(
+            BackgroundReauthenticationPolicy.shouldRecordBackgroundTransition(
+                isChangingConfigurations = false,
+                isExternalPickerActive = true,
+                hasOtherStartedActivity = false
+            )
+        )
+    }
+
+    @Test
+    fun realAppBackgroundStartsClockWhenNoOtherActivitiesRemain() {
+        assertTrue(
+            BackgroundReauthenticationPolicy.shouldRecordBackgroundTransition(
+                isChangingConfigurations = false,
+                isExternalPickerActive = false,
+                hasOtherStartedActivity = false
+            )
+        )
+    }
+
+    @Test
     fun explicitLogoutOrMissingSessionStillRoutesToLogin() {
         assertFalse(
             BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
