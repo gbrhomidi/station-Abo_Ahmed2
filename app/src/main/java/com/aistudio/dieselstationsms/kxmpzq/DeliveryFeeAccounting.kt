@@ -720,40 +720,80 @@ object DeliveryFeeAccounting {
         }
     }
 
-    fun recentFuelSaleCustomerIds(helper: DatabaseHelper, stationId: Int): JSONArray {
+    fun recentCustomerSaleIds(helper: DatabaseHelper, stationId: Int): JSONArray {
         require(stationId > 0) { "معرف المحطة غير صالح" }
         val db = helper.readableDatabase
-        if (!tableExists(db, "fuel_sales")) return JSONArray()
-        val saleColumns = columns(db, "fuel_sales")
-        if (!setOf("id", "station_id").all { it in saleColumns }) return JSONArray()
+        val selects = mutableListOf<String>()
+        val arguments = mutableListOf<String>()
 
-        val customerExpression = when {
-            "customer_party_id" in saleColumns && "customer_id" in saleColumns ->
-                "COALESCE(NULLIF(customer_party_id,0),customer_id,0)"
-            "customer_party_id" in saleColumns -> "COALESCE(customer_party_id,0)"
-            "customer_id" in saleColumns -> "COALESCE(customer_id,0)"
-            else -> return JSONArray()
-        }
-        val timeParts = mutableListOf<String>()
-        if ("transaction_time" in saleColumns) timeParts += "COALESCE(transaction_time,'')"
-        if ("sale_date" in saleColumns) timeParts += "COALESCE(sale_date,'')"
-        if ("sale_time" in saleColumns) timeParts += "COALESCE(sale_time,'')"
-        if ("created_at" in saleColumns) timeParts += "COALESCE(created_at,'')"
-        val sortExpression = if (timeParts.isEmpty()) "CAST(id AS TEXT)" else timeParts.joinToString(" || ' ' || ")
-        val predicates = mutableListOf(
-            "station_id=?",
-            "$customerExpression>0"
-        )
-        if ("is_deleted" in saleColumns) predicates += "COALESCE(CAST(is_deleted AS INTEGER),0)=0"
-        if ("deleted_at" in saleColumns) {
-            predicates += "(deleted_at IS NULL OR TRIM(CAST(deleted_at AS TEXT))='')"
+        // Fuel sales and product invoices both feed the delivery customer picker.
+        for (table in listOf("fuel_sales", "sales_transactions")) {
+            if (!tableExists(db, table)) continue
+            val saleColumns = columns(db, table)
+            if (!setOf("id", "station_id").all { it in saleColumns }) continue
+
+            val customerExpression = when {
+                "customer_party_id" in saleColumns && "customer_id" in saleColumns ->
+                    "COALESCE(NULLIF(customer_party_id,0),customer_id,0)"
+                "customer_party_id" in saleColumns -> "COALESCE(customer_party_id,0)"
+                "customer_id" in saleColumns -> "COALESCE(customer_id,0)"
+                else -> continue
+            }
+
+            val predicates = mutableListOf(
+                "station_id=?",
+                "$customerExpression>0"
+            )
+            if ("is_deleted" in saleColumns) {
+                predicates += "COALESCE(CAST(is_deleted AS INTEGER),0)=0"
+            }
+            if ("deleted_at" in saleColumns) {
+                predicates += "(deleted_at IS NULL OR TRIM(CAST(deleted_at AS TEXT))='')"
+            }
+
+            // sales_transactions stores product invoices; exclude other transaction kinds
+            // because fuel sales are represented separately in fuel_sales.
+            if (table == "sales_transactions") {
+                val typeColumn = when {
+                    "order_type" in saleColumns -> "order_type"
+                    "sale_type" in saleColumns -> "sale_type"
+                    "transaction_type" in saleColumns -> "transaction_type"
+                    else -> continue
+                }
+                predicates += "LOWER(COALESCE(`$typeColumn`,'')) IN ('product','products')"
+            }
+
+            val timeExpressions = mutableListOf<String>()
+            if ("transaction_time" in saleColumns) {
+                timeExpressions += "NULLIF(TRIM(CAST(transaction_time AS TEXT)),'')"
+            }
+            if ("sale_date" in saleColumns && "sale_time" in saleColumns) {
+                timeExpressions += "NULLIF(TRIM(CAST(sale_date AS TEXT)),'') || ' ' || COALESCE(CAST(sale_time AS TEXT),'')"
+            } else if ("sale_date" in saleColumns) {
+                timeExpressions += "NULLIF(TRIM(CAST(sale_date AS TEXT)),'')"
+            }
+            if ("transaction_date" in saleColumns) {
+                timeExpressions += "NULLIF(TRIM(CAST(transaction_date AS TEXT)),'')"
+            }
+            if ("created_at" in saleColumns) {
+                timeExpressions += "NULLIF(TRIM(CAST(created_at AS TEXT)),'')"
+            }
+            val timeExpression = if (timeExpressions.isEmpty()) {
+                "CAST(id AS TEXT)"
+            } else {
+                "COALESCE(${timeExpressions.joinToString(",")},CAST(id AS TEXT))"
+            }
+
+            selects += "SELECT $customerExpression AS party_id, $timeExpression AS sale_at, " +
+                "id AS source_sale_id FROM `$table` WHERE ${predicates.joinToString(" AND ")}"
+            arguments += stationId.toString()
         }
 
-        val sql = "SELECT $customerExpression AS party_id, MAX($sortExpression) AS last_sale, " +
-            "MAX(id) AS latest_sale_id FROM fuel_sales WHERE ${predicates.joinToString(" AND ")} " +
-            "GROUP BY party_id ORDER BY last_sale DESC, latest_sale_id DESC"
+        if (selects.isEmpty()) return JSONArray()
+        val sql = "SELECT party_id FROM (${selects.joinToString(" UNION ALL ")}) " +
+            "GROUP BY party_id ORDER BY MAX(sale_at) DESC, MAX(source_sale_id) DESC"
         return JSONArray().also { ids ->
-            db.rawQuery(sql, arrayOf(stationId.toString())).use { cursor ->
+            db.rawQuery(sql, arguments.toTypedArray()).use { cursor ->
                 while (cursor.moveToNext()) {
                     val partyId = cursor.getLong(0)
                     if (partyId > 0L) ids.put(partyId)
