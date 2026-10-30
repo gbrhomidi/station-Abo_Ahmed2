@@ -678,12 +678,13 @@ object DeliveryFeeAccounting {
         val predicates = mutableListOf("CAST($customerExpression AS INTEGER)=CAST(? AS INTEGER)")
         val arguments = mutableListOf(partyId.toString())
         val fromClause = if (joinParentSale) {
-            predicates += "st.station_id=CAST(? AS INTEGER)"
+            // Keep the indexed invoice station column bare so SQLite can use its station indexes.
+            predicates += "st.station_id=?"
             arguments += stationId.toString()
             if ("station_id" in saleColumns) {
-                // A duplicated child station scope must not contradict its owning invoice.
-                predicates += "CAST(COALESCE(NULLIF(CAST(fs.station_id AS INTEGER),0),CAST(st.station_id AS INTEGER)) AS INTEGER)=CAST(? AS INTEGER)"
-                arguments += stationId.toString()
+                // The invoice is authoritative; a populated child station must agree with it.
+                // NULL/0 are tolerated only as legacy "not recorded" values.
+                predicates += "(fs.station_id IS NULL OR fs.station_id=0 OR fs.station_id=st.station_id)"
             }
             "fuel_sales fs INNER JOIN sales_transactions st ON st.id=fs.sale_id"
         } else {
@@ -833,19 +834,39 @@ object DeliveryFeeAccounting {
                 Log.w(DELIVERY_LOOKUP_TAG, "savedDeliveryLocations: skipping missing table '$table'")
                 continue
             }
+
             val tableColumns = columns(db, table)
-            if ("station_id" !in tableColumns) {
+            val joinDeliveryInvoice = table == "deliveries"
+            val joinFuelInvoice = table == "fuel_sales" && "sale_id" in tableColumns
+            var parentColumns = emptySet<String>()
+
+            // deliveries has no station_id in the canonical schema. Never read it unscoped:
+            // its owning sales_transactions invoice is the sole station authority.
+            if (joinDeliveryInvoice) {
+                if ("sale_id" !in tableColumns) {
+                    Log.w(DELIVERY_LOOKUP_TAG, "savedDeliveryLocations: skipping deliveries; sale_id is missing")
+                    continue
+                }
+                if (!tableExists(db, "sales_transactions")) {
+                    Log.w(DELIVERY_LOOKUP_TAG, "savedDeliveryLocations: skipping deliveries; original invoice table sales_transactions is missing")
+                    continue
+                }
+                parentColumns = columns(db, "sales_transactions")
+                if (!setOf("id", "station_id").all { it in parentColumns }) {
+                    Log.w(DELIVERY_LOOKUP_TAG, "savedDeliveryLocations: skipping deliveries; original invoice lacks id/station_id required for station isolation")
+                    continue
+                }
+            } else if ("station_id" !in tableColumns) {
                 Log.w(DELIVERY_LOOKUP_TAG, "savedDeliveryLocations: skipping '$table'; required column station_id is missing")
                 continue
             }
+
             val locationColumns = listOf("delivery_location", "location").filter { it in tableColumns }
             if (locationColumns.isEmpty()) {
                 Log.w(DELIVERY_LOOKUP_TAG, "savedDeliveryLocations: skipping '$table'; neither delivery_location nor location exists")
                 continue
             }
 
-            var parentColumns = emptySet<String>()
-            val joinFuelInvoice = table == "fuel_sales" && "sale_id" in tableColumns
             if (joinFuelInvoice) {
                 if (!tableExists(db, "sales_transactions")) {
                     Log.w(DELIVERY_LOOKUP_TAG, "savedDeliveryLocations: skipping fuel_sales; original invoice table sales_transactions is missing")
@@ -860,19 +881,41 @@ object DeliveryFeeAccounting {
 
             for (locationColumn in locationColumns) {
                 val predicates = mutableListOf<String>()
-                val from = if (joinFuelInvoice) {
-                    predicates += "st.station_id=?"
-                    // A child row may not claim a different station from its owning invoice.
-                    predicates += "(fs.station_id IS NULL OR fs.station_id=0 OR fs.station_id=st.station_id)"
-                    appendSaleValidityPredicates(predicates, "fs", tableColumns)
-                    appendSaleValidityPredicates(predicates, "st", parentColumns)
-                    "fuel_sales fs INNER JOIN sales_transactions st ON st.id=fs.sale_id"
-                } else {
-                    predicates += "src.station_id=CAST(? AS INTEGER)"
-                    appendSaleValidityPredicates(predicates, "src", tableColumns)
-                    "`$table` src"
+                val from: String
+                val alias: String
+
+                when {
+                    joinDeliveryInvoice -> {
+                        // Scope by the original invoice, not delivery.party_id or an
+                        // invented deliveries.station_id. Reject contradictory legacy scope.
+                        predicates += "d.sale_id IS NOT NULL"
+                        predicates += "st.station_id=?"
+                        if ("station_id" in tableColumns) {
+                            predicates += "(d.station_id IS NULL OR d.station_id=0 OR d.station_id=st.station_id)"
+                        }
+                        appendSaleValidityPredicates(predicates, "d", tableColumns)
+                        appendSaleValidityPredicates(predicates, "st", parentColumns)
+                        from = "deliveries d INNER JOIN sales_transactions st ON st.id=d.sale_id"
+                        alias = "d"
+                    }
+                    joinFuelInvoice -> {
+                        predicates += "st.station_id=?"
+                        // A child row may not claim a different station from its owning invoice.
+                        predicates += "(fs.station_id IS NULL OR fs.station_id=0 OR fs.station_id=st.station_id)"
+                        appendSaleValidityPredicates(predicates, "fs", tableColumns)
+                        appendSaleValidityPredicates(predicates, "st", parentColumns)
+                        from = "fuel_sales fs INNER JOIN sales_transactions st ON st.id=fs.sale_id"
+                        alias = "fs"
+                    }
+                    else -> {
+                        // Bind the station value; do not wrap the indexed column in CAST().
+                        predicates += "src.station_id=?"
+                        appendSaleValidityPredicates(predicates, "src", tableColumns)
+                        from = "`$table` src"
+                        alias = "src"
+                    }
                 }
-                val alias = if (joinFuelInvoice) "fs" else "src"
+
                 predicates += "$alias.`$locationColumn` IS NOT NULL"
                 predicates += "TRIM(CAST($alias.`$locationColumn` AS TEXT))<>''"
                 selects += "SELECT TRIM(CAST($alias.`$locationColumn` AS TEXT)) AS location FROM $from WHERE ${predicates.joinToString(" AND ")}"
@@ -939,13 +982,13 @@ object DeliveryFeeAccounting {
                 "CAST($customerExpression AS INTEGER)>0"
             )
             val from = if (joinFuelInvoice) {
-                predicates += "CAST(st.station_id AS INTEGER)=CAST(? AS INTEGER)"
-                predicates += "(fs.station_id IS NULL OR CAST(fs.station_id AS INTEGER)=0 OR CAST(fs.station_id AS INTEGER)=CAST(st.station_id AS INTEGER))"
+                predicates += "st.station_id=?"
+                predicates += "(fs.station_id IS NULL OR fs.station_id=0 OR fs.station_id=st.station_id)"
                 appendSaleValidityPredicates(predicates, "fs", saleColumns)
                 appendSaleValidityPredicates(predicates, "st", parentColumns)
                 "fuel_sales fs INNER JOIN sales_transactions st ON st.id=fs.sale_id"
             } else {
-                predicates += "CAST(src.station_id AS INTEGER)=CAST(? AS INTEGER)"
+                predicates += "src.station_id=?"
                 appendSaleValidityPredicates(predicates, "src", saleColumns)
                 "`$table` src"
             }
