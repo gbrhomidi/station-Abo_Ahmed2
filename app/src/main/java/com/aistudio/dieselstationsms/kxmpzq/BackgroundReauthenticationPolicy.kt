@@ -41,4 +41,18 @@ internal object BackgroundReauthenticationPolicy {
             backgroundTimeoutReached ||
             (!isActivityRecreation && securityReauthenticationEnabled)
     }
+
+    /**
+     * A restored Activity with a valid active session must rebuild the protected app
+     * shell instead of routing through login.html (which may start Remember-Me auth).
+     * Explicit logout and invalid/missing sessions still use the normal login route.
+     */
+    fun shouldRestoreAuthenticatedShell(
+        hasActiveSession: Boolean,
+        loginRequiredOnLaunch: Boolean,
+        isActivityRecreation: Boolean,
+        securityLockPending: Boolean
+    ): Boolean =
+        hasActiveSession && !loginRequiredOnLaunch &&
+            (isActivityRecreation || securityLockPending)
 }
