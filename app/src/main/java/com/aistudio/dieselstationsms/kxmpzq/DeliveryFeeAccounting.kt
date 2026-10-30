@@ -712,7 +712,7 @@ object DeliveryFeeAccounting {
             for (statusColumn in listOf("status", "sale_status", "transaction_status")) {
                 if (statusColumn in tableColumns) {
                     predicates += "LOWER(TRIM(COALESCE(CAST($alias.$statusColumn AS TEXT),''))) " +
-                        "NOT IN ('deleted','cancelled','canceled','void','voided','invalid','reversed','rejected')"
+                        "NOT IN ('deleted','draft','cancelled','canceled','void','voided','invalid','refunded','reversed','rejected')"
                 }
             }
             for (timestampColumn in listOf("cancelled_at", "canceled_at", "voided_at", "invalidated_at", "reversed_at")) {

@@ -101,13 +101,15 @@ class LatestFuelSaleForCustomerRobolectricTest {
 
     @Test
     fun lookupNeverReturnsFuelSaleFromAnotherStation() {
-        val customer = insertCustomer("عميل محطة مختلفة")
+        val customer = insertCustomer("عميل له مبيعات في محطتين")
+        val expectedFuelSaleId = insertFuelSale(customer, stationId, "2026-10-29 12:00:00")
         val otherStationId = stationId + 100000
         insertFuelSale(customer, otherStationId, "2026-10-30 23:59:00")
 
         val result = DeliveryFeeAccounting.latestFuelSaleForCustomer(helper, customer, stationId)
 
-        assertFalse(result.getBoolean("found"))
+        assertTrue("Latest-sale lookup response: $result; ${saleLookupDiagnostics(customer)}", result.getBoolean("found"))
+        assertEquals(expectedFuelSaleId, result.getJSONObject("sale").getLong("fuel_sale_id"))
     }
 
     @Test
@@ -124,6 +126,29 @@ class LatestFuelSaleForCustomerRobolectricTest {
         assertEquals(expectedFuelSaleId, result.getJSONObject("sale").getLong("fuel_sale_id"))
     }
 
+
+    @Test
+    fun lookupExcludesDraftAndRefundedParentInvoices() {
+        val customer = insertCustomer("عميل فواتير غير مكتملة أو مسترجعة")
+        val expectedFuelSaleId = insertFuelSale(customer, stationId, "2026-10-27 10:00:00")
+        insertFuelSale(
+            customer,
+            stationId,
+            "2026-10-29 10:00:00",
+            parentStatusOverride = "refunded"
+        )
+        insertFuelSale(
+            customer,
+            stationId,
+            "2026-10-30 10:00:00",
+            parentStatusOverride = "draft"
+        )
+
+        val result = DeliveryFeeAccounting.latestFuelSaleForCustomer(helper, customer, stationId)
+
+        assertTrue("Latest-sale lookup response: $result; ${saleLookupDiagnostics(customer)}", result.getBoolean("found"))
+        assertEquals(expectedFuelSaleId, result.getJSONObject("sale").getLong("fuel_sale_id"))
+    }
 
     private fun saleLookupDiagnostics(customerId: Long): String {
         val childColumns = tableColumns("fuel_sales")
@@ -201,7 +226,8 @@ class LatestFuelSaleForCustomerRobolectricTest {
         quantity: Double = 25.0,
         childDeleted: Boolean = false,
         parentDeleted: Boolean = false,
-        parentInvalid: Boolean = false
+        parentInvalid: Boolean = false,
+        parentStatusOverride: String? = null
     ): Long {
         val token = UUID.randomUUID().toString()
         val parentValues = ContentValues()
@@ -225,7 +251,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
         putExisting("sales_transactions", parentValues, "paid_amount", quantity * 500.0)
         putExisting("sales_transactions", parentValues, "remaining_amount", 0.0)
         putExisting("sales_transactions", parentValues, "is_credit", 0)
-        putExisting("sales_transactions", parentValues, "status", if (parentInvalid) "cancelled" else "completed")
+        putExisting("sales_transactions", parentValues, "status", if (parentInvalid) "cancelled" else parentStatusOverride ?: "completed")
         for (flag in listOf("is_cancelled", "is_canceled", "is_void", "is_voided", "is_invalid", "is_reversed")) {
             val invalidFlag = flag == "is_void" || flag == "is_voided" || flag == "is_invalid"
             putExisting("sales_transactions", parentValues, flag, if (parentInvalid && invalidFlag) 1 else 0)
