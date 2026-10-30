@@ -2830,6 +2830,26 @@ async function getSaleFormLookupData() {
     return state.saleFormLookupPromise;
 }
 
+function rememberSavedDeliveryLocation(value) {
+    const location = String(value || '').trim();
+    if (!location) return;
+
+    const locations = new Set(state.savedDeliveryLocationsCache.rows || []);
+    locations.add(location);
+    const rows = Array.from(locations).sort((a, b) => a.localeCompare(b, 'ar'));
+    state.savedDeliveryLocationsCache = { loadedAt: Date.now(), rows };
+
+    if (state.saleFormLookupCache) {
+        state.saleFormLookupCache.deliveryLocations = rows;
+    }
+    const datalist = document.getElementById('savedDeliveryLocations');
+    if (datalist) {
+        datalist.innerHTML = rows
+            .map(item => '<option value="' + esc(item) + '"></option>')
+            .join('');
+    }
+}
+
 function isCurrentFuelForm(openToken) {
     return Number(openToken) === Number(state.formOpenSequence) &&
         Boolean($('formModal') && $('formModal').classList.contains('show'));
@@ -3252,6 +3272,7 @@ async function saveForm() {
         if (state.editing && CFG.updateMethod) {
             result = await invoke(CFG.updateMethod, [Number(idOf(state.editing)), JSON.stringify(payload)]);
             parse(result);
+            rememberSavedDeliveryLocation(payload.delivery_location);
             showAdvancedNotification('تم تحديث عملية البيع بنجاح', 'success', 'تم التحديث');
             closeModal(null, 'formModal');
             await reloadData();
@@ -3264,6 +3285,7 @@ async function saveForm() {
             state.lastSavedSaleId = saleId;
             state.pendingIdempotencyKey = null;
             state.lastSuccessfulSaleFingerprint = fingerprint;
+            rememberSavedDeliveryLocation(payload.delivery_location);
             if (deliveryFeeMode === 'deduct_from_sales') {
                 const savedQuantity = Number(saved.quantity);
                 const savedFuelAmount = Number(saved.total_amount);
