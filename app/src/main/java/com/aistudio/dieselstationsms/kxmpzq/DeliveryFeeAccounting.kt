@@ -3,6 +3,7 @@ package com.aistudio.dieselstationsms.kxmpzq
 import android.content.ContentValues
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
+import android.util.Log
 import com.aistudio.dieselstationsms.kxmpzq.sms.PumpMeterSmsRepository
 import org.json.JSONArray
 import org.json.JSONObject
@@ -677,7 +678,7 @@ object DeliveryFeeAccounting {
         val predicates = mutableListOf("CAST($customerExpression AS INTEGER)=CAST(? AS INTEGER)")
         val arguments = mutableListOf(partyId.toString())
         val fromClause = if (joinParentSale) {
-            predicates += "st.station_id=?"
+            predicates += "st.station_id=CAST(? AS INTEGER)"
             arguments += stationId.toString()
             if ("station_id" in saleColumns) {
                 // A duplicated child station scope must not contradict its owning invoice.
@@ -694,36 +695,8 @@ object DeliveryFeeAccounting {
             "fuel_sales fs"
         }
 
-        fun appendValidityPredicates(alias: String, tableColumns: Set<String>) {
-            if ("is_deleted" in tableColumns) {
-                predicates += "COALESCE(CAST($alias.is_deleted AS INTEGER),0)=0"
-            }
-            if ("deleted_at" in tableColumns) {
-                predicates += "($alias.deleted_at IS NULL OR TRIM(CAST($alias.deleted_at AS TEXT))='')"
-            }
-            for (flag in listOf("is_cancelled", "is_canceled", "is_void", "is_voided", "is_invalid", "is_reversed")) {
-                if (flag in tableColumns) {
-                    predicates += "COALESCE(CAST($alias.$flag AS INTEGER),0)=0"
-                }
-            }
-            if ("is_valid" in tableColumns) {
-                predicates += "COALESCE(CAST($alias.is_valid AS INTEGER),0)=1"
-            }
-            for (statusColumn in listOf("status", "sale_status", "transaction_status")) {
-                if (statusColumn in tableColumns) {
-                    predicates += "LOWER(TRIM(COALESCE(CAST($alias.$statusColumn AS TEXT),''))) " +
-                        "NOT IN ('deleted','draft','cancelled','canceled','void','voided','invalid','refunded','reversed','rejected')"
-                }
-            }
-            for (timestampColumn in listOf("cancelled_at", "canceled_at", "voided_at", "invalidated_at", "reversed_at")) {
-                if (timestampColumn in tableColumns) {
-                    predicates += "($alias.$timestampColumn IS NULL OR TRIM(CAST($alias.$timestampColumn AS TEXT))='')"
-                }
-            }
-        }
-
-        appendValidityPredicates("fs", saleColumns)
-        if (joinParentSale) appendValidityPredicates("st", parentColumns)
+        appendSaleValidityPredicates(predicates, "fs", saleColumns)
+        if (joinParentSale) appendSaleValidityPredicates(predicates, "st", parentColumns)
 
         fun timestampParts(alias: String, tableColumns: Set<String>): List<String> {
             val parts = mutableListOf<String>()
@@ -751,7 +724,7 @@ object DeliveryFeeAccounting {
         val ordering = if (orderingParts.isEmpty()) {
             "fs.id DESC"
         } else {
-            "COALESCE(${orderingParts.joinToString(",")},'') DESC, fs.id DESC"
+            "COALESCE(${orderingParts.joinToString(",") { "julianday($it)" }},0.0) DESC, fs.id DESC"
         }
 
         val sale = db.rawQuery(
@@ -776,85 +749,209 @@ object DeliveryFeeAccounting {
         return JSONObject().put("found", true).put("sale", sale)
     }
 
-    fun savedDeliveryLocations(helper: DatabaseHelper, stationId: Int): JSONArray {
-        require(stationId > 0) { "معرف المحطة غير صالح" }
-        // Read-only autocomplete lookup: never run a schema migration while opening the modal.
-        val db = helper.readableDatabase
-        val selects = mutableListOf<String>()
-        val arguments = mutableListOf<String>()
+    private data class ReadOnlyLookupQuery(
+        val sql: String,
+        val arguments: Array<String>
+    )
 
-        // Include every persisted source used by the fuel-sales and delivery workflows.
-        // Tables and column names are an explicit allowlist; only values are bound parameters.
-        for (table in listOf("fuel_sales", "sales_transactions", "deliveries")) {
-            if (!tableExists(db, table)) continue
-            val tableColumns = columns(db, table)
-            if ("station_id" !in tableColumns) continue
+    private const val DELIVERY_LOOKUP_TAG = "DeliveryFeeLookup"
 
-            for (locationColumn in listOf("delivery_location", "location")) {
-                if (locationColumn !in tableColumns) continue
-                val predicates = mutableListOf(
-                    "station_id=?",
-                    "`$locationColumn` IS NOT NULL",
-                    "TRIM(CAST(`$locationColumn` AS TEXT))<>''"
-                )
-                if ("is_deleted" in tableColumns) {
-                    predicates += "COALESCE(CAST(is_deleted AS INTEGER),0)=0"
-                }
-                if ("deleted_at" in tableColumns) {
-                    predicates += "(deleted_at IS NULL OR TRIM(CAST(deleted_at AS TEXT))='')"
-                }
-                selects += "SELECT TRIM(CAST(`$locationColumn` AS TEXT)) AS location " +
-                    "FROM `$table` WHERE ${predicates.joinToString(" AND ")}"
-                arguments += stationId.toString()
+    /**
+     * One validity contract for both location suggestions and recent-customer ranking.
+     * Only columns present in the current SQLite schema are referenced.
+     */
+    private fun appendSaleValidityPredicates(
+        predicates: MutableList<String>,
+        alias: String,
+        tableColumns: Set<String>
+    ) {
+        if ("is_deleted" in tableColumns) {
+            predicates += "COALESCE(CAST($alias.is_deleted AS INTEGER),0)=0"
+        }
+        if ("deleted_at" in tableColumns) {
+            predicates += "($alias.deleted_at IS NULL OR TRIM(CAST($alias.deleted_at AS TEXT))='')"
+        }
+        for (flag in listOf("is_cancelled", "is_canceled", "is_void", "is_voided", "is_invalid", "is_reversed")) {
+            if (flag in tableColumns) {
+                predicates += "COALESCE(CAST($alias.$flag AS INTEGER),0)=0"
             }
         }
-
-        if (selects.isEmpty()) return JSONArray()
-        val sql = selects.joinToString(" UNION ") + " ORDER BY location COLLATE NOCASE"
-        return JSONArray().also { locations ->
-            db.rawQuery(sql, arguments.toTypedArray()).use { cursor ->
-                while (cursor.moveToNext()) {
-                    val value = cursor.getString(0)?.trim().orEmpty()
-                    if (value.isNotEmpty()) locations.put(value)
-                }
+        if ("is_valid" in tableColumns) {
+            predicates += "COALESCE(CAST($alias.is_valid AS INTEGER),0)=1"
+        }
+        for (statusColumn in listOf("status", "sale_status", "transaction_status")) {
+            if (statusColumn in tableColumns) {
+                predicates += "LOWER(TRIM(COALESCE(CAST($alias.$statusColumn AS TEXT),''))) " +
+                    "NOT IN ('deleted','draft','cancelled','canceled','void','voided','invalid','refunded','reversed','rejected')"
+            }
+        }
+        for (timestampColumn in listOf("cancelled_at", "canceled_at", "voided_at", "invalidated_at", "reversed_at")) {
+            if (timestampColumn in tableColumns) {
+                predicates += "($alias.$timestampColumn IS NULL OR TRIM(CAST($alias.$timestampColumn AS TEXT))='')"
             }
         }
     }
 
-    fun recentCustomerSaleIds(helper: DatabaseHelper, stationId: Int): JSONArray {
-        require(stationId > 0) { "معرف المحطة غير صالح" }
-        val db = helper.readableDatabase
+    private fun customerIdExpression(alias: String, tableColumns: Set<String>): String? {
+        val parts = buildList {
+            if ("customer_party_id" in tableColumns) add("NULLIF($alias.customer_party_id,0)")
+            if ("customer_id" in tableColumns) add("NULLIF($alias.customer_id,0)")
+        }
+        return parts.takeIf { it.isNotEmpty() }?.let { "COALESCE(${it.joinToString(",")},0)" }
+    }
+
+    private fun saleTimestampExpressions(alias: String, tableColumns: Set<String>): List<String> {
+        val parts = mutableListOf<String>()
+        if ("transaction_time" in tableColumns) {
+            parts += "NULLIF(TRIM(CAST($alias.transaction_time AS TEXT)),'')"
+        }
+        if ("sale_date" in tableColumns && "sale_time" in tableColumns) {
+            val date = "NULLIF(TRIM(CAST($alias.sale_date AS TEXT)),'')"
+            val time = "NULLIF(TRIM(CAST($alias.sale_time AS TEXT)),'')"
+            parts += "CASE WHEN $date IS NULL THEN NULL WHEN $time IS NULL THEN $date ELSE $date || ' ' || $time END"
+        } else if ("sale_date" in tableColumns) {
+            parts += "NULLIF(TRIM(CAST($alias.sale_date AS TEXT)),'')"
+        }
+        if ("transaction_date" in tableColumns) {
+            parts += "NULLIF(TRIM(CAST($alias.transaction_date AS TEXT)),'')"
+        }
+        if ("created_at" in tableColumns) {
+            parts += "NULLIF(TRIM(CAST($alias.created_at AS TEXT)),'')"
+        }
+        return parts
+    }
+
+    private fun buildSavedDeliveryLocationsQuery(
+        db: SQLiteDatabase,
+        stationId: Int
+    ): ReadOnlyLookupQuery? {
         val selects = mutableListOf<String>()
         val arguments = mutableListOf<String>()
 
-        // Fuel sales and product invoices both feed the delivery customer picker.
+        for (table in listOf("fuel_sales", "sales_transactions", "deliveries")) {
+            if (!tableExists(db, table)) {
+                Log.w(DELIVERY_LOOKUP_TAG, "savedDeliveryLocations: skipping missing table '$table'")
+                continue
+            }
+            val tableColumns = columns(db, table)
+            if ("station_id" !in tableColumns) {
+                Log.w(DELIVERY_LOOKUP_TAG, "savedDeliveryLocations: skipping '$table'; required column station_id is missing")
+                continue
+            }
+            val locationColumns = listOf("delivery_location", "location").filter { it in tableColumns }
+            if (locationColumns.isEmpty()) {
+                Log.w(DELIVERY_LOOKUP_TAG, "savedDeliveryLocations: skipping '$table'; neither delivery_location nor location exists")
+                continue
+            }
+
+            var parentColumns = emptySet<String>()
+            val joinFuelInvoice = table == "fuel_sales" && "sale_id" in tableColumns
+            if (joinFuelInvoice) {
+                if (!tableExists(db, "sales_transactions")) {
+                    Log.w(DELIVERY_LOOKUP_TAG, "savedDeliveryLocations: skipping fuel_sales; original invoice table sales_transactions is missing")
+                    continue
+                }
+                parentColumns = columns(db, "sales_transactions")
+                if (!setOf("id", "station_id").all { it in parentColumns }) {
+                    Log.w(DELIVERY_LOOKUP_TAG, "savedDeliveryLocations: skipping fuel_sales; sales_transactions lacks id/station_id required to validate the original invoice")
+                    continue
+                }
+            }
+
+            for (locationColumn in locationColumns) {
+                val predicates = mutableListOf<String>()
+                val from = if (joinFuelInvoice) {
+                    predicates += "st.station_id=?"
+                    // A child row may not claim a different station from its owning invoice.
+                    predicates += "(fs.station_id IS NULL OR fs.station_id=0 OR fs.station_id=st.station_id)"
+                    appendSaleValidityPredicates(predicates, "fs", tableColumns)
+                    appendSaleValidityPredicates(predicates, "st", parentColumns)
+                    "fuel_sales fs INNER JOIN sales_transactions st ON st.id=fs.sale_id"
+                } else {
+                    predicates += "src.station_id=CAST(? AS INTEGER)"
+                    appendSaleValidityPredicates(predicates, "src", tableColumns)
+                    "`$table` src"
+                }
+                val alias = if (joinFuelInvoice) "fs" else "src"
+                predicates += "$alias.`$locationColumn` IS NOT NULL"
+                predicates += "TRIM(CAST($alias.`$locationColumn` AS TEXT))<>''"
+                selects += "SELECT TRIM(CAST($alias.`$locationColumn` AS TEXT)) AS location FROM $from WHERE ${predicates.joinToString(" AND ")}"
+                arguments += stationId.toString()
+            }
+        }
+
+        if (selects.isEmpty()) {
+            Log.w(DELIVERY_LOOKUP_TAG, "savedDeliveryLocations: no compatible station-scoped location source is available")
+            return null
+        }
+        return ReadOnlyLookupQuery(
+            sql = selects.joinToString(" UNION ALL ") + " ORDER BY location COLLATE NOCASE",
+            arguments = arguments.toTypedArray()
+        )
+    }
+
+    private fun buildRecentCustomerSaleIdsQuery(
+        db: SQLiteDatabase,
+        stationId: Int
+    ): ReadOnlyLookupQuery? {
+        val selects = mutableListOf<String>()
+        val arguments = mutableListOf<String>()
+
         for (table in listOf("fuel_sales", "sales_transactions")) {
-            if (!tableExists(db, table)) continue
+            if (!tableExists(db, table)) {
+                Log.w(DELIVERY_LOOKUP_TAG, "recentCustomerSaleIds: skipping missing table '$table'")
+                continue
+            }
             val saleColumns = columns(db, table)
-            if (!setOf("id", "station_id").all { it in saleColumns }) continue
+            if (!setOf("id", "station_id").all { it in saleColumns }) {
+                Log.w(DELIVERY_LOOKUP_TAG, "recentCustomerSaleIds: skipping '$table'; required id/station_id column is missing")
+                continue
+            }
 
+            val joinFuelInvoice = table == "fuel_sales" && "sale_id" in saleColumns
+            var parentColumns = emptySet<String>()
+            if (joinFuelInvoice) {
+                if (!tableExists(db, "sales_transactions")) {
+                    Log.w(DELIVERY_LOOKUP_TAG, "recentCustomerSaleIds: skipping fuel_sales; original invoice table sales_transactions is missing")
+                    continue
+                }
+                parentColumns = columns(db, "sales_transactions")
+                if (!setOf("id", "station_id").all { it in parentColumns }) {
+                    Log.w(DELIVERY_LOOKUP_TAG, "recentCustomerSaleIds: skipping fuel_sales; parent invoice cannot be station-validated (id/station_id missing)")
+                    continue
+                }
+            }
+
+            val childCustomer = customerIdExpression(if (joinFuelInvoice) "fs" else "src", saleColumns)
+            val parentCustomer = if (joinFuelInvoice) customerIdExpression("st", parentColumns) else null
             val customerExpression = when {
-                "customer_party_id" in saleColumns && "customer_id" in saleColumns ->
-                    "COALESCE(NULLIF(customer_party_id,0),customer_id,0)"
-                "customer_party_id" in saleColumns -> "COALESCE(customer_party_id,0)"
-                "customer_id" in saleColumns -> "COALESCE(customer_id,0)"
-                else -> ""
+                parentCustomer != null && childCustomer != null -> "COALESCE(NULLIF($parentCustomer,0),NULLIF($childCustomer,0),0)"
+                parentCustomer != null -> parentCustomer
+                childCustomer != null -> childCustomer
+                else -> {
+                    Log.w(DELIVERY_LOOKUP_TAG, "recentCustomerSaleIds: skipping '$table'; no customer_party_id/customer_id column exists")
+                    continue
+                }
             }
-            if (customerExpression.isBlank()) continue
 
+            val alias = if (joinFuelInvoice) "fs" else "src"
             val predicates = mutableListOf(
-                "station_id=?",
-                "$customerExpression>0"
+                "CAST($customerExpression AS INTEGER)>0"
             )
-            if ("is_deleted" in saleColumns) {
-                predicates += "COALESCE(CAST(is_deleted AS INTEGER),0)=0"
-            }
-            if ("deleted_at" in saleColumns) {
-                predicates += "(deleted_at IS NULL OR TRIM(CAST(deleted_at AS TEXT))='')"
+            val from = if (joinFuelInvoice) {
+                predicates += "CAST(st.station_id AS INTEGER)=CAST(? AS INTEGER)"
+                predicates += "(fs.station_id IS NULL OR CAST(fs.station_id AS INTEGER)=0 OR CAST(fs.station_id AS INTEGER)=CAST(st.station_id AS INTEGER))"
+                appendSaleValidityPredicates(predicates, "fs", saleColumns)
+                appendSaleValidityPredicates(predicates, "st", parentColumns)
+                "fuel_sales fs INNER JOIN sales_transactions st ON st.id=fs.sale_id"
+            } else {
+                predicates += "CAST(src.station_id AS INTEGER)=CAST(? AS INTEGER)"
+                appendSaleValidityPredicates(predicates, "src", saleColumns)
+                "`$table` src"
             }
 
-            // sales_transactions stores product invoices; exclude other transaction kinds
-            // because fuel sales are represented separately in fuel_sales.
+            // sales_transactions is used here for product invoices only. Fuel rows are
+            // represented by fuel_sales and are validated against their parent invoice.
             if (table == "sales_transactions") {
                 val typeColumn = when {
                     "order_type" in saleColumns -> "order_type"
@@ -862,45 +959,89 @@ object DeliveryFeeAccounting {
                     "transaction_type" in saleColumns -> "transaction_type"
                     else -> ""
                 }
-                if (typeColumn.isBlank()) continue
-                predicates += "LOWER(COALESCE(`$typeColumn`,'')) IN ('product','products')"
+                if (typeColumn.isBlank()) {
+                    Log.w(DELIVERY_LOOKUP_TAG, "recentCustomerSaleIds: skipping sales_transactions; no order/sale/transaction type column exists")
+                    continue
+                }
+                predicates += "LOWER(TRIM(COALESCE(CAST(src.`$typeColumn` AS TEXT),''))) IN ('product','products')"
             }
 
-            val timeExpressions = mutableListOf<String>()
-            if ("transaction_time" in saleColumns) {
-                timeExpressions += "NULLIF(TRIM(CAST(transaction_time AS TEXT)),'')"
-            }
-            if ("sale_date" in saleColumns && "sale_time" in saleColumns) {
-                timeExpressions += "NULLIF(TRIM(CAST(sale_date AS TEXT)),'') || ' ' || COALESCE(CAST(sale_time AS TEXT),'')"
-            } else if ("sale_date" in saleColumns) {
-                timeExpressions += "NULLIF(TRIM(CAST(sale_date AS TEXT)),'')"
-            }
-            if ("transaction_date" in saleColumns) {
-                timeExpressions += "NULLIF(TRIM(CAST(transaction_date AS TEXT)),'')"
-            }
-            if ("created_at" in saleColumns) {
-                timeExpressions += "NULLIF(TRIM(CAST(created_at AS TEXT)),'')"
-            }
-            val timeExpression = if (timeExpressions.isEmpty()) {
-                "CAST(id AS TEXT)"
-            } else {
-                "COALESCE(${timeExpressions.joinToString(",")},CAST(id AS TEXT))"
-            }
-
-            selects += "SELECT $customerExpression AS party_id, $timeExpression AS sale_at, " +
-                "id AS source_sale_id FROM `$table` WHERE ${predicates.joinToString(" AND ")}"
+            val timeParts = saleTimestampExpressions(alias, saleColumns).toMutableList()
+            if (joinFuelInvoice) timeParts += saleTimestampExpressions("st", parentColumns)
+            // Parse each candidate independently: an unparseable preferred field must
+            // not hide a valid fallback timestamp in a legacy date column.
+            val timestampExpression = timeParts.takeIf { it.isNotEmpty() }
+                ?.map { "julianday($it)" }
+                ?.let { "COALESCE(${it.joinToString(",")},0.0)" }
+                ?: "0.0"
+            selects += "SELECT $customerExpression AS party_id, $timestampExpression AS sale_epoch, " +
+                "$alias.id AS source_sale_id FROM $from WHERE ${predicates.joinToString(" AND ")}"
             arguments += stationId.toString()
         }
 
-        if (selects.isEmpty()) return JSONArray()
+        if (selects.isEmpty()) {
+            Log.w(DELIVERY_LOOKUP_TAG, "recentCustomerSaleIds: no compatible station-scoped customer-sale source is available")
+            return null
+        }
         val sql = "SELECT party_id FROM (${selects.joinToString(" UNION ALL ")}) " +
-            "GROUP BY party_id ORDER BY MAX(sale_at) DESC, MAX(source_sale_id) DESC"
+            "GROUP BY party_id ORDER BY MAX(COALESCE(sale_epoch,0)) DESC, " +
+            "MAX(source_sale_id) DESC, party_id DESC"
+        return ReadOnlyLookupQuery(sql, arguments.toTypedArray())
+    }
+
+    fun savedDeliveryLocations(helper: DatabaseHelper, stationId: Int): JSONArray {
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        // This autocomplete read is deliberately read-only: no ensureSchema(), DDL or data repair.
+        val db = helper.readableDatabase
+        val query = buildSavedDeliveryLocationsQuery(db, stationId) ?: return JSONArray()
+        val locations = linkedMapOf<String, String>()
+        db.rawQuery(query.sql, query.arguments).use { cursor ->
+            while (cursor.moveToNext()) {
+                val value = cursor.getString(0)?.trim()?.replace(Regex("\\s+"), " ").orEmpty()
+                if (value.isEmpty()) continue
+                val key = value.lowercase(Locale.ROOT)
+                locations.putIfAbsent(key, value)
+            }
+        }
+        return JSONArray().also { result ->
+            locations.values.sortedWith(String.CASE_INSENSITIVE_ORDER).forEach { result.put(it) }
+        }
+    }
+
+    fun recentCustomerSaleIds(helper: DatabaseHelper, stationId: Int): JSONArray {
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        val db = helper.readableDatabase
+        val query = buildRecentCustomerSaleIdsQuery(db, stationId) ?: return JSONArray()
         return JSONArray().also { ids ->
-            db.rawQuery(sql, arguments.toTypedArray()).use { cursor ->
+            db.rawQuery(query.sql, query.arguments).use { cursor ->
                 while (cursor.moveToNext()) {
                     val partyId = cursor.getLong(0)
                     if (partyId > 0L) ids.put(partyId)
                 }
+            }
+        }
+    }
+
+    /**
+     * Read-only query-plan hook used by Robolectric regression/performance tests.
+     * It executes EXPLAIN QUERY PLAN for the exact production SQL without mutating schema.
+     */
+    internal fun explainDeliveryLookupQueryPlan(
+        helper: DatabaseHelper,
+        stationId: Int,
+        recentCustomers: Boolean
+    ): List<String> {
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        val db = helper.readableDatabase
+        val query = if (recentCustomers) {
+            buildRecentCustomerSaleIdsQuery(db, stationId)
+        } else {
+            buildSavedDeliveryLocationsQuery(db, stationId)
+        } ?: return emptyList()
+        return db.rawQuery("EXPLAIN QUERY PLAN ${query.sql}", query.arguments).use { cursor ->
+            val detailIndex = cursor.getColumnIndex("detail").takeIf { it >= 0 } ?: cursor.columnCount - 1
+            buildList {
+                while (cursor.moveToNext()) add(cursor.getString(detailIndex).orEmpty())
             }
         }
     }

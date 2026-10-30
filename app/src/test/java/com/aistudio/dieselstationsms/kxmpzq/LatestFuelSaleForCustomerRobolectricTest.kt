@@ -150,6 +150,154 @@ class LatestFuelSaleForCustomerRobolectricTest {
         assertEquals(expectedFuelSaleId, result.getJSONObject("sale").getLong("fuel_sale_id"))
     }
 
+    @Test
+    fun savedLocationsAreStationScopedNormalizedDeduplicatedAndExcludeInvalidRowsWithoutWrites() {
+        val customer = insertCustomer("عميل المواقع المحفوظة")
+        val validOne = insertFuelSale(customer, stationId, "2026-10-28 08:00:00", location = "  شارع   الملك  ")
+        insertFuelSale(customer, stationId, "2026-10-29 08:00:00", location = "شارع الملك")
+        insertFuelSale(customer, stationId, "2026-10-29 09:00:00", childDeleted = true, location = "موقع محذوف")
+        insertFuelSale(customer, stationId, "2026-10-29 10:00:00", parentStatusOverride = "refunded", location = "موقع مسترجع")
+        insertFuelSale(customer, stationId, "2026-10-29 11:00:00", parentInvalid = true, location = "موقع ملغي")
+        insertFuelSale(customer, stationId + 100000, "2026-10-30 12:00:00", location = "موقع محطة أخرى")
+
+        // The child claims the current station, but its owning invoice belongs elsewhere.
+        val mismatchedChild = insertFuelSale(customer, stationId, "2026-10-30 13:00:00", location = "موقع فاتورة مختلفة")
+        val mismatchedParent = scalarLong(
+            "SELECT sale_id FROM fuel_sales WHERE id=?",
+            arrayOf(mismatchedChild.toString())
+        )
+        db.setForeignKeyConstraintsEnabled(false)
+        try {
+            db.update(
+                "sales_transactions",
+                ContentValues().apply { put("station_id", stationId + 200000) },
+                "id=?",
+                arrayOf(mismatchedParent.toString())
+            )
+        } finally {
+            db.setForeignKeyConstraintsEnabled(true)
+        }
+
+        val schemaBefore = scalarString(
+            "SELECT GROUP_CONCAT(type || ':' || name || ':' || COALESCE(sql,''),'|') FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'"
+        )
+        val rowCountsBefore = listOf("fuel_sales", "sales_transactions", "deliveries").associateWith {
+            optionalScalarLong("SELECT COUNT(*) FROM `$it`")
+        }
+
+        val locations = DeliveryFeeAccounting.savedDeliveryLocations(helper, stationId)
+        val values = (0 until locations.length()).map { locations.getString(it) }
+        val normalized = values.map { it.trim().replace(Regex("\\s+"), " ").lowercase() }
+
+        assertTrue("Expected valid location from fuel row $validOne; actual=$values", normalized.contains("شارع الملك"))
+        assertEquals("Location suggestions must be unique after case/whitespace normalization", normalized.size, normalized.toSet().size)
+        assertFalse(values.any { it.contains("محذوف") || it.contains("مسترجع") || it.contains("ملغي") })
+        assertFalse(values.any { it.contains("محطة أخرى") || it.contains("فاتورة مختلفة") })
+
+        val schemaAfter = scalarString(
+            "SELECT GROUP_CONCAT(type || ':' || name || ':' || COALESCE(sql,''),'|') FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'"
+        )
+        val rowCountsAfter = listOf("fuel_sales", "sales_transactions", "deliveries").associateWith {
+            optionalScalarLong("SELECT COUNT(*) FROM `$it`")
+        }
+        assertEquals("Autocomplete must not mutate SQLite schema", schemaBefore, schemaAfter)
+        assertEquals("Autocomplete must not insert/update/delete business rows", rowCountsBefore, rowCountsAfter)
+    }
+
+    @Test
+    fun recentCustomerRankingUsesRealDatesGroupsCustomersAndRejectsInvalidOrForeignParentInvoices() {
+        val lateCustomer = insertCustomer("عميل أحدث زمنياً")
+        val earlyCustomer = insertCustomer("عميل أقدم زمنياً")
+        val invalidCustomer = insertCustomer("عميل عمليات غير صالحة")
+        val stationMismatchCustomer = insertCustomer("عميل فاتورة بمحطة أخرى")
+
+        // Lexical TEXT ordering incorrectly puts the 'T09...' ISO value after the space value.
+        insertFuelSale(lateCustomer, stationId, "2026-10-30 23:00:00")
+        insertFuelSale(lateCustomer, stationId, "2026-10-30 20:00:00")
+        insertFuelSale(earlyCustomer, stationId, "2026-10-30T09:00:00Z")
+        insertFuelSale(invalidCustomer, stationId, "2026-10-30 23:59:00", childDeleted = true)
+        insertFuelSale(invalidCustomer, stationId, "2026-10-30 23:58:00", parentStatusOverride = "refunded")
+        insertFuelSale(invalidCustomer, stationId, "2026-10-30 23:57:00", parentInvalid = true)
+
+        val mismatchedChild = insertFuelSale(
+            stationMismatchCustomer,
+            stationId,
+            "2026-10-30 23:56:00"
+        )
+        val mismatchedParent = scalarLong(
+            "SELECT sale_id FROM fuel_sales WHERE id=?",
+            arrayOf(mismatchedChild.toString())
+        )
+        db.setForeignKeyConstraintsEnabled(false)
+        try {
+            db.update(
+                "sales_transactions",
+                ContentValues().apply { put("station_id", stationId + 300000) },
+                "id=?",
+                arrayOf(mismatchedParent.toString())
+            )
+        } finally {
+            db.setForeignKeyConstraintsEnabled(true)
+        }
+
+        val ids = DeliveryFeeAccounting.recentCustomerSaleIds(helper, stationId)
+        val orderedIds = (0 until ids.length()).map { ids.getLong(it) }
+
+        assertEquals("The output must contain each customer exactly once", orderedIds.size, orderedIds.toSet().size)
+        assertTrue("Recent customer result: $orderedIds", orderedIds.contains(lateCustomer))
+        assertTrue("Recent customer result: $orderedIds", orderedIds.contains(earlyCustomer))
+        assertFalse("Deleted/refunded/invalid customers must not influence recent ranking", orderedIds.contains(invalidCustomer))
+        assertFalse("A child row whose parent invoice belongs to another station must be excluded", orderedIds.contains(stationMismatchCustomer))
+        assertTrue("julianday ordering should place the real 23:00 timestamp before 09:00Z", orderedIds.indexOf(lateCustomer) < orderedIds.indexOf(earlyCustomer))
+    }
+
+    @Test
+    fun deliveryLookupsReturnEmptyArraysWhenNoStationHasMatchingRows() {
+        val unusedStationId = stationId + 900000
+        assertEquals(0, DeliveryFeeAccounting.savedDeliveryLocations(helper, unusedStationId).length())
+        assertEquals(0, DeliveryFeeAccounting.recentCustomerSaleIds(helper, unusedStationId).length())
+    }
+
+    @Test
+    fun deliveryLookupQueriesExposePlansAndBoundedRobolectricPerformanceMeasurements() {
+        val customer = insertCustomer("عميل قياس الأداء")
+        repeat(35) { index ->
+            insertFuelSale(
+                customer,
+                stationId,
+                "2026-10-30 %02d:%02d:00".format(index / 60, index % 60),
+                location = "موقع أداء ${index % 7}"
+            )
+        }
+
+        val locationPlan = DeliveryFeeAccounting.explainDeliveryLookupQueryPlan(helper, stationId, recentCustomers = false)
+        val customerPlan = DeliveryFeeAccounting.explainDeliveryLookupQueryPlan(helper, stationId, recentCustomers = true)
+        assertTrue("savedDeliveryLocations EXPLAIN QUERY PLAN was empty", locationPlan.isNotEmpty())
+        assertTrue("recentCustomerSaleIds EXPLAIN QUERY PLAN was empty", customerPlan.isNotEmpty())
+
+        fun measure(action: () -> Unit): List<Long> {
+            repeat(3) { action() } // warm SQLite/Robolectric before collecting samples
+            return List(12) {
+                val startNanos = System.nanoTime()
+                action()
+                (System.nanoTime() - startNanos) / 1_000_000L
+            }.sorted()
+        }
+        val locationSamples = measure { DeliveryFeeAccounting.savedDeliveryLocations(helper, stationId) }
+        val customerSamples = measure { DeliveryFeeAccounting.recentCustomerSaleIds(helper, stationId) }
+        val locationP95 = locationSamples[(locationSamples.size * 95 / 100).coerceAtMost(locationSamples.lastIndex)]
+        val customerP95 = customerSamples[(customerSamples.size * 95 / 100).coerceAtMost(customerSamples.lastIndex)]
+
+        println("DELIVERY_LOOKUP_PLAN locations=${locationPlan.joinToString(" || ")}")
+        println("DELIVERY_LOOKUP_PLAN recentCustomers=${customerPlan.joinToString(" || ")}")
+        println("DELIVERY_LOOKUP_PERF ms locationsMedian=${locationSamples[locationSamples.size / 2]} locationsP95=$locationP95 recentMedian=${customerSamples[customerSamples.size / 2]} recentP95=$customerP95")
+
+        // A generous guard catches pathological regressions without making the test
+        // dependent on the speed of a particular CI virtual machine.
+        assertTrue("savedDeliveryLocations P95 exceeded 5 seconds: $locationP95 ms", locationP95 < 5000L)
+        assertTrue("recentCustomerSaleIds P95 exceeded 5 seconds: $customerP95 ms", customerP95 < 5000L)
+    }
+
     private fun saleLookupDiagnostics(customerId: Long): String {
         val childColumns = tableColumns("fuel_sales")
         val parentColumns = tableColumns("sales_transactions")
@@ -219,6 +367,11 @@ class LatestFuelSaleForCustomerRobolectricTest {
         })
     }
 
+    private fun scalarString(sql: String): String =
+        db.rawQuery(sql, null).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0).orEmpty() else ""
+        }
+
     private fun insertFuelSale(
         customerId: Long,
         saleStationId: Int,
@@ -227,7 +380,8 @@ class LatestFuelSaleForCustomerRobolectricTest {
         childDeleted: Boolean = false,
         parentDeleted: Boolean = false,
         parentInvalid: Boolean = false,
-        parentStatusOverride: String? = null
+        parentStatusOverride: String? = null,
+        location: String = "موقع اختبار"
     ): Long {
         val token = UUID.randomUUID().toString()
         val parentValues = ContentValues()
@@ -299,7 +453,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
             putExisting("fuel_sales", childValues, "created_at", timestamp)
             putExisting("fuel_sales", childValues, "delivery_service_fee", 250.0)
             putExisting("fuel_sales", childValues, "delivery_fee_mode", "add_to_sales")
-            putExisting("fuel_sales", childValues, "delivery_location", "موقع اختبار")
+            putExisting("fuel_sales", childValues, "delivery_location", location)
             putExisting("fuel_sales", childValues, "cash_customer_name", "")
             putExisting("fuel_sales", childValues, "delivery_fee_display_total", quantity * 500.0 + 250.0)
             putExisting("fuel_sales", childValues, "status", if (parentInvalid) "cancelled" else "completed")
