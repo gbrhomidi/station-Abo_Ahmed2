@@ -52,7 +52,10 @@
 # ----------------------------------------------------------------------------
 # - Gradle cache enabled.
 # - Gradle build caching enabled.
-# - Obsolete runs for the same ref are cancelled.
+# - Push-triggered builds are serialized by their predecessor commit.
+# - New pushes never cancel an older build.
+# - Each build waits for the build associated with the previous branch head.
+# - main and feature branches keep independent build sequences.
 # - No Validation APK artifact is uploaded.
 # - Only the final Release APK + SHA256 are retained.
 #
@@ -128,26 +131,31 @@ on:
 
 
 # ============================================================================
-# CONCURRENCY
+# ORDERED PUSH-BUILD QUEUE
 # ============================================================================
 #
-# Rapid repair commits should not create a queue of obsolete builds.
+# Do not use GitHub Actions concurrency groups here:
+# GitHub retains only one pending run per concurrency group, and a newer
+# pending run can replace an older pending run even with cancel-in-progress=false.
 #
-# Example:
+# Instead, every push run waits for the workflow run associated with the exact
+# previous branch head (github.event.before). This forms a predecessor chain:
 #
-#   commit A -> running
-#   commit B -> running
-#   commit C -> newest
+#   build A completes -> build B starts -> build C starts
 #
-# Older runs for the same ref are cancelled when the newer run supersedes them.
+# The check is based on commit SHA, not run-number ordering, so delayed webhook
+# delivery cannot make a newer commit overtake its direct predecessor.
 #
-# Different branches keep independent concurrency groups.
+# A manually dispatched build on a branch waits for earlier runs of that same
+# commit. A following push also waits for every still-running build on its
+# predecessor SHA.
+#
+# A missing predecessor run fails closed after 10 minutes; the workflow does
+# not silently proceed out of order.
+#
+# Different branches remain independent.
 #
 # ============================================================================
-
-concurrency:
-  group: android-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 
 # ============================================================================
@@ -168,6 +176,7 @@ concurrency:
 # ============================================================================
 
 permissions:
+  actions: read
   contents: read
 
 
@@ -217,12 +226,125 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    timeout-minutes: 30
+    # The validation runner also holds its place in the ordered push queue.
+    # Allow time for earlier builds to finish before applying the normal checks.
+    timeout-minutes: 360
 
     steps:
 
       # ----------------------------------------------------------------------
+      # Wait for the exact predecessor build before checking out this commit.
+      # ----------------------------------------------------------------------
+
+      - name: Wait for preceding branch build
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QUEUE_BRANCH: ${{ github.head_ref || github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          PREVIOUS_HEAD_SHA: ${{ github.event.before }}
+          CURRENT_HEAD_SHA: ${{ github.sha }}
+          CURRENT_RUN_NUMBER: ${{ github.run_number }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          if ! command -v gh >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+            echo "::error::GitHub CLI and jq are required for ordered build execution."
+            exit 1
+          fi
+
+          TARGET_SHA=""
+          if [ "$EVENT_NAME" = "push" ]; then
+            TARGET_SHA="$PREVIOUS_HEAD_SHA"
+
+            # A newly created branch has no predecessor build.
+            if [ -z "$TARGET_SHA" ] || [[ "$TARGET_SHA" =~ ^0+$ ]]; then
+              echo "No predecessor commit exists; this is the first push in the branch sequence."
+              exit 0
+            fi
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TARGET_SHA="$CURRENT_HEAD_SHA"
+          else
+            echo "This event does not participate in the branch push queue."
+            exit 0
+          fi
+
+          if ! [[ "$TARGET_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::The predecessor commit SHA is missing or malformed: '$TARGET_SHA'."
+            exit 1
+          fi
+
+          API_PATH="repos/$GITHUB_REPOSITORY/actions/workflows/android.yml/runs"
+          DEADLINE=$((SECONDS + 600))
+
+          echo "Branch: $QUEUE_BRANCH"
+          echo "Current run: #$CURRENT_RUN_NUMBER (ID $CURRENT_RUN_ID)"
+          echo "Waiting for predecessor commit: $TARGET_SHA"
+
+          while (( SECONDS < DEADLINE )); do
+            # --paginate is important: do not assume the predecessor is on page one.
+            # The API response is converted to a stream of run objects, then collected
+            # as one JSON array for exact branch/SHA matching.
+            MATCHING_RUNS="$(
+              gh api --paginate "$API_PATH" \
+                -f "branch=$QUEUE_BRANCH" \
+                -F per_page=100 \
+                --jq '.workflow_runs[]' |
+              jq -s \
+                --arg branch "$QUEUE_BRANCH" \
+                --arg target "$TARGET_SHA" \
+                --arg event "$EVENT_NAME" \
+                --arg current_run "$CURRENT_RUN_NUMBER" \
+                '
+                  [
+                    .[] |
+                    select(.head_branch == $branch and .head_sha == $target) |
+                    select(
+                      $event == "push" or
+                      ((.run_number | tonumber) < ($current_run | tonumber))
+                    )
+                  ]
+                '
+            )"
+
+            MATCH_COUNT="$(jq 'length' <<< "$MATCHING_RUNS")"
+
+            if (( MATCH_COUNT > 0 )); then
+              PENDING_RUNS="$(
+                jq -r '
+                  [
+                    .[] |
+                    select(.status != "completed") |
+                    "#\(.run_number) (\(.status), run ID \(.id))"
+                  ] |
+                  join(", ")
+                ' <<< "$MATCHING_RUNS"
+              )"
+
+              if [ -z "$PENDING_RUNS" ]; then
+                CONCLUSIONS="$(jq -r '[.[].conclusion // "unknown"] | unique | join(", ")' <<< "$MATCHING_RUNS")"
+                echo "Predecessor build(s) completed. Previous conclusion(s): $CONCLUSIONS"
+                echo "Continuing with the current commit."
+                exit 0
+              fi
+
+              echo "Earlier build(s) are still active: $PENDING_RUNS"
+            else
+              echo "The predecessor workflow run is not visible yet; waiting for GitHub to register it."
+            fi
+
+            sleep 15
+          done
+
+          echo "::error::The predecessor workflow run for commit $TARGET_SHA was not confirmed complete within 10 minutes."
+          echo "::error::This run stopped rather than building out of commit order. Check the predecessor push and retry this run after its workflow is registered."
+          exit 1
+
+
+      # ----------------------------------------------------------------------
       # Checkout repository
+
       # ----------------------------------------------------------------------
       #
       # checkout@v7 is Node.js 24 compatible.
