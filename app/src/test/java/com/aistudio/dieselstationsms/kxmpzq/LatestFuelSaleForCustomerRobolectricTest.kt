@@ -14,6 +14,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.Locale
 import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
@@ -332,13 +333,14 @@ class LatestFuelSaleForCustomerRobolectricTest {
 
     @Test
     fun deliveryLookupQueriesExposePlansAndBoundedRobolectricPerformanceMeasurements() {
-        val customer = insertCustomer("عميل قياس الأداء")
-        repeat(35) { index ->
+        // Exercise grouping and deduplication across multiple customers and locations.
+        val customers = (0 until 12).map { insertCustomer("عميل قياس الأداء ${it + 1}") }
+        repeat(300) { index ->
             insertFuelSale(
-                customer,
+                customers[index % customers.size],
                 stationId,
                 "2026-10-30 %02d:%02d:00".format(index / 60, index % 60),
-                location = "موقع أداء ${index % 7}"
+                location = "موقع أداء ${index % 50}"
             )
         }
 
@@ -347,27 +349,49 @@ class LatestFuelSaleForCustomerRobolectricTest {
         assertTrue("savedDeliveryLocations EXPLAIN QUERY PLAN was empty", locationPlan.isNotEmpty())
         assertTrue("recentCustomerSaleIds EXPLAIN QUERY PLAN was empty", customerPlan.isNotEmpty())
 
-        fun measure(action: () -> Unit): List<Long> {
-            repeat(3) { action() } // warm SQLite/Robolectric before collecting samples
-            return List(12) {
+        fun measure(action: () -> Unit): List<Double> {
+            repeat(5) { action() } // warm SQLite/Robolectric before collecting samples
+            return List(40) {
                 val startNanos = System.nanoTime()
                 action()
-                (System.nanoTime() - startNanos) / 1_000_000L
+                (System.nanoTime() - startNanos) / 1_000_000.0
             }.sorted()
         }
+        fun median(samples: List<Double>): Double {
+            val middle = samples.size / 2
+            return if (samples.size % 2 == 0) {
+                (samples[middle - 1] + samples[middle]) / 2.0
+            } else {
+                samples[middle]
+            }
+        }
+        fun p95(samples: List<Double>): Double {
+            val nearestRankIndex = ((samples.size * 95 + 99) / 100 - 1).coerceIn(0, samples.lastIndex)
+            return samples[nearestRankIndex]
+        }
+
         val locationSamples = measure { DeliveryFeeAccounting.savedDeliveryLocations(helper, stationId) }
         val customerSamples = measure { DeliveryFeeAccounting.recentCustomerSaleIds(helper, stationId) }
-        val locationP95 = locationSamples[(locationSamples.size * 95 / 100).coerceAtMost(locationSamples.lastIndex)]
-        val customerP95 = customerSamples[(customerSamples.size * 95 / 100).coerceAtMost(customerSamples.lastIndex)]
+        val locationMedian = median(locationSamples)
+        val customerMedian = median(customerSamples)
+        val locationP95 = p95(locationSamples)
+        val customerP95 = p95(customerSamples)
 
+        println("DELIVERY_LOOKUP_DATASET fuelSales=300 customers=12 distinctLocations=50")
         println("DELIVERY_LOOKUP_PLAN locations=${locationPlan.joinToString(" || ")}")
         println("DELIVERY_LOOKUP_PLAN recentCustomers=${customerPlan.joinToString(" || ")}")
-        println("DELIVERY_LOOKUP_PERF ms locationsMedian=${locationSamples[locationSamples.size / 2]} locationsP95=$locationP95 recentMedian=${customerSamples[customerSamples.size / 2]} recentP95=$customerP95")
+        println(
+            "DELIVERY_LOOKUP_PERF samples=40 warmups=5 " +
+                "locationsMedian=${"%.3f".format(Locale.US, locationMedian)}ms " +
+                "locationsP95=${"%.3f".format(Locale.US, locationP95)}ms " +
+                "recentMedian=${"%.3f".format(Locale.US, customerMedian)}ms " +
+                "recentP95=${"%.3f".format(Locale.US, customerP95)}ms"
+        )
 
         // A generous guard catches pathological regressions without making the test
         // dependent on the speed of a particular CI virtual machine.
-        assertTrue("savedDeliveryLocations P95 exceeded 5 seconds: $locationP95 ms", locationP95 < 5000L)
-        assertTrue("recentCustomerSaleIds P95 exceeded 5 seconds: $customerP95 ms", customerP95 < 5000L)
+        assertTrue("savedDeliveryLocations P95 exceeded 5 seconds: $locationP95 ms", locationP95 < 5000.0)
+        assertTrue("recentCustomerSaleIds P95 exceeded 5 seconds: $customerP95 ms", customerP95 < 5000.0)
     }
 
     private fun saleLookupDiagnostics(customerId: Long): String {
