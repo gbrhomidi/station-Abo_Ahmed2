@@ -2234,6 +2234,7 @@ const state = {
     saleFormLookupPromise: null,
     activePromotionCache: { loadedAt: 0, rows: [] },
     pumpNozzleCache: Object.create(null),
+    savedDeliveryLocationsCache: { loadedAt: 0, rows: [] },
     viewMode: 'cards',
     fuelAdjustmentCache: [],
     // report state
@@ -2681,13 +2682,30 @@ function inputHtml(def, row) {
     if (def.type === 'delivery_fee_configuration') {
         const fee = row && row.delivery_service_fee !== undefined ? row.delivery_service_fee : 0;
         return '<div class="form-group full"><div class="delivery-fee-composite">' +
-            '<div class="delivery-fee-cell"><label class="form-label" for="deliveryServiceFeeInput">رسوم خدمة التوصيل</label>' +
-            '<input id="deliveryServiceFeeInput" class="form-input" data-key="delivery_service_fee" type="number" min="0" step="0.01" inputmode="decimal" value="' + esc(fee) + '" placeholder="0.00"></div>' +
             '<div class="delivery-fee-cell"><label class="form-label" for="deliveryFeeModeSelect">احتساب رسوم التوصيل</label>' +
             '<select id="deliveryFeeModeSelect" class="form-input" data-key="delivery_fee_mode" required>' +
             '<option value="exempt">معفي منها</option><option value="add_to_sales">تُضاف لقيمة المبيعات</option>' +
             '<option value="driver">على حساب السائق</option><option value="deduct_from_sales">تُنقص من المبيعات</option></select></div>' +
+            '<div class="delivery-fee-cell" data-delivery-fee-dependent="true" style="display:none"><label class="form-label" for="deliveryServiceFeeInput">رسوم خدمة التوصيل</label>' +
+            '<input id="deliveryServiceFeeInput" class="form-input" data-key="delivery_service_fee" type="number" min="0" step="0.01" inputmode="decimal" value="' + esc(fee) + '" placeholder="0.00"></div>' +
             '</div></div>';
+    }
+    if (def.key === 'delivery_fee_display_total') {
+        const numericValue = row && row.delivery_fee_display_total !== undefined
+            ? row.delivery_fee_display_total
+            : (row && row.total_amount !== undefined ? row.total_amount : 0);
+        return '<div class="form-group full" data-delivery-fee-dependent="true" style="display:none">' +
+            '<label class="form-label">' + esc(def.label) + '</label>' +
+            '<textarea id="deliveryFeeDisplaySummary" class="form-input" rows="3" readonly aria-readonly="true" tabindex="-1" placeholder="سيظهر تفصيل احتساب الرسوم هنا"></textarea>' +
+            '<input id="deliveryFeeDisplayTotalValue" type="hidden" data-key="delivery_fee_display_total" value="' + esc(numericValue) + '">' +
+            '</div>';
+    }
+    if (def.key === 'delivery_location') {
+        return '<div class="form-group full" data-delivery-fee-dependent="true" style="display:none">' +
+            '<label class="form-label">' + esc(def.label) + '</label>' +
+            '<input class="form-input" data-key="delivery_location" type="text" inputmode="text" autocomplete="on" list="savedDeliveryLocations" value="' + esc(value) + '" placeholder="أدخل الموقع أو اختر موقعاً محفوظاً">' +
+            '<datalist id="savedDeliveryLocations"></datalist>' +
+            '</div>';
     }
     if (def.type === 'textarea') {
         return '<div class="form-group full"><label class="form-label">' + esc(def.label) + (def.required?' *':'') + '</label>'
@@ -2778,18 +2796,32 @@ async function getSaleFormLookupData() {
     if (state.saleFormLookupPromise) return state.saleFormLookupPromise;
 
     state.saleFormLookupPromise = (async () => {
+        const cachedLocations = state.savedDeliveryLocationsCache;
+        const locationsPromise = cachedLocations.loadedAt && Date.now() - cachedLocations.loadedAt < 60000
+            ? Promise.resolve(cachedLocations.rows)
+            : ((bridge && typeof bridge.getSavedDeliveryLocations === 'function')
+                ? invoke('getSavedDeliveryLocations', []).then(result => rowsFrom(result)).catch(() => [])
+                : Promise.resolve([]));
         const results = await Promise.all([
             (bridge && typeof bridge.getCurrentShift === 'function') ? invoke('getCurrentShift', []).catch(() => null) : Promise.resolve(null),
             (bridge && typeof bridge.getPumps === 'function') ? invoke('getPumps', []).catch(() => null) : Promise.resolve(null),
             (bridge && typeof bridge.getFuelTypes === 'function') ? invoke('getFuelTypes', []).catch(() => null) : Promise.resolve(null),
-            (bridge && typeof bridge.getCustomers === 'function') ? invoke('getCustomers', []).catch(() => null) : Promise.resolve(null)
+            (bridge && typeof bridge.getCustomers === 'function') ? invoke('getCustomers', []).catch(() => null) : Promise.resolve(null),
+            locationsPromise
         ]);
         state.saleFormLookupCache = {
             loadedAt: Date.now(),
             shift: dataOf(results[0]),
             pumps: rowsFrom(results[1]),
             fuels: rowsFrom(results[2]),
-            customers: rowsFrom(results[3])
+            customers: rowsFrom(results[3]),
+            deliveryLocations: (results[4] || []).map(item =>
+                String(typeof item === 'string' ? item : (item.location || item.delivery_location || '')).trim()
+            ).filter(Boolean)
+        };
+        state.savedDeliveryLocationsCache = {
+            loadedAt: Date.now(),
+            rows: state.saleFormLookupCache.deliveryLocations
         };
         return state.saleFormLookupCache;
     })().finally(() => {
@@ -2836,7 +2868,7 @@ async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
 
     const customerEl = document.querySelector('[data-key="customer_id"]');
     if (customerEl) {
-        customerEl.innerHTML = '<option value="">اختر العميل عند الحاجة...</option>'
+        customerEl.innerHTML = '<option value="" selected hidden>اختر العميل عند الحاجة...</option>'
             + '<option value="cash_sale">مبيعات نقدية</option>'
             + lookups.customers.map(x => '<option value="' + esc(field(x,['id','party_id','customer_id'])) + '">' + esc(field(x,['commercial_name_ar','commercial_name','legal_name','name']) || 'عميل') + '</option>').join('');
         const existingCustomerId = field(row,['customer_id','customer_party_id']);
@@ -2856,8 +2888,22 @@ async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
     if (deliveryLocationEl) deliveryLocationEl.value = String(field(row,['delivery_location','location']) || '');
     const cashNameEl = document.querySelector('[data-key="cash_customer_name"]');
     if (cashNameEl) cashNameEl.value = String(field(row,['cash_customer_name','cash_customer_display_name']) || '');
-    const displayTotalEl = document.querySelector('[data-key="delivery_fee_display_total"]');
-    if (displayTotalEl && row) displayTotalEl.value = Number(field(row,['delivery_fee_display_total','total_amount']) || 0).toFixed(2);
+
+    const locationList = document.getElementById('savedDeliveryLocations');
+    const locationInput = document.querySelector('[data-key="delivery_location"]');
+    if (locationList) {
+        const currentLocation = String(field(row,['delivery_location','location']) || '').trim();
+        const savedLocations = Array.from(new Set([
+            ...(lookups.deliveryLocations || []),
+            ...(currentLocation ? [currentLocation] : [])
+        ]));
+        locationList.innerHTML = savedLocations
+            .map(location => '<option value="' + esc(location) + '"></option>')
+            .join('');
+    }
+    if (locationInput && row) {
+        locationInput.value = String(field(row,['delivery_location','location']) || '');
+    }
 
     if (!row) {
         const now = new Date();
@@ -2992,19 +3038,56 @@ async function refreshResolvedFuelPrice() {
 }
 
 function updateDeliveryFeeDisplay() {
-    const quantity = numeric(document.querySelector('[data-key="quantity"]')?.value);
-    const price = numeric(document.querySelector('[data-key="price_per_liter"]')?.value);
+    const quantity = Math.max(0, numeric(document.querySelector('[data-key="quantity"]')?.value));
+    const price = Math.max(0, numeric(document.querySelector('[data-key="price_per_liter"]')?.value));
     const base = quantity * price;
     const feeInput = document.querySelector('[data-key="delivery_service_fee"]');
     const modeInput = document.querySelector('[data-key="delivery_fee_mode"]');
     const mode = modeInput?.value || 'exempt';
-    if (mode === 'exempt' && feeInput && numeric(feeInput.value) !== 0) feeInput.value = '0';
+    const dependentFields = document.querySelectorAll('[data-delivery-fee-dependent]');
+    const needsFeeDetails = mode !== 'exempt';
+
+    dependentFields.forEach(element => {
+        element.style.display = needsFeeDetails ? '' : 'none';
+    });
+
+    if (mode === 'exempt' && feeInput) feeInput.value = '0';
     const fee = mode === 'exempt' ? 0 : Math.max(0, numeric(feeInput?.value));
-    const display = document.querySelector('[data-key="delivery_fee_display_total"]');
-    if (!display) return;
-    // Deduct mode reduces litres/fuel value, not the overall customer invoice.
-    const total = (mode === 'add_to_sales' || mode === 'driver') ? base + fee : base;
-    display.value = total.toFixed(2);
+    const displayValue = document.querySelector('[data-key="delivery_fee_display_total"]');
+    const summary = document.getElementById('deliveryFeeDisplaySummary');
+
+    // Preserve the existing financial contract: the hidden numeric value is the
+    // invoice total stored by MainActivity/DeliveryFeeAccounting.
+    const invoiceTotal = (mode === 'add_to_sales' || mode === 'driver')
+        ? base + fee
+        : base;
+    if (displayValue) displayValue.value = invoiceTotal.toFixed(2);
+
+    if (!summary) return;
+    if (mode === 'add_to_sales') {
+        summary.value =
+            'إجمالي قيمة المبيعات = ' + base.toFixed(2) + ' ريال\n' +
+            'رسوم خدمة التوصيل = ' + fee.toFixed(2) + ' ريال\n' +
+            'الإجمالي بعد رسوم التوصيل = ' + (base + fee).toFixed(2) + ' ريال';
+        return;
+    }
+    if (mode === 'driver') {
+        summary.value =
+            'إجمالي قيمة المبيعات = ' + base.toFixed(2) + ' ريال\n' +
+            'عهدة على السائق = ' + fee.toFixed(2) + ' ريال\n' +
+            'الإجمالي المطلوب من العميل = ' + (base + fee).toFixed(2) + ' ريال';
+        return;
+    }
+    if (mode === 'deduct_from_sales') {
+        const netQuantity = price > 0 ? Math.max(0, quantity - (fee / price)) : quantity;
+        const postedFuelAmount = netQuantity * price;
+        summary.value =
+            'صافي الكمية المباعة = ' + netQuantity.toFixed(3) + ' لتر\n' +
+            'المبلغ المرحل = ' + postedFuelAmount.toFixed(2) + ' ريال\n' +
+            'إيرادات خدمة التوصيل للبيع = ' + fee.toFixed(2) + ' ريال';
+        return;
+    }
+    summary.value = '';
 }
 
 function bindFuelCalculation(resolveDynamic=true) {
