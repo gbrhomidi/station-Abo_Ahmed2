@@ -74,7 +74,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
 
         val result = DeliveryFeeAccounting.latestFuelSaleForCustomer(helper, targetCustomer, stationId)
 
-        assertTrue(result.getBoolean("found"))
+        assertTrue("Latest-sale lookup response: $result", result.getBoolean("found"))
         val sale = result.getJSONObject("sale")
         assertEquals(expectedFuelSaleId, sale.getLong("fuel_sale_id"))
         assertEquals(expectedFuelSaleId, sale.getLong("sale_id"))
@@ -172,7 +172,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
         putExisting("sales_transactions", parentValues, "paid_amount", quantity * 500.0)
         putExisting("sales_transactions", parentValues, "remaining_amount", 0.0)
         putExisting("sales_transactions", parentValues, "is_credit", 0)
-        putExisting("sales_transactions", parentValues, "status", if (parentInvalid) "void" else "completed")
+        putExisting("sales_transactions", parentValues, "status", if (parentInvalid) "cancelled" else "completed")
         putExisting("sales_transactions", parentValues, "is_void", if (parentInvalid) 1 else 0)
         putExisting("sales_transactions", parentValues, "is_valid", if (parentInvalid) 0 else 1)
         putExisting("sales_transactions", parentValues, "is_deleted", if (parentDeleted) 1 else 0)
@@ -217,7 +217,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
             putExisting("fuel_sales", childValues, "delivery_location", "موقع اختبار")
             putExisting("fuel_sales", childValues, "cash_customer_name", "")
             putExisting("fuel_sales", childValues, "delivery_fee_display_total", quantity * 500.0 + 250.0)
-            putExisting("fuel_sales", childValues, "status", if (parentInvalid) "void" else "completed")
+            putExisting("fuel_sales", childValues, "status", if (parentInvalid) "cancelled" else "completed")
             putExisting("fuel_sales", childValues, "is_void", if (parentInvalid) 1 else 0)
             putExisting("fuel_sales", childValues, "is_valid", if (parentInvalid) 0 else 1)
             putExisting("fuel_sales", childValues, "is_deleted", if (childDeleted) 1 else 0)
