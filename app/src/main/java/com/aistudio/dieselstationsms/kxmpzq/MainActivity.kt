@@ -11874,14 +11874,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
-        fun getRecentFuelSaleCustomerIds(): String {
+        fun getRecentSaleCustomerIds(): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
-                dataResponse(DeliveryFeeAccounting.recentFuelSaleCustomerIds(db, stationId))
+                dataResponse(DeliveryFeeAccounting.recentCustomerSaleIds(db, stationId))
             } catch (e: Exception) {
-                DebugLogger.logException("RecentFuelSaleCustomerIds", e)
+                DebugLogger.logException("RecentSaleCustomerIds", e)
                 errorResponse(e.message ?: "تعذر استرجاع ترتيب العملاء حسب أحدث المبيعات")
             }
         }
