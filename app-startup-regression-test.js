@@ -15,12 +15,29 @@ assert(!onCreate.includes('migrateLegacySecuritySettings'), 'Security migration 
 assert(!onCreate.includes('clearSessionAfterDeviceRebootIfNeeded'), 'Session DB work must not run in onCreate');
 assert(!onCreate.includes('requestAllPermissions()'), 'Permission dialogs must not block initial screen creation');
 assert(onCreate.indexOf('setContent {') < onCreate.indexOf('initializeStartupDatabase()'), 'Compose must be scheduled before startup DB work');
+assert(/if\s*\(initializeStartupDatabase\(\)\)\s*\{\s*initializeSystem\(\)\s*\}\s*TaskNotificationManager\.reschedulePendingTasksAsync\(applicationContext\)/.test(onCreate), 'Task notifications must be rescheduled only after startup DB and SMS initialization');
+assert(onCreate.indexOf('TaskNotificationManager.reschedulePendingTasksAsync') > onCreate.indexOf('initializeSystem()'), 'Task notification DB reads must not compete with first SQLite initialization');
+
+const onStartStart = activity.indexOf('override fun onStart()');
+const onStartEnd = activity.indexOf('override fun onResume()', onStartStart);
+assert(onStartStart >= 0 && onStartEnd > onStartStart, 'MainActivity onStart block not found');
+const onStart = activity.slice(onStartStart, onStartEnd);
+assert(/startupDatabaseReady\s*&&\s*startupHealthCheckCompleted/.test(onStart), 'onStart SQLite health checks must wait for the startup check to finish');
+assert(onStart.includes('lifecycleScope.launch(Dispatchers.IO)'), 'onStart SQLite health checks must remain off the UI thread');
 
 const startupInitializer = activity.match(/private suspend fun initializeStartupDatabase\(\): Boolean\s*\{([\s\S]*?)\n\s*override fun onNewIntent/);
 assert(startupInitializer, 'Asynchronous startup initializer not found');
 assert(startupInitializer[1].includes('withContext(Dispatchers.IO)'), 'Startup SQLite work must use Dispatchers.IO');
 assert(startupInitializer[1].includes('DebtDueDateRepository.ensureSchema(dbHelper)'), 'Required schema preparation was removed');
 assert(startupInitializer[1].includes('migrateLegacySecuritySettings(dbHelper)'), 'Legacy security migration was removed');
+assert(startupInitializer[1].includes('SQLite startup preparation completed in'), 'SQLite startup timing log is missing');
+
+const initializeSystemStart = activity.indexOf('private suspend fun initializeSystem()');
+const initializeSystemEnd = activity.indexOf('// ============================================================', initializeSystemStart);
+assert(initializeSystemStart >= 0 && initializeSystemEnd > initializeSystemStart, 'initializeSystem block not found');
+const initializeSystem = activity.slice(initializeSystemStart, initializeSystemEnd);
+assert(/withContext\(Dispatchers\.IO\)\s*\{\s*checkSmsSystemHealth\(\)\s*\}/.test(initializeSystem), 'Startup health checks must not run synchronously on the UI thread');
+assert(initializeSystem.includes('startupHealthCheckCompleted = true'), 'Startup health-check completion state is missing');
 
 assert(activity.includes('wv.post {') && activity.includes('loadWebViewFromAssets()'), 'WebView factory must trigger its initial asset load');
 assert(activity.includes('startupDatabaseReady && startupSetupRequired'), 'First-user setup routing must use the cached startup result');

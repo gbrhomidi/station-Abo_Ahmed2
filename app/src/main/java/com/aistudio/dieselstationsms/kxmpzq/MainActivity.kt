@@ -244,6 +244,7 @@ class MainActivity : AppCompatActivity() {
     private var geminiApiKey: String = ""
     private var serverReady = false
     @Volatile private var startupDatabaseReady = false
+    private var startupHealthCheckCompleted = false
     @Volatile private var startupSetupRequired = false
     @Volatile private var startupUiState = "initializing"
     @Volatile private var startupErrorMessage = ""
@@ -397,10 +398,10 @@ class MainActivity : AppCompatActivity() {
             if (initializeStartupDatabase()) {
                 initializeSystem()
             }
+            TaskNotificationManager.reschedulePendingTasksAsync(applicationContext)
         }
 
         scheduleBackgroundTasks()
-        TaskNotificationManager.reschedulePendingTasksAsync(applicationContext)
 
         DebugLogger.info("MainActivity", "onCreate finished")
     }
@@ -511,8 +512,8 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         appInForeground = true
         updateUIState()
-        if (!isDestroyed.get()) {
-            // Health checks touch SQLite and are diagnostic only; keep them off the UI thread.
+        if (!isDestroyed.get() && startupDatabaseReady && startupHealthCheckCompleted) {
+            // Re-run diagnostic SQLite checks only after startup initialization has finished.
             lifecycleScope.launch(Dispatchers.IO) { checkSmsSystemHealth() }
         }
     }
@@ -1207,7 +1208,8 @@ class MainActivity : AppCompatActivity() {
             initializeDatabase()
             initializeSmsSettings()
             DebugLogger.logEvent("app_started", "Application started")
-            checkSmsSystemHealth()
+            withContext(Dispatchers.IO) { checkSmsSystemHealth() }
+            startupHealthCheckCompleted = true
         } catch (e: Exception) {
             DebugLogger.logException("Init", e)
             handleApplicationError(e)
