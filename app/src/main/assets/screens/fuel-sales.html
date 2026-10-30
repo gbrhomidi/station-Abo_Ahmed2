@@ -3083,9 +3083,17 @@ function openForm(row=null) {
         if (!isCurrentFuelForm(openToken)) return;
         form.innerHTML = (CFG.fields || []).map(def => inputHtml(def, row)).join('');
         form.removeAttribute('aria-busy');
-        loadSaleFormLookups(row, openToken).catch(error => {
-            if (isCurrentFuelForm(openToken)) toast(error.message || 'تعذر تحميل بيانات النموذج', true, 'form');
-        });
+
+        // Give WebView one complete paint with the real input controls before any
+        // synchronous JavaScript-interface/SQLite lookup is started.
+        const startLookups = () => window.setTimeout(() => {
+            if (!isCurrentFuelForm(openToken)) return;
+            loadSaleFormLookups(row, openToken).catch(error => {
+                if (isCurrentFuelForm(openToken)) toast(error.message || 'تعذر تحميل بيانات النموذج', true, 'form');
+            });
+        }, 0);
+        if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(startLookups);
+        else window.setTimeout(startLookups, 16);
     }, 0);
 
     if (typeof window.requestAnimationFrame === 'function') {
