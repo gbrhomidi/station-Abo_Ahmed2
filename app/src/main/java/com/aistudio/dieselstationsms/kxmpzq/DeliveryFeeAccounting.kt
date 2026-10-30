@@ -634,38 +634,139 @@ object DeliveryFeeAccounting {
         require(partyId > 0L) { "معرف العميل غير صالح" }
         require(stationId > 0) { "معرف المحطة غير صالح" }
         ensureSchema(helper)
+
         val db = helper.readableDatabase
         if (!tableExists(db, "fuel_sales")) {
             return JSONObject().put("found", false).put("message", "جدول مبيعات الوقود غير متاح")
         }
+
         val saleColumns = columns(db, "fuel_sales")
-        if (!setOf("id", "station_id").all { it in saleColumns }) {
+        if ("id" !in saleColumns) {
             return JSONObject().put("found", false).put("message", "بنية جدول مبيعات الوقود غير مكتملة")
         }
+
+        val parentColumns = if (tableExists(db, "sales_transactions")) {
+            columns(db, "sales_transactions")
+        } else {
+            emptySet()
+        }
+        // In the normalized schema, fuel_sales.sale_id points to the sales_transactions
+        // header. Scope and validate that header as well as the fuel detail row.
+        val joinParentSale = "sale_id" in saleColumns &&
+            setOf("id", "station_id").all { it in parentColumns }
+
+        fun partyExpression(alias: String, tableColumns: Set<String>): String? {
+            val expressions = buildList {
+                if ("customer_party_id" in tableColumns) add("NULLIF($alias.customer_party_id,0)")
+                if ("customer_id" in tableColumns) add("NULLIF($alias.customer_id,0)")
+            }
+            return expressions.takeIf { it.isNotEmpty() }
+                ?.let { "COALESCE(${it.joinToString(",")},0)" }
+        }
+
+        val childPartyExpression = partyExpression("fs", saleColumns)
+        val parentPartyExpression = if (joinParentSale) partyExpression("st", parentColumns) else null
         val customerExpression = when {
-            "customer_party_id" in saleColumns && "customer_id" in saleColumns ->
-                "COALESCE(NULLIF(customer_party_id,0),customer_id,0)"
-            "customer_party_id" in saleColumns -> "COALESCE(customer_party_id,0)"
-            "customer_id" in saleColumns -> "COALESCE(customer_id,0)"
+            parentPartyExpression != null && childPartyExpression != null ->
+                "COALESCE(NULLIF($parentPartyExpression,0),NULLIF($childPartyExpression,0),0)"
+            parentPartyExpression != null -> parentPartyExpression
+            childPartyExpression != null -> childPartyExpression
             else -> return JSONObject().put("found", false).put("message", "لا يوجد حقل يربط مبيعات الوقود بالعميل")
         }
-        val predicates = mutableListOf("station_id=?", "$customerExpression=?")
-        if ("is_deleted" in saleColumns) predicates += "COALESCE(CAST(is_deleted AS INTEGER),0)=0"
-        if ("deleted_at" in saleColumns) predicates += "(deleted_at IS NULL OR TRIM(CAST(deleted_at AS TEXT))='')"
-        val ordering = buildList {
-            if ("sale_date" in saleColumns) add("COALESCE(sale_date,'') DESC")
-            if ("sale_time" in saleColumns) add("COALESCE(sale_time,'') DESC")
-            if ("transaction_time" in saleColumns) add("COALESCE(transaction_time,'') DESC")
-            if ("created_at" in saleColumns) add("COALESCE(created_at,'') DESC")
-            add("id DESC")
-        }.distinct()
+
+        val predicates = mutableListOf("$customerExpression=?")
+        val arguments = mutableListOf(partyId.toString())
+        val fromClause = if (joinParentSale) {
+            predicates += "st.station_id=?"
+            arguments += stationId.toString()
+            if ("station_id" in saleColumns) {
+                // A duplicated child station scope must not contradict its owning invoice.
+                predicates += "COALESCE(NULLIF(CAST(fs.station_id AS INTEGER),0),st.station_id)=?"
+                arguments += stationId.toString()
+            }
+            "fuel_sales fs INNER JOIN sales_transactions st ON st.id=fs.sale_id"
+        } else {
+            if ("station_id" !in saleColumns) {
+                return JSONObject().put("found", false).put("message", "لا يتوفر نطاق محطة موثوق لعملية بيع الوقود")
+            }
+            predicates += "fs.station_id=?"
+            arguments += stationId.toString()
+            "fuel_sales fs"
+        }
+
+        fun appendValidityPredicates(alias: String, tableColumns: Set<String>) {
+            if ("is_deleted" in tableColumns) {
+                predicates += "COALESCE(CAST($alias.is_deleted AS INTEGER),0)=0"
+            }
+            if ("deleted_at" in tableColumns) {
+                predicates += "($alias.deleted_at IS NULL OR TRIM(CAST($alias.deleted_at AS TEXT))='')"
+            }
+            for (flag in listOf("is_cancelled", "is_canceled", "is_void", "is_voided", "is_invalid", "is_reversed")) {
+                if (flag in tableColumns) {
+                    predicates += "COALESCE(CAST($alias.$flag AS INTEGER),0)=0"
+                }
+            }
+            if ("is_valid" in tableColumns) {
+                predicates += "COALESCE(CAST($alias.is_valid AS INTEGER),0)=1"
+            }
+            for (statusColumn in listOf("status", "sale_status", "transaction_status")) {
+                if (statusColumn in tableColumns) {
+                    predicates += "LOWER(TRIM(COALESCE(CAST($alias.$statusColumn AS TEXT),''))) " +
+                        "NOT IN ('deleted','cancelled','canceled','void','voided','invalid','reversed','rejected')"
+                }
+            }
+            for (timestampColumn in listOf("cancelled_at", "canceled_at", "voided_at", "invalidated_at", "reversed_at")) {
+                if (timestampColumn in tableColumns) {
+                    predicates += "($alias.$timestampColumn IS NULL OR TRIM(CAST($alias.$timestampColumn AS TEXT))='')"
+                }
+            }
+        }
+
+        appendValidityPredicates("fs", saleColumns)
+        if (joinParentSale) appendValidityPredicates("st", parentColumns)
+
+        fun timestampParts(alias: String, tableColumns: Set<String>): List<String> {
+            val parts = mutableListOf<String>()
+            if ("transaction_time" in tableColumns) {
+                parts += "NULLIF(TRIM(CAST($alias.transaction_time AS TEXT)),'')"
+            }
+            if ("sale_date" in tableColumns && "sale_time" in tableColumns) {
+                val date = "NULLIF(TRIM(CAST($alias.sale_date AS TEXT)),'')"
+                val time = "NULLIF(TRIM(CAST($alias.sale_time AS TEXT)),'')"
+                parts += "CASE WHEN $date IS NULL THEN NULL WHEN $time IS NULL THEN $date ELSE $date || ' ' || $time END"
+            } else if ("sale_date" in tableColumns) {
+                parts += "NULLIF(TRIM(CAST($alias.sale_date AS TEXT)),'')"
+            }
+            if ("transaction_date" in tableColumns) {
+                parts += "NULLIF(TRIM(CAST($alias.transaction_date AS TEXT)),'')"
+            }
+            if ("created_at" in tableColumns) {
+                parts += "NULLIF(TRIM(CAST($alias.created_at AS TEXT)),'')"
+            }
+            return parts
+        }
+
+        val orderingParts = timestampParts("fs", saleColumns).toMutableList()
+        if (joinParentSale) orderingParts += timestampParts("st", parentColumns)
+        val ordering = if (orderingParts.isEmpty()) {
+            "fs.id DESC"
+        } else {
+            "COALESCE(${orderingParts.joinToString(",")},'') DESC, fs.id DESC"
+        }
+
         val sale = db.rawQuery(
-            "SELECT * FROM fuel_sales WHERE ${predicates.joinToString(" AND ")} ORDER BY ${ordering.joinToString(",")} LIMIT 1",
-            arrayOf(stationId.toString(), partyId.toString())
+            "SELECT fs.* FROM $fromClause WHERE ${predicates.joinToString(" AND ")} ORDER BY $ordering LIMIT 1",
+            arguments.toTypedArray()
         ).use { cursor -> if (!cursor.moveToFirst()) null else cursorObject(cursor) }
             ?: return JSONObject().put("found", false).put("message", "لا توجد عملية بيع وقود سابقة مرتبطة بهذا العميل في المحطة الحالية")
-        val fuelSaleId = sale.optLong("id", sale.optLong("sale_id", 0L))
-        if (fuelSaleId <= 0L) return JSONObject().put("found", false).put("message", "تعذر تحديد المعرف الفعلي لعملية بيع الوقود")
+
+        val fuelSaleId = sale.optLong("id", 0L)
+        if (fuelSaleId <= 0L) {
+            return JSONObject().put("found", false).put("message", "تعذر تحديد المعرف الفعلي لعملية بيع الوقود")
+        }
+        val parentSaleId = sale.optLong("sale_id", 0L)
+        if (parentSaleId > 0L) sale.put("parent_sale_id", parentSaleId)
+        // Existing delivery bridge contract uses the fuel_sales row id as sale_id.
         sale.put("sale_id", fuelSaleId)
         sale.put("fuel_sale_id", fuelSaleId)
         sale.put("customer_party_id", partyId)
