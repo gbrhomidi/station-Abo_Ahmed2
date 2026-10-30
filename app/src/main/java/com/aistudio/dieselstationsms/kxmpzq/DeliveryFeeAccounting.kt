@@ -677,7 +677,7 @@ object DeliveryFeeAccounting {
 
     fun savedDeliveryLocations(helper: DatabaseHelper, stationId: Int): JSONArray {
         require(stationId > 0) { "معرف المحطة غير صالح" }
-        ensureSchema(helper)
+        // Read-only autocomplete lookup: never run a schema migration while opening the modal.
         val db = helper.readableDatabase
         val selects = mutableListOf<String>()
         val arguments = mutableListOf<String>()
