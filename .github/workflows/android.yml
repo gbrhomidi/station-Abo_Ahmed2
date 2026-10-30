@@ -275,7 +275,7 @@ jobs:
             exit 1
           fi
 
-          API_PATH="repos/$GITHUB_REPOSITORY/actions/workflows/android.yml/runs"
+          API_PATH="repos/$GITHUB_REPOSITORY/actions/runs"
           DEADLINE=$((SECONDS + 600))
 
           echo "Branch: $QUEUE_BRANCH"
@@ -299,7 +299,7 @@ jobs:
                 '
                   [
                     .[] |
-                    select(.head_branch == $branch and .head_sha == $target) |
+                    select(.path == ".github/workflows/android.yml" and .head_branch == $branch and .head_sha == $target) |
                     select(
                       $event == "push" or
                       ((.run_number | tonumber) < ($current_run | tonumber))
