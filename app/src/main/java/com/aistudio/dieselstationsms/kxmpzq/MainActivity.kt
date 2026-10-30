@@ -116,6 +116,8 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_SYSTEM_SETUP_COMPLETED = "system_setup_completed"
         private const val KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH = "require_login_on_next_launch"
         private const val KEY_LAST_BOOT_COUNT = "last_boot_count"
+        private const val KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME = "security_background_at_elapsed_realtime"
+        private const val KEY_SECURITY_REAUTH_PENDING = "security_reauthentication_pending"
 
 
         private var webViewInstanceId = 0
@@ -273,9 +275,6 @@ class MainActivity : AppCompatActivity() {
     private var biometricCancellationExpected: Boolean = false
     private var securityFallbackDialog: androidx.appcompat.app.AlertDialog? = null
     private var lastSecurityInteractionElapsed: Long = android.os.SystemClock.elapsedRealtime()
-    // Monotonic timestamp captured only when the Activity actually leaves the foreground.
-    private var appBackgroundedAtElapsedRealtime: Long? = null
-    private val securityReauthenticationBackgroundDelayMs = 60_000L
 
     private val securityIdleRunnable = object : Runnable {
         override fun run() {
@@ -429,8 +428,17 @@ class MainActivity : AppCompatActivity() {
                 clearSessionAfterDeviceRebootIfNeeded(dbHelper)
 
                 val setupRequired = querySystemSetupRequired()
-                val lockPending = !sharedPrefs.getBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, false) &&
-                    !currentAuthToken.isNullOrBlank() && requiresSecurityReauthentication()
+                val loginRequiredOnLaunch = sharedPrefs.getBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, false)
+                val hasActiveSession = !currentAuthToken.isNullOrBlank()
+                val previouslyPending = sharedPrefs.getBoolean(KEY_SECURITY_REAUTH_PENDING, false)
+                val lockPending = !loginRequiredOnLaunch && hasActiveSession &&
+                    (previouslyPending || requiresSecurityReauthentication())
+                // Consume an elapsed-realtime background marker only after startup security
+                // settings and the current session have both been read successfully.
+                sharedPrefs.edit()
+                    .remove(KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME)
+                    .putBoolean(KEY_SECURITY_REAUTH_PENDING, lockPending)
+                    .apply()
                 val developerModeEnabled = dbHelper.getSetting("developerMode").trim().lowercase(Locale.ROOT) in
                     setOf("1", "true", "yes", "on")
                 StartupPreparation(setupRequired, lockPending, developerModeEnabled)
@@ -525,27 +533,34 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         val nowElapsed = android.os.SystemClock.elapsedRealtime()
-        val backgroundedAt = appBackgroundedAtElapsedRealtime
-        appBackgroundedAtElapsedRealtime = null
-        val backgroundDuration = backgroundedAt?.let { (nowElapsed - it).coerceAtLeast(0L) } ?: 0L
 
         if (startupDatabaseReady) {
+            // Read the persisted monotonic timestamp so Activity recreation does not
+            // reset the interval. Do not consume it before startup security settings load.
+            val backgroundedAt = sharedPrefs.getLong(KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME, -1L)
+                .takeIf { it >= 0L }
+            val backgroundDurationExceeded = BackgroundReauthenticationPolicy.shouldRequireReauthentication(
+                backgroundedAtElapsedRealtime = backgroundedAt,
+                resumedAtElapsedRealtime = nowElapsed
+            )
+            if (backgroundedAt != null) {
+                sharedPrefs.edit().remove(KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME).apply()
+            }
+
             applySecurityRuntimeSettings(target = null)
             val timeoutMinutes = securitySettingValue("autoLogoutMinutes").toIntOrNull()?.coerceIn(0, 1440) ?: 0
 
-            // The biometric/device-unlock gate is based on continuous time spent fully
-            // outside the app, not on every onPause callback (dialogs and brief app
-            // switches can pause an Activity for only a few seconds).
-            if (backgroundedAt != null &&
-                backgroundDuration >= securityReauthenticationBackgroundDelayMs &&
+            // onStop records the actual background transition. onPause is intentionally
+            // ignored because it also runs for temporary system UI and short interruptions.
+            if (backgroundDurationExceeded &&
                 !currentAuthToken.isNullOrBlank() &&
                 requiresSecurityReauthentication()
             ) {
-                securityLockPending = true
+                updateSecurityLockPending(true)
                 webView?.visibility = View.INVISIBLE
                 DebugLogger.logEvent(
                     "security_background_timeout",
-                    "Background duration reached ${backgroundDuration}ms; reauthentication required"
+                    "Background duration reached at least 60000ms; reauthentication required"
                 )
             }
 
@@ -599,12 +614,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         appInForeground = false
-        // Record the actual background interval once. elapsedRealtime is monotonic,
-        // so changing the wall clock cannot shorten or extend the 60-second threshold.
+        // Persist the monotonic start time in encrypted preferences. This survives
+        // Activity recreation while avoiding wall-clock changes and Activity-age timing.
         if (!isChangingConfigurations && !isDatabaseBackupPickerActive &&
-            appBackgroundedAtElapsedRealtime == null
+            sharedPrefs.getLong(KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME, -1L) < 0L
         ) {
-            appBackgroundedAtElapsedRealtime = android.os.SystemClock.elapsedRealtime()
+            sharedPrefs.edit()
+                .putLong(KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME, android.os.SystemClock.elapsedRealtime())
+                .apply()
         }
 
         // A biometric sheet may be cancelled when another app comes forward. Preserve
@@ -1751,6 +1768,20 @@ class MainActivity : AppCompatActivity() {
         isTrueSetting(securitySettingValue("requireDeviceUnlock")) ||
             isTrueSetting(securitySettingValue("biometricLockEnabled"))
 
+    /**
+     * Keep a pending foreground lock across Activity recreation. Clearing a successful
+     * challenge also removes any stale background timestamp, without touching auth or
+     * Remember-Me tokens.
+     */
+    private fun updateSecurityLockPending(pending: Boolean) {
+        securityLockPending = pending
+        if (::sharedPrefs.isInitialized) {
+            val editor = sharedPrefs.edit().putBoolean(KEY_SECURITY_REAUTH_PENDING, pending)
+            if (!pending) editor.remove(KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME)
+            editor.apply()
+        }
+    }
+
     private fun requestSecurityReauthentication() {
         if (!appInForeground || !securityLockPending || securityPromptActive || currentAuthToken.isNullOrBlank() || isFinishing) return
         webView?.visibility = View.INVISIBLE
@@ -1759,7 +1790,7 @@ class MainActivity : AppCompatActivity() {
             showBiometricPrompt(
                 onSuccess = {
                     securityPromptActive = false
-                    securityLockPending = false
+                    updateSecurityLockPending(false)
                     lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
                     applySecurityRuntimeSettings()
                     webView?.visibility = View.VISIBLE
@@ -1826,7 +1857,7 @@ class MainActivity : AppCompatActivity() {
             dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val verified = runCatching { securitySettingsStore.verifyPinCode(input.text?.toString().orEmpty()) }.getOrDefault(false)
                 if (verified) {
-                    securityLockPending = false
+                    updateSecurityLockPending(false)
                     securityPromptActive = false
                     lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
                     applySecurityRuntimeSettings()
@@ -1859,7 +1890,7 @@ class MainActivity : AppCompatActivity() {
         currentUserName = ""
         // Keep Remember-Me material intact; only the active session token is removed.
         sharedPrefs.edit().remove(KEY_TOKEN).apply()
-        securityLockPending = false
+        updateSecurityLockPending(false)
         securityPromptActive = false
         lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
         webView?.post {
@@ -1873,7 +1904,7 @@ class MainActivity : AppCompatActivity() {
     private fun onSecurityDeviceUnlockResult(resultCode: Int) {
         securityPromptActive = false
         if (resultCode == RESULT_OK) {
-            securityLockPending = false
+            updateSecurityLockPending(false)
             lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
             applySecurityRuntimeSettings()
             webView?.visibility = View.VISIBLE
@@ -3447,7 +3478,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         act.currentAuthToken = token
                         act.sharedPrefs.edit().remove(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH).apply()
                         // A successful password login completes any deferred foreground lock.
-                        act.securityLockPending = false
+                        act.updateSecurityLockPending(false)
                         act.securityPromptActive = false
                         act.lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
 
@@ -9216,7 +9247,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                             activity.currentUserRole = role
                             // This web-driven biometric flow is the active unlock authority for
                             // lock-screen.html; clear any stale native re-auth request from onPause.
-                            activity.securityLockPending = false
+                            activity.updateSecurityLockPending(false)
                             activity.securityPromptActive = false
                             activity.lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
                             activity.currentUserName = savedUsername
