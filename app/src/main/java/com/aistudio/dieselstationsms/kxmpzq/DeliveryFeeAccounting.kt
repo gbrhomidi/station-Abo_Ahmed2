@@ -630,6 +630,51 @@ object DeliveryFeeAccounting {
         return JSONObject().put("success", true).put("journal_entry_id", journalId).put("message", "تم إثبات تسديد رسوم التوصيل وإنقاص مديونية السائق بقيد محاسبي")
     }
 
+    fun latestFuelSaleForCustomer(helper: DatabaseHelper, partyId: Long, stationId: Int): JSONObject {
+        require(partyId > 0L) { "معرف العميل غير صالح" }
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        ensureSchema(helper)
+        val db = helper.readableDatabase
+        if (!tableExists(db, "fuel_sales")) {
+            return JSONObject().put("found", false).put("message", "جدول مبيعات الوقود غير متاح")
+        }
+        val saleColumns = columns(db, "fuel_sales")
+        if (!setOf("id", "station_id").all { it in saleColumns }) {
+            return JSONObject().put("found", false).put("message", "بنية جدول مبيعات الوقود غير مكتملة")
+        }
+        val customerExpression = when {
+            "customer_party_id" in saleColumns && "customer_id" in saleColumns ->
+                "COALESCE(NULLIF(customer_party_id,0),customer_id,0)"
+            "customer_party_id" in saleColumns -> "COALESCE(customer_party_id,0)"
+            "customer_id" in saleColumns -> "COALESCE(customer_id,0)"
+            else -> return JSONObject().put("found", false).put("message", "لا يوجد حقل يربط مبيعات الوقود بالعميل")
+        }
+        val predicates = mutableListOf("station_id=?", "$customerExpression=?")
+        if ("is_deleted" in saleColumns) predicates += "COALESCE(CAST(is_deleted AS INTEGER),0)=0"
+        if ("deleted_at" in saleColumns) predicates += "(deleted_at IS NULL OR TRIM(CAST(deleted_at AS TEXT))='')"
+        val ordering = buildList {
+            if ("sale_date" in saleColumns) add("COALESCE(sale_date,'') DESC")
+            if ("sale_time" in saleColumns) add("COALESCE(sale_time,'') DESC")
+            if ("transaction_time" in saleColumns) add("COALESCE(transaction_time,'') DESC")
+            if ("created_at" in saleColumns) add("COALESCE(created_at,'') DESC")
+            add("id DESC")
+        }.distinct()
+        val sale = db.rawQuery(
+            "SELECT * FROM fuel_sales WHERE ${predicates.joinToString(" AND ")} ORDER BY ${ordering.joinToString(",")} LIMIT 1",
+            arrayOf(stationId.toString(), partyId.toString())
+        ).use { cursor -> if (!cursor.moveToFirst()) null else cursorObject(cursor) }
+            ?: return JSONObject().put("found", false).put("message", "لا توجد عملية بيع وقود سابقة مرتبطة بهذا العميل في المحطة الحالية")
+        val fuelSaleId = sale.optLong("id", sale.optLong("sale_id", 0L))
+        if (fuelSaleId <= 0L) return JSONObject().put("found", false).put("message", "تعذر تحديد المعرف الفعلي لعملية بيع الوقود")
+        sale.put("sale_id", fuelSaleId)
+        sale.put("fuel_sale_id", fuelSaleId)
+        sale.put("customer_party_id", partyId)
+        sale.put("party_id", partyId)
+        sale.put("sale_kind", "fuel")
+        sale.put("sale_type", "fuel")
+        return JSONObject().put("found", true).put("sale", sale)
+    }
+
     fun enrichSaleContext(helper: DatabaseHelper, stationId: Int, context: JSONObject): JSONObject {
         ensureSchema(helper)
         val saleJson = context.optJSONObject("sale") ?: context
