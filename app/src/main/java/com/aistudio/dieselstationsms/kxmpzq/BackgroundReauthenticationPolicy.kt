@@ -55,4 +55,15 @@ internal object BackgroundReauthenticationPolicy {
     ): Boolean =
         hasActiveSession && !loginRequiredOnLaunch &&
             (isActivityRecreation || securityLockPending)
+
+    /**
+     * Don't start the background clock for rotations, external pickers or a second
+     * Activity in this same application (for example the native map selector).
+     */
+    fun shouldRecordBackgroundTransition(
+        isChangingConfigurations: Boolean,
+        isExternalPickerActive: Boolean,
+        hasOtherStartedActivity: Boolean
+    ): Boolean =
+        !isChangingConfigurations && !isExternalPickerActive && !hasOtherStartedActivity
 }
