@@ -11833,7 +11833,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     db, activity.currentUserId
                 )
                 DeliveryFeeAccounting.ensureSchema(db)
-                val saleContext = db.getLatestCustomerSaleForDelivery(partyId, stationScopeId)
+                val saleContext = DeliveryFeeAccounting.latestFuelSaleForCustomer(db, partyId, stationScopeId)
                 dataResponse(DeliveryFeeAccounting.enrichSaleContext(db, stationScopeId, saleContext))
             } catch (e: Exception) {
                 DebugLogger.logException(
