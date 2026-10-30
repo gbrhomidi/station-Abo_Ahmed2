@@ -2112,6 +2112,7 @@ textarea.form-input { text-align: right; min-height: 64px; resize: vertical; }
 <!-- Print Area — يظهر فقط في الطباعة -->
 <div id="printArea"></div>
 
+<script src="file:///android_asset/assets-local/js/fuel-sales-async-bridge.js"></script>
 <script>
 (() => {
 'use strict';
@@ -2230,6 +2231,9 @@ const state = {
     lastSuccessfulSaleFingerprint: null,
     priceLookupSeq: 0,
     formOpenSequence: 0,
+    pumpNozzleRequestSequence: 0,
+    formOpenStartedAt: 0,
+    isSaving: false,
     saleFormLookupCache: { loadedAt: 0, shift: null, pumps: [], fuels: [], customers: [] },
     saleFormLookupPromise: null,
     activePromotionCache: { loadedAt: 0, rows: [] },
@@ -2245,6 +2249,40 @@ const state = {
     pumpsCache: [],
     shiftsCache: []
 };
+
+const fuelSalesAsyncBridge = window.FuelSalesAsyncBridge &&
+    typeof window.FuelSalesAsyncBridge.create === 'function'
+    ? window.FuelSalesAsyncBridge.create(bridge, {timeoutMs: 30000})
+    : null;
+
+window.__fuelSalesNativeResult = function(requestId, rawResponse) {
+    if (fuelSalesAsyncBridge) fuelSalesAsyncBridge.resolve(requestId, rawResponse);
+};
+
+function invokeFuelSalesAsync(operation, args=[], timeoutMs) {
+    if (!fuelSalesAsyncBridge) return Promise.reject(new Error('مساعد Android غير المتزامن لمبيعات الوقود غير محمّل'));
+    return fuelSalesAsyncBridge.invoke(operation, args, timeoutMs);
+}
+
+function fuelSalePerformanceNow() {
+    return window.performance && typeof window.performance.now === 'function' ? window.performance.now() : Date.now();
+}
+
+function recordFuelSalePerformance(label, startedAt) {
+    const elapsed = Math.max(0, fuelSalePerformanceNow() - Number(startedAt || 0));
+    if (window.console && typeof window.console.info === 'function') {
+        window.console.info('[FuelSalesPerformance] ' + label + ': ' + elapsed.toFixed(1) + 'ms');
+    }
+    return elapsed;
+}
+
+function parseOptionalBridgeResult(raw) {
+    try { return parse(raw); } catch (_) { return null; }
+}
+
+window.addEventListener('pagehide', function() {
+    if (fuelSalesAsyncBridge) fuelSalesAsyncBridge.rejectAll('تم مغادرة شاشة مبيعات الوقود');
+});
 
 try {
     const savedView = localStorage.getItem('fuel-sales-view');
@@ -2323,7 +2361,8 @@ function showFormToast(message, type='success') {
     }
     clearTimeout(node._timer);
     node.textContent = String(message || '');
-    node.className = 'toast form-toast show ' + (type === 'error' ? 'error' : 'success');
+    const tone = ['success','error','warning','info'].includes(type) ? type : 'success';
+    node.className = 'toast form-toast show ' + tone;
     node.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
     const body = node.closest('.modal-body');
     if (body) body.scrollTop = 0;
@@ -2744,13 +2783,13 @@ function promotionIsValidAt(row, at) {
 
 async function loadActivePromotions(row=null, openToken=state.formOpenSequence) {
     const select = document.querySelector('[data-key="occasion_code"]');
-    if (!select || !bridge || typeof bridge.getPriceListRecords !== 'function') return;
+    if (!select || !bridge || typeof bridge.executeFuelSalesAsync !== 'function') return;
     try {
         let promotionRows = state.activePromotionCache.rows;
         const cacheFresh = state.activePromotionCache.loadedAt &&
             Date.now() - state.activePromotionCache.loadedAt < 60000;
         if (!cacheFresh) {
-            const result = await invoke('getPriceListRecords', [JSON.stringify({})]);
+            const result = await invokeFuelSalesAsync('promotions', [JSON.stringify({})]);
             promotionRows = rowsFrom(result);
             state.activePromotionCache = { loadedAt: Date.now(), rows: promotionRows };
         }
@@ -2798,18 +2837,17 @@ async function getSaleFormLookupData() {
     // Keep the four essential lookups together. The optional location autocomplete
     // is loaded after the inputs are wired so it cannot delay the usable form.
     state.saleFormLookupPromise = (async () => {
-        const results = await Promise.all([
-            (bridge && typeof bridge.getCurrentShift === 'function') ? invoke('getCurrentShift', []).catch(() => null) : Promise.resolve(null),
-            (bridge && typeof bridge.getPumps === 'function') ? invoke('getPumps', []).catch(() => null) : Promise.resolve(null),
-            (bridge && typeof bridge.getFuelTypes === 'function') ? invoke('getFuelTypes', []).catch(() => null) : Promise.resolve(null),
-            (bridge && typeof bridge.getCustomers === 'function') ? invoke('getCustomers', []).catch(() => null) : Promise.resolve(null)
-        ]);
+        const response = await invokeFuelSalesAsync('formLookups', []);
+        const shift = parseOptionalBridgeResult(response.shift);
+        const pumps = parseOptionalBridgeResult(response.pumps);
+        const fuels = parseOptionalBridgeResult(response.fuels);
+        const customers = parseOptionalBridgeResult(response.customers);
         state.saleFormLookupCache = {
             loadedAt: Date.now(),
-            shift: dataOf(results[0]),
-            pumps: rowsFrom(results[1]),
-            fuels: rowsFrom(results[2]),
-            customers: rowsFrom(results[3])
+            shift: dataOf(shift),
+            pumps: rowsFrom(pumps),
+            fuels: rowsFrom(fuels),
+            customers: rowsFrom(customers)
         };
         return state.saleFormLookupCache;
     })().finally(() => {
@@ -2848,9 +2886,9 @@ async function loadSavedDeliveryLocationSuggestions(openToken, row=null) {
     const cacheFresh = state.savedDeliveryLocationsCache.loadedAt &&
         Date.now() - state.savedDeliveryLocationsCache.loadedAt < 60000;
 
-    if (!cacheFresh && bridge && typeof bridge.getSavedDeliveryLocations === 'function') {
+    if (!cacheFresh && bridge && typeof bridge.executeFuelSalesAsync === 'function') {
         try {
-            const response = await invoke('getSavedDeliveryLocations', []);
+            const response = await invokeFuelSalesAsync('locations', []);
             locations = rowsFrom(response).map(item =>
                 String(typeof item === 'string' ? item : (item.location || item.delivery_location || '')).trim()
             ).filter(Boolean);
@@ -2946,8 +2984,9 @@ async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
     const pumpSelect = document.querySelector('[data-key="pump_id"]');
     if (pumpSelect) {
         pumpSelect.onchange = async () => {
-            await loadPumpNozzles(pumpSelect.value, '', openToken);
-            if (!isCurrentFuelForm(openToken)) return;
+            const changedPumpId = String(pumpSelect.value || '');
+            await loadPumpNozzles(changedPumpId, '', openToken);
+            if (!isCurrentFuelForm(openToken) || String(pumpSelect.value || '') !== changedPumpId) return;
             const fuel = document.querySelector('[data-key="fuel_type_id"]');
             const price = document.querySelector('[data-key="price_per_liter"]');
             const total = document.querySelector('[data-key="total_amount"]');
@@ -2959,13 +2998,10 @@ async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
     }
 
     const selectedPumpId = row ? field(row,['pump_id']) : (pumpSelect?.value || '');
-    if (selectedPumpId) {
-        await loadPumpNozzles(selectedPumpId, row ? field(row,['nozzle_id']) : '', openToken);
-    }
-    if (!isCurrentFuelForm(openToken)) return;
-
     const nozzleSelect = document.querySelector('[data-key="nozzle_id"]');
-    if (nozzleSelect) nozzleSelect.onchange = () => {
+    if (nozzleSelect) {
+        nozzleSelect.disabled = !selectedPumpId;
+        nozzleSelect.onchange = () => {
         const option = nozzleSelect.options[nozzleSelect.selectedIndex];
         const fuelId = option?.dataset?.fuelTypeId || '';
         const fuel = document.querySelector('[data-key="fuel_type_id"]');
@@ -2980,7 +3016,8 @@ async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
             if (total) total.value = '';
             toast('هذه الفوهة غير مرتبطة بنوع وقود صالح في قاعدة البيانات؛ تحقق من إعداد الفوهة.', true, 'form');
         }
-    };
+        };
+    }
 
     const fee = document.querySelector('[data-key="delivery_service_fee"]');
     const mode = document.querySelector('[data-key="delivery_fee_mode"]');
@@ -2997,6 +3034,15 @@ async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
 
     bindFuelCalculation(!row);
     updateDeliveryFeeDisplay();
+    recordFuelSalePerformance('form-interactive', state.formOpenStartedAt);
+
+    // Nozzle data is not on the critical path for enabling the remaining controls.
+    if (selectedPumpId) {
+        loadPumpNozzles(selectedPumpId, row ? field(row,['nozzle_id']) : '', openToken)
+            .catch(error => {
+                if (isCurrentFuelForm(openToken)) toast(error.message || 'تعذر تحميل فوهات المضخة', true, 'form');
+            });
+    }
 
     window.setTimeout(() => {
         if (isCurrentFuelForm(openToken)) {
@@ -3018,23 +3064,32 @@ function localTime(d=new Date()) { return String(d.getHours()).padStart(2,'0')+'
 async function loadPumpNozzles(pumpId='', selectedId='', openToken=state.formOpenSequence) {
     const nozzleEl = document.querySelector('[data-key="nozzle_id"]');
     if (!nozzleEl) return;
+    const requestSequence = ++state.pumpNozzleRequestSequence;
+    const key = String(pumpId || '');
     nozzleEl.innerHTML = '<option value="">اختر الفوهة...</option>';
-    if (!pumpId || !bridge || typeof bridge.getPumpNozzles !== 'function') return;
+    nozzleEl.disabled = !key;
+    if (!key || !bridge || typeof bridge.executeFuelSalesAsync !== 'function') return;
+    nozzleEl.disabled = true;
     try {
-        const key = String(pumpId);
         const cached = state.pumpNozzleCache[key];
         let nozzles = cached && Date.now() - cached.loadedAt < 60000 ? cached.rows : null;
         if (!nozzles) {
-            const result = parse(bridge.getPumpNozzles(JSON.stringify({pump_id: Number(pumpId)})));
+            const result = await invokeFuelSalesAsync('nozzles', [JSON.stringify({pump_id: Number(pumpId)})]);
             nozzles = rowsFrom(result);
             state.pumpNozzleCache[key] = { loadedAt: Date.now(), rows: nozzles };
         }
-        if (!isCurrentFuelForm(openToken)) return;
+        if (!isCurrentFuelForm(openToken) ||
+            requestSequence !== state.pumpNozzleRequestSequence ||
+            String(document.querySelector('[data-key="pump_id"]')?.value || '') !== key) return;
         nozzleEl.innerHTML = '<option value="">اختر الفوهة...</option>'
             + nozzles.map(n => '<option value="' + esc(n.id) + '" data-fuel-type-id="' + esc(n.fuel_type_id || '') + '">' + esc(n.nozzle_number||n.nozzle_code||n.id) + ' — ' + esc(n.nozzle_code||'فوهة') + '</option>').join('');
         nozzleEl.value = String(selectedId||'');
+        nozzleEl.disabled = false;
     } catch (e) {
-        if (isCurrentFuelForm(openToken)) toast('تعذر تحميل فوهات المضخة: ' + e.message, true, 'form');
+        if (isCurrentFuelForm(openToken) && requestSequence === state.pumpNozzleRequestSequence) {
+            nozzleEl.disabled = false;
+            toast('تعذر تحميل فوهات المضخة: ' + e.message, true, 'form');
+        }
     }
 }
 
@@ -3050,7 +3105,7 @@ async function refreshResolvedFuelPrice() {
     const date = document.querySelector('[data-key="sale_date"]')?.value || localDate(new Date());
     const time = document.querySelector('[data-key="sale_time"]')?.value || localTime(new Date());
     try {
-        const raw = await invoke('getResolvedFuelSalePrice', [JSON.stringify({
+        const raw = await invokeFuelSalesAsync('resolvedPrice', [JSON.stringify({
             fuel_type_id: Number(f.value),
             quantity,
             customer_id: Number(customer?.value||0),
@@ -3180,6 +3235,7 @@ function openForm(row=null) {
     clearFormToast();
     state.editing = row;
     const openToken = ++state.formOpenSequence;
+    state.formOpenStartedAt = fuelSalePerformanceNow();
     const deliveryBtn = $('deliveryBtn');
     if (deliveryBtn) {
         deliveryBtn.disabled = true;
@@ -3205,12 +3261,16 @@ function openForm(row=null) {
 
         // Give WebView one complete paint with the real input controls before any
         // synchronous JavaScript-interface/SQLite lookup is started.
-        const startLookups = () => window.setTimeout(() => {
+        const startLookups = () => {
             if (!isCurrentFuelForm(openToken)) return;
-            loadSaleFormLookups(row, openToken).catch(error => {
-                if (isCurrentFuelForm(openToken)) toast(error.message || 'تعذر تحميل بيانات النموذج', true, 'form');
-            });
-        }, 0);
+            window.setTimeout(() => {
+                if (!isCurrentFuelForm(openToken)) return;
+                recordFuelSalePerformance('controls-painted', state.formOpenStartedAt);
+                loadSaleFormLookups(row, openToken).catch(error => {
+                    if (isCurrentFuelForm(openToken)) toast(error.message || 'تعذر تحميل بيانات النموذج', true, 'form');
+                });
+            }, 0);
+        };
         if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(startLookups);
         else window.setTimeout(startLookups, 16);
     }, 0);
@@ -3242,6 +3302,7 @@ function fuelSaleFingerprint(payload) {
 }
 
 async function saveForm() {
+    if (state.isSaving) return;
     const form = $('recordForm');
     if (!form.reportValidity()) return;
     const payload = collectForm();
@@ -3282,22 +3343,51 @@ async function saveForm() {
     payload.total_amount = (numeric(payload.quantity) * numeric(payload.price_per_liter)).toFixed(2);
     if (!state.pendingIdempotencyKey) state.pendingIdempotencyKey = newIdempotencyKey();
     payload.idempotency_key = state.pendingIdempotencyKey;
+
+    const saveStartedAt = fuelSalePerformanceNow();
+    const saveButton = $('saveBtn');
+    const originalSaveButtonHtml = saveButton ? saveButton.innerHTML : '';
+    const originalSaveButtonDisabled = Boolean(saveButton && saveButton.disabled);
+    const previousControlStates = Array.from(form.elements).map(control => ({
+        control,
+        disabled: Boolean(control.disabled)
+    }));
+
+    state.isSaving = true;
+    previousControlStates.forEach(item => { item.control.disabled = true; });
+    form.setAttribute('aria-busy', 'true');
+    if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.setAttribute('aria-busy', 'true');
+        saveButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارٍ الحفظ...';
+    }
+    showFormToast('جارٍ حفظ عملية البيع والتحقق من SQLite.', 'info');
     setLoading(true);
+
     try {
+        // Allow WebView to paint the pending status before native SQLite starts.
+        await new Promise(resolve => {
+            const resume = () => window.setTimeout(resolve, 0);
+            if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(resume);
+            else window.setTimeout(resume, 16);
+        });
+
         let result;
         if (state.editing && CFG.updateMethod) {
-            result = await invoke(CFG.updateMethod, [Number(idOf(state.editing)), JSON.stringify(payload)]);
+            result = await invokeFuelSalesAsync('update', [Number(idOf(state.editing)), JSON.stringify(payload)], 60000);
             parse(result);
+            recordFuelSalePerformance('save-confirmed', saveStartedAt);
             rememberSavedDeliveryLocation(payload.delivery_location);
-            showAdvancedNotification('تم تحديث عملية البيع بنجاح', 'success', 'تم التحديث');
+            showFormToast('تم تحديث عملية البيع بنجاح بعد تأكيد SQLite.', 'success');
             closeModal(null, 'formModal');
-            await reloadData();
+            void reloadData().catch(refreshError => console.warn('[Fuel Sales] Background refresh failed:', refreshError));
             return;
         } else {
-            result = await invoke('saveFuelSaleRecord', [JSON.stringify(payload)]);
+            result = await invokeFuelSalesAsync('save', [JSON.stringify(payload)], 120000);
             const saved = parse(result);
             const saleId = Number(saved.sale_id || saved.id || 0);
             if (!saleId) throw new Error('لم يتم استلام sale_id الحقيقي من SQLite');
+            recordFuelSalePerformance('save-confirmed', saveStartedAt);
             state.lastSavedSaleId = saleId;
             state.pendingIdempotencyKey = null;
             state.lastSuccessfulSaleFingerprint = fingerprint;
@@ -3330,9 +3420,17 @@ async function saveForm() {
             return;
         }
     } catch (e) {
+        showFormToast(e.message || 'فشل حفظ العملية؛ لم يتم تأكيد الكتابة في SQLite.', 'error');
         showAdvancedNotification(e.message || 'فشل حفظ العملية', 'error', '❌ فشل الحفظ');
-        toast(e.message || 'فشل حفظ العملية', true, 'form');
     } finally {
+        previousControlStates.forEach(item => { item.control.disabled = item.disabled; });
+        form.removeAttribute('aria-busy');
+        if (saveButton) {
+            saveButton.innerHTML = originalSaveButtonHtml;
+            saveButton.disabled = originalSaveButtonDisabled;
+            saveButton.removeAttribute('aria-busy');
+        }
+        state.isSaving = false;
         setLoading(false);
     }
 }
@@ -3377,7 +3475,9 @@ async function reloadData() {
     if (!bridge) { $('offlineBanner').classList.add('show'); renderCards(); return; }
     setLoading(true);
     try {
-        const result = await invoke(CFG.listMethod, argsForLoad());
+        const result = CFG.listMethod === 'getFuelSalesPage'
+            ? await invokeFuelSalesAsync('fuelSalesPage', argsForLoad(), 30000)
+            : await invoke(CFG.listMethod, argsForLoad());
         state.rows = rowsFrom(result);
         state.loadedAt = new Date();
         $('offlineBanner').classList.remove('show');

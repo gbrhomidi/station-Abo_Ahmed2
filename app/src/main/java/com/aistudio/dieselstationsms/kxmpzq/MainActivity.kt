@@ -78,6 +78,7 @@ import java.util.*
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.io.FileOutputStream
@@ -2748,6 +2749,90 @@ class MainActivity : AppCompatActivity() {
         private fun getDbHelper(): DatabaseHelper? = dbHelperRef.get()
         private fun getGeminiHelper(): GeminiAIHelper? = geminiHelperRef.get()
         private fun getActivity(): MainActivity? = activityRef.get()
+
+        private val activeFuelSalesBridgeRequests = AtomicInteger(0)
+
+        /**
+         * Runs allowlisted fuel-sales bridge operations away from the WebView JavaScript
+         * thread. Existing synchronous methods remain available for other screens.
+         */
+        @JavascriptInterface
+        fun executeFuelSalesAsync(requestId: String, operation: String, argsJson: String): String {
+            if (!requestId.matches(Regex("[A-Za-z0-9_-]{1,96}"))) {
+                return errorResponse("معرف طلب غير صالح")
+            }
+
+            val allowedOperations = setOf(
+                "formLookups", "nozzles", "resolvedPrice", "promotions",
+                "locations", "save", "update", "fuelSalesPage"
+            )
+            if (operation !in allowedOperations) {
+                return errorResponse("عملية غير مدعومة في جسر مبيعات الوقود")
+            }
+
+            val args = try {
+                JSONArray(argsJson.ifBlank { "[]" })
+            } catch (exception: Exception) {
+                return errorResponse("وسائط طلب مبيعات الوقود غير صالحة")
+            }
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+
+            if (activeFuelSalesBridgeRequests.incrementAndGet() > 12) {
+                activeFuelSalesBridgeRequests.decrementAndGet()
+                return errorResponse("النظام مشغول بطلبات مبيعات أخرى؛ حاول مجدداً")
+            }
+
+            return try {
+                val job = activity.lifecycleScope.launch {
+                    val response = withContext(Dispatchers.IO) {
+                        try {
+                            when (operation) {
+                                "formLookups" -> JSONObject().apply {
+                                    // A missing shift must not prevent pumps, fuels, or customers loading.
+                                    put("shift", getCurrentShift())
+                                    put("pumps", getPumps())
+                                    put("fuels", getFuelTypes())
+                                    put("customers", getCustomers())
+                                }.toString()
+                                "nozzles" -> getPumpNozzles(args.optString(0, "{}"))
+                                "resolvedPrice" -> getResolvedFuelSalePrice(args.optString(0, "{}"))
+                                "promotions" -> getPriceListRecords(args.optString(0, "{}"))
+                                "locations" -> getSavedDeliveryLocations()
+                                "save" -> saveFuelSaleRecord(args.optString(0, "{}"))
+                                "update" -> updateFuelSaleRecord(
+                                    args.optLong(0, 0L),
+                                    args.optString(1, "{}")
+                                )
+                                "fuelSalesPage" -> getFuelSalesPage(args.optString(0, "{}"))
+                                else -> errorResponse("عملية غير مدعومة")
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (exception: Exception) {
+                            DebugLogger.logException("FuelSalesAsync:$operation", exception)
+                            errorResponse(exception.message ?: "تعذر تنفيذ طلب مبيعات الوقود")
+                        }
+                    }
+
+                    if (!this@MainActivity.isDestroyed.get() && !activity.isFinishing) {
+                        val callbackScript =
+                            "if (typeof window.__fuelSalesNativeResult === 'function') {" +
+                            "window.__fuelSalesNativeResult(" +
+                            JSONObject.quote(requestId) + "," +
+                            JSONObject.quote(response) +
+                            ");}"
+                        activity.webView?.evaluateJavascript(callbackScript, null)
+                    }
+                }
+                // Completion also runs for lifecycle cancellation, releasing the slot.
+                job.invokeOnCompletion { activeFuelSalesBridgeRequests.decrementAndGet() }
+                JSONObject().put("success", true).put("queued", true).toString()
+            } catch (exception: Exception) {
+                activeFuelSalesBridgeRequests.decrementAndGet()
+                DebugLogger.logException("FuelSalesAsyncDispatch", exception)
+                errorResponse(exception.message ?: "تعذر جدولة طلب مبيعات الوقود")
+            }
+        }
 
         @JavascriptInterface
         fun getStartupState(): String = getActivity()?.startupStateForBridge() ?: "failed"
