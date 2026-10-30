@@ -76,6 +76,9 @@ async function runFuelSalesAsyncBridgeTests() {
     assert.ok(screen.includes("invokeFuelSalesAsync('formLookups'"), 'essential form reads must use the async bridge');
     assert.ok(screen.includes("invokeFuelSalesAsync('save'"), 'fuel-sale writes must use the async bridge');
     assert.ok(screen.includes("invokeFuelSalesAsync('resolvedPrice'"), 'price resolution must use the async bridge');
+    assert.ok(screen.includes('const seq = ++state.priceLookupSeq;'), 'clearing a fuel selection must invalidate a pending price response');
+    assert.ok(screen.includes('seq !== state.priceLookupSeq || !isCurrentFuelForm(openToken)'), 'late price responses must not overwrite a newer or closed form');
+
     assert.ok(screen.includes('if (state.isSaving) return;'), 'the save handler must reject repeat taps');
     assert.ok(screen.includes("showFormToast('جارٍ حفظ عملية البيع والتحقق من SQLite.'"), 'the form must show pending state before native confirmation');
     assert.ok(activity.includes('fun executeFuelSalesAsync('), 'MainActivity must expose the asynchronous fuel-sales endpoint');

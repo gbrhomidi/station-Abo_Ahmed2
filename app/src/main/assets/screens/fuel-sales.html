@@ -3094,13 +3094,15 @@ async function loadPumpNozzles(pumpId='', selectedId='', openToken=state.formOpe
 }
 
 async function refreshResolvedFuelPrice() {
+    // Invalidate earlier replies even when the user clears the fuel selection.
+    const seq = ++state.priceLookupSeq;
+    const openToken = state.formOpenSequence;
     const f = document.querySelector('[data-key="fuel_type_id"]');
     const q = document.querySelector('[data-key="quantity"]');
     const p = document.querySelector('[data-key="price_per_liter"]');
     const t = document.querySelector('[data-key="total_amount"]');
     const customer = document.querySelector('[data-key="customer_id"]');
-    if (!f || !p || !f.value) return;
-    const seq = ++state.priceLookupSeq;
+    if (!f || !p || !f.value || !isCurrentFuelForm(openToken)) return;
     const quantity = Math.max(0.000001, numeric(q?.value)||1);
     const date = document.querySelector('[data-key="sale_date"]')?.value || localDate(new Date());
     const time = document.querySelector('[data-key="sale_time"]')?.value || localTime(new Date());
@@ -3113,7 +3115,7 @@ async function refreshResolvedFuelPrice() {
             occasion_code: document.querySelector('[data-key="occasion_code"]')?.value.trim() || null
         })]);
         const resolved = dataOf(raw);
-        if (seq !== state.priceLookupSeq) return;
+        if (seq !== state.priceLookupSeq || !isCurrentFuelForm(openToken)) return;
         const price = Number(resolved?.unit_price);
         if (!Number.isFinite(price) || price < 0) throw new Error('لم يرجع محرك التسعير سعراً صالحاً');
         p.value = price.toFixed(4).replace(/0+$/,'').replace(/\.$/,'');
@@ -3122,7 +3124,7 @@ async function refreshResolvedFuelPrice() {
         if (t) t.value = (numeric(q?.value)*price).toFixed(2);
         updateDeliveryFeeDisplay();
     } catch (e) {
-        if (seq === state.priceLookupSeq) {
+        if (seq === state.priceLookupSeq && isCurrentFuelForm(openToken)) {
             toast('تعذر احتساب سعر الوقود الفعلي: ' + (e.message||'خطأ'), true, 'form');
         }
     }
