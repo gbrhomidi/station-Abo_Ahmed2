@@ -205,6 +205,78 @@ class LatestFuelSaleForCustomerRobolectricTest {
     }
 
     @Test
+    fun savedLocationsReadDeliveriesOnlyThroughValidSameStationInvoicesWithoutWrites() {
+        val customer = insertCustomer("عميل مواقع الفواتير")
+        val localFuelSaleId = insertFuelSale(
+            customer, stationId, "2026-10-30 10:00:00", location = ""
+        )
+        val localInvoiceId = scalarLong(
+            "SELECT sale_id FROM fuel_sales WHERE id=?",
+            arrayOf(localFuelSaleId.toString())
+        )
+
+        // This invoice is owned by another station while the delivery.party_id points
+        // to a customer in the current station. The invoice, not party_id, is authoritative.
+        val foreignFuelSaleId = insertFuelSale(
+            customer, stationId + 100000, "2026-10-30 11:00:00", location = ""
+        )
+        val foreignInvoiceId = scalarLong(
+            "SELECT sale_id FROM fuel_sales WHERE id=?",
+            arrayOf(foreignFuelSaleId.toString())
+        )
+
+        fun insertDelivery(invoiceId: Long, location: String, deleted: Boolean = false, declaredStation: Int? = null) {
+            val values = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("sale_id", invoiceId)
+                put("party_id", customer)
+                put("delivery_date", "2026-10-30 12:00:00")
+                put("status", "delivered")
+                put("location", location)
+                put("is_deleted", if (deleted) 1 else 0)
+            }
+            if (declaredStation != null) {
+                putExisting("deliveries", values, "station_id", declaredStation)
+            }
+            db.insertOrThrow("deliveries", null, values)
+        }
+
+        val localLocation = "موقع توصيل من فاتورة المحطة الحالية"
+        val foreignLocation = "موقع تسليم تابع لفاتورة محطة أخرى"
+        val deletedLocation = "موقع توصيل محذوف"
+        insertDelivery(localInvoiceId, localLocation, declaredStation = stationId)
+        insertDelivery(foreignInvoiceId, foreignLocation, declaredStation = stationId)
+        insertDelivery(localInvoiceId, deletedLocation, deleted = true, declaredStation = stationId)
+
+        val contradictoryLocation = "موقع تسليم بنطاق محطة متناقض"
+        if ("station_id" in tableColumns("deliveries")) {
+            insertDelivery(localInvoiceId, contradictoryLocation, declaredStation = stationId + 500000)
+        }
+
+        val schemaBefore = scalarString(
+            "SELECT GROUP_CONCAT(type || ':' || name || ':' || COALESCE(sql,''),'|') FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'"
+        )
+        val deliveryCountBefore = optionalScalarLong("SELECT COUNT(*) FROM deliveries")
+
+        val locations = DeliveryFeeAccounting.savedDeliveryLocations(helper, stationId)
+        val values = (0 until locations.length()).map { locations.getString(it) }
+
+        assertTrue("A valid delivery location linked to a current-station invoice must be suggested: $values", values.contains(localLocation))
+        assertFalse("A delivery linked to a foreign-station invoice must not leak via its party_id: $values", values.contains(foreignLocation))
+        assertFalse("Deleted delivery rows must not supply autocomplete locations: $values", values.contains(deletedLocation))
+        if ("station_id" in tableColumns("deliveries")) {
+            assertFalse("A conflicting legacy deliveries.station_id must be rejected: $values", values.contains(contradictoryLocation))
+        }
+
+        val schemaAfter = scalarString(
+            "SELECT GROUP_CONCAT(type || ':' || name || ':' || COALESCE(sql,''),'|') FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'"
+        )
+        val deliveryCountAfter = optionalScalarLong("SELECT COUNT(*) FROM deliveries")
+        assertEquals("Delivery autocomplete must remain schema read-only", schemaBefore, schemaAfter)
+        assertEquals("Delivery autocomplete must not create or repair delivery rows", deliveryCountBefore, deliveryCountAfter)
+    }
+
+    @Test
     fun recentCustomerRankingUsesRealDatesGroupsCustomersAndRejectsInvalidOrForeignParentInvoices() {
         val lateCustomer = insertCustomer("عميل أحدث زمنياً")
         val earlyCustomer = insertCustomer("عميل أقدم زمنياً")
