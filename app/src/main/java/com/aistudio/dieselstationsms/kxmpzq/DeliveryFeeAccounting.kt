@@ -675,6 +675,93 @@ object DeliveryFeeAccounting {
         return JSONObject().put("found", true).put("sale", sale)
     }
 
+    fun savedDeliveryLocations(helper: DatabaseHelper, stationId: Int): JSONArray {
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        ensureSchema(helper)
+        val db = helper.readableDatabase
+        val selects = mutableListOf<String>()
+        val arguments = mutableListOf<String>()
+
+        // Include every persisted source used by the fuel-sales and delivery workflows.
+        // Tables and column names are an explicit allowlist; only values are bound parameters.
+        for (table in listOf("fuel_sales", "sales_transactions", "deliveries")) {
+            if (!tableExists(db, table)) continue
+            val tableColumns = columns(db, table)
+            if ("station_id" !in tableColumns) continue
+
+            for (locationColumn in listOf("delivery_location", "location")) {
+                if (locationColumn !in tableColumns) continue
+                val predicates = mutableListOf(
+                    "station_id=?",
+                    "`$locationColumn` IS NOT NULL",
+                    "TRIM(CAST(`$locationColumn` AS TEXT))<>''"
+                )
+                if ("is_deleted" in tableColumns) {
+                    predicates += "COALESCE(CAST(is_deleted AS INTEGER),0)=0"
+                }
+                if ("deleted_at" in tableColumns) {
+                    predicates += "(deleted_at IS NULL OR TRIM(CAST(deleted_at AS TEXT))='')"
+                }
+                selects += "SELECT TRIM(CAST(`$locationColumn` AS TEXT)) AS location " +
+                    "FROM `$table` WHERE ${predicates.joinToString(" AND ")}"
+                arguments += stationId.toString()
+            }
+        }
+
+        if (selects.isEmpty()) return JSONArray()
+        val sql = selects.joinToString(" UNION ") + " ORDER BY location COLLATE NOCASE"
+        return JSONArray().also { locations ->
+            db.rawQuery(sql, arguments.toTypedArray()).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val value = cursor.getString(0)?.trim().orEmpty()
+                    if (value.isNotEmpty()) locations.put(value)
+                }
+            }
+        }
+    }
+
+    fun recentFuelSaleCustomerIds(helper: DatabaseHelper, stationId: Int): JSONArray {
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        val db = helper.readableDatabase
+        if (!tableExists(db, "fuel_sales")) return JSONArray()
+        val saleColumns = columns(db, "fuel_sales")
+        if (!setOf("id", "station_id").all { it in saleColumns }) return JSONArray()
+
+        val customerExpression = when {
+            "customer_party_id" in saleColumns && "customer_id" in saleColumns ->
+                "COALESCE(NULLIF(customer_party_id,0),customer_id,0)"
+            "customer_party_id" in saleColumns -> "COALESCE(customer_party_id,0)"
+            "customer_id" in saleColumns -> "COALESCE(customer_id,0)"
+            else -> return JSONArray()
+        }
+        val timeParts = mutableListOf<String>()
+        if ("transaction_time" in saleColumns) timeParts += "COALESCE(transaction_time,'')"
+        if ("sale_date" in saleColumns) timeParts += "COALESCE(sale_date,'')"
+        if ("sale_time" in saleColumns) timeParts += "COALESCE(sale_time,'')"
+        if ("created_at" in saleColumns) timeParts += "COALESCE(created_at,'')"
+        val sortExpression = if (timeParts.isEmpty()) "CAST(id AS TEXT)" else timeParts.joinToString(" || ' ' || ")
+        val predicates = mutableListOf(
+            "station_id=?",
+            "$customerExpression>0"
+        )
+        if ("is_deleted" in saleColumns) predicates += "COALESCE(CAST(is_deleted AS INTEGER),0)=0"
+        if ("deleted_at" in saleColumns) {
+            predicates += "(deleted_at IS NULL OR TRIM(CAST(deleted_at AS TEXT))='')"
+        }
+
+        val sql = "SELECT $customerExpression AS party_id, MAX($sortExpression) AS last_sale, " +
+            "MAX(id) AS latest_sale_id FROM fuel_sales WHERE ${predicates.joinToString(" AND ")} " +
+            "GROUP BY party_id ORDER BY last_sale DESC, latest_sale_id DESC"
+        return JSONArray().also { ids ->
+            db.rawQuery(sql, arrayOf(stationId.toString())).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val partyId = cursor.getLong(0)
+                    if (partyId > 0L) ids.put(partyId)
+                }
+            }
+        }
+    }
+
     fun enrichSaleContext(helper: DatabaseHelper, stationId: Int, context: JSONObject): JSONObject {
         ensureSchema(helper)
         val saleJson = context.optJSONObject("sale") ?: context
