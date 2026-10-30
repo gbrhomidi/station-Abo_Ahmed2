@@ -45,6 +45,8 @@ def setup_db(party_count=PARTY_COUNT, sale_count=SALE_COUNT):
         CREATE TABLE sales_transactions (
             id INTEGER PRIMARY KEY,
             station_id INTEGER NOT NULL,
+            customer_party_id INTEGER,
+            created_at TEXT,
             sale_code TEXT,
             invoice_number TEXT,
             is_deleted INTEGER NOT NULL DEFAULT 0
@@ -97,6 +99,8 @@ def setup_db(party_count=PARTY_COUNT, sale_count=SALE_COUNT):
         sales.append((
             sale_id,
             station_id,
+            (sale_id % party_count) + 1,
+            "2026-10-30",
             f"SALE-{sale_id:08d}",
             f"INV-{sale_id:08d}",
             0,
@@ -116,7 +120,7 @@ def setup_db(party_count=PARTY_COUNT, sale_count=SALE_COUNT):
         ))
 
     db.executemany(
-        "INSERT INTO sales_transactions VALUES (?,?,?,?,?)",
+        "INSERT INTO sales_transactions VALUES (?,?,?,?,?,?,?)",
         sales,
     )
     db.executemany(
@@ -127,8 +131,10 @@ def setup_db(party_count=PARTY_COUNT, sale_count=SALE_COUNT):
     # Mirror the production lookup paths: station/status filtering on invoice,
     # sale_id lookup for fuel detail rows, and station/type/deleted/name for parties.
     db.executescript("""
-        CREATE INDEX idx_sales_station_deleted
-            ON sales_transactions(station_id, is_deleted, id);
+        CREATE INDEX idx_sales_station
+            ON sales_transactions(station_id);
+        CREATE INDEX idx_sales_station_customer_deleted_date
+            ON sales_transactions(station_id, customer_party_id, is_deleted, created_at);
         CREATE INDEX idx_fuel_sales_sale
             ON fuel_sales(sale_id);
         CREATE INDEX idx_parties_station_type_deleted_name
@@ -250,7 +256,7 @@ def test_query_plans(db):
     fuel_text = " | ".join(fuel_plan).upper()
     customer_text = " | ".join(customer_plan).upper()
 
-    assert "IDX_SALES_STATION_DELETED" in fuel_text, fuel_text
+    assert "IDX_SALES_STATION_CUSTOMER_DELETED_DATE" in fuel_text, fuel_text
     assert "IDX_FUEL_SALES_SALE" in fuel_text, fuel_text
     assert "IDX_PARTIES_STATION_TYPE_DELETED_NAME" in customer_text, customer_text
     assert "SCAN FUEL_SALES" not in fuel_text, fuel_text
