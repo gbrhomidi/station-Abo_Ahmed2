@@ -146,6 +146,46 @@ class BackgroundReauthenticationPolicyTest {
     }
 
     @Test
+    fun ActivityRecreationRestoresAuthenticatedShellWithoutStartingRememberMeLogin() {
+        assertTrue(
+            BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
+                hasActiveSession = true,
+                loginRequiredOnLaunch = false,
+                isActivityRecreation = true,
+                securityLockPending = false
+            )
+        )
+        assertTrue(
+            BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
+                hasActiveSession = true,
+                loginRequiredOnLaunch = false,
+                isActivityRecreation = true,
+                securityLockPending = true
+            )
+        )
+    }
+
+    @Test
+    fun explicitLogoutOrMissingSessionStillRoutesToLogin() {
+        assertFalse(
+            BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
+                hasActiveSession = true,
+                loginRequiredOnLaunch = true,
+                isActivityRecreation = true,
+                securityLockPending = false
+            )
+        )
+        assertFalse(
+            BackgroundReauthenticationPolicy.shouldRestoreAuthenticatedShell(
+                hasActiveSession = false,
+                loginRequiredOnLaunch = false,
+                isActivityRecreation = true,
+                securityLockPending = false
+            )
+        )
+    }
+
+    @Test
     fun missingSessionOrExplicitLoginRequirementDoesNotStartNativeReauthentication() {
         assertFalse(
             BackgroundReauthenticationPolicy.shouldLockOnStartup(
