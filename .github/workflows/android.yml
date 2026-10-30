@@ -237,7 +237,7 @@ jobs:
       # ----------------------------------------------------------------------
 
       - name: Wait for preceding branch build
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/ai-health-sqlite'))
         env:
           GH_TOKEN: ${{ github.token }}
           QUEUE_BRANCH: ${{ github.head_ref || github.ref_name }}
@@ -277,7 +277,9 @@ jobs:
 
           API_BASE="${GITHUB_API_URL:-https://api.github.com}"
           BRANCH_QUERY="$(jq -rn --arg value "$QUEUE_BRANCH" '$value | @uri')"
-          DEADLINE=$((SECONDS + 600))
+          # Keep a grace window beyond the nominal wait so the final poll can
+          # observe a predecessor that completes at the timeout boundary.
+          DEADLINE=$((SECONDS + 900))
 
           echo "Repository: $GITHUB_REPOSITORY"
           echo "Branch: $QUEUE_BRANCH"
@@ -333,25 +335,18 @@ jobs:
             MATCH_COUNT="$(jq 'length' <<< "$MATCHING_RUNS")"
 
             if (( MATCH_COUNT > 0 )); then
-              PENDING_RUNS="$(
-                jq -r '
-                  [
-                    .[] |
-                    select(.status != "completed") |
-                    "#\\(.run_number) (\\(.status), run ID \\(.id))"
-                  ] |
-                  join(", ")
-                ' <<< "$MATCHING_RUNS"
+              PENDING_COUNT="$(
+                jq '[.[] | select(.status != "completed")] | length' <<< "$MATCHING_RUNS"
               )"
 
-              if [ -z "$PENDING_RUNS" ]; then
+              if (( PENDING_COUNT == 0 )); then
                 CONCLUSIONS="$(jq -r '[.[].conclusion // "unknown"] | unique | join(", ")' <<< "$MATCHING_RUNS")"
                 echo "Predecessor build(s) completed. Previous conclusion(s): $CONCLUSIONS"
                 echo "Continuing with the current commit."
                 exit 0
               fi
 
-              echo "Earlier build(s) are still active: $PENDING_RUNS"
+              echo "Waiting for $PENDING_COUNT earlier workflow run(s) to complete."
             else
               echo "The predecessor workflow run is not visible yet; waiting for GitHub to register it."
             fi
