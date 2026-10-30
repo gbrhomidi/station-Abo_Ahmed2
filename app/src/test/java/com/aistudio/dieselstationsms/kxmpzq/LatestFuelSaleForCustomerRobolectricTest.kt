@@ -120,7 +120,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
 
         val result = DeliveryFeeAccounting.latestFuelSaleForCustomer(helper, customer, stationId)
 
-        assertTrue(result.getBoolean("found"))
+        assertTrue("Latest-sale lookup response: $result; ${saleLookupDiagnostics(customer)}", result.getBoolean("found"))
         assertEquals(expectedFuelSaleId, result.getJSONObject("sale").getLong("fuel_sale_id"))
     }
 
@@ -160,7 +160,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
             expression("st", parentColumns, "customer_party_id") + " AS parent_party",
             expression("st", parentColumns, "customer_id") + " AS parent_customer"
         )
-        for (column in listOf("is_deleted", "deleted_at", "is_valid", "is_void", "is_cancelled", "is_canceled", "is_reversed", "status", "sale_status", "transaction_status", "cancelled_at", "canceled_at")) {
+        for (column in listOf("is_deleted", "deleted_at", "is_valid", "is_void", "is_voided", "is_invalid", "is_cancelled", "is_canceled", "is_reversed", "status", "sale_status", "transaction_status", "cancelled_at", "canceled_at", "voided_at", "invalidated_at", "reversed_at")) {
             fields += expression("fs", childColumns, column) + " AS child_$column"
             if (canJoinParent) fields += expression("st", parentColumns, column) + " AS parent_$column"
         }
@@ -174,7 +174,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
                 rows += values.joinToString(",")
             }
         }
-        return "customerId=$customerId stationId=$stationId rows=$rows"
+        return "customerId=$customerId stationId=$stationId childColumns=$childColumns parentColumns=$parentColumns rows=$rows"
     }
 
     private fun insertCustomer(name: String): Long {
@@ -226,8 +226,14 @@ class LatestFuelSaleForCustomerRobolectricTest {
         putExisting("sales_transactions", parentValues, "remaining_amount", 0.0)
         putExisting("sales_transactions", parentValues, "is_credit", 0)
         putExisting("sales_transactions", parentValues, "status", if (parentInvalid) "cancelled" else "completed")
-        putExisting("sales_transactions", parentValues, "is_void", if (parentInvalid) 1 else 0)
+        for (flag in listOf("is_cancelled", "is_canceled", "is_void", "is_voided", "is_invalid", "is_reversed")) {
+            val invalidFlag = flag == "is_void" || flag == "is_voided" || flag == "is_invalid"
+            putExisting("sales_transactions", parentValues, flag, if (parentInvalid && invalidFlag) 1 else 0)
+        }
         putExisting("sales_transactions", parentValues, "is_valid", if (parentInvalid) 0 else 1)
+        for (column in listOf("cancelled_at", "canceled_at", "voided_at", "invalidated_at", "reversed_at")) {
+            putExisting("sales_transactions", parentValues, column, "")
+        }
         putExisting("sales_transactions", parentValues, "is_deleted", if (parentDeleted) 1 else 0)
         putExisting("sales_transactions", parentValues, "deleted_at", if (parentDeleted) timestamp else null)
         putExisting("sales_transactions", parentValues, "cashier_id", userId)
@@ -271,8 +277,14 @@ class LatestFuelSaleForCustomerRobolectricTest {
             putExisting("fuel_sales", childValues, "cash_customer_name", "")
             putExisting("fuel_sales", childValues, "delivery_fee_display_total", quantity * 500.0 + 250.0)
             putExisting("fuel_sales", childValues, "status", if (parentInvalid) "cancelled" else "completed")
-            putExisting("fuel_sales", childValues, "is_void", if (parentInvalid) 1 else 0)
+            for (flag in listOf("is_cancelled", "is_canceled", "is_void", "is_voided", "is_invalid", "is_reversed")) {
+                val invalidFlag = flag == "is_void" || flag == "is_voided" || flag == "is_invalid"
+                putExisting("fuel_sales", childValues, flag, if (parentInvalid && invalidFlag) 1 else 0)
+            }
             putExisting("fuel_sales", childValues, "is_valid", if (parentInvalid) 0 else 1)
+            for (column in listOf("cancelled_at", "canceled_at", "voided_at", "invalidated_at", "reversed_at")) {
+                putExisting("fuel_sales", childValues, column, "")
+            }
             putExisting("fuel_sales", childValues, "is_deleted", if (childDeleted) 1 else 0)
             putExisting("fuel_sales", childValues, "deleted_at", if (childDeleted) timestamp else null)
             completeRequiredColumns("fuel_sales", childValues, customerId, saleStationId, parentSaleId)
