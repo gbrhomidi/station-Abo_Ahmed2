@@ -5591,9 +5591,12 @@
         await Promise.all([
             loadCustomers(),
             loadVehicles(),
-            loadShifts(),
-            loadRecentCustomerSaleOrder(true)
+            loadShifts()
         ]);
+
+        // Customer ranking is supplemental. Do not make opening the delivery form
+        // wait for this extra SQLite query; the focused customer field refreshes it.
+        void loadRecentCustomerSaleOrder(true);
     }
 
     /* ================================================================
