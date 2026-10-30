@@ -33,13 +33,18 @@ internal object BackgroundReauthenticationPolicy {
         loginRequiredOnLaunch: Boolean,
         previouslyPending: Boolean,
         isActivityRecreation: Boolean,
+        wasAuthenticatedShell: Boolean,
         backgroundTimeoutReached: Boolean,
         securityReauthenticationEnabled: Boolean
     ): Boolean {
         if (!hasActiveSession || loginRequiredOnLaunch) return false
-        return previouslyPending ||
-            backgroundTimeoutReached ||
-            (!isActivityRecreation && securityReauthenticationEnabled)
+        if (previouslyPending) return true
+        return if (isActivityRecreation) {
+            // A restored login/lock screen owns its existing authentication flow.
+            wasAuthenticatedShell && backgroundTimeoutReached
+        } else {
+            backgroundTimeoutReached || securityReauthenticationEnabled
+        }
     }
 
     /**
@@ -50,11 +55,11 @@ internal object BackgroundReauthenticationPolicy {
     fun shouldRestoreAuthenticatedShell(
         hasActiveSession: Boolean,
         loginRequiredOnLaunch: Boolean,
-        isActivityRecreation: Boolean,
+        wasAuthenticatedShell: Boolean,
         securityLockPending: Boolean
     ): Boolean =
         hasActiveSession && !loginRequiredOnLaunch &&
-            (isActivityRecreation || securityLockPending)
+            (wasAuthenticatedShell || securityLockPending)
 
     /**
      * Don't start the background clock for rotations, external pickers or a second
