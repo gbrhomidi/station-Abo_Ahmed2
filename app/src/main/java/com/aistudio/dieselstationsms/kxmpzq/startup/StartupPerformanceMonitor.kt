@@ -244,6 +244,44 @@ object StartupPerformanceMonitor {
         value.filter { it.isLetterOrDigit() || it in "._-" }.take(112).ifBlank { "unnamed" }
 
     /**
+     * Accepts a strict allow-list of numeric browser performance measurements.
+     * Page identifiers are reduced to a safe asset basename; URLs and DOM content are never stored.
+     */
+    fun recordWebPerformanceMetrics(payload: String) {
+        runCatching {
+            if (payload.length !in 2..4096) return
+            val input = JSONObject(payload)
+            val page = normalizeName(input.optString("page", "unknown"))
+            val allowed = listOf(
+                "timeToFirstByteMs", "domInteractiveMs", "domContentLoadedMs", "loadEventMs",
+                "firstPaintMs", "firstContentfulPaintMs", "largestContentfulPaintMs",
+                "cumulativeLayoutShift", "resourceCount", "resourceDurationMs",
+                "resourceTransferBytes", "longTaskCount", "longTaskTotalMs",
+                "longTaskMaximumMs", "interactionCount", "slowInteractionCount",
+                "interactionMaximumMs"
+            )
+            val details = LinkedHashMap<String, String>()
+            allowed.forEach { key ->
+                if (input.has(key)) {
+                    val value = input.optDouble(key, Double.NaN)
+                    if (value.isFinite() && value >= 0.0) {
+                        details[key] = value.toString()
+                    }
+                }
+            }
+            recordEvent(
+                type = "web_metrics",
+                name = "webview.metrics.$page",
+                durationNanos = ((input.optDouble("loadEventMs", 0.0).takeIf { it.isFinite() } ?: 0.0)
+                    .coerceAtLeast(0.0) * 1_000_000.0).toLong(),
+                success = true,
+                attributes = details
+            )
+            increment("webview.metrics_reports")
+        }.onFailure { Log.w(TAG, "Ignored invalid WebView performance metrics", it) }
+    }
+
+    /**
      * Returns a point-in-time report for the trusted local WebView diagnostics bridge.
      * The call is expected from a JavaScript-interface worker thread, not the UI thread.
      */
