@@ -34,6 +34,7 @@ function inlineApplicationScript() {
 
 async function runUiRegression() {
     const calls = { saves: [], operations: [] };
+    const completed = { formLookups: 0, locations: 0 };
     let lastSavedRow = null;
     let saleSequence = 700;
 
@@ -124,6 +125,8 @@ async function runUiRegression() {
             }
 
             window.setTimeout(() => {
+                if (operation === 'formLookups') completed.formLookups += 1;
+                if (operation === 'locations') completed.locations += 1;
                 if (typeof window.__fuelSalesNativeResult === 'function') {
                     window.__fuelSalesNativeResult(requestId, json(response));
                 }
@@ -138,7 +141,10 @@ async function runUiRegression() {
         await waitFor(() => calls.operations.includes('fuelSalesPage'), 'initial fuel-sale page load');
         await window.openForm(null);
         await waitFor(() => !!window.document.querySelector('[data-key="delivery_fee_mode"]'), 'new sale form');
-        await waitFor(() => calls.operations.includes('locations'), 'saved delivery location lookup');
+        await waitFor(() => completed.locations > 0, 'empty saved delivery location result');
+        await waitFor(() => completed.formLookups > 0 &&
+            window.document.querySelector('[data-key="pump_id"]').options.length > 1,
+            'fuel-sale form lookup choices');
 
         const { document } = window;
         const locationList = document.getElementById('savedDeliveryLocations');
@@ -189,9 +195,11 @@ async function runUiRegression() {
         assert.ok(document.getElementById('deliveryFeeDisplaySummary').value.includes('صافي الكمية المباعة = 9.900 لتر'),
             'the immediate post-save summary must deduct the service fee only once');
 
+        const formLookupCount = completed.formLookups;
         await window.openForm(lastSavedRow);
-        await waitFor(() => document.querySelector('[data-key="delivery_fee_mode"]').value === 'deduct_from_sales',
-            'reopening the saved deduction sale');
+        await waitFor(() => completed.formLookups > formLookupCount &&
+            document.querySelector('[data-key="delivery_fee_mode"]').value === 'deduct_from_sales',
+            'reopening the saved deduction sale and restoring its saved fields');
         assert.equal(document.querySelector('[data-key="quantity"]').value, '10',
             'reopening a deduction sale must restore gross_quantity');
         assert.equal(document.querySelector('[data-key="total_amount"]').value, '10000.00',
