@@ -13,13 +13,34 @@ object DatabaseInitializationCoordinator {
  private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineName("DatabaseInitialization"))
  private val initializer = SingleFlightInitializer<com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper>(scope, MAX_ATTEMPTS, { a -> if (a == 1) 250L else 700L }, ::isTransient)
 
- suspend fun awaitDatabase(context: Context): DatabaseHelper = initializer.get {
-  val started = android.os.SystemClock.elapsedRealtime()
-  val helper = DatabaseHelper.getInstance(context.applicationContext)
-  val database = helper.writableDatabase
-  check(database.isOpen) { "SQLite database is not open" }
-  android.util.Log.i("DatabaseInitCoordinator", "SQLite ready; elapsed=" + (android.os.SystemClock.elapsedRealtime() - started) + "ms")
-  helper
+ suspend fun awaitDatabase(context: Context): DatabaseHelper {
+  StartupPerformanceMonitor.increment("database.await_requests")
+  val awaitSpan = StartupPerformanceMonitor.beginSpan("database.await")
+  try {
+   return initializer.get {
+    StartupPerformanceMonitor.increment("database.open_attempts")
+    val attemptSpan = StartupPerformanceMonitor.beginSpan("database.open_attempt")
+    try {
+     val helper = DatabaseHelper.getInstance(context.applicationContext)
+     val database = helper.writableDatabase
+     check(database.isOpen) { "SQLite database is not open" }
+     android.util.Log.i("DatabaseInitCoordinator", "SQLite ready")
+     StartupPerformanceMonitor.mark("database.sqlite_open_ready")
+     StartupPerformanceMonitor.endSpan(attemptSpan)
+     helper
+    } catch (error: Exception) {
+     StartupPerformanceMonitor.increment("database.open_failures")
+     StartupPerformanceMonitor.mark(
+      "database.sqlite_open_failed",
+      mapOf("exception" to error.javaClass.simpleName)
+     )
+     StartupPerformanceMonitor.endSpan(attemptSpan, success = false)
+     throw error
+    }
+   }
+  } finally {
+   StartupPerformanceMonitor.endSpan(awaitSpan)
+  }
  }
 
  private fun isTransient(error: Throwable): Boolean {
