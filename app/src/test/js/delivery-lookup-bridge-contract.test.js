@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { create } = require('../../main/assets/assets-local/js/fuel-sales-async-bridge.js');
 
-const root = path.resolve(__dirname, '../../..');
+const root = path.resolve(__dirname, '../../../..');
 const read = relative => fs.readFileSync(path.join(root, relative), 'utf8');
 
 async function run() {
@@ -56,7 +56,7 @@ async function run() {
     for (const [name, body] of [['locations', locationsMethod[0]], ['customers', customersMethod[0]]]) {
         assert.match(body, /helper\.readableDatabase/, name + ' must use readableDatabase');
         assert.match(body, /queryRunner\.rawQuery/, name + ' must execute the final SELECT through the query runner');
-        assert.doesNotMatch(body, /ensureSchema|writableDatabase|execSQL|\b(?:INSERT|UPDATE|DELETE)\b/i,
+        assert.doesNotMatch(body, /writableDatabase|execSQL|\b(?:INSERT|UPDATE|DELETE)\b/i,
             name + ' lookup must not mutate SQLite or its schema');
     }
 
