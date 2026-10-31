@@ -2041,6 +2041,8 @@ class MainActivity : AppCompatActivity() {
                                 setSupportZoom(true)
                                 builtInZoomControls = true
                                 displayZoomControls = false
+                                // يسمح بتشغيل تنبيه نجاح مسح POS بعد التقاط الكاميرا دون اشتراط لمسة جديدة.
+                                mediaPlaybackRequiresUserGesture = false
                                 allowFileAccess = true
                                 // واجهات التطبيق من android_asset فقط، ولا تحتاج قراءة content:// داخل WebView.
                                 allowContentAccess = false

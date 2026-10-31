@@ -4509,7 +4509,9 @@ let torchTrack = null;
 let scanInProgress = false;
 let lastScannedBarcode = '';
 let lastScannedAt = 0;
-let audioDing = new Audio('/static/sound/Ding.mp3');
+let audioDing = new Audio('file:///android_asset/assets-local/sound/Ding.mp3');
+audioDing.preload = 'auto';
+audioDing.volume = 1;
 let inactivityTimer;
 let sleepModeTimer;
 const INACTIVITY_TIMEOUT = 10000;
@@ -4806,11 +4808,11 @@ function onScanSuccess(decodedText) {
     const input = document.getElementById('manualBarcodeInput');
     if (input) input.value = barcode;
 
-    try { const sound = audioDing.play(); if (sound && sound.catch) sound.catch(function () {}); } catch (error) { console.warn('Scanner sound unavailable', error); }
-
     addProductByBarcode(barcode)
         .then(success => {
             if (success) {
+                playScanSuccessSound();
+                focusScannedProductQuantity(barcode);
                 stopScanner();
             } else {
                 console.log('[Scanner] Product not found; scanner remains active');
@@ -4818,6 +4820,30 @@ function onScanSuccess(decodedText) {
         })
         .catch(() => { console.error('[Scanner] addProductByBarcode rejected'); })
         .finally(() => { scanInProgress = false; });
+}
+
+function playScanSuccessSound() {
+    document.querySelectorAll('audio').forEach(sound => {
+        try {
+            sound.pause();
+            sound.currentTime = 0;
+        } catch (error) { console.warn('Could not stop previous audio', error); }
+    });
+    try {
+        audioDing.pause();
+        audioDing.currentTime = 0;
+        audioDing.volume = 1;
+        const playback = audioDing.play();
+        if (playback && typeof playback.catch === 'function') {
+            playback.catch(error => console.warn('Scanner sound unavailable', error));
+        }
+    } catch (error) { console.warn('Scanner sound unavailable', error); }
+}
+
+function focusScannedProductQuantity(barcode) {
+    const row = Array.from(document.querySelectorAll('#productsTableBody tr'))
+        .find(item => String(item.dataset.barcode || '') === String(barcode));
+    if (row) focusAndSelectProductQuantity(row);
 }
 
 function onScanError(error) {
