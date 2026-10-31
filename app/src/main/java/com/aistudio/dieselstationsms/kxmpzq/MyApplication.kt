@@ -3,6 +3,7 @@ package com.aistudio.dieselstationsms.kxmpzq
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManager
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
+import com.aistudio.dieselstationsms.kxmpzq.startup.StartupPerformanceMonitor
 
 import android.app.Activity
 import android.app.Application
@@ -121,6 +122,8 @@ class MyApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        StartupPerformanceMonitor.initialize(this)
+        val applicationStartupSpan = StartupPerformanceMonitor.beginSpan("application.startup")
         instance = this
 
         registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
@@ -154,6 +157,19 @@ class MyApplication : Application() {
         }
 
         Log.d(TAG, "Application initialized successfully")
+        StartupPerformanceMonitor.endSpan(applicationStartupSpan)
+        StartupPerformanceMonitor.mark("application.ready")
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_BACKGROUND) {
+            StartupPerformanceMonitor.mark(
+                "application.memory_trim",
+                mapOf("level" to level.toString())
+            )
+            StartupPerformanceMonitor.flushReport("memory_trim")
+        }
     }
 
     /**
