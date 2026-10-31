@@ -16,8 +16,9 @@ object DatabaseInitializationCoordinator {
  suspend fun awaitDatabase(context: Context): DatabaseHelper {
   StartupPerformanceMonitor.increment("database.await_requests")
   val awaitSpan = StartupPerformanceMonitor.beginSpan("database.await")
+  var awaitSucceeded = false
   try {
-   return initializer.get {
+   val helper = initializer.get {
     StartupPerformanceMonitor.increment("database.open_attempts")
     val attemptSpan = StartupPerformanceMonitor.beginSpan("database.open_attempt")
     try {
@@ -38,8 +39,10 @@ object DatabaseInitializationCoordinator {
      throw error
     }
    }
+   awaitSucceeded = true
+   return helper
   } finally {
-   StartupPerformanceMonitor.endSpan(awaitSpan)
+   StartupPerformanceMonitor.endSpan(awaitSpan, awaitSucceeded)
   }
  }
 
