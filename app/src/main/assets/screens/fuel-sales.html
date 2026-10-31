@@ -980,21 +980,19 @@ body.sidebar-is-open .sidebar-toggle {
 .form-group.full { grid-column: 1 / -1; }
 .delivery-fee-composite { display:flex; flex-direction:row; align-items:flex-end; gap:8px; width:100%; min-width:0; }
 .delivery-fee-composite .delivery-fee-cell { display:flex; flex-direction:column; gap:4px; flex:1 1 0; min-width:0; }
-.delivery-fee-composite .form-input { width:100%; min-width:0; padding:8px 6px; font-size:.76rem; }
-.delivery-fee-composite .form-label { font-size:.72rem; line-height:1.35; white-space:normal; }
-
-/* Keep the two fee controls readable and ordered on narrow phones. */
-@media(max-width:380px) {
-    .delivery-fee-composite { flex-direction:column; align-items:stretch; gap:7px; }
-    .delivery-fee-composite .delivery-fee-cell { width:100%; }
-    .delivery-fee-composite .form-input { padding:8px 9px; font-size:.78rem; }
-    .delivery-fee-composite .form-label { font-size:.74rem; }
+.delivery-fee-composite .form-input { min-width:0; padding:8px 5px; font-size:clamp(.61rem,2.4vw,.78rem); }
+.delivery-fee-composite .form-label { font-size:clamp(.61rem,2.4vw,.75rem); line-height:1.35; }
+@media(max-width:340px) {
+    .delivery-fee-composite { gap:4px; }
+    .delivery-fee-composite .form-input { padding:7px 3px; font-size:.60rem; }
+    .delivery-fee-composite .form-label { font-size:.60rem; }
 }
 
-/* General form sizing excludes the fee composite to avoid overriding its mobile rules. */
-#formModal #recordForm .form-group:not(.delivery-fee-form-group) .form-input,
-#formModal #recordForm .form-group:not(.delivery-fee-form-group) .form-label,
-#formModal .modal-footer button { font-size:0.83rem; }
+/* Match readable new-sale form controls to the payment-method field size. */
+#formModal #recordForm *:not(i):not(svg):not(path) {
+    font-size: 0.83rem !important;
+}
+#formModal .modal-footer button { font-size: 0.83rem !important; }
 
 .form-label {
     color: var(--text-secondary);
@@ -2722,7 +2720,7 @@ function inputHtml(def, row) {
     const cls = def.readonly ? ' readonly' : '';
     if (def.type === 'delivery_fee_configuration') {
         const fee = row && row.delivery_service_fee !== undefined ? row.delivery_service_fee : 0;
-        return '<div class="form-group full delivery-fee-form-group"><div class="delivery-fee-composite">' +
+        return '<div class="form-group full"><div class="delivery-fee-composite">' +
             '<div class="delivery-fee-cell"><label class="form-label" for="deliveryFeeModeSelect">احتساب رسوم التوصيل</label>' +
             '<select id="deliveryFeeModeSelect" class="form-input" data-key="delivery_fee_mode" required>' +
             '<option value="exempt">معفي منها</option><option value="add_to_sales">تُضاف لقيمة المبيعات</option>' +
@@ -3238,18 +3236,6 @@ function openForm(row=null) {
 
     clearFormToast();
     state.editing = row;
-    const rowMode = String(field(row, ['delivery_fee_mode']) || 'exempt').trim();
-    const grossQuantity = Number(field(row, ['gross_quantity']));
-    const grossAmount = Number(field(row, ['gross_amount']));
-    const formRow = row && rowMode === 'deduct_from_sales'
-        ? {
-            ...row,
-            quantity: Number.isFinite(grossQuantity) && grossQuantity > 0
-                ? grossQuantity : field(row, ['quantity']),
-            total_amount: Number.isFinite(grossAmount) && grossAmount > 0
-                ? grossAmount : field(row, ['total_amount'])
-        }
-        : row;
     const openToken = ++state.formOpenSequence;
     state.formOpenStartedAt = fuelSalePerformanceNow();
     const deliveryBtn = $('deliveryBtn');
@@ -3272,7 +3258,7 @@ function openForm(row=null) {
     state.lastSuccessfulSaleFingerprint = null;
     const prepareForm = () => window.setTimeout(() => {
         if (!isCurrentFuelForm(openToken)) return;
-        form.innerHTML = (CFG.fields || []).map(def => inputHtml(def, formRow)).join('');
+        form.innerHTML = (CFG.fields || []).map(def => inputHtml(def, row)).join('');
         form.removeAttribute('aria-busy');
 
         // Give WebView one complete paint with the real input controls before any
@@ -3282,7 +3268,7 @@ function openForm(row=null) {
             window.setTimeout(() => {
                 if (!isCurrentFuelForm(openToken)) return;
                 recordFuelSalePerformance('controls-painted', state.formOpenStartedAt);
-                loadSaleFormLookups(formRow, openToken).catch(error => {
+                loadSaleFormLookups(row, openToken).catch(error => {
                     if (isCurrentFuelForm(openToken)) toast(error.message || 'تعذر تحميل بيانات النموذج', true, 'form');
                 });
             }, 0);
@@ -3409,24 +3395,15 @@ async function saveForm() {
             state.lastSuccessfulSaleFingerprint = fingerprint;
             rememberSavedDeliveryLocation(payload.delivery_location);
             if (deliveryFeeMode === 'deduct_from_sales') {
-                // Stored quantity/total_amount are already net of the fee. Keep the form
-                // on its gross basis so updateDeliveryFeeDisplay subtracts the fee once.
-                const savedGrossQuantity = Number(saved.gross_quantity ?? payload.quantity);
-                const savedGrossAmount = Number(saved.gross_amount ?? (payload.quantity * payload.price_per_liter));
-                const savedInvoiceTotal = Number(saved.invoice_total ?? saved.delivery_fee_display_total);
+                const savedQuantity = Number(saved.quantity);
+                const savedFuelAmount = Number(saved.total_amount);
+                const savedInvoiceTotal = Number(saved.delivery_fee_display_total);
                 const quantityEl = document.querySelector('[data-key="quantity"]');
                 const totalEl = document.querySelector('[data-key="total_amount"]');
                 const displayEl = document.querySelector('[data-key="delivery_fee_display_total"]');
-                if (quantityEl && Number.isFinite(savedGrossQuantity) && savedGrossQuantity > 0) {
-                    quantityEl.value = String(savedGrossQuantity);
-                }
-                if (totalEl && Number.isFinite(savedGrossAmount) && savedGrossAmount >= 0) {
-                    totalEl.value = savedGrossAmount.toFixed(2);
-                }
-                if (displayEl && Number.isFinite(savedInvoiceTotal) && savedInvoiceTotal >= 0) {
-                    displayEl.value = savedInvoiceTotal.toFixed(2);
-                }
-                updateDeliveryFeeDisplay();
+                if (quantityEl && Number.isFinite(savedQuantity) && savedQuantity > 0) quantityEl.value = String(savedQuantity);
+                if (totalEl && Number.isFinite(savedFuelAmount) && savedFuelAmount >= 0) totalEl.value = savedFuelAmount.toFixed(2);
+                if (displayEl && Number.isFinite(savedInvoiceTotal) && savedInvoiceTotal >= 0) displayEl.value = savedInvoiceTotal.toFixed(2);
                 state.lastSuccessfulSaleFingerprint = fuelSaleFingerprint(collectForm());
             }
             const sms = saved.sms || {};

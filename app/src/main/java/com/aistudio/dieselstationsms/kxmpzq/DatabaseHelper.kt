@@ -10500,13 +10500,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     fs.quantity AS original_quantity, fs.price_per_liter,
                     MAX(0, fs.total_amount - COALESCE((SELECT SUM(a.amount) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.status='posted'),0)) AS total_amount,
                     fs.total_amount AS original_total_amount,
-                    COALESCE(NULLIF(fs.gross_quantity,0),fs.quantity) AS gross_quantity,
-                    COALESCE(NULLIF(fs.gross_amount,0),fs.total_amount) AS gross_amount,
-                    COALESCE(fs.delivery_service_fee,0) AS delivery_service_fee,
-                    COALESCE(fs.delivery_fee_mode,'exempt') AS delivery_fee_mode,
-                    COALESCE(fs.delivery_location,'') AS delivery_location,
-                    COALESCE(fs.cash_customer_name,'') AS cash_customer_name,
-                    COALESCE(fs.delivery_fee_display_total,fs.total_amount) AS delivery_fee_display_total,
                     COALESCE((SELECT SUM(CASE WHEN a.adjustment_type='return' THEN a.quantity ELSE 0 END) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.status='posted'),0) AS returned_quantity,
                     COALESCE((SELECT SUM(CASE WHEN a.adjustment_type='damage' THEN a.quantity ELSE 0 END) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.status='posted'),0) AS damaged_quantity,
                     fs.payment_method, fs.customer_id, fs.vehicle_plate, fs.sale_date, fs.sale_time, fs.notes, fs.created_at

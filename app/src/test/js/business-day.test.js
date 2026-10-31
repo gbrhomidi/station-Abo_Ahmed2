@@ -52,9 +52,7 @@ assert.ok(mainHtml.includes("new Intl.DateTimeFormat('ar-EG'"), 'main.html must 
 assert.ok(mainHtml.includes('if (forceRefresh) dashboardRefreshQueued = true;'), 'midnight refresh must not be lost during an in-flight dashboard request');
 
 console.log('Business-day and main-dashboard rollover tests passed (America/New_York).');
-require('./fuel-sales-async-bridge.test.js')()
-    .then(() => require('./fuel-sales-delivery-fee.test.js')())
-    .catch(error => {
-        console.error(error);
-        process.exitCode = 1;
-    });
+require('./fuel-sales-async-bridge.test.js')().catch(error => {
+    console.error(error);
+    process.exitCode = 1;
+});

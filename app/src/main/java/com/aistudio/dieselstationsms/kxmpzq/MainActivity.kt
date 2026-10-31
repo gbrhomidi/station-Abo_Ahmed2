@@ -12099,14 +12099,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getFuelSalesPage(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try {
-                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                DeliveryFeeAccounting.ensureSchema(db)
-                dataResponse(db.getFuelSalesPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
-            } catch (e: Exception) {
-                DebugLogger.logException("FuelSalesPage", e)
-                errorResponse(e.message)
-            }
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getFuelSalesPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("FuelSalesPage", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
@@ -12661,13 +12655,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     put("success", true)
                     put("id", saleId)
                     put("sale_id", saleId)
-                    // total_amount is the fuel-only amount stored in fuel_sales
-                    // (net after the fee only for deduct_from_sales). The invoice is separate.
                     put("quantity", input.optDouble("quantity", 0.0))
-                    put("total_amount", input.optDouble("total_amount", 0.0))
-                    put("gross_quantity", originalQuantity)
-                    put("gross_amount", grossAmount)
-                    put("invoice_total", invoiceTotal)
+                    put("total_amount", invoiceTotal)
                     put("delivery_fee_display_total", invoiceTotal)
                     put("message", "تم حفظ مبيعات الوقود ورسوم الخدمة والتحقق من القيود المحاسبية")
                     put("delivery_fee_accounting", feeResult)
