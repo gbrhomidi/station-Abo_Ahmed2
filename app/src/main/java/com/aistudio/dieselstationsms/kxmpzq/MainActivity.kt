@@ -3097,6 +3097,13 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getStartupState(): String = getActivity()?.startupStateForBridge() ?: "failed"
 
+        /**
+         * Returns diagnostics captured by the native performance monitor.
+         * This bridge is only installed in the app's trusted local asset WebView.
+         */
+        @JavascriptInterface
+        fun getPerformanceDiagnostics(): String = StartupPerformanceMonitor.snapshotJson()
+
         @JavascriptInterface
         fun getStartupError(): String = getActivity()?.startupErrorForBridge() ?: "تعذر الوصول إلى النشاط"
 
