@@ -2,6 +2,7 @@ package com.aistudio.dieselstationsms.kxmpzq.service
 
 import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import com.aistudio.dieselstationsms.kxmpzq.startup.ServiceStatusRepository
+import com.aistudio.dieselstationsms.kxmpzq.startup.StartupPerformanceMonitor
 
 import android.Manifest
 import android.app.Notification
@@ -277,24 +278,46 @@ class SMSService : Service() {
 
             // All SQLite and module setup is performed on this service-owned IO scope.
             serviceScope.launch {
+                val serviceStartupSpan = StartupPerformanceMonitor.beginSpan("sms_service.initialize")
+                var serviceStartupSucceeded = false
                 try {
-                    initializeDatabase()
-                    initializeService()
-                    vehicleAlertMonitor = VehicleTrackingAlertMonitor(applicationContext, dbHelper)
-                    vehicleAlertMonitor.start(serviceScope)
-                    loadSettings()
-                    initializeSmsModules()
-                    registerSmsReceiver()
-                    startSmsEngine()
-                    SmsOutboxWorker.schedule(applicationContext)
-                    startHealthMonitor()
-                    startPerformanceMonitor()
-                    scheduleMaintenance()
-                    scheduleHealthChecks()
-                    scheduleDatabaseCleanup()
-                    scheduleMetricsFlush()
-                    scheduleSecurityChecks()
-                    serviceScope.launch { TaskNotificationManager.reschedulePendingTasks(applicationContext) }
+                    val databaseSpan = StartupPerformanceMonitor.beginSpan("sms_service.database")
+                    try {
+                        initializeDatabase()
+                    } finally {
+                        StartupPerformanceMonitor.endSpan(databaseSpan)
+                    }
+                    val moduleSpan = StartupPerformanceMonitor.beginSpan("sms_service.modules")
+                    try {
+                        initializeService()
+                        vehicleAlertMonitor = VehicleTrackingAlertMonitor(applicationContext, dbHelper)
+                        vehicleAlertMonitor.start(serviceScope)
+                        loadSettings()
+                        initializeSmsModules()
+                    } finally {
+                        StartupPerformanceMonitor.endSpan(moduleSpan)
+                    }
+                    val engineSpan = StartupPerformanceMonitor.beginSpan("sms_service.engine_and_receivers")
+                    try {
+                        registerSmsReceiver()
+                        startSmsEngine()
+                        SmsOutboxWorker.schedule(applicationContext)
+                    } finally {
+                        StartupPerformanceMonitor.endSpan(engineSpan)
+                    }
+                    val schedulingSpan = StartupPerformanceMonitor.beginSpan("sms_service.background_scheduling")
+                    try {
+                        startHealthMonitor()
+                        startPerformanceMonitor()
+                        scheduleMaintenance()
+                        scheduleHealthChecks()
+                        scheduleDatabaseCleanup()
+                        scheduleMetricsFlush()
+                        scheduleSecurityChecks()
+                        serviceScope.launch { TaskNotificationManager.reschedulePendingTasks(applicationContext) }
+                    } finally {
+                        StartupPerformanceMonitor.endSpan(schedulingSpan)
+                    }
                     logServiceStarted()
                     SystemEventLogger.recordService(this@SMSService, STATUS_SERVICE_STARTED, "Service started")
 
@@ -307,13 +330,23 @@ class SMSService : Service() {
                         isRunning.set(true)
                     }
                     serviceStatusRepository.setRunning(true)
+                    serviceStartupSucceeded = true
+                    StartupPerformanceMonitor.mark("sms_service.ready")
+                    StartupPerformanceMonitor.flushReport("sms_service_ready")
                     Log.i(TAG, "Service initialization completed successfully")
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
+                    StartupPerformanceMonitor.mark(
+                        "sms_service.initialization_failed",
+                        mapOf("exception" to error.javaClass.simpleName)
+                    )
+                    StartupPerformanceMonitor.flushReport("sms_service_failed")
                     Log.e(TAG, "Service initialization failed: " + error.message, error)
                     serviceStatusRepository.setRunning(false)
                     handleFatalError(error)
+                } finally {
+                    StartupPerformanceMonitor.endSpan(serviceStartupSpan, serviceStartupSucceeded)
                 }
             }
         } catch (error: Exception) {
@@ -533,17 +566,27 @@ class SMSService : Service() {
      * تهيئة قاعدة البيانات
      */
     private suspend fun initializeDatabase() {
+        val databaseSpan = StartupPerformanceMonitor.beginSpan("sms_service.database.prepare")
+        var initialized = false
         try {
             dbHelper = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
-            SmsAiHttpClientFactory.setNetworkOptimizationEnabled(
-                dbHelper.getSetting("networkOptimizationEnabled").trim().lowercase(Locale.ROOT) in
-                    setOf("1", "true", "yes", "on")
-            )
-            validateDatabase()
+            StartupPerformanceMonitor.measure("sms_service.database.load_network_setting") {
+                SmsAiHttpClientFactory.setNetworkOptimizationEnabled(
+                    dbHelper.getSetting("networkOptimizationEnabled").trim().lowercase(Locale.ROOT) in
+                        setOf("1", "true", "yes", "on")
+                )
+            }
+            StartupPerformanceMonitor.measure("sms_service.database.validate") {
+                validateDatabase()
+            }
+            initialized = true
+            StartupPerformanceMonitor.mark("sms_service.database.ready")
             Log.d(TAG, "DatabaseHelper initialized successfully (Singleton)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize DatabaseHelper: ${e.message}", e)
             throw e
+        } finally {
+            StartupPerformanceMonitor.endSpan(databaseSpan, initialized)
         }
     }
 
