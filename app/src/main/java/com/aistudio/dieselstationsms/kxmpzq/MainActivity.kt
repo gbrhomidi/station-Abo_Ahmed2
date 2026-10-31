@@ -2575,6 +2575,126 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
     }
 
+    /**
+     * Samples the local HTML screen's navigation, paint, resource, long-task and
+     * interaction timing APIs. It sends numeric aggregates only, never DOM text or URLs.
+     */
+    private fun installWebPerformanceObserver(target: WebView?) {
+        val script = """
+            (function () {
+                if (window.__stationPerformanceObserverInstalled) return;
+                window.__stationPerformanceObserverInstalled = true;
+                var page = (location.pathname || '').split('/').pop() || 'unknown';
+                page = page.replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 64) || 'unknown';
+                var latest = {
+                    page: page,
+                    timeToFirstByteMs: 0,
+                    domInteractiveMs: 0,
+                    domContentLoadedMs: 0,
+                    loadEventMs: 0,
+                    firstPaintMs: 0,
+                    firstContentfulPaintMs: 0,
+                    largestContentfulPaintMs: 0,
+                    cumulativeLayoutShift: 0,
+                    resourceCount: 0,
+                    resourceDurationMs: 0,
+                    resourceTransferBytes: 0,
+                    longTaskCount: 0,
+                    longTaskTotalMs: 0,
+                    longTaskMaximumMs: 0,
+                    interactionCount: 0,
+                    slowInteractionCount: 0,
+                    interactionMaximumMs: 0
+                };
+                var sentSignature = '';
+                function observe(type, callback, options) {
+                    try {
+                        if (window.PerformanceObserver &&
+                            PerformanceObserver.supportedEntryTypes &&
+                            PerformanceObserver.supportedEntryTypes.indexOf(type) >= 0) {
+                            var observer = new PerformanceObserver(function (list) {
+                                callback(list.getEntries());
+                            });
+                            observer.observe(options || { type: type, buffered: true });
+                        }
+                    } catch (_) { }
+                }
+                try {
+                    var nav = performance.getEntriesByType('navigation')[0];
+                    if (nav) {
+                        latest.timeToFirstByteMs = Math.max(0, nav.responseStart || 0);
+                        latest.domInteractiveMs = Math.max(0, nav.domInteractive || 0);
+                        latest.domContentLoadedMs = Math.max(0, nav.domContentLoadedEventEnd || 0);
+                        latest.loadEventMs = Math.max(0, nav.loadEventEnd || 0);
+                    }
+                    var paints = performance.getEntriesByType('paint') || [];
+                    paints.forEach(function (entry) {
+                        if (entry.name === 'first-paint') latest.firstPaintMs = Math.max(0, entry.startTime || 0);
+                        if (entry.name === 'first-contentful-paint') {
+                            latest.firstContentfulPaintMs = Math.max(0, entry.startTime || 0);
+                        }
+                    });
+                    var resources = performance.getEntriesByType('resource') || [];
+                    latest.resourceCount = resources.length;
+                    resources.forEach(function (entry) {
+                        latest.resourceDurationMs += Math.max(0, entry.duration || 0);
+                        latest.resourceTransferBytes += Math.max(0, entry.transferSize || 0);
+                    });
+                } catch (_) { }
+                observe('largest-contentful-paint', function (entries) {
+                    entries.forEach(function (entry) {
+                        latest.largestContentfulPaintMs =
+                            Math.max(latest.largestContentfulPaintMs, entry.startTime || 0);
+                    });
+                }, { type: 'largest-contentful-paint', buffered: true });
+                observe('layout-shift', function (entries) {
+                    entries.forEach(function (entry) {
+                        if (!entry.hadRecentInput) {
+                            latest.cumulativeLayoutShift += Math.max(0, entry.value || 0);
+                        }
+                    });
+                }, { type: 'layout-shift', buffered: true });
+                observe('longtask', function (entries) {
+                    entries.forEach(function (entry) {
+                        var duration = Math.max(0, entry.duration || 0);
+                        latest.longTaskCount++;
+                        latest.longTaskTotalMs += duration;
+                        latest.longTaskMaximumMs = Math.max(latest.longTaskMaximumMs, duration);
+                    });
+                }, { type: 'longtask', buffered: true });
+                observe('event', function (entries) {
+                    entries.forEach(function (entry) {
+                        if (entry.interactionId && entry.duration > 0) {
+                            latest.interactionCount++;
+                            latest.interactionMaximumMs =
+                                Math.max(latest.interactionMaximumMs, entry.duration);
+                            if (entry.duration >= 50) latest.slowInteractionCount++;
+                        }
+                    });
+                }, { type: 'event', buffered: true, durationThreshold: 16 });
+                function send() {
+                    try {
+                        if (!window.AndroidInterface ||
+                            typeof AndroidInterface.recordWebPerformanceMetrics !== 'function') return;
+                        var signature = JSON.stringify(latest);
+                        if (signature === sentSignature) return;
+                        sentSignature = signature;
+                        AndroidInterface.recordWebPerformanceMetrics(signature);
+                    } catch (_) { }
+                }
+                setTimeout(send, 1800);
+                window.addEventListener('pagehide', send, { once: true });
+                var timer = window.setInterval(function () {
+                    send();
+                    if (document.visibilityState === 'hidden') {
+                        window.clearInterval(timer);
+                    }
+                }, 15000);
+            })();
+        """.trimIndent()
+        target?.evaluateJavascript(script, null)
+    }
+
     private fun createWebViewClient(): WebViewClient {
         return object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -2616,6 +2736,7 @@ class MainActivity : AppCompatActivity() {
                     scheduleStartupPermissionsRequest()
                 }
                 normalizeOfflineFirstUi(view)
+                installWebPerformanceObserver(view)
                 if (!url.isNullOrBlank() && url.startsWith("file:///android_asset/")) {
                     val assetName = url.substringAfterLast('/').substringBefore('?').substringBefore('#').take(64)
                     if (currentPageLoadAsset == assetName) {
