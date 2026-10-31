@@ -2153,6 +2153,8 @@ class MainActivity : AppCompatActivity() {
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
 
+                    val webViewFactorySpan =
+                        StartupPerformanceMonitor.beginSpan("webview.create_and_configure")
                     val wv = if (this@MainActivity.webView == null) {
                         WebView(context).apply {
                             if (securityLockPending) visibility = View.INVISIBLE
@@ -2259,6 +2261,7 @@ class MainActivity : AppCompatActivity() {
                     } else {
                         this@MainActivity.webView!!
                     }
+                    StartupPerformanceMonitor.endSpan(webViewFactorySpan)
 
                     (wv.parent as? ViewGroup)?.removeView(wv)
                     addView(wv)
