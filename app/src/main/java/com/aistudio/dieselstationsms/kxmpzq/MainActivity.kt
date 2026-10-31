@@ -3105,6 +3105,11 @@ class MainActivity : AppCompatActivity() {
         fun getPerformanceDiagnostics(): String = StartupPerformanceMonitor.snapshotJson()
 
         @JavascriptInterface
+        fun recordWebPerformanceMetrics(payload: String) {
+            StartupPerformanceMonitor.recordWebPerformanceMetrics(payload)
+        }
+
+        @JavascriptInterface
         fun getStartupError(): String = getActivity()?.startupErrorForBridge() ?: "تعذر الوصول إلى النشاط"
 
         /** Opens the real Google Maps SDK picker; no API key or map state is exposed to JavaScript. */
