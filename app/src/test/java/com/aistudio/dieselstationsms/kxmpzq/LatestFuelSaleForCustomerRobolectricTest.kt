@@ -339,16 +339,24 @@ class LatestFuelSaleForCustomerRobolectricTest {
 
         val failOnlyLocationSql = DeliveryLookupQueryRunner { database, sql, arguments ->
             if (sql.contains(" AS location ", ignoreCase = true)) {
-                throw SQLiteException("injected saved-location SQLite read failure")
+                // Ask the real SQLite engine to execute an invalid column reference.
+                database.rawQuery(
+                    "SELECT __forced_missing_location_column__ FROM fuel_sales",
+                    emptyArray()
+                )
+            } else {
+                database.rawQuery(sql, arguments)
             }
-            database.rawQuery(sql, arguments)
         }
 
         val failedLocations = JSONObject(
             DeliveryLookupBridgeContract.savedLocations(helper, stationId, failOnlyLocationSql)
         )
         assertFalse("Saved-location query failure must be reported as a failed JSON response", failedLocations.getBoolean("success"))
-        assertTrue(failedLocations.getString("error").contains("saved-location"))
+        assertTrue(
+            "Expected a SQLite missing-column failure, received: $failedLocations",
+            failedLocations.getString("error").contains("__forced_missing_location_column__")
+        )
 
         // The same runner now executes the real recent-customer SQL against SQLite.
         val recentCustomers = JSONObject(
@@ -366,16 +374,24 @@ class LatestFuelSaleForCustomerRobolectricTest {
 
         val failOnlyRecentCustomerSql = DeliveryLookupQueryRunner { database, sql, arguments ->
             if (sql.contains(" AS party_id", ignoreCase = true)) {
-                throw SQLiteException("injected recent-customer SQLite read failure")
+                // Fail this SELECT inside SQLite, leaving the location SELECT untouched.
+                database.rawQuery(
+                    "SELECT __forced_missing_customer_column__ FROM fuel_sales",
+                    emptyArray()
+                )
+            } else {
+                database.rawQuery(sql, arguments)
             }
-            database.rawQuery(sql, arguments)
         }
 
         val failedCustomers = JSONObject(
             DeliveryLookupBridgeContract.recentCustomerIds(helper, stationId, failOnlyRecentCustomerSql)
         )
         assertFalse("Recent-customer query failure must be reported as a failed JSON response", failedCustomers.getBoolean("success"))
-        assertTrue(failedCustomers.getString("error").contains("recent-customer"))
+        assertTrue(
+            "Expected a SQLite missing-column failure, received: $failedCustomers",
+            failedCustomers.getString("error").contains("__forced_missing_customer_column__")
+        )
 
         // The same runner now executes the real saved-location SQL against SQLite.
         val locations = JSONObject(
