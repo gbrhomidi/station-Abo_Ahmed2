@@ -1027,7 +1027,6 @@ class SMSService : Service() {
         return try {
             if (!::dbHelper.isInitialized || dbHelper.isClosed()) {
                 Log.w(TAG, "Database not initialized or closed")
-                initializeDatabase()
                 return false
             }
             true
@@ -1824,40 +1823,38 @@ class SMSService : Service() {
      * الاسترداد من الفشل
      */
     private fun recoverFromFailure() {
-        try {
-            logRecovery("Starting recovery sequence")
+        // Recovery may need database initialization; keep it off the service main thread.
+        serviceScope.launch {
+            try {
+                logRecovery("Starting recovery sequence")
 
-            // 1. إيقاف المكونات
-            stopSmsEngine()
-            unregisterSmsReceiver()
+                stopSmsEngine()
+                unregisterSmsReceiver()
+                stopHealthMonitor()
+                stopPerformanceMonitor()
 
-            // 2. إلغاء المراقبة
-            stopHealthMonitor()
-            stopPerformanceMonitor()
+                cleanupScope.launch {
+                    runCleanupNow()
+                }
 
-            // 3. تنظيف
-            cleanupScope.launch {
-                runCleanupNow()
+                delay(RESTART_BACKOFF_MS)
+                initializeService()
+                initializeDatabase()
+                initializeSmsModules()
+
+                registerSmsReceiver()
+                startSmsEngine()
+                startHealthMonitor()
+                startPerformanceMonitor()
+
+                logRecovery("Recovery completed successfully")
+                notifyServiceHealthy()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.e(TAG, "Recovery failed: " + error.message, error)
+                restartAfterCrash()
             }
-
-            // 4. إعادة تهيئة
-            Thread.sleep(RESTART_BACKOFF_MS)
-            initializeService()
-            initializeDatabase()
-            initializeSmsModules()
-
-            // 5. إعادة التشغيل
-            registerSmsReceiver()
-            startSmsEngine()
-            startHealthMonitor()
-            startPerformanceMonitor()
-
-            logRecovery("Recovery completed successfully")
-            notifyServiceHealthy()
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Recovery failed: ${e.message}", e)
-            restartAfterCrash()
         }
     }
 
