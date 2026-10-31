@@ -1847,6 +1847,15 @@ class SMSService : Service() {
                 startHealthMonitor()
                 startPerformanceMonitor()
 
+                synchronized(serviceInitializationLock) {
+                    while (true) {
+                        val queued = pendingServiceCommands.poll() ?: break
+                        handleServiceCommand(queued)
+                    }
+                    isInitialized.set(true)
+                    isRunning.set(true)
+                }
+                serviceStatusRepository.setRunning(true)
                 logRecovery("Recovery completed successfully")
                 notifyServiceHealthy()
             } catch (cancelled: CancellationException) {
