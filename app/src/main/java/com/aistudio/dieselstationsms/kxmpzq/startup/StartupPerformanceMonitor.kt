@@ -243,6 +243,17 @@ object StartupPerformanceMonitor {
     private fun normalizeName(value: String): String =
         value.filter { it.isLetterOrDigit() || it in "._-" }.take(112).ifBlank { "unnamed" }
 
+    /**
+     * Returns a point-in-time report for the trusted local WebView diagnostics bridge.
+     * The call is expected from a JavaScript-interface worker thread, not the UI thread.
+     */
+    fun snapshotJson(): String {
+        val context = appContext ?: return JSONObject().put("available", false).toString()
+        mark("performance.snapshot_requested")
+        return runCatching { buildReport(context, "bridge_snapshot").toString() }
+            .getOrElse { JSONObject().put("available", false).put("error", "snapshot_failed").toString() }
+    }
+
     fun flushReport(reason: String) {
         val context = appContext ?: return
         mark("performance.report_requested", mapOf("reason" to reason.take(48)))
