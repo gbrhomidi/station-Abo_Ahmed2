@@ -3,7 +3,6 @@ package com.aistudio.dieselstationsms.kxmpzq
 import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
-import android.database.sqlite.SQLiteException
 import androidx.test.core.app.ApplicationProvider
 import org.json.JSONObject
 import org.junit.After
