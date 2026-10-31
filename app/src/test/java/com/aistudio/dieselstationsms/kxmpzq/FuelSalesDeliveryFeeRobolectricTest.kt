@@ -201,11 +201,16 @@ class FuelSalesDeliveryFeeRobolectricTest {
 
     @Test
     fun actualMainActivityJavascriptBridgePersistsDeliverySaleInRealSqlite() {
-        // Start the production Activity so the inner WebAppInterface is bound to a real
-        // Android Context, the same SQLite helper, and the authenticated user preference.
-        val controller = Robolectric.buildActivity(MainActivity::class.java).create()
+        // Attach a real production Activity instance, but do not run onCreate: that startup
+        // path intentionally requires AndroidKeyStore, which the JVM Robolectric runtime lacks.
+        // The bridge itself is then wired to the same real SQLite helper and a test session store.
+        val controller = Robolectric.buildActivity(MainActivity::class.java).attach()
         val activity = controller.get()
         try {
+            activity.sharedPrefs = context.getSharedPreferences(
+                "fuel-sales-bridge-test-auth",
+                Context.MODE_PRIVATE
+            )
             activity.sharedPrefs.edit().putLong("user_id", userId).commit()
 
             // Ensure the bridge references the exact DatabaseHelper instance used by this
@@ -344,8 +349,6 @@ class FuelSalesDeliveryFeeRobolectricTest {
                     locationLookup.getJSONArray("data").getString(it) == location
                 }
             )
-        } finally {
-            controller.destroy()
         }
     }
 
