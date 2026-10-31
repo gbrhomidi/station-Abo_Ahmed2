@@ -128,6 +128,26 @@ class FuelSalesDeliveryFeeRobolectricTest {
     }
 
     @Test
+    fun legacyDeductionRowsRecoverGrossBasisFromNetFuelAndSavedFee() {
+        val saved = createAndPersistSale(DeliveryFeeAccounting.DEDUCT_FROM_SALES, 100.0, "موقع سجل قديم")
+        // Simulate a row created before gross_quantity/gross_amount snapshots were persisted.
+        db.update("fuel_sales", ContentValues().apply {
+            put("gross_quantity", 0.0)
+            put("gross_amount", 0.0)
+        }, "id=? AND station_id=?", arrayOf(saved.fuelSaleId.toString(), stationId.toString()))
+
+        val page = helper.getFuelSalesPage(JSONObject().put("limit", 100), stationId)
+        val rows = page.getJSONArray("rows")
+        val row = (0 until rows.length()).map { rows.getJSONObject(it) }
+            .first { it.optLong("fuel_sale_id") == saved.fuelSaleId }
+
+        assertEquals("Missing gross_quantity must be recovered from net litres plus fee litres",
+            saved.grossQuantity, row.getDouble("gross_quantity"), 0.000001)
+        assertEquals("Missing gross_amount must be recovered from net fuel value plus fee",
+            saved.grossAmount, row.getDouble("gross_amount"), 0.01)
+    }
+
+    @Test
     fun emptyLocationLookupRejectsBlankLocationAndAcceptsManuallyEnteredLocation() {
         val lookup = JSONObject(DeliveryLookupBridgeContract.savedLocations(helper, stationId))
         assertTrue("Location lookup should succeed with an empty result", lookup.getBoolean("success"))

@@ -10500,8 +10500,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     fs.quantity AS original_quantity, fs.price_per_liter,
                     MAX(0, fs.total_amount - COALESCE((SELECT SUM(a.amount) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.status='posted'),0)) AS total_amount,
                     fs.total_amount AS original_total_amount,
-                    COALESCE(NULLIF(fs.gross_quantity,0),fs.quantity) AS gross_quantity,
-                    COALESCE(NULLIF(fs.gross_amount,0),fs.total_amount) AS gross_amount,
+                    CASE
+                        WHEN COALESCE(fs.gross_quantity,0)>0 THEN fs.gross_quantity
+                        WHEN COALESCE(fs.delivery_fee_mode,'')='deduct_from_sales'
+                             AND COALESCE(fs.price_per_liter,0)>0
+                            THEN fs.quantity + COALESCE(fs.delivery_service_fee,0)/fs.price_per_liter
+                        ELSE fs.quantity
+                    END AS gross_quantity,
+                    CASE
+                        WHEN COALESCE(fs.gross_amount,0)>0 THEN fs.gross_amount
+                        WHEN COALESCE(fs.delivery_fee_mode,'')='deduct_from_sales'
+                            THEN fs.total_amount + COALESCE(fs.delivery_service_fee,0)
+                        ELSE fs.total_amount
+                    END AS gross_amount,
                     COALESCE(fs.delivery_service_fee,0) AS delivery_service_fee,
                     COALESCE(fs.delivery_fee_mode,'exempt') AS delivery_fee_mode,
                     COALESCE(fs.delivery_location,'') AS delivery_location,
