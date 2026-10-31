@@ -246,9 +246,9 @@ object StartupPerformanceMonitor {
     fun flushReport(reason: String) {
         val context = appContext ?: return
         mark("performance.report_requested", mapOf("reason" to reason.take(48)))
-        val report = buildReport(context, reason)
         ioExecutor.execute {
             runCatching {
+                val report = buildReport(context, reason)
                 val directory = File(context.filesDir, "diagnostics/performance")
                 if (!directory.exists() && !directory.mkdirs()) {
                     throw IllegalStateException("Could not create performance diagnostics directory")
