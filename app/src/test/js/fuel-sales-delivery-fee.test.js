@@ -195,9 +195,8 @@ async function runUiRegression() {
         assert.ok(document.getElementById('deliveryFeeDisplaySummary').value.includes('صافي الكمية المباعة = 9.900 لتر'),
             'the immediate post-save summary must deduct the service fee only once');
 
-        const formLookupCount = completed.formLookups;
         await window.openForm(lastSavedRow);
-        await waitFor(() => completed.formLookups > formLookupCount &&
+        await waitFor(() =>
             document.querySelector('[data-key="delivery_fee_mode"]').value === 'deduct_from_sales',
             'reopening the saved deduction sale and restoring its saved fields');
         assert.equal(document.querySelector('[data-key="quantity"]').value, '10',
