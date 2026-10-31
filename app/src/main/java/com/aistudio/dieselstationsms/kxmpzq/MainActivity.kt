@@ -51,6 +51,7 @@ import com.aistudio.dieselstationsms.kxmpzq.receiver.*
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManager
 import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
+import com.aistudio.dieselstationsms.kxmpzq.startup.StartupPerformanceMonitor
 import com.aistudio.dieselstationsms.kxmpzq.startup.ServiceStatusRepository
 import com.aistudio.dieselstationsms.kxmpzq.startup.ServiceLaunchResult
 import com.aistudio.dieselstationsms.kxmpzq.startup.SmsServiceLauncher
@@ -257,6 +258,11 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var startupUiState = "initializing"
     @Volatile private var startupErrorMessage = ""
     private var startupExpectedAsset = "login.html"
+    private var activityCreatePerformanceSpan: StartupPerformanceMonitor.Span? = null
+    private var currentPageLoadPerformanceSpan: StartupPerformanceMonitor.Span? = null
+    private var currentPageLoadAsset: String? = null
+    private var firstAssetPageFinished = false
+    private var startupPerformanceReportedFullyDrawn = false
     private var startupPermissionsRequested = false
     private val isDestroyed = AtomicBoolean(false)
     private val handler = Handler(Looper.getMainLooper())
@@ -334,6 +340,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        StartupPerformanceMonitor.attachWindow(window)
+        activityCreatePerformanceSpan = StartupPerformanceMonitor.beginSpan("activity.onCreate")
+        StartupPerformanceMonitor.mark(
+            "activity.create",
+            mapOf("recreated" to (savedInstanceState != null).toString())
+        )
         isActivityRecreation = savedInstanceState != null
         wasAuthenticatedShellAtRecreation =
             savedInstanceState?.getBoolean(STATE_WAS_AUTHENTICATED_SHELL, false) == true
@@ -364,6 +376,8 @@ class MainActivity : AppCompatActivity() {
             startupErrorMessage = e.message ?: "تعذر تجهيز مكونات بدء التشغيل"
             startupUiState = "failed"
             Toast.makeText(this, "تعذر بدء التطبيق", Toast.LENGTH_LONG).show()
+            StartupPerformanceMonitor.endSpan(activityCreatePerformanceSpan, success = false)
+            StartupPerformanceMonitor.flushReport("activity_initialization_failed")
             finish()
             return
         }
@@ -409,10 +423,22 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 // This await does not block the Activity. Concurrent startup callers share one IO open.
-                dbHelper = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
+                val databaseAwaitSpan = StartupPerformanceMonitor.beginSpan("startup.database.await")
+                try {
+                    dbHelper = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
+                } finally {
+                    StartupPerformanceMonitor.endSpan(databaseAwaitSpan)
+                }
+                StartupPerformanceMonitor.mark("startup.database.ready")
                 DebugLogger.info("Database", "Shared SQLite initialization completed")
                 if (initializeStartupDatabase()) {
-                    initializeSystem()
+                    val systemInitializationSpan =
+                        StartupPerformanceMonitor.beginSpan("startup.system.initialize")
+                    try {
+                        initializeSystem()
+                    } finally {
+                        StartupPerformanceMonitor.endSpan(systemInitializationSpan, startupHealthCheckCompleted)
+                    }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -422,6 +448,11 @@ class MainActivity : AppCompatActivity() {
                 startupErrorMessage = e.message?.takeIf { it.isNotBlank() }
                     ?: "تعذر تجهيز قاعدة البيانات المحلية"
                 startupUiState = "failed"
+                StartupPerformanceMonitor.mark(
+                    "startup.failed",
+                    mapOf("stage" to "database_await", "exception" to e.javaClass.simpleName)
+                )
+                StartupPerformanceMonitor.flushReport("startup_failed")
                 withContext(Dispatchers.Main) {
                     if (!isDestroyed.get() && !isFinishing) {
                         webView?.evaluateJavascript(
@@ -443,6 +474,8 @@ class MainActivity : AppCompatActivity() {
         scheduleBackgroundTasks()
 
         DebugLogger.info("MainActivity", "onCreate finished")
+        StartupPerformanceMonitor.endSpan(activityCreatePerformanceSpan)
+        StartupPerformanceMonitor.mark("activity.onCreate.completed")
     }
 
     private data class StartupPreparation(
@@ -456,12 +489,21 @@ class MainActivity : AppCompatActivity() {
      * the UI thread so the bundled login screen can render immediately on cold start.
      */
     private suspend fun initializeStartupDatabase(): Boolean {
+        val performanceSpan = StartupPerformanceMonitor.beginSpan("startup.database.prepare")
+        var preparationSucceeded = false
         val startedAt = android.os.SystemClock.elapsedRealtime()
-        return try {
+        try {
+            return try {
             val preparation = withContext(Dispatchers.IO) {
-                DebtDueDateRepository.ensureSchema(dbHelper)
-                migrateLegacySecuritySettings(dbHelper)
-                clearSessionAfterDeviceRebootIfNeeded(dbHelper)
+                StartupPerformanceMonitor.measure("startup.schema.debt_due") {
+                    DebtDueDateRepository.ensureSchema(dbHelper)
+                }
+                StartupPerformanceMonitor.measure("startup.security.migrate_legacy") {
+                    migrateLegacySecuritySettings(dbHelper)
+                }
+                StartupPerformanceMonitor.measure("startup.session.boot_validation") {
+                    clearSessionAfterDeviceRebootIfNeeded(dbHelper)
+                }
 
                 val setupRequired = querySystemSetupRequired()
                 val loginRequiredOnLaunch = sharedPrefs.getBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, false)
@@ -525,8 +567,18 @@ class MainActivity : AppCompatActivity() {
                 "SQLite startup preparation completed in ${android.os.SystemClock.elapsedRealtime() - startedAt}ms; " +
                     "entry=$startupExpectedAsset"
             )
+            StartupPerformanceMonitor.mark(
+                "startup.database_preparation.completed",
+                mapOf("entry" to startupExpectedAsset)
+            )
+            preparationSucceeded = true
             true
         } catch (e: Exception) {
+            StartupPerformanceMonitor.mark(
+                "startup.database_preparation.failed",
+                mapOf("exception" to e.javaClass.simpleName)
+            )
+            StartupPerformanceMonitor.flushReport("startup_database_preparation_failed")
             DebugLogger.logException("StartupDatabase", e)
             withContext(Dispatchers.Main) {
                 startupDatabaseReady = false
@@ -535,6 +587,9 @@ class MainActivity : AppCompatActivity() {
                 webView?.evaluateJavascript("window.onAppStartupFailed && window.onAppStartupFailed()", null)
             }
             false
+            }
+        } finally {
+            StartupPerformanceMonitor.endSpan(performanceSpan, preparationSucceeded)
         }
     }
 
@@ -571,6 +626,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        StartupPerformanceMonitor.mark("activity.onStart")
         appInForeground = true
         updateUIState()
         if (!isDestroyed.get() && startupDatabaseReady && startupHealthCheckCompleted) {
@@ -581,6 +637,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        StartupPerformanceMonitor.mark("activity.onResume")
         val nowElapsed = android.os.SystemClock.elapsedRealtime()
 
         if (startupDatabaseReady) {
@@ -668,6 +725,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        StartupPerformanceMonitor.mark("activity.onPause")
         // onPause also fires for transient system UI and short interruptions. It must
         // not lock the user; the 60-second timer starts only from onStop.
         super.onPause()
@@ -683,6 +741,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
+        StartupPerformanceMonitor.mark("activity.onStop")
+        StartupPerformanceMonitor.flushReport("activity_stopped")
         appInForeground = false
         // Persist the monotonic start time in encrypted preferences. This survives
         // Activity recreation while avoiding wall-clock changes and Activity-age timing.
@@ -734,6 +794,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        StartupPerformanceMonitor.mark("activity.onDestroy")
+        StartupPerformanceMonitor.detachWindow(window)
+        StartupPerformanceMonitor.flushReport("activity_destroyed")
         isDestroyed.set(true)
 
         backgroundJob?.cancel()
@@ -759,6 +822,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         super.onDestroy()
+        StartupPerformanceMonitor.endSpan(activityCreatePerformanceSpan, success = false)
         DebugLogger.info("MainActivity", "onDestroy finished")
     }
 
@@ -1312,16 +1376,55 @@ class MainActivity : AppCompatActivity() {
     // ============================================================
 
     private suspend fun initializeSystem() {
+        val performanceSpan = StartupPerformanceMonitor.beginSpan("startup.system.initialize_work")
+        var initializationSucceeded = false
         try {
-            initializeDatabase()
-            initializeSmsSettings()
+            val databaseSpan = StartupPerformanceMonitor.beginSpan("startup.system.database")
+            try {
+                initializeDatabase()
+            } finally {
+                StartupPerformanceMonitor.endSpan(databaseSpan)
+            }
+            val smsSettingsSpan = StartupPerformanceMonitor.beginSpan("startup.system.sms_settings")
+            try {
+                initializeSmsSettings()
+            } finally {
+                StartupPerformanceMonitor.endSpan(smsSettingsSpan)
+            }
             DebugLogger.logEvent("app_started", "Application started")
-            withContext(Dispatchers.IO) { checkSmsSystemHealth() }
+            val healthSpan = StartupPerformanceMonitor.beginSpan("startup.system.health_check")
+            try {
+                withContext(Dispatchers.IO) { checkSmsSystemHealth() }
+            } finally {
+                StartupPerformanceMonitor.endSpan(healthSpan)
+            }
             startupHealthCheckCompleted = true
+            initializationSucceeded = true
+            StartupPerformanceMonitor.mark("startup.system.ready")
+            maybeReportFullyDrawn()
         } catch (e: Exception) {
+            StartupPerformanceMonitor.mark(
+                "startup.system.failed",
+                mapOf("exception" to e.javaClass.simpleName)
+            )
+            StartupPerformanceMonitor.flushReport("startup_system_failed")
             DebugLogger.logException("Init", e)
             handleApplicationError(e)
+        } finally {
+            StartupPerformanceMonitor.endSpan(performanceSpan, initializationSucceeded)
         }
+    }
+
+    private fun maybeReportFullyDrawn() {
+        if (startupPerformanceReportedFullyDrawn || !firstAssetPageFinished ||
+            !startupDatabaseReady || !startupHealthCheckCompleted || isDestroyed.get()
+        ) return
+        startupPerformanceReportedFullyDrawn = true
+        StartupPerformanceMonitor.mark("startup.fully_drawn")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            reportFullyDrawn()
+        }
+        StartupPerformanceMonitor.flushReport("fully_drawn")
     }
 
     // ============================================================
@@ -2476,6 +2579,16 @@ class MainActivity : AppCompatActivity() {
                 DebugLogger.info("WebView", "PAGE_STARTED: $url")
                 if (!url.isNullOrBlank() && url.startsWith("file:///android_asset/")) {
                     lastKnownAssetUrl = url
+                    val assetName = url.substringAfterLast('/').substringBefore('?').substringBefore('#').take(64)
+                    StartupPerformanceMonitor.endSpan(
+                        currentPageLoadPerformanceSpan,
+                        success = false,
+                        attributes = mapOf("outcome" to "superseded")
+                    )
+                    currentPageLoadAsset = assetName
+                    currentPageLoadPerformanceSpan =
+                        StartupPerformanceMonitor.beginSpan("webview.page_load.$assetName")
+                    StartupPerformanceMonitor.mark("webview.page_started", mapOf("asset" to assetName))
                 }
                 if (url?.substringBefore('?')?.substringBefore('#')?.endsWith("/login.html") == true &&
                     shouldOpenSystemSetupScreen() && startupExpectedAsset != "first-user-setup.html"
@@ -2500,6 +2613,23 @@ class MainActivity : AppCompatActivity() {
                     scheduleStartupPermissionsRequest()
                 }
                 normalizeOfflineFirstUi(view)
+                if (!url.isNullOrBlank() && url.startsWith("file:///android_asset/")) {
+                    val assetName = url.substringAfterLast('/').substringBefore('?').substringBefore('#').take(64)
+                    if (currentPageLoadAsset == assetName) {
+                        StartupPerformanceMonitor.endSpan(
+                            currentPageLoadPerformanceSpan,
+                            attributes = mapOf("asset" to assetName)
+                        )
+                        currentPageLoadPerformanceSpan = null
+                        currentPageLoadAsset = null
+                    }
+                    StartupPerformanceMonitor.mark("webview.page_finished", mapOf("asset" to assetName))
+                    if (!firstAssetPageFinished) {
+                        firstAssetPageFinished = true
+                        StartupPerformanceMonitor.mark("startup.first_asset_page_finished", mapOf("asset" to assetName))
+                    }
+                }
+                maybeReportFullyDrawn()
                 if (url?.endsWith("/main.html") == true || url?.endsWith("main.html") == true) {
                     val taskId = pendingNotificationTaskId
                     if (taskId != null) {
