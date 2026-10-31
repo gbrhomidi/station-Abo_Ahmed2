@@ -163,7 +163,7 @@ class MyApplication : Application() {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (level >= TRIM_MEMORY_BACKGROUND) {
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
             StartupPerformanceMonitor.mark(
                 "application.memory_trim",
                 mapOf("level" to level.toString())
