@@ -22,6 +22,15 @@ import kotlin.math.abs
  * recognised through a balanced journal. A driver-borne fee is not posted until an
  * actual driver is assigned to the delivery.
  */
+internal fun interface DeliveryLookupQueryRunner {
+    fun rawQuery(database: SQLiteDatabase, sql: String, arguments: Array<String>): Cursor
+}
+
+internal object DefaultDeliveryLookupQueryRunner : DeliveryLookupQueryRunner {
+    override fun rawQuery(database: SQLiteDatabase, sql: String, arguments: Array<String>): Cursor =
+        database.rawQuery(sql, arguments)
+}
+
 object DeliveryFeeAccounting {
     const val EXEMPT = "exempt"
     const val ADD_TO_SALES = "add_to_sales"
@@ -1032,13 +1041,24 @@ object DeliveryFeeAccounting {
         return ReadOnlyLookupQuery(sql, arguments.toTypedArray())
     }
 
-    fun savedDeliveryLocations(helper: DatabaseHelper, stationId: Int): JSONArray {
+    fun savedDeliveryLocations(helper: DatabaseHelper, stationId: Int): JSONArray =
+        savedDeliveryLocations(helper, stationId, DefaultDeliveryLookupQueryRunner)
+
+    /**
+     * Query-runner overload keeps the production SQL path intact while allowing tests
+     * to inject a SQLite read failure at the exact query execution boundary.
+     */
+    internal fun savedDeliveryLocations(
+        helper: DatabaseHelper,
+        stationId: Int,
+        queryRunner: DeliveryLookupQueryRunner
+    ): JSONArray {
         require(stationId > 0) { "معرف المحطة غير صالح" }
         // This autocomplete read is deliberately read-only: no ensureSchema(), DDL or data repair.
         val db = helper.readableDatabase
         val query = buildSavedDeliveryLocationsQuery(db, stationId) ?: return JSONArray()
         val locations = linkedMapOf<String, String>()
-        db.rawQuery(query.sql, query.arguments).use { cursor ->
+        queryRunner.rawQuery(db, query.sql, query.arguments).use { cursor ->
             while (cursor.moveToNext()) {
                 val value = cursor.getString(0)?.trim()?.replace(Regex("\\s+"), " ").orEmpty()
                 if (value.isEmpty()) continue
@@ -1051,12 +1071,19 @@ object DeliveryFeeAccounting {
         }
     }
 
-    fun recentCustomerSaleIds(helper: DatabaseHelper, stationId: Int): JSONArray {
+    fun recentCustomerSaleIds(helper: DatabaseHelper, stationId: Int): JSONArray =
+        recentCustomerSaleIds(helper, stationId, DefaultDeliveryLookupQueryRunner)
+
+    internal fun recentCustomerSaleIds(
+        helper: DatabaseHelper,
+        stationId: Int,
+        queryRunner: DeliveryLookupQueryRunner
+    ): JSONArray {
         require(stationId > 0) { "معرف المحطة غير صالح" }
         val db = helper.readableDatabase
         val query = buildRecentCustomerSaleIdsQuery(db, stationId) ?: return JSONArray()
         return JSONArray().also { ids ->
-            db.rawQuery(query.sql, query.arguments).use { cursor ->
+            queryRunner.rawQuery(db, query.sql, query.arguments).use { cursor ->
                 while (cursor.moveToNext()) {
                     val partyId = cursor.getLong(0)
                     if (partyId > 0L) ids.put(partyId)
