@@ -1,5 +1,6 @@
 package com.aistudio.dieselstationsms.kxmpzq.service
 
+import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import com.aistudio.dieselstationsms.kxmpzq.startup.ServiceStatusRepository
 
 import android.Manifest
@@ -47,6 +48,7 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -181,6 +183,8 @@ class SMSService : Service() {
     private val isInitialized = AtomicBoolean(false)
     private val isRunning = AtomicBoolean(false)
     private val isPaused = AtomicBoolean(false)
+    private val serviceInitializationLock = Any()
+    private val pendingServiceCommands = ConcurrentLinkedQueue<Intent>()
     private val restartAttempts = AtomicInteger(0)
     private val lastRestartTime = AtomicLong(0L)
     private val startTime = AtomicLong(0L)
@@ -253,9 +257,7 @@ class SMSService : Service() {
     override fun onCreate() {
         super.onCreate()
         serviceInstance = this
-        Log.i(TAG, "═══════════════════════════════════════════════")
-        Log.i(TAG, "SMSService onCreate - Complete Orchestrator v7.0.0")
-        Log.i(TAG, "═══════════════════════════════════════════════")
+        Log.i(TAG, "SMSService starting")
 
         isDestroyed.set(false)
         isInitialized.set(false)
@@ -267,71 +269,57 @@ class SMSService : Service() {
         processedMessageCount.set(0)
 
         try {
-            // يجب نشر إشعار foreground قبل أي تهيئة طويلة حتى لا يقتل
-            // Android الخدمة بسبب انتهاء مهلة foreground service.
             initializeNotification()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForeground(NOTIFICATION_ID, buildForegroundNotification())
             }
-
-            // 1. تهيئة Coroutine Scope
             initializeCoroutineScope()
 
-            // 2. تهيئة الخدمة
-            initializeService()
+            // All SQLite and module setup is performed on this service-owned IO scope.
+            serviceScope.launch {
+                try {
+                    initializeDatabase()
+                    initializeService()
+                    vehicleAlertMonitor = VehicleTrackingAlertMonitor(applicationContext, dbHelper)
+                    vehicleAlertMonitor.start(serviceScope)
+                    loadSettings()
+                    initializeSmsModules()
+                    registerSmsReceiver()
+                    startSmsEngine()
+                    SmsOutboxWorker.schedule(applicationContext)
+                    startHealthMonitor()
+                    startPerformanceMonitor()
+                    scheduleMaintenance()
+                    scheduleHealthChecks()
+                    scheduleDatabaseCleanup()
+                    scheduleMetricsFlush()
+                    scheduleSecurityChecks()
+                    serviceScope.launch { TaskNotificationManager.reschedulePendingTasks(applicationContext) }
+                    logServiceStarted()
+                    SystemEventLogger.recordService(this@SMSService, STATUS_SERVICE_STARTED, "Service started")
 
-            // 3. تهيئة قاعدة البيانات
-            initializeDatabase()
-
-            // مراقبة توقف المركبات وفقد اتصال أجهزة GPS من SQLite داخل خدمة الخلفية الحالية.
-            vehicleAlertMonitor = VehicleTrackingAlertMonitor(applicationContext, dbHelper)
-            vehicleAlertMonitor.start(serviceScope)
-
-            // 4. قناة الإشعار مهيأة أعلاه؛ الاستدعاء هنا idempotent فقط.
-            initializeNotification()
-
-            // 5. تحميل الإعدادات
-            loadSettings()
-
-            // 6. تهيئة الوحدات
-            initializeSmsModules()
-
-            // 7. تسجيل مستقبل الرسائل
-            registerSmsReceiver()
-
-            // 8. تشغيل محرك SMS
-            startSmsEngine()
-
-            // outbox مصدر الحقيقة للرسائل الصادرة؛ لا ينتظر فتح الواجهة.
-            SmsOutboxWorker.schedule(applicationContext)
-
-            // 9. بدء مراقبة الصحة
-            startHealthMonitor()
-
-            // 10. بدء مراقبة الأداء
-            startPerformanceMonitor()
-
-            // 11. جدولة المهام
-            scheduleMaintenance()
-            scheduleHealthChecks()
-            scheduleDatabaseCleanup()
-            scheduleMetricsFlush()
-            scheduleSecurityChecks()
-            serviceScope.launch { TaskNotificationManager.reschedulePendingTasks(applicationContext) }
-
-            // 12. تسجيل بدء الخدمة
-            logServiceStarted()
-            SystemEventLogger.recordService(this, STATUS_SERVICE_STARTED, "Service v7.1.0 started")
-
-            isInitialized.set(true)
-            isRunning.set(true)
-            serviceStatusRepository.setRunning(true)
-            Log.i(TAG, "Service initialization completed successfully")
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Fatal Error in service initialization: ${e.message}", e)
+                    synchronized(serviceInitializationLock) {
+                        while (true) {
+                            val queued = pendingServiceCommands.poll() ?: break
+                            handleServiceCommand(queued)
+                        }
+                        isInitialized.set(true)
+                        isRunning.set(true)
+                    }
+                    serviceStatusRepository.setRunning(true)
+                    Log.i(TAG, "Service initialization completed successfully")
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Log.e(TAG, "Service initialization failed: " + error.message, error)
+                    serviceStatusRepository.setRunning(false)
+                    handleFatalError(error)
+                }
+            }
+        } catch (error: Exception) {
+            Log.e(TAG, "Service foreground startup failed: " + error.message, error)
             serviceStatusRepository.setRunning(false)
-            handleFatalError(e)
+            handleFatalError(error)
         }
     }
 
@@ -339,40 +327,40 @@ class SMSService : Service() {
         Log.i(TAG, "SMSService onStartCommand - START_STICKY")
 
         try {
-            if (!isInitialized.get()) {
-                Log.w(TAG, "Service not initialized yet, reinitializing...")
-                initializeService()
+            if (!isDestroyed.get()) {
+                startForeground(NOTIFICATION_ID, buildForegroundNotification())
+            }
+
+            val initializationPending = synchronized(serviceInitializationLock) {
+                if (isInitialized.get()) {
+                    false
+                } else {
+                    intent?.let { command ->
+                        if (!command.getStringExtra("action").isNullOrBlank()) {
+                            pendingServiceCommands.offer(Intent(command))
+                        }
+                    }
+                    true
+                }
+            }
+
+            if (initializationPending) {
+                Log.i(TAG, "Service initialization pending; command deferred")
+                sendServiceStatusBroadcast()
+                return START_STICKY
             }
 
             if (isPaused.get()) {
                 resumeSmsEngine()
             }
-
-            if (!isDestroyed.get()) {
-                startForeground(NOTIFICATION_ID, buildForegroundNotification())
-            }
-
-            // إعادة محاولة الرسائل العالقة بعد إعادة التشغيل أو wake-up.
             SmsOutboxWorker.schedule(applicationContext)
-
-            // معالجة أي أمر مرسل إلى الخدمة
             handleServiceCommand(intent)
-
-            // تسجيل معلومات بدء التشغيل بدون التأثير على السلوك
-            intent?.getStringExtra("startup_reason")?.let {
-                Log.i(TAG, "Startup reason: $it")
-            }
-
-            intent?.getStringExtra("restart_reason")?.let {
-                Log.i(TAG, "Restart reason: $it")
-            }
-
+            intent?.getStringExtra("startup_reason")?.let { Log.i(TAG, "Startup reason: " + it) }
+            intent?.getStringExtra("restart_reason")?.let { Log.i(TAG, "Restart reason: " + it) }
             sendServiceStatusBroadcast()
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Error handling service start command: ${e.message}", e)
+        } catch (error: Exception) {
+            Log.e(TAG, "Error handling service start command: " + error.message, error)
         }
-
         return START_STICKY
     }
 
@@ -447,6 +435,8 @@ class SMSService : Service() {
         isInitialized.set(false)
         isRunning.set(false)
         serviceStatusRepository.setRunning(false)
+        // Stop service-owned coroutines without cancelling the process-wide DB coordinator.
+        serviceScope.cancel()
 
         try {
             // 1. إيقاف المحرك
@@ -484,10 +474,8 @@ class SMSService : Service() {
             logServiceStopped()
             SystemEventLogger.recordService(this, STATUS_SERVICE_STOPPED, "Service stopped")
 
-            // 8. إغلاق قاعدة البيانات
-            if (::dbHelper.isInitialized) {
-                dbHelper.close()
-            }
+            // DatabaseHelper is process-scoped and shared with MainActivity.
+            // SMSService must not close this shared SQLiteOpenHelper.
 
             // 9. إلغاء جدولة العمل
             WorkManager.getInstance(this).cancelUniqueWork(BACKUP_WORK_NAME)
@@ -544,9 +532,9 @@ class SMSService : Service() {
     /**
      * تهيئة قاعدة البيانات
      */
-    private fun initializeDatabase() {
+    private suspend fun initializeDatabase() {
         try {
-            dbHelper = DatabaseHelper.getInstance(applicationContext)
+            dbHelper = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
             SmsAiHttpClientFactory.setNetworkOptimizationEnabled(
                 dbHelper.getSetting("networkOptimizationEnabled").trim().lowercase(Locale.ROOT) in
                     setOf("1", "true", "yes", "on")
@@ -855,10 +843,7 @@ class SMSService : Service() {
             performanceScope.cancel()
             cleanupScope.cancel()
 
-            // إغلاق قاعدة البيانات
-            if (::dbHelper.isInitialized) {
-                dbHelper.close()
-            }
+            // Keep the process-shared SQLiteOpenHelper alive for other consumers.
 
             logServiceStopped()
             Log.i(TAG, "Graceful shutdown completed")
@@ -2502,8 +2487,11 @@ class SMSService : Service() {
     private fun acquireWakeLock() {
         try {
             val setting = runCatching {
-                val db = if (::dbHelper.isInitialized) dbHelper else DatabaseHelper.getInstance(applicationContext)
-                db.getSetting("wakeLockEnabled").trim().lowercase(Locale.ROOT)
+                if (::dbHelper.isInitialized) {
+                    dbHelper.getSetting("wakeLockEnabled").trim().lowercase(Locale.ROOT)
+                } else {
+                    ""
+                }
             }.getOrDefault("")
             val enabled = when (setting) {
                 "0", "false", "no", "off" -> false

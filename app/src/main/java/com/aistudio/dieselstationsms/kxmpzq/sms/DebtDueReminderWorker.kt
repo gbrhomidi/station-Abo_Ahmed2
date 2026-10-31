@@ -13,7 +13,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import com.aistudio.dieselstationsms.kxmpzq.MainActivity
 import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
 import java.util.concurrent.TimeUnit
@@ -35,8 +35,8 @@ class DebtDueReminderWorker(
         val userId = inputData.getLong(KEY_USER_ID, 0L)
         if (stationId <= 0 || userId <= 0L) return Result.success()
 
-        val db = DatabaseHelper.getInstance(applicationContext)
         return try {
+            val db = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
             if (db.getSetting("sms_send_enabled") == "0") return Result.success()
 
             // Create/repair maturity dates before the reminder query runs. The same

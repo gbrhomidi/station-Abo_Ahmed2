@@ -16,6 +16,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.WorkerParameters
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
@@ -1009,7 +1010,7 @@ class MaintenanceWorker(
             MaintenanceCoordinator.lock.withLock {
                 // ── الحصول على DatabaseHelper بأمان ──
                 val db = try {
-                    DatabaseHelper.getInstance(applicationContext)
+                    DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
                 } catch (e: Exception) {
                     logError("Failed to initialize DatabaseHelper", e)
                     return@withLock if (shouldRetry()) {

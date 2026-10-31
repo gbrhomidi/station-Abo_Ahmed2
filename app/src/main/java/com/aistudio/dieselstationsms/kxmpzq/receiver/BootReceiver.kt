@@ -6,9 +6,9 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
-import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManager
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
+import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import com.aistudio.dieselstationsms.kxmpzq.startup.StartupReason
 import com.aistudio.dieselstationsms.kxmpzq.startup.config.DatabaseConfigurationProvider
 import com.aistudio.dieselstationsms.kxmpzq.startup.di.StartupCompositionRoot
@@ -33,28 +33,31 @@ class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action !in SUPPORTED_ACTIONS) return
+
         val appContext = context.applicationContext
-        TaskNotificationManager.reschedulePendingTasksAsync(appContext)
-
-        val database = DatabaseHelper.getInstance(appContext)
-        val config = DatabaseConfigurationProvider(appContext)
-        val autoStart = database.getSetting("auto_start_enabled").ifBlank { database.getSetting("autoStartEnabled") }
-        if (explicitlyDisabled(autoStart)) {
-            Log.i(TAG, "Automatic startup disabled in SQLite settings")
-            return
-        }
-        if (explicitlyDisabled(database.getSetting("sms_enabled"))) {
-            Log.i(TAG, "SMS service disabled in SQLite settings")
-            return
-        }
-        if (config.getStartupMode() == "MANUAL") {
-            Log.i(TAG, "Startup mode is MANUAL; skipping boot launch")
-            return
-        }
-
+        // Acquire the async receiver token before any database or settings access.
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
+                // The Activity and service use this exact same process-level operation.
+                val database = DatabaseInitializationCoordinator.awaitDatabase(appContext)
+                TaskNotificationManager.reschedulePendingTasksAsync(appContext)
+                val config = DatabaseConfigurationProvider(appContext)
+                val autoStart = database.getSetting("auto_start_enabled")
+                    .ifBlank { database.getSetting("autoStartEnabled") }
+                if (explicitlyDisabled(autoStart)) {
+                    Log.i(TAG, "Automatic startup disabled in SQLite settings")
+                    return@launch
+                }
+                if (explicitlyDisabled(database.getSetting("sms_enabled"))) {
+                    Log.i(TAG, "SMS service disabled in SQLite settings")
+                    return@launch
+                }
+                if (config.getStartupMode() == "MANUAL") {
+                    Log.i(TAG, "Startup mode is MANUAL; skipping boot launch")
+                    return@launch
+                }
+
                 if (config.isPipelineEnabled()) {
                     val completed = CompletableDeferred<Unit>()
                     StartupCompositionRoot.createCoordinator(appContext).execute(

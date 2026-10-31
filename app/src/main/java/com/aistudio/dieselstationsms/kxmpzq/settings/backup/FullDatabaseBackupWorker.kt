@@ -10,6 +10,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.settings.security.SecuritySettingsStore
 import java.util.concurrent.TimeUnit
@@ -22,7 +23,7 @@ class FullDatabaseBackupWorker(
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         return try {
-            val database = DatabaseHelper.getInstance(applicationContext)
+            val database = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
             if (!isEnabled(database.getSetting("includeDatabaseBackup"), true)) {
                 return Result.success(Data.Builder().putBoolean("skipped", true).build())
             }

@@ -6,7 +6,7 @@ import android.content.Intent
 import android.os.PowerManager
 import android.provider.Telephony
 import android.util.Log
-import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -80,14 +80,6 @@ class SmsReceiver : BroadcastReceiver() {
         }
 
         val appContext = context.applicationContext
-        val receiveEnabled = runCatching {
-            DatabaseHelper.getInstance(appContext).getSetting("sms_receive_enabled")
-        }.getOrDefault("")
-        if (receiveEnabled == "0") {
-            Log.i(TAG, "SMS receiving disabled by system settings")
-            return
-        }
-
         /*
          * نستخدم goAsync() لأن معالجة الرسالة قد تتجاوز
          * المدة القصيرة المسموح بها لـ onReceive().
@@ -129,7 +121,11 @@ class SmsReceiver : BroadcastReceiver() {
                  * DatabaseHelper هو مصدر قاعدة البيانات المركزي
                  * في المشروع.
                  */
-                val database = DatabaseHelper.getInstance(appContext)
+                val database = DatabaseInitializationCoordinator.awaitDatabase(appContext)
+                if (database.getSetting("sms_receive_enabled") == "0") {
+                    Log.i(TAG, "SMS receiving disabled by system settings")
+                    return@launch
+                }
 
                 /*
                  * إنشاء Processor وتمرير Intent كما هو.

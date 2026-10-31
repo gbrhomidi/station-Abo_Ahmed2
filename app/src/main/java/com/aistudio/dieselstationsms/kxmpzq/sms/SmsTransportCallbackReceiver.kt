@@ -6,11 +6,29 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /** يستقبل نتائج modem لكل جزء؛ لا ينفذ منطقاً تجارياً. */
 class SmsTransportCallbackReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        handleCallback(context, intent, resultCode)
+        if (intent == null) return
+        val appContext = context.applicationContext
+        val callbackResultCode = resultCode
+        val pending = goAsync()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                DatabaseInitializationCoordinator.awaitDatabase(appContext)
+                handleCallback(appContext, intent, callbackResultCode)
+            } catch (error: Exception) {
+                Log.e("SmsTransportCallback", "Failed to initialize SQLite for SMS callback", error)
+            } finally {
+                pending.finish()
+            }
+        }
     }
 
     /**

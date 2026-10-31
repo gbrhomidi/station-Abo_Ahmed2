@@ -13,6 +13,7 @@ import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 
 
 /*
@@ -99,10 +100,7 @@ class BackupWorker(
             // 2. الحصول على قاعدة البيانات
             // ========================================================
 
-            val db =
-                DatabaseHelper.getInstance(
-                    applicationContext
-                )
+            val db = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
 
 
 
@@ -282,25 +280,7 @@ class BackupWorker(
 
 
             } finally {
-
-
-                // ====================================================
-                // إغلاق Singleton بالطريقة الصحيحة
-                // ====================================================
-
-                try {
-
-                    DatabaseHelper.closeInstance()
-
-                } catch (e: Exception) {
-
-
-                    Log.w(
-                        TAG,
-                        "Error closing database instance",
-                        e
-                    )
-                }
+                // DatabaseHelper is shared across the process; backup work does not own it.
             }
 
 

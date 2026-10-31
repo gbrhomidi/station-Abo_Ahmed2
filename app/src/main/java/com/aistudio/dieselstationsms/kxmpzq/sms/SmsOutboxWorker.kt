@@ -9,7 +9,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -21,7 +21,7 @@ import kotlinx.coroutines.withContext
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val db = DatabaseHelper.getInstance(applicationContext)
+        val db = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
         // Respect the global outbound switch and leave messages durable while permission is absent.
         if (db.getSetting("sms_send_enabled") == "0") return@withContext Result.success()
         if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {

@@ -50,6 +50,7 @@ import androidx.security.crypto.MasterKeys
 import com.aistudio.dieselstationsms.kxmpzq.receiver.*
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManager
+import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import com.aistudio.dieselstationsms.kxmpzq.startup.ServiceStatusRepository
 import com.aistudio.dieselstationsms.kxmpzq.startup.ServiceLaunchResult
 import com.aistudio.dieselstationsms.kxmpzq.startup.SmsServiceLauncher
@@ -350,16 +351,17 @@ class MainActivity : AppCompatActivity() {
         initEncryptedPrefs()
 
         try {
-            dbHelper = DatabaseHelper.getInstance(applicationContext)
+            // إنشاء مكونات الحالة لا يفتح SQLite؛ فتح قاعدة البيانات يتم لاحقاً
+            // عبر المنسق المشترك على Dispatchers.IO.
             smsServiceLauncher = SmsServiceLauncher(
                 applicationContext,
                 ServiceStatusRepository(applicationContext)
             )
             LiveUpdateHub.subscribe(liveUpdateListener)
-            DebugLogger.info("Database", "DatabaseHelper initialized")
+            DebugLogger.info("Database", "SQLite initialization delegated to the process coordinator")
         } catch (e: Exception) {
-            DebugLogger.logException("Database", e)
-            startupErrorMessage = e.message ?: "تعذر تجهيز قاعدة البيانات"
+            DebugLogger.logException("Startup", e)
+            startupErrorMessage = e.message ?: "تعذر تجهيز مكونات بدء التشغيل"
             startupUiState = "failed"
             Toast.makeText(this, "تعذر بدء التطبيق", Toast.LENGTH_LONG).show()
             finish()
@@ -405,10 +407,37 @@ class MainActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch {
-            if (initializeStartupDatabase()) {
-                initializeSystem()
+            try {
+                // This await does not block the Activity. Concurrent startup callers share one IO open.
+                dbHelper = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
+                DebugLogger.info("Database", "Shared SQLite initialization completed")
+                if (initializeStartupDatabase()) {
+                    initializeSystem()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                DebugLogger.logException("DatabaseInitialization", e)
+                startupDatabaseReady = false
+                startupErrorMessage = e.message?.takeIf { it.isNotBlank() }
+                    ?: "تعذر تجهيز قاعدة البيانات المحلية"
+                startupUiState = "failed"
+                withContext(Dispatchers.Main) {
+                    if (!isDestroyed.get() && !isFinishing) {
+                        webView?.evaluateJavascript(
+                            "window.onAppStartupFailed && window.onAppStartupFailed()",
+                            null
+                        )
+                        Toast.makeText(
+                            this@MainActivity,
+                            "تعذر تجهيز قاعدة البيانات؛ أعد المحاولة بعد معالجة السبب",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            } finally {
+                TaskNotificationManager.reschedulePendingTasksAsync(applicationContext)
             }
-            TaskNotificationManager.reschedulePendingTasksAsync(applicationContext)
         }
 
         scheduleBackgroundTasks()
@@ -2833,9 +2862,8 @@ class MainActivity : AppCompatActivity() {
                 ""
             }
         }
-        private val dbHelperRef = WeakReference(dbHelper)
         private val db: DatabaseHelper
-            get() = dbHelperRef.get() ?: throw IllegalStateException("قاعدة البيانات غير متاحة")
+            get() = getDbHelper() ?: throw IllegalStateException("قاعدة البيانات غير متاحة")
         private val geminiHelperRef = WeakReference(geminiHelper)
         private val settingsJson = Json {
             ignoreUnknownKeys = true
@@ -2844,7 +2872,8 @@ class MainActivity : AppCompatActivity() {
         }
         private val systemSetupLock = Any()
 
-        private fun getDbHelper(): DatabaseHelper? = dbHelperRef.get()
+        private fun getDbHelper(): DatabaseHelper? =
+            if (this@MainActivity::dbHelper.isInitialized) this@MainActivity.dbHelper else null
         private fun getGeminiHelper(): GeminiAIHelper? = geminiHelperRef.get()
         private fun getActivity(): MainActivity? = activityRef.get()
 
