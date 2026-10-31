@@ -13,6 +13,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Robolectric
 import org.robolectric.annotation.Config
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -196,6 +197,156 @@ class FuelSalesDeliveryFeeRobolectricTest {
         val manualLocations = JSONObject(afterManualEntry).getJSONArray("data")
         assertTrue("A manually typed location must be persisted and appear in future lookup results",
             (0 until manualLocations.length()).any { manualLocations.getString(it) == manuallyEnteredLocation })
+    }
+
+    @Test
+    fun actualMainActivityJavascriptBridgePersistsDeliverySaleInRealSqlite() {
+        // Start the production Activity so the inner WebAppInterface is bound to a real
+        // Android Context, the same SQLite helper, and the authenticated user preference.
+        val controller = Robolectric.buildActivity(MainActivity::class.java).create()
+        val activity = controller.get()
+        try {
+            activity.sharedPrefs.edit().putLong("user_id", userId).commit()
+
+            // Ensure the bridge references the exact DatabaseHelper instance used by this
+            // Robolectric fixture. No bridge, SQLite, or accounting method is mocked.
+            MainActivity::class.java.getDeclaredField("dbHelper").apply {
+                isAccessible = true
+                set(activity, helper)
+            }
+
+            val bridge = activity.WebAppInterface(context, activity)
+            val location = "موقع اختبار الجسر الأصلي-" + UUID.randomUUID().toString().take(8)
+            val input = buildFuelSaleInput(
+                DeliveryFeeAccounting.ADD_TO_SALES,
+                100.0,
+                location
+            )
+
+            // Call the real @JavascriptInterface method on MainActivity.WebAppInterface.
+            // This executes the production save path, including its transaction and the
+            // DeliveryFeeAccounting persistence call, against the fixture's real SQLite DB.
+            val nativeResponse = JSONObject(bridge.saveFuelSaleRecord(input.toString()))
+            assertTrue("The real Android bridge should return success: $nativeResponse",
+                nativeResponse.optBoolean("success"))
+            val parentSaleId = nativeResponse.getLong("id")
+            assertTrue(parentSaleId > 0L)
+
+            val grossQuantity = input.getDouble("quantity")
+            val unitPrice = input.getDouble("price_per_liter")
+            val grossAmount = round(grossQuantity * unitPrice * 100.0) / 100.0
+            val invoiceTotal = grossAmount + 100.0
+
+            assertEquals(grossQuantity, nativeResponse.getDouble("gross_quantity"), 0.000001)
+            assertEquals(grossAmount, nativeResponse.getDouble("gross_amount"), 0.01)
+            assertEquals(
+                "total_amount remains the fuel-only amount in the native bridge response",
+                grossAmount,
+                nativeResponse.getDouble("total_amount"),
+                0.01
+            )
+            assertEquals(invoiceTotal, nativeResponse.getDouble("invoice_total"), 0.01)
+            assertEquals(invoiceTotal, nativeResponse.getDouble("delivery_fee_display_total"), 0.01)
+
+            val parentAmounts = db.rawQuery(
+                "SELECT gross_amount,net_amount FROM sales_transactions WHERE id=? AND station_id=?",
+                arrayOf(parentSaleId.toString(), stationId.toString())
+            ).use { cursor ->
+                assertTrue("The parent sale must be committed by the Android bridge", cursor.moveToFirst())
+                cursor.getDouble(0) to cursor.getDouble(1)
+            }
+            assertEquals(grossAmount, parentAmounts.first, 0.01)
+            assertEquals(invoiceTotal, parentAmounts.second, 0.01)
+
+            val child = db.rawQuery(
+                """SELECT id,quantity,total_amount,gross_quantity,gross_amount,
+                          delivery_service_fee,delivery_fee_mode
+                   FROM fuel_sales
+                   WHERE sale_id=? AND station_id=?
+                   ORDER BY id DESC LIMIT 1""",
+                arrayOf(parentSaleId.toString(), stationId.toString())
+            ).use { cursor ->
+                assertTrue("The fuel row must be committed by the Android bridge", cursor.moveToFirst())
+                JSONObject().apply {
+                    put("id", cursor.getLong(0))
+                    put("quantity", cursor.getDouble(1))
+                    put("total_amount", cursor.getDouble(2))
+                    put("gross_quantity", cursor.getDouble(3))
+                    put("gross_amount", cursor.getDouble(4))
+                    put("delivery_service_fee", cursor.getDouble(5))
+                    put("delivery_fee_mode", cursor.getString(6))
+                }
+            }
+            val fuelSaleId = child.getLong("id")
+            assertEquals(grossQuantity, child.getDouble("quantity"), 0.000001)
+            assertEquals(grossAmount, child.getDouble("total_amount"), 0.01)
+            assertEquals(grossQuantity, child.getDouble("gross_quantity"), 0.000001)
+            assertEquals(grossAmount, child.getDouble("gross_amount"), 0.01)
+            assertEquals(100.0, child.getDouble("delivery_service_fee"), 0.01)
+            assertEquals(DeliveryFeeAccounting.ADD_TO_SALES, child.getString("delivery_fee_mode"))
+
+            var feeJournalId = 0L
+            db.rawQuery(
+                """SELECT amount,mode,status,COALESCE(journal_entry_id,0)
+                   FROM delivery_service_fee_ledger
+                   WHERE fuel_sale_id=? AND station_id=?""",
+                arrayOf(fuelSaleId.toString(), stationId.toString())
+            ).use { cursor ->
+                assertTrue("The native bridge must persist a delivery-fee ledger row", cursor.moveToFirst())
+                assertEquals(100.0, cursor.getDouble(0), 0.01)
+                assertEquals(DeliveryFeeAccounting.ADD_TO_SALES, cursor.getString(1))
+                assertEquals("posted", cursor.getString(2))
+                feeJournalId = cursor.getLong(3)
+            }
+            assertTrue("The fee ledger must link to its posted service-revenue journal", feeJournalId > 0L)
+
+            db.rawQuery(
+                "SELECT status,total_debit,total_credit FROM journal_entries WHERE id=? AND station_id=?",
+                arrayOf(feeJournalId.toString(), stationId.toString())
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("posted", cursor.getString(0))
+                assertEquals(100.0, cursor.getDouble(1), 0.01)
+                assertEquals(100.0, cursor.getDouble(2), 0.01)
+            }
+            assertEquals(
+                100.0,
+                scalarDouble(
+                    "SELECT COALESCE(SUM(debit),0) FROM journal_entry_items WHERE journal_entry_id=?",
+                    arrayOf(feeJournalId.toString())
+                ),
+                0.01
+            )
+            assertEquals(
+                100.0,
+                scalarDouble(
+                    "SELECT COALESCE(SUM(credit),0) FROM journal_entry_items WHERE journal_entry_id=?",
+                    arrayOf(feeJournalId.toString())
+                ),
+                0.01
+            )
+
+            // The standard sale journal is still present alongside the fee journal.
+            assertTrue(
+                scalarLong(
+                    """SELECT COUNT(*) FROM journal_entries
+                       WHERE station_id=? AND reference_type='sale' AND reference_id=?
+                         AND status='posted' AND is_deleted=0""",
+                    arrayOf(stationId.toString(), parentSaleId.toString())
+                ) > 0L
+            )
+
+            val locationLookup = JSONObject(DeliveryLookupBridgeContract.savedLocations(helper, stationId))
+            assertTrue(locationLookup.getBoolean("success"))
+            assertTrue(
+                "The manually supplied location must be persisted for subsequent bridge lookups",
+                (0 until locationLookup.getJSONArray("data").length()).any {
+                    locationLookup.getJSONArray("data").getString(it) == location
+                }
+            )
+        } finally {
+            controller.destroy()
+        }
     }
 
     private fun assertMode(
