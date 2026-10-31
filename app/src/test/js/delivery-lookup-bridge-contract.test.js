@@ -5,7 +5,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { create } = require('../../main/assets/assets-local/js/fuel-sales-async-bridge.js');
 
-const root = path.resolve(__dirname, '../../../..');
+// Resolve from app/src so main/assets and main/java map to the actual Android source tree.
+const root = path.resolve(__dirname, '../..');
 const read = relative => fs.readFileSync(path.join(root, relative), 'utf8');
 
 async function run() {
