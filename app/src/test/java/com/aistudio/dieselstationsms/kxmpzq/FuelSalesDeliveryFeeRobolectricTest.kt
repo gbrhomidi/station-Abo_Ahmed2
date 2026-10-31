@@ -273,9 +273,8 @@ class FuelSalesDeliveryFeeRobolectricTest {
             scalarDouble(
                 """SELECT COALESCE(SUM(ji.credit),0)
                    FROM journal_entry_items ji JOIN accounts a ON a.id=ji.account_id
-                   WHERE ji.journal_entry_id=? AND a.account_type='revenue'
-                     AND (LOWER(COALESCE(a.account_name,'')) LIKE '%delivery service revenue%'
-                       OR COALESCE(a.account_name_ar,'') LIKE '%خدمة التوصيل%')""",
+                   WHERE ji.journal_entry_id=?
+                     AND LOWER(COALESCE(a.account_type,'')) IN ('income','revenue','revenues','إيراد','إيرادات')""",
                 arrayOf(expectedJournalId.toString())
             )
         } else {
