@@ -3,7 +3,10 @@ package com.aistudio.dieselstationsms.kxmpzq
 import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import android.os.Looper
+import android.webkit.WebView
 import androidx.test.core.app.ApplicationProvider
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -14,6 +17,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Robolectric
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -200,32 +204,25 @@ class FuelSalesDeliveryFeeRobolectricTest {
     }
 
     @Test
-    fun actualMainActivityJavascriptBridgePersistsDeliverySaleInRealSqlite() {
-        // Robolectric's buildActivity creates and attaches a real Activity without calling
-        // onCreate. This avoids emulating AndroidKeyStore while preserving a genuine Activity
-        // instance and its real, non-mocked WebAppInterface implementation.
-        val controller = Robolectric.buildActivity(MainActivity::class.java)
-        val activity = controller.get()
+    fun actualExecuteFuelSalesAsyncCallbackPersistsDeliverySaleInRealSqlite() {
+        // Use a real Activity, the production WebAppInterface, this test's SQLite helper,
+        // and a real Robolectric WebView. ShadowWebView records the exact JavaScript callback
+        // sent by executeFuelSalesAsync without replacing the native dispatcher or database.
+        val harness = createNativeAsyncBridgeHarness()
+        val bridge = harness.first
+        val webView = harness.second
 
-        activity.sharedPrefs = context.getSharedPreferences(
-            "fuel-sales-bridge-test-auth",
-            Context.MODE_PRIVATE
+        val emptyLocations = invokeFuelSalesAsyncAndAwait(
+            bridge,
+            webView,
+            "locations-before-" + UUID.randomUUID().toString().take(8),
+            "locations",
+            JSONArray()
         )
-        activity.sharedPrefs.edit().putLong("user_id", userId).commit()
-
-        // Supply the fixture's actual SQLite helper to the production bridge.
-        MainActivity::class.java.getDeclaredField("dbHelper").apply {
-            isAccessible = true
-            set(activity, helper)
-        }
-        // WebAppInterface captures this helper during construction; no AI model or network
-        // initialization is needed for the fuel-sale save path exercised by this test.
-        MainActivity::class.java.getDeclaredField("geminiHelper").apply {
-            isAccessible = true
-            set(activity, GeminiAIHelper(context))
-        }
-
-        val bridge = activity.WebAppInterface(context, activity)
+        assertTrue("The native locations callback must succeed: $emptyLocations",
+            emptyLocations.optBoolean("success"))
+        assertEquals("The fixture starts with no saved delivery locations",
+            0, emptyLocations.getJSONArray("data").length())
         val location = "موقع اختبار الجسر الأصلي-" + UUID.randomUUID().toString().take(8)
         val input = buildFuelSaleInput(
             DeliveryFeeAccounting.ADD_TO_SALES,
@@ -233,9 +230,16 @@ class FuelSalesDeliveryFeeRobolectricTest {
             location
         )
 
-        // Invoke the real production @JavascriptInterface method, not a fake bridge.
-        // Its full save transaction and fee persistence path write into this test's real SQLite.
-        val nativeResponse = JSONObject(bridge.saveFuelSaleRecord(input.toString()))
+        // Exercise the production asynchronous allowlisted dispatcher. The helper waits
+        // until the actual native callback script reaches WebView.evaluateJavascript and
+        // decodes the JSON response that the page callback receives.
+        val nativeResponse = invokeFuelSalesAsyncAndAwait(
+            bridge,
+            webView,
+            "manual-location-save-" + UUID.randomUUID().toString().take(8),
+            "save",
+            JSONArray().put(input.toString())
+        )
         assertTrue(
             "The real Android bridge should return success: $nativeResponse",
             nativeResponse.optBoolean("success")
@@ -347,13 +351,153 @@ class FuelSalesDeliveryFeeRobolectricTest {
             ) > 0L
         )
 
-        val locationLookup = JSONObject(DeliveryLookupBridgeContract.savedLocations(helper, stationId))
-        assertTrue(locationLookup.getBoolean("success"))
+        val locationLookup = invokeFuelSalesAsyncAndAwait(
+            bridge,
+            webView,
+            "locations-after-" + UUID.randomUUID().toString().take(8),
+            "locations",
+            JSONArray()
+        )
+        assertTrue("The follow-up native locations callback must succeed: $locationLookup",
+            locationLookup.getBoolean("success"))
         assertTrue(
             "The manually supplied location must be persisted for subsequent bridge lookups",
             (0 until locationLookup.getJSONArray("data").length()).any {
                 locationLookup.getJSONArray("data").getString(it) == location
             }
+        )
+    }
+
+    @Test
+    fun actualExecuteFuelSalesAsyncCallbackRejectsBlankDeliveryLocationWithoutSqliteWrites() {
+        val harness = createNativeAsyncBridgeHarness()
+        val bridge = harness.first
+        val webView = harness.second
+
+        val beforeSales = scalarLong(
+            "SELECT COUNT(*) FROM sales_transactions WHERE station_id=?",
+            arrayOf(stationId.toString())
+        )
+        val beforeFuelRows = scalarLong(
+            "SELECT COUNT(*) FROM fuel_sales WHERE station_id=?",
+            arrayOf(stationId.toString())
+        )
+        val beforeFeeRows = scalarLong(
+            "SELECT COUNT(*) FROM delivery_service_fee_ledger WHERE station_id=?",
+            arrayOf(stationId.toString())
+        )
+        val beforeJournals = scalarLong(
+            "SELECT COUNT(*) FROM journal_entries WHERE station_id=?",
+            arrayOf(stationId.toString())
+        )
+
+        val invalidInput = buildFuelSaleInput(
+            DeliveryFeeAccounting.ADD_TO_SALES,
+            100.0,
+            ""
+        )
+        val rejected = invokeFuelSalesAsyncAndAwait(
+            bridge,
+            webView,
+            "blank-location-save-" + UUID.randomUUID().toString().take(8),
+            "save",
+            JSONArray().put(invalidInput.toString())
+        )
+
+        assertFalse("The callback must report a failed save for an empty delivery location: $rejected",
+            rejected.optBoolean("success"))
+        assertTrue("The callback must explain that the delivery location is required: $rejected",
+            rejected.optString("error").contains("موقع التوصيل"))
+
+        assertEquals("A rejected async save must not create a parent sale", beforeSales,
+            scalarLong("SELECT COUNT(*) FROM sales_transactions WHERE station_id=?",
+                arrayOf(stationId.toString())))
+        assertEquals("A rejected async save must not create a fuel row", beforeFuelRows,
+            scalarLong("SELECT COUNT(*) FROM fuel_sales WHERE station_id=?",
+                arrayOf(stationId.toString())))
+        assertEquals("A rejected async save must not create a delivery-fee ledger row", beforeFeeRows,
+            scalarLong("SELECT COUNT(*) FROM delivery_service_fee_ledger WHERE station_id=?",
+                arrayOf(stationId.toString())))
+        assertEquals("A rejected async save must not post any journal", beforeJournals,
+            scalarLong("SELECT COUNT(*) FROM journal_entries WHERE station_id=?",
+                arrayOf(stationId.toString())))
+    }
+
+    private fun createNativeAsyncBridgeHarness(): Pair<MainActivity.WebAppInterface, WebView> {
+        // Do not call Activity.onCreate here: it initializes unrelated device security services.
+        // The bridge's own lifecycleScope is still the real production coroutine scope.
+        val activity = Robolectric.buildActivity(MainActivity::class.java).get()
+        val authPrefs = context.getSharedPreferences(
+            "fuel-sales-async-bridge-test-" + UUID.randomUUID().toString(),
+            Context.MODE_PRIVATE
+        )
+        authPrefs.edit().putLong("user_id", userId).commit()
+        activity.sharedPrefs = authPrefs
+
+        MainActivity::class.java.getDeclaredField("dbHelper").apply {
+            isAccessible = true
+            set(activity, helper)
+        }
+        MainActivity::class.java.getDeclaredField("geminiHelper").apply {
+            isAccessible = true
+            set(activity, GeminiAIHelper(context))
+        }
+
+        val webView = WebView(context)
+        MainActivity::class.java.getDeclaredField("webView").apply {
+            isAccessible = true
+            set(activity, webView)
+        }
+
+        return activity.WebAppInterface(context, activity) to webView
+    }
+
+    private fun invokeFuelSalesAsyncAndAwait(
+        bridge: MainActivity.WebAppInterface,
+        webView: WebView,
+        requestId: String,
+        operation: String,
+        args: JSONArray
+    ): JSONObject {
+        val acknowledgement = JSONObject(
+            bridge.executeFuelSalesAsync(requestId, operation, args.toString())
+        )
+        assertTrue("The real async dispatcher must acknowledge the request: $acknowledgement",
+            acknowledgement.optBoolean("success"))
+        assertTrue("The real async dispatcher must queue the request: $acknowledgement",
+            acknowledgement.optBoolean("queued"))
+
+        return awaitFuelSalesAsyncCallback(webView, requestId)
+    }
+
+    private fun awaitFuelSalesAsyncCallback(
+        webView: WebView,
+        requestId: String
+    ): JSONObject {
+        val requestPrefix = "window.__fuelSalesNativeResult(${JSONObject.quote(requestId)},"
+        val callbackPattern = Regex(
+            Regex.escape(requestPrefix) + """("(?:\\.|[^"\\])*")\);"""
+        )
+        val deadline = System.currentTimeMillis() + 20_000L
+
+        while (System.currentTimeMillis() < deadline) {
+            // executeFuelSalesAsync runs its SQLite work on Dispatchers.IO and posts the
+            // completion back to the Activity's main-thread lifecycleScope.
+            shadowOf(Looper.getMainLooper()).idle()
+            val script = shadowOf(webView).getLastEvaluatedJavascript().orEmpty()
+            val callback = callbackPattern.find(script)
+            if (callback != null) {
+                val encodedResponse = callback.groupValues[1]
+                val rawResponse = JSONArray("[$encodedResponse]").getString(0)
+                return JSONObject(rawResponse)
+            }
+            Thread.sleep(10L)
+        }
+
+        val lastScript = shadowOf(webView).getLastEvaluatedJavascript()
+        throw AssertionError(
+            "Timed out waiting for executeFuelSalesAsync callback for request $requestId. " +
+                "Last WebView script: $lastScript"
         )
     }
 
