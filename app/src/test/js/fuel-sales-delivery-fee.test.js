@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
 
-const projectRoot = path.resolve(__dirname, '../../../..');
+const projectRoot = path.resolve(__dirname, '../..');
 const htmlPath = path.join(projectRoot, 'main/assets/screens/fuel-sales.html');
 const mainActivityPath = path.join(projectRoot, 'main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt');
 const html = fs.readFileSync(htmlPath, 'utf8');
