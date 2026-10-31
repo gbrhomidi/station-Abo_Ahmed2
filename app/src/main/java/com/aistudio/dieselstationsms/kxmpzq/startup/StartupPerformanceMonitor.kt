@@ -73,7 +73,7 @@ object StartupPerformanceMonitor {
     private var frameCount = 0L
     private var slowFrameCount = 0L
     private var verySlowFrameCount = 0L
-    private var droppedFrameCount = 0L
+    private var droppedReportCount = 0L
     private var totalFrameNanos = 0L
     private var maxFrameNanos = 0L
     private val framePhaseTotals = LinkedHashMap<String, Long>()
@@ -194,7 +194,7 @@ object StartupPerformanceMonitor {
             frameCount++
             totalFrameNanos += total
             maxFrameNanos = maxOf(maxFrameNanos, total)
-            droppedFrameCount += dropped.coerceAtLeast(0)
+            droppedReportCount += dropped.coerceAtLeast(0)
             if (total > frameBudgetNanos) slowFrameCount++
             if (total > frameBudgetNanos * 2L) verySlowFrameCount++
             addFramePhase("inputHandling", metrics, FrameMetrics.INPUT_HANDLING_DURATION)
@@ -348,7 +348,7 @@ object StartupPerformanceMonitor {
             TAG,
             "FRAMES targetMs=${frames.optDouble("targetFrameMs")} count=${frames.optLong("frames")} " +
                 "slow=${frames.optLong("slowFrames")} verySlow=${frames.optLong("verySlowFrames")} " +
-                "dropped=${frames.optLong("droppedFrames")} avgMs=${frames.optDouble("averageFrameMs")} " +
+                "droppedReports=${frames.optLong("droppedFrameReports")} avgMs=${frames.optDouble("averageFrameMs")} " +
                 "maxMs=${frames.optDouble("maximumFrameMs")}"
         )
         val memory = report.optJSONObject("memory") ?: JSONObject()
@@ -404,7 +404,7 @@ object StartupPerformanceMonitor {
                 .put("frames", frameCount)
                 .put("slowFrames", slowFrameCount)
                 .put("verySlowFrames", verySlowFrameCount)
-                .put("droppedFrames", droppedFrameCount)
+                .put("droppedFrameReports", droppedReportCount)
                 .put("averageFrameMs", if (frameCount == 0L) 0.0 else totalFrameNanos / frameCount / 1_000_000.0)
                 .put("maximumFrameMs", maxFrameNanos / 1_000_000.0)
                 .put("phaseTotalsMs", JSONObject().also { phases ->
