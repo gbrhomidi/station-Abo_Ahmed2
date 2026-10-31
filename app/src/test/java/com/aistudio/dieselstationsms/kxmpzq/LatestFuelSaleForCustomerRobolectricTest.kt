@@ -3,6 +3,7 @@ package com.aistudio.dieselstationsms.kxmpzq
 import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteException
 import androidx.test.core.app.ApplicationProvider
 import org.json.JSONObject
 import org.junit.After
@@ -329,6 +330,82 @@ class LatestFuelSaleForCustomerRobolectricTest {
         val unusedStationId = stationId + 900000
         assertEquals(0, DeliveryFeeAccounting.savedDeliveryLocations(helper, unusedStationId).length())
         assertEquals(0, DeliveryFeeAccounting.recentCustomerSaleIds(helper, unusedStationId).length())
+    }
+
+    @Test
+    fun savedLocationSqliteFailureIsIsolatedAndRecentCustomerQueryStillSucceeds() {
+        val customer = insertCustomer("عميل اختبار عزل فشل المواقع")
+        insertFuelSale(customer, stationId, "2026-10-30 19:20:00", location = "موقع عزل الاختبار")
+
+        val failOnlyLocationSql = DeliveryLookupQueryRunner { database, sql, arguments ->
+            if (sql.contains(" AS location ", ignoreCase = true)) {
+                throw SQLiteException("injected saved-location SQLite read failure")
+            }
+            database.rawQuery(sql, arguments)
+        }
+
+        val failedLocations = JSONObject(
+            DeliveryLookupBridgeContract.savedLocations(helper, stationId, failOnlyLocationSql)
+        )
+        assertFalse("Saved-location query failure must be reported as a failed JSON response", failedLocations.getBoolean("success"))
+        assertTrue(failedLocations.getString("error").contains("saved-location"))
+
+        // The same runner now executes the real recent-customer SQL against SQLite.
+        val recentCustomers = JSONObject(
+            DeliveryLookupBridgeContract.recentCustomerIds(helper, stationId, failOnlyLocationSql)
+        )
+        assertTrue("A locations SQL failure must not poison the independent customer query: $recentCustomers", recentCustomers.getBoolean("success"))
+        val ids = recentCustomers.getJSONArray("data")
+        assertTrue((0 until ids.length()).map { ids.getLong(it) }.contains(customer))
+    }
+
+    @Test
+    fun recentCustomerSqliteFailureIsIsolatedAndSavedLocationQueryStillSucceeds() {
+        val customer = insertCustomer("عميل اختبار عزل فشل العملاء")
+        insertFuelSale(customer, stationId, "2026-10-30 19:30:00", location = "موقع يبقى متاحاً")
+
+        val failOnlyRecentCustomerSql = DeliveryLookupQueryRunner { database, sql, arguments ->
+            if (sql.contains(" AS party_id", ignoreCase = true)) {
+                throw SQLiteException("injected recent-customer SQLite read failure")
+            }
+            database.rawQuery(sql, arguments)
+        }
+
+        val failedCustomers = JSONObject(
+            DeliveryLookupBridgeContract.recentCustomerIds(helper, stationId, failOnlyRecentCustomerSql)
+        )
+        assertFalse("Recent-customer query failure must be reported as a failed JSON response", failedCustomers.getBoolean("success"))
+        assertTrue(failedCustomers.getString("error").contains("recent-customer"))
+
+        // The same runner now executes the real saved-location SQL against SQLite.
+        val locations = JSONObject(
+            DeliveryLookupBridgeContract.savedLocations(helper, stationId, failOnlyRecentCustomerSql)
+        )
+        assertTrue("A customer SQL failure must not poison the independent locations query: $locations", locations.getBoolean("success"))
+        val rows = locations.getJSONArray("data")
+        assertTrue((0 until rows.length()).map { rows.getString(it) }.contains("موقع يبقى متاحاً"))
+    }
+
+    @Test
+    fun bridgeContractsReturnRealSqliteArraysAndKeepTheTwoReadsIndependent() {
+        val customer = insertCustomer("عميل عقد الجسر الفعلي")
+        insertFuelSale(customer, stationId, "2026-10-30 20:15:00", location = "موقع عقد الجسر")
+
+        val locations = JSONObject(DeliveryLookupBridgeContract.savedLocations(helper, stationId))
+        val customers = JSONObject(DeliveryLookupBridgeContract.recentCustomerIds(helper, stationId))
+
+        assertTrue(locations.toString(), locations.getBoolean("success"))
+        assertTrue(customers.toString(), customers.getBoolean("success"))
+        assertTrue(
+            (0 until locations.getJSONArray("data").length())
+                .map { locations.getJSONArray("data").getString(it) }
+                .contains("موقع عقد الجسر")
+        )
+        assertTrue(
+            (0 until customers.getJSONArray("data").length())
+                .map { customers.getJSONArray("data").getLong(it) }
+                .contains(customer)
+        )
     }
 
     @Test
