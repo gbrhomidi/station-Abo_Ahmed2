@@ -54,6 +54,7 @@ assert.ok(mainHtml.includes('if (forceRefresh) dashboardRefreshQueued = true;'),
 console.log('Business-day and main-dashboard rollover tests passed (America/New_York).');
 require('./fuel-sales-async-bridge.test.js')()
     .then(() => require('./fuel-sales-delivery-fee.test.js')())
+    .then(() => require('./login-attempt-classification.test.js')())
     .catch(error => {
         console.error(error);
         process.exitCode = 1;

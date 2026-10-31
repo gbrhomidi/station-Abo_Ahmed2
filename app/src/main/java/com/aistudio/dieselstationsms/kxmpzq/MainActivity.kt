@@ -3027,6 +3027,39 @@ class MainActivity : AppCompatActivity() {
             }.toString()
         }
 
+        /**
+         * Stable response codes let the login UI distinguish rejected credentials
+         * from database/startup failures. Only AUTHENTICATION_REJECTED consumes an
+         * interactive password attempt.
+         */
+        private fun loginErrorResponse(code: String, error: String): String {
+            return JSONObject().apply {
+                put("success", false)
+                put("code", code)
+                put("error", error)
+                put("retryable", code == "DATABASE_NOT_READY" || code == "DATABASE_ERROR")
+            }.toString()
+        }
+
+        private fun isDatabaseAccessFailure(error: Throwable): Boolean {
+            var current: Throwable? = error
+            var depth = 0
+            while (current != null && depth++ < 12) {
+                if (current is android.database.sqlite.SQLiteException) return true
+                if (current is IllegalStateException) {
+                    val message = current.message.orEmpty()
+                    if (message.contains("database", ignoreCase = true) ||
+                        message.contains("sqlite", ignoreCase = true) ||
+                        message.contains("closed", ignoreCase = true)
+                    ) {
+                        return true
+                    }
+                }
+                current = current.cause
+            }
+            return false
+        }
+
         private fun dispatchCustomerDetailsResult(activity: MainActivity, requestId: String, payload: String) {
             val quotedRequestId = JSONObject.quote(requestId)
             val quotedPayload = JSONObject.quote(payload)
@@ -3507,8 +3540,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
             val db = getDbHelper()
             if (db == null) {
-                DebugLogger.error("LOGIN", "DatabaseHelper is null")
-                return errorResponse("قاعدة البيانات غير متاحة")
+                DebugLogger.error("LOGIN", "DatabaseHelper is null; authentication was not attempted")
+                return loginErrorResponse(
+                    "DATABASE_NOT_READY",
+                    "قاعدة البيانات غير جاهزة حالياً. لم تُحتسب محاولة تسجيل الدخول."
+                )
             }
 
             return try {
@@ -3567,12 +3603,27 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 } else {
                     val duration = System.currentTimeMillis() - startTime
                     DebugLogger.warn("LOGIN", "AUTHENTICATION_RESULT success=false duration=${duration}ms")
-                    errorResponse("بيانات خاطئة")
+                    loginErrorResponse(
+                        "AUTHENTICATION_REJECTED",
+                        "اسم المستخدم أو كلمة المرور غير صحيحة"
+                    )
                 }
             } catch (e: Exception) {
                 val duration = System.currentTimeMillis() - startTime
-                DebugLogger.logException("LOGIN_EXCEPTION", e)
-                errorResponse("خطأ داخلي: ${e.message}")
+                val databaseFailure = isDatabaseAccessFailure(e)
+                if (databaseFailure) {
+                    DebugLogger.logException("LOGIN_DATABASE_ERROR", e)
+                    loginErrorResponse(
+                        "DATABASE_ERROR",
+                        "تعذر الوصول إلى قاعدة البيانات. لم تُحتسب محاولة تسجيل الدخول."
+                    )
+                } else {
+                    DebugLogger.logException("LOGIN_PROCESS_ERROR", e)
+                    loginErrorResponse(
+                        "LOGIN_PROCESS_ERROR",
+                        "تعذر إتمام عملية تسجيل الدخول بسبب خطأ داخلي. لم تُحتسب المحاولة."
+                    )
+                }
             }
         }
 
