@@ -361,6 +361,21 @@ for case_name, (case_path, tokens) in SECURITY_CASES.items():
         if not ok:
             failed += 1
 
+# Execute the HTML/JavaScript -> Android Bridge -> SQLite lookup contract checks.
+bridge_contract_test = PROJECT_ROOT / 'app' / 'src' / 'test' / 'js' / 'delivery-lookup-bridge-contract.test.js'
+if not bridge_contract_test.exists():
+    print('FAIL delivery lookup bridge integration: test runner missing')
+    failed += 1
+else:
+    bridge_contract = subprocess.run(
+        ['node', str(bridge_contract_test)],
+        cwd=PROJECT_ROOT,
+        check=False,
+    )
+    if bridge_contract.returncode != 0:
+        print(f'FAIL delivery lookup bridge integration: runner exited {bridge_contract.returncode}')
+        failed += 1
+
 # Run the source-backed preflight for the 200 custody/workshop acceptance scenarios.
 # These are natural-language scenarios, not executable fixtures, so missing business
 # capabilities are reported as BLOCKED rather than falsely marked PASS.
