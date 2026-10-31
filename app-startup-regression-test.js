@@ -131,10 +131,9 @@ async function verifyStartupWaitRecovery() {
 
 verifyStartupWaitRecovery().then(() => {
   console.log('Startup regression PASS: native state is re-read, settled wait promises are released, resume refreshes readiness, and concurrent callers share only an active poll.');
+  console.log('Startup regression PASS: DB initialization is asynchronous, WebView loading is anchored to its factory, and login calls are readiness-gated.');
 }).catch(error => {
   console.error(error);
   process.exitCode = 1;
 });
 
-
-console.log('Startup regression PASS: DB initialization is asynchronous, WebView loading is anchored to its factory, and login calls are readiness-gated.');
