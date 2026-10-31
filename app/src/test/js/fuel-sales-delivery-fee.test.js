@@ -196,9 +196,10 @@ async function runUiRegression() {
             'the immediate post-save summary must deduct the service fee only once');
 
         await window.openForm(lastSavedRow);
-        await waitFor(() =>
-            document.querySelector('[data-key="delivery_fee_mode"]').value === 'deduct_from_sales',
-            'reopening the saved deduction sale and restoring its saved fields');
+        await waitFor(() => {
+            const reopenedMode = document.querySelector('[data-key="delivery_fee_mode"]');
+            return !!reopenedMode && reopenedMode.value === 'deduct_from_sales';
+        }, 'reopening the saved deduction sale and restoring its saved fields');
         assert.equal(document.querySelector('[data-key="quantity"]').value, '10',
             'reopening a deduction sale must restore gross_quantity');
         assert.equal(document.querySelector('[data-key="total_amount"]').value, '10000.00',
