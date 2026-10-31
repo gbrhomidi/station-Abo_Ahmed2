@@ -204,7 +204,7 @@ class FuelSalesDeliveryFeeRobolectricTest {
         // Attach a real production Activity instance, but do not run onCreate: that startup
         // path intentionally requires AndroidKeyStore, which the JVM Robolectric runtime lacks.
         // The bridge itself is then wired to the same real SQLite helper and a test session store.
-        val controller = Robolectric.buildActivity(MainActivity::class.java).attach()
+        val controller = Robolectric.buildActivity(MainActivity::class.java)
         val activity = controller.get()
         activity.sharedPrefs = context.getSharedPreferences(
             "fuel-sales-bridge-test-auth",
@@ -241,16 +241,16 @@ class FuelSalesDeliveryFeeRobolectricTest {
             val grossAmount = round(grossQuantity * unitPrice * 100.0) / 100.0
             val invoiceTotal = grossAmount + 100.0
 
-            assertEquals(grossQuantity, nativeResponse.optDouble("gross_quantity"), 0.000001)
-            assertEquals(grossAmount, nativeResponse.optDouble("gross_amount"), 0.01)
+            assertEquals(grossQuantity, nativeResponse.getDouble("gross_quantity"), 0.000001)
+            assertEquals(grossAmount, nativeResponse.getDouble("gross_amount"), 0.01)
             assertEquals(
                 "total_amount remains the fuel-only amount in the native bridge response",
                 grossAmount,
-                nativeResponse.optDouble("total_amount"),
+                nativeResponse.getDouble("total_amount"),
                 0.01
             )
-            assertEquals(invoiceTotal, nativeResponse.optDouble("invoice_total"), 0.01)
-            assertEquals(invoiceTotal, nativeResponse.optDouble("delivery_fee_display_total"), 0.01)
+            assertEquals(invoiceTotal, nativeResponse.getDouble("invoice_total"), 0.01)
+            assertEquals(invoiceTotal, nativeResponse.getDouble("delivery_fee_display_total"), 0.01)
 
             val parentAmounts = db.rawQuery(
                 "SELECT gross_amount,net_amount FROM sales_transactions WHERE id=? AND station_id=?",
@@ -282,11 +282,11 @@ class FuelSalesDeliveryFeeRobolectricTest {
                 }
             }
             val fuelSaleId = child.getLong("id")
-            assertEquals(grossQuantity, child.optDouble("quantity"), 0.000001)
-            assertEquals(grossAmount, child.optDouble("total_amount"), 0.01)
-            assertEquals(grossQuantity, child.optDouble("gross_quantity"), 0.000001)
-            assertEquals(grossAmount, child.optDouble("gross_amount"), 0.01)
-            assertEquals(100.0, child.optDouble("delivery_service_fee"), 0.01)
+            assertEquals(grossQuantity, child.getDouble("quantity"), 0.000001)
+            assertEquals(grossAmount, child.getDouble("total_amount"), 0.01)
+            assertEquals(grossQuantity, child.getDouble("gross_quantity"), 0.000001)
+            assertEquals(grossAmount, child.getDouble("gross_amount"), 0.01)
+            assertEquals(100.0, child.getDouble("delivery_service_fee"), 0.01)
             assertEquals(DeliveryFeeAccounting.ADD_TO_SALES, child.getString("delivery_fee_mode"))
 
             var feeJournalId = 0L
