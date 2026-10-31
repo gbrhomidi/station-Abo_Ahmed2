@@ -249,6 +249,7 @@ object StartupPerformanceMonitor {
         ioExecutor.execute {
             runCatching {
                 val report = buildReport(context, reason)
+                logSummary(report, reason)
                 val directory = File(context.filesDir, "diagnostics/performance")
                 if (!directory.exists() && !directory.mkdirs()) {
                     throw IllegalStateException("Could not create performance diagnostics directory")
@@ -272,6 +273,42 @@ object StartupPerformanceMonitor {
                 Log.i(TAG, "Performance report updated: ${target.name}; reason=$reason")
             }.onFailure { Log.w(TAG, "Could not persist performance report", it) }
         }
+    }
+
+    private fun logSummary(report: JSONObject, reason: String) {
+        val aggregates = report.optJSONObject("aggregates") ?: JSONObject()
+        val names = mutableListOf<String>()
+        val iterator = aggregates.keys()
+        while (iterator.hasNext()) names += iterator.next()
+        Log.i(
+            TAG,
+            "SUMMARY reason=$reason session=$sessionId processElapsedMs=${report.optLong("processElapsedMs")} " +
+                "spans=${names.size} events=${report.optJSONArray("events")?.length() ?: 0}"
+        )
+        names.forEach { name ->
+            val metric = aggregates.optJSONObject(name) ?: return@forEach
+            Log.i(
+                TAG,
+                "METRIC name=$name count=${metric.optLong("count")} " +
+                    "avgMs=${metric.optDouble("averageMs")} maxMs=${metric.optDouble("maximumMs")} " +
+                    "failures=${metric.optLong("failures")}"
+            )
+        }
+        val frames = report.optJSONObject("frames") ?: JSONObject()
+        Log.i(
+            TAG,
+            "FRAMES targetMs=${frames.optDouble("targetFrameMs")} count=${frames.optLong("frames")} " +
+                "slow=${frames.optLong("slowFrames")} verySlow=${frames.optLong("verySlowFrames")} " +
+                "dropped=${frames.optLong("droppedFrames")} avgMs=${frames.optDouble("averageFrameMs")} " +
+                "maxMs=${frames.optDouble("maximumFrameMs")}"
+        )
+        val memory = report.optJSONObject("memory") ?: JSONObject()
+        Log.i(
+            TAG,
+            "MEMORY pssMb=${memory.optDouble("pssMb")} javaUsedMb=${memory.optDouble("javaHeapUsedMb")} " +
+                "nativeAllocatedMb=${memory.optDouble("nativeHeapAllocatedMb")} " +
+                "deviceAvailableMb=${memory.optDouble("deviceAvailableMb")}"
+        )
     }
 
     private fun buildReport(context: Context, reason: String): JSONObject {
