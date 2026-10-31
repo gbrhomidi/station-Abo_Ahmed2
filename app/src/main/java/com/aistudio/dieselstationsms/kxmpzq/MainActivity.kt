@@ -2893,7 +2893,7 @@ class MainActivity : AppCompatActivity() {
                                 "nozzles" -> getPumpNozzles(args.optString(0, "{}"))
                                 "resolvedPrice" -> getResolvedFuelSalePrice(args.optString(0, "{}"))
                                 "promotions" -> getPriceListRecords(args.optString(0, "{}"))
-                                "locations" -> getSavedDeliveryLocations()
+                                "locations" -> readSavedDeliveryLocationsForFuelSales()
                                 "save" -> saveFuelSaleRecord(args.optString(0, "{}"))
                                 "update" -> updateFuelSaleRecord(
                                     args.optLong(0, 0L),
@@ -12041,13 +12041,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
-        @JavascriptInterface
-        fun getSavedDeliveryLocations(): String {
+        /**
+         * Private implementation for executeFuelSalesAsync("locations").
+         * Fuel-sales JavaScript must use the asynchronous allowlisted endpoint, not a
+         * second synchronous @JavascriptInterface surface for the same SQLite read.
+         */
+        private fun readSavedDeliveryLocationsForFuelSales(): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
-                dataResponse(DeliveryFeeAccounting.savedDeliveryLocations(db, stationId))
+                DeliveryLookupBridgeContract.savedLocations(db, stationId) { exception ->
+                    DebugLogger.logException("SavedDeliveryLocations", exception)
+                }
             } catch (e: Exception) {
                 DebugLogger.logException("SavedDeliveryLocations", e)
                 errorResponse(e.message ?: "تعذر استرجاع مواقع التوصيل المحفوظة")
@@ -12060,7 +12066,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
-                dataResponse(DeliveryFeeAccounting.recentCustomerSaleIds(db, stationId))
+                DeliveryLookupBridgeContract.recentCustomerIds(db, stationId) { exception ->
+                    DebugLogger.logException("RecentSaleCustomerIds", exception)
+                }
             } catch (e: Exception) {
                 DebugLogger.logException("RecentSaleCustomerIds", e)
                 errorResponse(e.message ?: "تعذر استرجاع ترتيب العملاء حسب أحدث المبيعات")
