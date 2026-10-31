@@ -148,7 +148,7 @@ class FuelSalesDeliveryFeeRobolectricTest {
     }
 
     @Test
-    fun emptyLocationLookupRejectsBlankLocationAndAcceptsManuallyEnteredLocation() {
+    fun blankDeliveryLocationIsRejectedAndSaleRollsBackInSqlite() {
         val lookup = JSONObject(DeliveryLookupBridgeContract.savedLocations(helper, stationId))
         assertTrue("Location lookup should succeed with an empty result", lookup.getBoolean("success"))
         assertEquals(0, lookup.getJSONArray("data").length())
@@ -172,21 +172,30 @@ class FuelSalesDeliveryFeeRobolectricTest {
             } catch (error: IllegalArgumentException) {
                 rejected = error.message.orEmpty().contains("موقع التوصيل")
             }
-            // The outer sale transaction is deliberately not marked successful after rejection.
             assertTrue("SQLite boundary must reject an empty delivery location", rejected)
             assertTrue("The inserted fuel row should be part of the same rollback", fuelSaleId > 0L)
         } finally {
+            // Deliberately do not mark this transaction successful after validation rejects the fee.
             db.endTransaction()
         }
         assertEquals("Rejected save must roll back the parent sale", before,
             scalarLong("SELECT COUNT(*) FROM sales_transactions WHERE station_id=?", arrayOf(stationId.toString())))
+    }
 
-        val saved = createAndPersistSale(DeliveryFeeAccounting.ADD_TO_SALES, 100.0, "موقع جديد أُدخل يدوياً")
+    @Test
+    fun emptySavedLocationLookupAllowsManualLocationToPersistInSqlite() {
+        val lookup = JSONObject(DeliveryLookupBridgeContract.savedLocations(helper, stationId))
+        assertTrue("Location lookup should succeed with an empty result", lookup.getBoolean("success"))
+        assertEquals("There are no saved delivery locations in this fixture", 0, lookup.getJSONArray("data").length())
+
+        val manuallyEnteredLocation = "موقع جديد أُدخل يدوياً"
+        val saved = createAndPersistSale(DeliveryFeeAccounting.ADD_TO_SALES, 100.0, manuallyEnteredLocation)
         assertTrue(saved.fuelSaleId > 0L)
+
         val afterManualEntry = DeliveryLookupBridgeContract.savedLocations(helper, stationId)
         val manualLocations = JSONObject(afterManualEntry).getJSONArray("data")
         assertTrue("A manually typed location must be persisted and appear in future lookup results",
-            (0 until manualLocations.length()).any { manualLocations.getString(it) == "موقع جديد أُدخل يدوياً" })
+            (0 until manualLocations.length()).any { manualLocations.getString(it) == manuallyEnteredLocation })
     }
 
     private fun assertMode(
@@ -204,14 +213,14 @@ class FuelSalesDeliveryFeeRobolectricTest {
         assertEquals(saved.grossAmount - expectedFuelReduction, saved.fuelAmount, 0.01)
 
         val parentAmounts = db.rawQuery(
-            "SELECT total_amount,net_amount FROM sales_transactions WHERE id=? AND station_id=?",
+            "SELECT gross_amount,net_amount FROM sales_transactions WHERE id=? AND station_id=?",
             arrayOf(saved.parentSaleId.toString(), stationId.toString())
         ).use { cursor ->
             assertTrue(cursor.moveToFirst())
             cursor.getDouble(0) to cursor.getDouble(1)
         }
-        assertEquals(saved.invoiceTotal, parentAmounts.first, 0.01)
-        assertEquals(saved.invoiceTotal, parentAmounts.second, 0.01)
+        assertEquals("Parent gross_amount must retain the original fuel basis", saved.grossAmount, parentAmounts.first, 0.01)
+        assertEquals("Parent net_amount is the customer invoice total", saved.invoiceTotal, parentAmounts.second, 0.01)
 
         val child = db.rawQuery(
             """SELECT quantity,total_amount,gross_quantity,gross_amount,delivery_service_fee,delivery_fee_mode
