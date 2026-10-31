@@ -206,12 +206,11 @@ class FuelSalesDeliveryFeeRobolectricTest {
         // The bridge itself is then wired to the same real SQLite helper and a test session store.
         val controller = Robolectric.buildActivity(MainActivity::class.java).attach()
         val activity = controller.get()
-        try {
-            activity.sharedPrefs = context.getSharedPreferences(
-                "fuel-sales-bridge-test-auth",
-                Context.MODE_PRIVATE
-            )
-            activity.sharedPrefs.edit().putLong("user_id", userId).commit()
+        activity.sharedPrefs = context.getSharedPreferences(
+            "fuel-sales-bridge-test-auth",
+            Context.MODE_PRIVATE
+        )
+        activity.sharedPrefs.edit().putLong("user_id", userId).commit()
 
             // Ensure the bridge references the exact DatabaseHelper instance used by this
             // Robolectric fixture. No bridge, SQLite, or accounting method is mocked.
@@ -242,7 +241,7 @@ class FuelSalesDeliveryFeeRobolectricTest {
             val grossAmount = round(grossQuantity * unitPrice * 100.0) / 100.0
             val invoiceTotal = grossAmount + 100.0
 
-            assertEquals(grossQuantity, nativeResponse.getDouble("gross_quantity"), 0.000001)
+            assertEquals(grossQuantity, nativeResponse.optDouble("gross_quantity"), 0.000001)
             assertEquals(grossAmount, nativeResponse.getDouble("gross_amount"), 0.01)
             assertEquals(
                 "total_amount remains the fuel-only amount in the native bridge response",
@@ -283,7 +282,7 @@ class FuelSalesDeliveryFeeRobolectricTest {
                 }
             }
             val fuelSaleId = child.getLong("id")
-            assertEquals(grossQuantity, child.getDouble("quantity"), 0.000001)
+            assertEquals(grossQuantity, child.optDouble("quantity"), 0.000001)
             assertEquals(grossAmount, child.getDouble("total_amount"), 0.01)
             assertEquals(grossQuantity, child.getDouble("gross_quantity"), 0.000001)
             assertEquals(grossAmount, child.getDouble("gross_amount"), 0.01)
@@ -349,7 +348,6 @@ class FuelSalesDeliveryFeeRobolectricTest {
                     locationLookup.getJSONArray("data").getString(it) == location
                 }
             )
-        }
     }
 
     private fun assertMode(
