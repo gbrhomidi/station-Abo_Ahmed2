@@ -52,4 +52,89 @@ assert(login.includes('class="startup-status"'), 'Login startup status notice is
 assert(login.includes('await waitForNativeStartup()'), 'Login bridge calls must wait asynchronously for startup readiness');
 assert(login.includes('startupRedirect: startupState ==='), 'Startup redirects must not count as failed login attempts');
 
+assert(login.includes('function readNativeStartupState()'), 'Native startup state must be read from the live Android bridge');
+assert(/attempt\.then\(releaseWaitSlot, releaseWaitSlot\)/.test(login), 'Settled startup wait promises must release the single-flight slot');
+assert(login.includes("document.addEventListener('visibilitychange', refreshNativeStartupStateOnResume)"), 'WebView visibility resume must refresh native startup state');
+assert(login.includes("window.addEventListener('pageshow', refreshNativeStartupStateOnResume)"), 'WebView pageshow must refresh native startup state');
+assert(login.includes("Always read Android's live state before checking the JS deadline"), 'A resumed page must read native readiness before applying an elapsed JS timeout');
+
+async function verifyStartupWaitRecovery() {
+  const bridgeStart = login.indexOf('function hasAndroidBridge()');
+  const bridgeEnd = login.indexOf('function logToAndroid(', bridgeStart);
+  assert(bridgeStart >= 0 && bridgeEnd > bridgeStart, 'Startup bridge helper block not found');
+
+  const listeners = {};
+  const state = { value: 'initializing', reads: 0 };
+  const status = {
+    textContent: '',
+    visible: false,
+    classList: {
+      add() { status.visible = true; },
+      remove() { status.visible = false; }
+    }
+  };
+  const context = vm.createContext({
+    AndroidInterface: {
+      getStartupState() { state.reads += 1; return state.value; },
+      getStartupError() { return 'startup test failure'; }
+    },
+    document: {
+      hidden: false,
+      getElementById(id) { return id === 'startupStatus' ? status : null; },
+      addEventListener(name, callback) { listeners['document:' + name] = callback; }
+    },
+    window: {
+      addEventListener(name, callback) { listeners['window:' + name] = callback; }
+    },
+    setTimeout,
+    Promise,
+    Date
+  });
+
+  new vm.Script(login.slice(bridgeStart, bridgeEnd), { filename: 'login-startup-bridge.js' }).runInContext(context);
+
+  const timedOut = await vm.runInContext(
+    'waitForNativeStartup({ timeoutMs: 10, pollIntervalMs: 1 })',
+    context
+  );
+  assert.strictEqual(timedOut, 'failed', 'An initializing database should time out visibly');
+  assert.strictEqual(vm.runInContext('nativeStartupWaitPromise === null', context), true,
+    'A timed-out promise must not remain cached');
+
+  state.value = 'ready';
+  const readsBeforeRetry = state.reads;
+  const recovered = await vm.runInContext(
+    'waitForNativeStartup({ timeoutMs: 100, pollIntervalMs: 1 })',
+    context
+  );
+  assert.strictEqual(recovered, 'ready', 'A later call must re-read and accept native ready state');
+  assert(state.reads > readsBeforeRetry, 'A later call must query Android again');
+  assert.strictEqual(vm.runInContext('nativeStartupWaitPromise === null', context), true,
+    'A successful promise must also release the slot');
+
+  state.value = 'initializing';
+  const coalesced = vm.runInContext(
+    '(() => { const first = waitForNativeStartup({ timeoutMs: 500, pollIntervalMs: 50 }); const second = waitForNativeStartup({ timeoutMs: 500, pollIntervalMs: 50 }); return first === second; })()',
+    context
+  );
+  assert.strictEqual(coalesced, true, 'Concurrent callers must share the active poll');
+
+  state.value = 'ready';
+  const readsBeforeResume = state.reads;
+  listeners['document:visibilitychange']();
+  assert(state.reads > readsBeforeResume, 'Returning to a visible WebView must query Android immediately');
+  assert.strictEqual(status.visible, false, 'A live ready state must clear the startup notice');
+  await vm.runInContext('nativeStartupWaitPromise', context);
+  assert.strictEqual(vm.runInContext('nativeStartupWaitPromise === null', context), true,
+    'The resumed poll must release its slot after observing readiness');
+}
+
+verifyStartupWaitRecovery().then(() => {
+  console.log('Startup regression PASS: native state is re-read, settled wait promises are released, resume refreshes readiness, and concurrent callers share only an active poll.');
+}).catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});
+
+
 console.log('Startup regression PASS: DB initialization is asynchronous, WebView loading is anchored to its factory, and login calls are readiness-gated.');

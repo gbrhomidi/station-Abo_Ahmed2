@@ -2037,59 +2037,137 @@
             }
         }
 
+        // This promise represents only the currently running poll. It must never
+        // retain a timeout or failure for the lifetime of the WebView.
         let nativeStartupWaitPromise = null;
-        function waitForNativeStartup() {
+
+        function readNativeStartupState() {
+            if (!hasAndroidBridge() || typeof AndroidInterface.getStartupState !== 'function') {
+                return 'ready';
+            }
+
+            try {
+                const state = String(AndroidInterface.getStartupState() || 'initializing');
+                return ['ready', 'setup_required', 'protected', 'failed', 'initializing'].includes(state)
+                    ? state
+                    : 'initializing';
+            } catch (_) {
+                // A transient bridge failure is not proof that native startup failed.
+                return 'initializing';
+            }
+        }
+
+        function updateNativeStartupStatus(state) {
+            const status = document.getElementById('startupStatus');
+            if (!status) return;
+
+            if (state === 'ready') {
+                status.classList.remove('show');
+                return;
+            }
+
+            if (state === 'setup_required' || state === 'protected') {
+                status.textContent = state === 'setup_required'
+                    ? 'يتم فتح شاشة إعداد المستخدم الأول…'
+                    : 'يتم استكمال التحقق الأمني…';
+                status.classList.add('show');
+                return;
+            }
+
+            if (state === 'failed') {
+                let error = 'تعذر تجهيز قاعدة البيانات المحلية. أعد تشغيل التطبيق أو تحقق من مساحة التخزين.';
+                try {
+                    error = String(AndroidInterface.getStartupError() || error);
+                } catch (_) {}
+                status.textContent = error;
+                status.classList.add('show');
+                return;
+            }
+
+            if (state === 'timeout') {
+                status.textContent = 'استغرق تجهيز قاعدة البيانات وقتاً أطول من المعتاد. لا تغلق التطبيق؛ ستتم إعادة قراءة الحالة تلقائياً عند العودة إلى الشاشة.';
+                status.classList.add('show');
+                return;
+            }
+
+            status.textContent = 'يتم تجهيز قاعدة البيانات المحلية. ستصبح شاشة الدخول متاحة تلقائياً…';
+            status.classList.add('show');
+        }
+
+        function waitForNativeStartup(options = {}) {
             if (!hasAndroidBridge() || typeof AndroidInterface.getStartupState !== 'function') {
                 return Promise.resolve('ready');
             }
+
+            // Concurrent callers share only the active poll, never a settled result.
             if (nativeStartupWaitPromise) return nativeStartupWaitPromise;
 
-            nativeStartupWaitPromise = (async function() {
-                const status = document.getElementById('startupStatus');
-                const deadline = Date.now() + 180000;
-                while (Date.now() < deadline) {
-                    let state = 'failed';
-                    try { state = String(AndroidInterface.getStartupState() || 'initializing'); }
-                    catch (_) { state = 'initializing'; }
+            const requestedTimeout = Number(options.timeoutMs);
+            const requestedInterval = Number(options.pollIntervalMs);
+            const timeoutMs = Number.isFinite(requestedTimeout) && requestedTimeout >= 0
+                ? requestedTimeout
+                : 180000;
+            const pollIntervalMs = Number.isFinite(requestedInterval) && requestedInterval > 0
+                ? Math.max(50, requestedInterval)
+                : 200;
+            const deadline = Date.now() + timeoutMs;
 
-                    if (state === 'ready') {
-                        if (status) status.classList.remove('show');
-                        return state;
-                    }
-                    if (state === 'setup_required' || state === 'protected') {
-                        if (status) {
-                            status.textContent = state === 'setup_required'
-                                ? 'يتم فتح شاشة إعداد المستخدم الأول…'
-                                : 'يتم استكمال التحقق الأمني…';
-                            status.classList.add('show');
-                        }
-                        return state;
-                    }
-                    if (state === 'failed') {
-                        let error = 'تعذر تجهيز قاعدة البيانات المحلية. أعد تشغيل التطبيق أو تحقق من مساحة التخزين.';
-                        try { error = String(AndroidInterface.getStartupError() || error); } catch (_) {}
-                        if (status) {
-                            status.textContent = error;
-                            status.classList.add('show');
-                        }
+            const attempt = (async function() {
+                while (true) {
+                    // Always read Android's live state before checking the JS deadline.
+                    // Timers may be throttled while WebView is in the background; on resume,
+                    // a native-ready state must win over an already elapsed UI timeout.
+                    const state = readNativeStartupState();
+                    if (state === 'ready' || state === 'setup_required' ||
+                        state === 'protected' || state === 'failed') {
+                        updateNativeStartupStatus(state);
                         return state;
                     }
 
-                    if (status) {
-                        status.textContent = 'يتم تجهيز قاعدة البيانات المحلية لأول تشغيل. ستصبح شاشة الدخول متاحة تلقائياً…';
-                        status.classList.add('show');
+                    if (Date.now() >= deadline) {
+                        updateNativeStartupStatus('timeout');
+                        return 'failed';
                     }
-                    await new Promise(resolve => setTimeout(resolve, 200));
+
+                    updateNativeStartupStatus('initializing');
+                    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
                 }
-
-                if (status) {
-                    status.textContent = 'استغرق تجهيز قاعدة البيانات وقتاً أطول من المعتاد. لا تغلق التطبيق؛ ستتم إعادة المحاولة تلقائياً عند إعادة فتحه.';
-                    status.classList.add('show');
-                }
-                return 'failed';
             })();
-            return nativeStartupWaitPromise;
+
+            nativeStartupWaitPromise = attempt;
+
+            // Release the single-flight slot after success, native failure, timeout,
+            // or an unexpected rejection so the next request queries Android again.
+            const releaseWaitSlot = function() {
+                if (nativeStartupWaitPromise === attempt) {
+                    nativeStartupWaitPromise = null;
+                }
+            };
+            attempt.then(releaseWaitSlot, releaseWaitSlot);
+
+            return attempt;
         }
+
+        // Re-read the native state whenever the existing WebView becomes visible again.
+        // This does not restart SQLite initialization; it only observes its live state.
+        function refreshNativeStartupState() {
+            if (!hasAndroidBridge() || document.hidden) return;
+
+            const state = readNativeStartupState();
+            updateNativeStartupStatus(state);
+
+            if (state === 'initializing' && !nativeStartupWaitPromise) {
+                void waitForNativeStartup();
+            }
+        }
+
+        function refreshNativeStartupStateOnResume() {
+            if (!document.hidden) refreshNativeStartupState();
+        }
+
+        document.addEventListener('visibilitychange', refreshNativeStartupStateOnResume);
+        window.addEventListener('pageshow', refreshNativeStartupStateOnResume);
+        window.addEventListener('focus', refreshNativeStartupStateOnResume);
 
         function logToAndroid(action, details) {
             try {
