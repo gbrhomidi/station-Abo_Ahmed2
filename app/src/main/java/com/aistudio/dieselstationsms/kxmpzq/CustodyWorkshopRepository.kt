@@ -33,8 +33,8 @@ object CustodyWorkshopRepository {
             amount REAL NOT NULL CHECK(amount>0),status TEXT NOT NULL DEFAULT 'requested'
               CHECK(status IN ('requested','approved','issued','partially_settled','settled','reversed','rejected')),
             requested_by INTEGER NOT NULL,approved_by INTEGER,issued_by INTEGER,expense_total REAL NOT NULL DEFAULT 0 CHECK(expense_total>=0),
-            returned_total REAL NOT NULL DEFAULT 0 CHECK(returned_total>=0),recovered_total REAL NOT NULL DEFAULT 0 CHECK(recovered_total>=0),
-            idempotency_key TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            returned_total REAL NOT NULL DEFAULT 0 CHECK(returned_total>=0),recovered_total REAL NOT NULL DEFAULT 0 CHECK(recovered_total>=0),outstanding_amount REAL NOT NULL DEFAULT 0 CHECK(outstanding_amount>=0),
+            is_deleted INTEGER NOT NULL DEFAULT 0,idempotency_key TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(station_id,custody_code),UNIQUE(station_id,idempotency_key),FOREIGN KEY(employee_id) REFERENCES employees(id),
             FOREIGN KEY(requested_by) REFERENCES users(id),FOREIGN KEY(approved_by) REFERENCES users(id),FOREIGN KEY(issued_by) REFERENCES users(id))""")
         db.execSQL("""CREATE TABLE IF NOT EXISTS operating_custody_expenses(
@@ -230,7 +230,7 @@ object CustodyWorkshopRepository {
         val domain=d.optString("domain");val key=d.optString("mapping_key");val account=d.optLong("account_id")
         require(domain=="custody"||domain=="workshop")
         val allowed=if(domain=="custody") setOf("custody_receivable","expense","asset","inventory","payroll_payable","shortage","surplus")
-            else setOf("inventory_asset","maintenance_expense","accounts_payable","accounts_receivable","service_revenue","vat_payable","damage_expense","inventory_variance","warranty_receivable")
+            else setOf("inventory_asset","maintenance_expense","labor_expense","labor_payable","accounts_payable","accounts_receivable","service_revenue","vat_payable","damage_expense","inventory_variance","warranty_receivable")
         require(key in allowed){"مفتاح الحساب غير معروف"}
         requireAccount(db,account)
         db.execSQL("""INSERT INTO custody_workshop_account_mappings(station_id,domain,mapping_key,account_id,version,updated_by)
@@ -413,6 +413,11 @@ object CustodyWorkshopRepository {
             put("receipt_number",receipt);put("document_sha256",digest);put("status","accepted")
             put("idempotency_key",key);put("created_by",u)
         })
+        if(type=="inventory"){
+            val qty=money(d.optDouble("quantity",Double.NaN));val unit=money(d.optDouble("unit_cost",amount/qty))
+            require(qty>0&&abs(qty*unit-amount)<0.02){"كمية وتكلفة المخزون لا تطابق إجمالي المصروف"}
+            changeStock(db,d.optLong("product_id"),d.optLong("warehouse_id"),s,qty,unit,u,"in","custody_expense",eid,"شراء مخزون من العهدة")
+        }
         db.execSQL("UPDATE operating_custodies SET expense_total=expense_total+?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND station_id=?",arrayOf(amount,id,s))
         remember(db,s,"custody_expense",key,eid);auditCustody(db,id,s,u,"expense_added",null,amount.toString(),receipt)
         result(eid,"تم تسجيل مصروف العهدة والتحقق من مستنده")
@@ -568,10 +573,12 @@ object CustodyWorkshopRepository {
     private fun requireWarehouse(db:SQLiteDatabase,id:Long,s:Int){
         require(db.rawQuery("SELECT 1 FROM warehouses WHERE id=? AND station_id=? AND is_active=1",arrayOf(id.toString(),s.toString())).use{it.moveToFirst()}){"المخزن خارج المحطة أو غير نشط"}
     }
+    private fun rowCost(db:SQLiteDatabase,id:Long,s:Int)=db.rawQuery("SELECT other_cost FROM workshop_work_orders WHERE id=? AND station_id=?",arrayOf(id.toString(),s.toString())).use{if(it.moveToFirst())it.getDouble(0)else 0.0}
     private fun stock(db:SQLiteDatabase,p:Long,w:Long)=db.rawQuery("SELECT quantity_on_hand FROM inventory_levels WHERE product_id=? AND warehouse_id=?",arrayOf(p.toString(),w.toString())).use{if(it.moveToFirst())it.getDouble(0)else 0.0}
     private fun changeStock(db:SQLiteDatabase,p:Long,w:Long,s:Int,delta:Double,cost:Double,u:Long,kind:String,ref:String,refId:Long,reason:String){
         val before=stock(db,p,w);val after=money(before+delta);require(after>=0){"رصيد المخزون غير كافٍ"}
-        if(before==0.0) db.insertOrThrow("inventory_levels",null,ContentValues().apply{put("product_id",p);put("warehouse_id",w);put("quantity_on_hand",after);put("quantity_committed",0);put("average_cost",cost)})
+        val hasLevel=db.rawQuery("SELECT 1 FROM inventory_levels WHERE product_id=? AND warehouse_id=?",arrayOf(p.toString(),w.toString())).use{it.moveToFirst()}
+        if(!hasLevel) db.insertOrThrow("inventory_levels",null,ContentValues().apply{put("product_id",p);put("warehouse_id",w);put("quantity_on_hand",after);put("quantity_committed",0);put("average_cost",cost)})
         else db.update("inventory_levels",ContentValues().apply{put("quantity_on_hand",after);if(delta>0)put("average_cost",cost)},"product_id=? AND warehouse_id=?",arrayOf(p.toString(),w.toString()))
         db.insertOrThrow("inventory_movements",null,ContentValues().apply{
             put("uuid",UUID.randomUUID().toString());put("movement_code","CWW-"+s+"-"+UUID.randomUUID().toString().take(12))
@@ -631,7 +638,7 @@ object CustodyWorkshopRepository {
         val inv=mapping(db,s,"workshop","inventory_asset");val ap=mapping(db,s,"workshop","accounts_payable")
         changeStock(db,p,wh,s,qty,cost,u,"in","work_order_purchase",id,"استلام قطعة صيانة من مورد آجل")
         val total=money(qty*cost);val j=journal(db,s,u,"work_order_purchase",id,"شراء قطع صيانة آجل",listOf(Triple(inv,total,0.0),Triple(ap,0.0,total)),"purchase")
-        db.update("workshop_work_orders",ContentValues().apply{put("vendor_party_id",vendor);put("other_cost",total)},"id=? AND station_id=?",arrayOf(id.toString(),s.toString()))
+        db.update("workshop_work_orders",ContentValues().apply{put("vendor_party_id",vendor);put("other_cost",rowCost(db,id,s)+total)},"id=? AND station_id=?",arrayOf(id.toString(),s.toString()))
         val pid=db.insertOrThrow("workshop_work_order_parts",null,ContentValues().apply{
             put("uuid",UUID.randomUUID().toString());put("work_order_id",id);put("station_id",s);put("product_id",p);put("warehouse_id",wh)
             put("quantity_issued",0);put("quantity_returned",0);put("quantity_damaged",0);put("unit_cost",cost);put("total_cost",total)
@@ -646,6 +653,9 @@ object CustodyWorkshopRepository {
         val id=d.optLong("work_order_id");val w=work(db,id,s);require(w.optString("status") in setOf("approved","in_progress"))
         val emp=d.optLong("employee_id");employee(db,emp,s);val hours=money(d.optDouble("hours",Double.NaN));val rate=money(d.optDouble("hourly_rate",Double.NaN))
         require(hours>0);val amount=money(hours*rate)
+        openPeriod(db,s)
+        val laborAccount=mapping(db,s,"workshop","labor_expense");val payable=mapping(db,s,"workshop","labor_payable")
+        val journalId=journal(db,s,u,"work_order_labor",id,"تكلفة ساعات فني",listOf(Triple(laborAccount,amount,0.0),Triple(payable,0.0,amount)),"payroll")
         val lid=db.insertOrThrow("workshop_work_order_labor",null,ContentValues().apply{
             put("uuid",UUID.randomUUID().toString());put("work_order_id",id);put("station_id",s);put("employee_id",emp)
             put("work_date",d.optString("work_date",LocalDate.now().toString()));put("hours",hours);put("hourly_rate",rate);put("amount",amount)
@@ -653,7 +663,7 @@ object CustodyWorkshopRepository {
         })
         db.execSQL("UPDATE workshop_work_orders SET actual_labor_cost=actual_labor_cost+? WHERE id=? AND station_id=?",arrayOf(amount,id,s))
         remember(db,s,"work_order_labor",key,lid);auditWork(db,id,s,u,"labor_recorded",null,emp+":"+hours)
-        result(lid,"تم تسجيل ساعات الفني وتكلفتها دون تنفيذ صرف رواتب",JSONObject().put("amount",amount))
+        result(lid,"تم تسجيل ساعات الفني وتكلفتها دون تنفيذ صرف رواتب",JSONObject().put("amount",amount).put("journal_entry_id",journalId))
     }
 
     private fun workOrderEstimate(db:SQLiteDatabase,d:JSONObject,s:Int,u:Long)=tx(db){
