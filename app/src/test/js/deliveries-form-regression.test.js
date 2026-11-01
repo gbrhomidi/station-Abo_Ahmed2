@@ -98,6 +98,8 @@ function testNativeRankingContractIsReadOnlyAndStationScoped() {
         'product-sale rows must be identified without ranking fuel rows twice');
     assert.match(queryBuilder, /ORDER BY MAX\(COALESCE\(sale_epoch,0\)\) DESC/,
         'customers must be ordered by their most recent sale timestamp');
+    assert.ok(html.includes('verifiedScopeKey !== scope.scopeKey'),
+        'a failed ranking callback must revalidate the live station before retaining cached data');
 }
 
 async function run() {
@@ -139,6 +141,11 @@ async function run() {
         5: [
             { id: 88, name: 'عميل مع تعذر الترتيب أ' },
             { id: 89, name: 'عميل مع تعذر الترتيب ب' }
+        ],
+        6: [
+            { id: 99, name: 'عميل المحطة السادسة أ' },
+            { id: 100, name: 'عميل المحطة السادسة ب' },
+            { id: 101, name: 'عميل المحطة السادسة بلا تعاملات' }
         ]
     };
 
@@ -147,6 +154,7 @@ async function run() {
     let activeScope = { user_id: 101, station_id: 1 };
     let failNextRanking = false;
     let failNextScope = false;
+    let scopeAfterFailedRanking = null;
     let window;
 
     const bridge = {
@@ -181,6 +189,9 @@ async function run() {
 
             if (failNextRanking) {
                 failNextRanking = false;
+                const nextScope = scopeAfterFailedRanking;
+                scopeAfterFailedRanking = null;
+                if (nextScope) activeScope = { ...nextScope };
                 queueMicrotask(() => {
                     window.__fuelSalesNativeResult(
                         requestId,
@@ -449,18 +460,29 @@ async function run() {
         await expectMenuIds(['71', '72'],
             'an empty ranking must preserve every customer without changing order');
 
-        // SQLite failure is non-fatal: the form and customers remain usable in source order.
+        // If the session changes after scope preflight but the ranking query fails,
+        // the post-failure scope check must discard the old station's customer rows.
         activeScope = { user_id: 505, station_id: 5 };
         failNextRanking = true;
+        scopeAfterFailedRanking = { user_id: 606, station_id: 6 };
         window.dispatchEvent(new window.Event('focus'));
         await waitFor(() => calls.recent.length === 5,
-            'ranking request that will return a SQLite failure');
+            'station-5 ranking request that will fail after a session switch');
+        await waitFor(() => calls.recent.length === 6,
+            'automatic station-6 refresh after revalidating the failed station-5 request');
+        const stationSixRanking = calls.recent[5];
+        assert.deepEqual(stationSixRanking.scope, { user_id: 606, station_id: 6 },
+            'the retry must execute under the newly authenticated user and station');
         openCustomerPicker();
-        await waitFor(() => menuIds().includes('88') && menuIds().includes('89'),
-            'station-5 customer list remains available after a ranking failure');
-        await delay(60);
-        assert.deepEqual(menuIds(), ['88', '89'],
-            'a failed recent-sales query must fall back to all customers, not block the picker');
+        await waitFor(() => menuIds().includes('99') && menuIds().includes('101'),
+            'station-6 customer rows must replace station-5 rows after the failed request');
+        assert.deepEqual(menuIds(), ['99', '100', '101'],
+            'no station-5 customer may remain visible after the failed cross-station request');
+        assert.equal(menuIds().includes('88'), false);
+        assert.equal(menuIds().includes('89'), false);
+        releaseRanking(stationSixRanking, [100, 99]);
+        await expectMenuIds(['100', '99', '101'],
+            'the newly authenticated station ranking must be applied after recovery');
 
         testFeeNormalizer();
         console.log(
