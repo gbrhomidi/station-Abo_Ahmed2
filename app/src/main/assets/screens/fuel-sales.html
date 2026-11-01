@@ -2900,7 +2900,7 @@ async function resolveSavedDeliveryLocationScope() {
             state.savedDeliveryLocationsCache = { scopeKey, loadedAt: 0, rows: [] };
             state.savedDeliveryLocationsRevision = Number(state.savedDeliveryLocationsRevision || 0) + 1;
             const datalist = document.getElementById('savedDeliveryLocations');
-            if (datalist) datalist.replaceChildren();
+            if (datalist) datalist.innerHTML = '';
         }
         return scopeKey;
     })().finally(() => {
@@ -2949,7 +2949,7 @@ async function loadSavedDeliveryLocationSuggestions(openToken, row=null) {
 
     // Do not display a previous user's/station's suggestions while the authenticated
     // scope is being revalidated for this form opening.
-    datalist.replaceChildren();
+    datalist.innerHTML = '';
 
     let scopeKey = '';
     try {

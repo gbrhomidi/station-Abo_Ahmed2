@@ -380,6 +380,9 @@ async function runUiRegression() {
         // A change of user or station invalidates the prior cache namespace in the same WebView.
         activeScope = { user_id: 22, station_id: 2 };
         await window.openForm(null);
+        await waitFor(() => !!document.querySelector('[data-key="delivery_location"]') &&
+            !!document.getElementById('savedDeliveryLocations'),
+            'new sale form controls for the changed station');
         await waitFor(() => Array.from(document.getElementById('savedDeliveryLocations').options)
             .some(option => option.value === 'موقع المحطة الثانية'),
             'suggestions for the newly authenticated station');
@@ -390,6 +393,9 @@ async function runUiRegression() {
 
         activeScope = { user_id: 33, station_id: 2 };
         await window.openForm(null);
+        await waitFor(() => !!document.querySelector('[data-key="delivery_location"]') &&
+            !!document.getElementById('savedDeliveryLocations'),
+            'new sale form controls for the changed user');
         await waitFor(() => Array.from(document.getElementById('savedDeliveryLocations').options)
             .some(option => option.value === 'موقع مستخدم جديد'),
             'suggestions for a different user assigned to the same station');
