@@ -355,9 +355,13 @@ async function runUiRegression() {
         await waitFor(() => !!document.querySelector('[data-key="delivery_location"]') &&
             document.querySelector('[data-key="delivery_location"]').value === 'موقع تعديل محفوظ',
             'reopening the edited sale');
-        assert.ok(Array.from(document.getElementById('savedDeliveryLocations').options)
+        await waitFor(() => Array.from(document.getElementById('savedDeliveryLocations')?.options || [])
             .some(option => option.value === 'موقع تعديل محفوظ'),
-            'the edited location must remain suggested after reopening the saved sale');
+            'reloading SQLite/cache suggestions after reopening the edited sale');
+        const reopenedSuggestions = Array.from(document.getElementById('savedDeliveryLocations').options)
+            .map(option => option.value);
+        assert.equal(reopenedSuggestions.filter(value => value === 'موقع تعديل محفوظ').length, 1,
+            'the edited location must remain suggested exactly once after reopening the saved sale');
 
         const feeGroup = document.querySelector('.delivery-fee-form-group .delivery-fee-composite');
         assert.ok(feeGroup, 'fee controls must be grouped in a dedicated layout container');
