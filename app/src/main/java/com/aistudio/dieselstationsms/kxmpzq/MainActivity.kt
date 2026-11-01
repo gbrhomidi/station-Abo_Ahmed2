@@ -14406,6 +14406,37 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun deleteMaintenanceRequestRecord(id: Long) = operationalDelete("maintenance", "maintenance_requests", id)
         @JavascriptInterface
         fun resolveMaintenanceRequestRecord(id: Long, note: String = "") = operationalResolve("maintenance", "maintenance_requests", id, note)
+        
+        @JavascriptInterface
+        fun executeCustodyOperation(action: String, jsonData: String): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val database = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId = requireCurrentStationId(database, activity.currentUserId)
+                CustodyWorkshopManager.executeCustody(
+                    database, stationId, activity.currentUserId, action, JSONObject(jsonData)
+                ).toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("CustodyOperation-" + action, e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun executeWorkshopOperation(action: String, jsonData: String): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val database = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId = requireCurrentStationId(database, activity.currentUserId)
+                CustodyWorkshopManager.executeWorkshop(
+                    database, stationId, activity.currentUserId, action, JSONObject(jsonData)
+                ).toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("WorkshopOperation-" + action, e)
+                errorResponse(e.message)
+            }
+        }
+
 
         @JavascriptInterface
         fun getMaintenanceScheduleRecords(jsonData: String = "{}") = operationalList("maintenance", "maintenance_schedule", jsonData)

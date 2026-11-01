@@ -373,6 +373,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureModule006Schema(db)
             ensureModule007Schema(db)
             ensureModule010Schema(db)
+            CustodyWorkshopManager.ensureSchema(db)
             ensureDeliveriesSchema(db)
             ensureFuelSalesSchema(db)
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_tank_ledger_tank_date ON tank_ledger(tank_id, transaction_date)")

@@ -376,9 +376,8 @@ else:
         print(f'FAIL delivery lookup bridge integration: runner exited {bridge_contract.returncode}')
         failed += 1
 
-# Run the source-backed preflight for the 200 custody/workshop acceptance scenarios.
-# These are natural-language scenarios, not executable fixtures, so missing business
-# capabilities are reported as BLOCKED rather than falsely marked PASS.
+# Verify the catalogue and executable Robolectric acceptance runner for the 200 custody/workshop cases.
+# This is a readiness check only; :app:testDebugUnitTest executes the actual SQLite workflows.
 preflight_script = PROJECT_ROOT / 'all-test' / 'custody_workshop_preflight.py'
 if not preflight_script.exists():
     print('FAIL custody/workshop preflight: runner missing')
