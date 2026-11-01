@@ -12441,10 +12441,24 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val stationId = requireCurrentStationId(db, activity.currentUserId)
-                DeliveryLookupBridgeContract.recentCustomerIds(db, stationId) { exception ->
-                    DebugLogger.logException("RecentSaleCustomerIds", exception)
+                val userId = activity.currentUserId
+                val stationId = requireCurrentStationId(db, userId)
+                val result = JSONObject(
+                    DeliveryLookupBridgeContract.recentCustomerIds(db, stationId) { exception ->
+                        DebugLogger.logException("RecentSaleCustomerIds", exception)
+                    }
+                )
+                if (!result.optBoolean("success", false)) {
+                    return result.toString()
                 }
+                // Bind IDs to the user+station that actually executed the SQLite query.
+                // The WebView discards a callback if either identity changed in flight.
+                JSONObject().apply {
+                    put("success", true)
+                    put("data", result.optJSONArray("data") ?: JSONArray())
+                    put("user_id", userId)
+                    put("station_id", stationId)
+                }.toString()
             } catch (e: Exception) {
                 DebugLogger.logException("RecentSaleCustomerIds", e)
                 errorResponse(e.message ?: "تعذر استرجاع ترتيب العملاء حسب أحدث المبيعات")
