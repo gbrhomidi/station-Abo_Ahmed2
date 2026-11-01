@@ -26,7 +26,7 @@ async function run() {
     });
     assert.equal(legacyScan.error, undefined, 'git grep must be available for the repository-wide API scan');
     assert.equal(legacyScan.status, 1,
-        'the retired Android Bridge method must not exist in any tracked file:\\n' +
+        'the retired Android Bridge method must not exist in any tracked file:\n' +
         (legacyScan.stdout || legacyScan.stderr || ''));
 
 
@@ -77,12 +77,12 @@ async function run() {
         extract('function parseResponse(', 'function dataOf(') +
         extract('function dataOf(', 'function invoke(') +
         extract('function invoke(', 'function toast(') +
-        '\\nreturn { invoke, dataOf };'
+        '\nreturn { invoke, dataOf };'
     );
     const createLoader = (state, bridge, consoleApi) => {
         const helpers = pageHelpers(bridge);
         return new Function('state', 'bridge', 'invoke', 'dataOf', 'console',
-            recentLoaderSource + '\\nreturn loadRecentCustomerSaleOrder;'
+            recentLoaderSource + '\nreturn loadRecentCustomerSaleOrder;'
         )(state, bridge, helpers.invoke, helpers.dataOf, consoleApi);
     };
 
