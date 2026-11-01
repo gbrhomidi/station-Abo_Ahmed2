@@ -1005,17 +1005,27 @@ object DeliveryFeeAccounting {
             // sales_transactions is used here for product invoices only. Fuel rows are
             // represented by fuel_sales and are validated against their parent invoice.
             if (table == "sales_transactions") {
-                val typeColumn = when {
-                    "order_type" in saleColumns -> "order_type"
-                    "sale_type" in saleColumns -> "sale_type"
-                    "transaction_type" in saleColumns -> "transaction_type"
-                    else -> ""
+                val typeColumns = listOf("order_type", "sale_type", "transaction_type")
+                    .filter { it in saleColumns }
+                val typePredicates = typeColumns.map {
+                    "LOWER(TRIM(COALESCE(CAST(src.`$it` AS TEXT),''))) IN " +
+                        "('product','products','product_sale','merchandise')"
                 }
-                if (typeColumn.isBlank()) {
-                    Log.w(DELIVERY_LOOKUP_TAG, "recentCustomerSaleIds: skipping sales_transactions; no order/sale/transaction type column exists")
+                // The current schema uses order_type='product'. Legacy databases may
+                // lack a type column or may have left its default value ('sale') while
+                // still carrying product_id. Use the structural product identity as a
+                // safe fallback, and never classify a row with a fuel_type_id as a
+                // product when both columns exist.
+                val structuralProductPredicate = if ("product_id" in saleColumns) {
+                    "COALESCE(CAST(src.product_id AS INTEGER),0)>0" +
+                        if ("fuel_type_id" in saleColumns) " AND COALESCE(CAST(src.fuel_type_id AS INTEGER),0)=0" else ""
+                } else null
+                val productPredicates = typePredicates + listOfNotNull(structuralProductPredicate)
+                if (productPredicates.isEmpty()) {
+                    Log.w(DELIVERY_LOOKUP_TAG, "recentCustomerSaleIds: skipping sales_transactions; no product discriminator exists")
                     continue
                 }
-                predicates += "LOWER(TRIM(COALESCE(CAST(src.`$typeColumn` AS TEXT),''))) IN ('product','products')"
+                predicates += "(${productPredicates.joinToString(" OR ")})"
             }
 
             val timeParts = saleTimestampExpressions(alias, saleColumns).toMutableList()

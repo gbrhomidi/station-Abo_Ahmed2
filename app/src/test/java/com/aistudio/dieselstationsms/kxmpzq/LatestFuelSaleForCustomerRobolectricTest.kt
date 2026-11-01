@@ -328,6 +328,38 @@ class LatestFuelSaleForCustomerRobolectricTest {
     }
 
     @Test
+    fun recentCustomerRankingMergesFuelAndProductSalesByLatestValidTransaction() {
+        val fuelOnly = insertCustomer("عميل وقود فقط")
+        val productOnly = insertCustomer("عميل منتجات فقط")
+        val mixed = insertCustomer("عميل النوعين")
+        val oldOnly = insertCustomer("عميل قديم فقط")
+        val foreignOnly = insertCustomer("عميل منتجات محطة أخرى")
+        val invalidProduct = insertCustomer("عميل منتج ملغى")
+
+        insertFuelSale(fuelOnly, stationId, "2026-10-30 10:00:00")
+        insertProductSale(productOnly, stationId, "2026-10-30 23:45:00")
+        insertFuelSale(mixed, stationId, "2026-10-30 22:00:00")
+        insertProductSale(mixed, stationId, "2026-10-30 23:30:00")
+        insertFuelSale(oldOnly, stationId, "2026-10-01 08:00:00")
+        insertProductSale(foreignOnly, stationId + 777777, "2026-10-31 23:59:00")
+        insertProductSale(invalidProduct, stationId, "2026-10-31 23:58:00", status = "cancelled")
+
+        val ids = DeliveryFeeAccounting.recentCustomerSaleIds(helper, stationId)
+        val ordered = (0 until ids.length()).map { ids.getLong(it) }
+
+        assertEquals("Every customer must occur once after UNION/GROUP BY", ordered.size, ordered.toSet().size)
+        assertTrue("Product-only customers must be included", ordered.contains(productOnly))
+        assertTrue("Fuel-only customers must be included", ordered.contains(fuelOnly))
+        assertTrue("Mixed customers must be included", ordered.contains(mixed))
+        assertTrue("Old valid customers must remain available", ordered.contains(oldOnly))
+        assertFalse("Foreign-station sales must not leak", ordered.contains(foreignOnly))
+        assertFalse("Cancelled product sales must not affect ranking", ordered.contains(invalidProduct))
+        assertTrue("The product sale is newer than the mixed customer's fuel sale", ordered.indexOf(productOnly) < ordered.indexOf(mixed))
+        assertTrue("The mixed customer's product sale is newer than its fuel-only customer", ordered.indexOf(mixed) < ordered.indexOf(fuelOnly))
+        assertTrue("Old-only customer must be last", ordered.last() == oldOnly)
+    }
+
+    @Test
     fun deliveryLookupsReturnEmptyArraysWhenNoStationHasMatchingRows() {
         val unusedStationId = stationId + 900000
         assertEquals(0, DeliveryFeeAccounting.savedDeliveryLocations(helper, unusedStationId).length())
@@ -660,6 +692,45 @@ class LatestFuelSaleForCustomerRobolectricTest {
             putExisting("fuel_sales", childValues, "deleted_at", if (childDeleted) timestamp else null)
             completeRequiredColumns("fuel_sales", childValues, customerId, saleStationId, parentSaleId)
             return db.insertOrThrow("fuel_sales", null, childValues)
+        } finally {
+            db.setForeignKeyConstraintsEnabled(true)
+        }
+    }
+
+    private fun insertProductSale(
+        customerId: Long,
+        saleStationId: Int,
+        timestamp: String,
+        status: String = "completed"
+    ): Long {
+        val token = UUID.randomUUID().toString()
+        val values = ContentValues().apply {
+            putExisting("sales_transactions", this, "uuid", token)
+            putExisting("sales_transactions", this, "sale_code", "LATEST-PRODUCT-$token")
+            putExisting("sales_transactions", this, "station_id", saleStationId)
+            putExisting("sales_transactions", this, "shift_id", shiftId)
+            putExisting("sales_transactions", this, "customer_party_id", customerId)
+            putExisting("sales_transactions", this, "product_id", optionalScalarLong("SELECT id FROM products WHERE COALESCE(is_deleted,0)=0 ORDER BY id LIMIT 1"))
+            putExisting("sales_transactions", this, "product_subtotal", 125.0)
+            putExisting("sales_transactions", this, "quantity", 1.0)
+            putExisting("sales_transactions", this, "unit_price", 125.0)
+            putExisting("sales_transactions", this, "subtotal", 125.0)
+            putExisting("sales_transactions", this, "gross_amount", 125.0)
+            putExisting("sales_transactions", this, "net_amount", 125.0)
+            putExisting("sales_transactions", this, "payment_method", "cash")
+            putExisting("sales_transactions", this, "payment_status", "paid")
+            putExisting("sales_transactions", this, "paid_amount", 125.0)
+            putExisting("sales_transactions", this, "status", status)
+            putExisting("sales_transactions", this, "order_type", "product")
+            putExisting("sales_transactions", this, "sale_type", "retail")
+            putExisting("sales_transactions", this, "cashier_id", userId)
+            putExisting("sales_transactions", this, "created_at", timestamp)
+            putExisting("sales_transactions", this, "updated_at", timestamp)
+        }
+        completeRequiredColumns("sales_transactions", values, customerId, saleStationId, 0L)
+        db.setForeignKeyConstraintsEnabled(false)
+        return try {
+            db.insertOrThrow("sales_transactions", null, values)
         } finally {
             db.setForeignKeyConstraintsEnabled(true)
         }
