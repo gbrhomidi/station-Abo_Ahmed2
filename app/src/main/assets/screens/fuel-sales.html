@@ -2913,16 +2913,14 @@ function rememberSavedDeliveryLocation(value, confirmedResponse=null) {
     const location = normalizeSavedDeliveryLocationText(value);
     if (!location) return;
 
-    // The native commit response is authoritative if the authenticated scope changed
-    // while this form was open. Never merge a saved location into another scope.
-    const responseScopeKey = confirmedResponse ? deliveryLocationScopeKey(confirmedResponse) : '';
-    if (responseScopeKey && state.savedDeliveryLocationsCache.scopeKey !== responseScopeKey) {
-        state.savedDeliveryLocationsCache = { scopeKey: responseScopeKey, loadedAt: 0, rows: [] };
-        state.savedDeliveryLocationsRevision = Number(state.savedDeliveryLocationsRevision || 0) + 1;
-    }
-
     const cache = state.savedDeliveryLocationsCache;
-    if (!cache.scopeKey) return;
+    const responseScopeKey = confirmedResponse ? deliveryLocationScopeKey(confirmedResponse) : '';
+
+    // A write result must carry the authenticated native scope and it must still
+    // match the cache namespace currently displayed by this WebView. If the user or
+    // station changed while the write was pending, leave the new scope untouched.
+    if (!cache.scopeKey || !responseScopeKey || cache.scopeKey !== responseScopeKey) return;
+
     const rows = normalizeSavedDeliveryLocations([
         ...(cache.rows || []),
         location

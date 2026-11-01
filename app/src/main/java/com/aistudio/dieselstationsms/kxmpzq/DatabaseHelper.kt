@@ -18841,7 +18841,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
             "fuel_sales" -> OperationalTableSpec(
                 table = "fuel_sales",
-                columns = listOf("sale_id", "station_id", "shift_id", "pump_id", "fuel_type_id", "quantity", "price_per_liter", "total_amount", "payment_method", "customer_id", "vehicle_plate", "sale_date", "sale_time", "notes", "status"),
+                columns = listOf("sale_id", "station_id", "shift_id", "pump_id", "fuel_type_id", "quantity", "price_per_liter", "total_amount", "payment_method", "customer_id", "vehicle_plate", "sale_date", "sale_time", "notes", "status", "delivery_location"),
                 required = listOf("shift_id", "fuel_type_id", "quantity", "price_per_liter", "total_amount"),
                 searchColumns = listOf("sale_date", "payment_method", "vehicle_plate", "notes"),
                 softDeleted = true,
