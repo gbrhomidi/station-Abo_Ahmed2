@@ -2241,6 +2241,7 @@ const state = {
     activePromotionCache: { loadedAt: 0, rows: [] },
     pumpNozzleCache: Object.create(null),
     savedDeliveryLocationsCache: { loadedAt: 0, rows: [] },
+    savedDeliveryLocationsRevision: 0,
     viewMode: 'cards',
     fuelAdjustmentCache: [],
     // report state
@@ -2869,12 +2870,14 @@ function normalizeSavedDeliveryLocations(values) {
     return Array.from(unique.values()).sort((a, b) => a.localeCompare(b, 'ar'));
 }
 function rememberSavedDeliveryLocation(value) {
+    const location = String(value || '').trim().replace(/\s+/g, ' ');
+    if (!location) return;
     const rows = normalizeSavedDeliveryLocations([
         ...(state.savedDeliveryLocationsCache.rows || []),
-        value
+        location
     ]);
-    if (!rows.length) return;
     state.savedDeliveryLocationsCache = { loadedAt: Date.now(), rows };
+    state.savedDeliveryLocationsRevision = Number(state.savedDeliveryLocationsRevision || 0) + 1;
 
     const datalist = document.getElementById('savedDeliveryLocations');
     if (datalist) {
@@ -2898,13 +2901,26 @@ async function loadSavedDeliveryLocationSuggestions(openToken, row=null) {
         Date.now() - state.savedDeliveryLocationsCache.loadedAt < 60000;
 
     if (!cacheFresh && bridge && typeof bridge.executeFuelSalesAsync === 'function') {
+        const revisionAtQueryStart = Number(state.savedDeliveryLocationsRevision || 0);
         try {
             const response = await invokeFuelSalesAsync('locations', []);
-            locations = rowsFrom(response).map(item =>
-                String(typeof item === 'string' ? item : (item.location || item.delivery_location || '')).trim()
-            ).filter(Boolean);
-            locations = normalizeSavedDeliveryLocations(locations);
+            const queriedLocations = normalizeSavedDeliveryLocations(
+                rowsFrom(response).map(item =>
+                    String(typeof item === 'string' ? item : (item.location || item.delivery_location || '')).trim()
+                )
+            );
+
+            // A successful sale may add a location while this read is still in flight.
+            // Merge instead of allowing an older SQLite snapshot to erase that addition.
+            const currentRevision = Number(state.savedDeliveryLocationsRevision || 0);
+            locations = currentRevision === revisionAtQueryStart
+                ? queriedLocations
+                : normalizeSavedDeliveryLocations([
+                    ...queriedLocations,
+                    ...(state.savedDeliveryLocationsCache.rows || [])
+                ]);
             state.savedDeliveryLocationsCache = { loadedAt: Date.now(), rows: locations };
+            state.savedDeliveryLocationsRevision = currentRevision + 1;
         } catch (error) {
             console.warn('[Fuel Sales] Saved delivery locations unavailable:', error.message || error);
         }

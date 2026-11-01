@@ -283,11 +283,13 @@ class LatestFuelSaleForCustomerRobolectricTest {
         val earlyCustomer = insertCustomer("عميل أقدم زمنياً")
         val invalidCustomer = insertCustomer("عميل عمليات غير صالحة")
         val stationMismatchCustomer = insertCustomer("عميل فاتورة بمحطة أخرى")
+        val foreignOnlyCustomer = insertCustomer("عميل مبيعاته في محطة أخرى فقط")
 
         // Lexical TEXT ordering incorrectly puts the 'T09...' ISO value after the space value.
         insertFuelSale(lateCustomer, stationId, "2026-10-30 23:00:00")
         insertFuelSale(lateCustomer, stationId, "2026-10-30 20:00:00")
         insertFuelSale(earlyCustomer, stationId, "2026-10-30T09:00:00Z")
+        insertFuelSale(foreignOnlyCustomer, stationId + 400000, "2026-10-30 23:59:30")
         insertFuelSale(invalidCustomer, stationId, "2026-10-30 23:59:00", childDeleted = true)
         insertFuelSale(invalidCustomer, stationId, "2026-10-30 23:58:00", parentStatusOverride = "refunded")
         insertFuelSale(invalidCustomer, stationId, "2026-10-30 23:57:00", parentInvalid = true)
@@ -321,6 +323,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
         assertTrue("Recent customer result: $orderedIds", orderedIds.contains(earlyCustomer))
         assertFalse("Deleted/refunded/invalid customers must not influence recent ranking", orderedIds.contains(invalidCustomer))
         assertFalse("A child row whose parent invoice belongs to another station must be excluded", orderedIds.contains(stationMismatchCustomer))
+        assertFalse("A customer with sales only at another station must not leak into this station's picker", orderedIds.contains(foreignOnlyCustomer))
         assertTrue("julianday ordering should place the real 23:00 timestamp before 09:00Z", orderedIds.indexOf(lateCustomer) < orderedIds.indexOf(earlyCustomer))
     }
 

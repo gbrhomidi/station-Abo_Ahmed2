@@ -33,10 +33,13 @@ function inlineApplicationScript() {
 }
 
 async function runUiRegression() {
-    const calls = { saves: [], operations: [] };
+    const calls = { saves: [], updates: [], operations: [] };
     const completed = { formLookups: 0, locations: 0 };
     let lastSavedRow = null;
     let saleSequence = 700;
+    let deferredLocationRequest = null;
+    let deferFirstLocationRead = true;
+    let failNextWrite = false;
 
     const dom = new JSDOM(html, {
         runScripts: 'outside-only',
@@ -70,7 +73,7 @@ async function runUiRegression() {
                     response = { success: true, data: [{ id: 5, nozzle_number: 'A', nozzle_code: 'TEST-A', fuel_type_id: 1 }] };
                     break;
                 case 'locations':
-                    response = { success: true, data: ['شارع  الاختبار', ' شارع الاختبار '] };
+                    response = { success: true, data: ['حي المحطة', '  حي المحطة  '] };
                     break;
                 case 'promotions':
                     response = { success: true, data: [] };
@@ -81,6 +84,11 @@ async function runUiRegression() {
                 case 'save': {
                     const payload = JSON.parse(args[0]);
                     calls.saves.push(payload);
+                    if (failNextWrite) {
+                        failNextWrite = false;
+                        response = { success: false, error: 'SQLite test failure: sale was not saved' };
+                        break;
+                    }
                     const grossQuantity = Number(payload.quantity);
                     const unitPrice = Number(payload.price_per_liter);
                     const grossAmount = Math.round(grossQuantity * unitPrice * 100) / 100;
@@ -120,8 +128,32 @@ async function runUiRegression() {
                     };
                     break;
                 }
+                case 'update': {
+                    const payload = JSON.parse(args[1]);
+                    calls.updates.push({ id: Number(args[0]), payload });
+                    if (failNextWrite) {
+                        failNextWrite = false;
+                        response = { success: false, error: 'SQLite test failure: update was not saved' };
+                        break;
+                    }
+                    lastSavedRow = {
+                        ...lastSavedRow,
+                        ...payload,
+                        delivery_location: payload.delivery_location,
+                        delivery_service_fee: Number(payload.delivery_service_fee || 0),
+                        delivery_fee_mode: payload.delivery_fee_mode
+                    };
+                    response = { success: true, data: { sale_id: lastSavedRow.sale_id } };
+                    break;
+                }
                 default:
                     response = { success: true, data: [] };
+            }
+
+            if (operation === 'locations' && deferFirstLocationRead) {
+                deferFirstLocationRead = false;
+                deferredLocationRequest = { requestId, response };
+                return json({ success: true, queued: true });
             }
 
             window.setTimeout(() => {
@@ -137,11 +169,50 @@ async function runUiRegression() {
     window.AndroidInterface = nativeBridge;
     window.eval(inlineApplicationScript());
 
+    function resolveDeferredLocationRead() {
+        assert.ok(deferredLocationRequest, 'the initial SQLite locations read must be held for the race test');
+        const pending = deferredLocationRequest;
+        deferredLocationRequest = null;
+        completed.locations += 1;
+        window.__fuelSalesNativeResult(pending.requestId, json(pending.response));
+    }
+
+    async function prepareNewSaleAt(locationValue) {
+        const document = window.document;
+        const pump = document.querySelector('[data-key="pump_id"]');
+        pump.value = '3';
+        pump.dispatchEvent(new window.Event('change', { bubbles: true }));
+        await waitFor(() => document.querySelector('[data-key="nozzle_id"]').options.length > 1,
+            'pump nozzle choices');
+        const nozzle = document.querySelector('[data-key="nozzle_id"]');
+        nozzle.value = '5';
+        nozzle.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+        const fuel = document.querySelector('[data-key="fuel_type_id"]');
+        fuel.value = '1';
+        fuel.dispatchEvent(new window.Event('change', { bubbles: true }));
+        await waitFor(() => document.querySelector('[data-key="price_per_liter"]').value === '1000',
+            'resolved fuel price');
+
+        const quantity = document.querySelector('[data-key="quantity"]');
+        quantity.value = '10';
+        quantity.dispatchEvent(new window.Event('input', { bubbles: true }));
+        const mode = document.querySelector('[data-key="delivery_fee_mode"]');
+        mode.value = 'deduct_from_sales';
+        mode.dispatchEvent(new window.Event('change', { bubbles: true }));
+        const fee = document.querySelector('[data-key="delivery_service_fee"]');
+        fee.value = '100';
+        fee.dispatchEvent(new window.Event('input', { bubbles: true }));
+        const location = document.querySelector('[data-key="delivery_location"]');
+        location.value = locationValue;
+        location.dispatchEvent(new window.Event('input', { bubbles: true }));
+    }
+
     try {
         await waitFor(() => calls.operations.includes('fuelSalesPage'), 'initial fuel-sale page load');
         await window.openForm(null);
         await waitFor(() => !!window.document.querySelector('[data-key="delivery_fee_mode"]'), 'new sale form');
-        await waitFor(() => completed.locations > 0, 'empty saved delivery location result');
+        await waitFor(() => calls.operations.includes('locations'), 'dispatch of saved-location SQLite read');
         await waitFor(() => completed.formLookups > 0 &&
             window.document.querySelector('[data-key="pump_id"]').options.length > 1,
             'fuel-sale form lookup choices');
@@ -149,7 +220,8 @@ async function runUiRegression() {
         const { document } = window;
         const locationList = document.getElementById('savedDeliveryLocations');
         assert.ok(locationList, 'delivery location autocomplete list must exist');
-        assert.equal(locationList.options.length, 1, 'SQLite location suggestions must be normalized and deduplicated');
+        assert.equal(locationList.options.length, 0,
+            'the first SQLite locations response is deliberately pending, leaving the initial cache empty');
 
         const pump = document.querySelector('[data-key="pump_id"]');
         pump.value = '3';
@@ -178,19 +250,42 @@ async function runUiRegression() {
         const location = document.querySelector('[data-key="delivery_location"]');
         location.value = '';
         await window.saveForm();
-        assert.equal(calls.saves.length, 0, 'the UI must stop a fee sale before invoking SQLite when no location is selected');
+        assert.equal(calls.saves.length, 0,
+            'the UI must stop a fee sale before invoking SQLite when no location is selected');
 
-        // No saved choices is not a blocker: a user-entered new location must pass through.
+        // A failed SQLite write must not publish an unsaved location as a suggestion.
+        location.value = 'موقع فشل غير محفوظ';
+        location.dispatchEvent(new window.Event('input', { bubbles: true }));
+        failNextWrite = true;
+        await window.saveForm();
+        assert.equal(calls.saves.length, 1, 'the failed save must reach SQLite exactly once');
+        assert.equal(Array.from(locationList.options).some(option => option.value === 'موقع فشل غير محفوظ'), false,
+            'a failed save must never be reflected in the saved-location list');
+
+        // A new location appears only after SQLite confirms the sale.
         location.value = 'شارع الاختبار';
         location.dispatchEvent(new window.Event('input', { bubbles: true }));
         await window.saveForm();
-        assert.equal(calls.saves.length, 1, 'a manually entered location must be submitted to the native SQLite bridge');
-        assert.equal(calls.saves[0].delivery_location, 'شارع الاختبار');
-        assert.equal(calls.saves[0].delivery_fee_mode, 'deduct_from_sales');
+        assert.equal(calls.saves.length, 2, 'the subsequent successful sale must be persisted');
+        assert.equal(calls.saves[1].delivery_location, 'شارع الاختبار');
+        assert.equal(calls.saves[1].delivery_fee_mode, 'deduct_from_sales');
         assert.equal(locationList.options.length, 1,
-            'a successful SQLite save must update the open datalist immediately without duplicates');
+            'a successful SQLite save must update the current datalist without waiting for a reload');
         assert.equal(locationList.options[0].value, 'شارع الاختبار',
-            'the newly saved location must be immediately available as a normalized suggestion');
+            'the new location must appear immediately after SQLite confirmation');
+
+        // Return the stale pre-save SQLite snapshot after the successful write.
+        resolveDeferredLocationRead();
+        await waitFor(() => completed.locations === 1 &&
+            Array.from(locationList.options).some(option => option.value === 'حي المحطة'),
+            'the delayed SQLite location read');
+        const mergedLocations = Array.from(locationList.options).map(option => option.value);
+        assert.ok(mergedLocations.includes('شارع الاختبار'),
+            'the older SQLite snapshot must not erase a location just confirmed by the sale');
+        assert.equal(mergedLocations.filter(value => value === 'حي المحطة').length, 1,
+            'duplicate values from SQLite must normalize to one suggestion');
+        assert.equal(mergedLocations.filter(value => value === 'شارع الاختبار').length, 1,
+            'the newly saved location must remain unique after the delayed response');
 
         await waitFor(() => lastSavedRow !== null, 'saved row');
         assert.equal(quantity.value, '10', 'after deduction the editor must retain gross quantity as its calculation basis');
@@ -210,6 +305,38 @@ async function runUiRegression() {
             'reopening a deduction sale must restore gross_amount');
         assert.ok(document.getElementById('deliveryFeeDisplaySummary').value.includes('صافي الكمية المباعة = 9.900 لتر'),
             'reopening must not apply the delivery fee a second time');
+
+        // A new sale may reuse a previously saved location without adding another option.
+        await window.openForm(null);
+        await waitFor(() => !!document.querySelector('[data-key="delivery_fee_mode"]') &&
+            document.querySelector('[data-key="pump_id"]').options.length > 1,
+            'second new sale form');
+        await prepareNewSaleAt('حي المحطة');
+        await window.saveForm();
+        assert.equal(calls.saves.length, 3, 'a new sale at an existing location must be persisted');
+        assert.equal(Array.from(locationList.options).filter(option => option.value === 'حي المحطة').length, 1,
+            'a new sale using an existing location must not duplicate the suggestion');
+
+        // An accepted edit may add a new location; the update response is the commit boundary.
+        await window.openForm(lastSavedRow);
+        await waitFor(() => !!document.querySelector('[data-key="delivery_location"]') &&
+            document.querySelector('[data-key="delivery_location"]').value === 'حي المحطة',
+            'editing a previously saved sale');
+        const editedLocation = document.querySelector('[data-key="delivery_location"]');
+        editedLocation.value = 'موقع تعديل محفوظ';
+        editedLocation.dispatchEvent(new window.Event('input', { bubbles: true }));
+        await window.saveForm();
+        assert.equal(calls.updates.length, 1, 'an edit must use the SQLite update operation');
+        assert.equal(calls.updates[0].payload.delivery_location, 'موقع تعديل محفوظ');
+        assert.equal(Array.from(locationList.options).filter(option => option.value === 'موقع تعديل محفوظ').length, 1,
+            'a new location from a successful update must appear exactly once');
+
+        await window.openForm(lastSavedRow);
+        await waitFor(() => !!document.querySelector('[data-key="delivery_location"]') &&
+            document.querySelector('[data-key="delivery_location"]').value === 'موقع تعديل محفوظ',
+            'reopening the edited sale');
+        assert.ok(Array.from(locationList.options).some(option => option.value === 'موقع تعديل محفوظ'),
+            'the edited location must remain suggested after reopening the saved sale');
 
         const feeGroup = document.querySelector('.delivery-fee-form-group .delivery-fee-composite');
         assert.ok(feeGroup, 'fee controls must be grouped in a dedicated layout container');
