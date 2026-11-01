@@ -914,7 +914,11 @@ class LatestFuelSaleForCustomerRobolectricTest {
         db.execSQL("CREATE TABLE sales_transactions (${definitions.joinToString(",")})")
 
         val retainedColumns = snapshotColumns.filter { it != missingColumn }
-        if (retainedColumns.isNotEmpty()) {
+        // Reinsert rows only when id remains a valid parent key. When id is the
+        // missing column, an INSERT would correctly fail because deliveries and
+        // other tables still declare foreign keys to sales_transactions(id); the
+        // empty malformed table is sufficient to exercise the direct fuel fallback.
+        if (missingColumn != "id" && retainedColumns.isNotEmpty()) {
             val columnList = retainedColumns.joinToString(",")
             db.execSQL(
                 "INSERT INTO sales_transactions ($columnList) " +
