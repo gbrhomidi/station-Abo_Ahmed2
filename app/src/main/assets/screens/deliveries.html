@@ -2849,6 +2849,7 @@
         recentSaleCustomersRetryAfter: 0,
         customerScopeReloadGeneration: 0,
         recentSaleCustomersScopeNeedsCustomerReload: false,
+        customerMenuMarkup: '',
         saleKind: 'fuel',
         saleItems: [],
 
@@ -5076,7 +5077,7 @@
             })
             .slice(0, 50);
 
-        menu.innerHTML =
+        const markup =
             '<button type="button" class="lookup-item" data-anonymous="1">' +
                 '<strong>عميل غير مسجل</strong><br>' +
                 '<small>بدون إنشاء Customer وهمي</small>' +
@@ -5101,35 +5102,41 @@
                     </div>
                 `);
 
+        // Avoid replacing the dropdown DOM (and its listeners) when the visible
+        // rows/order/search text are identical. Async callbacks can therefore safely
+        // converge without repeated layout work.
+        if (state.customerMenuMarkup !== markup) {
+            menu.innerHTML = markup;
+            state.customerMenuMarkup = markup;
+
+            menu.querySelectorAll('[data-anonymous]').forEach(item =>
+                item.addEventListener('click', () => {
+                    selectAnonymousCustomer();
+                    menu.classList.remove('show');
+                }));
+
+            menu.querySelectorAll('[data-id]').forEach(item =>
+                item.addEventListener('click', () => {
+                    const id = item.dataset.id;
+                    const customer = state.customers.find(
+                        c => String(c.id ?? c.party_id) === String(id)
+                    );
+
+                    // Remove any previous customer's sale data immediately; never leave stale fees/names visible.
+                    state.latestSaleRequestId++;
+                    $('f_party_id').value = id;
+                    $('f_party_display').value = customer ? customerName(customer) : '';
+                    $('f_sale_id').value = '';
+                    $('saleIdGroup').style.display = 'none';
+                    $('saleContextHelp').style.display = 'none';
+                    clearSaleContextFields();
+                    hideLatestSale();
+                    menu.classList.remove('show');
+                    loadLatestCustomerSale(Number(id));
+                }));
+        }
+
         menu.classList.add('show');
-
-        menu.querySelectorAll('[data-anonymous]').forEach(item =>
-            item.addEventListener('click', () => {
-                selectAnonymousCustomer();
-                menu.classList.remove('show');
-            }));
-
-        menu.querySelectorAll('[data-id]').forEach(item =>
-            item.addEventListener('click', () => {
-
-                const id = item.dataset.id;
-
-                const customer = state.customers.find(
-                    c => String(c.id ?? c.party_id) === String(id)
-                );
-
-                // Remove any previous customer's sale data immediately; never leave stale fees/names visible.
-                state.latestSaleRequestId++;
-                $('f_party_id').value = id;
-                $('f_party_display').value = customer ? customerName(customer) : '';
-                $('f_sale_id').value = '';
-                $('saleIdGroup').style.display = 'none';
-                $('saleContextHelp').style.display = 'none';
-                clearSaleContextFields();
-                hideLatestSale();
-                menu.classList.remove('show');
-                loadLatestCustomerSale(Number(id));
-            }));
     }
 
     /* ================================================================
