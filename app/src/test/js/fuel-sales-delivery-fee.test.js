@@ -316,7 +316,8 @@ async function runUiRegression() {
         await prepareNewSaleAt('حي المحطة');
         await window.saveForm();
         assert.equal(calls.saves.length, 3, 'a new sale at an existing location must be persisted');
-        assert.equal(Array.from(locationList.options).filter(option => option.value === 'حي المحطة').length, 1,
+        assert.equal(Array.from(document.getElementById('savedDeliveryLocations').options)
+            .filter(option => option.value === 'حي المحطة').length, 1,
             'a new sale using an existing location must not duplicate the suggestion');
 
         // An accepted edit may add a new location; the update response is the commit boundary.
@@ -337,7 +338,8 @@ async function runUiRegression() {
         failNextWrite = true;
         await window.saveForm();
         assert.equal(calls.updates.length, 1, 'the rejected edit must invoke SQLite once');
-        assert.equal(Array.from(locationList.options).some(option => option.value === 'موقع تعديل فاشل'), false,
+        assert.equal(Array.from(document.getElementById('savedDeliveryLocations').options)
+            .some(option => option.value === 'موقع تعديل فاشل'), false,
             'a failed edit must not add its destination to saved suggestions');
 
         editedLocation.value = 'موقع تعديل محفوظ';
@@ -345,14 +347,16 @@ async function runUiRegression() {
         await window.saveForm();
         assert.equal(calls.updates.length, 2, 'a subsequent accepted edit must use the SQLite update operation');
         assert.equal(calls.updates[1].payload.delivery_location, 'موقع تعديل محفوظ');
-        assert.equal(Array.from(locationList.options).filter(option => option.value === 'موقع تعديل محفوظ').length, 1,
+        assert.equal(Array.from(document.getElementById('savedDeliveryLocations').options)
+            .filter(option => option.value === 'موقع تعديل محفوظ').length, 1,
             'a new location from a successful update must appear exactly once');
 
         await window.openForm(lastSavedRow);
         await waitFor(() => !!document.querySelector('[data-key="delivery_location"]') &&
             document.querySelector('[data-key="delivery_location"]').value === 'موقع تعديل محفوظ',
             'reopening the edited sale');
-        assert.ok(Array.from(locationList.options).some(option => option.value === 'موقع تعديل محفوظ'),
+        assert.ok(Array.from(document.getElementById('savedDeliveryLocations').options)
+            .some(option => option.value === 'موقع تعديل محفوظ'),
             'the edited location must remain suggested after reopening the saved sale');
 
         const feeGroup = document.querySelector('.delivery-fee-form-group .delivery-fee-composite');
