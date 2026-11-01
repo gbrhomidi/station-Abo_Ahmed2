@@ -57,13 +57,13 @@ async function run() {
     assert.ok(recentLoaderStart >= 0 && recentLoaderEnd > recentLoaderStart,
         'deliveries must retain the recent-customer loader');
     const recentLoaderSource = deliveriesScreen.slice(recentLoaderStart, recentLoaderEnd);
-    assert.doesNotMatch(recentLoaderSource, /typeof bridge\\.getRecentSaleCustomerIds/,
+    assert.equal(recentLoaderSource.includes('typeof bridge.getRecentSaleCustomerIds'), false,
         'the loader must not silently skip an absent Bridge method');
-    assert.match(recentLoaderSource, /!Array\\.isArray\\(values\\)/,
+    assert.ok(recentLoaderSource.includes('if (!Array.isArray(values))'),
         'the loader must reject malformed non-array payloads');
-    assert.match(recentLoaderSource, /state\\.recentSaleCustomerIds = \\[\\]/,
+    assert.ok(recentLoaderSource.includes('state.recentSaleCustomerIds = [];'),
         'the loader must clear stale ids after a failed read');
-    assert.match(recentLoaderSource, /state\\.recentSaleCustomersLoadedAt = 0/,
+    assert.ok(recentLoaderSource.includes('state.recentSaleCustomersLoadedAt = 0;'),
         'the loader must clear stale cache age after a failed read');
 
     // Execute the actual helper functions and loader extracted from deliveries.html.
