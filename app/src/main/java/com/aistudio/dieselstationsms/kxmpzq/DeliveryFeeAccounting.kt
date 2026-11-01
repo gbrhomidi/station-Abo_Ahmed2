@@ -960,18 +960,34 @@ object DeliveryFeeAccounting {
                 continue
             }
 
-            val joinFuelInvoice = table == "fuel_sales" && "sale_id" in saleColumns
-            var parentColumns = emptySet<String>()
-            if (joinFuelInvoice) {
-                if (!tableExists(db, "sales_transactions")) {
-                    Log.w(DELIVERY_LOOKUP_TAG, "recentCustomerSaleIds: skipping fuel_sales; original invoice table sales_transactions is missing")
-                    continue
+            val hasFuelParentReference = table == "fuel_sales" && "sale_id" in saleColumns
+            val parentColumns = if (
+                hasFuelParentReference && tableExists(db, "sales_transactions")
+            ) {
+                columns(db, "sales_transactions")
+            } else {
+                emptySet()
+            }
+            // Keep fuel ranking independent from the parent invoice schema. If the
+            // invoice table or its id column is unavailable, use the station-scoped
+            // fuel row directly. If only the parent's station_id is missing, retain
+            // the id join for parent validity checks but scope by fuel_sales.station_id.
+            val joinFuelInvoice = hasFuelParentReference && "id" in parentColumns
+            if (hasFuelParentReference && !joinFuelInvoice) {
+                val reason = if (parentColumns.isEmpty()) {
+                    "sales_transactions is missing"
+                } else {
+                    "sales_transactions lacks the id column required for the parent join"
                 }
-                parentColumns = columns(db, "sales_transactions")
-                if (!setOf("id", "station_id").all { it in parentColumns }) {
-                    Log.w(DELIVERY_LOOKUP_TAG, "recentCustomerSaleIds: skipping fuel_sales; parent invoice cannot be station-validated (id/station_id missing)")
-                    continue
-                }
+                Log.w(
+                    DELIVERY_LOOKUP_TAG,
+                    "recentCustomerSaleIds: using station-scoped fuel_sales fallback; $reason"
+                )
+            } else if (joinFuelInvoice && "station_id" !in parentColumns) {
+                Log.w(
+                    DELIVERY_LOOKUP_TAG,
+                    "recentCustomerSaleIds: parent station_id is missing; using fuel_sales.station_id for station scope"
+                )
             }
 
             val childCustomer = customerIdExpression(if (joinFuelInvoice) "fs" else "src", saleColumns)
@@ -991,8 +1007,14 @@ object DeliveryFeeAccounting {
                 "CAST($customerExpression AS INTEGER)>0"
             )
             val from = if (joinFuelInvoice) {
-                predicates += "st.station_id=?"
-                predicates += "(fs.station_id IS NULL OR fs.station_id=0 OR fs.station_id=st.station_id)"
+                if ("station_id" in parentColumns) {
+                    predicates += "st.station_id=?"
+                    predicates += "(fs.station_id IS NULL OR fs.station_id=0 OR fs.station_id=st.station_id)"
+                } else {
+                    // The fuel row is the only reliable station authority in this
+                    // legacy schema; keep the parent join for its validity and date.
+                    predicates += "fs.station_id=?"
+                }
                 appendSaleValidityPredicates(predicates, "fs", saleColumns)
                 appendSaleValidityPredicates(predicates, "st", parentColumns)
                 "fuel_sales fs INNER JOIN sales_transactions st ON st.id=fs.sale_id"

@@ -328,6 +328,107 @@ class LatestFuelSaleForCustomerRobolectricTest {
     }
 
     @Test
+    fun recentCustomerRankingKeepsFuelCustomersWhenSalesTransactionsTableIsMissing() {
+        val fuelCustomer = insertCustomer("عميل وقود مع غياب جدول الفواتير")
+        insertFuelSale(fuelCustomer, stationId, "2026-10-30 23:20:00")
+
+        // Remove only the parent invoice table after creating a real child fuel row.
+        dropTableForFallbackTest("sales_transactions")
+
+        val ids = DeliveryFeeAccounting.recentCustomerSaleIds(helper, stationId)
+        val ordered = (0 until ids.length()).map { ids.getLong(it) }
+
+        assertEquals("Fuel ranking must survive a missing sales_transactions table", listOf(fuelCustomer), ordered)
+    }
+
+    @Test
+    fun recentCustomerRankingKeepsProductCustomersWhenFuelSalesTableIsMissing() {
+        val olderProductCustomer = insertCustomer("عميل منتجات أقدم مع غياب الوقود")
+        val newerProductCustomer = insertCustomer("عميل منتجات أحدث مع غياب الوقود")
+        insertProductSale(olderProductCustomer, stationId, "2026-10-30 18:00:00")
+        insertProductSale(newerProductCustomer, stationId, "2026-10-30 23:00:00")
+
+        // Product invoices remain a complete independent source.
+        dropTableForFallbackTest("fuel_sales")
+
+        val ids = DeliveryFeeAccounting.recentCustomerSaleIds(helper, stationId)
+        val ordered = (0 until ids.length()).map { ids.getLong(it) }
+
+        assertEquals("Product ranking must survive a missing fuel_sales table", 2, ordered.size)
+        assertTrue(ordered.contains(olderProductCustomer))
+        assertTrue(ordered.contains(newerProductCustomer))
+        assertTrue(
+            "The newest product transaction must remain first when fuel_sales is absent",
+            ordered.indexOf(newerProductCustomer) < ordered.indexOf(olderProductCustomer)
+        )
+        assertEquals("Product customer ids must remain unique", ordered.size, ordered.toSet().size)
+    }
+
+    @Test
+    fun recentCustomerRankingFallsBackWhenFuelSaleIdColumnIsMissingAndKeepsProductSource() {
+        val fuelCustomer = insertCustomer("عميل وقود بلا رابط فاتورة")
+        val productCustomer = insertCustomer("عميل منتجات مع رابط وقود مفقود")
+        insertProductSale(productCustomer, stationId, "2026-10-30 23:45:00")
+
+        replaceFuelSalesWithoutParentLink()
+        insertStandaloneFuelSale(fuelCustomer, stationId, "2026-10-30 23:30:00")
+
+        val ids = DeliveryFeeAccounting.recentCustomerSaleIds(helper, stationId)
+        val ordered = (0 until ids.length()).map { ids.getLong(it) }
+
+        assertTrue("Fuel row with a station id must be ranked without sale_id", ordered.contains(fuelCustomer))
+        assertTrue("Missing fuel parent linkage must not suppress product invoices", ordered.contains(productCustomer))
+        assertTrue(
+            "The newer product invoice must outrank the standalone fuel row",
+            ordered.indexOf(productCustomer) < ordered.indexOf(fuelCustomer)
+        )
+        assertEquals("Combined source ids must be unique", ordered.size, ordered.toSet().size)
+    }
+
+    @Test
+    fun recentCustomerRankingUsesFuelStationWhenParentStationIdIsMissingAndStillRejectsCancelledParent() {
+        val validCustomer = insertCustomer("عميل وقود صالح مع غياب محطة الفاتورة")
+        val cancelledCustomer = insertCustomer("عميل فاتورته ملغاة مع غياب محطة الفاتورة")
+        insertFuelSale(validCustomer, stationId, "2026-10-30 22:10:00")
+        insertFuelSale(
+            cancelledCustomer,
+            stationId,
+            "2026-10-30 22:11:00",
+            parentStatusOverride = "cancelled"
+        )
+
+        replaceSalesTransactionsWithoutJoinColumn("station_id")
+
+        val ids = DeliveryFeeAccounting.recentCustomerSaleIds(helper, stationId)
+        val ordered = (0 until ids.length()).map { ids.getLong(it) }
+
+        assertTrue(
+            "Fuel ranking must use fuel_sales.station_id when the parent station_id is unavailable",
+            ordered.contains(validCustomer)
+        )
+        assertFalse(
+            "Parent cancellation rules must still apply when parent id remains joinable",
+            ordered.contains(cancelledCustomer)
+        )
+    }
+
+    @Test
+    fun recentCustomerRankingFallsBackToFuelStationWhenParentIdColumnIsMissing() {
+        val customer = insertCustomer("عميل وقود مع غياب id في الفاتورة")
+        insertFuelSale(customer, stationId, "2026-10-30 22:20:00")
+
+        replaceSalesTransactionsWithoutJoinColumn("id")
+
+        val ids = DeliveryFeeAccounting.recentCustomerSaleIds(helper, stationId)
+        val ordered = (0 until ids.length()).map { ids.getLong(it) }
+
+        assertTrue(
+            "Fuel ranking must fall back to fuel_sales.station_id when the parent id is unavailable",
+            ordered.contains(customer)
+        )
+    }
+
+    @Test
     fun recentCustomerRankingMergesFuelAndProductSalesByLatestValidTransaction() {
         val fuelOnly = insertCustomer("عميل وقود فقط")
         val productOnly = insertCustomer("عميل منتجات فقط")
@@ -734,6 +835,93 @@ class LatestFuelSaleForCustomerRobolectricTest {
         } finally {
             db.setForeignKeyConstraintsEnabled(true)
         }
+    }
+
+    private fun dropTableForFallbackTest(table: String) {
+        require(table == "fuel_sales" || table == "sales_transactions")
+        db.setForeignKeyConstraintsEnabled(false)
+        try {
+            db.execSQL("DROP TABLE IF EXISTS `$table`")
+        } finally {
+            db.setForeignKeyConstraintsEnabled(true)
+        }
+    }
+
+    private fun replaceFuelSalesWithoutParentLink() {
+        dropTableForFallbackTest("fuel_sales")
+        db.execSQL(
+            """
+            CREATE TABLE fuel_sales (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                station_id INTEGER NOT NULL,
+                customer_party_id INTEGER,
+                transaction_time TEXT,
+                status TEXT NOT NULL DEFAULT 'completed',
+                is_deleted INTEGER NOT NULL DEFAULT 0,
+                deleted_at TEXT
+            )
+            """.trimIndent()
+        )
+    }
+
+    private fun insertStandaloneFuelSale(customerId: Long, saleStationId: Int, timestamp: String): Long =
+        db.insertOrThrow(
+            "fuel_sales",
+            null,
+            ContentValues().apply {
+                put("station_id", saleStationId)
+                put("customer_party_id", customerId)
+                put("transaction_time", timestamp)
+                put("status", "completed")
+                put("is_deleted", 0)
+            }
+        )
+
+    private fun replaceSalesTransactionsWithoutJoinColumn(missingColumn: String) {
+        require(missingColumn == "id" || missingColumn == "station_id")
+        val originalColumns = tableColumns("sales_transactions")
+        require("id" in originalColumns && "station_id" in originalColumns)
+
+        // Preserve the invoices so a missing parent station_id can still exercise
+        // parent validity predicates through the surviving id relationship.
+        val snapshotColumns = listOf(
+            "id", "station_id", "customer_party_id", "order_type", "sale_type",
+            "transaction_type", "product_id", "fuel_type_id", "created_at",
+            "transaction_time", "sale_date", "sale_time", "status", "sale_status",
+            "transaction_status", "is_deleted", "deleted_at", "is_valid",
+            "is_cancelled", "is_canceled", "is_void", "is_voided", "is_invalid",
+            "is_reversed", "cancelled_at", "canceled_at", "voided_at",
+            "invalidated_at", "reversed_at"
+        ).filter { it in originalColumns }
+        db.execSQL(
+            "CREATE TEMP TABLE __fallback_parent_snapshot AS " +
+                "SELECT ${snapshotColumns.joinToString(",")} FROM sales_transactions"
+        )
+        dropTableForFallbackTest("sales_transactions")
+
+        val definitions = snapshotColumns.map { column ->
+            when (column) {
+                "id" -> "id INTEGER PRIMARY KEY AUTOINCREMENT"
+                "station_id", "customer_party_id", "product_id", "fuel_type_id",
+                "is_deleted", "is_valid", "is_cancelled", "is_canceled", "is_void",
+                "is_voided", "is_invalid", "is_reversed" -> "$column INTEGER"
+                else -> "$column TEXT"
+            }
+        }.filterNot { definition ->
+            (missingColumn == "id" && definition.startsWith("id ")) ||
+                (missingColumn == "station_id" && definition.startsWith("station_id "))
+        }
+        db.execSQL("CREATE TABLE sales_transactions (${definitions.joinToString(",")})")
+
+        val retainedColumns = snapshotColumns.filter { it != missingColumn }
+        if (retainedColumns.isNotEmpty()) {
+            val columnList = retainedColumns.joinToString(",")
+            db.execSQL(
+                "INSERT INTO sales_transactions ($columnList) " +
+                    "SELECT $columnList FROM __fallback_parent_snapshot"
+            )
+        }
+        db.execSQL("DROP TABLE __fallback_parent_snapshot")
     }
 
     private fun putExisting(table: String, values: ContentValues, column: String, value: Any?) {
