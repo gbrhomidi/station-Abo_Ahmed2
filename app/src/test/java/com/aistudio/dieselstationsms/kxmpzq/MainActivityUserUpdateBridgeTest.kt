@@ -132,8 +132,12 @@ class MainActivityUserUpdateBridgeTest {
 
     @Test
     fun updateUserBridgeReturnsNotFoundWithoutChangingRows() {
+        // Keep the payload valid for the current normalizer so the bridge
+        // reaches DatabaseHelper.updateUser() and exercises the actual
+        // zero-affected-rows response instead of an earlier validation error.
         val payload = JSONObject()
             .put("full_name", "Must Not Be Inserted")
+            .put("employee_id", employeeId)
             .put("role_id", roleId)
             .put("status", "active")
         val response = JSONObject(bridge.updateUser(9_999_999L, payload.toString()))
