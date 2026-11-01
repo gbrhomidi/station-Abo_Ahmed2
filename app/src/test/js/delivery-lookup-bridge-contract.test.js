@@ -50,95 +50,331 @@ async function run() {
     assert.match(mainActivity, /addJavascriptInterface\(webAppInterface!!,\s*"AndroidInterface"\)/,
         'the WebAppInterface instance must be injected under the expected JS name');
 
-    assert.match(deliveriesScreen, /invoke\(['"]getRecentSaleCustomerIds['"]\)/,
-        'deliveries.html must use the current recent-customer method name');
-    const recentLoaderStart = deliveriesScreen.indexOf('async function loadRecentCustomerSaleOrder(');
-    const recentLoaderEnd = deliveriesScreen.indexOf('function selectAnonymousCustomer(', recentLoaderStart);
-    assert.ok(recentLoaderStart >= 0 && recentLoaderEnd > recentLoaderStart,
-        'deliveries must retain the recent-customer loader');
-    const recentLoaderSource = deliveriesScreen.slice(recentLoaderStart, recentLoaderEnd);
-    assert.equal(recentLoaderSource.includes('typeof bridge.getRecentSaleCustomerIds'), false,
-        'the loader must not silently skip an absent Bridge method');
-    assert.ok(recentLoaderSource.includes('if (!Array.isArray(values))'),
-        'the loader must reject malformed non-array payloads');
-    assert.ok(recentLoaderSource.includes('state.recentSaleCustomerIds = [];'),
-        'the loader must clear stale ids after a failed read');
-    assert.ok(recentLoaderSource.includes('state.recentSaleCustomersLoadedAt = 0;'),
-        'the loader must clear stale cache age after a failed read');
+    assert.ok(
+        deliveriesScreen.includes('assets-local/js/fuel-sales-async-bridge.js'),
+        'deliveries.html must load the asynchronous native bridge adapter'
+    );
+    assert.ok(
+        deliveriesScreen.includes('window.__fuelSalesNativeResult'),
+        'deliveries.html must resolve native async callbacks'
+    );
+    assert.ok(
+        deliveriesScreen.includes("recentSaleCustomersBridgeClient.invoke(") &&
+        deliveriesScreen.includes("'getRecentSaleCustomerIds'"),
+        'the page must request the named recent-customer operation asynchronously'
+    );
+    assert.match(mainActivity, /"getRecentSaleCustomerIds"\\s*->\\s*getRecentSaleCustomerIds\\(\\)/,
+        'the IO dispatcher must route the async operation to the canonical API');
+    assert.match(mainActivity, /"getRecentSaleCustomerIds"\\s*,\\s*"save"/,
+        'the async bridge allowlist must explicitly include recent-customer ranking');
 
-    // Execute the actual helper functions and loader extracted from deliveries.html.
     const extract = (startMarker, endMarker) => {
         const start = deliveriesScreen.indexOf(startMarker);
         const end = deliveriesScreen.indexOf(endMarker, start);
-        assert.ok(start >= 0 && end > start, 'missing helper source: ' + startMarker);
+        assert.ok(start >= 0 && end > start, 'missing page source: ' + startMarker);
         return deliveriesScreen.slice(start, end);
     };
-    const pageHelpers = new Function('bridge',
-        extract('function parseResponse(', 'function dataOf(') +
-        extract('function dataOf(', 'function invoke(') +
-        extract('function invoke(', 'function toast(') +
-        '\nreturn { invoke, dataOf };'
+    const recentLoaderSource = extract(
+        'async function loadRecentCustomerSaleOrder(',
+        'function selectAnonymousCustomer('
     );
-    const createLoader = (state, bridge, consoleApi) => {
-        const helpers = pageHelpers(bridge);
-        return new Function('state', 'bridge', 'invoke', 'dataOf', 'console',
-            recentLoaderSource + '\nreturn loadRecentCustomerSaleOrder;'
-        )(state, bridge, helpers.invoke, helpers.dataOf, consoleApi);
-    };
+    assert.ok(recentLoaderSource.includes("recentSaleCustomersBridgeClient.invoke("),
+        'the real page loader must use the asynchronous callback bridge, not direct SQLite calls');
+    assert.ok(recentLoaderSource.includes("'getRecentSaleCustomerIds'"),
+        'the operation name must match the canonical Android Bridge API');
+    assert.ok(recentLoaderSource.includes('state.recentSaleCustomersRequestGeneration'),
+        'the page loader must guard against superseded responses');
+    assert.ok(recentLoaderSource.includes('sameRecentCustomerOrder'),
+        'the page loader must compare rankings before replacing state');
+    assert.ok(recentLoaderSource.includes('state.recentSaleCustomerIds = [];'),
+        'failed current requests must remove stale ranking data');
 
-    const called = [];
-    const successBridge = {
-        getRecentSaleCustomerIds() {
-            called.push('getRecentSaleCustomerIds');
-            return JSON.stringify({
-                success: true,
-                data: [{ party_id: 31 }, { customer_party_id: '22' }, 31, 0, -3, { id: 'bad' }]
-            });
+    const dataOfSource = extract('function dataOf(', 'function invoke(');
+    const dataOf = new Function(dataOfSource + '\nreturn dataOf;')();
+    const createLoader = (state, asyncClient, consoleApi) => new Function(
+        'state', 'recentSaleCustomersBridgeClient', 'dataOf', 'console',
+        recentLoaderSource + '\nreturn loadRecentCustomerSaleOrder;'
+    )(state, asyncClient, dataOf, consoleApi);
+
+    const validIds = [
+        { party_id: 31 },
+        { customer_party_id: '22' },
+        31,
+        0,
+        -3,
+        { id: 'bad' }
+    ];
+    let successCalls = 0;
+    const successClient = {
+        invoke(operation, args) {
+            successCalls++;
+            assert.equal(operation, 'getRecentSaleCustomerIds');
+            assert.deepEqual(args, []);
+            return Promise.resolve({ success: true, data: validIds });
         }
     };
-    const successState = { recentSaleCustomerIds: [], recentSaleCustomersLoadedAt: 0, recentSaleCustomersPromise: null };
-    const successLoader = createLoader(successState, successBridge, { warn() {} });
-    const successIds = await successLoader();
-    assert.deepEqual(Array.from(successIds), [31, 22],
-        'the real page loader must normalize, validate and deduplicate IDs');
-    assert.deepEqual(called, ['getRecentSaleCustomerIds'],
-        'the new Android Bridge API must be invoked exactly once');
-    assert.ok(successState.recentSaleCustomersLoadedAt > 0, 'valid results must be cached');
+    const successState = {
+        recentSaleCustomerIds: [],
+        recentSaleCustomersLoadedAt: 0,
+        recentSaleCustomersPromise: null,
+        recentSaleCustomersRequestGeneration: 0
+    };
+    const successLoader = createLoader(successState, successClient, { warn() {} });
+    const successfulResult = await successLoader();
+    assert.deepEqual(Array.from(successfulResult.ids), [31, 22],
+        'the page must normalize, validate and deduplicate returned customer IDs');
+    assert.equal(successfulResult.changed, true);
+    assert.equal(successCalls, 1);
+    assert.ok(successState.recentSaleCustomersLoadedAt > 0);
 
-    const missingState = { recentSaleCustomerIds: [91], recentSaleCustomersLoadedAt: Date.now(), recentSaleCustomersPromise: null };
+    // An unchanged result refreshes the TTL without replacing the array or rebuilding UI.
+    const cachedArray = successState.recentSaleCustomerIds;
+    successState.recentSaleCustomersLoadedAt = 0;
+    const unchangedResult = await successLoader(true);
+    assert.equal(unchangedResult.changed, false,
+        'an unchanged ranking must not request a list rebuild');
+    assert.equal(successState.recentSaleCustomerIds, cachedArray,
+        'an unchanged ranking must retain the existing array instance');
+    assert.equal(successCalls, 2);
+    const cachedResult = await successLoader();
+    assert.equal(cachedResult.cached, true,
+        'the 30-second cache must avoid unnecessary native database calls');
+    assert.equal(successCalls, 2);
+
+    // Empty recent results must remain a valid result; ordinary customers are not removed.
+    const emptyState = {
+        recentSaleCustomerIds: [],
+        recentSaleCustomersLoadedAt: 0,
+        recentSaleCustomersPromise: null,
+        recentSaleCustomersRequestGeneration: 0
+    };
+    const emptyLoader = createLoader(emptyState, {
+        invoke: () => Promise.resolve({ success: true, data: [] })
+    }, { warn() {} });
+    const emptyResult = await emptyLoader();
+    assert.deepEqual(Array.from(emptyResult.ids), []);
+    assert.equal(emptyResult.failed, undefined);
+
+    const missingState = {
+        recentSaleCustomerIds: [91],
+        recentSaleCustomersLoadedAt: Date.now(),
+        recentSaleCustomersPromise: null,
+        recentSaleCustomersRequestGeneration: 0
+    };
     const missingWarnings = [];
-    const missingLoader = createLoader(missingState, {}, { warn: (...args) => missingWarnings.push(args) });
-    const missingIds = await missingLoader(true);
-    assert.deepEqual(Array.from(missingIds), [],
-        'a missing new Bridge method must not silently retain stale customer IDs');
+    const missingLoader = createLoader(missingState, null, {
+        warn: (...args) => missingWarnings.push(args)
+    });
+    const missingResult = await missingLoader(true);
+    assert.deepEqual(Array.from(missingResult.ids), [],
+        'an unavailable async bridge must not preserve stale recent IDs');
     assert.equal(missingState.recentSaleCustomersLoadedAt, 0);
-    assert.match(String(missingWarnings[0] && missingWarnings[0].join(' ')), /getRecentSaleCustomerIds/);
+    assert.match(String(missingWarnings[0] && missingWarnings[0].join(' ')), /غير متاحة/);
 
-    const malformedState = { recentSaleCustomerIds: [81], recentSaleCustomersLoadedAt: Date.now(), recentSaleCustomersPromise: null };
+    const malformedState = {
+        recentSaleCustomerIds: [81],
+        recentSaleCustomersLoadedAt: Date.now(),
+        recentSaleCustomersPromise: null,
+        recentSaleCustomersRequestGeneration: 0
+    };
     const malformedWarnings = [];
-    const malformedBridge = {
-        getRecentSaleCustomerIds() {
-            return JSON.stringify({ success: true, data: { ids: [71] } });
-        }
-    };
-    const malformedLoader = createLoader(malformedState, malformedBridge, { warn: (...args) => malformedWarnings.push(args) });
-    const malformedIds = await malformedLoader(true);
-    assert.deepEqual(Array.from(malformedIds), [], 'malformed success data must not become a cached empty ranking');
+    const malformedLoader = createLoader(malformedState, {
+        invoke: () => Promise.resolve({ success: true, data: { ids: [71] } })
+    }, { warn: (...args) => malformedWarnings.push(args) });
+    const malformedResult = await malformedLoader(true);
+    assert.deepEqual(Array.from(malformedResult.ids), []);
     assert.equal(malformedState.recentSaleCustomersLoadedAt, 0);
-    assert.match(String(malformedWarnings[0] && malformedWarnings[0].join(' ')), /مصفوفة معرفات العملاء/);
+    assert.match(String(malformedWarnings[0] && malformedWarnings[0].join(' ')),
+        /مصفوفة معرفات العملاء/);
 
-    const failedState = { recentSaleCustomerIds: [71], recentSaleCustomersLoadedAt: Date.now(), recentSaleCustomersPromise: null };
+    const failedState = {
+        recentSaleCustomerIds: [71],
+        recentSaleCustomersLoadedAt: Date.now(),
+        recentSaleCustomersPromise: null,
+        recentSaleCustomersRequestGeneration: 0
+    };
     const failedWarnings = [];
-    const failedBridge = {
-        getRecentSaleCustomerIds() {
-            return JSON.stringify({ success: false, error: 'SQLite recent customer query failed' });
+    const failedLoader = createLoader(failedState, {
+        invoke: () => Promise.reject(new Error('SQLite recent customer query failed'))
+    }, { warn: (...args) => failedWarnings.push(args) });
+    const failedResult = await failedLoader(true);
+    assert.deepEqual(Array.from(failedResult.ids), [],
+        'SQLite read errors must not leave stale ranking IDs');
+    assert.equal(failedState.recentSaleCustomersLoadedAt, 0);
+    assert.match(String(failedWarnings[0] && failedWarnings[0].join(' ')),
+        /SQLite recent customer query failed/);
+
+    // Simulate a slow native query: the real create-modal function must show the
+    // form before starting the extra lookup, and must not await the pending response.
+    const contextSource = extract('async function loadFormContext()', '/* CREATE MODAL */');
+    assert.equal(contextSource.includes('loadRecentCustomerSaleOrder'), false,
+        'loadFormContext must not schedule ranking work before the modal is opened');
+    const openCreateSource = extract('async function openCreateModal()', '/* EDIT MODAL */');
+    const openEvents = [];
+    let releaseSlowQuery;
+    const slowQuery = new Promise(resolve => { releaseSlowQuery = resolve; });
+    const slowState = {
+        recentSaleCustomerIds: [],
+        recentSaleCustomersLoadedAt: 0,
+        recentSaleCustomersPromise: null,
+        recentSaleCustomersRequestGeneration: 0
+    };
+    const slowClient = {
+        invoke(operation) {
+            openEvents.push('sqlite-request-started:' + operation);
+            return slowQuery;
         }
     };
-    const failedLoader = createLoader(failedState, failedBridge, { warn: (...args) => failedWarnings.push(args) });
-    const failedIds = await failedLoader(true);
-    assert.deepEqual(Array.from(failedIds), [], 'SQLite read errors must not leave stale ranking IDs');
-    assert.equal(failedState.recentSaleCustomersLoadedAt, 0);
-    assert.match(String(failedWarnings[0] && failedWarnings[0].join(' ')), /SQLite recent customer query failed/);
+    const slowLoader = createLoader(slowState, slowClient, { warn() {} });
+    const formField = { textContent: '', focus() {} };
+    const createModal = new Function(
+        'resetForm', '$', 'loadFormContext', 'openModal', 'setTimeout',
+        'loadRecentCustomerSaleOrder',
+        openCreateSource + '\nreturn openCreateModal;'
+    )(
+        () => openEvents.push('reset'),
+        id => id === 'formTitle' ? formField : formField,
+        () => { openEvents.push('form-context-ready'); return Promise.resolve(); },
+        id => openEvents.push('modal-opened:' + id),
+        () => 0,
+        slowLoader
+    );
+    await createModal();
+    await Promise.resolve();
+    assert.ok(openEvents.indexOf('modal-opened:formModal') >= 0);
+    assert.ok(
+        openEvents.indexOf('modal-opened:formModal') <
+        openEvents.indexOf('sqlite-request-started:getRecentSaleCustomerIds'),
+        'the form must be visible before the asynchronous SQLite query begins'
+    );
+    assert.equal(slowState.recentSaleCustomersLoadedAt, 0,
+        'the open form must not wait for the delayed database response');
+    releaseSlowQuery({ success: true, data: [44] });
+    await slowState.recentSaleCustomersPromise;
+    assert.deepEqual(Array.from(slowState.recentSaleCustomerIds), [44]);
+
+    // A user can continue searching while the native query is pending. On completion,
+    // the exact latest search text is used; a closed menu/selected customer is untouched.
+    const focusStart = deliveriesScreen.indexOf("$('f_party_display').addEventListener('focus', () => {");
+    const focusEnd = deliveriesScreen.indexOf("    $('f_party_display').addEventListener('input'", focusStart);
+    assert.ok(focusStart >= 0 && focusEnd > focusStart, 'customer focus refresh handler must exist');
+    const focusSource = deliveriesScreen.slice(focusStart, focusEnd);
+    const focusListeners = {};
+    const focusField = {
+        value: '',
+        addEventListener(eventName, handler) { focusListeners[eventName] = handler; }
+    };
+    let menuVisible = true;
+    const menuNode = { classList: { contains: () => menuVisible } };
+    const renderedQueries = [];
+    const focusState = {
+        recentSaleCustomerIds: [],
+        recentSaleCustomersLoadedAt: 0,
+        recentSaleCustomersPromise: null,
+        recentSaleCustomersRequestGeneration: 0
+    };
+    let releaseFocusQuery;
+    const focusLoader = createLoader(focusState, {
+        invoke: () => new Promise(resolve => { releaseFocusQuery = resolve; })
+    }, { warn() {} });
+    new Function('$', 'renderCustomerMenu', 'loadRecentCustomerSaleOrder', 'document',
+        focusSource
+    )(
+        id => id === 'f_party_display' ? focusField : menuNode,
+        query => renderedQueries.push(query),
+        focusLoader,
+        { get activeElement() { return focusField; } }
+    );
+    focusListeners.focus();
+    focusField.value = 'عميل بحثه تغير أثناء الانتظار';
+    releaseFocusQuery({ success: true, data: [5] });
+    await focusState.recentSaleCustomersPromise;
+    await Promise.resolve();
+    assert.equal(renderedQueries[0], '',
+        'the customer menu must appear immediately on focus');
+    assert.equal(renderedQueries.at(-1), 'عميل بحثه تغير أثناء الانتظار',
+        'a delayed ranking result must use the latest search query');
+
+    // Selecting a customer closes the menu. A late response may update ranking state,
+    // but it must neither reopen the menu nor change the user's current selection.
+    const selectedFocusState = {
+        recentSaleCustomerIds: [],
+        recentSaleCustomersLoadedAt: 0,
+        recentSaleCustomersPromise: null,
+        recentSaleCustomersRequestGeneration: 0
+    };
+    let releaseSelectedQuery;
+    const selectedFocusLoader = createLoader(selectedFocusState, {
+        invoke: () => new Promise(resolve => { releaseSelectedQuery = resolve; })
+    }, { warn() {} });
+    const selectedField = { value: '', addEventListener(eventName, handler) { focusListeners[eventName] = handler; } };
+    let selectedMenuVisible = true;
+    const selectedRendered = [];
+    new Function('$', 'renderCustomerMenu', 'loadRecentCustomerSaleOrder', 'document',
+        focusSource
+    )(
+        id => id === 'f_party_display'
+            ? selectedField
+            : { classList: { contains: () => selectedMenuVisible } },
+        query => selectedRendered.push(query),
+        selectedFocusLoader,
+        { get activeElement() { return selectedField; } }
+    );
+    focusListeners.focus();
+    selectedField.value = 'العميل الذي اختاره المستخدم';
+    selectedMenuVisible = false;
+    releaseSelectedQuery({ success: true, data: [8] });
+    await selectedFocusState.recentSaleCustomersPromise;
+    await Promise.resolve();
+    assert.equal(selectedField.value, 'العميل الذي اختاره المستخدم');
+    assert.deepEqual(selectedRendered, [''],
+        'a closed menu must not be rebuilt after the user selects a customer');
+
+    // Execute the page's actual rendering function: ranked customers lead, while
+    // customers without sales remain visible in their original relative order.
+    const customerNameSource = extract('function customerName(', 'function uniqueCustomers(');
+    const uniqueCustomersSource = extract('function uniqueCustomers(', 'async function loadCustomers(');
+    const renderSource = extract('function renderCustomerMenu(query)', '/* LATEST CUSTOMER SALE');
+    const customerName = new Function(customerNameSource + '\nreturn customerName;')();
+    const uniqueCustomers = new Function('customerName',
+        uniqueCustomersSource + '\nreturn uniqueCustomers;'
+    )(customerName);
+    const menu = {
+        innerHTML: '',
+        classList: { add() {}, remove() {}, contains: () => true },
+        querySelectorAll: () => []
+    };
+    const renderState = {
+        customers: [
+            { id: 1, name: 'عميل واحد' },
+            { id: 2, name: 'عميل اثنان' },
+            { id: 3, name: 'عميل ثلاثة' },
+            { id: 4, name: 'عميل أربعة' }
+        ],
+        recentSaleCustomerIds: [2, 1]
+    };
+    const renderMenu = new Function('state', '$', 'uniqueCustomers', 'customerName', 'esc',
+        renderSource + '\nreturn renderCustomerMenu;'
+    )(
+        renderState,
+        id => menu,
+        uniqueCustomers,
+        customerName,
+        value => String(value)
+    );
+    renderMenu('');
+    const rankTwoAt = menu.innerHTML.indexOf('data-id="2"');
+    const rankOneAt = menu.innerHTML.indexOf('data-id="1"');
+    const noSaleThreeAt = menu.innerHTML.indexOf('data-id="3"');
+    const noSaleFourAt = menu.innerHTML.indexOf('data-id="4"');
+    assert.ok(rankTwoAt >= 0 && rankTwoAt < rankOneAt);
+    assert.ok(rankOneAt < noSaleThreeAt && noSaleThreeAt < noSaleFourAt,
+        'customers without prior sales must remain visible in their original order');
+    renderMenu('ثلاثة');
+    assert.ok(menu.innerHTML.includes('data-id="3"'),
+        'search must still find a customer regardless of its recent-sale rank');
+    assert.equal(menu.innerHTML.includes('data-id="2"'), false,
+        'search must filter the ranked list without changing the selected customer');
 
     assert.match(deliveriesScreen, /function uniqueCustomers\(customers\)/,
         'deliveries.html must remove duplicate customers before rendering the menu');

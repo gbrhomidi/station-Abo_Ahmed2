@@ -2790,6 +2790,7 @@
     class="toast">
 </div>
 
+<script src="file:///android_asset/assets-local/js/fuel-sales-async-bridge.js"></script>
 <script>
 (() => {
 
@@ -2800,6 +2801,17 @@
        ================================================================ */
 
     const bridge = window.AndroidInterface;
+
+    // The ranking lookup uses the native IO bridge. The acknowledgement returns
+    // immediately; SQLite results arrive later through __fuelSalesNativeResult.
+    const recentSaleCustomersBridgeClient = window.FuelSalesAsyncBridge
+        ? window.FuelSalesAsyncBridge.create(bridge, { timeoutMs: 15000 })
+        : null;
+
+    window.__fuelSalesNativeResult = function(requestId, response) {
+        if (!recentSaleCustomersBridgeClient) return false;
+        return recentSaleCustomersBridgeClient.resolve(requestId, response);
+    };
 
     const state = {
 
@@ -2825,6 +2837,7 @@
         recentSaleCustomerIds: [],
         recentSaleCustomersLoadedAt: 0,
         recentSaleCustomersPromise: null,
+        recentSaleCustomersRequestGeneration: 0,
         saleKind: 'fuel',
         saleItems: [],
 
@@ -4610,45 +4623,118 @@
         }
     }
 
+    function sameRecentCustomerOrder(left, right) {
+        return Array.isArray(left) &&
+            Array.isArray(right) &&
+            left.length === right.length &&
+            left.every((id, index) => Number(id) === Number(right[index]));
+    }
+
     async function loadRecentCustomerSaleOrder(force = false) {
         const cacheAge = Date.now() - Number(state.recentSaleCustomersLoadedAt || 0);
         if (!force && state.recentSaleCustomersLoadedAt && cacheAge < 30000) {
-            return state.recentSaleCustomerIds;
+            return {
+                ids: state.recentSaleCustomerIds,
+                changed: false,
+                cached: true
+            };
         }
-        if (state.recentSaleCustomersPromise) return state.recentSaleCustomersPromise;
-        state.recentSaleCustomersPromise = (async () => {
+        if (state.recentSaleCustomersPromise) {
+            return state.recentSaleCustomersPromise;
+        }
+
+        const requestGeneration = ++state.recentSaleCustomersRequestGeneration;
+        const requestPromise = Promise.resolve().then(async () => {
             try {
-                const response = await invoke('getRecentSaleCustomerIds');
+                if (!recentSaleCustomersBridgeClient ||
+                    typeof recentSaleCustomersBridgeClient.invoke !== 'function') {
+                    throw new Error('واجهة Android غير المتزامنة لترتيب العملاء غير متاحة.');
+                }
+
+                // This is an asynchronous acknowledgement/callback flow. Android
+                // performs the station-scoped SQLite query on Dispatchers.IO.
+                const response = await recentSaleCustomersBridgeClient.invoke(
+                    'getRecentSaleCustomerIds',
+                    []
+                );
                 const raw = dataOf(response);
                 const values = Array.isArray(raw)
                     ? raw
                     : (raw && Array.isArray(raw.data) ? raw.data : null);
+
                 if (!Array.isArray(values)) {
                     throw new Error(
                         'عقد getRecentSaleCustomerIds أعاد صيغة غير متوافقة؛ المتوقع مصفوفة معرفات العملاء.'
                     );
                 }
-                const ids = values.map(value => {
+
+                const ids = Array.from(new Set(values.map(value => {
                     if (value && typeof value === 'object') {
-                        return Number(value.party_id || value.customer_party_id || value.customer_id || value.id || 0);
+                        return Number(
+                            value.party_id ||
+                            value.customer_party_id ||
+                            value.customer_id ||
+                            value.id ||
+                            0
+                        );
                     }
                     return Number(value || 0);
-                }).filter(id => Number.isSafeInteger(id) && id > 0);
+                }).filter(id => Number.isSafeInteger(id) && id > 0)));
 
-                state.recentSaleCustomerIds = Array.from(new Set(ids));
+                // Ignore a delayed response after a newer request/context has superseded it.
+                if (requestGeneration !== state.recentSaleCustomersRequestGeneration) {
+                    return {
+                        ids: state.recentSaleCustomerIds,
+                        changed: false,
+                        stale: true
+                    };
+                }
+
+                const changed = !sameRecentCustomerOrder(state.recentSaleCustomerIds, ids);
+                if (changed) {
+                    state.recentSaleCustomerIds = ids;
+                }
                 state.recentSaleCustomersLoadedAt = Date.now();
+
+                return {
+                    ids: state.recentSaleCustomerIds,
+                    changed,
+                    cached: false
+                };
             } catch (error) {
-                // Do not retain stale or partial customer ranking after a failed read.
+                if (requestGeneration !== state.recentSaleCustomersRequestGeneration) {
+                    return {
+                        ids: state.recentSaleCustomerIds,
+                        changed: false,
+                        stale: true
+                    };
+                }
+
+                const changed = state.recentSaleCustomerIds.length > 0;
+                // Never display a stale ranking as though it were a current result.
                 state.recentSaleCustomerIds = [];
                 state.recentSaleCustomersLoadedAt = 0;
-                console.warn('[Deliveries] Recent customer-sale order unavailable:', error.message || error);
-            } finally {
+                console.warn(
+                    '[Deliveries] Recent customer-sale order unavailable:',
+                    error.message || error
+                );
+                return {
+                    ids: state.recentSaleCustomerIds,
+                    changed,
+                    failed: true
+                };
+            }
+        }).finally(() => {
+            if (
+                requestGeneration === state.recentSaleCustomersRequestGeneration &&
+                state.recentSaleCustomersPromise === requestPromise
+            ) {
                 state.recentSaleCustomersPromise = null;
             }
-            return state.recentSaleCustomerIds;
-        })();
+        });
 
-        return state.recentSaleCustomersPromise;
+        state.recentSaleCustomersPromise = requestPromise;
+        return requestPromise;
     }
 
     function selectAnonymousCustomer() {
@@ -4673,10 +4759,17 @@
     }
 
     $('f_party_display').addEventListener('focus', () => {
+        // Show the current list immediately. A changed ranking is applied after its
+        // asynchronous SQLite response, using the field's latest search text.
         renderCustomerMenu('');
-        loadRecentCustomerSaleOrder().then(() => {
+        loadRecentCustomerSaleOrder().then(result => {
             const field = $('f_party_display');
-            if (document.activeElement === field && $('partyMenu').classList.contains('show')) {
+            if (
+                result &&
+                result.changed &&
+                document.activeElement === field &&
+                $('partyMenu').classList.contains('show')
+            ) {
                 renderCustomerMenu(field.value);
             }
         });
@@ -4696,13 +4789,17 @@
         const recentRank = new Map(
             state.recentSaleCustomerIds.map((id, index) => [String(id), index])
         );
-        const orderedCustomers = uniqueCustomers(state.customers).sort((a, b) => {
-            const aId = String(a.id ?? a.party_id ?? '');
-            const bId = String(b.id ?? b.party_id ?? '');
-            const aRank = recentRank.has(aId) ? recentRank.get(aId) : Number.MAX_SAFE_INTEGER;
-            const bRank = recentRank.has(bId) ? recentRank.get(bId) : Number.MAX_SAFE_INTEGER;
-            return aRank - bRank;
-        });
+        const orderedCustomers = uniqueCustomers(state.customers)
+            .map((customer, originalIndex) => {
+                const id = String(customer.id ?? customer.party_id ?? customer.customer_id ?? '');
+                return {
+                    customer,
+                    originalIndex,
+                    rank: recentRank.has(id) ? recentRank.get(id) : Number.MAX_SAFE_INTEGER
+                };
+            })
+            .sort((a, b) => a.rank - b.rank || a.originalIndex - b.originalIndex)
+            .map(entry => entry.customer);
         const rows = orderedCustomers
             .filter(customer => {
                 const text = (
@@ -5613,9 +5710,7 @@
             loadShifts()
         ]);
 
-        // Customer ranking is supplemental. Do not make opening the delivery form
-        // wait for this extra SQLite query; the focused customer field refreshes it.
-        void loadRecentCustomerSaleOrder(true);
+
     }
 
     /* ================================================================
@@ -5631,6 +5726,9 @@
         await loadFormContext();
 
         openModal('formModal');
+
+        // Prefetch asynchronously only after the form is visible; reuse the 30-second cache.
+        void loadRecentCustomerSaleOrder();
 
         setTimeout(() => {
             const field = $('f_party_display');
@@ -5667,6 +5765,7 @@
         );
 
         openModal('formModal');
+        void loadRecentCustomerSaleOrder();
         const feeNeedsSettlement = String(row.delivery_fee_mode || '').toLowerCase() === 'driver' &&
             number(row.delivery_service_fee ?? row.service_fee ?? 0) > 0 &&
             !['settled','exempt','none'].includes(String(row.delivery_fee_status || '').toLowerCase());
@@ -6717,6 +6816,7 @@
                 );
 
                 openModal('formModal');
+                void loadRecentCustomerSaleOrder();
 
                 setTimeout(() => {
                     const field = $('f_location');

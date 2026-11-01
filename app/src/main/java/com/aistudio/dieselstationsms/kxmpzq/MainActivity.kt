@@ -3145,7 +3145,7 @@ class MainActivity : AppCompatActivity() {
 
             val allowedOperations = setOf(
                 "formLookups", "nozzles", "resolvedPrice", "promotions",
-                "scope", "locations", "save", "update", "fuelSalesPage"
+                "scope", "locations", "getRecentSaleCustomerIds", "save", "update", "fuelSalesPage"
             )
             if (operation !in allowedOperations) {
                 return errorResponse("عملية غير مدعومة في جسر مبيعات الوقود")
@@ -3180,6 +3180,7 @@ class MainActivity : AppCompatActivity() {
                                 "promotions" -> getPriceListRecords(args.optString(0, "{}"))
                                 "scope" -> readFuelSalesScope()
                                 "locations" -> readSavedDeliveryLocationsForFuelSales()
+                                "getRecentSaleCustomerIds" -> getRecentSaleCustomerIds()
                                 "save" -> saveFuelSaleRecord(args.optString(0, "{}"))
                                 "update" -> updateFuelSaleRecord(
                                     args.optLong(0, 0L),
