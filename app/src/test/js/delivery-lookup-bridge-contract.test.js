@@ -46,8 +46,10 @@ async function run() {
     const createModal = deliveries.slice(createStart, editStart);
     assert.ok(createModal.indexOf("openModal('formModal')") >= 0,
         'the create modal must be shown immediately');
+    const rankingDispatchAt = createModal.search(/loadRecentCustomerSaleOrder\\s*\\(/);
     assert.ok(
-        createModal.indexOf("openModal('formModal')") < createModal.indexOf('loadRecentCustomerSaleOrder()'),
+        rankingDispatchAt >= 0 &&
+        createModal.indexOf("openModal('formModal')") < rankingDispatchAt,
         'the modal must be opened before ranking lookup dispatch'
     );
     assert.doesNotMatch(createModal, /await\s+loadRecentCustomerSaleOrder|await\s+loadFormContext/,
