@@ -74,7 +74,11 @@ async function run() {
         assert.ok(start >= 0 && end > start, 'missing page source: ' + startMarker);
         return deliveriesScreen.slice(start, end);
     };
-    const recentLoaderSource = extract(
+    const recentOrderHelperSource = extract(
+        'function sameRecentCustomerOrder(',
+        'async function loadRecentCustomerSaleOrder('
+    );
+    const recentLoaderSource = recentOrderHelperSource + extract(
         'async function loadRecentCustomerSaleOrder(',
         'function selectAnonymousCustomer('
     );
