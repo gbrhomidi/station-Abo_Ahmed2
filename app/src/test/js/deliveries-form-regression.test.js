@@ -304,7 +304,7 @@ async function run() {
         await waitFor(() => partyId.value === '22' && party.value === 'عميل بلا بيع سابق',
             'customer selection while ranking is pending');
         await waitFor(() => calls.latest.length === 1 && calls.latest[0] === 22,
-            'the selected customer's own latest-sale lookup');
+            "the selected customer's own latest-sale lookup");
         assert.equal(fee.value, '0.00',
             'a customer with no previous sale must not inherit another customer fee');
 
