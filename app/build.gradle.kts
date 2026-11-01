@@ -285,7 +285,7 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
                 "  \"failed\": " + (failures + errors) + ",",
                 "  \"skipped\": " + skipped,
                 "}"
-            ).joinToString(separator = \"\\n\", postfix = \"\\n\")
+            ).joinToString(separator = "\n", postfix = "\n")
             val output = summaryFile.get().asFile
             output.parentFile.mkdirs()
             output.writeText(summary, Charsets.UTF_8)
