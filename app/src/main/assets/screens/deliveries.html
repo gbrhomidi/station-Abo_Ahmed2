@@ -4971,8 +4971,77 @@
                     };
                 }
 
-                // Keep a valid same-station cache on temporary failure; a scope switch
-                // clears it before querying, so no previous station ranking can leak.
+                // The ranking callback may fail after the authenticated station changes.
+                // Re-read the live identity before keeping either customer rows or a cached
+                // ranking. This check is asynchronous and never blocks the open form.
+                let verifiedScopeKey = '';
+                try {
+                    const verification = await client.invoke('scope', []);
+                    const verificationPayload = dataOf(verification) || verification || {};
+                    const verifiedUserId = Number(
+                        verification.user_id ??
+                        verificationPayload.user_id ??
+                        (verificationPayload.data && verificationPayload.data.user_id) ??
+                        0
+                    );
+                    const verifiedStationId = Number(
+                        verification.station_id ??
+                        verificationPayload.station_id ??
+                        (verificationPayload.data && verificationPayload.data.station_id) ??
+                        0
+                    );
+                    if (
+                        Number.isSafeInteger(verifiedUserId) &&
+                        verifiedUserId > 0 &&
+                        Number.isSafeInteger(verifiedStationId) &&
+                        verifiedStationId > 0
+                    ) {
+                        verifiedScopeKey = String(verifiedUserId) + ':' + String(verifiedStationId);
+                    }
+                } catch (scopeError) {
+                    console.warn(
+                        '[Deliveries] Customer scope recheck failed after ranking error:',
+                        scopeError.message || scopeError
+                    );
+                }
+
+                // Another request may have advanced the scope while this verification
+                // was in flight. Never invalidate that newer state.
+                if (
+                    requestGeneration !== state.recentSaleCustomersRequestGeneration ||
+                    state.recentSaleCustomersScopeKey !== scope.scopeKey
+                ) {
+                    return {
+                        ids: state.recentSaleCustomerIds,
+                        changed: false,
+                        stale: true
+                    };
+                }
+
+                if (!verifiedScopeKey || verifiedScopeKey !== scope.scopeKey) {
+                    // Fail closed if the active identity changed or can no longer be
+                    // verified. Clear old-station customers/ranking immediately, then
+                    // asynchronously reload the authenticated station and its customer rows.
+                    invalidateRecentCustomerScope();
+                    window.setTimeout(() => {
+                        void loadRecentCustomerSaleOrder(true).then(result => {
+                            if (result && result.changed) refreshOpenCustomerMenu();
+                        });
+                    }, 0);
+                    console.warn(
+                        '[Deliveries] Customer scope changed or could not be revalidated after ranking failure; stale rows were discarded.'
+                    );
+                    return {
+                        ids: state.recentSaleCustomerIds,
+                        changed: true,
+                        failed: true,
+                        stale: true,
+                        scopeUnavailable: !verifiedScopeKey
+                    };
+                }
+
+                // Same-station transient read failure: keep its last valid ranking and
+                // retry after a short backoff. Cross-station data was handled above.
                 state.recentSaleCustomersRetryScopeKey = scope.scopeKey;
                 state.recentSaleCustomersRetryAfter = Date.now() + 5000;
                 console.warn(
