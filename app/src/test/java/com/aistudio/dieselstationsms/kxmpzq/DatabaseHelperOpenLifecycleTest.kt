@@ -136,7 +136,7 @@ class DatabaseHelperOpenLifecycleTest {
         helper.close()
 
         val upgraded = helper.writableDatabase
-        assertEquals(49, upgraded.version)
+        assertEquals(DatabaseHelper.VERSION, upgraded.version)
         val preserved = upgraded.rawQuery(
             "SELECT setting_value FROM settings WHERE setting_key = ?",
             arrayOf(marker)
