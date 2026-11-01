@@ -176,7 +176,7 @@ class CustodyWorkshopAcceptanceRobolectricTest {
             require(caseNumber in 1..200) { "Acceptance case number is outside 001..200: " + id }
             require(!resolved.containsKey(id)) { "Duplicate acceptance case ID '" + id + "'" }
             val route = resolveCaseRoute(definition)
-            require(routeCoverage.add(Triple(route.domain, route.scenario, route.dimension)) {
+            require(routeCoverage.add(Triple(route.domain, route.scenario, route.dimension))) {
                 "Duplicate executable route/dimension for case '" + id + "'"
             }
             resolved[id] = CatalogueCase(definition, route, caseNumber)

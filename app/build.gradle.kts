@@ -275,15 +275,17 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
                 skipped += xmlCount(attributes, "skipped", xmlFile)
             }
             val passed = tests - failures - errors - skipped
-            val summary = """{
-  "task": """" + taskNameForXmlSummary + """",
-  "source": "Gradle JUnit XML",
-  "xml_files": """ + xmlFiles.size + """,
-  "tests": """ + tests + """,
-  "passed": """ + passed + """,
-  "failed": """ + (failures + errors) + """,
-  "skipped": """ + skipped + """
-}""" + "\n"
+            val summary = listOf(
+                "{",
+                "  \"task\": \"" + taskNameForXmlSummary + "\",",
+                "  \"source\": \"Gradle JUnit XML\",",
+                "  \"xml_files\": " + xmlFiles.size + ",",
+                "  \"tests\": " + tests + ",",
+                "  \"passed\": " + passed + ",",
+                "  \"failed\": " + (failures + errors) + ",",
+                "  \"skipped\": " + skipped,
+                "}"
+            ).joinToString(separator = \"\\n\", postfix = \"\\n\")
             val output = summaryFile.get().asFile
             output.parentFile.mkdirs()
             output.writeText(summary, Charsets.UTF_8)
