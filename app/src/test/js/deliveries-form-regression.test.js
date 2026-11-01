@@ -120,6 +120,8 @@ async function run() {
         const party = document.getElementById('f_party_display');
         const menu = document.getElementById('partyMenu');
         const openCustomerPicker = () => {
+            party.value = '';
+            party.dispatchEvent(new window.Event('input', { bubbles: true }));
             party.blur();
             party.focus();
         };
