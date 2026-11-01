@@ -150,8 +150,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         @JvmStatic
         fun getInstance(context: Context): DatabaseHelper = synchronized(this) {
-            instance ?: DatabaseHelper(context.applicationContext).also {
-                instance = it
+            val applicationContext = context.applicationContext
+            val current = instance
+
+            when {
+                current == null -> DatabaseHelper(applicationContext).also {
+                    instance = it
+                }
+                current.contextRef === applicationContext -> current
+                else -> {
+                    // Android has one stable Application context per process. Tests,
+                    // isolated processes, and wrapped app contexts may use a different
+                    // application context/database directory; never leak the previous
+                    // SQLiteOpenHelper into that context.
+                    current.close()
+                    DatabaseHelper(applicationContext).also {
+                        instance = it
+                    }
+                }
             }
         }
 

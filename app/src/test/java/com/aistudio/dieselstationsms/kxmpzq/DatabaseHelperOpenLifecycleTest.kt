@@ -8,6 +8,8 @@ import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -75,6 +77,27 @@ class DatabaseHelperOpenLifecycleTest {
     fun tearDown() {
         helper.close()
         testRoot.deleteRecursively()
+    }
+
+    @Test
+    fun singletonIsStableForOneApplicationContextAndReboundForAnother() {
+        val firstContext = ApplicationProvider.getApplicationContext<Context>()
+        val firstHelper = DatabaseHelper.getInstance(firstContext)
+
+        val secondContext = object : ContextWrapper(firstContext) {
+            override fun getApplicationContext(): Context = this
+        }
+        val secondHelper = DatabaseHelper.getInstance(secondContext)
+
+        assertNotSame("a helper must not retain a different app context's database path", firstHelper, secondHelper)
+        assertSame(secondHelper, DatabaseHelper.getInstance(secondContext))
+
+        DatabaseHelper.closeInstance()
+        assertSame(
+            "closing connections must not replace the process helper for the same context",
+            secondHelper,
+            DatabaseHelper.getInstance(secondContext)
+        )
     }
 
     @Test
