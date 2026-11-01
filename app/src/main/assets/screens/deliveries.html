@@ -6090,7 +6090,7 @@
         $('formTitle').textContent = 'إضافة توصيل جديد';
         openModal('formModal');
 
-        void loadRecentCustomerSaleOrder().then(result => {
+        void loadRecentCustomerSaleOrder(true).then(result => {
             if (result && result.changed) refreshOpenCustomerMenu();
         });
         scheduleDeliveryFormLookups();
@@ -6118,7 +6118,7 @@
         }
 
         openModal('formModal');
-        void loadRecentCustomerSaleOrder().then(result => {
+        void loadRecentCustomerSaleOrder(true).then(result => {
             if (result && result.changed) refreshOpenCustomerMenu();
         });
 
