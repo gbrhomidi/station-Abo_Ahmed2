@@ -3145,7 +3145,7 @@ class MainActivity : AppCompatActivity() {
 
             val allowedOperations = setOf(
                 "formLookups", "nozzles", "resolvedPrice", "promotions",
-                "locations", "save", "update", "fuelSalesPage"
+                "scope", "locations", "save", "update", "fuelSalesPage"
             )
             if (operation !in allowedOperations) {
                 return errorResponse("عملية غير مدعومة في جسر مبيعات الوقود")
@@ -3178,6 +3178,7 @@ class MainActivity : AppCompatActivity() {
                                 "nozzles" -> getPumpNozzles(args.optString(0, "{}"))
                                 "resolvedPrice" -> getResolvedFuelSalePrice(args.optString(0, "{}"))
                                 "promotions" -> getPriceListRecords(args.optString(0, "{}"))
+                                "scope" -> readFuelSalesScope()
                                 "locations" -> readSavedDeliveryLocationsForFuelSales()
                                 "save" -> saveFuelSaleRecord(args.optString(0, "{}"))
                                 "update" -> updateFuelSaleRecord(
@@ -12394,14 +12395,40 @@ fun getDashboardStats(jsonData: String = "{}"): String {
          * Fuel-sales JavaScript must use the asynchronous allowlisted endpoint, not a
          * second synchronous @JavascriptInterface surface for the same SQLite read.
          */
+        /**
+         * Returns the authenticated cache namespace used by fuel-sales autocomplete.
+         * This read-only scope check does not load the locations list.
+         */
+        private fun readFuelSalesScope(): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val userId = activity.currentUserId
+                require(userId > 0L) { "لا توجد جلسة مستخدم صالحة" }
+                val stationId = requireCurrentStationId(db, userId)
+                JSONObject().apply {
+                    put("success", true)
+                    put("user_id", userId)
+                    put("station_id", stationId)
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("FuelSalesScope", e)
+                errorResponse(e.message ?: "تعذر تحديد نطاق المستخدم والمحطة")
+            }
+        }
+
         private fun readSavedDeliveryLocationsForFuelSales(): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val stationId = requireCurrentStationId(db, activity.currentUserId)
-                DeliveryLookupBridgeContract.savedLocations(db, stationId) { exception ->
+                val userId = activity.currentUserId
+                val stationId = requireCurrentStationId(db, userId)
+                JSONObject(DeliveryLookupBridgeContract.savedLocations(db, stationId) { exception ->
                     DebugLogger.logException("SavedDeliveryLocations", exception)
-                }
+                }).apply {
+                    put("user_id", userId)
+                    put("station_id", stationId)
+                }.toString()
             } catch (e: Exception) {
                 DebugLogger.logException("SavedDeliveryLocations", e)
                 errorResponse(e.message ?: "تعذر استرجاع مواقع التوصيل المحفوظة")
@@ -13009,6 +13036,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     put("success", true)
                     put("id", saleId)
                     put("sale_id", saleId)
+                    put("user_id", currentUserId)
+                    put("station_id", stationScopeId)
                     // total_amount is the fuel-only amount stored in fuel_sales
                     // (net after the fee only for deduct_from_sales). The invoice is separate.
                     put("quantity", input.optDouble("quantity", 0.0))
@@ -13038,7 +13067,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val immutableFields=listOf("price_per_liter","total_amount","quantity","fuel_type_id","sale_date","sale_time","business_day","sale_id","station_id","shift_id")
                 require(immutableFields.none { input.has(it) && !input.isNull(it) }) { "لا يمكن تعديل السعر أو الكمية أو التاريخ أو نطاق عملية بيع محفوظة" }
                 val rows=db.updateOperationalRecord("fuel_sales",id,operationalScopedJson(input.toString()),a.currentUserId)
-                if(rows>0)dataResponseObject(JSONObject().apply{put("success",true);put("message","تم تعديل الحقول المسموح بها فقط والتحقق من SQLite");put("record",db.getOperationalRecord("fuel_sales",id)?:JSONObject());put("station_id",stationId)}).toString() else successResponse(false,"لم يتم العثور على عملية البيع")
+                if(rows>0)dataResponseObject(JSONObject().apply{put("success",true);put("message","تم تعديل الحقول المسموح بها فقط والتحقق من SQLite");put("record",db.getOperationalRecord("fuel_sales",id)?:JSONObject());put("user_id",a.currentUserId);put("station_id",stationId)}).toString() else successResponse(false,"لم يتم العثور على عملية البيع")
             } catch(e:Exception){DebugLogger.logException("UpdateFuelSaleRecord",e);errorResponse(e.message?:"فشل تعديل عملية البيع")}
         }
         @JavascriptInterface

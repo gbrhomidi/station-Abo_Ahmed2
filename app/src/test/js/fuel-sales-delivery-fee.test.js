@@ -40,6 +40,7 @@ async function runUiRegression() {
     let deferredLocationRequest = null;
     let deferFirstLocationRead = true;
     let failNextWrite = false;
+    let activeScope = { user_id: 11, station_id: 1 };
 
     const dom = new JSDOM(html, {
         runScripts: 'outside-only',
@@ -57,6 +58,9 @@ async function runUiRegression() {
             calls.operations.push(operation);
             let response;
             switch (operation) {
+                case 'scope':
+                    response = { success: true, ...activeScope };
+                    break;
                 case 'fuelSalesPage':
                     response = { success: true, data: { rows: lastSavedRow ? [lastSavedRow] : [] } };
                     break;
@@ -72,9 +76,13 @@ async function runUiRegression() {
                 case 'nozzles':
                     response = { success: true, data: [{ id: 5, nozzle_number: 'A', nozzle_code: 'TEST-A', fuel_type_id: 1 }] };
                     break;
-                case 'locations':
-                    response = { success: true, data: ['حي المحطة', '  حي المحطة  '] };
+                case 'locations': {
+                    const locationRows = activeScope.station_id === 2
+                        ? (activeScope.user_id === 33 ? ['موقع مستخدم جديد'] : ['موقع المحطة الثانية'])
+                        : ['حي المحطة', '  حي المحطة  ', 'Main Road', 'main   road', 'Cafe\u0301 Road', 'Café Road'];
+                    response = { success: true, data: locationRows, ...activeScope };
                     break;
+                }
                 case 'promotions':
                     response = { success: true, data: [] };
                     break;
@@ -125,6 +133,8 @@ async function runUiRegression() {
                         gross_amount: grossAmount,
                         invoice_total: invoiceTotal,
                         delivery_fee_display_total: invoiceTotal,
+                        user_id: activeScope.user_id,
+                        station_id: activeScope.station_id,
                         delivery_fee_accounting: { success: true, mode },
                         sms: { queued: false }
                     };
@@ -145,7 +155,7 @@ async function runUiRegression() {
                         delivery_service_fee: Number(payload.delivery_service_fee || 0),
                         delivery_fee_mode: payload.delivery_fee_mode
                     };
-                    response = { success: true, data: { sale_id: lastSavedRow.sale_id } };
+                    response = { success: true, data: { sale_id: lastSavedRow.sale_id, ...activeScope } };
                     break;
                 }
                 default:
@@ -286,6 +296,10 @@ async function runUiRegression() {
             'the older SQLite snapshot must not erase a location just confirmed by the sale');
         assert.equal(mergedLocations.filter(value => value === 'حي المحطة').length, 1,
             'duplicate values from SQLite must normalize to one suggestion');
+        assert.equal(mergedLocations.filter(value => value.toLowerCase() === 'main road').length, 1,
+            'case and repeated whitespace differences must collapse to one location');
+        assert.equal(mergedLocations.filter(value => value === 'Café Road').length, 1,
+            'Unicode NFC-equivalent location strings must collapse to one suggestion');
         assert.equal(mergedLocations.filter(value => value === 'شارع الاختبار').length, 1,
             'the newly saved location must remain unique after the delayed response');
 
@@ -363,6 +377,27 @@ async function runUiRegression() {
         assert.equal(reopenedSuggestions.filter(value => value === 'موقع تعديل محفوظ').length, 1,
             'the edited location must remain suggested exactly once after reopening the saved sale');
 
+        // A change of user or station invalidates the prior cache namespace in the same WebView.
+        activeScope = { user_id: 22, station_id: 2 };
+        await window.openForm(null);
+        await waitFor(() => Array.from(document.getElementById('savedDeliveryLocations').options)
+            .some(option => option.value === 'موقع المحطة الثانية'),
+            'suggestions for the newly authenticated station');
+        let scopedSuggestions = Array.from(document.getElementById('savedDeliveryLocations').options)
+            .map(option => option.value);
+        assert.deepEqual(scopedSuggestions, ['موقع المحطة الثانية'],
+            'switching station/user must discard suggestions cached under the previous scope');
+
+        activeScope = { user_id: 33, station_id: 2 };
+        await window.openForm(null);
+        await waitFor(() => Array.from(document.getElementById('savedDeliveryLocations').options)
+            .some(option => option.value === 'موقع مستخدم جديد'),
+            'suggestions for a different user assigned to the same station');
+        scopedSuggestions = Array.from(document.getElementById('savedDeliveryLocations').options)
+            .map(option => option.value);
+        assert.deepEqual(scopedSuggestions, ['موقع مستخدم جديد'],
+            'changing user identity must also invalidate the prior cache namespace');
+
         const feeGroup = document.querySelector('.delivery-fee-form-group .delivery-fee-composite');
         assert.ok(feeGroup, 'fee controls must be grouped in a dedicated layout container');
         assert.ok(feeGroup.querySelector('[data-key="delivery_fee_mode"]') &&
@@ -380,6 +415,10 @@ async function runUiRegression() {
             'Kotlin save response must expose invoice_total separately');
         assert.match(mainActivity, /put\("gross_quantity",\s*originalQuantity\)/);
         assert.match(mainActivity, /put\("gross_amount",\s*grossAmount\)/);
+        assert.match(mainActivity, /"scope"\s*->\s*readFuelSalesScope\(\)/,
+            "the async bridge must expose the authenticated cache scope");
+        assert.match(mainActivity, /put\("user_id",\s*userId\)/);
+        assert.match(mainActivity, /put\("station_id",\s*stationId\)/);
         console.log('Fuel-sales delivery-fee UI and bridge contract regression tests passed.');
     } finally {
         dom.window.close();

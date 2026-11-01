@@ -423,6 +423,152 @@ class FuelSalesDeliveryFeeRobolectricTest {
                 arrayOf(stationId.toString())))
     }
 
+    @Test
+    fun actualExecuteFuelSalesAsyncUpdatePersistsLocationAndRefreshesScopedSuggestions() {
+        val harness = createNativeAsyncBridgeHarness()
+        val bridge = harness.first
+        val webView = harness.second
+
+        val scope = invokeFuelSalesAsyncAndAwait(
+            bridge, webView, "scope-before-update-" + UUID.randomUUID().toString().take(8),
+            "scope", JSONArray()
+        )
+        assertTrue("The production scope operation must succeed: $scope", scope.optBoolean("success"))
+        assertEquals(userId, scope.optLong("user_id"))
+        assertEquals(stationId.toLong(), scope.optLong("station_id"))
+
+        val originalLocation = "موقع أصلي للتعديل-" + UUID.randomUUID().toString().take(8)
+        val input = buildFuelSaleInput(DeliveryFeeAccounting.ADD_TO_SALES, 100.0, originalLocation)
+        val saved = invokeFuelSalesAsyncAndAwait(
+            bridge, webView, "save-before-update-" + UUID.randomUUID().toString().take(8),
+            "save", JSONArray().put(input.toString())
+        )
+        assertTrue("The initial sale must be saved by the real bridge: $saved", saved.optBoolean("success"))
+        val parentSaleId = saved.optLong("sale_id", 0L)
+        assertTrue("The native save response must return a real parent sale id", parentSaleId > 0L)
+        val fuelSaleId = scalarLong(
+            "SELECT id FROM fuel_sales WHERE sale_id=? AND station_id=? ORDER BY id DESC LIMIT 1",
+            arrayOf(parentSaleId.toString(), stationId.toString())
+        )
+        assertTrue(fuelSaleId > 0L)
+        assertEquals(originalLocation, db.rawQuery(
+            "SELECT delivery_location FROM fuel_sales WHERE id=? AND station_id=?",
+            arrayOf(fuelSaleId.toString(), stationId.toString())
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            cursor.getString(0)
+        })
+
+        val journalCountBefore = scalarLong(
+            "SELECT COUNT(*) FROM journal_entries WHERE station_id=?",
+            arrayOf(stationId.toString())
+        )
+        val feeLedgerCountBefore = scalarLong(
+            "SELECT COUNT(*) FROM delivery_service_fee_ledger WHERE fuel_sale_id=? AND station_id=?",
+            arrayOf(fuelSaleId.toString(), stationId.toString())
+        )
+        val editedLocation = "موقع معدل عبر Android Bridge-" + UUID.randomUUID().toString().take(8)
+        val updateResponse = invokeFuelSalesAsyncAndAwait(
+            bridge, webView, "real-update-" + UUID.randomUUID().toString().take(8),
+            "update", JSONArray().put(fuelSaleId).put(JSONObject().put("delivery_location", editedLocation).toString())
+        )
+        assertTrue("The production update operation must commit successfully: $updateResponse",
+            updateResponse.optBoolean("success"))
+
+        assertEquals("SQLite must contain the newly committed delivery location", editedLocation,
+            db.rawQuery(
+                "SELECT delivery_location FROM fuel_sales WHERE id=? AND station_id=?",
+                arrayOf(fuelSaleId.toString(), stationId.toString())
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getString(0)
+            })
+
+        val lookup = invokeFuelSalesAsyncAndAwait(
+            bridge, webView, "locations-after-update-" + UUID.randomUUID().toString().take(8),
+            "locations", JSONArray()
+        )
+        assertTrue("The locations read after the update must succeed: $lookup", lookup.optBoolean("success"))
+        assertEquals(userId, lookup.optLong("user_id"))
+        assertEquals(stationId.toLong(), lookup.optLong("station_id"))
+        val updatedSuggestionCount = (0 until lookup.getJSONArray("data").length()).count {
+            lookup.getJSONArray("data").getString(it) == editedLocation
+        }
+        assertEquals("The updated location must be suggested exactly once", 1, updatedSuggestionCount)
+
+        assertEquals("Editing only the delivery location must not create or modify journals",
+            journalCountBefore, scalarLong(
+                "SELECT COUNT(*) FROM journal_entries WHERE station_id=?",
+                arrayOf(stationId.toString())
+            ))
+        assertEquals("Editing only the delivery location must not duplicate or remove fee ledger rows",
+            feeLedgerCountBefore, scalarLong(
+                "SELECT COUNT(*) FROM delivery_service_fee_ledger WHERE fuel_sale_id=? AND station_id=?",
+                arrayOf(fuelSaleId.toString(), stationId.toString())
+            ))
+    }
+
+    @Test
+    fun actualExecuteFuelSalesAsyncSqliteUpdateFailureDoesNotPublishUnsavedLocation() {
+        val harness = createNativeAsyncBridgeHarness()
+        val bridge = harness.first
+        val webView = harness.second
+
+        val originalLocation = "موقع ثابت قبل فشل الكتابة-" + UUID.randomUUID().toString().take(8)
+        val input = buildFuelSaleInput(DeliveryFeeAccounting.ADD_TO_SALES, 100.0, originalLocation)
+        val saved = invokeFuelSalesAsyncAndAwait(
+            bridge, webView, "save-before-forced-failure-" + UUID.randomUUID().toString().take(8),
+            "save", JSONArray().put(input.toString())
+        )
+        assertTrue("The fixture sale must be committed before inducing the failure: $saved",
+            saved.optBoolean("success"))
+        val parentSaleId = saved.optLong("sale_id", 0L)
+        val fuelSaleId = scalarLong(
+            "SELECT id FROM fuel_sales WHERE sale_id=? AND station_id=? ORDER BY id DESC LIMIT 1",
+            arrayOf(parentSaleId.toString(), stationId.toString())
+        )
+        assertTrue(fuelSaleId > 0L)
+
+        val failedLocation = "موقع يجب ألا يظهر بعد فشل SQLite-" + UUID.randomUUID().toString().take(8)
+        val triggerName = "test_fail_delivery_location_" + UUID.randomUUID().toString().replace("-", "")
+        db.execSQL(
+            "CREATE TRIGGER `" + triggerName + "` BEFORE UPDATE OF delivery_location ON fuel_sales " +
+                "WHEN OLD.id=" + fuelSaleId + " BEGIN SELECT RAISE(ABORT, 'forced SQLite delivery-location write failure'); END"
+        )
+        try {
+            val failedUpdate = invokeFuelSalesAsyncAndAwait(
+                bridge, webView, "forced-sqlite-update-failure-" + UUID.randomUUID().toString().take(8),
+                "update", JSONArray().put(fuelSaleId).put(JSONObject().put("delivery_location", failedLocation).toString())
+            )
+            assertFalse("The native bridge must report the SQLite-triggered write failure: $failedUpdate",
+                failedUpdate.optBoolean("success"))
+
+            val storedLocation = db.rawQuery(
+                "SELECT delivery_location FROM fuel_sales WHERE id=? AND station_id=?",
+                arrayOf(fuelSaleId.toString(), stationId.toString())
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getString(0)
+            }
+            assertEquals("The failed SQLite UPDATE must leave the committed value untouched",
+                originalLocation, storedLocation)
+
+            val lookup = invokeFuelSalesAsyncAndAwait(
+                bridge, webView, "locations-after-sqlite-failure-" + UUID.randomUUID().toString().take(8),
+                "locations", JSONArray()
+            )
+            assertTrue("The post-failure locations lookup must still succeed: $lookup",
+                lookup.optBoolean("success"))
+            val values = (0 until lookup.getJSONArray("data").length()).map {
+                lookup.getJSONArray("data").getString(it)
+            }
+            assertTrue("The original committed location must remain available", values.contains(originalLocation))
+            assertFalse("A location rejected by SQLite must never be offered as saved", values.contains(failedLocation))
+        } finally {
+            db.execSQL("DROP TRIGGER IF EXISTS `" + triggerName + "`")
+        }
+    }
+
     private fun createNativeAsyncBridgeHarness(): Pair<MainActivity.WebAppInterface, WebView> {
         // Do not call Activity.onCreate here: it initializes unrelated device security services.
         // The bridge's own lifecycleScope is still the real production coroutine scope.

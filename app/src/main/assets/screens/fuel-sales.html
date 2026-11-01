@@ -2240,8 +2240,9 @@ const state = {
     saleFormLookupPromise: null,
     activePromotionCache: { loadedAt: 0, rows: [] },
     pumpNozzleCache: Object.create(null),
-    savedDeliveryLocationsCache: { loadedAt: 0, rows: [] },
+    savedDeliveryLocationsCache: { scopeKey: "", loadedAt: 0, rows: [] },
     savedDeliveryLocationsRevision: 0,
+    savedDeliveryLocationScopePromise: null,
     viewMode: 'cards',
     fuelAdjustmentCache: [],
     // report state
@@ -2859,24 +2860,74 @@ async function getSaleFormLookupData() {
     return state.saleFormLookupPromise;
 }
 
+function normalizeSavedDeliveryLocationText(value) {
+    const raw = String(value == null ? '' : value);
+    const unicodeNormalized = typeof raw.normalize === 'function' ? raw.normalize('NFC') : raw;
+    return unicodeNormalized.replace(/\u00a0/g, ' ').trim().replace(/\s+/g, ' ');
+}
+
 function normalizeSavedDeliveryLocations(values) {
     const unique = new Map();
     (Array.isArray(values) ? values : []).forEach(value => {
-        const location = String(value || '').trim().replace(/\s+/g, ' ');
+        const location = normalizeSavedDeliveryLocationText(value);
         if (!location) return;
-        const key = location.toLocaleLowerCase('ar');
+        // Lowercase is locale-independent; Arabic remains unchanged while Latin names
+        // become case-insensitive regardless of the device language.
+        const key = location.toLowerCase();
         if (!unique.has(key)) unique.set(key, location);
     });
     return Array.from(unique.values()).sort((a, b) => a.localeCompare(b, 'ar'));
 }
-function rememberSavedDeliveryLocation(value) {
-    const location = String(value || '').trim().replace(/\s+/g, ' ');
+
+function deliveryLocationScopeKey(response) {
+    const value = response && response.data && typeof response.data === 'object' &&
+        !Array.isArray(response.data) ? response.data : response;
+    const userId = Number(value && (value.user_id ?? value.userId));
+    const stationId = Number(value && (value.station_id ?? value.stationId));
+    if (!Number.isSafeInteger(userId) || userId <= 0 ||
+        !Number.isSafeInteger(stationId) || stationId <= 0) return '';
+    return String(userId) + ':' + String(stationId);
+}
+
+async function resolveSavedDeliveryLocationScope() {
+    if (state.savedDeliveryLocationScopePromise) return state.savedDeliveryLocationScopePromise;
+    state.savedDeliveryLocationScopePromise = (async () => {
+        const response = parse(await invokeFuelSalesAsync('scope', []));
+        const scopeKey = deliveryLocationScopeKey(response);
+        if (!scopeKey) throw new Error('لم يرجع Android Bridge معرف المستخدم والمحطة لمقترحات مواقع التوصيل');
+
+        if (state.savedDeliveryLocationsCache.scopeKey !== scopeKey) {
+            state.savedDeliveryLocationsCache = { scopeKey, loadedAt: 0, rows: [] };
+            state.savedDeliveryLocationsRevision = Number(state.savedDeliveryLocationsRevision || 0) + 1;
+            const datalist = document.getElementById('savedDeliveryLocations');
+            if (datalist) datalist.replaceChildren();
+        }
+        return scopeKey;
+    })().finally(() => {
+        state.savedDeliveryLocationScopePromise = null;
+    });
+    return state.savedDeliveryLocationScopePromise;
+}
+
+function rememberSavedDeliveryLocation(value, confirmedResponse=null) {
+    const location = normalizeSavedDeliveryLocationText(value);
     if (!location) return;
+
+    // The native commit response is authoritative if the authenticated scope changed
+    // while this form was open. Never merge a saved location into another scope.
+    const responseScopeKey = confirmedResponse ? deliveryLocationScopeKey(confirmedResponse) : '';
+    if (responseScopeKey && state.savedDeliveryLocationsCache.scopeKey !== responseScopeKey) {
+        state.savedDeliveryLocationsCache = { scopeKey: responseScopeKey, loadedAt: 0, rows: [] };
+        state.savedDeliveryLocationsRevision = Number(state.savedDeliveryLocationsRevision || 0) + 1;
+    }
+
+    const cache = state.savedDeliveryLocationsCache;
+    if (!cache.scopeKey) return;
     const rows = normalizeSavedDeliveryLocations([
-        ...(state.savedDeliveryLocationsCache.rows || []),
+        ...(cache.rows || []),
         location
     ]);
-    state.savedDeliveryLocationsCache = { loadedAt: Date.now(), rows };
+    state.savedDeliveryLocationsCache = { scopeKey: cache.scopeKey, loadedAt: Date.now(), rows };
     state.savedDeliveryLocationsRevision = Number(state.savedDeliveryLocationsRevision || 0) + 1;
 
     const datalist = document.getElementById('savedDeliveryLocations');
@@ -2896,22 +2947,42 @@ async function loadSavedDeliveryLocationSuggestions(openToken, row=null) {
     const datalist = document.getElementById('savedDeliveryLocations');
     if (!datalist) return;
 
+    // Do not display a previous user's/station's suggestions while the authenticated
+    // scope is being revalidated for this form opening.
+    datalist.replaceChildren();
+
+    let scopeKey = '';
+    try {
+        scopeKey = await resolveSavedDeliveryLocationScope();
+    } catch (error) {
+        console.warn('[Fuel Sales] Saved delivery-location scope unavailable:', error.message || error);
+        return;
+    }
+    if (!isCurrentFuelForm(openToken) || state.savedDeliveryLocationsCache.scopeKey !== scopeKey) return;
+
     let locations = state.savedDeliveryLocationsCache.rows || [];
-    const cacheFresh = state.savedDeliveryLocationsCache.loadedAt &&
+    const cacheFresh = state.savedDeliveryLocationsCache.scopeKey === scopeKey &&
+        state.savedDeliveryLocationsCache.loadedAt &&
         Date.now() - state.savedDeliveryLocationsCache.loadedAt < 60000;
 
     if (!cacheFresh && bridge && typeof bridge.executeFuelSalesAsync === 'function') {
         const revisionAtQueryStart = Number(state.savedDeliveryLocationsRevision || 0);
         try {
-            const response = await invokeFuelSalesAsync('locations', []);
+            const response = parse(await invokeFuelSalesAsync('locations', []));
+            // The same SQLite result carries its authenticated scope. A delayed response
+            // from another account/station must never refill this datalist.
+            if (deliveryLocationScopeKey(response) !== scopeKey) {
+                throw new Error('تغير نطاق المستخدم أو المحطة أثناء تحميل مواقع التوصيل');
+            }
+            if (state.savedDeliveryLocationsCache.scopeKey !== scopeKey) return;
+
             const queriedLocations = normalizeSavedDeliveryLocations(
                 rowsFrom(response).map(item =>
-                    String(typeof item === 'string' ? item : (item.location || item.delivery_location || '')).trim()
+                    typeof item === 'string' ? item : (item.location || item.delivery_location || '')
                 )
             );
 
-            // A successful sale may add a location while this read is still in flight.
-            // Merge instead of allowing an older SQLite snapshot to erase that addition.
+            // A committed sale may add a location while this SQLite snapshot is in flight.
             const currentRevision = Number(state.savedDeliveryLocationsRevision || 0);
             locations = currentRevision === revisionAtQueryStart
                 ? queriedLocations
@@ -2919,20 +2990,20 @@ async function loadSavedDeliveryLocationSuggestions(openToken, row=null) {
                     ...queriedLocations,
                     ...(state.savedDeliveryLocationsCache.rows || [])
                 ]);
-            state.savedDeliveryLocationsCache = { loadedAt: Date.now(), rows: locations };
+            state.savedDeliveryLocationsCache = { scopeKey, loadedAt: Date.now(), rows: locations };
             state.savedDeliveryLocationsRevision = currentRevision + 1;
         } catch (error) {
             console.warn('[Fuel Sales] Saved delivery locations unavailable:', error.message || error);
         }
     }
 
-    if (!isCurrentFuelForm(openToken)) return;
+    if (!isCurrentFuelForm(openToken) || state.savedDeliveryLocationsCache.scopeKey !== scopeKey) return;
     const locationInput = document.querySelector('[data-key="delivery_location"]');
-    const currentLocation = String(
+    const currentLocation = normalizeSavedDeliveryLocationText(
         field(row, ['delivery_location','location']) ||
         locationInput?.value ||
         ''
-    ).trim();
+    );
     const suggestions = normalizeSavedDeliveryLocations([
         ...locations,
         ...(currentLocation ? [currentLocation] : [])
@@ -3417,9 +3488,9 @@ async function saveForm() {
         let result;
         if (state.editing && CFG.updateMethod) {
             result = await invokeFuelSalesAsync('update', [Number(idOf(state.editing)), JSON.stringify(payload)], 60000);
-            parse(result);
+            const confirmedUpdate = parse(result);
             recordFuelSalePerformance('save-confirmed', saveStartedAt);
-            rememberSavedDeliveryLocation(payload.delivery_location);
+            rememberSavedDeliveryLocation(payload.delivery_location, confirmedUpdate);
             showFormToast('تم تحديث عملية البيع بنجاح بعد تأكيد SQLite.', 'success');
             closeModal(null, 'formModal');
             void reloadData().catch(refreshError => console.warn('[Fuel Sales] Background refresh failed:', refreshError));
@@ -3433,7 +3504,7 @@ async function saveForm() {
             state.lastSavedSaleId = saleId;
             state.pendingIdempotencyKey = null;
             state.lastSuccessfulSaleFingerprint = fingerprint;
-            rememberSavedDeliveryLocation(payload.delivery_location);
+            rememberSavedDeliveryLocation(payload.delivery_location, saved);
             if (deliveryFeeMode === 'deduct_from_sales') {
                 // Stored quantity/total_amount are already net of the fee. Keep the form
                 // on its gross basis so updateDeliveryFeeDisplay subtracts the fee once.
