@@ -11,9 +11,21 @@ class SmsServiceLauncher(
     private val statusRepository: ServiceStatusRepository
 ) : ServiceLauncher {
 
+    companion object {
+        private val launchGate = SingleFlightLaunchGate()
+        fun releaseLaunchClaim() { launchGate.release() }
+    }
+
     override fun launch(reason: StartupReason): ServiceLaunchResult {
-        if (statusRepository.isRunning()) {
-            return ServiceLaunchResult.AlreadyRunning("Service already running (persistent)")
+        if (statusRepository.isRunning() || SMSService.getInstance() != null) {
+            return ServiceLaunchResult.AlreadyRunning("Service already running or initializing")
+        }
+        if (!launchGate.tryAcquire()) {
+            return ServiceLaunchResult.AlreadyRunning("SMSService launch is already in progress")
+        }
+        if (statusRepository.isRunning() || SMSService.getInstance() != null) {
+            launchGate.release()
+            return ServiceLaunchResult.AlreadyRunning("Service already running or initializing")
         }
 
         return try {
@@ -33,8 +45,10 @@ class SmsServiceLauncher(
             ServiceLaunchResult.Success("SMSService launch requested")
 
         } catch (e: SecurityException) {
+            launchGate.release()
             ServiceLaunchResult.Failure("Security: ${e.message}", retryable = false)
         } catch (e: Exception) {
+            launchGate.release()
             ServiceLaunchResult.Failure("Launch failed: ${e.message}", retryable = true)
         }
     }

@@ -51,7 +51,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 48
+        const val VERSION = 49
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -149,18 +149,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private var instance: DatabaseHelper? = null
 
         @JvmStatic
-        fun getInstance(context: Context): DatabaseHelper {
-            return instance ?: synchronized(this) {
-                instance ?: DatabaseHelper(context.applicationContext).also {
-                    instance = it
-                }
+        fun getInstance(context: Context): DatabaseHelper = synchronized(this) {
+            instance ?: DatabaseHelper(context.applicationContext).also {
+                instance = it
             }
         }
 
         @JvmStatic
         fun closeInstance() {
-            instance?.close()
-            instance = null
+            // Keep the process-wide helper identity stable for cached consumers.
+            // SQLiteOpenHelper reopens its connection on the next database access.
+            synchronized(this) {
+                instance?.close()
+            }
         }
     }
 
@@ -229,6 +230,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureFiscalPeriodSchema(db)
             ensureApprovalControlSchema(db)
             ensurePricingV42Schema(db)
+            ensureOpenCompatibilitySchema(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
         } finally {
@@ -300,6 +302,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureFiscalPeriodSchema(db)
             ensurePricingV41Schema(db)
             ensurePricingV42Schema(db)
+            ensureOpenCompatibilitySchema(db)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -307,62 +310,76 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     override fun onOpen(db: SQLiteDatabase) {
+        // Keep connection-open work intentionally constant-time. Compatibility DDL,
+        // indexes and data repair run once in the transactional V49 migration.
         super.onOpen(db)
-        ensureSmsMessagesTable(db)
-        ensureSmsMessagesColumns(db)
-        createNotificationTables(db)
-        ensureMessagingIndexes(db)
-        ensureContractSchema(db)
-        ensureJournalStationScopeSchema(db)
-        ensureMaintenanceScheduleStationScopeSchema(db)
-        ensureProductReferenceData(db)
-        ensureFinancialIdempotencySchema(db)
-        // Repair already-installed databases that did not receive the source column in an upgrade.
-        ensureColumn(db, "expenses", "cash_box_id", "INTEGER")
-        ensureSalesAdjustmentSchema(db)
-        ensureReportCacheTable(db)
-        // A database created by an earlier V43 build may not contain this column:
-        // V43's fresh-install path previously relied on an upgrade-only initializer.
-        // Repair that schema before ensureModule003Indexes uses business_day.
-        ensurePricingV41Schema(db)
-        createSmsProcessedTable(db)
-        createSmsProcessedHashesTable(db)
-        createSmsRateLimitsTable(db)
-        createSmsConversationContextTable(db)
-        createSmsCustomerPreferencesTable(db)
-        createSmsInteractionHistoryTable(db)
-        createSmsRecurringOrdersTable(db)
-        createSmsMetricsTable(db)
-        createSmsOtpVerificationsTable(db)
-        createUserOtpVerificationsTable(db)
-        createSmsOutboundDedupeTable(db)
-        createSmsPlatformTables(db)
-        createSmsCognitiveTables(db)
-        ensureActivityPermissions(db)
-        ensurePartyTypePermissions(db)
-        ensureModule003Indexes(db)
-        ensureFleetSchema(db)
-        ensureFleetPermissions(db)
-        ensureModule006Schema(db)
-        ensureModule007Schema(db)
-        ensureModule010Schema(db)
-        ensureDeliveriesSchema(db)
-        ensureFuelSalesSchema(db)
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_tank_ledger_tank_date ON tank_ledger(tank_id, transaction_date)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_tank_refills_station_date_fuel ON tank_refills(station_id, created_at, fuel_type_id, is_deleted)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_sales_sale_fuel_date ON fuel_sales(fuel_type_id, created_at, is_deleted)")
-        ensureLegacyAssetsSchema(db)
-        ensureVehicleTripLifecycleSchema(db)
-        createTasksTable(db)
-        ensureTaskPermissions(db)
-        ensureMessagingPermissions(db)
-        ensureSmsSettings(db)
-        ensureLegacySettingsSchema(db)
-        ensureManagementIdentitySchema(db)
-        ensureScreenPermissionsSchema(db)
-        ensureSalesPricingDefaults(db)
-        // Repair legacy COA-to-cash-box/bank links before any financial bridge can post.
-        repairSettlementAccountMappings(db)
+    }
+
+    /**
+     * Applies the legacy/open-time compatibility work once during a schema
+     * transaction. Failure propagates so SQLiteOpenHelper rolls the migration back.
+     */
+    private fun ensureOpenCompatibilitySchema(db: SQLiteDatabase) {
+        check(db.inTransaction()) { "Open compatibility schema requires an active migration transaction" }
+        val startedAtNanos = System.nanoTime()
+        try {
+            ensureSmsMessagesTable(db)
+            ensureSmsMessagesColumns(db)
+            createNotificationTables(db)
+            ensureMessagingIndexes(db)
+            ensureContractSchema(db)
+            ensureJournalStationScopeSchema(db)
+            ensureMaintenanceScheduleStationScopeSchema(db)
+            ensureProductReferenceData(db)
+            ensureFinancialIdempotencySchema(db)
+            ensureColumn(db, "expenses", "cash_box_id", "INTEGER")
+            ensureSalesAdjustmentSchema(db)
+            ensureReportCacheTable(db)
+            ensurePricingV41Schema(db)
+            createSmsProcessedTable(db)
+            createSmsProcessedHashesTable(db)
+            createSmsRateLimitsTable(db)
+            createSmsConversationContextTable(db)
+            createSmsCustomerPreferencesTable(db)
+            createSmsInteractionHistoryTable(db)
+            createSmsRecurringOrdersTable(db)
+            createSmsMetricsTable(db)
+            createSmsOtpVerificationsTable(db)
+            createUserOtpVerificationsTable(db)
+            createSmsOutboundDedupeTable(db)
+            createSmsPlatformTables(db)
+            createSmsCognitiveTables(db)
+            ensureActivityPermissions(db)
+            ensurePartyTypePermissions(db)
+            ensureModule003Indexes(db)
+            ensureFleetSchema(db)
+            ensureFleetPermissions(db)
+            ensureModule006Schema(db)
+            ensureModule007Schema(db)
+            ensureModule010Schema(db)
+            ensureDeliveriesSchema(db)
+            ensureFuelSalesSchema(db)
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_tank_ledger_tank_date ON tank_ledger(tank_id, transaction_date)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_tank_refills_station_date_fuel ON tank_refills(station_id, created_at, fuel_type_id, is_deleted)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_sales_sale_fuel_date ON fuel_sales(fuel_type_id, created_at, is_deleted)")
+            ensureLegacyAssetsSchema(db)
+            ensureVehicleTripLifecycleSchema(db)
+            createTasksTable(db)
+            ensureTaskPermissions(db)
+            ensureMessagingPermissions(db)
+            ensureSmsSettings(db)
+            ensureLegacySettingsSchema(db)
+            ensureManagementIdentitySchema(db)
+            ensureScreenPermissionsSchema(db)
+            ensureSalesPricingDefaults(db)
+            repairSettlementAccountMappings(db)
+        } catch (error: Exception) {
+            Log.e(TAG, "Open compatibility schema migration failed", error)
+            throw error
+        } finally {
+            val durationMs = (System.nanoTime() - startedAtNanos).coerceAtLeast(0L) / 1_000_000L
+            Log.i(TAG, "Open compatibility schema migration finished in ${durationMs}ms")
+        }
     }
 
     /**
@@ -25138,49 +25155,66 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun backupDatabase(): String {
         dbLock.lock()
+        var temporaryFile: File? = null
         return try {
             val dbFile = contextRef.getDatabasePath(DB_NAME)
             require(dbFile.exists()) { "ملف قاعدة البيانات غير موجود" }
-
-            // Committed pages can still live in -wal; copying only the .db file loses them.
+            // Serialize writers while copying the main database and its committed WAL.
+            // Keep the process-shared SQLiteOpenHelper open for MainActivity/SMSService.
             val liveDatabase = writableDatabase
-            val checkpoint = liveDatabase.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { cursor ->
-                require(cursor.moveToFirst()) { "لم يُرجع SQLite نتيجة WAL checkpoint" }
-                Triple(cursor.getInt(0), cursor.getInt(1), cursor.getInt(2))
-            }
-            require(checkpoint.first == 0 && (checkpoint.second < 0 || checkpoint.third >= checkpoint.second)) {
-                "تعذر إكمال WAL checkpoint؛ busy=" + checkpoint.first +
-                    ", log=" + checkpoint.second + ", checkpointed=" + checkpoint.third
-            }
-
-            // Close SQLiteOpenHelper connections after checkpoint and before snapshotting.
-            close()
-            val walFile = File(dbFile.absolutePath + "-wal")
-            require(!walFile.exists() || walFile.length() == 0L) {
-                "لا يمكن ضمان اكتمال النسخة: ملف WAL ما زال يحتوي بيانات بعد checkpoint"
-            }
-
             val backupDir = File(contextRef.getExternalFilesDir(null), "backups")
             require(backupDir.exists() || backupDir.mkdirs()) { "تعذر إنشاء مجلد النسخ" }
             val stamp = System.currentTimeMillis()
             val tempFile = File(backupDir, ".backup_" + stamp + ".tmp")
             val backupFile = File(backupDir, "backup_" + stamp + ".db")
-            dbFile.copyTo(tempFile, overwrite = true)
-            if (!tempFile.renameTo(backupFile)) {
-                tempFile.copyTo(backupFile, overwrite = true)
-                tempFile.delete()
-            }
-            require(backupFile.exists() && backupFile.length() > 0L) { "فشل إنشاء ملف النسخة" }
+            temporaryFile = tempFile
 
-            SQLiteDatabase.openDatabase(backupFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { snapshot ->
-                val integrityOk = snapshot.rawQuery("PRAGMA integrity_check", null).use { cursor ->
-                    cursor.moveToFirst() && cursor.getString(0).equals("ok", true)
+            liveDatabase.beginTransactionNonExclusive()
+            try {
+                dbFile.copyTo(tempFile, overwrite = true)
+                val sourceWal = File(dbFile.absolutePath + "-wal")
+                val copiedWal = File(tempFile.absolutePath + "-wal")
+                if (sourceWal.exists() && sourceWal.length() > 0L) {
+                    sourceWal.copyTo(copiedWal, overwrite = true)
+                } else {
+                    copiedWal.delete()
                 }
-                require(integrityOk) { "فشل integrity_check لملف النسخة الذي تم إنشاؤه" }
-                val version = snapshot.rawQuery("PRAGMA user_version", null).use { cursor ->
-                    if (cursor.moveToFirst()) cursor.getInt(0) else -1
+
+                SQLiteDatabase.openDatabase(
+                    tempFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE
+                ).use { snapshot ->
+                    val checkpoint = snapshot.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { cursor ->
+                        require(cursor.moveToFirst()) { "لم يُرجع SQLite نتيجة WAL checkpoint للنسخة" }
+                        Triple(cursor.getInt(0), cursor.getInt(1), cursor.getInt(2))
+                    }
+                    require(checkpoint.first == 0 && (checkpoint.second < 0 || checkpoint.third >= checkpoint.second)) {
+                        "تعذر إكمال WAL checkpoint للنسخة؛ busy=" + checkpoint.first +
+                            ", log=" + checkpoint.second + ", checkpointed=" + checkpoint.third
+                    }
+                    val integrityOk = snapshot.rawQuery("PRAGMA integrity_check", null).use { cursor ->
+                        cursor.moveToFirst() && cursor.getString(0).equals("ok", true)
+                    }
+                    require(integrityOk) { "فشل integrity_check لملف النسخة الذي تم إنشاؤه" }
+                    val version = snapshot.rawQuery("PRAGMA user_version", null).use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getInt(0) else -1
+                    }
+                    require(version == VERSION) { "إصدار قاعدة البيانات في النسخة غير متوافق: " + version }
                 }
-                require(version == VERSION) { "إصدار قاعدة البيانات في النسخة غير متوافق: " + version }
+
+                val remainingWal = File(tempFile.absolutePath + "-wal")
+                require(!remainingWal.exists() || remainingWal.length() == 0L) {
+                    "ملف WAL الخاص بالنسخة ما زال يحتوي بيانات بعد checkpoint"
+                }
+                remainingWal.delete()
+                File(tempFile.absolutePath + "-shm").delete()
+                if (!tempFile.renameTo(backupFile)) {
+                    tempFile.copyTo(backupFile, overwrite = true)
+                    tempFile.delete()
+                }
+                require(backupFile.exists() && backupFile.length() > 0L) { "فشل إنشاء ملف النسخة" }
+                liveDatabase.setTransactionSuccessful()
+            } finally {
+                liveDatabase.endTransaction()
             }
 
             recordBackupHistory(
@@ -25190,6 +25224,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 completedAtMillis = System.currentTimeMillis()
             )
             backupFile.absolutePath
+        } catch (error: Exception) {
+            temporaryFile?.delete()
+            temporaryFile?.let {
+                File(it.absolutePath + "-wal").delete()
+                File(it.absolutePath + "-shm").delete()
+            }
+            throw error
         } finally {
             dbLock.unlock()
         }

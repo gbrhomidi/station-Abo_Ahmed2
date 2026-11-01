@@ -2,6 +2,7 @@ package com.aistudio.dieselstationsms.kxmpzq.service
 
 import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import com.aistudio.dieselstationsms.kxmpzq.startup.ServiceStatusRepository
+import com.aistudio.dieselstationsms.kxmpzq.startup.SmsServiceLauncher
 import com.aistudio.dieselstationsms.kxmpzq.startup.StartupPerformanceMonitor
 
 import android.Manifest
@@ -330,6 +331,7 @@ class SMSService : Service() {
                         isRunning.set(true)
                     }
                     serviceStatusRepository.setRunning(true)
+                    SmsServiceLauncher.releaseLaunchClaim()
                     serviceStartupSucceeded = true
                     StartupPerformanceMonitor.mark("sms_service.ready")
                     StartupPerformanceMonitor.flushReport("sms_service_ready")
@@ -344,6 +346,7 @@ class SMSService : Service() {
                     StartupPerformanceMonitor.flushReport("sms_service_failed")
                     Log.e(TAG, "Service initialization failed: " + error.message, error)
                     serviceStatusRepository.setRunning(false)
+            SmsServiceLauncher.releaseLaunchClaim()
                     handleFatalError(error)
                 } finally {
                     StartupPerformanceMonitor.endSpan(serviceStartupSpan, serviceStartupSucceeded)
@@ -352,6 +355,7 @@ class SMSService : Service() {
         } catch (error: Exception) {
             Log.e(TAG, "Service foreground startup failed: " + error.message, error)
             serviceStatusRepository.setRunning(false)
+            SmsServiceLauncher.releaseLaunchClaim()
             handleFatalError(error)
         }
     }
@@ -468,6 +472,7 @@ class SMSService : Service() {
         isInitialized.set(false)
         isRunning.set(false)
         serviceStatusRepository.setRunning(false)
+            SmsServiceLauncher.releaseLaunchClaim()
         // Stop service-owned coroutines without cancelling the process-wide DB coordinator.
         serviceScope.cancel()
 
@@ -1899,6 +1904,7 @@ class SMSService : Service() {
                     isRunning.set(true)
                 }
                 serviceStatusRepository.setRunning(true)
+                    SmsServiceLauncher.releaseLaunchClaim()
                 logRecovery("Recovery completed successfully")
                 notifyServiceHealthy()
             } catch (cancelled: CancellationException) {
