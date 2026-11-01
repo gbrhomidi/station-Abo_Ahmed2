@@ -2858,13 +2858,22 @@ async function getSaleFormLookupData() {
     return state.saleFormLookupPromise;
 }
 
+function normalizeSavedDeliveryLocations(values) {
+    const unique = new Map();
+    (Array.isArray(values) ? values : []).forEach(value => {
+        const location = String(value || '').trim().replace(/\s+/g, ' ');
+        if (!location) return;
+        const key = location.toLocaleLowerCase('ar');
+        if (!unique.has(key)) unique.set(key, location);
+    });
+    return Array.from(unique.values()).sort((a, b) => a.localeCompare(b, 'ar'));
+}
 function rememberSavedDeliveryLocation(value) {
-    const location = String(value || '').trim();
-    if (!location) return;
-
-    const locations = new Set(state.savedDeliveryLocationsCache.rows || []);
-    locations.add(location);
-    const rows = Array.from(locations).sort((a, b) => a.localeCompare(b, 'ar'));
+    const rows = normalizeSavedDeliveryLocations([
+        ...(state.savedDeliveryLocationsCache.rows || []),
+        value
+    ]);
+    if (!rows.length) return;
     state.savedDeliveryLocationsCache = { loadedAt: Date.now(), rows };
 
     const datalist = document.getElementById('savedDeliveryLocations');
@@ -2894,6 +2903,7 @@ async function loadSavedDeliveryLocationSuggestions(openToken, row=null) {
             locations = rowsFrom(response).map(item =>
                 String(typeof item === 'string' ? item : (item.location || item.delivery_location || '')).trim()
             ).filter(Boolean);
+            locations = normalizeSavedDeliveryLocations(locations);
             state.savedDeliveryLocationsCache = { loadedAt: Date.now(), rows: locations };
         } catch (error) {
             console.warn('[Fuel Sales] Saved delivery locations unavailable:', error.message || error);
@@ -2907,10 +2917,10 @@ async function loadSavedDeliveryLocationSuggestions(openToken, row=null) {
         locationInput?.value ||
         ''
     ).trim();
-    const suggestions = Array.from(new Set([
+    const suggestions = normalizeSavedDeliveryLocations([
         ...locations,
         ...(currentLocation ? [currentLocation] : [])
-    ]));
+    ]);
     datalist.innerHTML = suggestions
         .map(location => '<option value="' + esc(location) + '"></option>')
         .join('');

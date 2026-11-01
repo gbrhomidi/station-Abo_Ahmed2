@@ -4563,6 +4563,21 @@
         );
     }
 
+    function uniqueCustomers(customers) {
+        const seen = new Set();
+        return (Array.isArray(customers) ? customers : []).filter(customer => {
+            if (!customer || typeof customer !== 'object') return false;
+            const rawId = customer.id ?? customer.party_id ?? customer.customer_id;
+            const nameKey = customerName(customer).trim().toLocaleLowerCase('ar');
+            const key = rawId !== null && rawId !== undefined && String(rawId).trim()
+                ? 'id:' + String(rawId).trim()
+                : 'name:' + nameKey;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
     async function loadCustomers() {
 
         try {
@@ -4585,7 +4600,7 @@
                 throw new Error('لا يوجد عقد فعلي لجلب العملاء.');
             }
 
-            state.customers = rowsFrom(response);
+            state.customers = uniqueCustomers(rowsFrom(response));
 
         } catch (error) {
 
@@ -4677,7 +4692,7 @@
         const recentRank = new Map(
             state.recentSaleCustomerIds.map((id, index) => [String(id), index])
         );
-        const orderedCustomers = state.customers.slice().sort((a, b) => {
+        const orderedCustomers = uniqueCustomers(state.customers).sort((a, b) => {
             const aId = String(a.id ?? a.party_id ?? '');
             const bId = String(b.id ?? b.party_id ?? '');
             const aRank = recentRank.has(aId) ? recentRank.get(aId) : Number.MAX_SAFE_INTEGER;

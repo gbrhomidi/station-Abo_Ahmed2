@@ -70,7 +70,7 @@ async function runUiRegression() {
                     response = { success: true, data: [{ id: 5, nozzle_number: 'A', nozzle_code: 'TEST-A', fuel_type_id: 1 }] };
                     break;
                 case 'locations':
-                    response = { success: true, data: [] };
+                    response = { success: true, data: ['شارع  الاختبار', ' شارع الاختبار '] };
                     break;
                 case 'promotions':
                     response = { success: true, data: [] };
@@ -149,7 +149,7 @@ async function runUiRegression() {
         const { document } = window;
         const locationList = document.getElementById('savedDeliveryLocations');
         assert.ok(locationList, 'delivery location autocomplete list must exist');
-        assert.equal(locationList.options.length, 0, 'empty SQLite location results must render as an empty suggestion list');
+        assert.equal(locationList.options.length, 1, 'SQLite location suggestions must be normalized and deduplicated');
 
         const pump = document.querySelector('[data-key="pump_id"]');
         pump.value = '3';
@@ -187,6 +187,10 @@ async function runUiRegression() {
         assert.equal(calls.saves.length, 1, 'a manually entered location must be submitted to the native SQLite bridge');
         assert.equal(calls.saves[0].delivery_location, 'شارع الاختبار');
         assert.equal(calls.saves[0].delivery_fee_mode, 'deduct_from_sales');
+        assert.equal(locationList.options.length, 1,
+            'a successful SQLite save must update the open datalist immediately without duplicates');
+        assert.equal(locationList.options[0].value, 'شارع الاختبار',
+            'the newly saved location must be immediately available as a normalized suggestion');
 
         await waitFor(() => lastSavedRow !== null, 'saved row');
         assert.equal(quantity.value, '10', 'after deduction the editor must retain gross quantity as its calculation basis');

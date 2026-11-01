@@ -38,6 +38,12 @@ async function run() {
 
     assert.match(deliveriesScreen, /invoke\(['"]getRecentSaleCustomerIds['"]\)/,
         'deliveries.html must use the current recent-customer method name');
+    assert.match(deliveriesScreen, /function uniqueCustomers\(customers\)/,
+        'deliveries.html must remove duplicate customers before rendering the menu');
+    assert.match(deliveriesScreen, /setDeliveryFeeInput\(0\)/,
+        'new and reset delivery forms must normalize the service fee to zero');
+    assert.match(deliveriesScreen, /function normalizeDeliveryFeeInput\(value\)/,
+        'delivery fee input must handle empty, dot-only and invalid values centrally');
     assert.match(mainActivity, /@JavascriptInterface\s+fun getRecentSaleCustomerIds\(\): String/,
         'the recent-customer method must remain exposed for the current deliveries caller');
 
