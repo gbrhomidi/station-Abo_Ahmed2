@@ -2,8 +2,8 @@
 """Verify the users-screen updateUser contract.
 
 This is a source/bridge contract check. The corresponding SQLite mutation,
-row isolation, missing-id result, and invalid-id rejection are executed by
-DatabaseHelperUserUpdateContractTest under the Gradle Robolectric suite.
+row isolation, employee-link preservation, missing-id result, and invalid-id
+rejection are executed by the DatabaseHelper and MainActivity Robolectric tests.
 """
 from pathlib import Path
 import re
@@ -81,6 +81,8 @@ for marker in (
     "updateUserRejectsNonPositiveIdsBeforeWriting",
     "assertEquals(\"exactly one SQLite row must be updated\", 1, affectedRows)",
     "assertEquals(\"a missing user must produce zero affected rows\", 0, affectedRows)",
+    "updateUserPreservesExistingEmployeeAssociationWhenPayloadOmitsEmployeeId",
+    "assertEquals(employeeId, userEmployeeId(targetUserId))",
 ):
     if marker not in runtime_test:
         fail(f"runtime SQLite contract test is missing: {marker}")
@@ -89,7 +91,7 @@ for marker in (
     "updateUserBridgeReturnsNotFoundWithoutChangingRows",
     "updateUserBridgeRejectsZeroNegativeIdsAndMalformedJsonWithoutPartialWrites",
     "bridge.updateUser(targetUserId, payload.toString())",
-    "employee_id is deliberately omitted",
+    "The bridge normalizer requires the employee link; submit the existing ID and verify it remains bound.",
     'assertEquals(employeeId, userLong(targetUserId, "employee_id"))',
 ):
     if marker not in bridge_test:
