@@ -406,9 +406,9 @@ async function runUiRegression() {
 
         // A delayed successful response from the previous user must not repopulate
         // the current user's datalist after the scope namespace has changed.
-        window.rememberSavedDeliveryLocation('موقع من استجابة مستخدم سابق', {
-            success: true, user_id: 22, station_id: 2
-        });
+        window.eval("rememberSavedDeliveryLocation(" +
+            JSON.stringify('موقع من استجابة مستخدم سابق') + "," +
+            JSON.stringify({ success: true, user_id: 22, station_id: 2 }) + ");");
         scopedSuggestions = Array.from(document.getElementById('savedDeliveryLocations').options)
             .map(option => option.value);
         assert.deepEqual(scopedSuggestions, ['موقع مستخدم جديد'],
