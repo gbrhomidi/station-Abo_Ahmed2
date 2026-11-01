@@ -2,6 +2,7 @@ package com.aistudio.dieselstationsms.kxmpzq
 
 import android.content.ContentValues
 import android.content.Context
+import android.content.ContextWrapper
 import androidx.test.core.app.ApplicationProvider
 import org.json.JSONObject
 import org.junit.After
@@ -13,7 +14,6 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
-import org.robolectric.android.controller.ActivityController
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.util.UUID
@@ -25,7 +25,6 @@ class MainActivityUserUpdateBridgeTest {
     private lateinit var helper: DatabaseHelper
     private lateinit var activity: MainActivity
     private lateinit var bridge: MainActivity.WebAppInterface
-    private var activityController: ActivityController<MainActivity>? = null
     private var roleId = 0L
     private var employeeId = 0L
     private var targetUserId = 0L
@@ -62,25 +61,36 @@ class MainActivityUserUpdateBridgeTest {
         targetUserId = insertUser("bridge-target", "Original Bridge Target")
         otherUserId = insertUser("bridge-other", "Untouched Bridge Other")
 
-        activityController = Robolectric.buildActivity(MainActivity::class.java).setup()
-        activity = activityController!!.get()
-
-        // Use the attached Robolectric Activity but keep the DB isolated in this test.
+        // Construct a real MainActivity instance without running onCreate().
+        // Production onCreate initializes AndroidKeyStore-backed preferences,
+        // which Robolectric's JVM sandbox does not provide. Attach only the
+        // application Context needed by Context APIs, then inject isolated test
+        // dependencies before constructing the actual inner WebAppInterface.
+        activity = MainActivity()
+        ContextWrapper::class.java.getDeclaredField("mBase").apply {
+            isAccessible = true
+            set(activity, context)
+        }
         MainActivity::class.java.getDeclaredField("dbHelper").apply {
             isAccessible = true
             set(activity, helper)
+        }
+        MainActivity::class.java.getDeclaredField("geminiHelper").apply {
+            isAccessible = true
+            set(activity, GeminiAIHelper(context))
         }
         activity.sharedPrefs = context.getSharedPreferences(
             "main_activity_user_update_bridge_test",
             Context.MODE_PRIVATE
         )
         activity.sharedPrefs.edit().clear().commit()
-        bridge = activity.WebAppInterface(activity, activity)
+        bridge = activity.WebAppInterface(context, activity)
     }
 
     @After
     fun tearDown() {
-        runCatching { activityController?.pause()?.stop()?.destroy() }
+        // No Activity lifecycle was entered, so teardown only closes the
+        // synthetic SQLite helper and clears isolated test preferences.
         DatabaseHelper.closeInstance()
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
         context.getSharedPreferences("main_activity_user_update_bridge_test", Context.MODE_PRIVATE)
