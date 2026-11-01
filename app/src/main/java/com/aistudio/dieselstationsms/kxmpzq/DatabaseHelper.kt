@@ -390,6 +390,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureScreenPermissionsSchema(db)
             ensureSalesPricingDefaults(db)
             repairSettlementAccountMappings(db)
+            CustodyWorkshopRepository.ensureSchema(db)
         } catch (error: Exception) {
             Log.e(TAG, "Open compatibility schema migration failed", error)
             throw error
