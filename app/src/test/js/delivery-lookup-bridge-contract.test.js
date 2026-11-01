@@ -63,9 +63,9 @@ async function run() {
         deliveriesScreen.includes("'getRecentSaleCustomerIds'"),
         'the page must request the named recent-customer operation asynchronously'
     );
-    assert.match(mainActivity, /"getRecentSaleCustomerIds"\\s*->\\s*getRecentSaleCustomerIds\\(\\)/,
+    assert.ok(mainActivity.includes('"getRecentSaleCustomerIds" -> getRecentSaleCustomerIds()'),
         'the IO dispatcher must route the async operation to the canonical API');
-    assert.match(mainActivity, /"getRecentSaleCustomerIds"\\s*,\\s*"save"/,
+    assert.ok(mainActivity.includes('"locations", "getRecentSaleCustomerIds", "save"'),
         'the async bridge allowlist must explicitly include recent-customer ranking');
 
     const extract = (startMarker, endMarker) => {
@@ -286,6 +286,7 @@ async function run() {
         { get activeElement() { return focusField; } }
     );
     focusListeners.focus();
+    await Promise.resolve(); // Allow the asynchronous native request to be issued.
     focusField.value = 'عميل بحثه تغير أثناء الانتظار';
     releaseFocusQuery({ success: true, data: [5] });
     await focusState.recentSaleCustomersPromise;
@@ -321,6 +322,7 @@ async function run() {
         { get activeElement() { return selectedField; } }
     );
     focusListeners.focus();
+    await Promise.resolve(); // Allow the asynchronous native request to be issued.
     selectedField.value = 'العميل الذي اختاره المستخدم';
     selectedMenuVisible = false;
     releaseSelectedQuery({ success: true, data: [8] });
@@ -334,7 +336,7 @@ async function run() {
     // customers without sales remain visible in their original relative order.
     const customerNameSource = extract('function customerName(', 'function uniqueCustomers(');
     const uniqueCustomersSource = extract('function uniqueCustomers(', 'async function loadCustomers(');
-    const renderSource = extract('function renderCustomerMenu(query)', '/* LATEST CUSTOMER SALE');
+    const renderSource = extract('function renderCustomerMenu(query)', 'function firstSaleValue(');
     const customerName = new Function(customerNameSource + '\nreturn customerName;')();
     const uniqueCustomers = new Function('customerName',
         uniqueCustomersSource + '\nreturn uniqueCustomers;'
@@ -425,6 +427,28 @@ async function run() {
     assert.equal(requests[0].operation, 'locations');
     assert.deepEqual(requests[0].args, []);
     assert.equal(client.pendingCount(), 0);
+
+    // The exact recent-customer operation must travel through the same async
+    // acknowledgement/callback path used by the page (never a synchronous SQLite call).
+    const rankingRequests = [];
+    let rankingClient;
+    const fakeRankingAndroidInterface = {
+        executeFuelSalesAsync(requestId, operation, argsJson) {
+            rankingRequests.push({ requestId, operation, args: JSON.parse(argsJson) });
+            queueMicrotask(() => rankingClient.resolve(
+                requestId,
+                JSON.stringify({ success: true, data: [12, 4, 9] })
+            ));
+            return JSON.stringify({ success: true, queued: true });
+        }
+    };
+    rankingClient = create(fakeRankingAndroidInterface, { timeoutMs: 1500 });
+    const rankingResponse = await rankingClient.invoke('getRecentSaleCustomerIds', []);
+    assert.deepEqual(rankingResponse.data, [12, 4, 9]);
+    assert.equal(rankingRequests.length, 1);
+    assert.equal(rankingRequests[0].operation, 'getRecentSaleCustomerIds');
+    assert.deepEqual(rankingRequests[0].args, []);
+    assert.equal(rankingClient.pendingCount(), 0);
 
     let failingClient;
     const failingAndroidInterface = {
