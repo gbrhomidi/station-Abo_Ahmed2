@@ -4806,6 +4806,9 @@
                     clearRecentCustomerRankingForScopeChange();
                     state.recentSaleCustomersScopeKey = scopeKey;
                     if (reloadCustomerRows) {
+                        // Rebuild (or empty) an already-open menu immediately, even when
+                        // the previous station happened to have no recent-sale IDs.
+                        refreshOpenCustomerMenu();
                         state.recentSaleCustomersScopeNeedsCustomerReload = false;
                         window.setTimeout(() => {
                             void reloadCustomersForAuthenticatedScope(scopeKey);
@@ -4897,6 +4900,15 @@
                     responseUserId !== scope.userId ||
                     responseStationId !== scope.stationId
                 ) {
+                    // The authenticated session changed between the scope preflight
+                    // and the SQLite worker. Fail closed, discard both caches, and
+                    // request the current scope again instead of retaining old rows.
+                    invalidateRecentCustomerScope();
+                    window.setTimeout(() => {
+                        void loadRecentCustomerSaleOrder(true).then(result => {
+                            if (result && result.changed) refreshOpenCustomerMenu();
+                        });
+                    }, 0);
                     throw new Error('تغير المستخدم أو المحطة أثناء تحديث ترتيب العملاء؛ تم تجاهل النتيجة.');
                 }
 
