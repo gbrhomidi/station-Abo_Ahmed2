@@ -1186,7 +1186,7 @@ object CustodyWorkshopManager {
         val current = inventoryQuantity(db, product, warehouse)
         val difference = counted - current
         if (!p.optBoolean("approve", false)) {
-            return JSONObject().put("success", true).put("approved", false).put("system_quantity", current)
+            return JSONObject().put("success", true).put("id", id).put("approved", false).put("system_quantity", current)
                 .put("counted_quantity", counted).put("variance", difference)
                 .put("message", "تمت معاينة الجرد دون تعديل المخزون")
         }
@@ -1207,7 +1207,7 @@ object CustodyWorkshopManager {
                 postJournal(db, stationId, actorId, "work_order_stocktake", id, "تسوية جرد معتمدة", lines)
             }
         }
-        return JSONObject().put("success", true).put("approved", true).put("system_quantity", current)
+        return JSONObject().put("success", true).put("id", id).put("approved", true).put("system_quantity", current)
             .put("counted_quantity", counted).put("variance", difference).put("message", "تم تطبيق تسوية الجرد المعتمدة")
     }
 

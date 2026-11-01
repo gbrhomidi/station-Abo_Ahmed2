@@ -82,7 +82,7 @@ def main() -> int:
         "CustodyWorkshopManager.executeCustody",
         "CustodyWorkshopManager.executeWorkshop",
         "rejected operation must not leave partial rows",
-        "custody_workshop_acceptance.json",
+        "FUEL-CUST-WORK-",
     ]
     for token in test_contracts:
         if token not in test_source:
