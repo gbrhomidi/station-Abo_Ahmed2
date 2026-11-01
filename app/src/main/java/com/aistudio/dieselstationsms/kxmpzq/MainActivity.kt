@@ -3131,6 +3131,31 @@ class MainActivity : AppCompatActivity() {
         private fun getGeminiHelper(): GeminiAIHelper? = geminiHelperRef.get()
         private fun getActivity(): MainActivity? = activityRef.get()
 
+        /**
+         * Station-scoped command gateway for operating custody and workshop work orders.
+         * The repository enforces permission, station scope, idempotency and SQLite transactions.
+         */
+        @JavascriptInterface
+        fun executeCustodyWorkshopCommand(command: String, jsonData: String = "{}"): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId = requireCurrentStationId(helper, activity.currentUserId)
+                val payload = JSONObject(jsonData.ifBlank { "{}" })
+                CustodyWorkshopRepository.execute(
+                    helper.writableDatabase,
+                    command.trim(),
+                    payload,
+                    stationId,
+                    activity.currentUserId
+                ).toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("CustodyWorkshop-" + command, e)
+                errorResponse(e.message)
+            }
+        }
+
+
         private val activeFuelSalesBridgeRequests = AtomicInteger(0)
 
         /**
