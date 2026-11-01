@@ -19,6 +19,7 @@ SPEC = ROOT / "all-test" / "اختبارات_عهد_النزول_وورش_الص
 MANAGER = ROOT / "app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/CustodyWorkshopManager.kt"
 MAIN = ROOT / "app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt"
 TEST = ROOT / "app/src/test/java/com/aistudio/dieselstationsms/kxmpzq/CustodyWorkshopAcceptanceRobolectricTest.kt"
+BRIDGE_TEST = ROOT / "app/src/test/java/com/aistudio/dieselstationsms/kxmpzq/MainActivityUserUpdateBridgeTest.kt"
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -26,7 +27,7 @@ def main() -> int:
     parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
 
-    required = [SPEC, MANAGER, MAIN, TEST]
+    required = [SPEC, MANAGER, MAIN, TEST, BRIDGE_TEST]
     missing = [str(p.relative_to(ROOT)) for p in required if not p.is_file()]
     if missing:
         print("FAIL executable acceptance suite missing: " + ", ".join(missing))
@@ -49,6 +50,7 @@ def main() -> int:
     manager = MANAGER.read_text(encoding="utf-8")
     main_source = MAIN.read_text(encoding="utf-8")
     test_source = TEST.read_text(encoding="utf-8")
+    bridge_test_source = BRIDGE_TEST.read_text(encoding="utf-8")
     manager_contracts = [
         "CREATE TABLE IF NOT EXISTS operating_custodies",
         "CREATE TABLE IF NOT EXISTS custody_movements",
@@ -78,7 +80,11 @@ def main() -> int:
     test_contracts = [
         "@RunWith(RobolectricTestRunner::class)",
         "fun executesAllTwoHundredAcceptanceCasesAgainstRealSyntheticSQLite()",
-        "for (number in 1..200)",
+        "loadCatalogueCases(reverseOrder = true)",
+        "private fun resolveCaseRoute(definition: JSONObject)",
+        "val catalogueCasesById = loadCatalogueCases(reverseOrder = true)",
+        "databaseSnapshotDelta(before, after)",
+        "duration_ms",
         "CustodyWorkshopManager.executeCustody",
         "CustodyWorkshopManager.executeWorkshop",
         "rejected operation must not leave partial rows",
@@ -87,6 +93,19 @@ def main() -> int:
     for token in test_contracts:
         if token not in test_source:
             errors.append("Robolectric acceptance runner contract missing: " + token)
+
+    if "val scenario = (number - 1) / 5" in test_source or "val dimension = (number - 1) % 5" in test_source:
+        errors.append("acceptance runner must not route cases by catalogue position")
+    if len(set(type_counts)) != 5:
+        errors.append("catalogue must expose exactly five named verification dimensions")
+    for marker in (
+        "updateUserInvokesTheRealBridgeAndMutatesOnlyTheExplicitTargetRow",
+        "updateUserBridgeReturnsNotFoundWithoutChangingRows",
+        "updateUserBridgeRejectsZeroNegativeIdsAndMalformedJsonWithoutPartialWrites",
+        "bridge.updateUser(targetUserId, payload.toString())",
+    ):
+        if marker not in bridge_test_source:
+            errors.append("real Android Bridge Robolectric test contract missing: " + marker)
 
     report = {
         "suite": spec.get("title", ""),

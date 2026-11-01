@@ -64,44 +64,265 @@ class CustodyWorkshopAcceptanceRobolectricTest {
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
     }
 
+    private data class CaseRoute(
+        val domain: String,
+        val scenario: Int,
+        val dimension: Int
+    )
+
+    private data class CatalogueCase(
+        val definition: JSONObject,
+        val route: CaseRoute,
+        val caseNumber: Int
+    )
+
+    private val scenarioRoutes: Map<Pair<String, String>, Pair<String, Int>> = mapOf(
+        ("عهد النزول والعهد النقدية التشغيلية" to "إنشاء عهدة نزول لموظف") to ("custody" to 0),
+        ("عهد النزول والعهد النقدية التشغيلية" to "صرف مبلغ العهدة نقدًا أو من البنك") to ("custody" to 1),
+        ("عهد النزول والعهد النقدية التشغيلية" to "تسجيل مصروفات عهدة مدعمة بمستندات") to ("custody" to 2),
+        ("عهد النزول والعهد النقدية التشغيلية" to "إعادة المتبقي من العهدة") to ("custody" to 3),
+        ("عهد النزول والعهد النقدية التشغيلية" to "تسوية العهدة بمصروفات ومتبقٍ نقدي") to ("custody" to 4),
+        ("عهد النزول والعهد النقدية التشغيلية" to "عجز عهدة بعد الجرد") to ("custody" to 5),
+        ("عهد النزول والعهد النقدية التشغيلية" to "زيادة عهدة غير مفسرة") to ("custody" to 6),
+        ("عهد النزول والعهد النقدية التشغيلية" to "تجاوز مصروفات العهدة للمبلغ المصروف") to ("custody" to 7),
+        ("عهد النزول والعهد النقدية التشغيلية" to "مصروف عهدة بلا مستند أو بمستند مكرر") to ("custody" to 8),
+        ("عهد النزول والعهد النقدية التشغيلية" to "تسوية عهدة بين ورديتين/موظفين") to ("custody" to 9),
+        ("عهد النزول والعهد النقدية التشغيلية" to "عهدة مؤقتة لشراء عاجل للمحطة") to ("custody" to 10),
+        ("عهد النزول والعهد النقدية التشغيلية" to "عهدة مرتبطة بتحصيل/إيداع نقدية") to ("custody" to 11),
+        ("عهد النزول والعهد النقدية التشغيلية" to "عهدة معلقة عند نهاية الفترة") to ("custody" to 12),
+        ("عهد النزول والعهد النقدية التشغيلية" to "استرداد عهدة من راتب أو موظف") to ("custody" to 13),
+        ("عهد النزول والعهد النقدية التشغيلية" to "إلغاء أو عكس سند عهدة مرحل") to ("custody" to 14),
+        ("عهد النزول والعهد النقدية التشغيلية" to "تقرير أعمار العهد ومطابقة الأستاذ") to ("custody" to 15),
+        ("عهد النزول والعهد النقدية التشغيلية" to "صلاحيات اعتماد وصرف وتسوية العهدة") to ("custody" to 16),
+        ("عهد النزول والعهد النقدية التشغيلية" to "إعادة إرسال طلب صرف العهدة") to ("custody" to 17),
+        ("عهد النزول والعهد النقدية التشغيلية" to "تغيير حسابات العهدة أو مركز التكلفة") to ("custody" to 18),
+        ("عهد النزول والعهد النقدية التشغيلية" to "مطابقة عهدة النزول مع دفتر اليومية") to ("custody" to 19),
+        ("ورش الصيانة الملحقة بالمحطة" to "إنشاء أمر عمل لصيانة أصل المحطة") to ("workshop" to 0),
+        ("ورش الصيانة الملحقة بالمحطة" to "إصلاح داخلي دون قطع غيار") to ("workshop" to 1),
+        ("ورش الصيانة الملحقة بالمحطة" to "صرف قطع غيار لأمر عمل") to ("workshop" to 2),
+        ("ورش الصيانة الملحقة بالمحطة" to "إرجاع قطعة غير مستخدمة") to ("workshop" to 3),
+        ("ورش الصيانة الملحقة بالمحطة" to "شراء قطعة صيانة آجلًا") to ("workshop" to 4),
+        ("ورش الصيانة الملحقة بالمحطة" to "صيانة دورية مقابل إصلاح جوهري") to ("workshop" to 5),
+        ("ورش الصيانة الملحقة بالمحطة" to "خدمة صيانة للغير بمقابل") to ("workshop" to 6),
+        ("ورش الصيانة الملحقة بالمحطة" to "تسعير أمر العمل قبل وبعد التنفيذ") to ("workshop" to 7),
+        ("ورش الصيانة الملحقة بالمحطة" to "أجور الفنيين وتوزيع ساعاتهم") to ("workshop" to 8),
+        ("ورش الصيانة الملحقة بالمحطة" to "ضمان إصلاح/قطعة") to ("workshop" to 9),
+        ("ورش الصيانة الملحقة بالمحطة" to "أمر عمل ملغى بعد صرف القطع") to ("workshop" to 10),
+        ("ورش الصيانة الملحقة بالمحطة" to "تلف قطعة داخل الورشة") to ("workshop" to 11),
+        ("ورش الصيانة الملحقة بالمحطة" to "توقف مضخة وأثره التشغيلي والمالي") to ("workshop" to 12),
+        ("ورش الصيانة الملحقة بالمحطة" to "إغلاق أمر العمل وفوترته") to ("workshop" to 13),
+        ("ورش الصيانة الملحقة بالمحطة" to "أوامر عمل مفتوحة عند الإقفال") to ("workshop" to 14),
+        ("ورش الصيانة الملحقة بالمحطة" to "مقارنة ميزانية الورشة بالتكلفة الفعلية") to ("workshop" to 15),
+        ("ورش الصيانة الملحقة بالمحطة" to "مطابقة مخزون قطع الغيار") to ("workshop" to 16),
+        ("ورش الصيانة الملحقة بالمحطة" to "صلاحيات اعتماد أمر العمل والفاتورة") to ("workshop" to 17),
+        ("ورش الصيانة الملحقة بالمحطة" to "تكرار فاتورة ورشة/عميل") to ("workshop" to 18),
+        ("ورش الصيانة الملحقة بالمحطة" to "تقارير ربحية الورشة وتكلفة الصيانة") to ("workshop" to 19)
+    )
+
+    private val dimensionRoutes = mapOf(
+        "مسار سليم" to 0,
+        "حدود ومدخلات غير صحيحة" to 1,
+        "تكرار وتزامن" to 2,
+        "صلاحيات وحالات مقفلة" to 3,
+        "ترابط ومطابقة وتدقيق" to 4
+    )
+
+    private fun repositoryRoot(): File {
+        var current: File? = File(System.getProperty("user.dir")).canonicalFile
+        while (current != null) {
+            if (File(current, "all-test/اختبارات_عهد_النزول_وورش_الصيانة.json").isFile) return current
+            current = current.parentFile
+        }
+        throw IllegalStateException("Could not locate repository root containing the 200-case catalogue")
+    }
+
+    private fun resolveCaseRoute(definition: JSONObject): CaseRoute {
+        val axis = definition.getString("المحور")
+        val scenarioTitle = definition.getString("السيناريو")
+        val route = scenarioRoutes[axis to scenarioTitle]
+            ?: throw IllegalArgumentException("No executable route for axis='" + axis + "', scenario='" + scenarioTitle + "'")
+        val dimensionTitle = definition.getString("نوع_الفحص")
+        val dimension = dimensionRoutes[dimensionTitle]
+            ?: throw IllegalArgumentException("Unsupported verification dimension '" + dimensionTitle + "'")
+        return CaseRoute(route.first, route.second, dimension)
+    }
+
+    /**
+     * Every runtime case is resolved by stable catalogue ID and semantic
+     * axis/scenario/dimension. Reversing the source order proves that execution
+     * does not infer scenario identity from a row's ordinal position.
+     */
+    private fun loadCatalogueCases(reverseOrder: Boolean): LinkedHashMap<String, CatalogueCase> {
+        val catalogueFile = File(repositoryRoot(), "all-test/اختبارات_عهد_النزول_وورش_الصيانة.json")
+        val catalogue = JSONObject(catalogueFile.readText(Charsets.UTF_8))
+        val sourceCases = catalogue.getJSONArray("cases")
+        require(catalogue.optInt("count") == 200 && sourceCases.length() == 200) {
+            "The acceptance catalogue must declare and contain exactly 200 cases"
+        }
+        require(scenarioRoutes.size == 40) { "The explicit route table must cover all 40 semantic scenarios" }
+
+        val sourceIndexes = (0 until sourceCases.length()).toList()
+        val indexes = if (reverseOrder) sourceIndexes.reversed() else sourceIndexes
+        val resolved = LinkedHashMap<String, CatalogueCase>()
+        val routeCoverage = mutableSetOf<Triple<String, Int, Int>>()
+        val idPattern = Regex("^FUEL-CUST-WORK-(\\d{3})$")
+
+        indexes.forEach { index ->
+            val definition = sourceCases.getJSONObject(index)
+            val id = definition.getString("id")
+            val match = idPattern.matchEntire(id)
+                ?: throw IllegalArgumentException("Invalid acceptance case ID '" + id + "'")
+            val caseNumber = match.groupValues[1].toInt()
+            require(caseNumber in 1..200) { "Acceptance case number is outside 001..200: " + id }
+            require(!resolved.containsKey(id)) { "Duplicate acceptance case ID '" + id + "'" }
+            val route = resolveCaseRoute(definition)
+            require(routeCoverage.add(Triple(route.domain, route.scenario, route.dimension)) {
+                "Duplicate executable route/dimension for case '" + id + "'"
+            }
+            resolved[id] = CatalogueCase(definition, route, caseNumber)
+        }
+
+        val expectedIds = (1..200).map { "FUEL-CUST-WORK-" + it.toString().padStart(3, '0') }.toSet()
+        require(resolved.keys == expectedIds) {
+            "Catalogue ID mismatch; missing=" + (expectedIds - resolved.keys) + ", unknown=" + (resolved.keys - expectedIds)
+        }
+        require(routeCoverage.size == 200) { "Every one of the 40 scenarios × 5 dimensions must map exactly once" }
+        return resolved
+    }
+
+    private fun catalogueMetadata(definition: JSONObject): JSONObject = JSONObject()
+        .put("axis", definition.optString("المحور"))
+        .put("scenario", definition.optString("السيناريو"))
+        .put("verification_dimension", definition.optString("نوع_الفحص"))
+        .put("instructions", definition.optString("تعليمات_للوكيل"))
+        .put("required_outputs", definition.optString("مخرجات_مطلوبة"))
+
+    private fun databaseSnapshot(): JSONObject = JSONObject()
+        .put("table_rows", tableCounts())
+        .put("journal_entries", scalarLong("SELECT COUNT(*) FROM journal_entries"))
+        .put("inventory_quantity", inventoryQuantity())
+
+    private fun databaseSnapshotDelta(before: JSONObject, after: JSONObject): JSONObject {
+        val beforeTables = before.getJSONObject("table_rows")
+        val afterTables = after.getJSONObject("table_rows")
+        val rowDeltas = JSONObject()
+        val keys = afterTables.keys()
+        while (keys.hasNext()) {
+            val table = keys.next()
+            rowDeltas.put(table, afterTables.optLong(table) - beforeTables.optLong(table))
+        }
+        return JSONObject()
+            .put("table_row_deltas", rowDeltas)
+            .put("journal_entry_delta", after.optLong("journal_entries") - before.optLong("journal_entries"))
+            .put("inventory_quantity_delta", after.optDouble("inventory_quantity") - before.optDouble("inventory_quantity"))
+    }
+
+    @Test
+    fun catalogueRoutingUsesIdsAndIsIndependentOfJsonOrder() {
+        val originalOrder = loadCatalogueCases(reverseOrder = false)
+        val reversedOrder = loadCatalogueCases(reverseOrder = true)
+        val originalRoutes = originalOrder.mapValues { (_, item) ->
+            Triple(item.route.domain, item.route.scenario, item.route.dimension)
+        }
+        val reversedRoutes = reversedOrder.mapValues { (_, item) ->
+            Triple(item.route.domain, item.route.scenario, item.route.dimension)
+        }
+        assertEquals("All 200 IDs must resolve identically after catalogue reordering", originalRoutes, reversedRoutes)
+        assertEquals(200, originalRoutes.size)
+        assertEquals(200, originalRoutes.values.toSet().size)
+    }
+
     @Test
     fun executesAllTwoHundredAcceptanceCasesAgainstRealSyntheticSQLite() {
         val cases = JSONArray()
-        val failures = mutableListOf<String>()
+        val failures = JSONArray()
+        val catalogueCasesById = loadCatalogueCases(reverseOrder = true)
+
         for (number in 1..200) {
-            val scenario = (number - 1) / 5
-            val dimension = (number - 1) % 5
             val id = "FUEL-CUST-WORK-" + number.toString().padStart(3, '0')
+            val catalogueCase = catalogueCasesById[id]
+                ?: throw AssertionError("Catalogue case " + id + " was not resolved before execution")
+            val before = databaseSnapshot()
+            val startedAtNanos = System.nanoTime()
             try {
-                val result = if (scenario < 20) runCustodyCase(number, scenario, dimension)
-                    else runWorkshopCase(number, scenario - 20, dimension)
-                val entry = JSONObject().put("id", id).put("domain", if (scenario < 20) "custody" else "workshop")
-                    .put("scenario_index", scenario).put("verification_dimension", dimension)
-                    .put("status", "PASS").put("actual", result)
-                    .put("sqlite", tableCounts()).put("journal_entries", scalarLong("SELECT COUNT(*) FROM journal_entries"))
-                    .put("inventory_quantity", inventoryQuantity())
-                cases.put(entry)
-                println("ACCEPTANCE " + id + " PASS " + result.optString("message", "verified") +
-                    " sqlite=" + tableCounts().toString())
+                val route = catalogueCase.route
+                val result = when (route.domain) {
+                    "custody" -> runCustodyCase(catalogueCase.caseNumber, route.scenario, route.dimension)
+                    "workshop" -> runWorkshopCase(catalogueCase.caseNumber, route.scenario, route.dimension)
+                    else -> throw IllegalStateException("Unsupported route domain '" + route.domain + "' for " + id)
+                }
+                val after = databaseSnapshot()
+                val durationMs = (System.nanoTime() - startedAtNanos) / 1_000_000.0
+                cases.put(
+                    JSONObject()
+                        .put("id", id)
+                        .put("catalogue", catalogueMetadata(catalogueCase.definition))
+                        .put("route", JSONObject()
+                            .put("domain", route.domain)
+                            .put("scenario_index", route.scenario)
+                            .put("verification_dimension_index", route.dimension))
+                        .put("status", "PASS")
+                        .put("duration_ms", durationMs)
+                        .put("actual", result)
+                        .put("sqlite_before", before)
+                        .put("sqlite_after", after)
+                        .put("sqlite_delta", databaseSnapshotDelta(before, after))
+                )
+                println("ACCEPTANCE " + id + " PASS " + result.optString("message", "verified") + " duration_ms=" + durationMs)
             } catch (error: Throwable) {
+                val durationMs = (System.nanoTime() - startedAtNanos) / 1_000_000.0
+                val after = runCatching { databaseSnapshot() }
+                    .getOrElse { JSONObject().put("snapshot_error", it.message ?: it.javaClass.simpleName) }
                 val detail = id + ": " + (error.message ?: error.javaClass.simpleName)
-                failures.add(detail)
-                cases.put(JSONObject().put("id", id).put("status", "FAIL").put("error", detail))
-                println("ACCEPTANCE " + id + " FAIL " + detail)
+                failures.put(detail)
+                cases.put(
+                    JSONObject()
+                        .put("id", id)
+                        .put("catalogue", catalogueMetadata(catalogueCase.definition))
+                        .put("route", JSONObject()
+                            .put("domain", catalogueCase.route.domain)
+                            .put("scenario_index", catalogueCase.route.scenario)
+                            .put("verification_dimension_index", catalogueCase.route.dimension))
+                        .put("status", "FAIL")
+                        .put("duration_ms", durationMs)
+                        .put("error", detail)
+                        .put("error_type", error.javaClass.name)
+                        .put("stack_trace", error.stackTrace.take(12).joinToString("\n"))
+                        .put("sqlite_before", before)
+                        .put("sqlite_after", after)
+                        .put("sqlite_delta", if (after.has("table_rows")) databaseSnapshotDelta(before, after) else JSONObject())
+                )
+                println("ACCEPTANCE " + id + " FAIL " + detail + " duration_ms=" + durationMs)
             }
         }
 
-        val report = JSONObject().put("suite", "custody-workshop-acceptance")
-            .put("total", 200).put("passed", 200 - failures.size).put("failed", failures.size)
-            .put("blocked", 0).put("environment", "Robolectric + real SQLite + synthetic rows only")
-            .put("cases", cases).put("failures", JSONArray(failures))
-        val reportFile = File("app/build/reports/custody-workshop-acceptance.json")
+        val passed = (0 until cases.length()).count { cases.getJSONObject(it).optString("status") == "PASS" }
+        val failed = (0 until cases.length()).count { cases.getJSONObject(it).optString("status") == "FAIL" }
+        val report = JSONObject()
+            .put("suite", "custody-workshop-acceptance")
+            .put("catalogue", "all-test/اختبارات_عهد_النزول_وورش_الصيانة.json")
+            .put("catalogue_count", 200)
+            .put("total", 200)
+            .put("executed", cases.length())
+            .put("passed", passed)
+            .put("failed", failed)
+            .put("blocked", 0)
+            .put("not_executed", 200 - cases.length())
+            .put("routing", "stable case ID + explicit axis/scenario/dimension; catalogue was reversed before execution")
+            .put("environment", "Robolectric + Android DatabaseHelper + isolated SQLite database + synthetic rows only")
+            .put("cases", cases)
+            .put("failures", failures)
+
+        val reportFile = File(repositoryRoot(), "app/build/reports/custody-workshop-acceptance.json")
         reportFile.parentFile?.mkdirs()
         reportFile.writeText(report.toString(2), Charsets.UTF_8)
-        println("CUSTODY_WORKSHOP_ACCEPTANCE_REPORT " + report.toString())
-        assertEquals("All 200 catalogue entries must execute and pass with recorded SQLite effects: " + failures.joinToString("; "),
-            0, failures.size)
-        assertEquals(200, cases.length())
+        println("CUSTODY_WORKSHOP_ACCEPTANCE_REPORT path=" + reportFile.absolutePath +
+            " total=200 executed=" + cases.length() + " passed=" + passed + " failed=" + failed +
+            " blocked=0 not_executed=" + (200 - cases.length()))
+
+        assertEquals("Exactly 200 catalogue IDs must be executed", 200, cases.length())
+        assertEquals("Every case must be PASS; failure details are in the report", 0, failed)
+        assertEquals("Every case must be represented as executed PASS", 200, passed)
     }
 
     private fun runCustodyCase(caseNo: Int, scenario: Int, dimension: Int): JSONObject {

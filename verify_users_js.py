@@ -15,6 +15,7 @@ HTML_PATH = ROOT / "app/src/main/assets/screens/users.html"
 MAIN_PATH = ROOT / "app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt"
 HELPER_PATH = ROOT / "app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt"
 RUNTIME_TEST_PATH = ROOT / "app/src/test/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelperUserUpdateContractTest.kt"
+BRIDGE_TEST_PATH = ROOT / "app/src/test/java/com/aistudio/dieselstationsms/kxmpzq/MainActivityUserUpdateBridgeTest.kt"
 
 
 def fail(message: str) -> None:
@@ -25,6 +26,9 @@ html = HTML_PATH.read_text(encoding="utf-8")
 main = MAIN_PATH.read_text(encoding="utf-8")
 helper = HELPER_PATH.read_text(encoding="utf-8")
 runtime_test = RUNTIME_TEST_PATH.read_text(encoding="utf-8")
+if not BRIDGE_TEST_PATH.is_file():
+    fail("real MainActivity WebAppInterface Robolectric test is missing")
+bridge_test = BRIDGE_TEST_PATH.read_text(encoding="utf-8")
 
 scripts = re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", html, flags=re.S | re.I)
 if not scripts:
@@ -80,5 +84,15 @@ for marker in (
 ):
     if marker not in runtime_test:
         fail(f"runtime SQLite contract test is missing: {marker}")
-print("PASS runtime evidence declared: row isolation, missing id, invalid id, SQLite write count")
-print("RUNTIME: execute DatabaseHelperUserUpdateContractTest in :app:testDebugUnitTest to record SQLite results")
+for marker in (
+    "updateUserInvokesTheRealBridgeAndMutatesOnlyTheExplicitTargetRow",
+    "updateUserBridgeReturnsNotFoundWithoutChangingRows",
+    "updateUserBridgeRejectsZeroNegativeIdsAndMalformedJsonWithoutPartialWrites",
+    "bridge.updateUser(targetUserId, payload.toString())",
+    "employee_id is deliberately omitted",
+    'assertEquals(employeeId, userLong(targetUserId, "employee_id"))',
+):
+    if marker not in bridge_test:
+        fail(f"real Android Bridge Robolectric coverage is missing: {marker}")
+print("PASS runtime test declarations: DatabaseHelper SQLite contract + real MainActivity.WebAppInterface calls")
+print("RUNTIME: run both Robolectric test classes in :app:testDebugUnitTest; this Python verifier remains static-only")

@@ -240,6 +240,58 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
         events("failed")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
+
+    // Emit the actual aggregate from the JUnit XML produced by Gradle.
+    // This prevents guessed or hand-entered test counts from being reported.
+    val taskNameForXmlSummary = name
+    if (taskNameForXmlSummary == "testDebugUnitTest") {
+        val junitXmlDirectory = layout.buildDirectory.dir("test-results/" + taskNameForXmlSummary)
+        val summaryFile = layout.buildDirectory.file("reports/" + taskNameForXmlSummary + "-xml-summary.json")
+        doLast {
+            val xmlDirectory = junitXmlDirectory.get().asFile
+            val xmlFiles = xmlDirectory.walkTopDown()
+                .filter { it.isFile && it.extension.equals("xml", ignoreCase = true) }
+                .toList()
+            if (xmlFiles.isEmpty()) {
+                throw org.gradle.api.GradleException("No JUnit XML files were produced under " + xmlDirectory)
+            }
+
+            fun xmlCount(attributes: String, attribute: String, file: File): Int =
+                Regex("\\b" + attribute + "=\"(\\d+)\"").find(attributes)?.groupValues?.get(1)?.toInt()
+                    ?: throw org.gradle.api.GradleException("Missing '" + attribute + "' count in JUnit XML file: " + file)
+
+            var tests = 0
+            var failures = 0
+            var errors = 0
+            var skipped = 0
+            xmlFiles.forEach { xmlFile ->
+                val xml = xmlFile.readText(Charsets.UTF_8)
+                val root = Regex("<testsuite\\b([^>]*)>").find(xml)
+                    ?: throw org.gradle.api.GradleException("JUnit XML has no <testsuite> root: " + xmlFile)
+                val attributes = root.groupValues[1]
+                tests += xmlCount(attributes, "tests", xmlFile)
+                failures += xmlCount(attributes, "failures", xmlFile)
+                errors += xmlCount(attributes, "errors", xmlFile)
+                skipped += xmlCount(attributes, "skipped", xmlFile)
+            }
+            val passed = tests - failures - errors - skipped
+            val summary = """{
+  "task": """" + taskNameForXmlSummary + """",
+  "source": "Gradle JUnit XML",
+  "xml_files": """ + xmlFiles.size + """,
+  "tests": """ + tests + """,
+  "passed": """ + passed + """,
+  "failed": """ + (failures + errors) + """,
+  "skipped": """ + skipped + """
+}""" + "\n"
+            val output = summaryFile.get().asFile
+            output.parentFile.mkdirs()
+            output.writeText(summary, Charsets.UTF_8)
+            println("GRADLE_XML_TEST_SUMMARY tests=" + tests + " passed=" + passed +
+                " failed=" + (failures + errors) + " skipped=" + skipped +
+                " xml_files=" + xmlFiles.size + " report=" + output.path)
+        }
+    }
 }
 
 configurations.all {
