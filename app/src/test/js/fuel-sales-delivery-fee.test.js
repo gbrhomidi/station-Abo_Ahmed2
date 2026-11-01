@@ -101,6 +101,8 @@ async function runUiRegression() {
                         ? grossAmount + fee : grossAmount;
                     const id = ++saleSequence;
                     lastSavedRow = {
+                        ...payload,
+                        id: id + 1000,
                         fuel_sale_id: id,
                         sale_id: id + 1000,
                         quantity: fuelQuantity,
@@ -319,15 +321,30 @@ async function runUiRegression() {
 
         // An accepted edit may add a new location; the update response is the commit boundary.
         await window.openForm(lastSavedRow);
-        await waitFor(() => !!document.querySelector('[data-key="delivery_location"]') &&
-            document.querySelector('[data-key="delivery_location"]').value === 'حي المحطة',
-            'editing a previously saved sale');
+        await waitFor(() => document.getElementById('formTitle')?.textContent === 'تعديل مبيعات الوقود' &&
+            !!document.querySelector('[data-key="delivery_location"]') &&
+            document.querySelector('[data-key="delivery_location"]').value === 'حي المحطة' &&
+            document.querySelector('[data-key="pump_id"]').value === '3' &&
+            document.querySelector('[data-key="nozzle_id"]').value === '5' &&
+            document.querySelector('[data-key="fuel_type_id"]').value === '1' &&
+            document.querySelector('[data-key="shift_id"]').value === '71',
+            'editing form to restore every required field from the saved sale');
         const editedLocation = document.querySelector('[data-key="delivery_location"]');
+
+        // A rejected edit must not publish its unsaved destination.
+        editedLocation.value = 'موقع تعديل فاشل';
+        editedLocation.dispatchEvent(new window.Event('input', { bubbles: true }));
+        failNextWrite = true;
+        await window.saveForm();
+        assert.equal(calls.updates.length, 1, 'the rejected edit must invoke SQLite once');
+        assert.equal(Array.from(locationList.options).some(option => option.value === 'موقع تعديل فاشل'), false,
+            'a failed edit must not add its destination to saved suggestions');
+
         editedLocation.value = 'موقع تعديل محفوظ';
         editedLocation.dispatchEvent(new window.Event('input', { bubbles: true }));
         await window.saveForm();
-        assert.equal(calls.updates.length, 1, 'an edit must use the SQLite update operation');
-        assert.equal(calls.updates[0].payload.delivery_location, 'موقع تعديل محفوظ');
+        assert.equal(calls.updates.length, 2, 'a subsequent accepted edit must use the SQLite update operation');
+        assert.equal(calls.updates[1].payload.delivery_location, 'موقع تعديل محفوظ');
         assert.equal(Array.from(locationList.options).filter(option => option.value === 'موقع تعديل محفوظ').length, 1,
             'a new location from a successful update must appear exactly once');
 
