@@ -206,10 +206,10 @@ async function run() {
 
     // Simulate a slow native query: the real create-modal function must show the
     // form before starting the extra lookup, and must not await the pending response.
-    const contextSource = extract('async function loadFormContext()', '/* CREATE MODAL */');
+    const contextSource = extract('async function loadFormContext()', 'async function openCreateModal()');
     assert.equal(contextSource.includes('loadRecentCustomerSaleOrder'), false,
         'loadFormContext must not schedule ranking work before the modal is opened');
-    const openCreateSource = extract('async function openCreateModal()', '/* EDIT MODAL */');
+    const openCreateSource = extract('async function openCreateModal()', 'async function openEditModal(');
     const openEvents = [];
     let releaseSlowQuery;
     const slowQuery = new Promise(resolve => { releaseSlowQuery = resolve; });
@@ -372,6 +372,14 @@ async function run() {
     assert.ok(rankTwoAt >= 0 && rankTwoAt < rankOneAt);
     assert.ok(rankOneAt < noSaleThreeAt && noSaleThreeAt < noSaleFourAt,
         'customers without prior sales must remain visible in their original order');
+    renderState.recentSaleCustomerIds = [];
+    renderMenu('');
+    const noRankIds = [1, 2, 3, 4].map(id => menu.innerHTML.indexOf('data-id="' + id + '"'));
+    assert.ok(noRankIds.every(index => index >= 0),
+        'when there are no recent sales, every available customer must still be shown');
+    assert.ok(noRankIds.every((index, position) =>
+        position === 0 || noRankIds[position - 1] < index
+    ), 'when the recent ranking is empty, the original customer order must be preserved');
     renderMenu('ثلاثة');
     assert.ok(menu.innerHTML.includes('data-id="3"'),
         'search must still find a customer regardless of its recent-sale rank');
