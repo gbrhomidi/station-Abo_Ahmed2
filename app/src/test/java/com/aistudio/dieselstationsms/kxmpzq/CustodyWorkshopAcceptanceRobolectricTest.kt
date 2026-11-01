@@ -16,6 +16,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.Callable
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -687,28 +691,67 @@ class CustodyWorkshopAcceptanceRobolectricTest {
 
     /**
      * Dimension 2 is deliberately scenario-specific: the same business command is
-     * submitted twice with the same key, or a duplicate document is submitted with
-     * a different key. The second attempt must never duplicate journals or stock.
-     */
-    private fun assertIdempotentReplay(block: () -> JSONObject, label: String): JSONObject {
-        val first = block()
-        assertTrue(label + " first command failed: " + first, first.optBoolean("success"))
-        val rowsAfterFirst = tableCounts()
-        val journalsAfterFirst = scalarLong("SELECT COUNT(*) FROM journal_entries")
-        val linesAfterFirst = scalarLong("SELECT COUNT(*) FROM journal_entry_items")
-        val movementsAfterFirst = scalarLong("SELECT COUNT(*) FROM inventory_movements")
-        val stockAfterFirst = inventoryQuantity()
-        val second = block()
-        assertTrue(label + " retry was not recognized: " + second, second.optBoolean("replayed"))
-        assertEquals(label + " resource id changed on retry", first.optLong("id"), second.optLong("id"))
-        assertEquals(label + " SQLite rows changed on retry", rowsAfterFirst.toString(), tableCounts().toString())
-        assertEquals(label + " journal count changed on retry", journalsAfterFirst,
+     * submitted twi    private fun assertIdempotentReplay(block: () -> JSONObject, label: String): JSONObject {
+        // Two callers enter the manager together with the same idempotency key.
+        // This tests the SQLite transaction boundary, not only a sequential retry.
+        val ready = CountDownLatch(2)
+        val start = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(2)
+        val futures = (1..2).map {
+            executor.submit(Callable {
+                ready.countDown()
+                check(start.await(10, TimeUnit.SECONDS)) { label + " concurrent start gate timed out" }
+                block()
+            })
+        }
+
+        val results = try {
+            assertTrue(label + " concurrent workers did not become ready", ready.await(10, TimeUnit.SECONDS))
+            start.countDown()
+            futures.map { it.get(30, TimeUnit.SECONDS) }
+        } finally {
+            start.countDown()
+            executor.shutdownNow()
+            assertTrue(label + " concurrent workers did not terminate", executor.awaitTermination(5, TimeUnit.SECONDS))
+        }
+
+        assertEquals(label + " must return exactly two responses", 2, results.size)
+        val created = results.filterNot { it.optBoolean("replayed") }
+        val replayed = results.filter { it.optBoolean("replayed") }
+        assertEquals(label + " must create exactly one resource under concurrency", 1, created.size)
+        assertEquals(label + " must replay the competing request", 1, replayed.size)
+        val first = created.single()
+        val second = replayed.single()
+        assertTrue(label + " original command failed: " + first, first.optBoolean("success"))
+        assertTrue(label + " concurrent replay failed: " + second, second.optBoolean("success"))
+        assertEquals(label + " resource ID changed on concurrent replay", first.optLong("id"), second.optLong("id"))
+
+        val rowsAfterConcurrentPair = tableCounts()
+        val journalsAfterConcurrentPair = scalarLong("SELECT COUNT(*) FROM journal_entries")
+        val linesAfterConcurrentPair = scalarLong("SELECT COUNT(*) FROM journal_entry_items")
+        val movementsAfterConcurrentPair = scalarLong("SELECT COUNT(*) FROM inventory_movements")
+        val stockAfterConcurrentPair = inventoryQuantity()
+
+        val third = block()
+        assertTrue(label + " subsequent retry was not recognized", third.optBoolean("replayed"))
+        assertEquals(label + " resource ID changed on subsequent retry", first.optLong("id"), third.optLong("id"))
+        assertEquals(label + " SQLite rows changed after replay", rowsAfterConcurrentPair.toString(), tableCounts().toString())
+        assertEquals(label + " journal count changed after replay", journalsAfterConcurrentPair,
             scalarLong("SELECT COUNT(*) FROM journal_entries"))
-        assertEquals(label + " journal lines changed on retry", linesAfterFirst,
+        assertEquals(label + " journal lines changed after replay", linesAfterConcurrentPair,
             scalarLong("SELECT COUNT(*) FROM journal_entry_items"))
-        assertEquals(label + " inventory movements changed on retry", movementsAfterFirst,
+        assertEquals(label + " inventory movements changed after replay", movementsAfterConcurrentPair,
             scalarLong("SELECT COUNT(*) FROM inventory_movements"))
-        assertEquals(label + " inventory quantity changed on retry", stockAfterFirst, inventoryQuantity(), 0.0001)
+        assertEquals(label + " inventory quantity changed after replay", stockAfterConcurrentPair, inventoryQuantity(), 0.0001)
+
+        return JSONObject(first.toString())
+            .put("idempotent_replay_verified", true)
+            .put("concurrent_request_count", 2)
+            .put("concurrent_replay_verified", true)
+            .put("replay_message", second.optString("message"))
+            .put("subsequent_replay_message", third.optString("message"))
+    }
+
         return JSONObject(first.toString()).put("idempotent_replay_verified", true)
             .put("replay_message", second.optString("message"))
     }
