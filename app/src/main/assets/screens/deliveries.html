@@ -4616,17 +4616,18 @@
             return state.recentSaleCustomerIds;
         }
         if (state.recentSaleCustomersPromise) return state.recentSaleCustomersPromise;
-        if (!bridge || typeof bridge.getRecentSaleCustomerIds !== 'function') {
-            return state.recentSaleCustomerIds;
-        }
-
         state.recentSaleCustomersPromise = (async () => {
             try {
                 const response = await invoke('getRecentSaleCustomerIds');
                 const raw = dataOf(response);
                 const values = Array.isArray(raw)
                     ? raw
-                    : (raw && Array.isArray(raw.data) ? raw.data : []);
+                    : (raw && Array.isArray(raw.data) ? raw.data : null);
+                if (!Array.isArray(values)) {
+                    throw new Error(
+                        'عقد getRecentSaleCustomerIds أعاد صيغة غير متوافقة؛ المتوقع مصفوفة معرفات العملاء.'
+                    );
+                }
                 const ids = values.map(value => {
                     if (value && typeof value === 'object') {
                         return Number(value.party_id || value.customer_party_id || value.customer_id || value.id || 0);
@@ -4637,6 +4638,9 @@
                 state.recentSaleCustomerIds = Array.from(new Set(ids));
                 state.recentSaleCustomersLoadedAt = Date.now();
             } catch (error) {
+                // Do not retain stale or partial customer ranking after a failed read.
+                state.recentSaleCustomerIds = [];
+                state.recentSaleCustomersLoadedAt = 0;
                 console.warn('[Deliveries] Recent customer-sale order unavailable:', error.message || error);
             } finally {
                 state.recentSaleCustomersPromise = null;
