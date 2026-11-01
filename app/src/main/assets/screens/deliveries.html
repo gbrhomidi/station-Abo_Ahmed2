@@ -2842,6 +2842,7 @@
         recentSaleCustomersScopeStationId: 0,
         recentSaleCustomersScopeCheckedAt: 0,
         recentSaleCustomersScopePromise: null,
+        recentSaleCustomersScopePromiseForceChecked: false,
         recentSaleCustomersPromise: null,
         recentSaleCustomersPromiseScopeKey: '',
         recentSaleCustomersRequestGeneration: 0,
@@ -4716,6 +4717,7 @@
         state.recentSaleCustomersScopeStationId = 0;
         state.recentSaleCustomersScopeCheckedAt = 0;
         state.recentSaleCustomersScopePromise = null;
+        state.recentSaleCustomersScopePromiseForceChecked = false;
         if (hadScope || state.customers.length > 0) {
             state.recentSaleCustomersScopeNeedsCustomerReload = true;
             state.customerScopeReloadGeneration++;
@@ -4740,9 +4742,14 @@
 
         let scope;
         const scopeAge = Date.now() - Number(state.recentSaleCustomersScopeCheckedAt || 0);
+        let scopePromiseObservedAtEntry = null;
+        let observedPromiseWasForced = false;
+
         if (state.recentSaleCustomersScopePromise) {
+            scopePromiseObservedAtEntry = state.recentSaleCustomersScopePromise;
+            observedPromiseWasForced = state.recentSaleCustomersScopePromiseForceChecked === true;
             try {
-                scope = await state.recentSaleCustomersScopePromise;
+                scope = await scopePromiseObservedAtEntry;
             } catch (error) {
                 const changed = invalidateRecentCustomerScope();
                 console.warn('[Deliveries] Customer ranking scope unavailable:', error.message || error);
@@ -4752,6 +4759,15 @@
                     failed: true,
                     scopeUnavailable: true
                 };
+            }
+
+            // An in-flight preflight may have started before this focus/resume event
+            // and therefore cannot prove that the active station is still current.
+            // A forced caller waits for it to settle, then starts or joins a newer
+            // forced request. A fresh forced request already started by another caller
+            // is safe to share (single-flight).
+            if (forceScopeCheck && !observedPromiseWasForced) {
+                scope = null;
             }
         } else if (
             !forceScopeCheck &&
@@ -4766,63 +4782,82 @@
                 changed: false,
                 cached: true
             };
-        } else {
-            const scopePromise = Promise.resolve().then(async () => {
-                const response = await client.invoke('scope', []);
-                const payload = dataOf(response) || response || {};
-                const userId = Number(
-                    response.user_id ??
-                    payload.user_id ??
-                    (payload.data && payload.data.user_id) ??
-                    0
-                );
-                const stationId = Number(
-                    response.station_id ??
-                    payload.station_id ??
-                    (payload.data && payload.data.station_id) ??
-                    0
-                );
-                if (
-                    !Number.isSafeInteger(userId) ||
-                    userId <= 0 ||
-                    !Number.isSafeInteger(stationId) ||
-                    stationId <= 0
-                ) {
-                    throw new Error('لم يُرجع Android هوية المستخدم والمحطة الحالية بصورة صالحة.');
-                }
+        }
 
-                const previousScopeKey = state.recentSaleCustomersScopeKey;
-                const scopeKey = String(userId) + ':' + String(stationId);
-                const changed = previousScopeKey !== scopeKey;
-                if (changed) {
-                    const reloadCustomerRows =
-                        Boolean(previousScopeKey) ||
-                        state.recentSaleCustomersScopeNeedsCustomerReload;
-                    if (reloadCustomerRows) {
-                        // Immediately remove the old station's choices before requesting
-                        // the new station's authoritative customer list.
-                        state.customers = [];
-                        state.customerScopeReloadGeneration++;
-                    }
-                    clearRecentCustomerRankingForScopeChange();
-                    state.recentSaleCustomersScopeKey = scopeKey;
-                    if (reloadCustomerRows) {
-                        // Rebuild (or empty) an already-open menu immediately, even when
-                        // the previous station happened to have no recent-sale IDs.
-                        refreshOpenCustomerMenu();
-                        state.recentSaleCustomersScopeNeedsCustomerReload = false;
-                        window.setTimeout(() => {
-                            void reloadCustomersForAuthenticatedScope(scopeKey);
-                        }, 0);
-                    }
-                }
-                state.recentSaleCustomersScopeUserId = userId;
-                state.recentSaleCustomersScopeStationId = stationId;
-                state.recentSaleCustomersScopeCheckedAt = Date.now();
-                return { scopeKey, userId, stationId, changed, cached: false };
-            });
+        if (!scope) {
+            let scopePromise = state.recentSaleCustomersScopePromise;
 
-            state.recentSaleCustomersScopePromise = scopePromise;
+            // Do not rejoin the same stale, non-forced promise just awaited above.
+            // If another caller has installed a newer promise, join that one instead.
+            if (
+                scopePromise &&
+                scopePromise === scopePromiseObservedAtEntry &&
+                forceScopeCheck &&
+                !observedPromiseWasForced
+            ) {
+                scopePromise = null;
+            }
+
+            if (!scopePromise) {
+                scopePromise = Promise.resolve().then(async () => {
+                    const response = await client.invoke('scope', []);
+                    const payload = dataOf(response) || response || {};
+                    const userId = Number(
+                        response.user_id ??
+                        payload.user_id ??
+                        (payload.data && payload.data.user_id) ??
+                        0
+                    );
+                    const stationId = Number(
+                        response.station_id ??
+                        payload.station_id ??
+                        (payload.data && payload.data.station_id) ??
+                        0
+                    );
+                    if (
+                        !Number.isSafeInteger(userId) ||
+                        userId <= 0 ||
+                        !Number.isSafeInteger(stationId) ||
+                        stationId <= 0
+                    ) {
+                        throw new Error('لم يُرجع Android هوية المستخدم والمحطة الحالية بصورة صالحة.');
+                    }
+
+                    const previousScopeKey = state.recentSaleCustomersScopeKey;
+                    const scopeKey = String(userId) + ':' + String(stationId);
+                    const changed = previousScopeKey !== scopeKey;
+                    if (changed) {
+                        const reloadCustomerRows =
+                            Boolean(previousScopeKey) ||
+                            state.recentSaleCustomersScopeNeedsCustomerReload;
+                        if (reloadCustomerRows) {
+                            // Immediately remove the old station's choices before requesting
+                            // the new station's authoritative customer list.
+                            state.customers = [];
+                            state.customerScopeReloadGeneration++;
+                        }
+                        clearRecentCustomerRankingForScopeChange();
+                        state.recentSaleCustomersScopeKey = scopeKey;
+                        if (reloadCustomerRows) {
+                            // Rebuild (or empty) an already-open menu immediately, even when
+                            // the previous station happened to have no recent-sale IDs.
+                            refreshOpenCustomerMenu();
+                            state.recentSaleCustomersScopeNeedsCustomerReload = false;
+                            window.setTimeout(() => {
+                                void reloadCustomersForAuthenticatedScope(scopeKey);
+                            }, 0);
+                        }
+                    }
+                    state.recentSaleCustomersScopeUserId = userId;
+                    state.recentSaleCustomersScopeStationId = stationId;
+                    state.recentSaleCustomersScopeCheckedAt = Date.now();
+                    return { scopeKey, userId, stationId, changed, cached: false };
+                });
+
+                state.recentSaleCustomersScopePromise = scopePromise;
+                state.recentSaleCustomersScopePromiseForceChecked = Boolean(forceScopeCheck);
+            }
+
             try {
                 scope = await scopePromise;
             } catch (error) {
@@ -4837,6 +4872,7 @@
             } finally {
                 if (state.recentSaleCustomersScopePromise === scopePromise) {
                     state.recentSaleCustomersScopePromise = null;
+                    state.recentSaleCustomersScopePromiseForceChecked = false;
                 }
             }
         }
