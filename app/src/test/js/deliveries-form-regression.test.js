@@ -69,6 +69,19 @@ async function run() {
     };
     const json = value => JSON.stringify(value);
     const bridge = {
+        executeFuelSalesAsync(requestId, operation, argsJson) {
+            assert.equal(operation, 'getRecentSaleCustomerIds',
+                'deliveries must route recent-customer reads through the async native bridge');
+            assert.deepEqual(JSON.parse(argsJson), []);
+            calls.recent += 1;
+            queueMicrotask(() => {
+                window.__fuelSalesNativeResult(
+                    requestId,
+                    json({ success: true, data: [33, 11] })
+                );
+            });
+            return json({ success: true, queued: true });
+        },
         getDeliveriesPage() {
             calls.page += 1;
             return json({ success: true, data: { rows: [] } });
@@ -85,10 +98,6 @@ async function run() {
         getVehicleRecords() { return json({ success: true, data: [] }); },
         getDriverRecords() { return json({ success: true, data: [] }); },
         getCurrentShift() { return json({ success: true, data: null }); },
-        getRecentSaleCustomerIds() {
-            calls.recent += 1;
-            return json({ success: true, data: [33, 11] });
-        },
         getLatestCustomerSaleForDelivery(customerId) {
             calls.latest.push(Number(customerId));
             const sale = salesByCustomer[Number(customerId)];
@@ -108,6 +117,7 @@ async function run() {
     });
     const { window } = dom;
     window.AndroidInterface = bridge;
+    window.FuelSalesAsyncBridge = require('../../main/assets/assets-local/js/fuel-sales-async-bridge.js');
     window.HTMLFormElement.prototype.reportValidity = () => true;
     window.eval(applicationScript());
 
