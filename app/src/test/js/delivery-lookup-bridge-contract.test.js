@@ -46,7 +46,7 @@ async function run() {
     const createModal = deliveries.slice(createStart, editStart);
     assert.ok(createModal.indexOf("openModal('formModal')") >= 0,
         'the create modal must be shown immediately');
-    const rankingDispatchAt = createModal.search(/loadRecentCustomerSaleOrder\\s*\\(/);
+    const rankingDispatchAt = createModal.indexOf('loadRecentCustomerSaleOrder(');
     assert.ok(
         rankingDispatchAt >= 0 &&
         createModal.indexOf("openModal('formModal')") < rankingDispatchAt,
