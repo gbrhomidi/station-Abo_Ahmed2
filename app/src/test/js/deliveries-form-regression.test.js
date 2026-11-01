@@ -78,6 +78,8 @@ function testNativeRankingContractIsReadOnlyAndStationScoped() {
     assert.match(method, /put\("user_id",\s*userId\)/);
     assert.match(method, /put\("station_id",\s*stationId\)/,
         'each callback must identify the user and station that actually ran the query');
+    assert.match(mainActivity, /db\.getParties\(type \?: "",\s*requireCurrentStationId\(db,\s*activity\.currentUserId\)\)/,
+        'the unranked customer list must also be restricted to the authenticated station');
     assert.doesNotMatch(method, /saveFuelSaleRecord|updateFuelSaleRecord|completeSale|db\.(insert|update|delete)\s*\(/,
         'the ranking bridge must not write sales, accounting, or inventory data');
 
@@ -269,7 +271,6 @@ async function run() {
     try {
         testNativeRankingContractIsReadOnlyAndStationScoped();
         assert.ok(fee, 'the delivery form must render its service-fee field');
-        assert.equal(fee.value, '0.00', 'a new delivery form must start at 0.00');
         assert.equal(fee.readOnly, true, 'the service fee must remain readonly');
 
         await waitFor(() => calls.page > 0, 'initial deliveries page load');
@@ -282,6 +283,7 @@ async function run() {
         assert.ok(Date.now() - openedAt < 250,
             'form opening should remain responsive while the recent-customer SQLite lookup is pending');
         await openPromise;
+        assert.equal(fee.value, '0.00', 'a new delivery form must start at 0.00');
 
         await waitFor(() => calls.customers > 0 && menu.classList.contains('show'),
             'initial station-scoped customer list and picker');
@@ -401,9 +403,37 @@ async function run() {
         assert.deepEqual(menuIds(), ['44', '55', '66'],
             'a delayed callback from the previous station must be ignored');
 
+        // A live search remains intact while ranking data arrives for the new station.
+        party.value = 'عميل المحطة الثالثة بلا بيع';
+        party.dispatchEvent(new window.Event('input', { bubbles: true }));
+        assert.deepEqual(menuIds(), ['66'],
+            'search must be scoped to the replacement station customer rows');
+        releaseRanking(stationTwoRanking, [33, 11]);
+        await delay(30);
+        assert.equal(party.value, 'عميل المحطة الثالثة بلا بيع',
+            'a stale previous-station callback must not overwrite the current search text');
+        assert.deepEqual(menuIds(), ['66'],
+            'a stale previous-station callback must not alter the current station search results');
+
         releaseRanking(stationThreeRanking, [55, 44]);
+        await waitFor(() => menu.classList.contains('show') && menuIds().join(',') === '66',
+            'new station ranking must update without clearing the active search');
+        assert.equal(party.value, 'عميل المحطة الثالثة بلا بيع',
+            'a ranking refresh must preserve the operator search text');
+
+        party.value = '';
+        party.dispatchEvent(new window.Event('input', { bubbles: true }));
         await expectMenuIds(['55', '44', '66'],
             'only the newest station ranking may reorder the current station customer list');
+
+        const renderedMenuBeforeUnchangedRefresh = menu.innerHTML;
+        const recentCallsBeforeUnchangedRefresh = calls.recent.length;
+        window.dispatchEvent(new window.Event('focus'));
+        await delay(60);
+        assert.equal(menu.innerHTML, renderedMenuBeforeUnchangedRefresh,
+            'an unchanged cached ranking must not rebuild the customer menu');
+        assert.equal(calls.recent.length, recentCallsBeforeUnchangedRefresh,
+            'a valid cache must avoid repeating the recent-sales SQL query');
 
         // No-sales case: an empty recent-ID result leaves all customers visible in source order.
         activeScope = { user_id: 404, station_id: 4 };
