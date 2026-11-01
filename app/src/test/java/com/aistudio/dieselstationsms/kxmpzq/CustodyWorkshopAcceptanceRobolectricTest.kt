@@ -105,36 +105,9 @@ class CustodyWorkshopAcceptanceRobolectricTest {
     }
 
     private fun runCustodyCase(caseNo: Int, scenario: Int, dimension: Int): JSONObject {
-        if (dimension == 2) {
-            val input = custodyCreateInput(caseNo, "duplicate-" + caseNo)
-            val first = custody("create", input)
-            val firstId = first.getLong("id")
-            val before = scalarLong("SELECT COUNT(*) FROM operating_custodies")
-            val second = custody("create", input)
-            assertEquals(firstId, second.getLong("id"))
-            assertTrue(second.optBoolean("replayed"))
-            assertEquals(before, scalarLong("SELECT COUNT(*) FROM operating_custodies"))
-            return JSONObject().put("message", "idempotent replay returned the original custody").put("resource_id", firstId)
-        }
-        if (dimension == 3) {
-            val before = tableCounts()
-            expectRejected {
-                CustodyWorkshopManager.executeCustody(helper, stationId, restrictedUserId,
-                    "create", custodyCreateInput(caseNo, "denied-" + caseNo))
-            }
-            assertEquals(before.toString(), tableCounts().toString())
-            return JSONObject().put("message", "unauthorized actor rejected before SQLite writes")
-                .put("permission", "custody.create")
-        }
-        if (dimension == 4) {
-            val id = createCustody(caseNo, 100.0)
-            val result = custody("reconcile", JSONObject())
-            assertTrue("custody reconciliation: " + result, result.optBoolean("passed"))
-            val auditCount = scalarLong("SELECT COUNT(*) FROM custody_audit_events WHERE custody_id=?", id)
-            assertTrue(auditCount > 0)
-            return JSONObject().put("message", "station-scoped custody audit and posted journal reconciliation passed")
-                .put("custody_id", id).put("audit_events", auditCount).put("reconciliation", result)
-        }
+        if (dimension == 2) return runCustodyIdempotencyCase(caseNo, scenario)
+        if (dimension == 3) return runCustodyPermissionCase(caseNo, scenario)
+        if (dimension == 4) return runCustodyIntegrityCase(caseNo, scenario)
         if (dimension == 1) {
             val before = tableCounts()
             when (scenario) {
@@ -302,35 +275,9 @@ class CustodyWorkshopAcceptanceRobolectricTest {
     }
 
     private fun runWorkshopCase(caseNo: Int, scenario: Int, dimension: Int): JSONObject {
-        if (dimension == 2) {
-            val p = workOrderCreateInput(caseNo, "duplicate-" + caseNo)
-            val first = workshop("create", p)
-            val before = scalarLong("SELECT COUNT(*) FROM work_orders")
-            val second = workshop("create", p)
-            assertEquals(first.getLong("id"), second.getLong("id"))
-            assertTrue(second.optBoolean("replayed"))
-            assertEquals(before, scalarLong("SELECT COUNT(*) FROM work_orders"))
-            return JSONObject().put("message", "work-order idempotent replay preserved one SQLite row").put("work_order_id", first.getLong("id"))
-        }
-        if (dimension == 3) {
-            val before = tableCounts()
-            expectRejected {
-                CustodyWorkshopManager.executeWorkshop(helper, stationId, restrictedUserId,
-                    "create", workOrderCreateInput(caseNo, "denied-" + caseNo))
-            }
-            assertEquals(before.toString(), tableCounts().toString())
-            return JSONObject().put("message", "unauthorized workshop create rejected before writes")
-                .put("permission", "workshop.create")
-        }
-        if (dimension == 4) {
-            val id = createInProgressOrder(caseNo, false)
-            val result = workshop("reconcile", JSONObject())
-            assertTrue("workshop reconciliation: " + result, result.optBoolean("passed"))
-            val auditCount = scalarLong("SELECT COUNT(*) FROM work_order_audit_events WHERE work_order_id=?", id)
-            assertTrue(auditCount > 0)
-            return JSONObject().put("message", "work order, audit, inventory and journal reconciliation passed")
-                .put("work_order_id", id).put("audit_events", auditCount).put("reconciliation", result)
-        }
+        if (dimension == 2) return runWorkshopIdempotencyCase(caseNo, scenario)
+        if (dimension == 3) return runWorkshopPermissionCase(caseNo, scenario)
+        if (dimension == 4) return runWorkshopIntegrityCase(caseNo, scenario)
         if (dimension == 1) {
             val before = tableCounts()
             when (scenario) {
@@ -514,6 +461,461 @@ class CustodyWorkshopAcceptanceRobolectricTest {
             }
             else -> workshop("profitability", JSONObject())
         }
+    }
+
+
+    /**
+     * Dimension 2 is deliberately scenario-specific: the same business command is
+     * submitted twice with the same key, or a duplicate document is submitted with
+     * a different key. The second attempt must never duplicate journals or stock.
+     */
+    private fun assertIdempotentReplay(block: () -> JSONObject, label: String): JSONObject {
+        val first = block()
+        assertTrue(label + " first command failed: " + first, first.optBoolean("success"))
+        val rowsAfterFirst = tableCounts()
+        val journalsAfterFirst = scalarLong("SELECT COUNT(*) FROM journal_entries")
+        val linesAfterFirst = scalarLong("SELECT COUNT(*) FROM journal_entry_items")
+        val movementsAfterFirst = scalarLong("SELECT COUNT(*) FROM inventory_movements")
+        val stockAfterFirst = inventoryQuantity()
+        val second = block()
+        assertTrue(label + " retry was not recognized: " + second, second.optBoolean("replayed"))
+        assertEquals(label + " resource id changed on retry", first.optLong("id"), second.optLong("id"))
+        assertEquals(label + " SQLite rows changed on retry", rowsAfterFirst.toString(), tableCounts().toString())
+        assertEquals(label + " journal count changed on retry", journalsAfterFirst,
+            scalarLong("SELECT COUNT(*) FROM journal_entries"))
+        assertEquals(label + " journal lines changed on retry", linesAfterFirst,
+            scalarLong("SELECT COUNT(*) FROM journal_entry_items"))
+        assertEquals(label + " inventory movements changed on retry", movementsAfterFirst,
+            scalarLong("SELECT COUNT(*) FROM inventory_movements"))
+        assertEquals(label + " inventory quantity changed on retry", stockAfterFirst, inventoryQuantity(), 0.0001)
+        return JSONObject(first.toString()).put("idempotent_replay_verified", true)
+            .put("replay_message", second.optString("message"))
+    }
+
+    private fun assertReadOnlyRepeat(block: () -> JSONObject, label: String): JSONObject {
+        val before = tableCounts()
+        val journalCount = scalarLong("SELECT COUNT(*) FROM journal_entries")
+        val movementCount = scalarLong("SELECT COUNT(*) FROM inventory_movements")
+        val stockBefore = inventoryQuantity()
+        val first = block()
+        assertTrue(label + " first read failed: " + first, first.optBoolean("success"))
+        assertEquals(label + " first read mutated SQLite", before.toString(), tableCounts().toString())
+        val second = block()
+        assertTrue(label + " second read failed: " + second, second.optBoolean("success"))
+        assertEquals(label + " repeated read mutated SQLite", before.toString(), tableCounts().toString())
+        assertEquals(journalCount, scalarLong("SELECT COUNT(*) FROM journal_entries"))
+        assertEquals(movementCount, scalarLong("SELECT COUNT(*) FROM inventory_movements"))
+        assertEquals(stockBefore, inventoryQuantity(), 0.0001)
+        return JSONObject(first.toString()).put("read_repeat_verified", true)
+    }
+
+    private fun assertPermissionDeniedWithoutWrites(
+        permission: String,
+        operation: () -> JSONObject
+    ): JSONObject {
+        val before = tableCounts()
+        val journals = scalarLong("SELECT COUNT(*) FROM journal_entries")
+        val journalLines = scalarLong("SELECT COUNT(*) FROM journal_entry_items")
+        val movements = scalarLong("SELECT COUNT(*) FROM inventory_movements")
+        val stock = inventoryQuantity()
+        val failure = runCatching { operation() }.exceptionOrNull()
+        assertTrue("Expected SecurityException for " + permission + " but received " +
+            (failure?.javaClass?.name ?: "no exception"), failure is SecurityException)
+        assertEquals(permission + " unauthorized attempt changed SQLite rows", before.toString(), tableCounts().toString())
+        assertEquals(permission + " unauthorized attempt created journal", journals, scalarLong("SELECT COUNT(*) FROM journal_entries"))
+        assertEquals(permission + " unauthorized attempt created journal lines", journalLines, scalarLong("SELECT COUNT(*) FROM journal_entry_items"))
+        assertEquals(permission + " unauthorized attempt moved inventory", movements, scalarLong("SELECT COUNT(*) FROM inventory_movements"))
+        assertEquals(permission + " unauthorized attempt changed stock", stock, inventoryQuantity(), 0.0001)
+        return JSONObject().put("success", true).put("message", "denied before mutation")
+            .put("permission", permission).put("exception", failure!!.javaClass.simpleName)
+            .put("sqlite_unchanged", true).put("journal_unchanged", true).put("inventory_unchanged", true)
+    }
+
+    private fun runCustodyIdempotencyCase(caseNo: Int, scenario: Int): JSONObject {
+        val key = "custody-retry-" + caseNo
+        return when (scenario) {
+            0 -> {
+                val input = custodyCreateInput(caseNo, "retry-create-" + caseNo)
+                assertIdempotentReplay({ custody("create", input) }, "custody create")
+            }
+            1, 17 -> {
+                val id = createApprovedCustody(caseNo, 100.0)
+                val input = custodyActionInput(caseNo, id).put("idempotency_key", key)
+                    .put("amount", 70.0).put("cash_box_id", cashBoxId)
+                assertIdempotentReplay({ custody("disburse", input) }, "custody disbursement")
+            }
+            2, 7 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                val input = custodyActionInput(caseNo, id).put("idempotency_key", key).put("amount", 25.0)
+                    .put("document_no", "DUP-EXP-" + caseNo).put("document_hash", "DUP-EXP-HASH-" + caseNo)
+                assertIdempotentReplay({ custody("expense", input) }, "custody expense")
+            }
+            3 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                val input = custodyActionInput(caseNo, id).put("idempotency_key", key)
+                    .put("amount", 40.0).put("cash_box_id", cashBoxId)
+                assertIdempotentReplay({ custody("return", input) }, "custody cash return")
+            }
+            4 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                custody("return", custodyActionInput(caseNo, id).put("amount", 100.0)
+                    .put("cash_box_id", cashBoxId).put("idempotency_key", key + "-return"))
+                val input = custodyActionInput(caseNo, id).put("idempotency_key", key + "-settle")
+                assertIdempotentReplay({ custody("settle", input) }, "custody settlement")
+            }
+            5, 6 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                val input = custodyActionInput(caseNo, id).put("idempotency_key", key).put("amount", 15.0)
+                    .put("variance_type", if (scenario == 5) "shortage" else "overage")
+                    .put("reason", "Synthetic counted variance")
+                assertIdempotentReplay({ custody("variance", input) }, "custody variance")
+            }
+            8 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                val number = "DUPLICATE-RECEIPT-" + caseNo
+                val hash = "DUPLICATE-RECEIPT-HASH-" + caseNo
+                val first = custody("expense", custodyActionInput(caseNo, id).put("amount", 10.0)
+                    .put("document_no", number).put("document_hash", hash))
+                val afterFirst = tableCounts()
+                expectRejected {
+                    custody("expense", custodyActionInput(caseNo, id).put("amount", 10.0)
+                        .put("document_no", number).put("document_hash", hash))
+                }
+                assertEquals("duplicate receipt must not create a second expense", afterFirst.toString(), tableCounts().toString())
+                JSONObject(first.toString()).put("duplicate_document_rejected", true)
+                    .put("sqlite_unchanged_after_duplicate", true)
+            }
+            9 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                val input = custodyActionInput(caseNo, id).put("idempotency_key", key).put("to_employee_id", employeeTwo)
+                assertIdempotentReplay({ custody("transfer", input) }, "custody transfer")
+            }
+            10 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                val input = custodyActionInput(caseNo, id).put("idempotency_key", key).put("amount", 40.0)
+                    .put("expense_type", "inventory").put("quantity", 2.0).put("product_id", productId)
+                    .put("warehouse_id", warehouseId).put("document_no", "INV-RETRY-" + caseNo)
+                    .put("document_hash", "INV-RETRY-HASH-" + caseNo)
+                assertIdempotentReplay({ custody("expense", input) }, "custody inventory purchase")
+            }
+            11 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                val input = custodyActionInput(caseNo, id).put("idempotency_key", key).put("amount", 20.0)
+                    .put("expense_type", "deposit_transit").put("document_no", "TRANSIT-RETRY-" + caseNo)
+                    .put("document_hash", "TRANSIT-RETRY-HASH-" + caseNo)
+                assertIdempotentReplay({ custody("expense", input) }, "custody deposit transit")
+            }
+            12, 15 -> assertReadOnlyRepeat({ custody("ageing", JSONObject()) }, "custody ageing")
+            13 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                val input = custodyActionInput(caseNo, id).put("idempotency_key", key).put("amount", 35.0)
+                    .put("approval_reference", "PAYROLL-REPLAY-" + caseNo)
+                assertIdempotentReplay({ custody("recover", input) }, "custody payroll recovery")
+            }
+            14 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                custody("return", custodyActionInput(caseNo, id).put("amount", 100.0)
+                    .put("cash_box_id", cashBoxId).put("idempotency_key", key + "-return"))
+                val input = custodyActionInput(caseNo, id).put("idempotency_key", key + "-reverse")
+                    .put("reason", "Synthetic approved reversal")
+                assertIdempotentReplay({ custody("reverse", input) }, "custody reversal")
+            }
+            16 -> {
+                val id = createCustody(caseNo, 100.0)
+                val input = custodyActionInput(caseNo, id).put("idempotency_key", key).put("approved_amount", 100.0)
+                assertIdempotentReplay({ custody("approve", input) }, "custody approval")
+            }
+            18 -> {
+                val id = createCustody(caseNo, 100.0)
+                val accountId = scalarLong("SELECT id FROM accounts WHERE account_type='asset' AND is_active=1 AND is_deleted=0 LIMIT 1")
+                val input = custodyActionInput(caseNo, id).put("idempotency_key", key).put("account_id", accountId)
+                assertIdempotentReplay({ custody("configure", input) }, "custody account mapping")
+            }
+            else -> assertReadOnlyRepeat({ custody("reconcile", JSONObject()) }, "custody ledger reconciliation")
+        }
+    }
+
+    private fun runCustodyPermissionCase(caseNo: Int, scenario: Int): JSONObject {
+        val key = "custody-denied-" + caseNo
+        val (action, input, permission) = when (scenario) {
+            0 -> Triple("create", custodyCreateInput(caseNo, key), "custody.create")
+            1, 17 -> {
+                val id = createApprovedCustody(caseNo, 100.0)
+                Triple("disburse", custodyActionInput(caseNo, id).put("amount", 50.0)
+                    .put("cash_box_id", cashBoxId), "custody.create")
+            }
+            2, 7, 8 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                Triple("expense", custodyActionInput(caseNo, id).put("amount", 20.0)
+                    .put("document_no", "PERM-EXP-" + caseNo).put("document_hash", "PERM-EXP-HASH-" + caseNo), "custody.update")
+            }
+            3 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                Triple("return", custodyActionInput(caseNo, id).put("amount", 20.0).put("cash_box_id", cashBoxId), "custody.update")
+            }
+            4 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                custody("return", custodyActionInput(caseNo, id).put("amount", 100.0).put("cash_box_id", cashBoxId))
+                Triple("settle", custodyActionInput(caseNo, id), "custody.update")
+            }
+            5, 6 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                Triple("variance", custodyActionInput(caseNo, id).put("amount", 10.0)
+                    .put("variance_type", if (scenario == 5) "shortage" else "overage").put("reason", "Permission fixture"), "custody.update")
+            }
+            9 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                Triple("transfer", custodyActionInput(caseNo, id).put("to_employee_id", employeeTwo), "custody.update")
+            }
+            10 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                Triple("expense", custodyActionInput(caseNo, id).put("amount", 40.0).put("expense_type", "inventory")
+                    .put("quantity", 2.0).put("product_id", productId).put("warehouse_id", warehouseId)
+                    .put("document_no", "PERM-INV-" + caseNo).put("document_hash", "PERM-INV-HASH-" + caseNo), "custody.update")
+            }
+            11 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                Triple("expense", custodyActionInput(caseNo, id).put("amount", 20.0).put("expense_type", "deposit_transit")
+                    .put("document_no", "PERM-TRANSIT-" + caseNo).put("document_hash", "PERM-TRANSIT-HASH-" + caseNo), "custody.update")
+            }
+            12, 15 -> Triple("ageing", JSONObject(), "custody.read")
+            13 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                Triple("recover", custodyActionInput(caseNo, id).put("amount", 25.0)
+                    .put("approval_reference", "PERM-RECOVER-" + caseNo), "custody.update")
+            }
+            14 -> {
+                val id = createIssuedCustody(caseNo, 100.0)
+                custody("return", custodyActionInput(caseNo, id).put("amount", 100.0).put("cash_box_id", cashBoxId))
+                Triple("reverse", custodyActionInput(caseNo, id).put("reason", "Permission fixture"), "custody.delete")
+            }
+            16 -> {
+                val id = createCustody(caseNo, 100.0)
+                Triple("approve", custodyActionInput(caseNo, id).put("approved_amount", 100.0), "custody.approve")
+            }
+            18 -> {
+                val id = createCustody(caseNo, 100.0)
+                val accountId = scalarLong("SELECT id FROM accounts WHERE account_type='asset' AND is_active=1 AND is_deleted=0 LIMIT 1")
+                Triple("configure", custodyActionInput(caseNo, id).put("account_id", accountId), "custody.update")
+            }
+            else -> Triple("reconcile", JSONObject(), "custody.read")
+        }
+        return assertPermissionDeniedWithoutWrites(permission) {
+            CustodyWorkshopManager.executeCustody(helper, stationId, restrictedUserId, action, input)
+        }
+    }
+
+    private fun runCustodyIntegrityCase(caseNo: Int, scenario: Int): JSONObject {
+        val executed = runCustodyCase(caseNo, scenario, 0)
+        val reconciliation = custody("reconcile", JSONObject())
+        assertTrue("custody integrity check failed: " + reconciliation, reconciliation.optBoolean("passed"))
+        val auditCount = scalarLong("SELECT COUNT(*) FROM custody_audit_events WHERE station_id=?", stationId)
+        assertTrue("custody audit ledger is empty", auditCount > 0)
+        val unbalanced = scalarLong("SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND status='posted' AND ABS(total_debit-total_credit)>0.01",
+            stationId)
+        assertEquals("posted custody journals must balance", 0L, unbalanced)
+        return JSONObject().put("message", "the scenario executed and station custody/GL/audit reconciliation passed")
+            .put("scenario_result", executed).put("reconciliation", reconciliation).put("station_audit_events", auditCount)
+    }
+
+    private fun runWorkshopIdempotencyCase(caseNo: Int, scenario: Int): JSONObject {
+        val key = "workshop-retry-" + caseNo
+        return when (scenario) {
+            0 -> {
+                val input = workOrderCreateInput(caseNo, "retry-create-" + caseNo)
+                assertIdempotentReplay({ workshop("create", input) }, "work order create")
+            }
+            1, 8 -> {
+                val id = createInProgressOrder(caseNo, false)
+                val input = workOrderActionInput(caseNo, id).put("employee_id", if (scenario == 8) employeeTwo else employeeOne)
+                    .put("hours", if (scenario == 8) 4.0 else 2.0).put("hourly_rate", 15.0).put("work_date", "2026-11-01")
+                assertIdempotentReplay({ workshop("labor", input) }, "technician labor")
+            }
+            2 -> {
+                val id = createInProgressOrder(caseNo, false)
+                val input = workOrderActionInput(caseNo, id).put("product_id", productId).put("warehouse_id", warehouseId).put("quantity", 2.0)
+                assertIdempotentReplay({ workshop("issue_part", input) }, "work order parts issue")
+            }
+            3 -> {
+                val id = createInProgressOrder(caseNo, false)
+                val part = issuePart(caseNo, id)
+                val input = workOrderActionInput(caseNo, id).put("part_id", part).put("quantity", 1.0)
+                assertIdempotentReplay({ workshop("return_part", input) }, "work order part return")
+            }
+            4 -> {
+                val id = createInProgressOrder(caseNo, false)
+                val input = workOrderActionInput(caseNo, id).put("product_id", productId).put("warehouse_id", warehouseId)
+                    .put("quantity", 2.0).put("unit_cost", 18.0)
+                assertIdempotentReplay({ workshop("purchase_part", input) }, "credit purchase of spare parts")
+            }
+            5 -> {
+                val id = createInProgressOrder(caseNo, false)
+                val input = workOrderActionInput(caseNo, id).put("amount", 350.0)
+                    .put("decision", if (caseNo % 2 == 0) "capitalize" else "expense")
+                    .put("approval_reference", "CAP-RETRY-" + caseNo)
+                assertIdempotentReplay({ workshop("capitalize", input) }, "maintenance capitalization decision")
+            }
+            6, 18 -> {
+                val id = createInProgressOrder(caseNo, true)
+                val input = workOrderActionInput(caseNo, id).put("invoice_type", "customer")
+                    .put("subtotal", 500.0).put("tax_rate", 15.0).put("invoice_code", "DUP-INV-" + caseNo)
+                assertIdempotentReplay({ workshop("invoice", input) }, "workshop customer invoice")
+            }
+            7 -> {
+                val id = createInProgressOrder(caseNo, false)
+                val input = workOrderActionInput(caseNo, id).put("estimate_labor_cost", 120.0).put("estimate_parts_cost", 300.0)
+                assertIdempotentReplay({ workshop("estimate", input) }, "work order estimate update")
+            }
+            9 -> {
+                val id = createInProgressOrder(caseNo, false)
+                val input = workOrderActionInput(caseNo, id).put("claim_type", "supplier").put("claim_amount", 200.0)
+                    .put("reference_no", "WARRANTY-RETRY-" + caseNo)
+                assertIdempotentReplay({ workshop("warranty", input) }, "warranty claim")
+            }
+            10 -> {
+                val id = createInProgressOrder(caseNo, false)
+                val part = issuePart(caseNo, id)
+                workshop("return_part", workOrderActionInput(caseNo, id).put("part_id", part).put("quantity", 1.0))
+                val input = workOrderActionInput(caseNo, id).put("reason", "Cancel after returned synthetic parts")
+                assertIdempotentReplay({ workshop("cancel", input) }, "work order cancellation")
+            }
+            11 -> {
+                val id = createInProgressOrder(caseNo, false)
+                val input = workOrderActionInput(caseNo, id).put("product_id", productId).put("warehouse_id", warehouseId)
+                    .put("quantity", 1.0).put("damage_reason", "Synthetic damaged part")
+                assertIdempotentReplay({ workshop("damage_part", input) }, "workshop damaged part")
+            }
+            12 -> {
+                val id = createInProgressOrder(caseNo, false)
+                val input = workOrderActionInput(caseNo, id).put("started_at", "2026-11-01 08:00:00")
+                    .put("ended_at", "2026-11-01 09:00:00").put("downtime_minutes", 60.0).put("lost_sales_estimate", 1000.0)
+                assertIdempotentReplay({ workshop("downtime", input) }, "asset downtime")
+            }
+            13 -> {
+                val id = createInProgressOrder(caseNo, true)
+                workshop("invoice", workOrderActionInput(caseNo, id).put("invoice_type", "customer").put("subtotal", 300.0)
+                    .put("tax_rate", 5.0).put("invoice_code", "CLOSE-RETRY-INV-" + caseNo))
+                val input = workOrderActionInput(caseNo, id)
+                assertIdempotentReplay({ workshop("close", input) }, "work order close")
+            }
+            14 -> assertReadOnlyRepeat({ workshop("list", JSONObject().put("status", "in_progress")) }, "open work orders report")
+            15 -> {
+                val id = createInProgressOrder(caseNo, false)
+                val input = workOrderActionInput(caseNo, id).put("budget_year", 2026).put("budget_month", 11)
+                    .put("cost_center", "WORKSHOP").put("budget_amount", 5000.0)
+                assertIdempotentReplay({ workshop("budget", input) }, "workshop budget")
+            }
+            16 -> {
+                val id = createInProgressOrder(caseNo, false)
+                val input = workOrderActionInput(caseNo, id).put("product_id", productId).put("warehouse_id", warehouseId)
+                    .put("counted_quantity", inventoryQuantity() + 3.0).put("approve", true)
+                    .put("approval_reference", "STOCKTAKE-RETRY-" + caseNo)
+                assertIdempotentReplay({ workshop("stocktake", input) }, "parts stocktake")
+            }
+            17 -> {
+                val id = createWorkOrderDraft(caseNo)
+                val input = workOrderActionInput(caseNo, id)
+                assertIdempotentReplay({ workshop("approve", input) }, "work order approval")
+            }
+            else -> assertReadOnlyRepeat({ workshop("profitability", JSONObject()) }, "workshop profitability report")
+        }
+    }
+
+    private fun runWorkshopPermissionCase(caseNo: Int, scenario: Int): JSONObject {
+        val (action, input, permission) = when (scenario) {
+            0 -> Triple("create", workOrderCreateInput(caseNo, "permission-" + caseNo), "workshop.create")
+            1, 8 -> {
+                val id = createInProgressOrder(caseNo, false)
+                Triple("labor", workOrderActionInput(caseNo, id).put("employee_id", employeeOne)
+                    .put("hours", 2.0).put("hourly_rate", 15.0), "workshop.update")
+            }
+            2 -> {
+                val id = createInProgressOrder(caseNo, false)
+                Triple("issue_part", workOrderActionInput(caseNo, id).put("product_id", productId)
+                    .put("warehouse_id", warehouseId).put("quantity", 1.0), "workshop.create")
+            }
+            3 -> {
+                val id = createInProgressOrder(caseNo, false)
+                val part = issuePart(caseNo, id)
+                Triple("return_part", workOrderActionInput(caseNo, id).put("part_id", part).put("quantity", 1.0), "workshop.update")
+            }
+            4 -> {
+                val id = createInProgressOrder(caseNo, false)
+                Triple("purchase_part", workOrderActionInput(caseNo, id).put("product_id", productId)
+                    .put("warehouse_id", warehouseId).put("quantity", 1.0).put("unit_cost", 18.0), "workshop.create")
+            }
+            5 -> {
+                val id = createInProgressOrder(caseNo, false)
+                Triple("capitalize", workOrderActionInput(caseNo, id).put("amount", 150.0).put("decision", "expense")
+                    .put("approval_reference", "CAP-PERM-" + caseNo), "workshop.update")
+            }
+            6, 18 -> {
+                val id = createInProgressOrder(caseNo, true)
+                Triple("invoice", workOrderActionInput(caseNo, id).put("invoice_type", "customer")
+                    .put("subtotal", 100.0).put("tax_rate", 15.0).put("invoice_code", "PERM-INV-" + caseNo), "workshop.create")
+            }
+            7 -> {
+                val id = createInProgressOrder(caseNo, false)
+                Triple("estimate", workOrderActionInput(caseNo, id).put("estimate_labor_cost", 50.0)
+                    .put("estimate_parts_cost", 75.0), "workshop.update")
+            }
+            9 -> {
+                val id = createInProgressOrder(caseNo, false)
+                Triple("warranty", workOrderActionInput(caseNo, id).put("claim_type", "supplier")
+                    .put("claim_amount", 50.0).put("reference_no", "PERM-WARRANTY-" + caseNo), "workshop.update")
+            }
+            10 -> {
+                val id = createInProgressOrder(caseNo, false)
+                val part = issuePart(caseNo, id)
+                workshop("return_part", workOrderActionInput(caseNo, id).put("part_id", part).put("quantity", 1.0))
+                Triple("cancel", workOrderActionInput(caseNo, id).put("reason", "Permission test"), "workshop.update")
+            }
+            11 -> {
+                val id = createInProgressOrder(caseNo, false)
+                Triple("damage_part", workOrderActionInput(caseNo, id).put("product_id", productId)
+                    .put("warehouse_id", warehouseId).put("quantity", 1.0).put("damage_reason", "Permission test damage"),
+                    "workshop.update")
+            }
+            12 -> {
+                val id = createInProgressOrder(caseNo, false)
+                Triple("downtime", workOrderActionInput(caseNo, id).put("started_at", "2026-11-01 08:00:00")
+                    .put("ended_at", "2026-11-01 09:00:00").put("downtime_minutes", 60.0), "workshop.update")
+            }
+            13 -> {
+                val id = createInProgressOrder(caseNo, false)
+                Triple("close", workOrderActionInput(caseNo, id), "workshop.update")
+            }
+            14 -> Triple("list", JSONObject().put("status", "in_progress"), "workshop.read")
+            15 -> {
+                val id = createInProgressOrder(caseNo, false)
+                Triple("budget", workOrderActionInput(caseNo, id).put("budget_year", 2026).put("budget_month", 11)
+                    .put("cost_center", "WORKSHOP").put("budget_amount", 500.0), "workshop.update")
+            }
+            16 -> {
+                val id = createInProgressOrder(caseNo, false)
+                Triple("stocktake", workOrderActionInput(caseNo, id).put("product_id", productId).put("warehouse_id", warehouseId)
+                    .put("counted_quantity", inventoryQuantity() + 2.0).put("approve", true).put("approval_reference", "PERM-STOCK-" + caseNo),
+                    "workshop.update")
+            }
+            17 -> Triple("approve", workOrderActionInput(caseNo, createWorkOrderDraft(caseNo)), "workshop.approve")
+            else -> Triple("profitability", JSONObject(), "workshop.read")
+        }
+        return assertPermissionDeniedWithoutWrites(permission) {
+            CustodyWorkshopManager.executeWorkshop(helper, stationId, restrictedUserId, action, input)
+        }
+    }
+
+    private fun runWorkshopIntegrityCase(caseNo: Int, scenario: Int): JSONObject {
+        val executed = runWorkshopCase(caseNo, scenario, 0)
+        val reconciliation = workshop("reconcile", JSONObject())
+        assertTrue("workshop reconciliation failed: " + reconciliation, reconciliation.optBoolean("passed"))
+        val auditCount = scalarLong("SELECT COUNT(*) FROM work_order_audit_events WHERE station_id=?", stationId)
+        assertTrue("work order audit ledger is empty", auditCount > 0)
+        val unbalanced = scalarLong("SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND status='posted' AND ABS(total_debit-total_credit)>0.01",
+            stationId)
+        assertEquals("posted workshop journals must balance", 0L, unbalanced)
+        return JSONObject().put("message", "the scenario executed and work order/stock/GL/audit reconciliation passed")
+            .put("scenario_result", executed).put("reconciliation", reconciliation).put("station_audit_events", auditCount)
     }
 
     private fun createCustody(caseNo: Int, amount: Double): Long =
