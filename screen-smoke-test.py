@@ -303,7 +303,7 @@ SECURITY_CASES = {
     'finance-posting-lifecycle': (
         PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt',
         [
-            'const val VERSION = 48', 'private fun postFinanceJournalLines',
+            'const val VERSION = 49', 'private fun postFinanceJournalLines',
             'fun addCashMovement(data: JSONObject, stationScopeId: Int, actorId: Long)',
             'fun addCashDeposit(data: JSONObject, stationScopeId: Int, actorId: Long)',
             'fun reverseCashDepositRecord(', 'fun addReceipt(data: JSONObject, stationScopeId: Int, actorId: Long)',
