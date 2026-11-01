@@ -103,7 +103,7 @@ function testNativeRankingContractIsReadOnlyAndStationScoped() {
 }
 
 async function run() {
-    const calls = { customers: 0, latest: [], recent: [], scope: 0, page: 0 };
+    const calls = { customers: 0, latest: [], recent: [], scope: 0, scopeRequests: [], page: 0 };
     const salesByCustomer = {
         11: {
             sale_id: 7011, fuel_sale_id: 7011, customer_party_id: 11,
@@ -167,13 +167,19 @@ async function run() {
                 const scope = { ...activeScope };
                 const fail = failNextScope;
                 failNextScope = false;
+                const record = {
+                    requestId,
+                    scope,
+                    status: 'pending',
+                    response: null
+                };
+                calls.scopeRequests.push(record);
                 queueMicrotask(() => {
-                    window.__fuelSalesNativeResult(
-                        requestId,
-                        json(fail
-                            ? { success: false, error: 'SQLite scope test failure' }
-                            : { success: true, ...scope })
-                    );
+                    record.status = fail ? 'failed' : 'succeeded';
+                    record.response = fail
+                        ? { success: false, error: 'SQLite scope test failure' }
+                        : { success: true, ...scope };
+                    window.__fuelSalesNativeResult(requestId, json(record.response));
                 });
                 return json({ success: true, queued: true });
             }
@@ -183,7 +189,9 @@ async function run() {
             const record = {
                 requestId,
                 scope: { ...activeScope },
-                index: calls.recent.length + 1
+                index: calls.recent.length + 1,
+                status: 'pending',
+                response: null
             };
             calls.recent.push(record);
 
@@ -193,10 +201,12 @@ async function run() {
                 scopeAfterFailedRanking = null;
                 if (nextScope) activeScope = { ...nextScope };
                 queueMicrotask(() => {
-                    window.__fuelSalesNativeResult(
-                        requestId,
-                        json({ success: false, error: 'SQLite simulated ranking read failure' })
-                    );
+                    record.status = 'failed';
+                    record.response = {
+                        success: false,
+                        error: 'SQLite simulated ranking read failure'
+                    };
+                    window.__fuelSalesNativeResult(requestId, json(record.response));
                 });
             } else {
                 // Deliberately hold the SQLite result to simulate slow storage and
@@ -263,15 +273,14 @@ async function run() {
         const index = pendingRankings.indexOf(record);
         assert.ok(index >= 0, 'expected a delayed ranking callback to be pending');
         pendingRankings.splice(index, 1);
-        window.__fuelSalesNativeResult(
-            record.requestId,
-            json({
-                success: true,
-                data: ids,
-                user_id: record.scope.user_id,
-                station_id: record.scope.station_id
-            })
-        );
+        record.status = 'succeeded';
+        record.response = {
+            success: true,
+            data: ids,
+            user_id: record.scope.user_id,
+            station_id: record.scope.station_id
+        };
+        window.__fuelSalesNativeResult(record.requestId, json(record.response));
     };
     const expectMenuIds = async (ids, label) => {
         await waitFor(() => menu.classList.contains('show') &&
@@ -469,20 +478,57 @@ async function run() {
         failNextRanking = true;
         scopeAfterFailedRanking = { user_id: 606, station_id: 6 };
         window.dispatchEvent(new window.Event('focus'));
-        await waitFor(() => calls.recent.length === 5,
-            'station-5 ranking request that will fail after a session switch');
-        await waitFor(() => calls.recent.length === 6,
-            'automatic station-6 refresh after revalidating the failed station-5 request');
-        const stationSixRanking = calls.recent[5];
+
+        // Identify the station-5 command by its authenticated scope, not by a
+        // positional array length. The failure callback may complete and dispatch
+        // station 6 between two polling ticks, so count===5 is inherently racy.
+        await waitFor(
+            () => calls.recent.some(record =>
+                record.scope.user_id === 505 && record.scope.station_id === 5),
+            'the exact station-5 ranking request'
+        );
+        const stationFiveRankings = calls.recent.filter(record =>
+            record.scope.user_id === 505 && record.scope.station_id === 5);
+        assert.equal(stationFiveRankings.length, 1,
+            'one station transition must not dispatch duplicate station-5 ranking queries');
+        const stationFiveRanking = stationFiveRankings[0];
+        await waitFor(() => stationFiveRanking.status === 'failed',
+            'the station-5 SQLite failure callback');
+
+        assert.equal(stationFiveRanking.response?.error, 'SQLite simulated ranking read failure',
+            'the station-5 ranking must fail for the intended SQLite read error');
+        assert.ok(
+            calls.scopeRequests.some(record =>
+                record.scope.user_id === 606 &&
+                record.scope.station_id === 6 &&
+                record.status === 'succeeded'),
+            'after station-5 failure, the active authenticated scope must be re-read as 606:6'
+        );
+
+        await waitFor(
+            () => calls.recent.some(record =>
+                record.scope.user_id === 606 && record.scope.station_id === 6),
+            'the recovery ranking request for authenticated station 6'
+        );
+        const stationSixRankings = calls.recent.filter(record =>
+            record.scope.user_id === 606 && record.scope.station_id === 6);
+        assert.equal(stationSixRankings.length, 1,
+            'recovery must issue one station-6 ranking query, not duplicate requests');
+        const stationSixRanking = stationSixRankings[0];
+        assert.equal(stationSixRanking.status, 'pending',
+            'station-6 result must remain independently pending until the test releases it');
         assert.deepEqual(stationSixRanking.scope, { user_id: 606, station_id: 6 },
             'the retry must execute under the newly authenticated user and station');
+
         openCustomerPicker();
         await waitFor(() => menuIds().includes('99') && menuIds().includes('101'),
-            'station-6 customer rows must replace station-5 rows after the failed request');
+            'station-6 customer rows must replace the previous station rows');
         assert.deepEqual(menuIds(), ['99', '100', '101'],
-            'no station-5 customer may remain visible after the failed cross-station request');
-        assert.equal(menuIds().includes('88'), false);
-        assert.equal(menuIds().includes('89'), false);
+            'no station-5 or station-4 customer may remain visible after failed cross-station refresh');
+        assert.equal(menuIds().includes('88'), false,
+            'station-5 customer 88 must not leak into the station-6 picker');
+        assert.equal(menuIds().includes('89'), false,
+            'station-5 customer 89 must not leak into the station-6 picker');
         releaseRanking(stationSixRanking, [100, 99]);
         await expectMenuIds(['100', '99', '101'],
             'the newly authenticated station ranking must be applied after recovery');
@@ -490,7 +536,8 @@ async function run() {
         testFeeNormalizer();
         console.log(
             'Deliveries customer ranking regression tests passed: immediate modal, delayed async lookup, ' +
-            'selection preservation, search, cache reuse, stale station response, empty results and SQLite failure.'
+            'selection preservation, search, cache reuse, stale station response, empty results, ' +
+            'and identity-verified station-5 failure recovery into station 6.'
         );
     } finally {
         // Complete any deliberately delayed native callbacks before disposing the DOM.
