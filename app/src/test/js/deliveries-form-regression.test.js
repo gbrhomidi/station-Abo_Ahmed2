@@ -427,11 +427,14 @@ async function run() {
             'only the newest station ranking may reorder the current station customer list');
 
         const renderedMenuBeforeUnchangedRefresh = menu.innerHTML;
+        const retainedMenuOption = menu.querySelector('[data-id="55"]');
         const recentCallsBeforeUnchangedRefresh = calls.recent.length;
         window.dispatchEvent(new window.Event('focus'));
         await delay(60);
         assert.equal(menu.innerHTML, renderedMenuBeforeUnchangedRefresh,
-            'an unchanged cached ranking must not rebuild the customer menu');
+            'an unchanged cached ranking must retain the same menu markup');
+        assert.strictEqual(menu.querySelector('[data-id="55"]'), retainedMenuOption,
+            'an unchanged result must reuse the existing dropdown DOM nodes, not rebuild them');
         assert.equal(calls.recent.length, recentCallsBeforeUnchangedRefresh,
             'a valid cache must avoid repeating the recent-sales SQL query');
 
