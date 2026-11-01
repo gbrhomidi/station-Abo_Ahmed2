@@ -54,6 +54,8 @@ async function run() {
         'the create modal must not wait for customer ranking or form context');
     assert.ok(createModal.includes('scheduleDeliveryFormLookups()'),
         'remaining form lookups must be scheduled after opening');
+    assert.ok(createModal.includes('loadRecentCustomerSaleOrder(true)'),
+        'every newly opened delivery form must revalidate its station before reusing cached ranking');
 
     // Dropdown behavior: ranked users first, all non-recent customers remain visible,
     // and identical markup reuses the current DOM instead of rebuilding it.
