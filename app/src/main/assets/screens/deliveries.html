@@ -2836,8 +2836,17 @@
         latestSaleRequestId: 0,
         recentSaleCustomerIds: [],
         recentSaleCustomersLoadedAt: 0,
+        recentSaleCustomersRankScopeKey: '',
+        recentSaleCustomersScopeKey: '',
+        recentSaleCustomersScopeUserId: 0,
+        recentSaleCustomersScopeStationId: 0,
+        recentSaleCustomersScopeCheckedAt: 0,
+        recentSaleCustomersScopePromise: null,
         recentSaleCustomersPromise: null,
+        recentSaleCustomersPromiseScopeKey: '',
         recentSaleCustomersRequestGeneration: 0,
+        recentSaleCustomersRetryScopeKey: '',
+        recentSaleCustomersRetryAfter: 0,
         saleKind: 'fuel',
         saleItems: [],
 
@@ -4630,38 +4639,208 @@
             left.every((id, index) => Number(id) === Number(right[index]));
     }
 
-    async function loadRecentCustomerSaleOrder(force = false) {
-        const cacheAge = Date.now() - Number(state.recentSaleCustomersLoadedAt || 0);
-        if (!force && state.recentSaleCustomersLoadedAt && cacheAge < 30000) {
+    function currentCustomerMenuIsInteractive() {
+        const field = $('f_party_display');
+        const menu = $('partyMenu');
+        return Boolean(
+            field &&
+            menu &&
+            document.activeElement === field &&
+            menu.classList.contains('show')
+        );
+    }
+
+    function refreshOpenCustomerMenu() {
+        if (!currentCustomerMenuIsInteractive()) return;
+        const field = $('f_party_display');
+        renderCustomerMenu(field.value);
+    }
+
+    function clearRecentCustomerRankingForScopeChange() {
+        const hadRanking = state.recentSaleCustomerIds.length > 0;
+        state.recentSaleCustomersRequestGeneration++;
+        state.recentSaleCustomersPromise = null;
+        state.recentSaleCustomersPromiseScopeKey = '';
+        state.recentSaleCustomersRankScopeKey = '';
+        state.recentSaleCustomerIds = [];
+        state.recentSaleCustomersLoadedAt = 0;
+        state.recentSaleCustomersRetryScopeKey = '';
+        state.recentSaleCustomersRetryAfter = 0;
+        if (hadRanking) refreshOpenCustomerMenu();
+        return hadRanking;
+    }
+
+    function invalidateRecentCustomerScope() {
+        state.recentSaleCustomersScopeKey = '';
+        state.recentSaleCustomersScopeUserId = 0;
+        state.recentSaleCustomersScopeStationId = 0;
+        state.recentSaleCustomersScopeCheckedAt = 0;
+        state.recentSaleCustomersScopePromise = null;
+        return clearRecentCustomerRankingForScopeChange();
+    }
+
+    async function loadRecentCustomerSaleOrder(forceScopeCheck = false) {
+        const client = recentSaleCustomersBridgeClient;
+        if (!client || typeof client.invoke !== 'function') {
+            const changed = invalidateRecentCustomerScope();
             return {
                 ids: state.recentSaleCustomerIds,
+                changed,
+                failed: true,
+                scopeUnavailable: true
+            };
+        }
+
+        let scope;
+        const scopeAge = Date.now() - Number(state.recentSaleCustomersScopeCheckedAt || 0);
+        if (state.recentSaleCustomersScopePromise) {
+            try {
+                scope = await state.recentSaleCustomersScopePromise;
+            } catch (error) {
+                const changed = invalidateRecentCustomerScope();
+                console.warn('[Deliveries] Customer ranking scope unavailable:', error.message || error);
+                return {
+                    ids: state.recentSaleCustomerIds,
+                    changed,
+                    failed: true,
+                    scopeUnavailable: true
+                };
+            }
+        } else if (
+            !forceScopeCheck &&
+            state.recentSaleCustomersScopeKey &&
+            scopeAge >= 0 &&
+            scopeAge < 3000
+        ) {
+            scope = {
+                scopeKey: state.recentSaleCustomersScopeKey,
+                userId: state.recentSaleCustomersScopeUserId,
+                stationId: state.recentSaleCustomersScopeStationId,
                 changed: false,
                 cached: true
             };
+        } else {
+            const scopePromise = Promise.resolve().then(async () => {
+                const response = await client.invoke('scope', []);
+                const payload = dataOf(response) || response || {};
+                const userId = Number(
+                    response.user_id ??
+                    payload.user_id ??
+                    (payload.data && payload.data.user_id) ??
+                    0
+                );
+                const stationId = Number(
+                    response.station_id ??
+                    payload.station_id ??
+                    (payload.data && payload.data.station_id) ??
+                    0
+                );
+                if (
+                    !Number.isSafeInteger(userId) ||
+                    userId <= 0 ||
+                    !Number.isSafeInteger(stationId) ||
+                    stationId <= 0
+                ) {
+                    throw new Error('لم يُرجع Android هوية المستخدم والمحطة الحالية بصورة صالحة.');
+                }
+
+                const scopeKey = String(userId) + ':' + String(stationId);
+                const changed = state.recentSaleCustomersScopeKey !== scopeKey;
+                if (changed) {
+                    clearRecentCustomerRankingForScopeChange();
+                    state.recentSaleCustomersScopeKey = scopeKey;
+                }
+                state.recentSaleCustomersScopeUserId = userId;
+                state.recentSaleCustomersScopeStationId = stationId;
+                state.recentSaleCustomersScopeCheckedAt = Date.now();
+                return { scopeKey, userId, stationId, changed, cached: false };
+            });
+
+            state.recentSaleCustomersScopePromise = scopePromise;
+            try {
+                scope = await scopePromise;
+            } catch (error) {
+                const changed = invalidateRecentCustomerScope();
+                console.warn('[Deliveries] Customer ranking scope unavailable:', error.message || error);
+                return {
+                    ids: state.recentSaleCustomerIds,
+                    changed,
+                    failed: true,
+                    scopeUnavailable: true
+                };
+            } finally {
+                if (state.recentSaleCustomersScopePromise === scopePromise) {
+                    state.recentSaleCustomersScopePromise = null;
+                }
+            }
         }
-        if (state.recentSaleCustomersPromise) {
+
+        if (!scope || !scope.scopeKey || state.recentSaleCustomersScopeKey !== scope.scopeKey) {
+            return {
+                ids: state.recentSaleCustomerIds,
+                changed: false,
+                stale: true
+            };
+        }
+
+        const now = Date.now();
+        if (
+            state.recentSaleCustomersRankScopeKey === scope.scopeKey &&
+            state.recentSaleCustomersLoadedAt > 0 &&
+            now - state.recentSaleCustomersLoadedAt < 30000
+        ) {
+            return {
+                ids: state.recentSaleCustomerIds,
+                changed: Boolean(scope.changed),
+                cached: true
+            };
+        }
+
+        if (
+            state.recentSaleCustomersPromise &&
+            state.recentSaleCustomersPromiseScopeKey === scope.scopeKey
+        ) {
             return state.recentSaleCustomersPromise;
         }
 
+        if (
+            state.recentSaleCustomersRetryScopeKey === scope.scopeKey &&
+            now < state.recentSaleCustomersRetryAfter
+        ) {
+            return {
+                ids: state.recentSaleCustomerIds,
+                changed: Boolean(scope.changed),
+                failed: true,
+                cached: true,
+                retrySuppressed: true
+            };
+        }
+
         const requestGeneration = ++state.recentSaleCustomersRequestGeneration;
-        const requestPromise = Promise.resolve().then(async () => {
+        const scopeChanged = Boolean(scope.changed);
+        let requestPromise;
+        requestPromise = Promise.resolve().then(async () => {
             try {
-                if (!recentSaleCustomersBridgeClient ||
-                    typeof recentSaleCustomersBridgeClient.invoke !== 'function') {
-                    throw new Error('واجهة Android غير المتزامنة لترتيب العملاء غير متاحة.');
+                // Native dispatch acknowledges immediately; SQLite runs on Dispatchers.IO.
+                const response = await client.invoke('getRecentSaleCustomerIds', []);
+                const payload = response && typeof response === 'object'
+                    ? response
+                    : {};
+                const raw = dataOf(response);
+                const responseUserId = Number(payload.user_id ?? (raw && raw.user_id) ?? 0);
+                const responseStationId = Number(payload.station_id ?? (raw && raw.station_id) ?? 0);
+
+                // Bind the callback to the exact session that executed the query.
+                if (
+                    responseUserId !== scope.userId ||
+                    responseStationId !== scope.stationId
+                ) {
+                    throw new Error('تغير المستخدم أو المحطة أثناء تحديث ترتيب العملاء؛ تم تجاهل النتيجة.');
                 }
 
-                // This is an asynchronous acknowledgement/callback flow. Android
-                // performs the station-scoped SQLite query on Dispatchers.IO.
-                const response = await recentSaleCustomersBridgeClient.invoke(
-                    'getRecentSaleCustomerIds',
-                    []
-                );
-                const raw = dataOf(response);
                 const values = Array.isArray(raw)
                     ? raw
                     : (raw && Array.isArray(raw.data) ? raw.data : null);
-
                 if (!Array.isArray(values)) {
                     throw new Error(
                         'عقد getRecentSaleCustomerIds أعاد صيغة غير متوافقة؛ المتوقع مصفوفة معرفات العملاء.'
@@ -4681,8 +4860,11 @@
                     return Number(value || 0);
                 }).filter(id => Number.isSafeInteger(id) && id > 0)));
 
-                // Ignore a delayed response after a newer request/context has superseded it.
-                if (requestGeneration !== state.recentSaleCustomersRequestGeneration) {
+                // Old callbacks are harmless after scope changes or a newer request.
+                if (
+                    requestGeneration !== state.recentSaleCustomersRequestGeneration ||
+                    state.recentSaleCustomersScopeKey !== scope.scopeKey
+                ) {
                     return {
                         ids: state.recentSaleCustomerIds,
                         changed: false,
@@ -4690,19 +4872,23 @@
                     };
                 }
 
-                const changed = !sameRecentCustomerOrder(state.recentSaleCustomerIds, ids);
-                if (changed) {
-                    state.recentSaleCustomerIds = ids;
-                }
+                const orderChanged = !sameRecentCustomerOrder(state.recentSaleCustomerIds, ids);
+                if (orderChanged) state.recentSaleCustomerIds = ids;
                 state.recentSaleCustomersLoadedAt = Date.now();
+                state.recentSaleCustomersRankScopeKey = scope.scopeKey;
+                state.recentSaleCustomersRetryScopeKey = '';
+                state.recentSaleCustomersRetryAfter = 0;
 
                 return {
                     ids: state.recentSaleCustomerIds,
-                    changed,
+                    changed: scopeChanged || orderChanged,
                     cached: false
                 };
             } catch (error) {
-                if (requestGeneration !== state.recentSaleCustomersRequestGeneration) {
+                if (
+                    requestGeneration !== state.recentSaleCustomersRequestGeneration ||
+                    state.recentSaleCustomersScopeKey !== scope.scopeKey
+                ) {
                     return {
                         ids: state.recentSaleCustomerIds,
                         changed: false,
@@ -4710,30 +4896,29 @@
                     };
                 }
 
-                const changed = state.recentSaleCustomerIds.length > 0;
-                // Never display a stale ranking as though it were a current result.
-                state.recentSaleCustomerIds = [];
-                state.recentSaleCustomersLoadedAt = 0;
+                // Keep a valid same-station cache on temporary failure; a scope switch
+                // clears it before querying, so no previous station ranking can leak.
+                state.recentSaleCustomersRetryScopeKey = scope.scopeKey;
+                state.recentSaleCustomersRetryAfter = Date.now() + 5000;
                 console.warn(
                     '[Deliveries] Recent customer-sale order unavailable:',
                     error.message || error
                 );
                 return {
                     ids: state.recentSaleCustomerIds,
-                    changed,
+                    changed: scopeChanged,
                     failed: true
                 };
-            }
-        }).finally(() => {
-            if (
-                requestGeneration === state.recentSaleCustomersRequestGeneration &&
-                state.recentSaleCustomersPromise === requestPromise
-            ) {
-                state.recentSaleCustomersPromise = null;
+            } finally {
+                if (state.recentSaleCustomersPromise === requestPromise) {
+                    state.recentSaleCustomersPromise = null;
+                    state.recentSaleCustomersPromiseScopeKey = '';
+                }
             }
         });
 
         state.recentSaleCustomersPromise = requestPromise;
+        state.recentSaleCustomersPromiseScopeKey = scope.scopeKey;
         return requestPromise;
     }
 
@@ -4759,19 +4944,25 @@
     }
 
     $('f_party_display').addEventListener('focus', () => {
-        // Show the current list immediately. A changed ranking is applied after its
-        // asynchronous SQLite response, using the field's latest search text.
-        renderCustomerMenu('');
-        loadRecentCustomerSaleOrder().then(result => {
-            const field = $('f_party_display');
-            if (
-                result &&
-                result.changed &&
-                document.activeElement === field &&
-                $('partyMenu').classList.contains('show')
-            ) {
-                renderCustomerMenu(field.value);
-            }
+        // Show the currently loaded customer list immediately without erasing the
+        // operator's search text. Ranking refresh stays off the form-open path.
+        renderCustomerMenu($('f_party_display').value);
+        void loadRecentCustomerSaleOrder().then(result => {
+            if (result && result.changed) refreshOpenCustomerMenu();
+        });
+    });
+
+    // Revalidate the authenticated user+station namespace when the WebView resumes.
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            void loadRecentCustomerSaleOrder(true).then(result => {
+                if (result && result.changed) refreshOpenCustomerMenu();
+            });
+        }
+    });
+    window.addEventListener('focus', () => {
+        void loadRecentCustomerSaleOrder(true).then(result => {
+            if (result && result.changed) refreshOpenCustomerMenu();
         });
     });
 
@@ -5717,22 +5908,40 @@
        CREATE MODAL
        ================================================================ */
 
-    async function openCreateModal() {
+    function scheduleDeliveryFormLookups() {
+        const load = () => {
+            void loadFormContext().then(() => {
+                refreshOpenCustomerMenu();
+            }).catch(error => {
+                console.warn('[Deliveries] Form lookup refresh failed:', error.message || error);
+            });
+        };
 
+        // Give the browser one frame to display the modal before the remaining form
+        // lookup bridges execute. This prevents any customer-ranking query from
+        // delaying the opening animation or first paint.
+        if (typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(() => window.setTimeout(load, 0));
+        } else {
+            window.setTimeout(load, 0);
+        }
+    }
+
+    function openCreateModal() {
         resetForm();
-
         $('formTitle').textContent = 'إضافة توصيل جديد';
-
-        await loadFormContext();
-
         openModal('formModal');
 
-        // Prefetch asynchronously only after the form is visible; reuse the 30-second cache.
-        void loadRecentCustomerSaleOrder();
+        void loadRecentCustomerSaleOrder().then(result => {
+            if (result && result.changed) refreshOpenCustomerMenu();
+        });
+        scheduleDeliveryFormLookups();
 
         setTimeout(() => {
             const field = $('f_party_display');
-            if (field) field.focus({ preventScroll: false });
+            if (field && $('formModal').classList.contains('show')) {
+                field.focus({ preventScroll: false });
+            }
         }, 100);
     }
 
@@ -5740,41 +5949,37 @@
        EDIT MODAL
        ================================================================ */
 
-    async function openEditModal(row) {
-
+    function openEditModal(row) {
         resetForm();
-
         state.editingId = row.id;
-
         $('formTitle').textContent = 'تعديل بيانات التوصيل';
-
         fillForm(row);
-
-        await loadFormContext();
 
         if (row.shift_id) {
             $('f_shift_id').value = String(row.shift_id);
         }
 
-        updateVehiclePreview(
-            state.vehicles.find(
-                vehicle =>
-                    String(vehicle.id ?? vehicle.vehicle_id ?? '') ===
-                    String(row.vehicle_id ?? '')
-            )
-        );
-
         openModal('formModal');
-        void loadRecentCustomerSaleOrder();
+        void loadRecentCustomerSaleOrder().then(result => {
+            if (result && result.changed) refreshOpenCustomerMenu();
+        });
+
         const feeNeedsSettlement = String(row.delivery_fee_mode || '').toLowerCase() === 'driver' &&
             number(row.delivery_service_fee ?? row.service_fee ?? 0) > 0 &&
             !['settled','exempt','none'].includes(String(row.delivery_fee_status || '').toLowerCase());
         $('settleFeeBtn').style.display = feeNeedsSettlement ? 'inline-flex' : 'none';
 
-        /* Re-run availability checks after modal is open */
-        if (Number(row.vehicle_id || 0) > 0) {
-            await refreshVehicleBusyAndDriverStatus();
-        }
+        // Background lookups and availability checks must not hold up edit-form access.
+        scheduleDeliveryFormLookups();
+        window.setTimeout(() => {
+            const vehicle = state.vehicles.find(item =>
+                String(item.id ?? item.vehicle_id ?? '') === String(row.vehicle_id ?? '')
+            );
+            updateVehiclePreview(vehicle);
+            if (Number(row.vehicle_id || 0) > 0 && $('formModal').classList.contains('show')) {
+                void refreshVehicleBusyAndDriverStatus();
+            }
+        }, 0);
 
         updateSmsPreview();
     }
