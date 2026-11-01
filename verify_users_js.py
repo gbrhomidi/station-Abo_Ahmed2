@@ -92,6 +92,9 @@ for marker in (
     "updateUserBridgeRejectsZeroNegativeIdsAndMalformedJsonWithoutPartialWrites",
     "bridge.updateUser(targetUserId, payload.toString())",
     "The bridge normalizer requires the employee link; submit the existing ID and verify it remains bound.",
+    '.put("password_hash", "attacker-controlled-password-hash")',
+    'assertEquals("synthetic-bridge-password-hash", userString(targetUserId, "password_hash"))',
+    "Unknown employee_id must be rejected by SQLite normalization",
     'assertEquals(employeeId, userLong(targetUserId, "employee_id"))',
 ):
     if marker not in bridge_test:

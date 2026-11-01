@@ -103,6 +103,8 @@ def main() -> int:
         "updateUserBridgeReturnsNotFoundWithoutChangingRows",
         "updateUserBridgeRejectsZeroNegativeIdsAndMalformedJsonWithoutPartialWrites",
         "bridge.updateUser(targetUserId, payload.toString())",
+        '.put("password_hash", "attacker-controlled-password-hash")',
+        "Unknown employee_id must be rejected by SQLite normalization",
     ):
         if marker not in bridge_test_source:
             errors.append("real Android Bridge Robolectric test contract missing: " + marker)

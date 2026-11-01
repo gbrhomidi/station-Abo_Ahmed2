@@ -96,6 +96,10 @@ class MainActivityUserUpdateBridgeTest {
             .put("employee_id", employeeId)
             .put("role_id", roleId)
             .put("status", "active")
+            .put("username", "attacker-controlled-username")
+            .put("password_hash", "attacker-controlled-password-hash")
+            .put("password_salt", "attacker-controlled-password-salt")
+            .put("is_deleted", 1)
         // The bridge normalizer requires the employee link; submit the existing ID and verify it remains bound.
 
         val response = JSONObject(bridge.updateUser(targetUserId, payload.toString()))
@@ -107,6 +111,10 @@ class MainActivityUserUpdateBridgeTest {
         assertEquals(employeeId, userLong(targetUserId, "employee_id"))
         assertEquals(roleId, userLong(targetUserId, "role_id"))
         assertEquals("active", userString(targetUserId, "status"))
+        assertEquals("bridge-target", userString(targetUserId, "username"))
+        assertEquals("synthetic-bridge-password-hash", userString(targetUserId, "password_hash"))
+        assertEquals("synthetic-bridge-password-salt", userString(targetUserId, "password_salt"))
+        assertEquals(0L, userLong(targetUserId, "is_deleted"))
         assertNotNull(userString(targetUserId, "updated_at"))
         assertEquals("Untouched Bridge Other", userString(otherUserId, "full_name"))
         assertEquals("bridge-other", userString(otherUserId, "username"))
@@ -140,6 +148,22 @@ class MainActivityUserUpdateBridgeTest {
             val response = JSONObject(bridge.updateUser(invalidId, payload.toString()))
             assertFalse("Bridge must reject id=" + invalidId, response.optBoolean("success"))
         }
+
+        val emptyPayload = JSONObject(bridge.updateUser(targetUserId, "{}"))
+        assertFalse("Empty JSON must be rejected because the employee association is mandatory", emptyPayload.optBoolean("success"))
+
+        val missingEmployee = JSONObject(bridge.updateUser(
+            targetUserId,
+            JSONObject().put("full_name", "Missing Employee Link").toString()
+        ))
+        assertFalse("Missing employee_id must be rejected by normalization", missingEmployee.optBoolean("success"))
+
+        val unknownEmployee = JSONObject(bridge.updateUser(
+            targetUserId,
+            JSONObject().put("full_name", "Unknown Employee Link")
+                .put("employee_id", 9_999_999L).toString()
+        ))
+        assertFalse("Unknown employee_id must be rejected by SQLite normalization", unknownEmployee.optBoolean("success"))
 
         val malformed = JSONObject(bridge.updateUser(targetUserId, "{"))
         assertFalse("Malformed JSON must be rejected by the bridge", malformed.optBoolean("success"))
