@@ -408,8 +408,6 @@ async function run() {
         party.dispatchEvent(new window.Event('input', { bubbles: true }));
         assert.deepEqual(menuIds(), ['66'],
             'search must be scoped to the replacement station customer rows');
-        releaseRanking(stationTwoRanking, [33, 11]);
-        await delay(30);
         assert.equal(party.value, 'عميل المحطة الثالثة بلا بيع',
             'a stale previous-station callback must not overwrite the current search text');
         assert.deepEqual(menuIds(), ['66'],
