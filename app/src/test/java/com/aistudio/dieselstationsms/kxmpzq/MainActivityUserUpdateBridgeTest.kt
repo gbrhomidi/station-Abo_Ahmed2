@@ -38,15 +38,24 @@ class MainActivityUserUpdateBridgeTest {
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
         helper = DatabaseHelper.getInstance(context)
         val db = helper.writableDatabase
-        roleId = db.rawQuery("SELECT id FROM roles WHERE is_deleted = 0 LIMIT 1", null).use { cursor ->
+        val employeeJobTitle = db.rawQuery(
+            "SELECT id, role_name_ar, role_name, role_code FROM roles WHERE is_deleted = 0 ORDER BY id LIMIT 1",
+            null
+        ).use { cursor ->
             require(cursor.moveToFirst()) { "The synthetic test database must contain an active role" }
-            cursor.getLong(0)
+            roleId = cursor.getLong(0)
+            listOf(
+                cursor.getString(cursor.getColumnIndexOrThrow("role_name_ar")),
+                cursor.getString(cursor.getColumnIndexOrThrow("role_name")),
+                cursor.getString(cursor.getColumnIndexOrThrow("role_code"))
+            ).firstOrNull { !it.isNullOrBlank() }?.trim()
+                ?: throw IllegalStateException("The active role has no name/code usable as employees.job_title")
         }
         employeeId = db.insertOrThrow("employees", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString())
             put("employee_code", "EMP-BRIDGE-" + UUID.randomUUID().toString().take(8))
             put("full_name", "Synthetic Bridge Employee")
-            put("job_title", "Technician")
+            put("job_title", employeeJobTitle)
             put("hire_date", "2026-01-01")
             put("status", "active")
         })
@@ -84,9 +93,10 @@ class MainActivityUserUpdateBridgeTest {
             .put("id", otherUserId)
             .put("full_name", "Updated Through Android Bridge")
             .put("full_name_ar", "تم التحديث عبر الجسر")
+            .put("employee_id", employeeId)
             .put("role_id", roleId)
             .put("status", "active")
-        // employee_id is deliberately omitted: a partial profile update must preserve it.
+        // The bridge normalizer requires the employee link; submit the existing ID and verify it remains bound.
 
         val response = JSONObject(bridge.updateUser(targetUserId, payload.toString()))
 

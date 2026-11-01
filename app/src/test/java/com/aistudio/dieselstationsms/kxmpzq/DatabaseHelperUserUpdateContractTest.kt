@@ -83,6 +83,22 @@ class DatabaseHelperUserUpdateContractTest {
         other.close()
     }
 
+
+    @Test
+    fun updateUserPreservesExistingEmployeeAssociationWhenPayloadOmitsEmployeeId() {
+        val payload = JSONObject()
+            .put("full_name", "Updated Without Employee Payload")
+            .put("role_id", roleId)
+            .put("status", "active")
+
+        val affectedRows = helper.updateUser(targetUserId, payload)
+
+        assertEquals(1, affectedRows)
+        assertEquals(employeeId, userEmployeeId(targetUserId))
+        assertEquals("Updated Without Employee Payload", userFullName(targetUserId))
+        assertEquals("Untouched Other", userFullName(otherUserId))
+    }
+
     @Test
     fun updateUserReturnsZeroForMissingIdWithoutChangingExistingRows() {
         val payload = JSONObject()
@@ -131,6 +147,15 @@ class DatabaseHelperUserUpdateContractTest {
             put("status", "active")
             put("is_deleted", 0)
         })
+
+    private fun userEmployeeId(id: Long): Long =
+        helper.readableDatabase.rawQuery(
+            "SELECT employee_id FROM users WHERE id = ?",
+            arrayOf(id.toString())
+        ).use { cursor ->
+            require(cursor.moveToFirst()) { "Expected user row $id" }
+            cursor.getLong(0)
+        }
 
     private fun userFullName(id: Long): String =
         helper.readableDatabase.rawQuery(
