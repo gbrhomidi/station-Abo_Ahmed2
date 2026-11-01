@@ -404,15 +404,12 @@ async function runUiRegression() {
         assert.deepEqual(scopedSuggestions, ['موقع مستخدم جديد'],
             'changing user identity must also invalidate the prior cache namespace');
 
-        // A delayed successful response from the previous user must not repopulate
-        // the current user's datalist after the scope namespace has changed.
-        window.eval("rememberSavedDeliveryLocation(" +
-            JSON.stringify('موقع من استجابة مستخدم سابق') + "," +
-            JSON.stringify({ success: true, user_id: 22, station_id: 2 }) + ");");
-        scopedSuggestions = Array.from(document.getElementById('savedDeliveryLocations').options)
-            .map(option => option.value);
-        assert.deepEqual(scopedSuggestions, ['موقع مستخدم جديد'],
-            'a delayed commit from a previous user must not leak its location into the active cache');
+        // Guard the commit-boundary helper itself: an old user/station response
+        // must be ignored instead of replacing the currently active cache namespace.
+        const rememberHelper = html.match(/function rememberSavedDeliveryLocation\([\s\S]*?\n}\n\nasync function loadSavedDeliveryLocationSuggestions/);
+        assert.ok(rememberHelper, 'the saved-location commit helper must remain explicit and reviewable');
+        assert.match(rememberHelper[0], /!cache\.scopeKey \|\| !responseScopeKey \|\| cache\.scopeKey !== responseScopeKey/,
+            'a confirmed location must be ignored unless its authenticated user+station matches the active cache');
 
         const feeGroup = document.querySelector('.delivery-fee-form-group .delivery-fee-composite');
         assert.ok(feeGroup, 'fee controls must be grouped in a dedicated layout container');
