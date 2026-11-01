@@ -690,10 +690,11 @@ class CustodyWorkshopAcceptanceRobolectricTest {
 
 
     /**
-     * Dimension 2 is deliberately scenario-specific: the same business command is
-     * submitted twi    private fun assertIdempotentReplay(block: () -> JSONObject, label: String): JSONObject {
-        // Two callers enter the manager together with the same idempotency key.
-        // This tests the SQLite transaction boundary, not only a sequential retry.
+     * Dimension 2 exercises both concurrent duplicate submissions and a later
+     * sequential replay. Every mutation must be applied once, with no duplicate
+     * journals, journal lines, inventory movements, or stock effect.
+     */
+    private fun assertIdempotentReplay(block: () -> JSONObject, label: String): JSONObject {
         val ready = CountDownLatch(2)
         val start = CountDownLatch(1)
         val executor = Executors.newFixedThreadPool(2)
@@ -750,10 +751,6 @@ class CustodyWorkshopAcceptanceRobolectricTest {
             .put("concurrent_replay_verified", true)
             .put("replay_message", second.optString("message"))
             .put("subsequent_replay_message", third.optString("message"))
-    }
-
-        return JSONObject(first.toString()).put("idempotent_replay_verified", true)
-            .put("replay_message", second.optString("message"))
     }
 
     private fun assertReadOnlyRepeat(block: () -> JSONObject, label: String): JSONObject {
