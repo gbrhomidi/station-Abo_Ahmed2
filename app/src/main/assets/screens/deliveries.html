@@ -2847,6 +2847,8 @@
         recentSaleCustomersRequestGeneration: 0,
         recentSaleCustomersRetryScopeKey: '',
         recentSaleCustomersRetryAfter: 0,
+        customerScopeReloadGeneration: 0,
+        recentSaleCustomersScopeNeedsCustomerReload: false,
         saleKind: 'fuel',
         saleItems: [],
 
@@ -4632,6 +4634,42 @@
         }
     }
 
+    async function reloadCustomersForAuthenticatedScope(expectedScopeKey) {
+        const generation = ++state.customerScopeReloadGeneration;
+        try {
+            const response = await invoke('getCustomers');
+            const customers = uniqueCustomers(rowsFrom(response));
+            const scopeResponse = await recentSaleCustomersBridgeClient.invoke('scope', []);
+            const payload = dataOf(scopeResponse) || scopeResponse || {};
+            const userId = Number(scopeResponse.user_id ?? payload.user_id ?? 0);
+            const stationId = Number(scopeResponse.station_id ?? payload.station_id ?? 0);
+            const verifiedScopeKey = userId > 0 && stationId > 0
+                ? String(userId) + ':' + String(stationId)
+                : '';
+
+            if (
+                generation !== state.customerScopeReloadGeneration ||
+                expectedScopeKey !== state.recentSaleCustomersScopeKey ||
+                verifiedScopeKey !== expectedScopeKey
+            ) {
+                return false;
+            }
+
+            state.customers = customers;
+            state.recentSaleCustomersScopeNeedsCustomerReload = false;
+            refreshOpenCustomerMenu();
+            return true;
+        } catch (error) {
+            if (generation === state.customerScopeReloadGeneration) {
+                // Fail closed: never continue showing customers from the previous station.
+                state.customers = [];
+                refreshOpenCustomerMenu();
+            }
+            console.warn('[Deliveries] Customer list refresh after station change failed:', error.message || error);
+            return false;
+        }
+    }
+
     function sameRecentCustomerOrder(left, right) {
         return Array.isArray(left) &&
             Array.isArray(right) &&
@@ -4671,12 +4709,20 @@
     }
 
     function invalidateRecentCustomerScope() {
+        const hadScope = Boolean(state.recentSaleCustomersScopeKey);
         state.recentSaleCustomersScopeKey = '';
         state.recentSaleCustomersScopeUserId = 0;
         state.recentSaleCustomersScopeStationId = 0;
         state.recentSaleCustomersScopeCheckedAt = 0;
         state.recentSaleCustomersScopePromise = null;
-        return clearRecentCustomerRankingForScopeChange();
+        if (hadScope || state.customers.length > 0) {
+            state.recentSaleCustomersScopeNeedsCustomerReload = true;
+            state.customerScopeReloadGeneration++;
+            state.customers = [];
+        }
+        const rankingChanged = clearRecentCustomerRankingForScopeChange();
+        refreshOpenCustomerMenu();
+        return rankingChanged;
     }
 
     async function loadRecentCustomerSaleOrder(forceScopeCheck = false) {
@@ -4744,11 +4790,27 @@
                     throw new Error('لم يُرجع Android هوية المستخدم والمحطة الحالية بصورة صالحة.');
                 }
 
+                const previousScopeKey = state.recentSaleCustomersScopeKey;
                 const scopeKey = String(userId) + ':' + String(stationId);
-                const changed = state.recentSaleCustomersScopeKey !== scopeKey;
+                const changed = previousScopeKey !== scopeKey;
                 if (changed) {
+                    const reloadCustomerRows =
+                        Boolean(previousScopeKey) ||
+                        state.recentSaleCustomersScopeNeedsCustomerReload;
+                    if (reloadCustomerRows) {
+                        // Immediately remove the old station's choices before requesting
+                        // the new station's authoritative customer list.
+                        state.customers = [];
+                        state.customerScopeReloadGeneration++;
+                    }
                     clearRecentCustomerRankingForScopeChange();
                     state.recentSaleCustomersScopeKey = scopeKey;
+                    if (reloadCustomerRows) {
+                        state.recentSaleCustomersScopeNeedsCustomerReload = false;
+                        window.setTimeout(() => {
+                            void reloadCustomersForAuthenticatedScope(scopeKey);
+                        }, 0);
+                    }
                 }
                 state.recentSaleCustomersScopeUserId = userId;
                 state.recentSaleCustomersScopeStationId = stationId;
@@ -5912,6 +5974,14 @@
         const load = () => {
             void loadFormContext().then(() => {
                 refreshOpenCustomerMenu();
+                const selectedVehicleId = Number($('f_vehicle_id').value || 0);
+                const selectedVehicle = state.vehicles.find(item =>
+                    Number(item.id ?? item.vehicle_id ?? 0) === selectedVehicleId
+                );
+                updateVehiclePreview(selectedVehicle);
+                if (state.editingId && selectedVehicleId > 0) {
+                    void refreshVehicleBusyAndDriverStatus();
+                }
             }).catch(error => {
                 console.warn('[Deliveries] Form lookup refresh failed:', error.message || error);
             });
@@ -5971,16 +6041,11 @@
 
         // Background lookups and availability checks must not hold up edit-form access.
         scheduleDeliveryFormLookups();
-        window.setTimeout(() => {
-            const vehicle = state.vehicles.find(item =>
+        updateVehiclePreview(
+            state.vehicles.find(item =>
                 String(item.id ?? item.vehicle_id ?? '') === String(row.vehicle_id ?? '')
-            );
-            updateVehiclePreview(vehicle);
-            if (Number(row.vehicle_id || 0) > 0 && $('formModal').classList.contains('show')) {
-                void refreshVehicleBusyAndDriverStatus();
-            }
-        }, 0);
-
+            )
+        );
         updateSmsPreview();
     }
 
