@@ -459,6 +459,9 @@ async function run() {
         releaseRanking(noSaleRanking, []);
         await expectMenuIds(['71', '72'],
             'an empty ranking must preserve every customer without changing order');
+        // Let the just-released read finish its Promise/finally cleanup before the next
+        // session switch. The next case still races a failed ranking against a live switch.
+        await delay(25);
 
         // If the session changes after scope preflight but the ranking query fails,
         // the post-failure scope check must discard the old station's customer rows.
@@ -490,6 +493,21 @@ async function run() {
             'selection preservation, search, cache reuse, stale station response, empty results and SQLite failure.'
         );
     } finally {
+        // Complete any deliberately delayed native callbacks before disposing the DOM.
+        // This prevents a secondary timeout from firing against a closed WebView fixture
+        // and obscuring the assertion that originally failed.
+        pendingRankings.splice(0).forEach(record => {
+            window.__fuelSalesNativeResult(
+                record.requestId,
+                json({
+                    success: true,
+                    data: [],
+                    user_id: record.scope.user_id,
+                    station_id: record.scope.station_id
+                })
+            );
+        });
+        await delay(20);
         dom.window.close();
     }
 }
