@@ -76,7 +76,7 @@ class DatabaseHelperUserUpdateContractTest {
         assertEquals("Updated Target", target.getString(target.getColumnIndexOrThrow("full_name")))
         assertEquals("الهدف المحدث", target.getString(target.getColumnIndexOrThrow("full_name_ar")))
         assertEquals(employeeId, target.getLong(target.getColumnIndexOrThrow("employee_id")))
-        assertEquals("Original Target", other.getString(other.getColumnIndexOrThrow("full_name")))
+        assertEquals("Untouched Other", other.getString(other.getColumnIndexOrThrow("full_name")))
         assertEquals("update-other", other.getString(other.getColumnIndexOrThrow("username")))
         assertNotNull(target.getString(target.getColumnIndexOrThrow("updated_at")))
         target.close()
