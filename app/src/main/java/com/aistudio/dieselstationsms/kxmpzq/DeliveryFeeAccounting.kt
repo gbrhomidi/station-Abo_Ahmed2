@@ -507,7 +507,38 @@ object DeliveryFeeAccounting {
         val deliveryColumns = columns(db, "deliveries")
         if ("location" in deliveryColumns) deliveryValues.put("location", cleanLocation)
         if ("fuel_type" in deliveryColumns && sale != null && sale.fuelTypeName.isNotBlank()) deliveryValues.put("fuel_type", sale.fuelTypeName)
-        db.update("deliveries", deliveryValues, "id=? AND station_id=?", arrayOf(deliveryId.toString(), stationId.toString()))
+
+        // The canonical deliveries table is station-scoped through its original
+        // sales_transactions invoice; it does not necessarily contain station_id.
+        // Use the direct column only when the current schema actually has it.
+        val deliveryUpdateWhere: String
+        val deliveryUpdateArguments: Array<String>
+        if ("station_id" in deliveryColumns) {
+            deliveryUpdateWhere = "id=? AND station_id=?"
+            deliveryUpdateArguments = arrayOf(deliveryId.toString(), stationId.toString())
+        } else {
+            val invoiceColumns = columns(db, "sales_transactions")
+            require(
+                "sale_id" in deliveryColumns &&
+                    setOf("id", "station_id").all { it in invoiceColumns }
+            ) {
+                "تعذر التحقق من محطة سجل التوصيل؛ لم يتم حفظ بيانات الرسوم أو اعتمادها"
+            }
+            deliveryUpdateWhere =
+                "id=? AND EXISTS (SELECT 1 FROM sales_transactions AS delivery_sale " +
+                    "WHERE delivery_sale.id=deliveries.sale_id AND delivery_sale.station_id=?)"
+            deliveryUpdateArguments = arrayOf(deliveryId.toString(), stationId.toString())
+        }
+
+        val updatedDeliveryRows = db.update(
+            "deliveries",
+            deliveryValues,
+            deliveryUpdateWhere,
+            deliveryUpdateArguments
+        )
+        require(updatedDeliveryRows == 1) {
+            "تعذر حفظ رسوم التوصيل وطريقة احتسابها وموقعها واسم العميل النقدي في سجل deliveries بالمحطة الحالية"
+        }
 
         val fuelSaleId = sale?.id ?: 0L
         val parentSaleId = sale?.parentSaleId ?: saleReferenceId
