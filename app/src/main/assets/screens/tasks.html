@@ -2483,7 +2483,7 @@
             );
             const values = {
                 statTotal: liveRows.length,
-                statPending: activeRows.filter(task => task.status === 'قيد التنفيذ' || task.status === 'غير مدفوعة').length,
+                statPending: activeRows.filter(task => task.status === 'قيد التنفيذ').length,
                 statHigh: activeRows.filter(task => task.priority === 'عالية').length,
                 statOverdue: activeRows.filter(task => task.status === 'متأخرة').length
             };
