@@ -102,20 +102,38 @@ function testNativeRankingContractIsReadOnlyAndStationScoped() {
         'a failed ranking callback must revalidate the live station before retaining cached data');
 }
 
+function testDeliverySaveUsesSeparateInvoiceAndFuelSaleIds() {
+    const methodStart = mainActivity.indexOf('fun saveDeliveryRecord(jsonData: String): String');
+    assert.ok(methodStart >= 0, 'MainActivity must expose the delivery SQLite save operation');
+    const methodEnd = mainActivity.indexOf('\n        @JavascriptInterface', methodStart);
+    const method = mainActivity.slice(methodStart, methodEnd > methodStart ? methodEnd : undefined);
+
+    assert.match(html, /id="f_fuel_sale_id"\s+name="fuel_sale_id"/,
+        'the form must retain the exact fuel_sales row ID separately from its invoice ID');
+    assert.match(method, /val fuelSaleReferenceId = input\.optLong\("fuel_sale_id", 0L\)/,
+        'the save bridge must prefer the explicit fuel_sales ID for fee persistence');
+    assert.match(method, /saleReferenceId = fuelSaleReferenceId/,
+        'the exact fuel_sales row must be passed to fee persistence after the invoice delivery is created');
+    assert.match(html, /fuel_sale_id:\s*number\(\$\('f_fuel_sale_id'\)\.value\)\s*\|\|\s*null/,
+        'the UI save payload must retain the fuel_sales ID');
+}
+
 async function run() {
     const calls = { customers: 0, latest: [], recent: [], scope: 0, scopeRequests: [], page: 0 };
     const salesByCustomer = {
         11: {
-            sale_id: 7011, fuel_sale_id: 7011, customer_party_id: 11,
+            sale_id: 7011, fuel_sale_id: 7011, parent_sale_id: 97011, customer_party_id: 11,
             quantity: 10, price_per_liter: 1000, total_amount: 10000,
             delivery_service_fee: 125.75, delivery_fee_mode: 'driver',
-            delivery_location: 'حي الاختبار', payment_method: 'cash', fuel_type_name: 'ديزل'
+            delivery_location: 'حي الاختبار', cash_customer_name: 'اسم نقدي للاختبار',
+            payment_method: 'cash', fuel_type_name: 'ديزل'
         },
         33: {
-            sale_id: 7033, fuel_sale_id: 7033, customer_party_id: 33,
+            sale_id: 7033, fuel_sale_id: 7033, parent_sale_id: 97033, customer_party_id: 33,
             quantity: 8, price_per_liter: 900, total_amount: 7200,
             delivery_service_fee: 88.5, delivery_fee_mode: 'driver',
-            delivery_location: 'شارع الاختبار', payment_method: 'cash', fuel_type_name: 'ديزل'
+            delivery_location: 'شارع الاختبار', cash_customer_name: 'اسم نقدي ثانٍ',
+            payment_method: 'cash', fuel_type_name: 'ديزل'
         }
     };
     const customersByStation = {
@@ -253,7 +271,14 @@ async function run() {
     window.AndroidInterface = bridge;
     window.FuelSalesAsyncBridge = require('../../main/assets/assets-local/js/fuel-sales-async-bridge.js');
     window.HTMLFormElement.prototype.reportValidity = () => true;
-    window.eval(applicationScript());
+    const controllerScript = applicationScript();
+    const testableControllerScript = controllerScript.replace(
+        /\n\}\)\(\);\s*$/,
+        '\n    window.buildPayload = buildPayload;\n})();'
+    );
+    assert.notEqual(testableControllerScript, controllerScript,
+        'the test fixture must instrument the controller before its private scope closes');
+    window.eval(testableControllerScript);
 
     const document = window.document;
     const fee = document.getElementById('f_delivery_service_fee');
@@ -327,6 +352,8 @@ async function run() {
             "the selected customer's own latest-sale lookup");
         assert.equal(fee.value, '0.00',
             'a customer with no previous sale must not inherit another customer fee');
+        assert.equal(document.getElementById('f_fuel_sale_id').value, '',
+            'a customer without a previous sale must not retain another customer fuel_sales ID');
 
         const stationOneRanking = calls.recent[0];
         releaseRanking(stationOneRanking, [33, 11]);
@@ -358,6 +385,25 @@ async function run() {
         await waitFor(() => fee.value === '125.75', 'actual fee from customer 11 original sale');
         assert.equal(fee.value, '125.75',
             'selecting a customer with an existing sale must preserve the actual original sale fee');
+        assert.equal(document.getElementById('f_delivery_fee_mode').value, 'driver',
+            'the latest fuel sale fee calculation mode must populate the form');
+        assert.equal(document.getElementById('f_location').value, 'حي الاختبار',
+            'the latest fuel sale delivery location must populate the form location');
+        assert.equal(document.getElementById('f_cash_customer_name').value, 'اسم نقدي للاختبار',
+            'the latest fuel sale cash-customer name must populate the form');
+        assert.equal(document.getElementById('f_sale_id').value, '97011',
+            'delivery.sale_id must retain the sales_transactions invoice ID');
+        assert.equal(document.getElementById('f_fuel_sale_id').value, '7011',
+            'fee persistence must retain the distinct fuel_sales row ID');
+        const savePayload = window.buildPayload();
+        assert.equal(savePayload.sale_id, 97011,
+            'the save payload must reference the invoice row from sales_transactions');
+        assert.equal(savePayload.fuel_sale_id, 7011,
+            'the save payload must carry the source fuel_sales row ID');
+        assert.equal(savePayload.delivery_service_fee, 125.75);
+        assert.equal(savePayload.delivery_fee_mode, 'driver');
+        assert.equal(savePayload.delivery_location, 'حي الاختبار');
+        assert.equal(savePayload.cash_customer_name, 'اسم نقدي للاختبار');
 
         openCustomerPicker();
         await waitFor(() => menu.classList.contains('show'), 'customer picker after first selection');
@@ -534,6 +580,7 @@ async function run() {
             'the newly authenticated station ranking must be applied after recovery');
 
         testFeeNormalizer();
+        testDeliverySaveUsesSeparateInvoiceAndFuelSaleIds();
         console.log(
             'Deliveries customer ranking regression tests passed: immediate modal, delayed async lookup, ' +
             'selection preservation, search, cache reuse, stale station response, empty results, ' +

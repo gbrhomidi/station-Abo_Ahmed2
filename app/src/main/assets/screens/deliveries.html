@@ -982,11 +982,19 @@
            ============================================================ */
 
         .location-input {
-            font-size: 16px !important;
+            font-size: 17px !important;
             font-weight: 900 !important;
             min-height: 56px !important;
             letter-spacing: .2px;
-            color: var(--data-text-color);
+            color: #000 !important;
+            opacity: 1 !important;
+        }
+
+        #f_delivery_fee_mode {
+            font-size: 15px;
+            font-weight: 800;
+            color: #000;
+            opacity: 1;
         }
 
         /* ============================================================
@@ -2115,6 +2123,7 @@
                     </label>
 
                     <input type="hidden" id="f_sale_type" name="sale_type" value="fuel">
+                    <input type="hidden" id="f_fuel_sale_id" name="fuel_sale_id" value="">
 
                     <input
                         id="f_sale_id"
@@ -4481,6 +4490,7 @@
 
         $('f_id').value = '';
         $('f_sale_id').value = '';
+        $('f_fuel_sale_id').value = '';
         $('f_party_id').value = '';
         $('f_party_display').value = '';
         $('f_vehicle_id').value = '';
@@ -5260,15 +5270,24 @@
 
     function normalizeLatestFuelSale(source) {
         const sale = source && typeof source === 'object' ? { ...source } : {};
-        const saleId = Number(firstSaleValue(sale, ['sale_id', 'fuel_sale_id', 'id'], 0));
+        const reportedSaleId = Number(firstSaleValue(sale, ['sale_id', 'fuel_sale_id', 'id'], 0));
+        const parentSaleId = Number(firstSaleValue(
+            sale,
+            ['parent_sale_id', 'invoice_sale_id', 'transaction_sale_id'],
+            reportedSaleId
+        )) || reportedSaleId;
+        const fuelSaleId = Number(firstSaleValue(sale, ['fuel_sale_id', 'id'], reportedSaleId)) || reportedSaleId;
         const fee = firstSaleValue(sale, ['delivery_service_fee', 'service_fee', 'delivery_fee_amount'], 0);
         const feeMode = String(firstSaleValue(sale, ['delivery_fee_mode', 'fee_mode', 'delivery_fee_calculation'], 'exempt')).trim();
         const location = firstSaleValue(sale, ['delivery_location', 'location', 'delivery_address'], '');
         const cashName = firstSaleValue(sale, ['cash_customer_name', 'cash_customer_display_name', 'customer_cash_name'], '');
         const partyId = Number(firstSaleValue(sale, ['customer_party_id', 'party_id', 'customer_id'], 0));
 
-        sale.sale_id = saleId;
-        sale.fuel_sale_id = Number(firstSaleValue(sale, ['fuel_sale_id', 'id'], saleId)) || saleId;
+        // deliveries.sale_id references the sales_transactions invoice; the fee
+        // source remains the distinct fuel_sales row when the IDs do not match.
+        sale.sale_id = parentSaleId;
+        sale.parent_sale_id = parentSaleId;
+        sale.fuel_sale_id = fuelSaleId;
         sale.customer_party_id = partyId;
         sale.delivery_service_fee = Number(fee) || 0;
         sale.delivery_fee_mode = ['exempt', 'add_to_sales', 'driver', 'deduct_from_sales'].includes(feeMode)
@@ -5357,6 +5376,7 @@
         $('f_sale_type').value = state.saleKind;
 
         setIfValue('f_sale_id', sale.sale_id);
+        setIfValue('f_fuel_sale_id', sale.fuel_sale_id);
         setIfValue('f_shift_id', sale.shift_id);
         setIfValue('f_quantity', sale.quantity);
         setIfValue(
@@ -5462,7 +5482,7 @@
     function clearSaleContextFields() {
 
         for (const id of [
-            'f_shift_id','f_quantity','f_fuel_type',
+            'f_fuel_sale_id','f_shift_id','f_quantity','f_fuel_type',
             'f_price_per_liter','f_total_amount','f_location','f_cash_customer_name',
             'f_vehicle_id','f_driver_id',
             'f_vehicle_display','f_driver_display'
@@ -6681,6 +6701,8 @@
             id: state.editingId ? Number(state.editingId) : undefined,
 
             sale_id: number($('f_sale_id').value) || null,
+
+            fuel_sale_id: number($('f_fuel_sale_id').value) || null,
 
             sale_type: state.saleKind === 'product' ? 'product' : 'fuel',
 

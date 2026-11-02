@@ -70,7 +70,16 @@ class LatestFuelSaleForCustomerRobolectricTest {
         val otherCustomerSameName = insertCustomer("عميل متشابه الاسم")
 
         insertFuelSale(targetCustomer, stationId, "2026-10-28 09:00:00", quantity = 10.0)
-        val expectedFuelSaleId = insertFuelSale(targetCustomer, stationId, "2026-10-29 15:30:00", quantity = 30.0)
+        val expectedFuelSaleId = insertFuelSale(
+            targetCustomer,
+            stationId,
+            "2026-10-29 15:30:00",
+            quantity = 30.0,
+            deliveryFee = 325.75,
+            deliveryFeeMode = "driver",
+            location = "موقع أحدث بيع",
+            cashCustomerName = "الاسم النقدي الأحدث"
+        )
         insertFuelSale(otherCustomerSameName, stationId, "2026-10-30 18:00:00", quantity = 90.0)
 
         val result = DeliveryFeeAccounting.latestFuelSaleForCustomer(helper, targetCustomer, stationId)
@@ -82,8 +91,72 @@ class LatestFuelSaleForCustomerRobolectricTest {
         assertEquals(targetCustomer, sale.getLong("customer_party_id"))
         assertEquals(30.0, sale.getDouble("quantity"), 0.0001)
         assertEquals(15000.0, sale.getDouble("total_amount"), 0.0001)
-        assertEquals(250.0, sale.getDouble("delivery_service_fee"), 0.0001)
+        assertEquals(325.75, sale.getDouble("delivery_service_fee"), 0.0001)
+        assertEquals("driver", sale.getString("delivery_fee_mode"))
+        assertEquals("موقع أحدث بيع", sale.getString("delivery_location"))
+        assertEquals("الاسم النقدي الأحدث", sale.getString("cash_customer_name"))
         assertTrue(sale.has("parent_sale_id"))
+    }
+
+    @Test
+    fun deliveryPersistsLatestFuelSaleFieldsUsingInvoiceAndFuelRowIdsSeparately() {
+        val customer = insertCustomer("عميل حقول التوصيل المحفوظة")
+        // A product invoice advances only the invoice table, proving these IDs are not interchangeable.
+        insertProductSale(customer, stationId, "2026-10-27 08:00:00")
+        val expectedFuelSaleId = insertFuelSale(
+            customer,
+            stationId,
+            "2026-10-29 15:30:00",
+            deliveryFee = 37.5,
+            deliveryFeeMode = DeliveryFeeAccounting.EXEMPT,
+            location = "موقع محفوظ من الوقود",
+            cashCustomerName = "اسم عميل نقدي محفوظ"
+        )
+        val parentSaleId = scalarLong(
+            "SELECT sale_id FROM fuel_sales WHERE id=? AND station_id=?",
+            arrayOf(expectedFuelSaleId.toString(), stationId.toString())
+        )
+        assertTrue("The fixture must represent distinct invoice and fuel row IDs", parentSaleId != expectedFuelSaleId)
+
+        val deliveryId = helper.addDelivery(
+            JSONObject().apply {
+                put("sale_id", parentSaleId)
+                put("party_id", customer)
+                put("delivery_date", "2026-10-30 10:00:00")
+                put("status", "pending")
+                put("location", "قيمة واجهة مؤقتة")
+                put("delivery_service_fee", 0.0)
+            },
+            stationId,
+            userId
+        )
+        DeliveryFeeAccounting.persistDeliveryFee(
+            helper = helper,
+            deliveryId = deliveryId,
+            saleReferenceId = expectedFuelSaleId,
+            stationId = stationId,
+            userId = userId,
+            driverId = 0L,
+            requestedAmount = 999.0,
+            requestedMode = "driver",
+            location = "قيمة واجهة مؤقتة",
+            cashCustomerName = "اسم نقدي مؤقت",
+            saleKind = "fuel"
+        )
+
+        db.rawQuery(
+            "SELECT sale_id,delivery_service_fee,delivery_fee_mode,delivery_location,cash_customer_name,location " +
+                "FROM deliveries WHERE id=? AND station_id=?",
+            arrayOf(deliveryId.toString(), stationId.toString())
+        ).use { cursor ->
+            assertTrue("The saved delivery must be readable from SQLite", cursor.moveToFirst())
+            assertEquals(parentSaleId, cursor.getLong(0))
+            assertEquals(37.5, cursor.getDouble(1), 0.0001)
+            assertEquals(DeliveryFeeAccounting.EXEMPT, cursor.getString(2))
+            assertEquals("موقع محفوظ من الوقود", cursor.getString(3))
+            assertEquals("اسم عميل نقدي محفوظ", cursor.getString(4))
+            assertEquals("موقع محفوظ من الوقود", cursor.getString(5))
+        }
     }
 
     @Test
@@ -705,7 +778,10 @@ class LatestFuelSaleForCustomerRobolectricTest {
         parentDeleted: Boolean = false,
         parentInvalid: Boolean = false,
         parentStatusOverride: String? = null,
-        location: String = "موقع اختبار"
+        location: String = "موقع اختبار",
+        deliveryFee: Double = 250.0,
+        deliveryFeeMode: String = "add_to_sales",
+        cashCustomerName: String = ""
     ): Long {
         val token = UUID.randomUUID().toString()
         val parentValues = ContentValues()
@@ -775,11 +851,11 @@ class LatestFuelSaleForCustomerRobolectricTest {
             putExisting("fuel_sales", childValues, "sale_time", timestamp.substring(11))
             putExisting("fuel_sales", childValues, "transaction_time", timestamp)
             putExisting("fuel_sales", childValues, "created_at", timestamp)
-            putExisting("fuel_sales", childValues, "delivery_service_fee", 250.0)
-            putExisting("fuel_sales", childValues, "delivery_fee_mode", "add_to_sales")
+            putExisting("fuel_sales", childValues, "delivery_service_fee", deliveryFee)
+            putExisting("fuel_sales", childValues, "delivery_fee_mode", deliveryFeeMode)
             putExisting("fuel_sales", childValues, "delivery_location", location)
-            putExisting("fuel_sales", childValues, "cash_customer_name", "")
-            putExisting("fuel_sales", childValues, "delivery_fee_display_total", quantity * 500.0 + 250.0)
+            putExisting("fuel_sales", childValues, "cash_customer_name", cashCustomerName)
+            putExisting("fuel_sales", childValues, "delivery_fee_display_total", quantity * 500.0 + deliveryFee)
             putExisting("fuel_sales", childValues, "status", if (parentInvalid) "cancelled" else "completed")
             for (flag in listOf("is_cancelled", "is_canceled", "is_void", "is_voided", "is_invalid", "is_reversed")) {
                 val invalidFlag = flag == "is_void" || flag == "is_voided" || flag == "is_invalid"

@@ -12751,6 +12751,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     put("cashier_id", activity.currentUserId)
                 }
                 val saleReferenceId = input.optLong("sale_id", 0L)
+                val fuelSaleReferenceId = input.optLong("fuel_sale_id", 0L)
+                    .takeIf { it > 0L } ?: saleReferenceId
                 val driverId = input.optLong("driver_id", 0L)
                 val fee = input.optDouble("delivery_service_fee", input.optDouble("service_fee", 0.0))
                 val feeMode = DeliveryFeeAccounting.normalizeMode(input.optString("delivery_fee_mode", "exempt"))
@@ -12781,7 +12783,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     feeResult = DeliveryFeeAccounting.persistDeliveryFee(
                         helper = db,
                         deliveryId = deliveryId,
-                        saleReferenceId = saleReferenceId,
+                        saleReferenceId = fuelSaleReferenceId,
                         stationId = stationId,
                         userId = activity.currentUserId,
                         driverId = driverId,

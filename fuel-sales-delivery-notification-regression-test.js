@@ -30,11 +30,15 @@ check(/id="f_location"[\s\S]{0,450}?readonly/.test(deliveries),
 check(/id="f_cash_customer_name"[^>]*readonly/.test(deliveries),
     'اسم العميل النقدي يجب أن يكون للقراءة فقط');
 check(/invoke\(\s*'getDeliverySaleContext',\s*\[querySaleId\]\s*\)/.test(deliveries) &&
-      deliveries.includes("setIfValue('f_delivery_service_fee', sale.delivery_service_fee ?? sale.service_fee ?? 0)") &&
-      deliveries.includes("setIfValue('f_delivery_fee_mode', sale.delivery_fee_mode || 'exempt')") &&
-      deliveries.includes("setIfValue('f_location', sale.location ?? sale.delivery_location)") &&
-      deliveries.includes("setIfValue('f_cash_customer_name', sale.cash_customer_name || '')"),
+      deliveries.includes("invoke(\n                'getLatestCustomerSaleForDelivery'") &&
+      deliveries.includes('setDeliveryFeeInput(sale.delivery_service_fee ?? sale.service_fee ?? 0)') &&
+      deliveries.includes("$('f_delivery_fee_mode').value = sale.delivery_fee_mode || 'exempt'") &&
+      deliveries.includes("$('f_location').value = String(sale.delivery_location || sale.location || '')") &&
+      deliveries.includes("$('f_cash_customer_name').value = String(sale.cash_customer_name || '')"),
     'حقول التوصيل المطلوبة يجب أن تُجلب من سياق البيع الأصلي');
+check(deliveries.includes("id=\"f_fuel_sale_id\" name=\"fuel_sale_id\"") &&
+      deliveries.includes("fuel_sale_id: number($('f_fuel_sale_id').value) || null"),
+    'يجب حفظ معرف صف fuel_sales منفصلاً عن معرف فاتورة التوصيل');
 
 check(/if \(fee > 0\.0 && feeMode == "driver"\)/.test(scheduler),
     'رسوم السائق لا تظهر في الرسالة الفعلية إلا عند اختيار على حساب السائق');
