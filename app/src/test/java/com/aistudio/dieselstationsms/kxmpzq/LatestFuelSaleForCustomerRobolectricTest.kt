@@ -65,6 +65,20 @@ class LatestFuelSaleForCustomerRobolectricTest {
     }
 
     @Test
+    fun deliveriesSchemaIncludesStationScopeAndStationFirstIndexes() {
+        val columns = tableColumns("deliveries")
+        assertTrue("deliveries must persist station ownership", "station_id" in columns)
+
+        val indexes = linkedSetOf<String>()
+        db.rawQuery("PRAGMA index_list('deliveries')", null).use { cursor ->
+            while (cursor.moveToNext()) indexes += cursor.getString(cursor.getColumnIndexOrThrow("name"))
+        }
+        assertTrue("delivery date queries need a station-scoped index", "idx_deliveries_station_date" in indexes)
+        assertTrue("delivery status queries need a station-scoped index", "idx_deliveries_station_status" in indexes)
+        assertTrue("invoice lookups need a station-scoped index", "idx_deliveries_station_sale" in indexes)
+    }
+
+    @Test
     fun latestLookupChoosesNewestSaleForExactCustomerIdWhenNamesMatch() {
         val targetCustomer = insertCustomer("عميل متشابه الاسم")
         val otherCustomerSameName = insertCustomer("عميل متشابه الاسم")

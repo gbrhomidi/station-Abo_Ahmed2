@@ -1203,6 +1203,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             CREATE TABLE IF NOT EXISTS deliveries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 uuid TEXT UNIQUE NOT NULL,
+                station_id INTEGER NOT NULL DEFAULT 0,
                 sale_id INTEGER REFERENCES sales_transactions(id),
                 party_id INTEGER REFERENCES parties(id),
                 shift_id INTEGER REFERENCES shifts(id),
@@ -1842,6 +1843,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             CREATE TABLE IF NOT EXISTS deliveries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 uuid TEXT UNIQUE NOT NULL,
+                station_id INTEGER NOT NULL DEFAULT 0,
                 sale_id INTEGER REFERENCES sales_transactions(id),
                 party_id INTEGER REFERENCES parties(id),
                 shift_id INTEGER REFERENCES shifts(id),
@@ -1862,6 +1864,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """.trimIndent())
 
         // Compatibility for a partially-created legacy table; do not alter existing data.
+        ensureColumn(db, "deliveries", "station_id", "INTEGER NOT NULL DEFAULT 0")
         ensureColumn(db, "deliveries", "sale_id", "INTEGER")
         ensureColumn(db, "deliveries", "party_id", "INTEGER")
         ensureColumn(db, "deliveries", "shift_id", "INTEGER")
@@ -1879,9 +1882,34 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureColumn(db, "deliveries", "updated_at", "TEXT")
         ensureColumn(db, "deliveries", "is_deleted", "INTEGER DEFAULT 0")
 
+        // Older delivery rows predate station_id. Restore their scope from the linked
+        // invoice first, then shift/customer as compatibility fallbacks. Never rewrite
+        // an already assigned station, and never infer a station outside this database.
+        val deliveryStationSources = mutableListOf<String>()
+        if (tableHasColumn(db, "sales_transactions", "station_id")) {
+            deliveryStationSources += "(SELECT st.station_id FROM sales_transactions st WHERE st.id=deliveries.sale_id LIMIT 1)"
+        }
+        if (tableHasColumn(db, "shifts", "station_id")) {
+            deliveryStationSources += "(SELECT sh.station_id FROM shifts sh WHERE sh.id=deliveries.shift_id LIMIT 1)"
+        }
+        if (tableHasColumn(db, "parties", "station_id")) {
+            deliveryStationSources += "(SELECT p.station_id FROM parties p WHERE p.id=deliveries.party_id LIMIT 1)"
+        }
+        if (deliveryStationSources.isNotEmpty()) {
+            val stationExpressions = (listOf("NULLIF(station_id,0)") +
+                deliveryStationSources.map { "NULLIF($it,0)" }).joinToString(",")
+            db.execSQL(
+                "UPDATE deliveries SET station_id=COALESCE($stationExpressions,0) " +
+                    "WHERE station_id IS NULL OR station_id<=0"
+            )
+        }
+
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_date ON deliveries(delivery_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_status ON deliveries(status, is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_sale ON deliveries(sale_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_station_date ON deliveries(station_id, delivery_date, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_station_status ON deliveries(station_id, status, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_station_sale ON deliveries(station_id, sale_id, is_deleted)")
     }
 
     /** Compatibility additions for databases created before the messaging read-state contract. */
@@ -10949,6 +10977,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     null,
                     ContentValues().apply {
                         put("uuid", UUID.randomUUID().toString())
+                        put("station_id", stationScopeId)
                         put("sale_id", saleId)
                         if (partyId != null) put("party_id", partyId) else putNull("party_id")
                         put("shift_id", shiftId)
