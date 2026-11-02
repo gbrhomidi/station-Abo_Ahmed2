@@ -379,6 +379,8 @@ else:
         ('idx_deliveries_station_status' in database_helper_source, 'station/status/deleted index exists'),
         ('idx_deliveries_station_sale' in database_helper_source, 'station/sale/deleted index exists'),
         ('idx_deliveries_station_driver_status' in database_helper_source, 'station/driver/status/deleted index exists'),
+        ('WHERE d.station_id=? AND d.driver_id=? AND d.is_deleted=0 AND d.status <> \'cancelled\'' in database_helper_source, 'driver previous-delivery lookup is station-scoped'),
+        ('s.station_id=d.station_id' in database_helper_source, 'delivery SMS/history joins require matching station ownership'),
         ('columns = listOf("station_id", "sale_id"' in database_helper_source, 'generic delivery CRUD persists and filters by station'),
         ('put("station_id", stationId)' in database_helper_source, 'legacy SMS delivery rows persist station ownership'),
         ('put("station_id", stationScopeId)' in database_helper_source, 'new delivery rows persist the authenticated station'),

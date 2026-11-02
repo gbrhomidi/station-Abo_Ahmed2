@@ -11406,7 +11406,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                           d.created_at, COALESCE(s.service_fee,0) AS service_fee, COALESCE(s.order_type,'') AS order_type
                    FROM deliveries d
                    LEFT JOIN sales_transactions s ON s.id=d.sale_id AND s.station_id=? AND s.station_id=d.station_id AND s.is_deleted=0
-                   WHERE d.driver_id=? AND d.is_deleted=0 AND d.status <> 'cancelled'
+                   WHERE d.station_id=? AND d.driver_id=? AND d.is_deleted=0 AND d.status <> 'cancelled'
                    ORDER BY d.id DESC LIMIT 1""",
                 arrayOf(stationScopeId.toString(), stationScopeId.toString(), driverId.toString())
             ).use { c ->
@@ -11557,7 +11557,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("sale_notes", c.getString(10).orEmpty())
             }
             if (orderType.equals("product", true)) {
-                val count = db.rawQuery("SELECT COALESCE(SUM(si.quantity-COALESCE(si.returned_quantity,0)),0) FROM sale_items si WHERE si.sale_id=(SELECT sale_id FROM deliveries WHERE id=? AND is_deleted=0) AND si.item_type='product'", arrayOf(deliveryId.toString())).use { x -> if (x.moveToFirst()) x.getDouble(0) else c.getDouble(1) }
+                val count = db.rawQuery("SELECT COALESCE(SUM(si.quantity-COALESCE(si.returned_quantity,0)),0) FROM sale_items si WHERE si.sale_id=(SELECT sale_id FROM deliveries WHERE id=? AND station_id=? AND is_deleted=0) AND si.item_type='product'", arrayOf(deliveryId.toString(), stationScopeId.toString())).use { x -> if (x.moveToFirst()) x.getDouble(0) else c.getDouble(1) }
                 payload.put("quantity", count.coerceAtLeast(0.0))
             }
             payload
