@@ -1510,6 +1510,10 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
         return v === 1 || v === '1' || v === true || String(v).toLowerCase() === 'yes' || String(v) === 'نعم';
     }
 
+    function isGlobalTemplate(row) {
+        return !!row && (row.station_id == null || String(row.station_id).trim() === '');
+    }
+
     function statusInfo(row) {
         return isActive(row)
             ? { label: 'نشط', cls: 'active' }
@@ -1724,30 +1728,36 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
        نموذج الإضافة/التعديل
        ============================================================ */
     async function openForm(row = null) {
-        if (!hasBridgeMethod(CFG.createMethod) && !hasBridgeMethod(CFG.updateMethod)) {
+        const isSharedTemplate = isGlobalTemplate(row);
+        const requiredMethod = isSharedTemplate || !row ? CFG.createMethod : CFG.updateMethod;
+        if (!hasBridgeMethod(requiredMethod)) {
             toast('لا توجد عملية كتابة متاحة', 'error');
             return;
         }
-        state.editing = row;
-        $('formTitle').innerHTML = '<i class="fas ' + (row ? 'fa-edit' : 'fa-plus-circle') + '"></i> ' +
-            (row ? 'تعديل قالب' : 'إضافة قالب جديد');
+        const formRow = isSharedTemplate ? Object.assign({}, row, {
+            template_code: nextTemplateCode(),
+            station_id: state.session.stationId || ''
+        }) : row;
+        state.editing = isSharedTemplate ? null : row;
+        const title = isSharedTemplate ? 'إنشاء نسخة محلية من قالب عام' : (row ? 'تعديل قالب' : 'إضافة قالب جديد');
+        $('formTitle').innerHTML = '<i class="fas ' + (isSharedTemplate ? 'fa-copy' : (row ? 'fa-edit' : 'fa-plus-circle')) + '"></i> ' + title;
 
         const form = $('recordForm');
-        form.innerHTML = CFG.fields.map(def => buildFieldHtml(def, row)).join('');
+        form.innerHTML = CFG.fields.map(def => buildFieldHtml(def, formRow)).join('');
 
-        if (!row) {
+        if (!formRow) {
             const codeEl = form.querySelector('[data-key="template_code"]');
             if (codeEl) codeEl.value = nextTemplateCode();
         } else {
             CFG.fields.forEach(def => {
                 const el = form.querySelector('[data-key="' + CSS.escape(def.key) + '"]');
                 if (!el) return;
-                const v = row[def.key];
+                const v = formRow[def.key];
                 if (v != null) el.value = v;
             });
         }
 
-        await refreshDynamicSelects(form, row);
+        await refreshDynamicSelects(form, formRow);
 
         // تركيز تلقائي على أول حقل قابل للتعديل
         setTimeout(() => {
@@ -1764,7 +1774,9 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
         form.querySelectorAll('[data-key]').forEach(el => {
             const key = el.dataset.key;
             let v = el.value;
-            if (el.type === 'number') v = v === '' ? 0 : Number(v);
+            if (key === 'station_id') v = v === '' ? null : Number(v);
+            else if (key === 'is_active' || key === 'is_default') v = String(v) === '1' ? 1 : 0;
+            else if (el.type === 'number') v = v === '' ? 0 : Number(v);
             payload[key] = v;
         });
         return payload;
@@ -1803,6 +1815,10 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
     async function deleteRow(row) {
         const id = idOf(row);
         if (!id) return;
+        if (isGlobalTemplate(row)) {
+            toast('القالب العام مشترك؛ أنشئ نسخة محلية بدلاً من حذفه', 'warning');
+            return;
+        }
         if (!hasBridgeMethod(CFG.deleteMethod)) {
             toast('لا توجد عملية حذف متاحة', 'error');
             return;
@@ -1829,7 +1845,7 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
         const def = defaultInfo(row);
         const stationName = (() => {
             const s = findStation(row.station_id);
-            return s ? stationLabel(s) : (row.station_id ? ('محطة #' + row.station_id) : '—');
+            return s ? stationLabel(s) : (isGlobalTemplate(row) ? 'عام (مشترك)' : ('محطة #' + row.station_id));
         })();
 
         const html = '<div style="text-align:center;margin-bottom:14px">' +
@@ -2038,13 +2054,14 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
 
         box.innerHTML = state.filtered.map((row, idx) => {
             const id = idOf(row) || idx;
+            const shared = isGlobalTemplate(row);
             const name = pick(row, ['template_name']) || 'قالب بدون اسم';
             const code = pick(row, ['template_code']) || '—';
             const desc = pick(row, ['description']) || '—';
             const width = pick(row, ['paper_width']) || '—';
             const fontSize = pick(row, ['font_size']) || '—';
             const station = findStation(row.station_id);
-            const stationName = station ? stationLabel(station) : (row.station_id ? ('محطة #' + row.station_id) : '—');
+            const stationName = station ? stationLabel(station) : (shared ? 'عام (مشترك)' : ('محطة #' + row.station_id));
             const status = statusInfo(row);
             const def = defaultInfo(row);
 
@@ -2068,10 +2085,10 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
                 '</div>' +
                 '<div class="card-actions">' +
                 '<button class="card-btn" data-view-details="' + esc(id) + '"><i class="fas fa-eye"></i> تفاصيل</button>' +
-                (hasBridgeMethod(CFG.updateMethod)
-                    ? '<button class="card-btn" data-edit="' + esc(id) + '"><i class="fas fa-edit"></i> تعديل</button>'
+                (hasBridgeMethod(shared ? CFG.createMethod : CFG.updateMethod)
+                    ? '<button class="card-btn" data-edit="' + esc(id) + '"><i class="fas ' + (shared ? 'fa-copy' : 'fa-edit') + '"></i> ' + (shared ? 'نسخ للمحطة' : 'تعديل') + '</button>'
                     : '') +
-                (hasBridgeMethod(CFG.deleteMethod)
+                (hasBridgeMethod(CFG.deleteMethod) && !shared
                     ? '<button class="card-btn danger" data-delete="' + esc(id) + '"><i class="fas fa-trash"></i> حذف</button>'
                     : '') +
                 '</div>' +
@@ -2114,6 +2131,7 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
         html += '<th>الحالة</th><th>افتراضي</th><th>إجراءات</th></tr></thead><tbody>';
         state.filtered.forEach((row, idx) => {
             const id = idOf(row) || idx;
+            const shared = isGlobalTemplate(row);
             const status = statusInfo(row);
             const def = defaultInfo(row);
             html += '<tr data-id="' + esc(id) + '">';
@@ -2126,10 +2144,10 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
             html += '<td>' + (def ? '<span class="status-badge card-status ' + def.cls + '">' + esc(def.label) + '</span>' : '—') + '</td>';
             html += '<td class="actions-cell">' +
                 '<button type="button" data-view-details="' + esc(id) + '" title="تفاصيل"><i class="fas fa-eye"></i></button>' +
-                (hasBridgeMethod(CFG.updateMethod)
-                    ? '<button type="button" data-edit="' + esc(id) + '" title="تعديل"><i class="fas fa-edit"></i></button>'
+                (hasBridgeMethod(shared ? CFG.createMethod : CFG.updateMethod)
+                    ? '<button type="button" data-edit="' + esc(id) + '" title="' + (shared ? 'نسخ للمحطة' : 'تعديل') + '"><i class="fas ' + (shared ? 'fa-copy' : 'fa-edit') + '"></i></button>'
                     : '') +
-                (hasBridgeMethod(CFG.deleteMethod)
+                (hasBridgeMethod(CFG.deleteMethod) && !shared
                     ? '<button type="button" data-delete="' + esc(id) + '" title="حذف"><i class="fas fa-trash"></i></button>'
                     : '') +
                 '</td></tr>';

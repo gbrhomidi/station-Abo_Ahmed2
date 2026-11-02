@@ -20145,6 +20145,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 where += calibrationStationPredicate(stationId)
             } else if (stationId > 0 && fleetScope != null) {
                 where += fleetScope
+            } else if (stationId > 0 && screenKey in setOf("receipt_templates", "invoice_templates")) {
+                where += "(station_id = ? OR station_id IS NULL)"
+                args += stationId.toString()
             } else if (stationId > 0 && spec.columns.contains("station_id")) {
                 where += "station_id = ?"
                 args += stationId.toString()

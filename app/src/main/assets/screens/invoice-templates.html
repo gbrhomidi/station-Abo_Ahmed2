@@ -1411,6 +1411,10 @@ textarea.form-input.code-field { direction: ltr; text-align: left; font-family: 
         return s === '1' || s === 'true' || s === 'yes' || s === 'نعم' || s === 'افتراضي';
     }
 
+    function isGlobalTemplate(row) {
+        return !!row && (row.station_id == null || String(row.station_id).trim() === '');
+    }
+
     function fmtDate(d) {
         if (!d) return '—';
         try {
@@ -1427,7 +1431,7 @@ textarea.form-input.code-field { direction: ltr; text-align: left; font-family: 
     function stationName(row) {
         if (!row) return '—';
         const sid = pick(row, ['station_id', 'station']);
-        if (sid === '') return '—';
+        if (sid === '') return 'عام (مشترك)';
         const found = state.lookup.stations.find(s => String(idOf(s)) === String(sid));
         if (found) return stationLabel(found);
         return 'محطة #' + sid;
@@ -1623,25 +1627,31 @@ textarea.form-input.code-field { direction: ltr; text-align: left; font-family: 
        نموذج الإضافة/التعديل
        ============================================================ */
     async function openForm(row = null) {
-        if (!hasBridgeMethod(CFG.createMethod) && !hasBridgeMethod(CFG.updateMethod)) {
+        const isSharedTemplate = isGlobalTemplate(row);
+        const requiredMethod = isSharedTemplate || !row ? CFG.createMethod : CFG.updateMethod;
+        if (!hasBridgeMethod(requiredMethod)) {
             toast('لا توجد عملية كتابة متاحة للقوالب', 'error');
             return;
         }
-        state.editing = row;
-        $('formTitle').innerHTML = '<i class="fas ' + (row ? 'fa-edit' : 'fa-plus-circle') + '"></i> ' +
-            (row ? 'تعديل قالب' : 'إضافة قالب جديد');
+        const formRow = isSharedTemplate ? Object.assign({}, row, {
+            template_code: nextTemplateCode(),
+            station_id: state.sessionStation ? idOf(state.sessionStation) : ''
+        }) : row;
+        state.editing = isSharedTemplate ? null : row;
+        const title = isSharedTemplate ? 'إنشاء نسخة محلية من قالب عام' : (row ? 'تعديل قالب' : 'إضافة قالب جديد');
+        $('formTitle').innerHTML = '<i class="fas ' + (isSharedTemplate ? 'fa-copy' : (row ? 'fa-edit' : 'fa-plus-circle')) + '"></i> ' + title;
 
         const form = $('recordForm');
-        form.innerHTML = CFG.fields.map(def => buildFieldHtml(def, row)).join('');
+        form.innerHTML = CFG.fields.map(def => buildFieldHtml(def, formRow)).join('');
 
-        if (!row) {
+        if (!formRow) {
             const codeEl = form.querySelector('[data-key="template_code"]');
             if (codeEl) codeEl.value = nextTemplateCode();
         } else {
             CFG.fields.forEach(def => {
                 const el = form.querySelector('[data-key="' + CSS.escape(def.key) + '"]');
                 if (!el) return;
-                const v = row[def.key];
+                const v = formRow[def.key];
                 if (v != null) {
                     if (def.key === 'is_active' || def.key === 'is_default') {
                         el.value = String(v) === '1' || v === 'true' || v === true ? '1' : '0';
@@ -1652,10 +1662,10 @@ textarea.form-input.code-field { direction: ltr; text-align: left; font-family: 
             });
         }
 
-        await refreshDynamicSelects(form, row);
+        await refreshDynamicSelects(form, formRow);
 
         // ربط حقول الكود التلقائي - يُحدَّث تلقائياً عند تغيير الاسم
-        if (!row) {
+        if (!formRow) {
             const nameEl = form.querySelector('[data-key="template_name"]');
             const codeEl = form.querySelector('[data-key="template_code"]');
             if (nameEl && codeEl) {
@@ -1720,6 +1730,10 @@ textarea.form-input.code-field { direction: ltr; text-align: left; font-family: 
     async function deleteRow(row) {
         const id = idOf(row);
         if (!id) return;
+        if (isGlobalTemplate(row)) {
+            toast('القالب العام مشترك؛ أنشئ نسخة محلية بدلاً من حذفه', 'warning');
+            return;
+        }
         if (!hasBridgeMethod(CFG.deleteMethod)) {
             toast('لا توجد عملية حذف متاحة', 'error');
             return;
@@ -2034,6 +2048,7 @@ textarea.form-input.code-field { direction: ltr; text-align: left; font-family: 
 
         box.innerHTML = state.filtered.map((row, idx) => {
             const id = idOf(row) || idx;
+            const shared = isGlobalTemplate(row);
             const name = pick(row, ['template_name']) || 'قالب بدون اسم';
             const code = pick(row, ['template_code']) || '—';
             const desc = pick(row, ['description']) || '';
@@ -2064,10 +2079,10 @@ textarea.form-input.code-field { direction: ltr; text-align: left; font-family: 
                 '<div class="card-actions">' +
                 '<button type="button" class="card-btn preview" data-preview="' + esc(id) + '"><i class="fas fa-eye"></i> معاينة</button>' +
                 '<button type="button" class="card-btn" data-view-details="' + esc(id) + '"><i class="fas fa-info-circle"></i> تفاصيل</button>' +
-                (hasBridgeMethod(CFG.updateMethod)
-                    ? '<button type="button" class="card-btn" data-edit="' + esc(id) + '"><i class="fas fa-edit"></i> تعديل</button>'
+                (hasBridgeMethod(shared ? CFG.createMethod : CFG.updateMethod)
+                    ? '<button type="button" class="card-btn" data-edit="' + esc(id) + '"><i class="fas ' + (shared ? 'fa-copy' : 'fa-edit') + '"></i> ' + (shared ? 'نسخ للمحطة' : 'تعديل') + '</button>'
                     : '') +
-                (hasBridgeMethod(CFG.deleteMethod)
+                (hasBridgeMethod(CFG.deleteMethod) && !shared
                     ? '<button type="button" class="card-btn danger" data-delete="' + esc(id) + '"><i class="fas fa-trash"></i> حذف</button>'
                     : '') +
                 '</div>' +
@@ -2115,6 +2130,7 @@ textarea.form-input.code-field { direction: ltr; text-align: left; font-family: 
         html += '<th>إجراءات</th></tr></thead><tbody>';
         state.filtered.forEach((row, idx) => {
             const id = idOf(row) || idx;
+            const shared = isGlobalTemplate(row);
             html += '<tr data-id="' + esc(id) + '">';
             cols.forEach(c => {
                 const v = c.render ? c.render(row) : pick(row, [c.k]);
@@ -2123,10 +2139,10 @@ textarea.form-input.code-field { direction: ltr; text-align: left; font-family: 
             html += '<td class="actions-cell">' +
                 '<button type="button" data-preview="' + esc(id) + '" title="معاينة"><i class="fas fa-eye"></i></button>' +
                 '<button type="button" data-view-details="' + esc(id) + '" title="تفاصيل"><i class="fas fa-info-circle"></i></button>' +
-                (hasBridgeMethod(CFG.updateMethod)
-                    ? '<button type="button" data-edit="' + esc(id) + '" title="تعديل"><i class="fas fa-edit"></i></button>'
+                (hasBridgeMethod(shared ? CFG.createMethod : CFG.updateMethod)
+                    ? '<button type="button" data-edit="' + esc(id) + '" title="' + (shared ? 'نسخ للمحطة' : 'تعديل') + '"><i class="fas ' + (shared ? 'fa-copy' : 'fa-edit') + '"></i></button>'
                     : '') +
-                (hasBridgeMethod(CFG.deleteMethod)
+                (hasBridgeMethod(CFG.deleteMethod) && !shared
                     ? '<button type="button" data-delete="' + esc(id) + '" title="حذف"><i class="fas fa-trash"></i></button>'
                     : '') +
                 '</td></tr>';
