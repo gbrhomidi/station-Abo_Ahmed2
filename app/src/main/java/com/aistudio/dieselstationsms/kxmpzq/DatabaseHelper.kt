@@ -51,7 +51,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 50
+        const val VERSION = 51
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -327,7 +327,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     override fun onOpen(db: SQLiteDatabase) {
         // Keep connection-open work intentionally constant-time. Compatibility DDL,
-        // indexes and data repair run once in the transactional V49 migration.
+        // indexes and data repair run once in the transactional V51 migration.
         super.onOpen(db)
     }
 
