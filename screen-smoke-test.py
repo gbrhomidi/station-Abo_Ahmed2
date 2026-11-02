@@ -303,7 +303,7 @@ SECURITY_CASES = {
     'finance-posting-lifecycle': (
         PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt',
         [
-            'const val VERSION = 50', 'private fun postFinanceJournalLines',
+            'private fun postFinanceJournalLines',
             'fun addCashMovement(data: JSONObject, stationScopeId: Int, actorId: Long)',
             'fun addCashDeposit(data: JSONObject, stationScopeId: Int, actorId: Long)',
             'fun reverseCashDepositRecord(', 'fun addReceipt(data: JSONObject, stationScopeId: Int, actorId: Long)',
@@ -358,6 +358,30 @@ for case_name, (case_path, tokens) in SECURITY_CASES.items():
     for token in tokens:
         ok = token in source
         print(f'{"PASS" if ok else "FAIL"} {case_name}: {token}')
+        if not ok:
+            failed += 1
+
+# Keep SQLite delivery schema checks version-aware and tied to the actual migration contract.
+DATABASE_HELPER_PATH = PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt'
+if not DATABASE_HELPER_PATH.exists():
+    print('FAIL deliveries-sqlite-schema: DatabaseHelper.kt is missing')
+    failed += 1
+else:
+    database_helper_source = DATABASE_HELPER_PATH.read_text(encoding='utf-8', errors='replace')
+    version_match = re.search(r'const val VERSION\\s*=\\s*(\\d+)', database_helper_source)
+    schema_version_ok = bool(version_match and int(version_match.group(1)) >= 51)
+    delivery_schema_checks = [
+        (schema_version_ok, 'database schema version includes delivery station-scope migration (v51+)'),
+        ('station_id INTEGER NOT NULL DEFAULT 0' in database_helper_source, 'fresh deliveries schema includes station_id'),
+        ('ensureColumn(db, "deliveries", "station_id", "INTEGER NOT NULL DEFAULT 0")' in database_helper_source, 'existing deliveries tables receive station_id'),
+        ('deliveryStationSources' in database_helper_source and 'UPDATE deliveries SET station_id=COALESCE(' in database_helper_source, 'legacy delivery station ownership is backfilled'),
+        ('idx_deliveries_station_date' in database_helper_source, 'station/date/deleted index exists'),
+        ('idx_deliveries_station_status' in database_helper_source, 'station/status/deleted index exists'),
+        ('idx_deliveries_station_sale' in database_helper_source, 'station/sale/deleted index exists'),
+        ('put("station_id", stationScopeId)' in database_helper_source, 'new delivery rows persist the authenticated station'),
+    ]
+    for ok, label in delivery_schema_checks:
+        print(f'{"PASS" if ok else "FAIL"} deliveries-sqlite-schema: {label}')
         if not ok:
             failed += 1
 

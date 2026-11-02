@@ -159,17 +159,18 @@ class LatestFuelSaleForCustomerRobolectricTest {
         )
 
         db.rawQuery(
-            "SELECT sale_id,delivery_service_fee,delivery_fee_mode,delivery_location,cash_customer_name,location " +
+            "SELECT station_id,sale_id,delivery_service_fee,delivery_fee_mode,delivery_location,cash_customer_name,location " +
                 "FROM deliveries WHERE id=? AND station_id=?",
             arrayOf(deliveryId.toString(), stationId.toString())
         ).use { cursor ->
             assertTrue("The saved delivery must be readable from SQLite", cursor.moveToFirst())
-            assertEquals(parentSaleId, cursor.getLong(0))
-            assertEquals(37.5, cursor.getDouble(1), 0.0001)
-            assertEquals(DeliveryFeeAccounting.EXEMPT, cursor.getString(2))
-            assertEquals("موقع محفوظ من الوقود", cursor.getString(3))
-            assertEquals("اسم عميل نقدي محفوظ", cursor.getString(4))
-            assertEquals("موقع محفوظ من الوقود", cursor.getString(5))
+            assertEquals("The saved delivery must belong to the authenticated station", stationId.toLong(), cursor.getLong(0))
+            assertEquals(parentSaleId, cursor.getLong(1))
+            assertEquals(37.5, cursor.getDouble(2), 0.0001)
+            assertEquals(DeliveryFeeAccounting.EXEMPT, cursor.getString(3))
+            assertEquals("موقع محفوظ من الوقود", cursor.getString(4))
+            assertEquals("اسم عميل نقدي محفوظ", cursor.getString(5))
+            assertEquals("موقع محفوظ من الوقود", cursor.getString(6))
         }
     }
 
