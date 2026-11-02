@@ -368,7 +368,7 @@ if not DATABASE_HELPER_PATH.exists():
     failed += 1
 else:
     database_helper_source = DATABASE_HELPER_PATH.read_text(encoding='utf-8', errors='replace')
-    version_match = re.search(r'const val VERSION\\s*=\\s*(\\d+)', database_helper_source)
+    version_match = re.search(r'const val VERSION = ([0-9]+)', database_helper_source)
     schema_version_ok = bool(version_match and int(version_match.group(1)) >= 51)
     delivery_schema_checks = [
         (schema_version_ok, 'database schema version includes delivery station-scope migration (v51+)'),
