@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.database.Cursor
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
@@ -9913,6 +9914,88 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 dataResponse(db.getSmsLogs())
             } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getSmsWorkspaceData(section: String, jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val key = section.trim().lowercase(Locale.ROOT)
+                val options = JSONObject(jsonData.ifBlank { "{}" })
+                val limit = options.optInt("limit", 300).coerceIn(1, 500)
+                val database = db.readableDatabase
+
+                fun readRows(sql: String, args: Array<String> = emptyArray()): JSONArray {
+                    val rows = JSONArray()
+                    database.rawQuery(sql, args).use { cursor ->
+                        while (cursor.moveToNext()) {
+                            val row = JSONObject()
+                            for (index in 0 until cursor.columnCount) {
+                                val column = cursor.getColumnName(index)
+                                when (cursor.getType(index)) {
+                                    Cursor.FIELD_TYPE_STRING -> row.put(column, cursor.getString(index))
+                                    Cursor.FIELD_TYPE_INTEGER -> row.put(column, cursor.getLong(index))
+                                    Cursor.FIELD_TYPE_FLOAT -> row.put(column, cursor.getDouble(index))
+                                    else -> row.put(column, JSONObject.NULL)
+                                }
+                            }
+                            rows.put(row)
+                        }
+                    }
+                    return rows
+                }
+
+                val rows = when (key) {
+                    "recurring" -> readRows(
+                        "SELECT id, customer_id, quantity, location, schedule, next_delivery, created_at, updated_at FROM sms_recurring_orders ORDER BY next_delivery ASC, updated_at DESC LIMIT ?",
+                        arrayOf(limit.toString())
+                    )
+                    "preferences" -> readRows(
+                        "SELECT id, phone, preferred_quantity, preferred_location, preferred_time, last_order_date, order_count, language, updated_at FROM sms_customer_preferences ORDER BY updated_at DESC, id DESC LIMIT ?",
+                        arrayOf(limit.toString())
+                    )
+                    "otp" -> readRows(
+                        "SELECT id, phone, timestamp, attempts, max_attempts, expires_at, created_at, CASE WHEN expires_at > ? AND attempts < max_attempts THEN 'active' ELSE 'expired' END AS verification_state FROM sms_otp_verifications ORDER BY timestamp DESC, id DESC LIMIT ?",
+                        arrayOf(System.currentTimeMillis().toString(), limit.toString())
+                    )
+                    "context" -> JSONArray().apply {
+                        val contexts = readRows(
+                            "SELECT id, phone, last_topic, last_intent, timestamp, pending_action, awaiting_response, updated_at, conversation_id, current_state, previous_state, order_id, draft_id, version, expires_at, last_inbound_message_id, last_outbound_message_id, retry_count, status FROM sms_conversation_context ORDER BY timestamp DESC, id DESC LIMIT ?",
+                            arrayOf(limit.toString())
+                        )
+                        for (index in 0 until contexts.length()) {
+                            contexts.optJSONObject(index)?.put("record_type", "context")?.let { put(it) }
+                        }
+                        val remaining = (limit - length()).coerceAtLeast(0)
+                        if (remaining > 0) {
+                            val interactions = readRows(
+                                "SELECT id, phone, timestamp, intent, message, created_at FROM sms_interaction_history ORDER BY timestamp DESC, id DESC LIMIT ?",
+                                arrayOf(remaining.toString())
+                            )
+                            for (index in 0 until interactions.length()) {
+                                interactions.optJSONObject(index)?.put("record_type", "interaction")?.let { put(it) }
+                            }
+                        }
+                    }
+                    "ratelimits" -> readRows(
+                        "SELECT id, phone, last_reply_at, day_start, daily_count, warning_count, blocked_until, updated_at FROM sms_rate_limits ORDER BY updated_at DESC, id DESC LIMIT ?",
+                        arrayOf(limit.toString())
+                    )
+                    "metrics" -> db.getSmsMetrics()
+                    "logs" -> db.getSmsLogs()
+                    else -> return errorResponse("قسم بيانات الرسائل غير معروف")
+                }
+
+                JSONObject().apply {
+                    put("success", true)
+                    put("data", rows)
+                    put("count", rows.length())
+                    put("source", "sqlite")
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("SMS_WORKSPACE_DATA", e)
+                errorResponse(e.message ?: "تعذر قراءة بيانات مركز الرسائل")
+            }
         }
 
         @JavascriptInterface

@@ -24500,21 +24500,51 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val dateTo = params.optString("date_to", "").trim()
             val search = params.optString("search", "").trim()
             if (search.isNotBlank()) {
-                where += "(phone_number LIKE ? OR message_body LIKE ?)"
                 val like = "%$search%"
+                val messagePhone = smsCleanPhoneSql("sm", "phone_number")
+                val contactPhone = smsCleanPhoneSql("pc", "phone")
+                val contactPhone2 = smsCleanPhoneSql("pc", "phone2")
+                where += """
+                    (
+                        sm.phone_number LIKE ? COLLATE NOCASE
+                        OR sm.message_body LIKE ? COLLATE NOCASE
+                        OR EXISTS (
+                            SELECT 1
+                            FROM party_contacts pc
+                            INNER JOIN parties p ON p.id = pc.party_id
+                            WHERE pc.is_deleted = 0
+                              AND pc.is_active = 1
+                              AND p.is_deleted = 0
+                              AND (? <= 0 OR p.station_id = ?)
+                              AND (($contactPhone = $messagePhone) OR ($contactPhone2 = $messagePhone))
+                              AND (
+                                  pc.contact_name_ar LIKE ? COLLATE NOCASE
+                                  OR pc.contact_name LIKE ? COLLATE NOCASE
+                                  OR p.commercial_name_ar LIKE ? COLLATE NOCASE
+                                  OR p.commercial_name LIKE ? COLLATE NOCASE
+                                  OR p.legal_name LIKE ? COLLATE NOCASE
+                              )
+                        )
+                    )
+                """.trimIndent()
                 args += like
                 args += like
+                args += stationScopeId.toString()
+                args += stationScopeId.toString()
+                repeat(5) { args += like }
             }
             if (status == "read") {
-                where += "is_read = 1"
+                where += "sm.is_read = 1"
             } else if (status == "unread") {
-                where += "is_read = 0"
+                where += "sm.is_read = 0"
+            } else if (status == "pending") {
+                where += "LOWER(sm.status) IN ('pending', 'queued', 'sending', 'retry_pending', 'delivery_pending')"
             } else if (status.isNotBlank()) {
-                where += "status = ?"
+                where += "LOWER(sm.status) = ?"
                 args += status
             }
             if (messageType.isNotBlank()) {
-                where += "message_type = ?"
+                where += "LOWER(sm.message_type) = ?"
                 args += messageType
             }
             if (dateFrom.isNotBlank()) {
@@ -24527,7 +24557,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
 
             val whereSql = if (where.isEmpty()) "" else " WHERE " + where.joinToString(" AND ")
-            val count = db.rawQuery("SELECT COUNT(*) FROM sms_messages$whereSql", args.toTypedArray()).use { cursor ->
+            val count = db.rawQuery("SELECT COUNT(*) FROM sms_messages sm$whereSql", args.toTypedArray()).use { cursor ->
                 if (cursor.moveToFirst()) cursor.getInt(0) else 0
             }
             val pageArgs = args.toMutableList().apply {
@@ -24536,7 +24566,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             val projection = "sm.id, sm.uuid, sm.phone_number, sm.message_body, sm.message_type, sm.status, sm.is_read, sm.party_id, sm.error_message, sm.retry_count, sm.created_at, sm.updated_at, sm.processed_at"
             val items = db.rawQuery(
-                "SELECT $projection, ${smsOwnerNameSelect("sm")} AS owner_name, (SELECT suggested_state FROM sms_cognitive_plans WHERE conversation_id = sm.phone_number ORDER BY created_at DESC LIMIT 1) as cognitive_state FROM sms_messages sm$whereSql ORDER BY sm.created_at DESC, sm.id DESC LIMIT ? OFFSET ?",
+                "SELECT $projection, ${smsOwnerNameSelect("sm")}, (SELECT suggested_state FROM sms_cognitive_plans WHERE conversation_id = sm.phone_number ORDER BY created_at DESC LIMIT 1) as cognitive_state FROM sms_messages sm$whereSql ORDER BY sm.created_at DESC, sm.id DESC LIMIT ? OFFSET ?",
                 pageArgs.toTypedArray()
             ).use { cursor -> cursorToJsonArray(cursor) }
             JSONObject().apply {
@@ -24633,6 +24663,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE status = 'failed'$andScopeSql", null).use { cursor ->
                 stats.put("failed", if (cursor.moveToFirst()) cursor.getInt(0) else 0)
+            }
+            db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE LOWER(message_type) = 'incoming'$andScopeSql", null).use { cursor ->
+                stats.put("incoming", if (cursor.moveToFirst()) cursor.getInt(0) else 0)
+            }
+            db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE LOWER(message_type) = 'outgoing'$andScopeSql", null).use { cursor ->
+                stats.put("outgoing", if (cursor.moveToFirst()) cursor.getInt(0) else 0)
             }
             stats
         } finally {
