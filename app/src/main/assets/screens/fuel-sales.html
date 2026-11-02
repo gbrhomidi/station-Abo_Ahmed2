@@ -1486,8 +1486,16 @@ textarea.form-input { text-align: right; min-height: 64px; resize: vertical; }
     transition: none;
     pointer-events: auto;
     box-shadow: none;
+    white-space: pre-line;
 }
 .form-toast.show { display: flex; transform: none; }
+
+.delivery-fee-display-summary,
+.delivery-location-input {
+    color: #000;
+    font-size: 1rem;
+    font-weight: 700;
+}
 
 .advanced-notification {
     position: fixed;
@@ -2723,30 +2731,31 @@ function inputHtml(def, row) {
     const ro = def.readonly ? 'readonly tabindex="-1"' : '';
     const cls = def.readonly ? ' readonly' : '';
     if (def.type === 'delivery_fee_configuration') {
-        const fee = row && row.delivery_service_fee !== undefined ? row.delivery_service_fee : 0;
+        const rowFee = row && row.delivery_service_fee !== undefined ? Number(row.delivery_service_fee) : NaN;
+        const fee = Number.isFinite(rowFee) && rowFee !== 0 ? row.delivery_service_fee : '';
         return '<div class="form-group full delivery-fee-form-group"><div class="delivery-fee-composite">' +
             '<div class="delivery-fee-cell"><label class="form-label" for="deliveryFeeModeSelect">احتساب رسوم التوصيل</label>' +
             '<select id="deliveryFeeModeSelect" class="form-input" data-key="delivery_fee_mode" required>' +
             '<option value="exempt">معفي منها</option><option value="add_to_sales">تُضاف لقيمة المبيعات</option>' +
             '<option value="driver">على حساب السائق</option><option value="deduct_from_sales">تُنقص من المبيعات</option></select></div>' +
-            '<div class="delivery-fee-cell" data-delivery-fee-dependent="true" style="display:none"><label class="form-label" for="deliveryServiceFeeInput">رسوم خدمة التوصيل</label>' +
-            '<input id="deliveryServiceFeeInput" class="form-input" data-key="delivery_service_fee" type="number" min="0" step="0.01" inputmode="decimal" value="' + esc(fee) + '" placeholder="0.00"></div>' +
+            '<div class="delivery-fee-cell" data-delivery-fee-charge-dependent="true" style="display:none"><label class="form-label" for="deliveryServiceFeeInput">رسوم خدمة التوصيل</label>' +
+            '<input id="deliveryServiceFeeInput" class="form-input" data-key="delivery_service_fee" type="number" min="0" step="0.01" inputmode="decimal" value="' + esc(fee) + '"></div>' +
             '</div></div>';
     }
     if (def.key === 'delivery_fee_display_total') {
         const numericValue = row && row.delivery_fee_display_total !== undefined
             ? row.delivery_fee_display_total
             : (row && row.total_amount !== undefined ? row.total_amount : 0);
-        return '<div class="form-group full" data-delivery-fee-dependent="true" style="display:none">' +
+        return '<div class="form-group full" data-delivery-fee-charge-dependent="true" style="display:none">' +
             '<label class="form-label">' + esc(def.label) + '</label>' +
-            '<textarea id="deliveryFeeDisplaySummary" class="form-input" rows="3" readonly aria-readonly="true" tabindex="-1" placeholder="سيظهر تفصيل احتساب الرسوم هنا"></textarea>' +
+            '<textarea id="deliveryFeeDisplaySummary" class="form-input delivery-fee-display-summary" rows="5" readonly aria-readonly="true" tabindex="-1" placeholder="سيظهر تفصيل احتساب الرسوم هنا"></textarea>' +
             '<input id="deliveryFeeDisplayTotalValue" type="hidden" data-key="delivery_fee_display_total" value="' + esc(numericValue) + '">' +
             '</div>';
     }
     if (def.key === 'delivery_location') {
-        return '<div class="form-group full" data-delivery-fee-dependent="true" style="display:none">' +
+        return '<div class="form-group full" data-delivery-location-field="true">' +
             '<label class="form-label">' + esc(def.label) + '</label>' +
-            '<input class="form-input" data-key="delivery_location" type="text" inputmode="text" autocomplete="on" list="savedDeliveryLocations" value="' + esc(value) + '" placeholder="أدخل الموقع أو اختر موقعاً محفوظاً">' +
+            '<input class="form-input delivery-location-input" data-key="delivery_location" type="text" inputmode="text" autocomplete="on" list="savedDeliveryLocations" value="' + esc(value) + '" placeholder="أدخل الموقع أو اختر موقعاً محفوظاً">' +
             '<datalist id="savedDeliveryLocations"></datalist>' +
             '</div>';
     }
@@ -3119,10 +3128,7 @@ async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
     const fee = document.querySelector('[data-key="delivery_service_fee"]');
     const mode = document.querySelector('[data-key="delivery_fee_mode"]');
     if (fee) fee.oninput = updateDeliveryFeeDisplay;
-    if (mode) mode.onchange = () => {
-        if (mode.value === 'exempt' && fee) fee.value = '0';
-        updateDeliveryFeeDisplay();
-    };
+    if (mode) mode.onchange = updateDeliveryFeeDisplay;
     const location = document.querySelector('[data-key="delivery_location"]');
     const cashName = document.querySelector('[data-key="cash_customer_name"]');
     [location,cashName].forEach(el => {
@@ -3234,14 +3240,14 @@ function updateDeliveryFeeDisplay() {
     const feeInput = document.querySelector('[data-key="delivery_service_fee"]');
     const modeInput = document.querySelector('[data-key="delivery_fee_mode"]');
     const mode = modeInput?.value || 'exempt';
-    const dependentFields = document.querySelectorAll('[data-delivery-fee-dependent]');
+    const dependentFields = document.querySelectorAll('[data-delivery-fee-charge-dependent]');
     const needsFeeDetails = mode !== 'exempt';
 
     dependentFields.forEach(element => {
         element.style.display = needsFeeDetails ? '' : 'none';
     });
 
-    if (mode === 'exempt' && feeInput) feeInput.value = '0';
+    if (mode === 'exempt' && feeInput) feeInput.value = '';
     const fee = mode === 'exempt' ? 0 : Math.max(0, numeric(feeInput?.value));
     const displayValue = document.querySelector('[data-key="delivery_fee_display_total"]');
     const summary = document.getElementById('deliveryFeeDisplaySummary');
@@ -3289,10 +3295,22 @@ function bindFuelCalculation(resolveDynamic=true) {
     const payment = document.querySelector('[data-key="payment_method"]');
     const cashName = document.querySelector('[data-key="cash_customer_name"]');
     const updateCashCustomerVisibility = () => {
+        const paymentValue = String(payment?.value || 'cash').trim().toLowerCase();
+        const allowsCashSale = ['cash', 'cash_payment', 'نقدي', 'نقداً'].includes(paymentValue);
+        const cashSaleOption = Array.from(customer?.options || []).find(option =>
+            option.value === 'cash_sale' || String(option.textContent || '').trim() === 'مبيعات نقدية'
+        );
+        if (cashSaleOption) {
+            cashSaleOption.hidden = !allowsCashSale;
+            cashSaleOption.disabled = !allowsCashSale;
+        }
+        if (!allowsCashSale && cashSaleOption && customer?.selectedIndex === cashSaleOption.index) {
+            customer.value = '';
+        }
         const option = customer?.options?.[customer.selectedIndex];
         const selectedCashSale = customer?.value === 'cash_sale' ||
             String(option?.textContent || '').trim() === 'مبيعات نقدية';
-        const visible = Boolean(selectedCashSale && (!payment || payment.value === 'cash'));
+        const visible = Boolean(selectedCashSale && allowsCashSale);
         const wrapper = cashName?.closest('[data-cash-customer-group]') || cashName?.closest('.form-group');
         if (wrapper) wrapper.style.display = visible ? '' : 'none';
         if (cashName && !visible) cashName.value = '';
@@ -3312,7 +3330,6 @@ function bindFuelCalculation(resolveDynamic=true) {
         if (resolveDynamic) { loadActivePromotions(); refreshResolvedFuelPrice(); }
     };
     if (payment) payment.onchange = () => {
-        if (payment.value !== 'cash' && customer?.value === 'cash_sale') customer.value = '';
         updateCashCustomerVisibility();
     };
     updateCashCustomerVisibility();
@@ -3423,8 +3440,6 @@ async function saveForm() {
     const customerId = cashSaleSelected ? 0 : (Number(customerSelection) || 0);
     if (cashSaleSelected) payload.payment_method = 'cash';
     const deliveryFeeMode = String(payload.delivery_fee_mode || 'exempt');
-    const feeInput = document.querySelector('[data-key="delivery_service_fee"]');
-    if (deliveryFeeMode === 'exempt' && feeInput) feeInput.value = '0';
     const deliveryFee = deliveryFeeMode === 'exempt' ? 0 : Number(payload.delivery_service_fee || 0);
     const deliveryLocation = String(payload.delivery_location || '').trim();
     const cashCustomerName = cashSaleSelected ? String(payload.cash_customer_name || '').trim() : '';
@@ -3532,7 +3547,8 @@ async function saveForm() {
                     ? ' — تم وضع رسالة SMS للعميل ' + (sms.customer_name || 'المحدد') + ' في طابور الإرسال'
                     : ' — لم تُجدول رسالة SMS للعميل: ' + (sms.reason || sms.message || 'سبب غير معروف'))
                 : '';
-            showFormToast('تم حفظ عملية البيع رقم ' + saleId + ' وتحديث المخزون' + smsNote, 'success');
+            showFormToast('تم حفظ عملية البيع رقم ' + saleId + ' وتحديث المخزون' +
+                (smsNote ? '\n' + smsNote.trim() : ''), 'success');
             showDeliveryAction(saleId);
             void reloadData().catch(refreshError => console.warn('[Fuel Sales] Background refresh failed:', refreshError));
             // Keep the form modal open for review; the operator closes it explicitly.
