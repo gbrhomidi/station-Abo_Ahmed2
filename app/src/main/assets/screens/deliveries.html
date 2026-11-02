@@ -982,7 +982,7 @@
            ============================================================ */
 
         .location-input {
-            font-size: 17px !important;
+            font-size: 18px !important;
             font-weight: 900 !important;
             min-height: 56px !important;
             letter-spacing: .2px;
@@ -991,10 +991,10 @@
         }
 
         #f_delivery_fee_mode {
-            font-size: 15px;
-            font-weight: 800;
-            color: #000;
-            opacity: 1;
+            font-size: 16px !important;
+            font-weight: 900 !important;
+            color: #000 !important;
+            opacity: 1 !important;
         }
 
         /* ============================================================
@@ -5301,6 +5301,44 @@
         return sale;
     }
 
+    function applyLatestSaleDeliveryFields(sale) {
+        // Keep these four values bound to the latest SQLite fuel_sales row.
+        // firstSaleValue skips empty aliases but preserves a legitimate zero fee.
+        const serviceFee = firstSaleValue(
+            sale,
+            ['delivery_service_fee', 'service_fee', 'delivery_fee_amount'],
+            0
+        );
+        const rawFeeMode = String(firstSaleValue(
+            sale,
+            ['delivery_fee_mode', 'fee_mode', 'delivery_fee_calculation'],
+            'exempt'
+        ) || 'exempt').trim();
+        const allowedFeeModes = [
+            'exempt',
+            'add_to_sales',
+            'driver',
+            'deduct_from_sales'
+        ];
+        const deliveryLocation = firstSaleValue(
+            sale,
+            ['delivery_location', 'location', 'delivery_address'],
+            ''
+        );
+        const cashCustomerName = firstSaleValue(
+            sale,
+            ['cash_customer_name', 'cash_customer_display_name', 'customer_cash_name'],
+            ''
+        );
+
+        setDeliveryFeeInput(serviceFee);
+        $('f_delivery_fee_mode').value = allowedFeeModes.includes(rawFeeMode)
+            ? rawFeeMode
+            : 'exempt';
+        $('f_location').value = String(deliveryLocation || '').trim();
+        $('f_cash_customer_name').value = String(cashCustomerName || '').trim();
+    }
+
     async function loadLatestCustomerSale(partyId) {
 
         if (!(Number(partyId) > 0)) return;
@@ -5387,14 +5425,11 @@
         );
         setIfValue('f_price_per_liter', isProductSale ? 0 : sale.price_per_liter);
         setIfValue('f_total_amount', sale.total_amount ?? sale.net_amount);
-        setIfValue('f_location', sale.location ?? sale.delivery_location);
         setIfValue('f_vehicle_id', sale.vehicle_id);
         setIfValue('f_driver_id', sale.driver_id);
         setIfValue('f_vehicle_display', sale.vehicle_name);
         setIfValue('f_driver_display', sale.driver_name);
-        setDeliveryFeeInput(sale.delivery_service_fee ?? sale.service_fee ?? 0);
-        setIfValue('f_delivery_fee_mode', sale.delivery_fee_mode || 'exempt');
-        setIfValue('f_cash_customer_name', sale.cash_customer_name || '');
+        applyLatestSaleDeliveryFields(sale);
 
         const selectedPartyId = Number($('f_party_id').value || 0);
         const partyId = Number(sale.customer_party_id || sale.party_id || sale.customer_id || selectedPartyId || 0);
@@ -5411,11 +5446,8 @@
                 ? sale.cash_customer_name
                 : 'عميل غير مسجل';
         }
-        // Always assign these fields explicitly so a legitimate zero fee or "exempt" mode is not skipped.
-        setDeliveryFeeInput(sale.delivery_service_fee ?? sale.service_fee ?? 0);
-        $('f_delivery_fee_mode').value = sale.delivery_fee_mode || 'exempt';
-        $('f_cash_customer_name').value = String(sale.cash_customer_name || '');
-        $('f_location').value = String(sale.delivery_location || sale.location || '');
+        // Assign fee, calculation method, delivery location and cash customer from this selected sale.
+        applyLatestSaleDeliveryFields(sale);
 
 
         const fuelGroup = $('f_fuel_type').closest('.form-group');
