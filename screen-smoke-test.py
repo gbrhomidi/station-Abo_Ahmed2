@@ -378,6 +378,9 @@ else:
         ('idx_deliveries_station_date' in database_helper_source, 'station/date/deleted index exists'),
         ('idx_deliveries_station_status' in database_helper_source, 'station/status/deleted index exists'),
         ('idx_deliveries_station_sale' in database_helper_source, 'station/sale/deleted index exists'),
+        ('idx_deliveries_station_driver_status' in database_helper_source, 'station/driver/status/deleted index exists'),
+        ('columns = listOf("station_id", "sale_id"' in database_helper_source, 'generic delivery CRUD persists and filters by station'),
+        ('put("station_id", stationId)' in database_helper_source, 'legacy SMS delivery rows persist station ownership'),
         ('put("station_id", stationScopeId)' in database_helper_source, 'new delivery rows persist the authenticated station'),
     ]
     for ok, label in delivery_schema_checks:

@@ -1910,6 +1910,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_station_date ON deliveries(station_id, delivery_date, is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_station_status ON deliveries(station_id, status, is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_station_sale ON deliveries(station_id, sale_id, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_station_driver_status ON deliveries(station_id, driver_id, status, is_deleted)")
     }
 
     /** Compatibility additions for databases created before the messaging read-state contract. */
@@ -10368,8 +10369,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(stationScopeId > 0) { "معرف المحطة مطلوب لقراءة التوصيلات" }
         val limit = data.optInt("limit", 50).coerceIn(1, 100)
         val offset = data.optInt("offset", 0).coerceAtLeast(0)
-        val where = mutableListOf("s.station_id = ?", "d.is_deleted = 0", "s.is_deleted = 0")
-        val args = mutableListOf(stationScopeId.toString())
+        val where = mutableListOf("d.station_id = ?", "s.station_id = ?", "d.is_deleted = 0", "s.is_deleted = 0")
+        val args = mutableListOf(stationScopeId.toString(), stationScopeId.toString())
         data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(s.sale_code LIKE ? OR s.invoice_number LIKE ? OR COALESCE(p.commercial_name,'') LIKE ? OR COALESCE(d.location,'') LIKE ?)"; repeat(4) { args += like } }
         data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "d.status = ?"; args += it }
         data.optLong("driver_id", 0L).takeIf { it > 0L }?.let { where += "d.driver_id = ?"; args += it.toString() }
@@ -10414,9 +10415,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                JOIN sales_transactions s ON s.id = d.sale_id
                JOIN parties p ON p.id = d.party_id
                WHERE d.is_deleted = 0 AND s.is_deleted = 0
-                 AND s.station_id = ? AND p.is_deleted = 0 AND p.is_active = 1
+                 AND d.station_id = ? AND s.station_id = ? AND p.is_deleted = 0 AND p.is_active = 1
                ORDER BY name COLLATE NOCASE, p.id""",
-            arrayOf(stationScopeId.toString())
+            arrayOf(stationScopeId.toString(), stationScopeId.toString())
         ).use { cursorToJsonArray(it) }
 
         val locations = db.rawQuery(
@@ -10424,9 +10425,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                FROM deliveries d
                JOIN sales_transactions s ON s.id = d.sale_id
                WHERE d.is_deleted = 0 AND s.is_deleted = 0
-                 AND s.station_id = ? AND TRIM(COALESCE(d.location, '')) <> ''
+                 AND d.station_id = ? AND s.station_id = ? AND TRIM(COALESCE(d.location, '')) <> ''
                ORDER BY location COLLATE NOCASE""",
-            arrayOf(stationScopeId.toString())
+            arrayOf(stationScopeId.toString(), stationScopeId.toString())
         ).use { cursorToJsonArray(it) }
 
         return JSONObject().apply {
@@ -10453,13 +10454,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(fromDate <= toDate) { "لا يمكن أن يسبق تاريخ البداية تاريخ النهاية" }
 
         val where = mutableListOf(
+            "d.station_id = ?",
             "s.station_id = ?",
             "s.is_deleted = 0",
             "d.is_deleted = 0",
             "date(d.delivery_date) >= date(?)",
             "date(d.delivery_date) <= date(?)"
         )
-        val args = mutableListOf(stationScopeId.toString(), fromDate, toDate)
+        val args = mutableListOf(stationScopeId.toString(), stationScopeId.toString(), fromDate, toDate)
 
         when (reportType) {
             "customer" -> {
@@ -10850,8 +10852,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
 
                 val existingDeliveryId = db.rawQuery(
-                    "SELECT id FROM deliveries WHERE sale_id = ? AND is_deleted = 0 ORDER BY id ASC LIMIT 1",
-                    arrayOf(saleId.toString())
+                    "SELECT id FROM deliveries WHERE station_id = ? AND sale_id = ? AND is_deleted = 0 ORDER BY id ASC LIMIT 1",
+                    arrayOf(stationScopeId.toString(), saleId.toString())
                 ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
                 if (existingDeliveryId > 0L) {
                     db.setTransactionSuccessful()
@@ -11142,12 +11144,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     """SELECT d.sale_id, d.party_id, d.shift_id, COALESCE(s.service_fee, 0)
                        FROM deliveries d
                        LEFT JOIN sales_transactions s ON s.id = d.sale_id
-                       WHERE d.id = ? AND d.is_deleted = 0
+                       WHERE d.id = ? AND d.station_id = ? AND d.is_deleted = 0
                          AND (s.station_id = ? OR (d.sale_id IS NULL AND EXISTS (
                              SELECT 1 FROM parties p WHERE p.id = d.party_id AND p.station_id = ? AND p.is_deleted = 0
                          )))
                        LIMIT 1""",
-                    arrayOf(id.toString(), stationScopeId.toString(), stationScopeId.toString())
+                    arrayOf(id.toString(), stationScopeId.toString(), stationScopeId.toString(), stationScopeId.toString())
                 ).use { cursor ->
                     require(cursor.moveToFirst()) { "التوصيل غير موجود ضمن محطة الجلسة الحالية" }
                     saleId = if (cursor.isNull(0)) 0L else cursor.getLong(0)
@@ -11358,10 +11360,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val active = db.rawQuery(
                 """SELECT d.id, d.status, d.delivery_date
                    FROM deliveries d
-                   WHERE d.driver_id=? AND d.is_deleted=0
+                   WHERE d.station_id=? AND d.driver_id=? AND d.is_deleted=0
                      AND d.status IN ('pending','assigned','out_for_delivery')
                    ORDER BY d.id DESC LIMIT 1""",
-                arrayOf(driverId.toString())
+                arrayOf(stationScopeId.toString(), driverId.toString())
             ).use { a ->
                 if (a.moveToFirst()) JSONObject().apply {
                     put("id", a.getLong(0))
@@ -11403,10 +11405,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 """SELECT d.id, d.sale_id, d.party_id, d.driver_id, d.vehicle_id, d.status, d.delivery_date, d.quantity, d.location,
                           d.created_at, COALESCE(s.service_fee,0) AS service_fee, COALESCE(s.order_type,'') AS order_type
                    FROM deliveries d
-                   LEFT JOIN sales_transactions s ON s.id=d.sale_id AND s.station_id=? AND s.is_deleted=0
+                   LEFT JOIN sales_transactions s ON s.id=d.sale_id AND s.station_id=? AND s.station_id=d.station_id AND s.is_deleted=0
                    WHERE d.driver_id=? AND d.is_deleted=0 AND d.status <> 'cancelled'
                    ORDER BY d.id DESC LIMIT 1""",
-                arrayOf(stationScopeId.toString(), driverId.toString())
+                arrayOf(stationScopeId.toString(), stationScopeId.toString(), driverId.toString())
             ).use { c ->
                 if (!c.moveToFirst()) null else JSONObject().apply {
                     put("id", c.getLong(0)); put("sale_id", c.getLong(1));
@@ -11536,14 +11538,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                       COALESCE(s.payment_method,'cash'),
                       COALESCE(fs.notes,'')
                FROM deliveries d
-               JOIN sales_transactions s ON s.id=d.sale_id AND s.station_id=? AND s.is_deleted=0
+               JOIN sales_transactions s ON s.id=d.sale_id AND s.station_id=? AND s.station_id=d.station_id AND s.is_deleted=0
                LEFT JOIN fuel_sales fs ON fs.sale_id=s.id AND fs.is_deleted=0
                LEFT JOIN parties p ON p.id=d.party_id
                LEFT JOIN drivers dr ON dr.id=d.driver_id
                LEFT JOIN fuel_types f ON f.id=s.fuel_type_id
-               WHERE d.id=? AND d.is_deleted=0 AND d.driver_id IS NOT NULL
+               WHERE d.id=? AND d.station_id=? AND d.is_deleted=0 AND d.driver_id IS NOT NULL
                ORDER BY fs.id DESC LIMIT 1""",
-            arrayOf(stationScopeId.toString(), deliveryId.toString())
+            arrayOf(stationScopeId.toString(), deliveryId.toString(), stationScopeId.toString())
         ).use { c ->
             require(c.moveToFirst()) { "بيانات التوصيل أو السائق غير موجودة ضمن المحطة الحالية" }
             val orderType = c.getString(4).orEmpty()
@@ -11612,8 +11614,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             db.rawQuery(
                 """SELECT d.*, s.sale_code, s.delivery_location, s.delivery_time, s.created_at as sale_date
                    FROM deliveries d
-                   INNER JOIN sales_transactions s ON d.sale_id = s.id
-                   WHERE d.is_deleted = 0 AND s.station_id = ?
+                   INNER JOIN sales_transactions s ON d.sale_id = s.id AND s.station_id = d.station_id
+                   WHERE d.station_id = ? AND d.is_deleted = 0
                    ORDER BY d.created_at DESC""",
                 arrayOf(stationScopeId.toString())
             ).use { cursor -> cursorToJsonArray(cursor) }
@@ -11631,8 +11633,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             db.rawQuery(
                 """SELECT d.*, s.sale_code, s.delivery_location, s.delivery_time
                    FROM deliveries d
-                   INNER JOIN sales_transactions s ON d.sale_id = s.id
-                   WHERE d.delivery_date = ? AND d.is_deleted = 0 AND s.station_id = ?
+                   INNER JOIN sales_transactions s ON d.sale_id = s.id AND s.station_id = d.station_id
+                   WHERE d.delivery_date = ? AND d.station_id = ? AND d.is_deleted = 0
                    ORDER BY d.created_at DESC""",
                 arrayOf(today, stationScopeId.toString())
             ).use { cursor -> cursorToJsonArray(cursor) }
@@ -18861,13 +18863,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
             "deliveries" -> OperationalTableSpec(
                 table = "deliveries",
-                columns = listOf("sale_id", "party_id", "delivery_date", "quantity", "fuel_type", "price_per_liter", "total_amount", "status", "location", "notes", "driver_id", "vehicle_id", "shift_id"),
-                required = listOf("delivery_date", "quantity", "total_amount"),
+                columns = listOf("station_id", "sale_id", "party_id", "delivery_date", "quantity", "fuel_type", "price_per_liter", "total_amount", "status", "location", "notes", "driver_id", "vehicle_id", "shift_id"),
+                required = listOf("station_id", "delivery_date", "quantity", "total_amount"),
                 searchColumns = listOf("delivery_date", "location", "status", "notes"),
                 softDeleted = true,
                 hasUpdatedAt = true,
                 hasStatus = true,
-                numericColumns = listOf("sale_id", "party_id", "quantity", "price_per_liter", "total_amount", "driver_id", "vehicle_id", "shift_id")
+                numericColumns = listOf("station_id", "sale_id", "party_id", "quantity", "price_per_liter", "total_amount", "driver_id", "vehicle_id", "shift_id")
             )
             "fuel_sales" -> OperationalTableSpec(
                 table = "fuel_sales",
@@ -21597,6 +21599,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
+                put("station_id", stationId)
                 put("sale_id", saleId)
                 put("party_id", partyId)
                 put("delivery_date", getCurrentDate())
@@ -24309,7 +24312,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(shiftId > 0 && deliveryId > 0) { "معرفا الوردية والتسليم مطلوبان" }
             require(amount.isFinite()) { "قيمة التسليم غير صالحة" }
             db.rawQuery("SELECT id FROM shifts WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'open'", arrayOf(shiftId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الوردية خارج نطاق المحطة أو غير مفتوحة" } }
-            db.rawQuery("SELECT d.id FROM deliveries d LEFT JOIN sales_transactions s ON s.id = d.sale_id LEFT JOIN parties p ON p.id = d.party_id WHERE d.id = ? AND d.is_deleted = 0 AND (s.station_id = ? OR p.station_id = ?)", arrayOf(deliveryId.toString(), stationScopeId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "التسليم خارج نطاق المحطة" } }
+            db.rawQuery("SELECT d.id FROM deliveries d LEFT JOIN sales_transactions s ON s.id = d.sale_id WHERE d.id = ? AND d.station_id = ? AND d.is_deleted = 0 AND (s.id IS NULL OR s.station_id = ?)", arrayOf(deliveryId.toString(), stationScopeId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "التسليم خارج نطاق المحطة" } }
             db.beginTransaction()
             try {
                 val currentTotal = db.rawQuery("SELECT COALESCE(total_deliveries, 0) FROM shifts WHERE id = ? AND station_id = ? AND status = 'open' AND is_deleted = 0", arrayOf(shiftId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الوردية خارج نطاق المحطة أو غير مفتوحة" }; cursor.getDouble(0) }

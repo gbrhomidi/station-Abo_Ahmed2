@@ -76,6 +76,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
         assertTrue("delivery date queries need a station-scoped index", "idx_deliveries_station_date" in indexes)
         assertTrue("delivery status queries need a station-scoped index", "idx_deliveries_station_status" in indexes)
         assertTrue("invoice lookups need a station-scoped index", "idx_deliveries_station_sale" in indexes)
+        assertTrue("driver workload queries need a station-scoped index", "idx_deliveries_station_driver_status" in indexes)
     }
 
     @Test
@@ -172,6 +173,13 @@ class LatestFuelSaleForCustomerRobolectricTest {
             assertEquals("اسم عميل نقدي محفوظ", cursor.getString(5))
             assertEquals("موقع محفوظ من الوقود", cursor.getString(6))
         }
+
+        val genericRows = helper.getOperationalRows("deliveries", JSONObject().put("station_id", stationId))
+        val savedDelivery = (0 until genericRows.length())
+            .mapNotNull { genericRows.optJSONObject(it) }
+            .firstOrNull { it.optLong("id", 0L) == deliveryId }
+        assertTrue("Generic delivery reads must retain station-scoped SQLite access", savedDelivery != null)
+        assertEquals(stationId.toLong(), savedDelivery!!.getLong("station_id"))
     }
 
     @Test
