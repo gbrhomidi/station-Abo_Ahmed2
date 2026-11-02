@@ -1443,25 +1443,25 @@
      </span>
     </div>
     <div aria-label="فلاتر المهام" class="filter-chips" role="tablist">
-     <button aria-selected="true" class="filter-chip active" onclick="setFilter('all', this)" role="tab">
+     <button aria-selected="true" class="filter-chip active" data-filter="all" onclick="setFilter('all', this)" role="tab">
       الكل
      </button>
-     <button aria-selected="false" class="filter-chip" onclick="setFilter('unpaid', this)" role="tab">
+     <button aria-selected="false" class="filter-chip" data-filter="unpaid" onclick="setFilter('unpaid', this)" role="tab">
       غير مدفوعة
      </button>
-     <button aria-selected="false" class="filter-chip" onclick="setFilter('overdue', this)" role="tab">
+     <button aria-selected="false" class="filter-chip" data-filter="overdue" onclick="setFilter('overdue', this)" role="tab">
       متأخرة
      </button>
-     <button aria-selected="false" class="filter-chip" onclick="setFilter('low_stock', this)" role="tab">
+     <button aria-selected="false" class="filter-chip" data-filter="low_stock" onclick="setFilter('low_stock', this)" role="tab">
       مخزون منخفض
      </button>
-     <button aria-selected="false" class="filter-chip" onclick="setFilter('pending', this)" role="tab">
+     <button aria-selected="false" class="filter-chip" data-filter="pending" onclick="setFilter('pending', this)" role="tab">
       معلقة
      </button>
-     <button aria-selected="false" class="filter-chip" onclick="setFilter('completed', this)" role="tab">مكتملة</button>
-     <button aria-selected="false" class="filter-chip" onclick="setFilter('archived', this)" role="tab">مؤرشفة</button>
-     <button aria-selected="false" class="filter-chip" onclick="setFilter('high', this)" role="tab">عالية الأولوية</button>
-     <button aria-selected="false" class="filter-chip ai-chip" onclick="setFilter('ai_suggest', this)" role="tab">
+     <button aria-selected="false" class="filter-chip" data-filter="completed" onclick="setFilter('completed', this)" role="tab">مكتملة</button>
+     <button aria-selected="false" class="filter-chip" data-filter="archived" onclick="setFilter('archived', this)" role="tab">مؤرشفة</button>
+     <button aria-selected="false" class="filter-chip" data-filter="high" onclick="setFilter('high', this)" role="tab">عالية الأولوية</button>
+     <button aria-selected="false" class="filter-chip ai-chip" data-filter="ai_suggest" onclick="setFilter('ai_suggest', this)" role="tab">
       🤖 توصية AI
      </button>
     </div>
@@ -1916,35 +1916,48 @@
     JAVASCRIPT – كامل ومتكامل
     ============================================================ -->
   <script>
+
         /* ============================================================
            API Call – عبر AndroidInterface (بيانات حقيقية)
            ============================================================ */
-        function apiCall(action, params) {
+        async function apiCall(action, params) {
             const p = params || {};
-            if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
-            try {
-                let raw;
-                switch (action) {
-                    case 'getPendingTasks': raw = AndroidInterface.getPendingTasks(JSON.stringify(p)); break;
-                    case 'addTask': raw = AndroidInterface.addTask(JSON.stringify(p)); break;
-                    case 'updateTask': raw = AndroidInterface.updateTask(Number(p.id), JSON.stringify(p)); break;
-                    case 'archiveTask': raw = AndroidInterface.archiveTask(Number(p.id)); break;
-                    case 'restoreTask': raw = AndroidInterface.restoreTask(Number(p.id)); break;
-                    case 'resolveTask': raw = AndroidInterface.resolveTask(Number(p.id)); break;
-                    case 'deleteTask': raw = AndroidInterface.deleteTask(Number(p.id)); break;
-                    case 'generateTaskReport': raw = AndroidInterface.generateTaskReport(JSON.stringify(p)); break;
-                    case 'backupData': raw = AndroidInterface.backupDatabase(); break;
-                    case 'getAuditLogs': raw = AndroidInterface.getActivityLogs(JSON.stringify({
-                        limit: Number(p.limit || 50),
-                        offset: Number(p.offset || 0)
-                    })); break;
-                    default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
-                }
-                return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
-            } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
+            const bridge = window.AndroidInterface;
+            if (!bridge) throw new Error('جسر Android غير متاح؛ تحقق من تهيئة التطبيق');
+            let method = '';
+            let args = [];
+            switch (action) {
+                case 'getPendingTasks': method = 'getPendingTasks'; args = [JSON.stringify(p)]; break;
+                case 'addTask': method = 'addTask'; args = [JSON.stringify(p)]; break;
+                case 'updateTask': method = 'updateTask'; args = [Number(p.id), JSON.stringify(p)]; break;
+                case 'archiveTask': method = 'archiveTask'; args = [Number(p.id)]; break;
+                case 'restoreTask': method = 'restoreTask'; args = [Number(p.id)]; break;
+                case 'resolveTask': method = 'resolveTask'; args = [Number(p.id)]; break;
+                case 'deleteTask': method = 'deleteTask'; args = [Number(p.id)]; break;
+                case 'generateTaskReport': method = 'generateTaskReport'; args = [JSON.stringify(p)]; break;
+                case 'backupData': method = 'backupDatabase'; args = []; break;
+                case 'getBackupHealth': method = 'getBackupHealth'; args = []; break;
+                case 'getAuditLogs':
+                    method = 'getActivityLogs';
+                    args = [JSON.stringify({ limit: Number(p.limit || 50), offset: Number(p.offset || 0) })];
+                    break;
+                default: throw new Error('العملية غير مدعومة: ' + action);
+            }
+            if (typeof bridge[method] !== 'function') throw new Error('عملية Android غير متاحة: ' + method);
+            let raw;
+            try { raw = bridge[method].apply(bridge, args); }
+            catch (error) { throw new Error(error && error.message ? error.message : 'فشل استدعاء Android Bridge'); }
+            let response = raw;
+            if (typeof raw === 'string') {
+                try { response = JSON.parse(raw); }
+                catch (error) { throw new Error('استجابة Android غير صالحة للعملية ' + action); }
+            }
+            if (!response || typeof response !== 'object') throw new Error('لم تُرجع قاعدة البيانات استجابة صالحة للعملية ' + action);
+            if (response.success === false) throw new Error(response.error || response.message || ('فشلت العملية: ' + action));
+            return response;
         }
 
-        /* ============================================================
+/* ============================================================
            Offline / Online — لا توجد عمليات أعمال محلية
            ============================================================ */
         // SQLite وBridge محليان؛ حالة الشبكة لا تمنع قراءة أو تعديل المهام.
@@ -1960,20 +1973,28 @@
            ============================================================ */
         function showToast(message, type) {
             const toast = document.getElementById('toast');
+            if (!toast) {
+                console[(type === 'error' ? 'error' : 'log')](message);
+                return;
+            }
             const msg = document.getElementById('toastMessage');
             const icon = toast.querySelector('.toast-icon i');
             toast.className = 'toast ' + (type || '');
-            msg.textContent = message;
-            if (type === 'success') { icon.className = 'fas fa-check'; } else if (type === 'error') { icon.className =
-                    'fas fa-times'; } else if (type === 'warning') { icon.className = 'fas fa-exclamation-triangle'; } else { icon
-                    .className = 'fas fa-info-circle'; }
+            if (msg) msg.textContent = message;
+            if (icon) {
+                if (type === 'success') icon.className = 'fas fa-check';
+                else if (type === 'error') icon.className = 'fas fa-times';
+                else if (type === 'warning') icon.className = 'fas fa-exclamation-triangle';
+                else icon.className = 'fas fa-info-circle';
+            }
             toast.classList.add('show');
             clearTimeout(toast._timer);
             toast._timer = setTimeout(() => toast.classList.remove('show'), 3500);
         }
 
         function showLoading(show) {
-            document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
+            const indicator = document.getElementById('loadingIndicator');
+            if (indicator) indicator.style.display = show ? 'flex' : 'none';
         }
 
         function formatNumber(num) {
@@ -2021,23 +2042,44 @@
         /* ============================================================
            Theme Toggle – الوضع الفاتح افتراضي
            ============================================================ */
+        const UiStorage = {
+            get(key, fallback) {
+                try {
+                    const value = window.localStorage.getItem(key);
+                    return value === null ? fallback : value;
+                } catch (error) {
+                    console.warn('تعذر قراءة تفضيل الواجهة:', key, error);
+                    return fallback;
+                }
+            },
+            set(key, value) {
+                try {
+                    window.localStorage.setItem(key, value);
+                    return true;
+                } catch (error) {
+                    console.warn('تعذر حفظ تفضيل الواجهة:', key, error);
+                    return false;
+                }
+            }
+        };
+
         function toggleTheme() {
             const current = document.documentElement.getAttribute('data-theme');
             const isDark = current === 'dark';
             const newTheme = isDark ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
+            UiStorage.set('theme', newTheme);
             const icon = document.getElementById('themeIcon');
-            icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+            if (icon) icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
             if (window.statusChart) window.statusChart.update();
             if (window.valueChart) window.valueChart.update();
         }
 
         function loadSavedTheme() {
-            const saved = localStorage.getItem('theme') || 'light';
+            const saved = UiStorage.get('theme', 'light') || 'light';
             document.documentElement.setAttribute('data-theme', saved);
             const icon = document.getElementById('themeIcon');
-            icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+            if (icon) icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
         }
         /* ============================================================
            Sidebar
@@ -2045,15 +2087,28 @@
         function setupSidebar() {
             const sidebar = document.getElementById('sidebar');
             const toggle = document.getElementById('sidebarToggle');
-            toggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                sidebar.classList.toggle('open');
-                toggle.classList.toggle('hidden');
+            if (!sidebar || !toggle) {
+                console.warn('عناصر القائمة الجانبية غير مكتملة');
+                return;
+            }
+            const toggleSidebar = event => {
+                if (event) event.stopPropagation();
+                const opened = sidebar.classList.toggle('open');
+                toggle.classList.toggle('hidden', opened);
+                toggle.setAttribute('aria-expanded', opened ? 'true' : 'false');
+            };
+            toggle.addEventListener('click', toggleSidebar);
+            toggle.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggleSidebar(event);
+                }
             });
-            document.addEventListener('click', (e) => {
-                if (!sidebar.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
+            document.addEventListener('click', event => {
+                if (!sidebar.contains(event.target) && event.target !== toggle && !toggle.contains(event.target)) {
                     sidebar.classList.remove('open');
                     toggle.classList.remove('hidden');
+                    toggle.setAttribute('aria-expanded', 'false');
                 }
             });
         }
@@ -2118,28 +2173,84 @@
         let fuseInstance = null;
         let isInitialLoad = true;
         let notificationTaskHandled = false;
+        let hasLoadedTaskSnapshot = false;
+        let pendingTasksLoadPromise = null;
+        let taskLoadRetryTimer = null;
+        let taskLoadRetryAttempt = 0;
+        let taskRefreshTimer = null;
+
+        function scheduleTaskLoadRetry() {
+            if (taskLoadRetryTimer || taskLoadRetryAttempt >= 6) return;
+            const delay = Math.min(30000, 1500 * Math.pow(2, taskLoadRetryAttempt++));
+            taskLoadRetryTimer = window.setTimeout(() => {
+                taskLoadRetryTimer = null;
+                loadData();
+            }, delay);
+        }
 
         /* ============================================================
            Load Data – من قاعدة البيانات الفعلية
            ============================================================ */
-        async function loadData(includeArchived = currentFilter === 'archived') {
-            if (isInitialLoad) renderSkeleton();
-            showLoading(true);
-            try {
-                const includeResolved = currentFilter === 'completed' || currentFilter === 'archived';
-                const response = await apiCall('getPendingTasks', {
-                    include_archived: includeArchived,
-                    include_resolved: includeResolved,
-                    limit: 1000
-                });
-                if (!response.success) throw new Error(response.message || 'فشل جلب المهام');
-                allTasks = Array.isArray(response.data) ? response.data : [];
-                initFuse(); generateAIInsights(); renderCards(); updateStats(); updateCharts(); updateAlerts();
-                openTaskFromNotification();
-            } catch (e) {
-                allTasks = []; initFuse(); renderCards(); updateStats(); updateCharts(); updateAlerts();
-                showToast(e.message || 'فشل تحميل المهام من SQLite', 'error');
-            } finally { isInitialLoad = false; showLoading(false); }
+        async function loadData() {
+            if (pendingTasksLoadPromise) return pendingTasksLoadPromise;
+            pendingTasksLoadPromise = (async () => {
+                if (isInitialLoad) renderSkeleton();
+                showLoading(true);
+                try {
+                    const pageSize = 5000;
+                    const maximumRows = 50000;
+                    const loadedRows = [];
+                    let reachedEnd = false;
+                    for (let offset = 0; offset < maximumRows; offset += pageSize) {
+                        const response = await apiCall('getPendingTasks', {
+                            include_archived: true,
+                            include_resolved: true,
+                            limit: pageSize,
+                            offset: offset
+                        });
+                        const batch = Array.isArray(response.data) ? response.data : (Array.isArray(response) ? response : []);
+                        loadedRows.push.apply(loadedRows, batch);
+                        if (batch.length < pageSize) {
+                            reachedEnd = true;
+                            break;
+                        }
+                    }
+                    allTasks = loadedRows.filter(task => Number(task && task.is_deleted || 0) === 0);
+                    hasLoadedTaskSnapshot = true;
+                    taskLoadRetryAttempt = 0;
+                    if (taskLoadRetryTimer) {
+                        window.clearTimeout(taskLoadRetryTimer);
+                        taskLoadRetryTimer = null;
+                    }
+                    initFuse();
+                    generateAIInsights();
+                    renderCards();
+                    updateStats();
+                    updateAlerts();
+                    updateCharts();
+                    openTaskFromNotification();
+                    if (!reachedEnd && loadedRows.length >= maximumRows) {
+                        showToast('تم تحميل أول 50,000 مهمة؛ راجع حجم سجل المهام لتجنب بتر النتائج.', 'warning');
+                    }
+                } catch (error) {
+                    if (!hasLoadedTaskSnapshot) {
+                        allTasks = [];
+                        initFuse();
+                        generateAIInsights();
+                    }
+                    try { renderCards(); } catch (renderError) { console.error('Task list render failed:', renderError); }
+                    try { updateStats(); } catch (statsError) { console.error('Task stats render failed:', statsError); }
+                    try { updateAlerts(); } catch (alertsError) { console.error('Task alerts render failed:', alertsError); }
+                    try { updateCharts(); } catch (chartError) { console.error('Task charts render failed:', chartError); }
+                    showToast('تعذر تحميل المهام من SQLite: ' + (error && error.message ? error.message : 'خطأ غير معروف'), 'error');
+                    scheduleTaskLoadRetry();
+                } finally {
+                    isInitialLoad = false;
+                    showLoading(false);
+                }
+            })();
+            try { return await pendingTasksLoadPromise; }
+            finally { pendingTasksLoadPromise = null; }
         }
 
         function openTaskFromNotification() {
@@ -2184,13 +2295,21 @@
            Fuzzy Search (Fuse.js)
            ============================================================ */
         function initFuse() {
-            if (typeof Fuse === 'undefined') return;
-            fuseInstance = new Fuse(allTasks, {
-                keys: ['id', 'reference', 'type', 'status'],
-                threshold: 0.3,
-                distance: 100,
-                includeScore: true
-            });
+            if (typeof window.Fuse === 'undefined') {
+                fuseInstance = null;
+                return;
+            }
+            try {
+                fuseInstance = new window.Fuse(allTasks, {
+                    keys: ['id', 'reference', 'type', 'task_type', 'status', 'notes'],
+                    threshold: 0.3,
+                    distance: 100,
+                    includeScore: true
+                });
+            } catch (error) {
+                console.warn('تعذر تهيئة البحث التقريبي؛ سيُستخدم البحث النصي.', error);
+                fuseInstance = null;
+            }
         }
 
         function handleSearch(query) {
@@ -2200,32 +2319,39 @@
         }
 
         function getFilteredData() {
-            let data = [...allTasks];
-
-            if (currentFilter === 'unpaid') data = data.filter(t => t.status === 'غير مدفوعة');
-            else if (currentFilter === 'overdue') data = data.filter(t => t.status === 'متأخرة');
-            else if (currentFilter === 'low_stock') data = data.filter(t => t.type === 'منتج منخفض المخزون');
-            else if (currentFilter === 'pending') data = data.filter(t => t.status === 'قيد التنفيذ' || t.status === 'معلقة');
-            else if (currentFilter === 'completed') data = data.filter(t => t.status === 'مكتملة' || Number(t.is_resolved) === 1);
-            else if (currentFilter === 'high') data = data.filter(t => t.priority === 'عالية');
-            else if (currentFilter === 'ai_suggest') {
-                const insights = window.__taskInsights || [];
-                const ids = insights.map(i => i.taskId);
-                data = data.filter(t => ids.includes(t.id));
-            }
-
-            if (searchQuery && fuseInstance) {
-                const results = fuseInstance.search(searchQuery);
-                const ids = results.map(r => r.item.id);
-                data = data.filter(t => ids.includes(t.id));
-            } else if (searchQuery) {
-                const q = searchQuery.toLowerCase();
-                data = data.filter(t =>
-                    String(t.id).includes(q) ||
-                    (t.reference || '').toLowerCase().includes(q) ||
-                    (t.type || '').toLowerCase().includes(q) ||
-                    (t.status || '').toLowerCase().includes(q)
+            const notDeleted = allTasks.filter(task => Number(task && task.is_deleted || 0) === 0);
+            let data;
+            if (currentFilter === 'archived') {
+                data = notDeleted.filter(task => Number(task.is_archived || 0) === 1);
+            } else if (currentFilter === 'completed') {
+                data = notDeleted.filter(task =>
+                    Number(task.is_archived || 0) === 0 &&
+                    (Number(task.is_resolved || 0) === 1 || task.status === 'مكتملة')
                 );
+            } else {
+                data = notDeleted.filter(task =>
+                    Number(task.is_archived || 0) === 0 &&
+                    Number(task.is_resolved || 0) === 0 &&
+                    task.status !== 'مكتملة'
+                );
+                if (currentFilter === 'unpaid') data = data.filter(task => task.status === 'غير مدفوعة');
+                else if (currentFilter === 'overdue') data = data.filter(task => task.status === 'متأخرة');
+                else if (currentFilter === 'low_stock') data = data.filter(task => (task.type || task.task_type) === 'منتج منخفض المخزون');
+                else if (currentFilter === 'pending') data = data.filter(task => task.status === 'قيد التنفيذ');
+                else if (currentFilter === 'high') data = data.filter(task => task.priority === 'عالية');
+                else if (currentFilter === 'ai_suggest') {
+                    const ids = new Set((window.__taskInsights || []).map(item => String(item.taskId)));
+                    data = data.filter(task => ids.has(String(task.id)));
+                }
+            }
+            if (searchQuery && fuseInstance) {
+                const ids = new Set(fuseInstance.search(searchQuery).map(result => String(result.item.id)));
+                data = data.filter(task => ids.has(String(task.id)));
+            } else if (searchQuery) {
+                const query = searchQuery.toLocaleLowerCase();
+                data = data.filter(task => [
+                    task.id, task.reference, task.type, task.task_type, task.status, task.notes
+                ].some(value => String(value == null ? '' : value).toLocaleLowerCase().includes(query)));
             }
             return data;
         }
@@ -2249,7 +2375,7 @@
                 container.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-tasks" aria-hidden="true"></i>
-                        <p>${allTasks.length === 0 ? '⚠️ لا توجد بيانات من قاعدة البيانات' : 'لا توجد مهام معلقة'}</p>
+                        <p>${allTasks.length === 0 ? 'لا توجد سجلات مهام في قاعدة بيانات SQLite' : (currentFilter === 'archived' ? 'لا توجد مهام مؤرشفة' : currentFilter === 'completed' ? 'لا توجد مهام مكتملة' : 'لا توجد مهام مطابقة لهذا الفلتر')}</p>
                     </div>
                 `;
                 renderPagination(totalPages);
@@ -2260,9 +2386,9 @@
 
             container.innerHTML = pageItems.map((task, idx) => {
                 const id = task.id;
-                const type = getTaskTypeLabel(task.type);
+                const type = getTaskTypeLabel(task.type || task.task_type);
                 const reference = task.reference || '---';
-                const date = task.date || '---';
+                const date = task.date || task.task_date || '---';
                 const amount = parseFloat(task.amount || 0);
                 const status = task.status || '---';
                 const statusClass = getStatusClass(status);
@@ -2349,23 +2475,44 @@
            Update Stats
            ============================================================ */
         function updateStats() {
-            const total = allTasks.length;
-            const pending = allTasks.filter(t => t.status === 'غير مدفوعة' || t.status === 'قيد التنفيذ' || t.status === 'معلقة')
-                .length;
-            const high = allTasks.filter(t => parseFloat(t.amount || 0) > 5000).length;
-            const overdue = allTasks.filter(t => t.status === 'متأخرة').length;
+            const liveRows = allTasks.filter(task => Number(task && task.is_deleted || 0) === 0);
+            const activeRows = liveRows.filter(task =>
+                Number(task.is_archived || 0) === 0 &&
+                Number(task.is_resolved || 0) === 0 &&
+                task.status !== 'مكتملة'
+            );
+            const values = {
+                statTotal: liveRows.length,
+                statPending: activeRows.filter(task => task.status === 'قيد التنفيذ' || task.status === 'غير مدفوعة').length,
+                statHigh: activeRows.filter(task => task.priority === 'عالية').length,
+                statOverdue: activeRows.filter(task => task.status === 'متأخرة').length
+            };
+            Object.entries(values).forEach(([id, value]) => {
+                const element = document.getElementById(id);
+                if (element) element.textContent = formatNumber(value);
+            });
+            ['trendTotal', 'trendPending', 'trendHigh', 'trendOverdue'].forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.textContent = '—';
+            });
+        }
 
-            document.getElementById('statTotal').textContent = total;
-            document.getElementById('statPending').textContent = pending;
-            document.getElementById('statHigh').textContent = high;
-            document.getElementById('statOverdue').textContent = overdue;
-
-            ['trendTotal','trendPending','trendHigh','trendOverdue'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
-
+        function getActiveTasksForCharts() {
+            return allTasks.filter(task =>
+                Number(task && task.is_deleted || 0) === 0 &&
+                Number(task.is_archived || 0) === 0 &&
+                Number(task.is_resolved || 0) === 0 &&
+                task.status !== 'مكتملة'
+            );
         }
 
         function showStatDetail(type) {
-            showToast('📊 عرض تفاصيل: ' + type, 'info');
+            const filter = { total: 'all', pending: 'pending', high: 'high', overdue: 'overdue' }[type];
+            if (!filter) return;
+            const chip = document.querySelector('.filter-chip[data-filter="' + filter + '"]');
+            setFilter(filter, chip || null);
+            const list = document.getElementById('cardsContainer');
+            if (list && typeof list.scrollIntoView === 'function') list.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         /* ============================================================
@@ -2375,69 +2522,58 @@
         let valueChartInstance = null;
 
         function updateCharts() {
-            const types = {};
-            const values = {};
-            allTasks.forEach(t => {
-                const label = getTaskTypeLabel(t.type);
-                types[label] = (types[label] || 0) + 1;
-                values[label] = (values[label] || 0) + parseFloat(t.amount || 0);
-            });
-
-            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-            const textColor = isDark ? '#e8e8f0' : '#2c1e16';
-            const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(139,107,77,0.10)';
-
-            const ctx1 = document.getElementById('statusChart').getContext('2d');
-            if (statusChartInstance) statusChartInstance.destroy();
-            statusChartInstance = new Chart(ctx1, {
-                type: 'doughnut',
-                data: {
-                    labels: Object.keys(types),
-                    datasets: [{
-                        data: Object.values(types),
-                        backgroundColor: ['#b31b3a', '#d4a017', '#1a3a6b'],
-                        borderColor: isDark ? '#1f1f3a' : '#fffcf7',
-                        borderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: {
-                        legend: { labels: { color: textColor, font: { family: 'Cairo' } } }
-                    }
+            try {
+                if (typeof window.Chart === 'undefined') {
+                    console.warn('Chart.js غير متاح؛ يستمر عرض البيانات دون مخططات.');
+                    return;
                 }
-            });
-
-            const ctx2 = document.getElementById('valueChart').getContext('2d');
-            if (valueChartInstance) valueChartInstance.destroy();
-            valueChartInstance = new Chart(ctx2, {
-                type: 'bar',
-                data: {
-                    labels: Object.keys(values),
-                    datasets: [{
-                        label: 'القيمة الإجمالية',
-                        data: Object.values(values),
-                        backgroundColor: ['#1a3a6b', '#9b1d3a', '#d4a017'],
-                        borderColor: isDark ? '#1f1f3a' : '#fffcf7',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: {
-                        legend: { labels: { color: textColor, font: { family: 'Cairo' } } }
+                const types = {};
+                const values = {};
+                getActiveTasksForCharts().forEach(task => {
+                    const label = getTaskTypeLabel(task.type || task.task_type);
+                    types[label] = (types[label] || 0) + 1;
+                    values[label] = (values[label] || 0) + (Number(task.amount) || 0);
+                });
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                const textColor = isDark ? '#e8e8f0' : '#2c1e16';
+                const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(139,107,77,0.10)';
+                const statusCanvas = document.getElementById('statusChart');
+                const valueCanvas = document.getElementById('valueChart');
+                if (!statusCanvas || !valueCanvas || typeof statusCanvas.getContext !== 'function' || typeof valueCanvas.getContext !== 'function') return;
+                const statusContext = statusCanvas.getContext('2d');
+                const valueContext = valueCanvas.getContext('2d');
+                if (!statusContext || !valueContext) return;
+                if (statusChartInstance) statusChartInstance.destroy();
+                if (valueChartInstance) valueChartInstance.destroy();
+                statusChartInstance = new window.Chart(statusContext, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(types),
+                        datasets: [{ data: Object.values(types), backgroundColor: ['#b31b3a', '#d4a017', '#1a3a6b'], borderColor: isDark ? '#1f1f3a' : '#fffcf7', borderWidth: 2 }]
                     },
-                    scales: {
-                        x: { ticks: { color: textColor, font: { family: 'Cairo' } }, grid: { color: gridColor } },
-                        y: { ticks: { color: textColor, font: { family: 'Cairo' } }, grid: { color: gridColor } }
+                    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: textColor, font: { family: 'Cairo' } } } } }
+                });
+                valueChartInstance = new window.Chart(valueContext, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(values),
+                        datasets: [{ label: 'القيمة الإجمالية', data: Object.values(values), backgroundColor: ['#1a3a6b', '#9b1d3a', '#d4a017'], borderColor: isDark ? '#1f1f3a' : '#fffcf7', borderWidth: 1 }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: { legend: { labels: { color: textColor, font: { family: 'Cairo' } } } },
+                        scales: {
+                            x: { ticks: { color: textColor, font: { family: 'Cairo' } }, grid: { color: gridColor } },
+                            y: { ticks: { color: textColor, font: { family: 'Cairo' } }, grid: { color: gridColor } }
+                        }
                     }
-                }
-            });
-
-            window.statusChart = statusChartInstance;
-            window.valueChart = valueChartInstance;
+                });
+                window.statusChart = statusChartInstance;
+                window.valueChart = valueChartInstance;
+            } catch (error) {
+                console.error('تعذر تحديث المخططات؛ بيانات SQLite محفوظة:', error);
+            }
         }
 
         /* ============================================================
@@ -2537,27 +2673,37 @@
            ============================================================ */
         function updateAlerts() {
             const container = document.getElementById('alertsContainer');
-            const alerts = allTasks.filter(t => t.status === 'متأخرة' || (t.type === 'منتج منخفض المخزون'));
-            if (alerts.length === 0) { container.innerHTML = ''; return; }
-
-            container.innerHTML = alerts.slice(0, 3).map((a, i) => {
-                const icon = a.status === 'متأخرة' ? 'fa-exclamation-circle' : 'fa-box-open';
-                const type = a.status === 'متأخرة' ? 'error' : 'warning';
+            if (!container) return;
+            const alerts = getActiveTasksForCharts().filter(task =>
+                task.status === 'متأخرة' || (task.type || task.task_type) === 'منتج منخفض المخزون'
+            );
+            if (!alerts.length) {
+                container.innerHTML = '';
+                return;
+            }
+            container.innerHTML = alerts.slice(0, 3).map(task => {
+                const overdue = task.status === 'متأخرة';
+                const icon = overdue ? 'fa-exclamation-circle' : 'fa-box-open';
                 return `
-                    <div style="padding:8px 14px;background:var(--surface-elevated);border-radius:12px;margin-bottom:6px;border:2px dashed ${type === 'error' ? 'var(--error)' : 'var(--warning)'};display:flex;align-items:center;gap:8px;animation:fadeInUp 0.4s ease ${i*0.1}s both;">
-                        <div style="width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;${type === 'error' ? 'background:rgba(179,27,58,0.12);color:var(--error);' : 'background:rgba(184,134,11,0.12);color:var(--warning);'}"><i class="fas ${icon}" aria-hidden="true"></i></div>
-                        <div style="flex:1;"><div style="font-weight:700;font-size:0.8rem;">${getTaskTypeLabel(a.type)}</div>
-                        <div style="font-size:0.7rem;color:var(--text-muted);">${a.reference} – ${a.status}</div></div>
-                    </div>
-                `;
+                    <div style="padding:8px 14px;background:var(--surface-elevated);border-radius:12px;margin-bottom:6px;border:2px dashed ${overdue ? 'var(--error)' : 'var(--warning)'};display:flex;align-items:center;gap:8px;">
+                        <div style="width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;background:${overdue ? 'rgba(179,27,58,0.12)' : 'rgba(184,134,11,0.12)'};color:${overdue ? 'var(--error)' : 'var(--warning)'};"><i class="fas ${icon}" aria-hidden="true"></i></div>
+                        <div style="flex:1;"><div style="font-weight:700;font-size:0.8rem;">${escapeHtml(getTaskTypeLabel(task.type || task.task_type))}</div>
+                        <div style="font-size:0.7rem;color:var(--text-muted);">${escapeHtml(task.reference || '—')} – ${escapeHtml(task.status || '—')}</div></div>
+                    </div>`;
             }).join('');
         }
 
         function showNotifications() {
-            const alerts = allTasks.filter(t => t.status === 'متأخرة' || t.type === 'منتج منخفض المخزون');
-            if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
-            showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
-            document.getElementById('alertsContainer').scrollIntoView({ behavior: 'smooth' });
+            const alerts = getActiveTasksForCharts().filter(task =>
+                task.status === 'متأخرة' || (task.type || task.task_type) === 'منتج منخفض المخزون'
+            );
+            if (!alerts.length) {
+                showToast('🔔 لا توجد إشعارات مهام جديدة', 'info');
+                return;
+            }
+            showToast('🔔 لديك ' + alerts.length + ' تنبيهات مهام', 'success');
+            const container = document.getElementById('alertsContainer');
+            if (container && typeof container.scrollIntoView === 'function') container.scrollIntoView({ behavior: 'smooth' });
         }
 
         function openAddTaskModal() {
@@ -2610,7 +2756,7 @@
             try {
                 const result = await apiCall(id > 0 ? 'updateTask' : 'addTask', data);
                 if (!result.success) throw new Error(result.message || 'فشل حفظ المهمة');
-                closeTaskModal(); await loadData(currentFilter === 'archived'); showToast(id > 0 ? '✅ تم تعديل المهمة' : '✅ تمت إضافة المهمة', 'success');
+                closeTaskModal(); await loadData(); showToast(id > 0 ? '✅ تم تعديل المهمة' : '✅ تمت إضافة المهمة', 'success');
             } catch (e) { showToast('❌ ' + (e.message || 'فشل حفظ المهمة'), 'error'); }
             finally { showLoading(false); }
         }
@@ -2618,11 +2764,17 @@
         /* ============================================================
            CRUD: Archive, Resolve, View
            ============================================================ */
+        async function confirmTaskAction(options) {
+            if (window.Swal && typeof window.Swal.fire === 'function') return window.Swal.fire(options);
+            const message = [options && options.title, options && options.text].filter(Boolean).join('\n');
+            return { isConfirmed: window.confirm(message || 'هل تريد تنفيذ هذا الإجراء؟') };
+        }
+
         async function archiveTask(id) {
             const task = allTasks.find(t => t.id == id);
             if (!task) { showToast('❌ المهمة غير موجودة', 'error'); return; }
 
-            const confirmed = await Swal.fire({
+            const confirmed = await confirmTaskAction({
                 title: '⚠️ هل أنت متأكد؟',
                 text: 'سيتم أرشفة المهمة رقم ' + id,
                 icon: 'warning',
@@ -2665,7 +2817,7 @@
                 return;
             }
 
-            const confirmed = await Swal.fire({
+            const confirmed = await confirmTaskAction({
                 title: '↩️ استعادة المهمة',
                 text: 'سيتم إخراج المهمة رقم ' + id + ' من الأرشيف وإعادتها إلى قائمة المهام.',
                 icon: 'question',
@@ -2685,7 +2837,7 @@
                 }
                 showToast('✅ تمت استعادة المهمة بنجاح', 'success');
                 selectedTaskId = null;
-                await loadData(false);
+                await loadData();
             } catch (e) {
                 showToast('❌ ' + (e.message || 'خطأ في استعادة المهمة'), 'error');
             } finally {
@@ -2697,7 +2849,7 @@
             const task = allTasks.find(t => t.id == id);
             if (!task) { showToast('❌ المهمة غير موجودة', 'error'); return; }
 
-            const confirmed = await Swal.fire({
+            const confirmed = await confirmTaskAction({
                 title: '✅ حل المهمة',
                 text: 'سيتم تعيين الحالة إلى "مكتملة" للمهمة رقم ' + id,
                 icon: 'question',
@@ -2966,23 +3118,51 @@
             showLoading(true);
             try {
                 const result = await apiCall('backupData', {});
-                if (result.success) {
-                    showToast('✅ تم إنشاء النسخة الاحتياطية بنجاح', 'success');
-                    loadBackupList();
-                } else {
-                    throw new Error(result.message || 'فشل في النسخ الاحتياطي');
+                if (result.status === 'processing') {
+                    showToast('بدأ إنشاء النسخة الاحتياطية؛ ستظهر النتيجة بعد اكتمال SQLite.', 'info');
+                    return;
                 }
-            } catch (e) {
-                showToast(e.message || '❌ النسخ الاحتياطي غير متاح', 'error'); return;
-
+                showToast('تم إنشاء النسخة الاحتياطية بنجاح', 'success');
+                await loadBackupList();
+            } catch (error) {
+                showToast(error.message || 'تعذر إنشاء النسخة الاحتياطية', 'error');
             } finally {
                 showLoading(false);
             }
         }
 
+        function onBackupResult(result) {
+            const response = typeof result === 'string' ? UtilsParseJson(result) : result;
+            if (response && response.success) {
+                showToast(response.message || 'تم إنشاء النسخة الاحتياطية بنجاح', 'success');
+                loadBackupList();
+            } else {
+                showToast((response && (response.error || response.message)) || 'فشل إنشاء النسخة الاحتياطية', 'error');
+            }
+        }
+
+        function UtilsParseJson(value) {
+            try { return JSON.parse(value); } catch (error) { return null; }
+        }
+
         function loadBackupList() {
             const container = document.getElementById('backupList');
-            container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:10px;">لا توجد قائمة نسخ احتياطية متاحة من طبقة Android الحالية</div>';
+            if (!container) return;
+            container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:10px;">جاري قراءة حالة النسخ من SQLite...</div>';
+            apiCall('getBackupHealth', {}).then(response => {
+                const health = response.data && typeof response.data === 'object' ? response.data : response;
+                container.innerHTML = `
+                    <div style="padding:12px;border:1px dashed var(--border-color);border-radius:12px;">
+                        <div style="display:flex;justify-content:space-between;gap:8px;"><strong>صحة النسخ الاحتياطي</strong><strong>${escapeHtml(String(health.health_score == null ? '—' : health.health_score))}%</strong></div>
+                        <div style="margin-top:8px;">إجمالي النسخ: ${escapeHtml(String(health.total_backups || 0))}</div>
+                        <div>النسخ الناجحة: ${escapeHtml(String(health.successful_backups || 0))}</div>
+                        <div>معدل النجاح: ${escapeHtml(String(Number(health.success_rate || 0).toFixed(1)))}%</div>
+                        <div>سلامة قاعدة البيانات: ${health.integrity_ok ? 'سليمة' : 'تحتاج إلى فحص'}</div>
+                    </div>`;
+            }).catch(error => {
+                container.innerHTML = '<div style="color:var(--error);text-align:center;padding:10px;">' +
+                    escapeHtml(error.message || 'تعذر قراءة سجل النسخ الاحتياطي') + '</div>';
+            });
         }
 
         /* ============================================================
@@ -3030,16 +3210,18 @@
            Filter
            ============================================================ */
         function setFilter(filter, btn) {
-            currentFilter = filter;
-            document.querySelectorAll('.filter-chip').forEach(c => {
-                c.classList.remove('active');
-                c.setAttribute('aria-selected', 'false');
+            const allowed = ['all', 'unpaid', 'overdue', 'low_stock', 'pending', 'completed', 'archived', 'high', 'ai_suggest'];
+            currentFilter = allowed.includes(filter) ? filter : 'all';
+            document.querySelectorAll('.filter-chip').forEach(chip => {
+                const active = chip === btn || (!btn && chip.dataset.filter === currentFilter);
+                chip.classList.toggle('active', active);
+                chip.setAttribute('aria-selected', active ? 'true' : 'false');
             });
-            if (btn) { btn.classList.add('active');
-                btn.setAttribute('aria-selected', 'true'); }
             currentPage = 1;
-            if (filter === 'archived' || filter === 'completed') loadData(filter === 'archived');
-            else renderCards();
+            selectedTaskId = null;
+            renderCards();
+            updateStats();
+            updateAlerts();
         }
 
         /* ============================================================
@@ -3107,32 +3289,46 @@ let pullStartY = 0,
         /* ============================================================
            Init
            ============================================================ */
-        document.addEventListener('DOMContentLoaded', function() {
-            loadSavedTheme();
-            setupSidebar();
-            updateOnlineStatus();
+        function safeInitStep(label, action) {
+            try { action(); }
+            catch (error) {
+                console.error('فشل تهيئة ' + label + ':', error);
+                showToast('تعذر تهيئة ' + label + ': ' + (error.message || 'خطأ'), 'warning');
+            }
+        }
 
-            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+        function bindModalBackdrop(id, closeHandler) {
+            const modal = document.getElementById(id);
+            if (modal) modal.addEventListener('click', event => {
+                if (event.target === modal) closeHandler();
+            });
+        }
 
-            document.getElementById('reportModal').addEventListener('click', function(e) { if (e.target === this)
-                closeReportModal(); });
-            document.getElementById('detailsOverlay').addEventListener('click', function(e) { if (e.target === this)
-                closeDetails(); });
-            document.getElementById('aiModal').addEventListener('click', function(e) { if (e.target === this)
-                closeAIModal(); });
-            document.getElementById('exportModal').addEventListener('click', function(e) { if (e.target === this)
-                closeExportModal(); });
-            document.getElementById('backupModal').addEventListener('click', function(e) { if (e.target === this)
-                closeBackupModal(); });
-            document.getElementById('auditModal').addEventListener('click', function(e) { if (e.target === this)
-                closeAuditModal(); });
+        function initTasksScreen() {
+            safeInitStep('الثيم', loadSavedTheme);
+            safeInitStep('القائمة الجانبية', setupSidebar);
+            safeInitStep('حالة الاتصال', updateOnlineStatus);
+            const themeToggle = document.getElementById('themeToggle');
+            if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
+            bindModalBackdrop('reportModal', closeReportModal);
+            bindModalBackdrop('detailsOverlay', closeDetails);
+            bindModalBackdrop('aiModal', closeAIModal);
+            bindModalBackdrop('exportModal', closeExportModal);
+            bindModalBackdrop('backupModal', closeBackupModal);
+            bindModalBackdrop('auditModal', closeAuditModal);
+            safeInitStep('تحميل مهام SQLite', () => { loadData(); });
+            if (taskRefreshTimer) window.clearInterval(taskRefreshTimer);
+            taskRefreshTimer = window.setInterval(() => {
+                if (!document.hidden) loadData();
+            }, 60000);
+            showToast('تم فتح شاشة المهام؛ جاري مزامنة بيانات SQLite', 'info');
+        }
 
-            loadData();
-
-            setInterval(() => { if (isOnline) loadData(); }, 60000);
-
-            showToast('📋 مرحباً بك في نظام المهام المعلقة', 'info');
-        });
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initTasksScreen, { once: true });
+        } else {
+            window.setTimeout(initTasksScreen, 0);
+        }
 
         // تصدير الدوال
         window.openAddTaskModal = openAddTaskModal;
@@ -3163,6 +3359,7 @@ let pullStartY = 0,
         window.openBackupModal = openBackupModal;
         window.closeBackupModal = closeBackupModal;
         window.createBackup = createBackup;
+        window.onBackupResult = onBackupResult;
         window.openAuditModal = openAuditModal;
         window.closeAuditModal = closeAuditModal;
         window.setFilter = setFilter;
@@ -3184,7 +3381,8 @@ let pullStartY = 0,
         window.getStatusClass = getStatusClass;
         window.getStatusLabel = getStatusLabel;
         window.getTaskTypeLabel = getTaskTypeLabel;
-  </script>
+  
+</script>
      <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
 </body>
 </html>
