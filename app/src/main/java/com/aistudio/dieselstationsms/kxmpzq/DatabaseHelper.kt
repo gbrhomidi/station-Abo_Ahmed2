@@ -2027,23 +2027,38 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("is_deleted", 0)
                         put("updated_at", getCurrentDateTime())
                     }
-                    val existingGrantId = db.rawQuery(
+                    val existingGrantIds = mutableListOf<Long>()
+                    db.rawQuery(
                         """
                         SELECT id FROM role_permissions
-                        WHERE role_id = ? AND permission_id = ?
-                          AND station_id IS NULL AND is_deleted = 0
-                        ORDER BY id LIMIT 1
+                        WHERE role_id = ? AND permission_id = ? AND station_id IS NULL
+                        ORDER BY id
                         """.trimIndent(),
                         arrayOf(roleId.toString(), permissionId.toString())
-                    ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+                    ).use { cursor ->
+                        while (cursor.moveToNext()) existingGrantIds += cursor.getLong(0)
+                    }
 
-                    if (existingGrantId > 0L) {
+                    if (existingGrantIds.isNotEmpty()) {
+                        // Re-enable/update the canonical global grant and retire any
+                        // duplicate NULL-scoped rows left by older permission seeders.
                         db.update(
                             "role_permissions",
                             values,
                             "id = ?",
-                            arrayOf(existingGrantId.toString())
+                            arrayOf(existingGrantIds.first().toString())
                         )
+                        existingGrantIds.drop(1).forEach { duplicateId ->
+                            db.update(
+                                "role_permissions",
+                                ContentValues().apply {
+                                    put("is_deleted", 1)
+                                    put("updated_at", getCurrentDateTime())
+                                },
+                                "id = ?",
+                                arrayOf(duplicateId.toString())
+                            )
+                        }
                     } else {
                         values.put(
                             "uuid",
