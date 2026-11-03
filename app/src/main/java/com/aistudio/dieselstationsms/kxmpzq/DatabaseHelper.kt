@@ -1995,6 +1995,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     private fun ensureTaskPermissions(db: SQLiteDatabase) {
+        val adminRoleIds = listOf(1L, 2L)
         val rows = listOf(
             arrayOf("PER-TASKS-READ-V21", "tasks.read", "Read Tasks", "قراءة المهام", "tasks", "المهام", "read"),
             arrayOf("PER-TASKS-CREATE-V21", "tasks.create", "Create Tasks", "إنشاء المهام", "tasks", "المهام", "create"),
@@ -2014,20 +2015,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 arrayOf(permissionCode)
             ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
             if (permissionId > 0L) {
-                val values = ContentValues().apply {
-                    put("uuid", "RP-${permissionCode.uppercase().replace('.', '-')}-ADMIN-V21")
-                    put("role_id", 1L)
-                    put("permission_id", permissionId)
-                    put("can_create", if (permissionCode.endsWith(".create")) 1 else 0)
-                    put("can_read", if (permissionCode.endsWith(".read")) 1 else 0)
-                    put("can_update", if (permissionCode.endsWith(".update")) 1 else 0)
-                    put("can_delete", if (permissionCode.endsWith(".delete")) 1 else 0)
-                    put("can_export", 1)
-                    put("can_print", 0)
-                    put("can_approve", 0)
-                    put("created_by", 1L)
+                adminRoleIds.forEach { roleId ->
+                    val values = ContentValues().apply {
+                        put("uuid", "RP-${permissionCode.uppercase().replace('.', '-')}-ROLE-${roleId}-V52")
+                        put("role_id", roleId)
+                        put("permission_id", permissionId)
+                        put("can_create", if (permissionCode.endsWith(".create")) 1 else 0)
+                        put("can_read", if (permissionCode.endsWith(".read")) 1 else 0)
+                        put("can_update", if (permissionCode.endsWith(".update")) 1 else 0)
+                        put("can_delete", if (permissionCode.endsWith(".delete")) 1 else 0)
+                        put("can_export", 1)
+                        put("can_print", 0)
+                        put("can_approve", 0)
+                        put("created_by", 1L)
+                    }
+                    db.insertWithOnConflict("role_permissions", null, values, SQLiteDatabase.CONFLICT_IGNORE)
                 }
-                db.insertWithOnConflict("role_permissions", null, values, SQLiteDatabase.CONFLICT_IGNORE)
             }
         }
     }
