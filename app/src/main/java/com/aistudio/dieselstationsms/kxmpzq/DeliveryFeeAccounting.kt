@@ -245,6 +245,10 @@ object DeliveryFeeAccounting {
         if (parentSaleId <= 0L || !tableExists(db, "deliveries")) return emptyList()
         val deliveryColumns = columns(db, "deliveries")
         if (!setOf("id", "sale_id").all { it in deliveryColumns }) return emptyList()
+        val parentColumns = columns(db, "sales_transactions")
+        val parentCanBeVerified = parentSaleId > 0L &&
+            setOf("id", "station_id").all { it in parentColumns }
+        if (parentCanBeVerified && !parentSaleVerified) return emptyList()
         if ("station_id" !in deliveryColumns && !parentSaleVerified) return emptyList()
 
         val predicates = mutableListOf("sale_id=?")

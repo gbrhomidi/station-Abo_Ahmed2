@@ -135,6 +135,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
         val legacyParentFee = ContentValues().apply {
             putExisting("sales_transactions", this, "service_fee", legacyFee)
             if (size() == 0) put("delivery_service_fee", legacyFee)
+            put("delivery_fee_mode", DeliveryFeeAccounting.DRIVER)
         }
         db.update(
             "sales_transactions",
@@ -164,22 +165,7 @@ class LatestFuelSaleForCustomerRobolectricTest {
             arrayOf(deliveryId.toString(), stationId.toString())
         )
 
-        db.insertOrThrow(
-            "delivery_service_fee_ledger",
-            null,
-            ContentValues().apply {
-                put("uuid", UUID.randomUUID().toString())
-                put("station_id", stationId)
-                put("fuel_sale_id", fuelSaleId)
-                put("parent_sale_id", parentSaleId)
-                put("delivery_id", deliveryId)
-                put("driver_id", 0L)
-                put("amount", legacyFee)
-                put("mode", DeliveryFeeAccounting.DRIVER)
-                put("status", "driver_due")
-                put("created_by", userId)
-            }
-        )
+
 
         // Re-open the one-time migration gate to simulate a pre-migration database.
         db.delete(
@@ -251,6 +237,86 @@ class LatestFuelSaleForCustomerRobolectricTest {
             ),
             0.0001
         )
+    }
+
+
+    @Test
+    fun explicitExemptLedgerPreventsStaleLegacyFeeFromBeingRestored() {
+        val customer = insertCustomer("عميل رسوم توصيل معفاة")
+        val fuelSaleId = insertFuelSale(
+            customer,
+            stationId,
+            "2026-10-29 13:30:00",
+            deliveryFee = 0.0,
+            deliveryFeeMode = DeliveryFeeAccounting.EXEMPT,
+            location = "",
+            cashCustomerName = ""
+        )
+        val parentSaleId = scalarLong(
+            "SELECT sale_id FROM fuel_sales WHERE id=? AND station_id=?",
+            arrayOf(fuelSaleId.toString(), stationId.toString())
+        )
+        db.update(
+            "sales_transactions",
+            ContentValues().apply {
+                putExisting("sales_transactions", this, "service_fee", 700.0)
+            },
+            "id=? AND station_id=?",
+            arrayOf(parentSaleId.toString(), stationId.toString())
+        )
+        val deliveryId = helper.addDelivery(
+            JSONObject().apply {
+                put("sale_id", parentSaleId)
+                put("party_id", customer)
+                put("delivery_date", "2026-10-30 11:00:00")
+                put("status", "pending")
+                put("location", "موقع توصيل معفى")
+                put("delivery_service_fee", 0.0)
+            },
+            stationId,
+            userId
+        )
+        db.insertOrThrow(
+            "delivery_service_fee_ledger",
+            null,
+            ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("station_id", stationId)
+                put("fuel_sale_id", fuelSaleId)
+                put("parent_sale_id", parentSaleId)
+                put("delivery_id", deliveryId)
+                put("driver_id", 0L)
+                put("amount", 0.0)
+                put("mode", DeliveryFeeAccounting.EXEMPT)
+                put("status", "exempt")
+                put("created_by", userId)
+            }
+        )
+        db.delete(
+            "delivery_context_migrations",
+            "migration_key=?",
+            arrayOf("legacy_delivery_context_v1")
+        )
+
+        DeliveryFeeAccounting.ensureSchema(helper)
+
+        val values = db.rawQuery(
+            "SELECT delivery_service_fee,delivery_fee_mode,delivery_location " +
+                "FROM fuel_sales WHERE id=? AND station_id=?",
+            arrayOf(fuelSaleId.toString(), stationId.toString())
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            listOf(cursor.getDouble(0), cursor.getString(1), cursor.getString(2))
+        }
+        assertEquals(0.0, values[0] as Double, 0.0001)
+        assertEquals(DeliveryFeeAccounting.EXEMPT, values[1])
+        assertEquals("موقع توصيل معفى", values[2])
+
+        val deliveryFee = scalarDouble(
+            "SELECT delivery_service_fee FROM deliveries WHERE id=? AND station_id=?",
+            arrayOf(deliveryId.toString(), stationId.toString())
+        )
+        assertEquals(0.0, deliveryFee, 0.0001)
     }
 
     @Test
