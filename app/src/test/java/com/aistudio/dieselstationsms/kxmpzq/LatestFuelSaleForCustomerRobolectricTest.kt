@@ -113,6 +113,144 @@ class LatestFuelSaleForCustomerRobolectricTest {
         assertTrue(sale.has("parent_sale_id"))
     }
 
+
+    @Test
+    fun legacyDeliveryContextMigrationBackfillsDefaultsAndIsIdempotent() {
+        val customer = insertCustomer("عميل ترحيل سياق التوصيل التاريخي")
+        val fuelSaleId = insertFuelSale(
+            customer,
+            stationId,
+            "2026-10-29 12:30:00",
+            deliveryFee = 0.0,
+            deliveryFeeMode = DeliveryFeeAccounting.EXEMPT,
+            location = "",
+            cashCustomerName = ""
+        )
+        val parentSaleId = scalarLong(
+            "SELECT sale_id FROM fuel_sales WHERE id=? AND station_id=?",
+            arrayOf(fuelSaleId.toString(), stationId.toString())
+        )
+
+        val legacyFee = 425.75
+        db.update(
+            "sales_transactions",
+            ContentValues().apply {
+                putExisting("sales_transactions", this, "service_fee", legacyFee)
+            },
+            "id=? AND station_id=?",
+            arrayOf(parentSaleId.toString(), stationId.toString())
+        )
+
+        val deliveryLocation = "موقع التوصيل التاريخي المرتبط بالفاتورة"
+        val cashName = "اسم العميل النقدي التاريخي"
+        val deliveryId = helper.addDelivery(
+            JSONObject().apply {
+                put("sale_id", parentSaleId)
+                put("party_id", customer)
+                put("delivery_date", "2026-10-30 10:00:00")
+                put("status", "pending")
+                put("location", deliveryLocation)
+                put("delivery_service_fee", 0.0)
+            },
+            stationId,
+            userId
+        )
+        db.update(
+            "deliveries",
+            ContentValues().apply { put("cash_customer_name", cashName) },
+            "id=? AND station_id=?",
+            arrayOf(deliveryId.toString(), stationId.toString())
+        )
+
+        db.insertOrThrow(
+            "delivery_service_fee_ledger",
+            null,
+            ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("station_id", stationId)
+                put("fuel_sale_id", fuelSaleId)
+                put("parent_sale_id", parentSaleId)
+                put("delivery_id", deliveryId)
+                put("driver_id", 0L)
+                put("amount", legacyFee)
+                put("mode", DeliveryFeeAccounting.DRIVER)
+                put("status", "driver_due")
+                put("created_by", userId)
+            }
+        )
+
+        // Re-open the one-time migration gate to simulate a pre-migration database.
+        db.delete(
+            "delivery_context_migrations",
+            "migration_key=?",
+            arrayOf("legacy_delivery_context_v1")
+        )
+        val journalCountBefore = scalarLong("SELECT COUNT(*) FROM journal_entries")
+        val ledgerCountBefore = scalarLong("SELECT COUNT(*) FROM delivery_service_fee_ledger")
+
+        DeliveryFeeAccounting.ensureSchema(helper)
+
+        val migratedFuel = db.rawQuery(
+            "SELECT delivery_service_fee,delivery_fee_mode,delivery_location,cash_customer_name " +
+                "FROM fuel_sales WHERE id=? AND station_id=?",
+            arrayOf(fuelSaleId.toString(), stationId.toString())
+        ).use { cursor ->
+            assertTrue("Migrated fuel-sale row must remain present", cursor.moveToFirst())
+            listOf(cursor.getDouble(0), cursor.getString(1), cursor.getString(2), cursor.getString(3))
+        }
+        assertEquals(legacyFee, migratedFuel[0] as Double, 0.0001)
+        assertEquals(DeliveryFeeAccounting.DRIVER, migratedFuel[1])
+        assertEquals(deliveryLocation, migratedFuel[2])
+        assertEquals(cashName, migratedFuel[3])
+
+        val migratedParent = db.rawQuery(
+            "SELECT delivery_service_fee,delivery_fee_mode,delivery_location,cash_customer_name " +
+                "FROM sales_transactions WHERE id=? AND station_id=?",
+            arrayOf(parentSaleId.toString(), stationId.toString())
+        ).use { cursor ->
+            assertTrue("Migrated invoice row must remain present", cursor.moveToFirst())
+            listOf(cursor.getDouble(0), cursor.getString(1), cursor.getString(2), cursor.getString(3))
+        }
+        assertEquals(legacyFee, migratedParent[0] as Double, 0.0001)
+        assertEquals(DeliveryFeeAccounting.DRIVER, migratedParent[1])
+        assertEquals(deliveryLocation, migratedParent[2])
+        assertEquals(cashName, migratedParent[3])
+
+        val migratedDelivery = db.rawQuery(
+            "SELECT delivery_service_fee,delivery_fee_mode,delivery_location,cash_customer_name " +
+                "FROM deliveries WHERE id=? AND station_id=?",
+            arrayOf(deliveryId.toString(), stationId.toString())
+        ).use { cursor ->
+            assertTrue("Migrated delivery row must remain present", cursor.moveToFirst())
+            listOf(cursor.getDouble(0), cursor.getString(1), cursor.getString(2), cursor.getString(3))
+        }
+        assertEquals(legacyFee, migratedDelivery[0] as Double, 0.0001)
+        assertEquals(DeliveryFeeAccounting.DRIVER, migratedDelivery[1])
+        assertEquals(deliveryLocation, migratedDelivery[2])
+        assertEquals(cashName, migratedDelivery[3])
+
+        val resolved = DeliveryFeeAccounting.latestFuelSaleForCustomer(helper, customer, stationId)
+        assertTrue("Latest sale must expose migrated context: $resolved", resolved.getBoolean("found"))
+        val sale = resolved.getJSONObject("sale")
+        assertEquals(legacyFee, sale.getDouble("delivery_service_fee"), 0.0001)
+        assertEquals(DeliveryFeeAccounting.DRIVER, sale.getString("delivery_fee_mode"))
+        assertEquals(deliveryLocation, sale.getString("delivery_location"))
+        assertEquals(cashName, sale.getString("cash_customer_name"))
+
+        // Re-running schema assurance must not duplicate ledgers or financial postings.
+        DeliveryFeeAccounting.ensureSchema(helper)
+        assertEquals(ledgerCountBefore, scalarLong("SELECT COUNT(*) FROM delivery_service_fee_ledger"))
+        assertEquals(journalCountBefore, scalarLong("SELECT COUNT(*) FROM journal_entries"))
+        assertEquals(
+            legacyFee,
+            scalarDouble(
+                "SELECT delivery_service_fee FROM fuel_sales WHERE id=? AND station_id=?",
+                arrayOf(fuelSaleId.toString(), stationId.toString())
+            ),
+            0.0001
+        )
+    }
+
     @Test
     fun deliveryPersistsLatestFuelSaleFieldsUsingInvoiceAndFuelRowIdsSeparately() {
         val customer = insertCustomer("عميل حقول التوصيل المحفوظة")

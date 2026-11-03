@@ -88,7 +88,10 @@ object DeliveryFeeAccounting {
     fun ensureSchema(helper: DatabaseHelper) {
         val db = helper.writableDatabase
         val schemaKey = "${db.path}:${db.version}"
-        if (schemaKey in ensuredSchemaVersions) return
+        if (schemaKey in ensuredSchemaVersions) {
+            migrateLegacyDeliveryContext(db)
+            return
+        }
         addColumn(db, "fuel_sales", "delivery_service_fee", "REAL NOT NULL DEFAULT 0")
         addColumn(db, "fuel_sales", "delivery_fee_mode", "TEXT NOT NULL DEFAULT 'exempt'")
         addColumn(db, "fuel_sales", "delivery_location", "TEXT NOT NULL DEFAULT ''")
@@ -143,6 +146,7 @@ object DeliveryFeeAccounting {
                 "ON delivery_service_fee_ledger(station_id,delivery_id) WHERE delivery_id > 0"
         )
         ensuredSchemaVersions += schemaKey
+        migrateLegacyDeliveryContext(db)
     }
 
     private fun columns(db: SQLiteDatabase, table: String): Set<String> {
@@ -178,6 +182,327 @@ object DeliveryFeeAccounting {
         }
     }
 
+
+    private const val LEGACY_DELIVERY_CONTEXT_MIGRATION = "legacy_delivery_context_v1"
+
+    private data class ResolvedDeliveryContext(
+        val serviceFee: Double,
+        val feeMode: String,
+        val location: String,
+        val cashCustomerName: String
+    )
+
+    private fun firstNonBlank(row: JSONObject?, keys: List<String>): String? {
+        if (row == null) return null
+        for (key in keys) {
+            if (!row.has(key) || row.isNull(key)) continue
+            val value = row.optString(key, "").trim()
+            if (value.isNotEmpty() && !value.equals("null", ignoreCase = true)) return value
+        }
+        return null
+    }
+
+    private fun firstPositive(row: JSONObject?, keys: List<String>): Double? {
+        if (row == null) return null
+        for (key in keys) {
+            if (!row.has(key) || row.isNull(key)) continue
+            val value = row.optDouble(key, Double.NaN)
+            if (value.isFinite() && value > 0.0) return value
+        }
+        return null
+    }
+
+    private fun readParentSale(
+        db: SQLiteDatabase,
+        parentSaleId: Long,
+        stationId: Int
+    ): JSONObject? {
+        if (parentSaleId <= 0L || !tableExists(db, "sales_transactions")) return null
+        val parentColumns = columns(db, "sales_transactions")
+        if (!setOf("id", "station_id").all { it in parentColumns }) return null
+        return db.rawQuery(
+            "SELECT * FROM sales_transactions WHERE id=? AND station_id=? LIMIT 1",
+            arrayOf(parentSaleId.toString(), stationId.toString())
+        ).use { cursor -> if (cursor.moveToFirst()) cursorObject(cursor) else null }
+    }
+
+    private fun readLinkedDeliveries(
+        db: SQLiteDatabase,
+        parentSaleId: Long,
+        stationId: Int,
+        parentSaleVerified: Boolean
+    ): List<JSONObject> {
+        if (parentSaleId <= 0L || !tableExists(db, "deliveries")) return emptyList()
+        val deliveryColumns = columns(db, "deliveries")
+        if (!setOf("id", "sale_id").all { it in deliveryColumns }) return emptyList()
+        if ("station_id" !in deliveryColumns && !parentSaleVerified) return emptyList()
+
+        val predicates = mutableListOf("sale_id=?")
+        val arguments = mutableListOf(parentSaleId.toString())
+        if ("station_id" in deliveryColumns) {
+            predicates += "station_id=?"
+            arguments += stationId.toString()
+        }
+        if ("is_deleted" in deliveryColumns) predicates += "COALESCE(is_deleted,0)=0"
+        if ("deleted_at" in deliveryColumns) predicates += "(deleted_at IS NULL OR TRIM(CAST(deleted_at AS TEXT))='')"
+        for (flag in listOf("is_cancelled", "is_canceled", "is_void", "is_voided", "is_invalid", "is_reversed")) {
+            if (flag in deliveryColumns) predicates += "COALESCE(" + flag + ",0)=0"
+        }
+        val orderParts = listOf("delivery_date", "created_at", "id").filter { it in deliveryColumns }
+        val order = if (orderParts.isEmpty()) "id DESC" else orderParts.joinToString(", ") { it + " DESC" }
+        val sql = "SELECT * FROM deliveries WHERE " + predicates.joinToString(" AND ") + " ORDER BY " + order
+        return db.rawQuery(sql, arguments.toTypedArray()).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) add(cursorObject(cursor))
+            }
+        }
+    }
+
+    private fun readDeliveryFeeLedger(
+        db: SQLiteDatabase,
+        fuelSaleId: Long,
+        parentSaleId: Long,
+        stationId: Int
+    ): JSONObject? {
+        if (!tableExists(db, "delivery_service_fee_ledger")) return null
+        val ledgerColumns = columns(db, "delivery_service_fee_ledger")
+        if (!setOf("station_id", "amount", "mode").all { it in ledgerColumns }) return null
+        val salePredicates = mutableListOf<String>()
+        val arguments = mutableListOf(stationId.toString())
+        if ("fuel_sale_id" in ledgerColumns && fuelSaleId > 0L) {
+            salePredicates += "(fuel_sale_id=? AND fuel_sale_id>0)"
+            arguments += fuelSaleId.toString()
+        }
+        if ("parent_sale_id" in ledgerColumns && parentSaleId > 0L) {
+            salePredicates += "(parent_sale_id=? AND parent_sale_id>0)"
+            arguments += parentSaleId.toString()
+        }
+        if (salePredicates.isEmpty()) return null
+        val active = if ("status" in ledgerColumns) " AND LOWER(COALESCE(status,'')) NOT IN ('reversed','cancelled','void')" else ""
+        val order = if ("id" in ledgerColumns) "id DESC" else "rowid DESC"
+        val sql = "SELECT * FROM delivery_service_fee_ledger WHERE station_id=? AND amount>0 AND (" +
+            salePredicates.joinToString(" OR ") + ")" + active + " ORDER BY " + order + " LIMIT 1"
+        return db.rawQuery(sql, arguments.toTypedArray()).use { cursor ->
+            if (cursor.moveToFirst()) cursorObject(cursor) else null
+        }
+    }
+
+    /**
+     * The single source-resolution contract used by migration and every fuel-sale
+     * lookup. Fallbacks are constrained to the same fuel row, invoice and station.
+     */
+    private fun resolveDeliveryContext(
+        db: SQLiteDatabase,
+        fuelSale: JSONObject,
+        stationId: Int
+    ): ResolvedDeliveryContext {
+        val fuelSaleId = fuelSale.optLong("id", 0L)
+        val parentSaleId = fuelSale.optLong("sale_id", 0L)
+        val parent = readParentSale(db, parentSaleId, stationId)
+        val deliveries = readLinkedDeliveries(db, parentSaleId, stationId, parent != null)
+        val ledger = readDeliveryFeeLedger(db, fuelSaleId, parentSaleId, stationId)
+
+        val feeKeys = listOf("delivery_service_fee", "service_fee", "delivery_fee_amount")
+        val fee = firstPositive(fuelSale, feeKeys)
+            ?: firstPositive(parent, feeKeys)
+            ?: firstPositive(ledger, listOf("amount"))
+            ?: deliveries.firstNotNullOfOrNull { firstPositive(it, feeKeys) }
+            ?: 0.0
+
+        val modeKeys = listOf("delivery_fee_mode", "fee_mode", "delivery_fee_calculation")
+        val modeRows = listOfNotNull(fuelSale, parent, ledger) + deliveries
+        val mode = modeRows
+            .mapNotNull { row ->
+                val raw = firstNonBlank(row, modeKeys + if (row === ledger) listOf("mode") else emptyList())
+                raw?.takeIf { normalizeMode(it) != EXEMPT }
+            }
+            .firstOrNull()
+            ?.let(::normalizeMode)
+            ?: EXEMPT
+
+        val locationKeys = listOf("delivery_location", "location", "delivery_address")
+        val location = firstNonBlank(fuelSale, locationKeys)
+            ?: firstNonBlank(parent, locationKeys)
+            ?: deliveries.firstNotNullOfOrNull { firstNonBlank(it, locationKeys) }
+            ?: ""
+
+        val cashNameKeys = listOf("cash_customer_name", "cash_customer_display_name", "customer_cash_name")
+        val cashName = firstNonBlank(fuelSale, cashNameKeys)
+            ?: firstNonBlank(parent, cashNameKeys)
+            ?: deliveries.firstNotNullOfOrNull { firstNonBlank(it, cashNameKeys) }
+            ?: ""
+
+        return ResolvedDeliveryContext(fee, mode, location, cashName)
+    }
+
+    private fun updateContextDefaults(
+        db: SQLiteDatabase,
+        table: String,
+        row: JSONObject,
+        values: ContentValues,
+        context: ResolvedDeliveryContext
+    ) {
+        val tableColumns = columns(db, table)
+        if ("delivery_service_fee" in tableColumns &&
+            row.optDouble("delivery_service_fee", 0.0) <= 0.0 && context.serviceFee > 0.0
+        ) {
+            values.put("delivery_service_fee", context.serviceFee)
+        }
+        if ("delivery_fee_mode" in tableColumns &&
+            normalizeMode(row.optString("delivery_fee_mode", EXEMPT)) == EXEMPT &&
+            context.feeMode != EXEMPT && context.serviceFee > 0.0
+        ) {
+            values.put("delivery_fee_mode", context.feeMode)
+        }
+        if ("delivery_location" in tableColumns &&
+            row.optString("delivery_location", "").isBlank() && context.location.isNotBlank()
+        ) {
+            values.put("delivery_location", context.location)
+        }
+        if ("cash_customer_name" in tableColumns &&
+            row.optString("cash_customer_name", "").isBlank() && context.cashCustomerName.isNotBlank()
+        ) {
+            values.put("cash_customer_name", context.cashCustomerName)
+        }
+    }
+
+    /**
+     * One-time, restart-safe historical backfill. It only fills canonical defaults;
+     * it never changes non-zero fees, non-exempt modes or non-empty text.
+     * It creates no journal, payment, balance, stock or ledger records.
+     */
+    private fun migrateLegacyDeliveryContext(db: SQLiteDatabase) {
+        if (!tableExists(db, "fuel_sales")) return
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS delivery_context_migrations (
+                migration_key TEXT PRIMARY KEY NOT NULL,
+                completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                migrated_rows INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent()
+        )
+        val alreadyDone = db.rawQuery(
+            "SELECT 1 FROM delivery_context_migrations WHERE migration_key=? LIMIT 1",
+            arrayOf(LEGACY_DELIVERY_CONTEXT_MIGRATION)
+        ).use { it.moveToFirst() }
+        if (alreadyDone) return
+
+        val ownsTransaction = !db.inTransaction()
+        if (ownsTransaction) db.beginTransaction()
+        try {
+            val fuelRows = db.rawQuery("SELECT * FROM fuel_sales ORDER BY id", null).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(cursorObject(cursor))
+                }
+            }
+            val parentColumns = columns(db, "sales_transactions")
+            val deliveryColumns = columns(db, "deliveries")
+            var migratedRows = 0
+
+            for (fuelRow in fuelRows) {
+                val fuelSaleId = fuelRow.optLong("id", 0L)
+                val parentSaleId = fuelRow.optLong("sale_id", 0L)
+                val stationId = fuelRow.optInt("station_id", 0)
+                if (fuelSaleId <= 0L || stationId <= 0) continue
+
+                val context = resolveDeliveryContext(db, fuelRow, stationId)
+                val fuelValues = ContentValues()
+                updateContextDefaults(db, "fuel_sales", fuelRow, fuelValues, context)
+                if (fuelValues.size() > 0) {
+                    db.update(
+                        "fuel_sales", fuelValues, "id=? AND station_id=?",
+                        arrayOf(fuelSaleId.toString(), stationId.toString())
+                    )
+                    migratedRows++
+                }
+
+                val parent = readParentSale(db, parentSaleId, stationId)
+                if (parent != null && parentColumns.isNotEmpty()) {
+                    val parentValues = ContentValues()
+                    updateContextDefaults(db, "sales_transactions", parent, parentValues, context)
+                    if (parentValues.size() > 0) {
+                        db.update(
+                            "sales_transactions", parentValues, "id=? AND station_id=?",
+                            arrayOf(parentSaleId.toString(), stationId.toString())
+                        )
+                        migratedRows++
+                    }
+                }
+
+                val linkedDeliveries = readLinkedDeliveries(db, parentSaleId, stationId, parent != null)
+                for (delivery in linkedDeliveries) {
+                    val deliveryId = delivery.optLong("id", 0L)
+                    if (deliveryId <= 0L || deliveryColumns.isEmpty()) continue
+                    val deliveryValues = ContentValues()
+                    val ownLegacyLocation = firstNonBlank(delivery, listOf("location", "delivery_address"))
+                    val ownLegacyCashName = firstNonBlank(delivery, listOf("cash_customer_display_name", "customer_cash_name"))
+                    if ("delivery_location" in deliveryColumns &&
+                        delivery.optString("delivery_location", "").isBlank()
+                    ) {
+                        (ownLegacyLocation ?: context.location.takeIf { linkedDeliveries.size == 1 })
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { deliveryValues.put("delivery_location", it) }
+                    }
+                    if ("cash_customer_name" in deliveryColumns &&
+                        delivery.optString("cash_customer_name", "").isBlank()
+                    ) {
+                        (ownLegacyCashName ?: context.cashCustomerName)
+                            .takeIf { it.isNotBlank() }
+                            ?.let { deliveryValues.put("cash_customer_name", it) }
+                    }
+
+                    val ledgerOwnsDelivery = db.rawQuery(
+                        "SELECT 1 FROM delivery_service_fee_ledger WHERE station_id=? AND delivery_id=? AND amount>0 LIMIT 1",
+                        arrayOf(stationId.toString(), deliveryId.toString())
+                    ).use { it.moveToFirst() }
+                    if ("delivery_service_fee" in deliveryColumns &&
+                        delivery.optDouble("delivery_service_fee", 0.0) <= 0.0
+                    ) {
+                        val ownLegacyFee = firstPositive(delivery, listOf("service_fee", "delivery_fee_amount"))
+                        val resolvedFee = ownLegacyFee
+                            ?: context.serviceFee.takeIf { linkedDeliveries.size == 1 || ledgerOwnsDelivery }
+                        resolvedFee?.let { deliveryValues.put("delivery_service_fee", it) }
+                    }
+                    if ("delivery_fee_mode" in deliveryColumns &&
+                        normalizeMode(delivery.optString("delivery_fee_mode", EXEMPT)) == EXEMPT
+                    ) {
+                        val ownLegacyMode = firstNonBlank(delivery, listOf("fee_mode", "delivery_fee_calculation"))
+                            ?.takeIf { normalizeMode(it) != EXEMPT }
+                        val resolvedMode = ownLegacyMode
+                            ?: context.feeMode.takeIf {
+                                context.serviceFee > 0.0 && (linkedDeliveries.size == 1 || ledgerOwnsDelivery)
+                            }
+                        resolvedMode?.let { deliveryValues.put("delivery_fee_mode", it) }
+                    }
+
+                    if (deliveryValues.size() > 0) {
+                        val where = if ("station_id" in deliveryColumns) "id=? AND station_id=?" else "id=?"
+                        val arguments = if ("station_id" in deliveryColumns) {
+                            arrayOf(deliveryId.toString(), stationId.toString())
+                        } else {
+                            arrayOf(deliveryId.toString())
+                        }
+                        db.update("deliveries", deliveryValues, where, arguments)
+                        migratedRows++
+                    }
+                }
+            }
+
+            db.insertOrThrow(
+                "delivery_context_migrations",
+                null,
+                ContentValues().apply {
+                    put("migration_key", LEGACY_DELIVERY_CONTEXT_MIGRATION)
+                    put("migrated_rows", migratedRows)
+                }
+            )
+            if (ownsTransaction) db.setTransactionSuccessful()
+        } finally {
+            if (ownsTransaction) db.endTransaction()
+        }
+    }
+
     private fun findSale(
         db: SQLiteDatabase,
         stationId: Int,
@@ -197,62 +522,54 @@ object DeliveryFeeAccounting {
 
     private fun findFuelSale(db: SQLiteDatabase, stationId: Int, referenceId: Long): FuelSale? {
         if (!tableExists(db, "fuel_sales")) return null
-        val c = columns(db, "fuel_sales")
-        val stationCol = if ("station_id" in c) "station_id" else return null
-        fun one(where: String, args: Array<String>): FuelSale? {
-            val fuelIdExpr = when {
-                "fuel_type_id" in c -> "fuel_type_id"
-                "fuel_id" in c -> "fuel_id"
-                else -> "0"
-            }
-            val parentColumn = if ("sale_id" in c) "COALESCE(sale_id,0)" else "0"
-            val customerColumn = when {
-                "customer_party_id" in c -> "COALESCE(customer_party_id,0)"
-                "customer_id" in c -> "COALESCE(customer_id,0)"
-                else -> "0"
-            }
-            val paymentColumn = if ("payment_method" in c) "COALESCE(payment_method,'cash')" else "'cash'"
-            val quantityColumn = if ("quantity" in c) "COALESCE(quantity,0)" else "0"
-            val amountColumn = when {
-                "total_amount" in c -> "COALESCE(total_amount,0)"
-                "net_amount" in c -> "COALESCE(net_amount,0)"
-                else -> "0"
-            }
-            val feeColumn = if ("delivery_service_fee" in c) "COALESCE(delivery_service_fee,0)" else "0"
-            val modeColumn = if ("delivery_fee_mode" in c) "COALESCE(delivery_fee_mode,'exempt')" else "'exempt'"
-            val locationColumn = if ("delivery_location" in c) "COALESCE(delivery_location,'')" else "''"
-            val cashNameColumn = if ("cash_customer_name" in c) "COALESCE(cash_customer_name,'')" else "''"
-            val grossColumn = if ("gross_amount" in c) "COALESCE(NULLIF(gross_amount,0),$amountColumn)" else amountColumn
-            return db.rawQuery(
-                "SELECT id,$parentColumn,$stationCol,$customerColumn,$paymentColumn,$fuelIdExpr," +
-                    "$quantityColumn,$amountColumn,$feeColumn,$modeColumn,$locationColumn,$cashNameColumn,$grossColumn " +
-                    "FROM fuel_sales WHERE $where LIMIT 1",
-                args
-            ).use { cursor ->
-                if (!cursor.moveToFirst()) null else {
-                    val fuelId = if (cursor.isNull(5)) 0L else cursor.getLong(5)
-                    FuelSale(
-                        id = cursor.getLong(0),
-                        parentSaleId = cursor.getLong(1),
-                        stationId = cursor.getInt(2),
-                        customerId = cursor.getLong(3),
-                        paymentMethod = cursor.getString(4).orEmpty(),
-                        fuelTypeId = fuelId,
-                        fuelTypeName = fuelTypeName(db, fuelId),
-                        quantity = cursor.getDouble(6),
-                        amount = cursor.getDouble(7),
-                        deliveryFee = cursor.getDouble(8),
-                        deliveryFeeMode = normalizeMode(cursor.getString(9)),
-                        deliveryLocation = cursor.getString(10).orEmpty(),
-                        cashCustomerName = cursor.getString(11).orEmpty(),
-                        grossAmount = cursor.getDouble(12),
-                        isFuelSale = true
-                    )
-                }
-            }
+        val saleColumns = columns(db, "fuel_sales")
+        if (!setOf("id", "station_id").all { it in saleColumns }) return null
+
+        fun firstPositiveLong(row: JSONObject, keys: List<String>): Long =
+            keys.firstNotNullOfOrNull { key -> row.optLong(key, 0L).takeIf { it > 0L } } ?: 0L
+
+        fun one(where: String, arguments: Array<String>): FuelSale? {
+            val row = db.rawQuery(
+                "SELECT * FROM fuel_sales WHERE $where LIMIT 1",
+                arguments
+            ).use { cursor -> if (cursor.moveToFirst()) cursorObject(cursor) else null } ?: return null
+
+            val context = resolveDeliveryContext(db, row, stationId)
+            val fuelTypeId = firstPositiveLong(row, listOf("fuel_type_id", "fuel_id"))
+            val parentSaleId = row.optLong("sale_id", 0L)
+            val customerId = firstPositiveLong(row, listOf("customer_party_id", "customer_id", "party_id"))
+            val quantity = listOf("quantity", "liters").firstNotNullOfOrNull { key ->
+                row.optDouble(key, 0.0).takeIf { it > 0.0 }
+            } ?: 0.0
+            val amount = listOf("total_amount", "net_amount", "amount").firstNotNullOfOrNull { key ->
+                if (row.has(key)) row.optDouble(key, 0.0).takeIf { it >= 0.0 } else null
+            } ?: 0.0
+
+            return FuelSale(
+                id = row.optLong("id", 0L),
+                parentSaleId = parentSaleId,
+                stationId = row.optInt("station_id", stationId),
+                customerId = customerId,
+                paymentMethod = firstNonBlank(row, listOf("payment_method", "payment_type")) ?: "cash",
+                fuelTypeId = fuelTypeId,
+                fuelTypeName = fuelTypeName(db, fuelTypeId),
+                quantity = quantity,
+                amount = amount,
+                deliveryFee = context.serviceFee,
+                deliveryFeeMode = context.feeMode,
+                deliveryLocation = context.location,
+                cashCustomerName = context.cashCustomerName,
+                grossAmount = row.optDouble("gross_amount", amount).takeIf { it > 0.0 } ?: amount,
+                isFuelSale = true
+            )
         }
-        return one("id=? AND $stationCol=?", arrayOf(referenceId.toString(), stationId.toString()))
-            ?: if ("sale_id" in c) one("sale_id=? AND $stationCol=?", arrayOf(referenceId.toString(), stationId.toString())) else null
+
+        one("id=? AND station_id=?", arrayOf(referenceId.toString(), stationId.toString()))?.let { return it }
+        return if ("sale_id" in saleColumns) {
+            one("sale_id=? AND station_id=?", arrayOf(referenceId.toString(), stationId.toString()))
+        } else {
+            null
+        }
     }
 
     private fun findProductSale(db: SQLiteDatabase, stationId: Int, referenceId: Long): FuelSale? {
@@ -478,7 +795,8 @@ object DeliveryFeeAccounting {
         require(requestedAmount.isFinite() && requestedAmount >= 0.0) { "رسوم خدمة التوصيل غير صالحة" }
 
         val sale = findSale(db, stationId, saleReferenceId, saleKind)
-        // Original SQLite sale values win even when the fee is zero or exempt.
+        // The centrally resolved SQLite context wins, including confirmed zero/exempt values.
+        // Parent-invoice, linked-delivery and fee-ledger fallbacks are resolved before this point.
         val amount = if (sale != null) sale.deliveryFee else requestedAmount
         val mode = if (sale != null) sale.deliveryFeeMode else normalizeMode(requestedMode)
         val cleanLocation = if (sale != null) sale.deliveryLocation.trim() else location.orEmpty().trim()
