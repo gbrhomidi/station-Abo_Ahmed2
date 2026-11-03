@@ -182,7 +182,7 @@ object CustodyWorkshopManager {
                 db.execSQL("""INSERT OR IGNORE INTO role_permissions
                     (uuid,role_id,permission_id,can_create,can_read,can_update,can_delete,can_export,can_print,can_approve)
                     SELECT ?,1,id,?,?,?,?,?,0,? FROM permissions WHERE permission_code=?""",
-                    arrayOf("RP-CW-ADMIN-" + module.first + "-" + action,
+                    arrayOf<Any?>("RP-CW-ADMIN-" + module.first + "-" + action,
                         if (action == "create") 1 else 0,
                         if (action == "read") 1 else 0,
                         if (action == "update") 1 else 0,
@@ -1364,7 +1364,7 @@ object CustodyWorkshopManager {
         db.execSQL("""INSERT INTO inventory_levels(product_id,warehouse_id,quantity_on_hand,quantity_committed,average_cost)
             VALUES(?,?,?,0,?) ON CONFLICT(product_id,warehouse_id) DO UPDATE SET
             quantity_on_hand=excluded.quantity_on_hand,average_cost=excluded.average_cost""",
-            arrayOf(productId, warehouseId, after, avg))
+            arrayOf<Any?>(productId, warehouseId, after, avg))
         val movementType = when {
             referenceType.contains("return") -> "return"
             referenceType.contains("damage") -> "damage"

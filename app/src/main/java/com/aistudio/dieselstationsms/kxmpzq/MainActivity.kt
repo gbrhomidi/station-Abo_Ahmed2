@@ -7869,6 +7869,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getMaintenanceRequests called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
+                if (jsonData.isNullOrBlank()) {
+                    return errorResponse("بيانات طلب الصيانة فارغة")
+                }
                 val data = JSONObject(jsonData)
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
@@ -13184,7 +13187,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     if (nozzleId > 0L) {
                         database.execSQL(
                             "UPDATE fuel_sales SET nozzle_id=? WHERE id=? AND station_id=?",
-                            arrayOf(nozzleId, saleId, stationScopeId)
+                            arrayOf<Any?>(nozzleId, saleId, stationScopeId)
                         )
                     }
                     feeResult = DeliveryFeeAccounting.persistFuelSaleFee(
@@ -13675,9 +13678,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     requireCurrentStationId(db, activity.currentUserId),
                     obj.optInt("limit", 100),
                     obj.optInt("offset", 0),
-                    obj.optString("status", null).takeIf { it.isNotEmpty() },
-                    obj.optString("asset_type", null).takeIf { it.isNotEmpty() },
-                    obj.optString("search", null).takeIf { it.isNotEmpty() }
+                    obj.optString("status").takeIf { it.isNotEmpty() },
+                    obj.optString("asset_type").takeIf { it.isNotEmpty() },
+                    obj.optString("search").takeIf { it.isNotEmpty() }
                 )
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
@@ -13703,9 +13706,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     requireCurrentStationId(db, activity.currentUserId),
                     obj.optInt("limit", 100),
                     obj.optInt("offset", 0),
-                    obj.optString("status", null).takeIf { it.isNotEmpty() },
-                    obj.optString("priority", null).takeIf { it.isNotEmpty() },
-                    obj.optString("search", null).takeIf { it.isNotEmpty() }
+                    obj.optString("status").takeIf { it.isNotEmpty() },
+                    obj.optString("priority").takeIf { it.isNotEmpty() },
+                    obj.optString("search").takeIf { it.isNotEmpty() }
                 )
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
@@ -13802,9 +13805,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val obj = JSONObject(jsonData.ifBlank { "{}" })
                 dataResponse(
                     db.getNotificationTemplateVariableSources(
-                        obj.optString("table_search", null).takeIf { !it.isNullOrBlank() },
-                        obj.optString("column_search", null).takeIf { !it.isNullOrBlank() },
-                        obj.optString("table_name", null).takeIf { !it.isNullOrBlank() }
+                        obj.optString("table_search").takeIf { !it.isNullOrBlank() },
+                        obj.optString("column_search").takeIf { !it.isNullOrBlank() },
+                        obj.optString("table_name").takeIf { !it.isNullOrBlank() }
                     )
                 )
             } catch (e: Exception) {
@@ -13818,9 +13821,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val obj = JSONObject(jsonData)
                 val arr = db.getNotificationTemplatesPage(
-                    obj.optString("channel", null).takeIf { it.isNotEmpty() },
-                    obj.optString("is_active", null).takeIf { it.isNotEmpty() },
-                    obj.optString("search", null).takeIf { it.isNotEmpty() }
+                    obj.optString("channel").takeIf { it.isNotEmpty() },
+                    obj.optString("is_active").takeIf { it.isNotEmpty() },
+                    obj.optString("search").takeIf { it.isNotEmpty() }
                 )
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
@@ -13862,7 +13865,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val obj = JSONObject(jsonData)
                 val arr = db.getNotificationsInboxPage(
                     activity.currentUserId,
-                    obj.optString("is_read", null).takeIf { it.isNotEmpty() }
+                    obj.optString("is_read").takeIf { it.isNotEmpty() }
                 )
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
@@ -13971,7 +13974,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val obj = JSONObject(jsonData)
                 val arr = db.getDebtRemindersPage(
                     requireCurrentStationId(db, activity.currentUserId),
-                    obj.optString("status", null).takeIf { it.isNotEmpty() }
+                    obj.optString("status").takeIf { it.isNotEmpty() }
                 )
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
@@ -14195,7 +14198,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val obj = JSONObject(jsonData)
                 val arr = db.getWhitelistPage(
-                    obj.optString("enabled", null).takeIf { it.isNotEmpty() }
+                    obj.optString("enabled").takeIf { it.isNotEmpty() }
                 )
                 dataResponse(arr)
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }

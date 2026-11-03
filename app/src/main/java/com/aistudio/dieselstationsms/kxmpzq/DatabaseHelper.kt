@@ -9306,7 +9306,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
         db.beginTransaction()
         try {
-            db.execSQL("UPDATE tanks SET current_quantity = ? WHERE id = ?", arrayOf(newQuantity, tankId))
+            db.execSQL("UPDATE tanks SET current_quantity = ? WHERE id = ?", arrayOf<Any?>(newQuantity, tankId))
             db.setTransactionSuccessful()
             logActivity(operator, "tank_update", "تحديث كمية الخزان $tankId إلى $newQuantity لتر")
             return true
@@ -10847,7 +10847,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 netAmount = totalAmount,
                 paymentMethod = paymentMethod,
                 isCredit = paymentMethod == "credit",
-                dueDate = data.optString("due_date", null),
+                dueDate = if (data.has("due_date") && !data.isNull("due_date")) data.optString("due_date") else null,
                 cashierId = cashierId.toInt(),
                 notes = data.optString("notes", ""),
                 deliveryLocation = data.optString("delivery_location", data.optString("location", "")),
@@ -12115,7 +12115,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 netAmount = netAmount,
                 paymentMethod = paymentMethod,
                 isCredit = isCredit,
-                dueDate = data.optString("due_date", null),
+                dueDate = if (data.has("due_date") && !data.isNull("due_date")) data.optString("due_date") else null,
                 cashierId = cashierId.toInt(),
                 notes = data.optString("notes", ""),
                 orderType = "product",
@@ -12439,12 +12439,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                             else unitCost
                             db.execSQL(
                                 "UPDATE inventory_levels SET quantity_on_hand = ?, average_cost = ? WHERE product_id = ? AND warehouse_id = ?",
-                                arrayOf(quantityAfter, newAverageCost, productId, warehouseId)
+                                arrayOf<Any?>(quantityAfter, newAverageCost, productId, warehouseId)
                             )
                         } else {
                             db.execSQL(
                                 "UPDATE inventory_levels SET quantity_on_hand = ? WHERE product_id = ? AND warehouse_id = ?",
-                                arrayOf(quantityAfter, productId, warehouseId)
+                                arrayOf<Any?>(quantityAfter, productId, warehouseId)
                             )
                         }
                     } else {
@@ -13137,7 +13137,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         for (i in 0 until allRows.length()) {
             val row = allRows.getJSONObject(i)
             csv.append(columns.joinToString(",") { key ->
-                val value = if (row.has(key) && !row.isNull(key)) row.opt(key).toString() else ""
+                val value = if (row.has(key) && !row.isNull(key)) row.opt(key)?.toString().orEmpty() else ""
                 "\"" + value.replace("\"","\"\"") + "\""
             }).append("\n")
         }
@@ -13267,9 +13267,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 fun updateLevel(warehouseId: Long, quantityAfter: Double) {
                     val existing = db.rawQuery("SELECT id FROM inventory_levels WHERE product_id = ? AND warehouse_id = ?", arrayOf(productId.toString(), warehouseId.toString())).use { it -> it.moveToFirst() }
                     if (existing) {
-                        db.execSQL("UPDATE inventory_levels SET quantity_on_hand = ?, average_cost = ? WHERE product_id = ? AND warehouse_id = ?", arrayOf(quantityAfter, unitCost, productId, warehouseId))
+                        db.execSQL("UPDATE inventory_levels SET quantity_on_hand = ?, average_cost = ? WHERE product_id = ? AND warehouse_id = ?", arrayOf<Any?>(quantityAfter, unitCost, productId, warehouseId))
                     } else {
-                        db.execSQL("INSERT INTO inventory_levels(product_id, warehouse_id, quantity_on_hand, average_cost) VALUES (?, ?, ?, ?)", arrayOf(productId, warehouseId, quantityAfter, unitCost))
+                        db.execSQL("INSERT INTO inventory_levels(product_id, warehouse_id, quantity_on_hand, average_cost) VALUES (?, ?, ?, ?)", arrayOf<Any?>(productId, warehouseId, quantityAfter, unitCost))
                     }
                 }
 
@@ -15187,7 +15187,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 db.insert("employee_payments", null, cv)
 
                 if (type == "salary" || type == "other") {
-                    db.execSQL("UPDATE employees SET total_salary = COALESCE(total_salary, 0) + ? WHERE id = ?", arrayOf(amount, employeeId))
+                    db.execSQL("UPDATE employees SET total_salary = COALESCE(total_salary, 0) + ? WHERE id = ?", arrayOf<Any?>(amount, employeeId))
                 }
                 db.setTransactionSuccessful()
                 logActivity(operator, "employee_payment", "دفعة $type للموظف $employeeId بمبلغ $amount")
@@ -16757,7 +16757,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             try {
                 db.execSQL(
                     "UPDATE parties SET current_balance = current_balance + ?, total_due = total_due + ? WHERE id = ?",
-                    arrayOf(amount, amount, customerId)
+                    arrayOf<Any?>(amount, amount, customerId)
                 )
                 val cv = ContentValues().apply {
                     put("customer_id", customerId)
@@ -25580,7 +25580,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 for (i in 0 until rows.length()) {
                     val row = rows.optJSONObject(i) ?: continue
                     val values = columns.map { key ->
-                        val raw = if (row.has(key) && !row.isNull(key)) row.opt(key).toString() else ""
+                        val raw = if (row.has(key) && !row.isNull(key)) row.opt(key)?.toString().orEmpty() else ""
                         "\"" + raw.replace("\"", "\"\"") + "\""
                     }
                     csv.append(values.joinToString(",")).append("\n")
@@ -27519,11 +27519,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val newPaid=(sale.getDouble("paid_amount")-actualRefund).coerceAtLeast(0.0)
                 val newRemaining=(newNet-newPaid).coerceAtLeast(0.0)
                 db.execSQL("UPDATE sales_transactions SET liters=MAX(0,liters-?), subtotal=MAX(0,subtotal-?), gross_amount=MAX(0,gross_amount-?), net_amount=?, paid_amount=?, remaining_amount=?, payment_status=?, status=?, updated_at=? WHERE id=? AND station_id=? AND is_deleted=0",
-                    arrayOf(qty,amount,amount,newNet,newPaid,newRemaining,if(newNet<=1e-9)"refunded" else if(newRemaining<=1e-9)"paid" else if(newPaid>1e-9)"partial" else "pending",if(newNet<=1e-9)"refunded" else "completed",getCurrentDateTime(),saleId,stationId))
+                    arrayOf<Any?>(qty,amount,amount,newNet,newPaid,newRemaining,if(newNet<=1e-9)"refunded" else if(newRemaining<=1e-9)"paid" else if(newPaid>1e-9)"partial" else "pending",if(newNet<=1e-9)"refunded" else "completed",getCurrentDateTime(),saleId,stationId))
                 db.execSQL("UPDATE fuel_sales SET quantity=MAX(0,quantity-?), total_amount=MAX(0,total_amount-?), status=?, updated_at=? WHERE id=? AND station_id=? AND is_deleted=0",
-                    arrayOf(qty,amount,if(newNet<=1e-9)"refunded" else "completed",getCurrentDateTime(),sale.getLong("fuel_sale_id"),stationId))
+                    arrayOf<Any?>(qty,amount,if(newNet<=1e-9)"refunded" else "completed",getCurrentDateTime(),sale.getLong("fuel_sale_id"),stationId))
                 db.execSQL("UPDATE shifts SET total_sales=MAX(0,total_sales-?), total_fuel_liters=MAX(0,total_fuel_liters-?), updated_at=? WHERE id=? AND station_id=? AND is_deleted=0",
-                    arrayOf(amount,qty,getCurrentDateTime(),sale.getLong("shift_id"),stationId))
+                    arrayOf<Any?>(amount,qty,getCurrentDateTime(),sale.getLong("shift_id"),stationId))
                 db.setTransactionSuccessful()
                 JSONObject().apply{put("success",true);put("id",adjId);put("sale_id",saleId);put("fuel_sale_id",sale.getLong("fuel_sale_id"));put("adjustment_type",type);put("quantity",qty);put("amount",amount);put("cash_refund",actualRefund);put("customer_credit_reduction",actualCredit);put("journal_entry_id",journalId);put("tank_id",if(tankId>0)tankId else JSONObject.NULL)}
             } finally { db.endTransaction() }
@@ -27587,7 +27587,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val actualRefund=refund.second; val credit=(amount-actualRefund).coerceAtLeast(0.0)
                 if(credit>0){
                     val cid=if(!item.isNull("customer_id"))item.getLong("customer_id")else 0L;require(cid>0){"لا يوجد عميل لعكس الجزء الآجل"}
-                    db.execSQL("UPDATE parties SET current_balance=MAX(0,COALESCE(current_balance,0)-?),total_due=MAX(0,COALESCE(total_due,0)-?),updated_at=? WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(credit,credit,getCurrentDateTime(),cid,stationId))
+                    db.execSQL("UPDATE parties SET current_balance=MAX(0,COALESCE(current_balance,0)-?),total_due=MAX(0,COALESCE(total_due,0)-?),updated_at=? WHERE id=? AND station_id=? AND is_deleted=0",arrayOf<Any?>(credit,credit,getCurrentDateTime(),cid,stationId))
                     db.insertOrThrow("customer_ledger",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("party_id",cid);put("transaction_date",getCurrentDateTime());put("transaction_type","sale_adjustment");put("transaction_id",item.getLong("sale_id"));put("reference_number",invoice);put("debit",0.0);put("credit",credit);put("balance",getPartyBalance(cid.toInt()));put("description","عكس $type للفاتورة $invoice");put("created_by",actorId)})
                 }
                 val journal=postSalesReversalJournal(db,item.getLong("sale_id"),stationId,actorId,amount,actualRefund,credit,item.getString("payment_method"),"عكس $type للفاتورة $invoice",type)
@@ -27605,9 +27605,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }) else 0L
                 val newNet=(item.getDouble("net")-amount).coerceAtLeast(0.0); val newPaid=(item.getDouble("paid")-actualRefund).coerceAtLeast(0.0); val rem=(newNet-newPaid).coerceAtLeast(0.0)
                 db.execSQL("UPDATE sales_transactions SET subtotal=MAX(0,subtotal-?), gross_amount=MAX(0,gross_amount-?), net_amount=?, paid_amount=?, remaining_amount=?, payment_status=?, status=?, updated_at=? WHERE id=? AND station_id=? AND is_deleted=0",
-                    arrayOf(amount,amount,newNet,newPaid,rem,if(newNet<=1e-9)"refunded" else if(rem<=1e-9)"paid" else if(newPaid>1e-9)"partial" else "pending",if(newNet<=1e-9)"refunded" else "completed",getCurrentDateTime(),item.getLong("sale_id"),stationId))
+                    arrayOf<Any?>(amount,amount,newNet,newPaid,rem,if(newNet<=1e-9)"refunded" else if(rem<=1e-9)"paid" else if(newPaid>1e-9)"partial" else "pending",if(newNet<=1e-9)"refunded" else "completed",getCurrentDateTime(),item.getLong("sale_id"),stationId))
                 db.execSQL("UPDATE shifts SET total_sales=MAX(0,total_sales-?), updated_at=? WHERE id=? AND station_id=? AND is_deleted=0",
-                    arrayOf(amount,getCurrentDateTime(),item.getLong("shift_id"),stationId))
+                    arrayOf<Any?>(amount,getCurrentDateTime(),item.getLong("shift_id"),stationId))
                 db.setTransactionSuccessful()
                 JSONObject().apply{put("success",true);put("id",adjustmentId);put("damaged_product_id",if(dp>0)dp else JSONObject.NULL);put("sale_id",item.getLong("sale_id"));put("sale_item_id",item.getLong("item_id"));put("adjustment_type",type);put("quantity",qty);put("amount",amount);put("cash_refund",actualRefund);put("customer_credit_reduction",credit);put("journal_entry_id",journal)}
             }finally{db.endTransaction()}
@@ -31324,7 +31324,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 while (cursor.moveToNext()) {
                     val childId = cursor.getLong(0)
                     val childLevel = parentLevel + 1
-                    db.execSQL("UPDATE accounts SET level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", arrayOf(childLevel, childId))
+                    db.execSQL("UPDATE accounts SET level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", arrayOf<Any?>(childLevel, childId))
                     queue.add(childId to childLevel)
                 }
             }
@@ -32186,7 +32186,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 db.update("depreciation", cv, "id = ?", arrayOf(depId.toString()))
 
                 // Restore asset value
-                db.execSQL("UPDATE fixed_assets SET current_value = current_value + ? WHERE id = ?", arrayOf(amount, assetId))
+                db.execSQL("UPDATE fixed_assets SET current_value = current_value + ? WHERE id = ?", arrayOf<Any?>(amount, assetId))
 
                 db.setTransactionSuccessful()
                 return 1
@@ -33386,7 +33386,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 db.rawQuery("SELECT sale_price, purchase_price FROM products WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(productId.toString(), stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "المنتج خارج نطاق المحطة" }; require(newPrice + 1e-9 >= c.getDouble(1)) { "سعر البيع أقل من سعر الشراء" } }
                 val rows = db.update("products", ContentValues().apply { put("sale_price", newPrice); put("updated_by", actorId); put("updated_at", getCurrentDateTime()) }, "id=? AND station_id=? AND is_deleted=0", arrayOf(productId.toString(), stationScopeId.toString()))
                 require(rows == 1) { "تعذر تغيير سعر المنتج" }
-                db.execSQL("UPDATE price_history SET change_reason=? WHERE id=(SELECT id FROM price_history WHERE product_id=? ORDER BY id DESC LIMIT 1)", arrayOf(reason.ifBlank { "تغيير سعر المنتج" }, productId))
+                db.execSQL("UPDATE price_history SET change_reason=? WHERE id=(SELECT id FROM price_history WHERE product_id=? ORDER BY id DESC LIMIT 1)", arrayOf<Any?>(reason.ifBlank { "تغيير سعر المنتج" }, productId))
                 db.setTransactionSuccessful()
                 PriceResolution(newPrice, "product.sale_price", productId, reason.ifBlank { "تغيير سعر المنتج" }, null)
             } finally { db.endTransaction() }

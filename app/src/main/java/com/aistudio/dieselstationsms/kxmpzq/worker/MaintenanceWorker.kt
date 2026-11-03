@@ -21,13 +21,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlin.coroutines.coroutineContext
 import kotlin.math.ceil
 
 /**
@@ -336,7 +336,7 @@ class MaintenanceWorker(
     }
 
     private suspend fun checkCancellation() {
-        coroutineContext.ensureActive()
+        currentCoroutineContext().ensureActive()
     }
 
     private fun isTransientDatabaseError(e: Exception): Boolean {

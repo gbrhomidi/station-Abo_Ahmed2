@@ -132,7 +132,10 @@ class CustodyWorkshopAcceptanceRobolectricTest {
     )
 
     private fun repositoryRoot(): File {
-        var current: File? = File(System.getProperty("user.dir")).canonicalFile
+        val userDir = requireNotNull(System.getProperty("user.dir")) {
+            "JVM user.dir is unavailable while locating the repository test catalogue"
+        }
+        var current: File? = File(userDir).canonicalFile
         while (current != null) {
             if (File(current, "all-test/اختبارات_عهد_النزول_وورش_الصيانة.json").isFile) return current
             current = current.parentFile
