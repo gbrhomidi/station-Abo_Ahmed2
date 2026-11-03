@@ -151,6 +151,19 @@ class PendingTasksWorkspaceRobolectricTest {
     }
 
     @Test
+    fun bothAdministratorRolesReceiveTheTaskPermissionsRequiredByTheBridge() {
+        val superAdminId = insertUser(1, "task-workspace-super-admin", roleId = 1)
+        val adminId = insertUser(1, "task-workspace-admin", roleId = 2)
+
+        listOf(superAdminId, adminId).forEach { userId ->
+            assertTrue(helper.hasPermission(userId, "tasks.read"))
+            assertTrue(helper.hasPermission(userId, "tasks.create"))
+            assertTrue(helper.hasPermission(userId, "tasks.update"))
+            assertTrue(helper.hasPermission(userId, "tasks.delete"))
+        }
+    }
+
+    @Test
     fun schemaHasStationColumnAndQueryUsesRealSearchAndPagination() {
         val database = helper.writableDatabase
         val columns = mutableSetOf<String>()
@@ -192,7 +205,7 @@ class PendingTasksWorkspaceRobolectricTest {
         assertFalse(first.getJSONObject(0).getLong("id") == second.getJSONObject(0).getLong("id"))
     }
 
-    private fun insertUser(stationId: Long, suffix: String): Long {
+    private fun insertUser(stationId: Long, suffix: String, roleId: Long = 1L): Long {
         return helper.writableDatabase.insertOrThrow(
             "users",
             null,
@@ -202,7 +215,7 @@ class PendingTasksWorkspaceRobolectricTest {
                 put("password_hash", "test-hash")
                 put("password_salt", "test-salt")
                 put("full_name", suffix)
-                put("role_id", 1)
+                put("role_id", roleId)
                 put("station_id", stationId)
                 put("status", "active")
                 put("is_deleted", 0)
