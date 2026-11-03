@@ -5,13 +5,16 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 
 /** عامل النقل الصادر. QUEUED لا تصبح SENT إلا عبر PendingIntent callback. */
  class SmsOutboxWorker @JvmOverloads constructor(
@@ -64,6 +67,8 @@ import kotlinx.coroutines.withContext
 
     companion object {
         private const val UNIQUE_WORK_NAME = "sms-outbox-transport"
+        private const val PERIODIC_RECOVERY_WORK_NAME = "sms-outbox-recovery-periodic"
+        private const val RECOVERY_INTERVAL_MINUTES = 15L
         private const val MAX_BATCH = 20
         private const val MAX_ATTEMPTS = 3
 
@@ -76,13 +81,28 @@ import kotlinx.coroutines.withContext
             )
         }
 
-        /** Schedule one idempotent startup recovery pass without appending duplicate work. */
+        /**
+         * Register a periodic durable outbox scan and request an immediate startup pass.
+         * The periodic worker closes the process-death window between SQLite commit and
+         * enqueueUniqueWork(), even when the app is not reopened.
+         */
         fun scheduleRecovery(context: Context) {
-            val request = OneTimeWorkRequestBuilder<SmsOutboxWorker>().build()
-            WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
+            val workManager = WorkManager.getInstance(context.applicationContext)
+            val periodicRequest = PeriodicWorkRequestBuilder<SmsOutboxWorker>(
+                RECOVERY_INTERVAL_MINUTES,
+                TimeUnit.MINUTES
+            ).build()
+            workManager.enqueueUniquePeriodicWork(
+                PERIODIC_RECOVERY_WORK_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
+                periodicRequest
+            )
+
+            val immediateRequest = OneTimeWorkRequestBuilder<SmsOutboxWorker>().build()
+            workManager.enqueueUniqueWork(
                 UNIQUE_WORK_NAME,
                 ExistingWorkPolicy.KEEP,
-                request
+                immediateRequest
             )
         }
     }
