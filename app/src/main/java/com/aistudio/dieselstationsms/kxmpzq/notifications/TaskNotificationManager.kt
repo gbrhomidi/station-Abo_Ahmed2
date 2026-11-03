@@ -97,11 +97,7 @@ object TaskNotificationManager {
             return
         }
         val rows = runCatching {
-            database.getPendingTasks(stationId, JSONObject().apply {
-                put("include_archived", false)
-                put("include_resolved", false)
-                put("limit", 5000)
-            })
+            database.getPendingManualTasksForNotifications(stationId, 5000)
         }.getOrElse {
             android.util.Log.e("TaskNotifications", "Could not read pending tasks", it)
             return
