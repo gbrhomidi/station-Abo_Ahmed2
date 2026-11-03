@@ -4,6 +4,7 @@ import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManager
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 import com.aistudio.dieselstationsms.kxmpzq.startup.StartupPerformanceMonitor
+import com.aistudio.dieselstationsms.kxmpzq.sms.SmsOutboxWorker
 
 import android.app.Activity
 import android.app.Application
@@ -155,6 +156,9 @@ class MyApplication : Application() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize encrypted preferences", e)
         }
+
+        runCatching { SmsOutboxWorker.scheduleRecovery(this) }
+            .onFailure { Log.w(TAG, "Unable to schedule SMS outbox recovery", it) }
 
         Log.d(TAG, "Application initialized successfully")
         StartupPerformanceMonitor.endSpan(applicationStartupSpan)
