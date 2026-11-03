@@ -1,8 +1,14 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
+import android.Manifest
 import android.content.ContentValues
+import android.content.Context
+import android.content.pm.PackageManager
+import android.util.Log
+import androidx.core.content.ContextCompat
 import android.database.sqlite.SQLiteDatabase
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
 import java.security.MessageDigest
 import java.util.UUID
 import org.json.JSONObject
@@ -37,68 +43,103 @@ object SmsOutboxRepository {
         subscriptionId: Int? = null,
         dedupeKey: String? = null
     ): EnqueueResult? {
+        val database = db.writableDatabase
+        database.beginTransaction()
+        try {
+            val result = enqueueWithinTransaction(
+                database = database,
+                recipient = recipient,
+                body = body,
+                eventId = eventId,
+                conversationId = conversationId,
+                businessEntityId = businessEntityId,
+                priority = priority,
+                subscriptionId = subscriptionId,
+                dedupeKey = dedupeKey
+            )
+            database.setTransactionSuccessful()
+            return result
+        } finally {
+            database.endTransaction()
+        }
+    }
+
+    /**
+     * Inserts the outbox row and legacy SMS log inside the caller's SQLite transaction.
+     * Business persistence uses this to commit the record and its notification atomically.
+     */
+    internal fun enqueueWithinTransaction(
+        database: SQLiteDatabase,
+        recipient: String,
+        body: String,
+        eventId: String? = null,
+        conversationId: String? = null,
+        businessEntityId: String? = null,
+        priority: SmsBudgetManager.Priority = SmsBudgetManager.Priority.NORMAL,
+        subscriptionId: Int? = null,
+        dedupeKey: String? = null
+    ): EnqueueResult? {
+        check(database.inTransaction()) { "SMS outbox insert requires an active SQLite transaction" }
         val cleanRecipient = recipient.trim()
         val prepared = SmsBudgetManager.prepare(body, priority = priority)
         if (cleanRecipient.isEmpty() || prepared.body.isEmpty()) return null
 
         val now = System.currentTimeMillis()
         val messageId = UUID.randomUUID().toString()
-        val safeDedupe = dedupeKey ?: sha256(
+        val safeDedupe = dedupeKey?.trim()?.takeIf { it.isNotEmpty() } ?: sha256(
             listOf("sms", cleanRecipient, prepared.body, eventId.orEmpty(), conversationId.orEmpty()).joinToString("|")
         )
-        val database = db.writableDatabase
-        database.beginTransaction()
-        try {
-            val values = ContentValues().apply {
-                put("message_id", messageId)
-                put("event_id", eventId)
-                put("conversation_id", conversationId)
-                put("business_entity_id", businessEntityId)
-                put("channel", "sms")
-                put("recipient", cleanRecipient)
-                put("body", prepared.body)
-                put("parts_count", prepared.partsCount)
-                put("priority", priority.name)
-                put("status", "QUEUED")
-                put("attempt_count", 0)
-                put("created_at", now)
-                put("queued_at", now)
-                put("subscription_id", subscriptionId)
-                put("dedupe_key", safeDedupe)
-                put("next_attempt_at", now)
-            }
-            val inserted = database.insertWithOnConflict(
-                "sms_outbox",
-                null,
-                values,
-                SQLiteDatabase.CONFLICT_IGNORE
-            )
-            if (inserted == -1L) {
-                val existing = database.rawQuery(
-                    "SELECT message_id, parts_count, status FROM sms_outbox WHERE dedupe_key = ? LIMIT 1",
-                    arrayOf(safeDedupe)
-                ).use { cursor ->
-                    if (!cursor.moveToFirst()) null else Triple(cursor.getString(0), cursor.getInt(1), cursor.getString(2))
-                }
-                database.setTransactionSuccessful()
-                return existing?.let { EnqueueResult(it.first, it.third, it.second) }
-            }
-
-            val logValues = ContentValues().apply {
-                put("uuid", messageId)
-                put("phone_number", cleanRecipient)
-                put("message_body", prepared.body)
-                put("message_type", "outgoing")
-                put("status", "queued")
-                put("created_at", now.toString())
-                put("updated_at", now.toString())
-            }
-            database.insertWithOnConflict("sms_messages", null, logValues, SQLiteDatabase.CONFLICT_IGNORE)
-            database.setTransactionSuccessful()
-            return EnqueueResult(messageId, "QUEUED", prepared.partsCount)
-        } finally {
-            database.endTransaction()
+        val values = ContentValues().apply {
+            put("message_id", messageId)
+            put("event_id", eventId)
+            put("conversation_id", conversationId)
+            put("business_entity_id", businessEntityId)
+            put("channel", "sms")
+            put("recipient", cleanRecipient)
+            put("body", prepared.body)
+            put("parts_count", prepared.partsCount)
+            put("priority", priority.name)
+            put("status", "QUEUED")
+            put("attempt_count", 0)
+            put("created_at", now)
+            put("queued_at", now)
+            put("subscription_id", subscriptionId)
+            put("dedupe_key", safeDedupe)
+            put("next_attempt_at", now)
         }
+        val inserted = database.insertWithOnConflict(
+            "sms_outbox",
+            null,
+            values,
+            SQLiteDatabase.CONFLICT_IGNORE
+        )
+        if (inserted == -1L) {
+            val existing = database.rawQuery(
+                "SELECT message_id, parts_count, status FROM sms_outbox WHERE dedupe_key = ? LIMIT 1",
+                arrayOf(safeDedupe)
+            ).use { cursor ->
+                if (!cursor.moveToFirst()) null
+                else Triple(cursor.getString(0), cursor.getInt(1), cursor.getString(2))
+            }
+            return existing?.let { EnqueueResult(it.first, it.third, it.second) }
+        }
+
+        val logValues = ContentValues().apply {
+            put("uuid", messageId)
+            put("phone_number", cleanRecipient)
+            put("message_body", prepared.body)
+            put("message_type", "outgoing")
+            put("status", "queued")
+            put("created_at", now.toString())
+            put("updated_at", now.toString())
+        }
+        database.insertWithOnConflict(
+            "sms_messages",
+            null,
+            logValues,
+            SQLiteDatabase.CONFLICT_IGNORE
+        )
+        return EnqueueResult(messageId, "QUEUED", prepared.partsCount)
     }
 
     fun claimNext(db: DatabaseHelper, now: Long = System.currentTimeMillis()): OutboxMessage? {
@@ -452,4 +493,192 @@ object SmsOutboxRepository {
     private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
+}
+
+
+/**
+ * Commits a business record and its SMS outbox row in one SQLite transaction.
+ * WorkManager must be scheduled only after execute() returns successfully.
+ */
+object SmsOutboxAtomicTransaction {
+    data class NotificationDraft(
+        val recipient: String,
+        val body: String,
+        val dedupeKey: String,
+        val eventId: String? = null,
+        val conversationId: String? = null,
+        val businessEntityId: String? = null,
+        val priority: SmsBudgetManager.Priority = SmsBudgetManager.Priority.NORMAL,
+        val subscriptionId: Int? = null
+    )
+
+    data class Outcome<T>(
+        val value: T,
+        val queuedMessageId: String?
+    )
+
+    data class DedupeRecoveryResult(
+        val finalizedWithOutbox: Int,
+        val releasedWithoutOutbox: Int,
+        val expired: Int
+    )
+
+    /**
+     * The business operation and a valid notification either both commit or both roll back.
+     * If SMS is disabled, permission is absent, or contact data is invalid, the business
+     * operation commits without queuing an SMS, matching the previous opt-out behavior.
+     */
+    fun <T> execute(
+        db: DatabaseHelper,
+        context: Context,
+        persist: () -> T,
+        notificationFactory: (T) -> NotificationDraft?
+    ): Outcome<T> {
+        val database = db.writableDatabase
+        database.beginTransaction()
+        try {
+            val value = persist()
+            val smsEnabled = runCatching { db.getSetting("sms_send_enabled") }
+                .getOrDefault("0") != "0"
+            val smsPermitted = runCatching {
+                ContextCompat.checkSelfPermission(
+                    context.applicationContext,
+                    Manifest.permission.SEND_SMS
+                ) == PackageManager.PERMISSION_GRANTED
+            }.getOrDefault(false)
+
+            var queuedMessageId: String? = null
+            if (smsEnabled && smsPermitted) {
+                val draft = try {
+                    notificationFactory(value)
+                } catch (exception: Exception) {
+                    Log.e(TAG, "Could not prepare business SMS; business record remains saved", exception)
+                    null
+                }
+
+                if (draft != null) {
+                    val recipient = runCatching { PhoneUtils.normalize(draft.recipient)?.trim() }
+                        .getOrNull()
+                        ?.takeIf { it.isNotEmpty() }
+                    val body = runCatching {
+                        SmsMessageNormalizer.normalizeForSms(draft.body)
+                    }.getOrDefault("")
+
+                    // Invalid recipient/content must not block the business record.
+                    if (recipient != null && body.isNotBlank() && body.length <= MAX_MESSAGE_LENGTH) {
+                        val dedupeKey = draft.dedupeKey.trim().ifBlank {
+                            sha256(listOf(recipient, body, draft.eventId.orEmpty()).joinToString("|"))
+                        }
+                        val queued = SmsOutboxRepository.enqueueWithinTransaction(
+                            database = database,
+                            recipient = recipient,
+                            body = body,
+                            eventId = draft.eventId,
+                            conversationId = draft.conversationId,
+                            businessEntityId = draft.businessEntityId,
+                            priority = draft.priority,
+                            subscriptionId = draft.subscriptionId,
+                            dedupeKey = dedupeKey
+                        ) ?: throw IllegalStateException("Valid business SMS could not be inserted into the outbox")
+
+                        // Align the legacy sendReplyOnce guard with this outbox key in the same commit.
+                        val now = System.currentTimeMillis()
+                        val reservation = ContentValues().apply {
+                            put("dedupe_key", dedupeKey)
+                            put("phone", recipient)
+                            put("message_hash", sha256(body))
+                            put("message_preview", body.take(120))
+                            // In the legacy guard, "sent" means accepted into the durable outbox.
+                            put("status", "sent")
+                            put("reserved_at", now)
+                            put("sent_at", now)
+                        }
+                        database.insertWithOnConflict(
+                            OUTBOUND_DEDUPE_TABLE,
+                            null,
+                            reservation,
+                            SQLiteDatabase.CONFLICT_IGNORE
+                        )
+                        queuedMessageId = queued.messageId
+                    } else {
+                        Log.w(TAG, "Business SMS skipped because recipient or message content is invalid")
+                    }
+                }
+            }
+
+            database.setTransactionSuccessful()
+            return Outcome(value, queuedMessageId)
+        } finally {
+            database.endTransaction()
+        }
+    }
+
+    /**
+     * Repairs the process-death window between reserving a key and inserting its outbox row.
+     * A matching outbox row finalizes the reservation; an orphan reservation is released.
+     */
+    fun recoverOutboundDedupeReservations(
+        db: DatabaseHelper,
+        now: Long = System.currentTimeMillis(),
+        staleAfterMs: Long = 5 * 60 * 1000L,
+        retentionMs: Long = 24L * 60L * 60L * 1000L
+    ): DedupeRecoveryResult {
+        require(staleAfterMs >= 0L) { "staleAfterMs must not be negative" }
+        require(retentionMs > staleAfterMs) { "retentionMs must exceed staleAfterMs" }
+        val database = db.writableDatabase
+        val staleCutoff = now - staleAfterMs
+        val retentionCutoff = now - retentionMs
+        database.beginTransaction()
+        try {
+            val args = arrayOf(staleCutoff.toString(), retentionCutoff.toString())
+            val finalized = database.update(
+                OUTBOUND_DEDUPE_TABLE,
+                ContentValues().apply {
+                    put("status", "sent")
+                    put("sent_at", now)
+                },
+                """
+                status = 'reserved'
+                AND reserved_at <= ?
+                AND reserved_at > ?
+                AND EXISTS (
+                    SELECT 1 FROM sms_outbox
+                    WHERE sms_outbox.dedupe_key = sms_outbound_dedupe.dedupe_key
+                )
+                """.trimIndent(),
+                args
+            )
+            val released = database.delete(
+                OUTBOUND_DEDUPE_TABLE,
+                """
+                status = 'reserved'
+                AND reserved_at <= ?
+                AND reserved_at > ?
+                AND NOT EXISTS (
+                    SELECT 1 FROM sms_outbox
+                    WHERE sms_outbox.dedupe_key = sms_outbound_dedupe.dedupe_key
+                )
+                """.trimIndent(),
+                args
+            )
+            val expired = database.delete(
+                OUTBOUND_DEDUPE_TABLE,
+                "reserved_at <= ?",
+                arrayOf(retentionCutoff.toString())
+            )
+            database.setTransactionSuccessful()
+            return DedupeRecoveryResult(finalized, released, expired)
+        } finally {
+            database.endTransaction()
+        }
+    }
+
+    private const val TAG = "SmsOutboxAtomic"
+    private const val MAX_MESSAGE_LENGTH = 4096
+    private const val OUTBOUND_DEDUPE_TABLE = "sms_outbound_dedupe"
+
+    private fun sha256(value: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
 }
