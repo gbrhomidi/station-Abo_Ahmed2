@@ -13240,12 +13240,17 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun generatePaymentReport(jsonData: String = "{}") = operationalReport("finance", "payments", jsonData)
 
-        private fun resolvePartySmsPhone(db: DatabaseHelper, partyId: Long): String? {
-            if (partyId <= 0L || db.getPartyById(partyId) == null) return null
-            val contacts = db.getPartyContacts(partyId)
+        private fun resolvePartySmsPhone(
+            db: DatabaseHelper,
+            partyId: Long,
+            stationId: Int
+        ): String? {
+            if (partyId <= 0L || stationId <= 0 || db.getPartyById(partyId, stationId) == null) return null
+            val contacts = db.getPartyContacts(partyId, stationId)
             var fallbackPhone: String? = null
             for (i in 0 until contacts.length()) {
                 val contact = contacts.optJSONObject(i) ?: continue
+                if (contact.optInt("is_active", 0) != 1) continue
                 val phone = contact.optString("phone").trim()
                 if (phone.isBlank()) continue
                 if (contact.optInt("is_primary", 0) == 1) return phone
@@ -13288,7 +13293,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     notificationFactory = { savedId ->
                         if (customerPartyId <= 0L) null
                         else {
-                            resolvePartySmsPhone(db, customerPartyId)?.let { phone ->
+                            resolvePartySmsPhone(db, customerPartyId, stationId)?.let { phone ->
                                 SmsOutboxAtomicTransaction.NotificationDraft(
                                     recipient = phone,
                                     body = "تم تسجيل سداد بمبلغ ${obj.optString("amount")} بتاريخ ${db.currentDateForBridge()}.",
@@ -13350,7 +13355,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     notificationFactory = { savedId ->
                         if (customerPartyId <= 0L) null
                         else {
-                            resolvePartySmsPhone(db, customerPartyId)?.let { phone ->
+                            resolvePartySmsPhone(db, customerPartyId, stationId)?.let { phone ->
                                 SmsOutboxAtomicTransaction.NotificationDraft(
                                     recipient = phone,
                                     body = "تم تسجيل مقبوضات بمبلغ ${obj.optString("amount")} بتاريخ ${db.currentDateForBridge()}.",

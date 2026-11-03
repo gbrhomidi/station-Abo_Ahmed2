@@ -547,7 +547,10 @@ object SmsOutboxAtomicTransaction {
             }.getOrDefault(false)
 
             var queuedMessageId: String? = null
-            if (smsEnabled && smsPermitted) {
+            if (smsEnabled) {
+                if (!smsPermitted) {
+                    Log.i(TAG, "SEND_SMS permission is absent; retaining this notification as QUEUED")
+                }
                 // Database/contact lookup failures abort the transaction; silently committing
                 // a financial event after an unexpected lookup error would lose its SMS.
                 val draft = notificationFactory(value)

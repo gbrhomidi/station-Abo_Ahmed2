@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Application
 import android.content.ContentValues
 import android.content.Context
+import androidx.core.content.ContextCompat
 import androidx.test.core.app.ApplicationProvider
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import org.junit.After
@@ -42,6 +43,7 @@ class SmsOutboxSqliteIntegrationTest {
             "CREATE TABLE IF NOT EXISTS test_financial_sms_records (id INTEGER PRIMARY KEY AUTOINCREMENT, amount REAL NOT NULL)"
         )
         database.writableDatabase.delete("test_financial_sms_records", null, null)
+        database.setSetting("sms_send_enabled", "1")
     }
 
     @After
@@ -141,6 +143,84 @@ class SmsOutboxSqliteIntegrationTest {
         assertEquals(1, count("sms_outbox"))
         assertEquals(1, count("sms_messages"))
         assertEquals(1, count("sms_outbound_dedupe"))
+    }
+
+    @Test
+    fun missingSendSmsPermissionKeepsBusinessNotificationQueuedForLaterDelivery() {
+        shadowOf(context.applicationContext as Application)
+            .denyPermissions(Manifest.permission.SEND_SMS)
+        assertEquals(
+            android.content.pm.PackageManager.PERMISSION_DENIED,
+            ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS)
+        )
+        database.setSetting("sms_send_enabled", "1")
+
+        val result = SmsOutboxAtomicTransaction.execute(
+            db = database,
+            context = context,
+            persist = { insertFinancialRecordInsideNestedTransaction(175.0) },
+            notificationFactory = { recordId ->
+                SmsOutboxAtomicTransaction.NotificationDraft(
+                    recipient = "967771234567",
+                    body = "Permission deferred notification",
+                    dedupeKey = "permission-deferred-$recordId",
+                    eventId = "payment:$recordId",
+                    businessEntityId = "payment:$recordId"
+                )
+            }
+        )
+
+        assertNotNull(result.queuedMessageId)
+        assertEquals(1, count("test_financial_sms_records"))
+        assertEquals(1, count("sms_outbox"))
+        assertEquals("QUEUED", status(result.queuedMessageId!!))
+    }
+
+    @Test
+    fun disabledSmsSettingDoesNotQueueButDoesNotBlockTheFinancialRecord() {
+        database.setSetting("sms_send_enabled", "0")
+
+        val result = SmsOutboxAtomicTransaction.execute(
+            db = database,
+            context = context,
+            persist = { insertFinancialRecordInsideNestedTransaction(80.0) },
+            notificationFactory = { recordId ->
+                SmsOutboxAtomicTransaction.NotificationDraft(
+                    recipient = "967771234567",
+                    body = "Should not be queued while SMS is disabled",
+                    dedupeKey = "sms-disabled-$recordId"
+                )
+            }
+        )
+
+        assertNull(result.queuedMessageId)
+        assertEquals(1, count("test_financial_sms_records"))
+        assertEquals(0, count("sms_outbox"))
+        assertEquals(0, count("sms_messages"))
+    }
+
+    @Test
+    fun notificationPreparationFailureRollsBackTheFinancialRecord() {
+        shadowOf(context.applicationContext as Application)
+            .grantPermissions(Manifest.permission.SEND_SMS)
+        database.setSetting("sms_send_enabled", "1")
+
+        val failure = runCatching {
+            SmsOutboxAtomicTransaction.execute(
+                db = database,
+                context = context,
+                persist = { insertFinancialRecordInsideNestedTransaction(95.0) },
+                notificationFactory = {
+                    throw IllegalStateException("simulated contact lookup failure")
+                }
+            )
+        }.exceptionOrNull()
+
+        assertNotNull("Unexpected notification preparation errors must abort the atomic operation", failure)
+        assertEquals(0, count("test_financial_sms_records"))
+        assertEquals(0, count("sms_outbox"))
+        assertEquals(0, count("sms_messages"))
+        assertEquals(0, count("sms_outbound_dedupe"))
     }
 
     @Test
