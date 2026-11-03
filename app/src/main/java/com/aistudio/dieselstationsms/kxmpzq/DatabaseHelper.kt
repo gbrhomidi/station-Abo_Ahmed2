@@ -51,7 +51,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 51
+        const val VERSION = 52
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -301,6 +301,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     45 -> ensureFiscalPeriodSchema(db)
                     46 -> ensureApprovalControlSchema(db)
                     47 -> ensureFinanceIntegritySchema(db)
+                    51 -> ensureTaskWorkspaceSchema(db)
                 }
             }
             ensureModule006Schema(db)
@@ -337,6 +338,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      */
     private fun ensureOpenCompatibilitySchema(db: SQLiteDatabase) {
         check(db.inTransaction()) { "Open compatibility schema requires an active migration transaction" }
+        ensureTaskWorkspaceSchema(db)
         val startedAtNanos = System.nanoTime()
         try {
             ensureSmsMessagesTable(db)
@@ -2445,11 +2447,34 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try { writableDatabase.delete("report_cache", "user_id = ?", arrayOf(userId.toString())) } finally { dbLock.unlock() }
     }
 
+    private fun ensureTaskWorkspaceSchema(db: SQLiteDatabase) {
+        check(db.inTransaction()) { "Task workspace schema requires an active migration transaction" }
+        ensureColumn(db, "tasks", "station_id", "INTEGER")
+        db.execSQL("""
+            UPDATE tasks
+            SET station_id = COALESCE(
+                (SELECT NULLIF(u.station_id, 0) FROM users u WHERE u.id = tasks.created_by),
+                (SELECT NULLIF(u.station_id, 0) FROM users u WHERE u.id = tasks.updated_by),
+                CASE
+                    WHEN (SELECT COUNT(*) FROM stations WHERE COALESCE(status, 'active') = 'active') = 1
+                    THEN (SELECT id FROM stations WHERE COALESCE(status, 'active') = 'active' ORDER BY id LIMIT 1)
+                    ELSE NULL
+                END
+            )
+            WHERE station_id IS NULL
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_station_pending ON tasks(station_id, is_deleted, is_archived, is_resolved, task_date DESC, id DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_station_status_priority ON tasks(station_id, status, priority, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_station_reference ON tasks(station_id, reference)")
+        ensureTaskPermissions(db)
+    }
+
     private fun createTasksTable(db: SQLiteDatabase) {
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 uuid TEXT UNIQUE NOT NULL,
+                station_id INTEGER,
                 task_type TEXT NOT NULL,
                 reference TEXT,
                 task_date TEXT NOT NULL,
@@ -2479,6 +2504,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
         """)
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_pending ON tasks(is_deleted, is_archived, is_resolved, task_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_station_pending ON tasks(station_id, is_deleted, is_archived, is_resolved, task_date DESC, id DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_station_status_priority ON tasks(station_id, status, priority, is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_status_priority ON tasks(status, priority, is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_reference ON tasks(reference)")
     }
@@ -18356,57 +18383,150 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.insert("user_activity_log", null, values)
     }
 
-    private fun taskQuery(params: JSONObject): JSONArray {
-        val where = mutableListOf("is_deleted = 0")
+    private fun taskQuery(params: JSONObject, stationId: Int): JSONArray {
+        require(stationId > 0) { "معرف المحطة غير صالح لقراءة المهام" }
+
+        val manualVisibility = buildString {
+            if (!params.optBoolean("include_archived", false)) append(" AND is_archived = 0")
+            if (!params.optBoolean("include_resolved", false)) append(" AND is_resolved = 0")
+        }
+        val filters = mutableListOf<String>()
         val args = mutableListOf<String>()
-        if (!params.optBoolean("include_archived", false)) where += "is_archived = 0"
-        if (!params.optBoolean("include_resolved", false)) where += "is_resolved = 0"
         params.optString("status", "").trim().takeIf { it.isNotEmpty() }?.let {
-            where += "status = ?"
+            filters += "status = ?"
             args += it
         }
         params.optString("priority", "").trim().takeIf { it.isNotEmpty() }?.let {
-            where += "priority = ?"
+            filters += "priority = ?"
             args += it
         }
         params.optString("search", "").trim().takeIf { it.isNotEmpty() }?.let {
-            where += "(task_type LIKE ? OR reference LIKE ? OR notes LIKE ?)"
+            filters += "(task_type LIKE ? OR reference LIKE ? OR notes LIKE ? OR display_id LIKE ?)"
             val pattern = "%$it%"
-            args += pattern
-            args += pattern
-            args += pattern
+            repeat(4) { args += pattern }
         }
         params.optString("from_date", "").trim().takeIf { it.isNotEmpty() }?.let {
-            where += "date(task_date) >= date(?)"
+            filters += "date(task_date) >= date(?)"
             args += it
         }
         params.optString("to_date", "").trim().takeIf { it.isNotEmpty() }?.let {
-            where += "date(task_date) <= date(?)"
+            filters += "date(task_date) <= date(?)"
             args += it
         }
+
         val limit = params.optInt("limit", 1000).coerceIn(1, 5000)
         val offset = params.optInt("offset", 0).coerceAtLeast(0)
-        args += limit.toString()
-        args += offset.toString()
         val sql = """
-            SELECT id, uuid, task_type, task_type AS type, reference,
-                   task_date, task_date AS date, amount, priority, status, notes,
-                   is_resolved, is_archived, is_deleted, extra_data AS extra,
-                   resolved_at, archived_at, created_by, updated_by, created_at, updated_at
-            FROM tasks
-            WHERE ${where.joinToString(" AND ")}
+            WITH task_rows AS (
+                SELECT
+                    id, uuid, task_type, task_type AS type, reference,
+                    task_date, task_date AS date, amount, priority, status, notes,
+                    is_resolved, is_archived, is_deleted, extra_data AS extra,
+                    resolved_at, archived_at, created_by, updated_by, created_at, updated_at,
+                    'manual' AS source_kind, id AS source_id, ('T-' || id) AS display_id, 1 AS can_edit
+                FROM tasks
+                WHERE station_id = ? AND is_deleted = 0 $manualVisibility
+
+                UNION ALL
+
+                SELECT
+                    CAST(-(1000000000000 + s.id) AS INTEGER) AS id,
+                    ('sale-task-' || s.id) AS uuid,
+                    'فاتورة بيع غير مدفوعة' AS task_type,
+                    'فاتورة بيع غير مدفوعة' AS type,
+                    COALESCE(NULLIF(s.invoice_number, ''), s.sale_code, CAST(s.id AS TEXT)) AS reference,
+                    COALESCE(NULLIF(s.due_date, ''), date(s.created_at)) AS task_date,
+                    COALESCE(NULLIF(s.due_date, ''), date(s.created_at)) AS date,
+                    COALESCE(s.remaining_amount, 0) AS amount,
+                    CASE
+                        WHEN date(COALESCE(NULLIF(s.due_date, ''), s.created_at)) < date('now', 'localtime') THEN 'عالية'
+                        ELSE 'متوسطة'
+                    END AS priority,
+                    CASE
+                        WHEN date(COALESCE(NULLIF(s.due_date, ''), s.created_at)) < date('now', 'localtime') THEN 'متأخرة'
+                        ELSE 'غير مدفوعة'
+                    END AS status,
+                    TRIM(COALESCE(p.commercial_name_ar, p.commercial_name, '')) AS notes,
+                    0 AS is_resolved, 0 AS is_archived, 0 AS is_deleted, NULL AS extra,
+                    NULL AS resolved_at, NULL AS archived_at, NULL AS created_by, NULL AS updated_by,
+                    s.created_at AS created_at, s.created_at AS updated_at,
+                    'credit_sale' AS source_kind, s.id AS source_id, ('S-' || s.id) AS display_id, 0 AS can_edit
+                FROM sales_transactions s
+                LEFT JOIN parties p
+                    ON p.id = s.customer_party_id
+                   AND p.station_id = s.station_id
+                   AND p.is_deleted = 0
+                WHERE s.station_id = ?
+                  AND s.is_deleted = 0
+                  AND s.status = 'completed'
+                  AND s.payment_status IN ('pending', 'partial')
+                  AND COALESCE(s.remaining_amount, 0) > 0
+
+                UNION ALL
+
+                SELECT
+                    CAST(-(2000000000000 + p.id) AS INTEGER) AS id,
+                    ('stock-task-' || p.id) AS uuid,
+                    'منتج منخفض المخزون' AS task_type,
+                    'منتج منخفض المخزون' AS type,
+                    COALESCE(NULLIF(p.product_code, ''), p.product_name_ar, p.product_name, CAST(p.id AS TEXT)) AS reference,
+                    date('now', 'localtime') AS task_date,
+                    date('now', 'localtime') AS date,
+                    0 AS amount,
+                    CASE WHEN COALESCE(stock.quantity_on_hand, 0) <= 0 THEN 'عالية' ELSE 'متوسطة' END AS priority,
+                    'قيد التنفيذ' AS status,
+                    TRIM(COALESCE(p.product_name_ar, p.product_name, p.product_code, ''))
+                        || ' — الرصيد: ' || CAST(COALESCE(stock.quantity_on_hand, 0) AS TEXT)
+                        || ' / الحد الأدنى: ' || CAST(COALESCE(p.minimum_stock, 0) AS TEXT) AS notes,
+                    0 AS is_resolved, 0 AS is_archived, 0 AS is_deleted, NULL AS extra,
+                    NULL AS resolved_at, NULL AS archived_at, NULL AS created_by, NULL AS updated_by,
+                    datetime('now', 'localtime') AS created_at, datetime('now', 'localtime') AS updated_at,
+                    'low_stock' AS source_kind, p.id AS source_id, ('P-' || p.id) AS display_id, 0 AS can_edit
+                FROM products p
+                LEFT JOIN (
+                    SELECT w.station_id, il.product_id, SUM(il.quantity_on_hand) AS quantity_on_hand
+                    FROM inventory_levels il
+                    INNER JOIN warehouses w ON w.id = il.warehouse_id
+                    WHERE w.station_id = ? AND w.is_active = 1
+                    GROUP BY w.station_id, il.product_id
+                ) stock ON stock.product_id = p.id AND stock.station_id = p.station_id
+                WHERE p.station_id = ?
+                  AND p.is_deleted = 0
+                  AND p.status = 'active'
+                  AND COALESCE(stock.quantity_on_hand, 0) <= COALESCE(p.minimum_stock, 0)
+            )
+            SELECT *
+            FROM task_rows
+            ${if (filters.isEmpty()) "" else "WHERE " + filters.joinToString(" AND ")}
             ORDER BY date(task_date) DESC, id DESC
             LIMIT ? OFFSET ?
         """.trimIndent()
-        return readableDatabase.rawQuery(sql, args.toTypedArray()).use { cursor -> cursorToJsonArray(cursor) }
+        val queryArgs = mutableListOf<String>().apply {
+            add(stationId.toString())
+            add(stationId.toString())
+            add(stationId.toString())
+            add(stationId.toString())
+            addAll(args)
+            add(limit.toString())
+            add(offset.toString())
+        }
+        return readableDatabase.rawQuery(sql, queryArgs.toTypedArray()).use { cursor ->
+            cursorToJsonArray(cursor)
+        }
     }
 
-    fun getPendingTasks(params: JSONObject = JSONObject()): JSONArray {
+    fun getPendingTasks(stationId: Int, params: JSONObject = JSONObject()): JSONArray {
+        require(stationId > 0) { "معرف المحطة غير صالح لقراءة المهام" }
+        dbLock.lock()
+        return try { taskQuery(params, stationId) } finally { dbLock.unlock() }
+    }
+
         dbLock.lock()
         return try { taskQuery(params) } finally { dbLock.unlock() }
     }
 
-    fun addTask(data: JSONObject, actorId: Long = 0L): Long {
+    fun addTask(data: JSONObject, stationId: Int, actorId: Long = 0L): Long {
+        require(stationId > 0) { "معرف المحطة غير صالح لإضافة المهمة" }
         val taskType = data.optString("task_type", data.optString("type")).trim()
         val taskDate = data.optString("task_date", data.optString("date")).trim()
         val amount = data.optDouble("amount", 0.0)
@@ -18421,6 +18541,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val now = getCurrentDateTime()
             val values = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
+                put("station_id", stationId)
                 put("task_type", taskType)
                 put("reference", data.optString("reference").trim())
                 put("task_date", taskDate)
@@ -18446,7 +18567,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
     }
 
-    fun updateTask(id: Long, data: JSONObject, actorId: Long = 0L): Int {
+    fun updateTask(id: Long, data: JSONObject, stationId: Int, actorId: Long = 0L): Int {
+        require(stationId > 0) { "معرف المحطة غير صالح لتحديث المهمة" }
         require(id > 0L) { "معرف المهمة غير صالح" }
         val values = ContentValues()
         if (data.has("task_type")) values.put("task_type", data.optString("task_type").trim())
@@ -18475,13 +18597,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val rows = db.update("tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            val rows = db.update("tasks", values, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationId.toString()))
             if (rows > 0) taskActivity(db, actorId, "update_task", id, "تحديث مهمة: $id")
             rows
         } finally { dbLock.unlock() }
     }
 
-    fun archiveTask(id: Long, actorId: Long = 0L): Int {
+    fun archiveTask(id: Long, stationId: Int, actorId: Long = 0L): Int {
+        require(stationId > 0) { "معرف المحطة غير صالح لأرشفة المهمة" }
         require(id > 0L) { "معرف المهمة غير صالح" }
         dbLock.lock()
         return try {
@@ -18493,13 +18616,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("updated_by", if (actorId > 0L) actorId else null)
                 put("updated_at", getCurrentDateTime())
             }
-            val rows = db.update("tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            val rows = db.update("tasks", values, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationId.toString()))
             if (rows > 0) taskActivity(db, actorId, "archive_task", id, "أرشفة مهمة: $id")
             rows
         } finally { dbLock.unlock() }
     }
 
-    fun restoreTask(id: Long, actorId: Long = 0L): Int {
+    fun restoreTask(id: Long, stationId: Int, actorId: Long = 0L): Int {
+        require(stationId > 0) { "معرف المحطة غير صالح لاستعادة المهمة" }
         require(id > 0L) { "معرف المهمة غير صالح" }
         dbLock.lock()
         return try {
@@ -18511,13 +18635,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("updated_by", if (actorId > 0L) actorId else null)
                 put("updated_at", getCurrentDateTime())
             }
-            val rows = db.update("tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            val rows = db.update("tasks", values, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationId.toString()))
             if (rows > 0) taskActivity(db, actorId, "restore_task", id, "استعادة مهمة: $id")
             rows
         } finally { dbLock.unlock() }
     }
 
-    fun resolveTask(id: Long, actorId: Long = 0L): Int {
+    fun resolveTask(id: Long, stationId: Int, actorId: Long = 0L): Int {
+        require(stationId > 0) { "معرف المحطة غير صالح لحل المهمة" }
         require(id > 0L) { "معرف المهمة غير صالح" }
         dbLock.lock()
         return try {
@@ -18530,13 +18655,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("updated_by", if (actorId > 0L) actorId else null)
                 put("updated_at", getCurrentDateTime())
             }
-            val rows = db.update("tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            val rows = db.update("tasks", values, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationId.toString()))
             if (rows > 0) taskActivity(db, actorId, "resolve_task", id, "حل مهمة: $id")
             rows
         } finally { dbLock.unlock() }
     }
 
-    fun deleteTask(id: Long, actorId: Long = 0L): Int {
+    fun deleteTask(id: Long, stationId: Int, actorId: Long = 0L): Int {
+        require(stationId > 0) { "معرف المحطة غير صالح لحذف المهمة" }
         require(id > 0L) { "معرف المهمة غير صالح" }
         dbLock.lock()
         return try {
@@ -18548,13 +18674,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("updated_by", if (actorId > 0L) actorId else null)
                 put("updated_at", getCurrentDateTime())
             }
-            val rows = db.update("tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            val rows = db.update("tasks", values, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationId.toString()))
             if (rows > 0) taskActivity(db, actorId, "delete_task", id, "حذف مهمة: $id")
             rows
         } finally { dbLock.unlock() }
     }
 
-    fun generateTaskReport(params: JSONObject = JSONObject()): JSONArray {
+    fun generateTaskReport(stationId: Int, params: JSONObject = JSONObject()): JSONArray {
+        require(stationId > 0) { "معرف المحطة غير صالح لإنشاء تقرير المهام" }
         val reportParams = JSONObject(params.toString()).apply {
             put("include_archived", true)
             put("include_resolved", true)
@@ -18563,7 +18690,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             put("limit", optInt("limit", 5000).coerceIn(1, 5000))
         }
         dbLock.lock()
-        return try { taskQuery(reportParams) } finally { dbLock.unlock() }
+        return try { taskQuery(reportParams, stationId) } finally { dbLock.unlock() }
     }
 
     // Typed operational screen contracts: whitelist-backed SQLite operations
