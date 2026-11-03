@@ -2195,7 +2195,8 @@
             if (pendingTasksLoadPromise) return pendingTasksLoadPromise;
             pendingTasksLoadPromise = (async () => {
                 if (isInitialLoad) renderSkeleton();
-                showLoading(true);
+                // List refreshes must not leave the full-screen blocking overlay over every control.
+                // The skeleton communicates the initial load; actions keep their own progress state.
                 try {
                     const pageSize = 5000;
                     const maximumRows = 50000;
@@ -2208,7 +2209,8 @@
                             limit: pageSize,
                             offset: offset
                         });
-                        const batch = Array.isArray(response.data) ? response.data : (Array.isArray(response) ? response : []);
+                        const batch = Array.isArray(response.data) ? response.data : (Array.isArray(response) ? response : null);
+                        if (!batch) throw new Error('استجابة SQLite لا تحتوي على قائمة مهام صالحة');
                         loadedRows.push.apply(loadedRows, batch);
                         if (batch.length < pageSize) {
                             reachedEnd = true;
@@ -2246,7 +2248,6 @@
                     scheduleTaskLoadRetry();
                 } finally {
                     isInitialLoad = false;
-                    showLoading(false);
                 }
             })();
             try { return await pendingTasksLoadPromise; }
@@ -2399,9 +2400,18 @@
                     `<div class="ai-insight-badge"><i class="fas fa-robot" aria-hidden="true"></i> ${insight.suggestion.substring(0, 45)}${insight.suggestion.length > 45 ? '...' : ''}</div>` :
                     '';
 
-                const archiveButton = currentFilter === 'archived'
-                    ? `<button class="card-btn" onclick="event.stopPropagation(); restoreTask(${id})" aria-label="استعادة"><i class="fas fa-rotate-left" aria-hidden="true"></i> استعادة</button>`
-                    : `<button class="card-btn danger" onclick="event.stopPropagation(); archiveTask(${id})" aria-label="أرشفة" ><i class="fas fa-archive" aria-hidden="true"></i> أرشفة</button>`;
+                const sourceKind = String(task.source_kind || 'manual');
+                const isOperationalSource = sourceKind !== 'manual';
+                const editButton = isOperationalSource ? '' :
+                    `<button type="button" class="card-btn" onclick="event.stopPropagation(); openEditTaskModal(${id})" aria-label="تعديل"><i class="fas fa-edit" aria-hidden="true"></i> تعديل</button>`;
+                const archiveButton = isOperationalSource ? '' : (currentFilter === 'archived'
+                    ? `<button type="button" class="card-btn" onclick="event.stopPropagation(); restoreTask(${id})" aria-label="استعادة"><i class="fas fa-rotate-left" aria-hidden="true"></i> استعادة</button>`
+                    : `<button type="button" class="card-btn danger" onclick="event.stopPropagation(); archiveTask(${id})" aria-label="أرشفة"><i class="fas fa-archive" aria-hidden="true"></i> أرشفة</button>`);
+                const resolveButton = isOperationalSource || currentFilter === 'completed' ? '' :
+                    `<button type="button" class="card-btn" onclick="event.stopPropagation(); resolveTask(${id})" aria-label="حل"><i class="fas fa-check" aria-hidden="true"></i> حل</button>`;
+                const sourceBadge = isOperationalSource
+                    ? '<div class="ai-insight-badge"><i class="fas fa-database" aria-hidden="true"></i> تنبيه مشتق مباشرة من SQLite</div>'
+                    : '';
 
                 return `
                     <div class="task-card animate-fade-up" style="animation-delay:${(idx % 5) * 0.04}s" data-id="${id}" onclick="selectCard(this, ${id})" role="listitem">
@@ -2410,8 +2420,10 @@
                             <span class="card-status ${statusClass}">${getStatusLabel(status)}</span>
                         </div>
                         <div class="card-name">${escapeHtml(type)}</div>
-                        <div class="card-code" style="direction:ltr;text-align:right;">#${escapeHtml(String(id))}</div>
+                        <div class="card-code" style="direction:ltr;text-align:right;">#${escapeHtml(String(task.display_id || id))}</div>
                         <div class="card-meta"><i class="fas fa-tag" aria-hidden="true"></i> ${escapeHtml(reference)}</div>
+                        ${sourceBadge}
+                        ${isOperationalSource && task.notes ? `<div class="card-meta" style="white-space:normal;">${escapeHtml(task.notes)}</div>` : ''}
                         ${insightHTML}
                         <div class="card-body">
                             <div class="metric-box"><div class="metric-value" style="color:var(--ruby);">${formatCurrency(amount)}</div><div class="metric-label">القيمة</div></div>
@@ -2419,10 +2431,10 @@
                             <div class="metric-box"><div class="metric-value" style="color:var(--text-muted);">${getStatusLabel(status)}</div><div class="metric-label">الحالة</div></div>
                         </div>
                         <div class="card-actions">
-                            <button class="card-btn" onclick="event.stopPropagation(); viewTask(${id})" aria-label="عرض التفاصيل"><i class="fas fa-eye" aria-hidden="true"></i> تفاصيل</button>
-                            <button class="card-btn" onclick="event.stopPropagation(); openEditTaskModal(${id})" aria-label="تعديل"><i class="fas fa-edit" aria-hidden="true"></i> تعديل</button>
+                            <button type="button" class="card-btn" onclick="event.stopPropagation(); viewTask(${id})" aria-label="عرض التفاصيل"><i class="fas fa-eye" aria-hidden="true"></i> تفاصيل</button>
+                            ${editButton}
                             ${archiveButton}
-                            ${currentFilter === 'completed' ? '' : `<button class="card-btn" onclick="event.stopPropagation(); resolveTask(${id})" aria-label="حل" ><i class="fas fa-check" aria-hidden="true"></i> حل</button>`}
+                            ${resolveButton}
                         </div>
                     </div>
                 `;
@@ -2720,6 +2732,7 @@
         function openEditTaskModal(id) {
             const task = allTasks.find(item => Number(item.id) === Number(id));
             if (!task) { showToast('❌ المهمة غير موجودة', 'error'); return; }
+            if (task.source_kind && task.source_kind !== 'manual') { showToast('هذا تنبيه تشغيلي مشتق من سجل أصلي؛ لا يمكن تعديله من شاشة المهام.', 'warning'); return; }
             document.getElementById('taskEditId').value = task.id;
             document.getElementById('taskFormTitle').textContent = 'تعديل مهمة';
             document.getElementById('taskType').value = task.task_type || task.type || '';
@@ -2773,6 +2786,7 @@
         async function archiveTask(id) {
             const task = allTasks.find(t => t.id == id);
             if (!task) { showToast('❌ المهمة غير موجودة', 'error'); return; }
+            if (task.source_kind && task.source_kind !== 'manual') { showToast('هذا التنبيه يتبع سجلاً تشغيلياً ولا يمكن أرشفته من هنا.', 'warning'); return; }
 
             const confirmed = await confirmTaskAction({
                 title: '⚠️ هل أنت متأكد؟',
@@ -2807,6 +2821,11 @@
                 showToast('❌ يرجى تحديد مهمة أولاً (انقر على البطاقة)', 'error');
                 return;
             }
+            const selected = allTasks.find(task => String(task.id) === String(selectedTaskId));
+            if (selected && selected.source_kind && selected.source_kind !== 'manual') {
+                showToast('التنبيه التشغيلي يُعالج من سجله الأصلي ولا يمكن أرشفته يدوياً.', 'warning');
+                return;
+            }
             await archiveTask(selectedTaskId);
         }
 
@@ -2816,6 +2835,7 @@
                 showToast('❌ المهمة غير موجودة', 'error');
                 return;
             }
+            if (task.source_kind && task.source_kind !== 'manual') { showToast('لا يمكن استعادة تنبيه تشغيلي من مصدره الأصلي.', 'warning'); return; }
 
             const confirmed = await confirmTaskAction({
                 title: '↩️ استعادة المهمة',
@@ -2848,6 +2868,7 @@
         async function resolveTask(id) {
             const task = allTasks.find(t => t.id == id);
             if (!task) { showToast('❌ المهمة غير موجودة', 'error'); return; }
+            if (task.source_kind && task.source_kind !== 'manual') { showToast('لا يتم إغلاق التنبيهات التشغيلية يدوياً؛ تختفي عند معالجة السجل الأصلي في SQLite.', 'warning'); return; }
 
             const confirmed = await confirmTaskAction({
                 title: '✅ حل المهمة',
@@ -2895,7 +2916,7 @@
 
                 <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);">
                     <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:8px;"><i class="fas fa-info-circle" aria-hidden="true"></i> المعلومات الأساسية</div>
-                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">رقم المهمة</span><span style="font-weight:600;">#${task.id}</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">المرجع</span><span style="font-weight:600;">#${escapeHtml(String(task.display_id || task.id))}</span></div>
                     <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">المرجع</span><span style="font-weight:600;">${escapeHtml(task.reference || '---')}</span></div>
                     <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">التاريخ</span><span style="font-weight:600;">${task.date || '---'}</span></div>
                     <div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--text-muted);font-size:0.75rem;">الحالة</span><span class="card-status ${getStatusClass(task.status)}" style="display:inline-block;padding:0 12px;">${getStatusLabel(task.status)}</span></div>
@@ -2906,12 +2927,19 @@
                     <div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--text-muted);font-size:0.75rem;">القيمة</span><span style="font-weight:600;color:var(--ruby);">${formatCurrency(task.amount || 0)}</span></div>
                 </div>
 
+                ${task.notes ? `
+                <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);">
+                    <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:6px;"><i class="fas fa-info-circle" aria-hidden="true"></i> ملاحظات المصدر</div>
+                    <p style="font-size:0.8rem;color:var(--data-text-muted);white-space:pre-wrap;">${escapeHtml(task.notes)}</p>
+                </div>
+                ` : ''}
                 ${task.extra ? `
                 <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);">
                     <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:6px;"><i class="fas fa-list-ul" aria-hidden="true"></i> تفاصيل إضافية</div>
-                    <p style="font-size:0.8rem;color:var(--data-text-muted);white-space:pre-wrap;">${escapeHtml(JSON.stringify(task.extra, null, 2))}</p>
+                    <p style="font-size:0.8rem;color:var(--data-text-muted);white-space:pre-wrap;">${escapeHtml(typeof task.extra === 'string' ? task.extra : JSON.stringify(task.extra, null, 2))}</p>
                 </div>
                 ` : ''}
+                ${task.source_kind && task.source_kind !== 'manual' ? '<div class="ai-insight-badge"><i class="fas fa-lock" aria-hidden="true"></i> سجل للعرض فقط؛ تتم معالجته من شاشة السجل الأصلي.</div>' : ''}
 
                 <div style="height:40px;"></div>
             `;
