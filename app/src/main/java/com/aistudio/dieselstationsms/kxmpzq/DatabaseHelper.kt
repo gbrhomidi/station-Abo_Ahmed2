@@ -18348,7 +18348,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     val colName = it.getColumnName(i)
                     when (it.getType(i)) {
                         Cursor.FIELD_TYPE_STRING -> obj.put(colName, it.getString(i))
-                        Cursor.FIELD_TYPE_INTEGER -> obj.put(colName, it.getInt(i))
+                        Cursor.FIELD_TYPE_INTEGER -> obj.put(colName, it.getLong(i))
                         Cursor.FIELD_TYPE_FLOAT -> obj.put(colName, it.getDouble(i))
                         Cursor.FIELD_TYPE_BLOB -> obj.put(colName, it.getBlob(i))
                         else -> obj.put(colName, "")
@@ -18368,7 +18368,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val colName = cursor.getColumnName(i)
             when (cursor.getType(i)) {
                 Cursor.FIELD_TYPE_STRING -> obj.put(colName, cursor.getString(i))
-                Cursor.FIELD_TYPE_INTEGER -> obj.put(colName, cursor.getInt(i))
+                Cursor.FIELD_TYPE_INTEGER -> obj.put(colName, cursor.getLong(i))
                 Cursor.FIELD_TYPE_FLOAT -> obj.put(colName, cursor.getDouble(i))
                 Cursor.FIELD_TYPE_BLOB -> obj.put(colName, cursor.getBlob(i))
                 else -> obj.put(colName, "")
