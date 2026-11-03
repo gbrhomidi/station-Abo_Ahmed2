@@ -1,5 +1,8 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
+import android.Manifest
+import android.app.Application
+import android.content.ContentValues
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
@@ -12,6 +15,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -32,6 +36,7 @@ class SmsOutboxSqliteIntegrationTest {
         database.writableDatabase.delete("sms_outbox_parts", null, null)
         database.writableDatabase.delete("sms_outbox", null, null)
         database.writableDatabase.delete("sms_messages", null, null)
+        database.writableDatabase.delete("sms_outbound_dedupe", null, null)
     }
 
     @After
@@ -101,6 +106,153 @@ class SmsOutboxSqliteIntegrationTest {
         assertNotNull(SmsOutboxRepository.claimNext(database, now = 1_060_000L))
         assertTrue(SmsOutboxRepository.hasPending(database))
     }
+
+    @Test
+    fun financialRecordAndNotificationAreCommittedAtomically() {
+        shadowOf(context.applicationContext as Application)
+            .grantPermissions(Manifest.permission.SEND_SMS)
+        database.setSetting("sms_send_enabled", "1")
+        database.writableDatabase.execSQL(
+            "CREATE TABLE IF NOT EXISTS test_financial_sms_records (id INTEGER PRIMARY KEY AUTOINCREMENT, amount REAL NOT NULL)"
+        )
+
+        val result = SmsOutboxAtomicTransaction.execute(
+            db = database,
+            context = context,
+            persist = {
+                database.writableDatabase.insertOrThrow(
+                    "test_financial_sms_records",
+                    null,
+                    ContentValues().apply { put("amount", 100.0) }
+                )
+            },
+            notificationFactory = { recordId ->
+                SmsOutboxAtomicTransaction.NotificationDraft(
+                    recipient = "967771234567",
+                    body = "Payment verified",
+                    dedupeKey = "atomic-financial-$recordId",
+                    eventId = "payment:$recordId",
+                    businessEntityId = "payment:$recordId"
+                )
+            }
+        )
+
+        assertNotNull(result.queuedMessageId)
+        assertEquals(1, count("test_financial_sms_records"))
+        assertEquals(1, count("sms_outbox"))
+        assertEquals(1, count("sms_messages"))
+        assertEquals(1, count("sms_outbound_dedupe"))
+    }
+
+    @Test
+    fun outboxInsertFailureRollsBackTheFinancialRecord() {
+        shadowOf(context.applicationContext as Application)
+            .grantPermissions(Manifest.permission.SEND_SMS)
+        database.setSetting("sms_send_enabled", "1")
+        database.writableDatabase.execSQL(
+            "CREATE TABLE IF NOT EXISTS test_financial_sms_records (id INTEGER PRIMARY KEY AUTOINCREMENT, amount REAL NOT NULL)"
+        )
+        database.writableDatabase.execSQL(
+            """
+            CREATE TRIGGER fail_sms_outbox_insert
+            BEFORE INSERT ON sms_outbox
+            BEGIN
+                SELECT RAISE(ABORT, 'simulated outbox insert failure');
+            END
+            """.trimIndent()
+        )
+
+        val failure = runCatching {
+            SmsOutboxAtomicTransaction.execute(
+                db = database,
+                context = context,
+                persist = {
+                    database.writableDatabase.insertOrThrow(
+                        "test_financial_sms_records",
+                        null,
+                        ContentValues().apply { put("amount", 250.0) }
+                    )
+                },
+                notificationFactory = { recordId ->
+                    SmsOutboxAtomicTransaction.NotificationDraft(
+                        recipient = "967771234567",
+                        body = "Payment failure rollback",
+                        dedupeKey = "atomic-rollback-$recordId",
+                        eventId = "payment:$recordId",
+                        businessEntityId = "payment:$recordId"
+                    )
+                }
+            )
+        }.exceptionOrNull()
+
+        assertNotNull("The injected outbox failure must be raised", failure)
+        assertEquals(0, count("test_financial_sms_records"))
+        assertEquals(0, count("sms_outbox"))
+        assertEquals(0, count("sms_messages"))
+        assertEquals(0, count("sms_outbound_dedupe"))
+    }
+
+    @Test
+    fun staleOutboundReservationsAreReconciledAgainstTheDurableOutbox() {
+        val now = System.currentTimeMillis()
+        val queued = SmsOutboxRepository.enqueue(
+            database,
+            "967771234567",
+            "Existing durable message",
+            dedupeKey = "recovery-existing-outbox"
+        )!!
+        insertOutboundReservation("recovery-existing-outbox", now - 10 * 60 * 1000L)
+        insertOutboundReservation("recovery-orphan", now - 10 * 60 * 1000L)
+        insertOutboundReservation("recovery-fresh", now - 30 * 1000L)
+
+        val result = SmsOutboxAtomicTransaction.recoverOutboundDedupeReservations(
+            db = database,
+            now = now,
+            staleAfterMs = 5 * 60 * 1000L,
+            retentionMs = 24 * 60 * 60 * 1000L
+        )
+
+        assertEquals(1, result.finalizedWithOutbox)
+        assertEquals(1, result.releasedWithoutOutbox)
+        assertEquals(0, result.expired)
+        assertEquals("sent", outboundStatus("recovery-existing-outbox"))
+        assertEquals("QUEUED", outboxStatusFor(queued.messageId))
+        assertEquals(0, outboundReservationCount("recovery-orphan"))
+        assertEquals("reserved", outboundStatus("recovery-fresh"))
+    }
+
+    private fun insertOutboundReservation(key: String, reservedAt: Long) {
+        database.writableDatabase.insertOrThrow(
+            "sms_outbound_dedupe",
+            null,
+            ContentValues().apply {
+                put("dedupe_key", key)
+                put("phone", "967771234567")
+                put("message_hash", "hash-$key")
+                put("message_preview", "test")
+                put("status", "reserved")
+                put("reserved_at", reservedAt)
+            }
+        )
+    }
+
+    private fun outboundStatus(key: String): String? =
+        database.readableDatabase.rawQuery(
+            "SELECT status FROM sms_outbound_dedupe WHERE dedupe_key = ?",
+            arrayOf(key)
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+
+    private fun outboundReservationCount(key: String): Int =
+        database.readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM sms_outbound_dedupe WHERE dedupe_key = ?",
+            arrayOf(key)
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+
+    private fun outboxStatusFor(messageId: String): String? =
+        database.readableDatabase.rawQuery(
+            "SELECT status FROM sms_outbox WHERE message_id = ?",
+            arrayOf(messageId)
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
 
     private fun status(id: String): String =
         database.readableDatabase.rawQuery(
