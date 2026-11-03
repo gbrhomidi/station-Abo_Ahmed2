@@ -212,6 +212,16 @@ object DeliveryFeeAccounting {
         return null
     }
 
+    private fun firstNonExemptMode(row: JSONObject?, keys: List<String>): String? {
+        if (row == null) return null
+        for (key in keys) {
+            val raw = firstNonBlank(row, listOf(key)) ?: continue
+            val normalized = normalizeMode(raw)
+            if (normalized != EXEMPT) return normalized
+        }
+        return null
+    }
+
     private fun readParentSale(
         db: SQLiteDatabase,
         parentSaleId: Long,
@@ -240,7 +250,11 @@ object DeliveryFeeAccounting {
         val predicates = mutableListOf("sale_id=?")
         val arguments = mutableListOf(parentSaleId.toString())
         if ("station_id" in deliveryColumns) {
-            predicates += "station_id=?"
+            if (parentSaleVerified) {
+                predicates += "(station_id IS NULL OR station_id=0 OR station_id=?)"
+            } else {
+                predicates += "station_id=?"
+            }
             arguments += stationId.toString()
         }
         if ("is_deleted" in deliveryColumns) predicates += "COALESCE(is_deleted,0)=0"
@@ -312,12 +326,9 @@ object DeliveryFeeAccounting {
         val modeKeys = listOf("delivery_fee_mode", "fee_mode", "delivery_fee_calculation")
         val modeRows = listOfNotNull(fuelSale, parent, ledger) + deliveries
         val mode = modeRows
-            .mapNotNull { row ->
-                val raw = firstNonBlank(row, modeKeys + if (row === ledger) listOf("mode") else emptyList())
-                raw?.takeIf { normalizeMode(it) != EXEMPT }
+            .firstNotNullOfOrNull { row ->
+                firstNonExemptMode(row, modeKeys + if (row === ledger) listOf("mode") else emptyList())
             }
-            .firstOrNull()
-            ?.let(::normalizeMode)
             ?: EXEMPT
 
         val locationKeys = listOf("delivery_location", "location", "delivery_address")
@@ -477,7 +488,11 @@ object DeliveryFeeAccounting {
                     }
 
                     if (deliveryValues.size() > 0) {
-                        val where = if ("station_id" in deliveryColumns) "id=? AND station_id=?" else "id=?"
+                        val where = if ("station_id" in deliveryColumns) {
+                            if (parent != null) "id=? AND (station_id=? OR station_id IS NULL OR station_id=0)" else "id=? AND station_id=?"
+                        } else {
+                            "id=?"
+                        }
                         val arguments = if ("station_id" in deliveryColumns) {
                             arrayOf(deliveryId.toString(), stationId.toString())
                         } else {

@@ -132,11 +132,13 @@ class LatestFuelSaleForCustomerRobolectricTest {
         )
 
         val legacyFee = 425.75
+        val legacyParentFee = ContentValues().apply {
+            putExisting("sales_transactions", this, "service_fee", legacyFee)
+            if (size() == 0) put("delivery_service_fee", legacyFee)
+        }
         db.update(
             "sales_transactions",
-            ContentValues().apply {
-                putExisting("sales_transactions", this, "service_fee", legacyFee)
-            },
+            legacyParentFee,
             "id=? AND station_id=?",
             arrayOf(parentSaleId.toString(), stationId.toString())
         )
