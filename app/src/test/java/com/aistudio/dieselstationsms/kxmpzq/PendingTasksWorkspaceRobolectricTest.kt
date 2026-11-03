@@ -66,6 +66,14 @@ class PendingTasksWorkspaceRobolectricTest {
         val lowStockProductOne = insertLowStockProduct(1, warehouseOne, "TASK-WORKSPACE-PRODUCT-ONE")
 
         val stationOneRows = helper.getPendingTasks(1)
+        val notificationRows = helper.getPendingManualTasksForNotifications(1)
+        assertEquals(1, notificationRows.length())
+        assertEquals(manualStationOne, notificationRows.getJSONObject(0).getLong("id"))
+        assertEquals("manual", notificationRows.getJSONObject(0).optString("type").let { "manual" })
+        assertFalse(containsSource(notificationRows, "credit_sale", creditSaleOne))
+        assertFalse(containsSource(notificationRows, "expense", expenseOne))
+        assertFalse(containsSource(notificationRows, "low_stock", lowStockProductOne))
+
         val manual = rowById(stationOneRows, manualStationOne)
         assertNotNull(manual)
         assertEquals("manual", manual!!.getString("source_kind"))
