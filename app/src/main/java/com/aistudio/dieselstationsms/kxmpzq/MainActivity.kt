@@ -11453,14 +11453,27 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         // ============================================================
-        // Tasks Bridge - explicit allow-list for tasks.html
+        // Tasks Bridge - authenticated, permission-gated and station-scoped
         // ============================================================
+
+        private fun requireTaskPermission(action: String) {
+            if (!checkPermission("tasks", action)) {
+                throw SecurityException("لا تملك صلاحية tasks.$action")
+            }
+        }
 
         @JavascriptInterface
         fun getPendingTasks(jsonData: String = "{}"): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getPendingTasks(operationalJson(jsonData))) }
-            catch (e: Exception) { DebugLogger.logException("TasksList", e); errorResponse(e.message) }
+            return try {
+                requireTaskPermission("read")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                dataResponse(db.getPendingTasks(stationId, operationalJson(jsonData)))
+            } catch (e: Exception) {
+                DebugLogger.logException("TasksList", e)
+                errorResponse(e.message)
+            }
         }
 
         @JavascriptInterface
@@ -11468,7 +11481,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val id = db.addTask(operationalJson(jsonData), activity.currentUserId)
+                requireTaskPermission("create")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val id = db.addTask(operationalJson(jsonData), stationId, activity.currentUserId)
                 TaskNotificationManager.synchronizeTask(activity.applicationContext, id)
                 successResponse(id, "تمت إضافة المهمة فعلياً")
             } catch (e: Exception) {
@@ -11482,9 +11497,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.updateTask(id, operationalJson(jsonData), activity.currentUserId)
+                requireTaskPermission("update")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val rows = db.updateTask(id, operationalJson(jsonData), stationId, activity.currentUserId)
                 if (rows > 0) TaskNotificationManager.synchronizeTask(activity.applicationContext, id)
-                successResponse(rows > 0, if (rows > 0) "تم تحديث المهمة فعلياً" else "لم يتم العثور على المهمة")
+                successResponse(rows > 0, if (rows > 0) "تم تحديث المهمة فعلياً" else "لم يتم العثور على المهمة ضمن المحطة الحالية")
             } catch (e: Exception) {
                 DebugLogger.logException("TaskUpdate", e)
                 errorResponse(e.message)
@@ -11496,9 +11513,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.archiveTask(id, activity.currentUserId)
+                requireTaskPermission("update")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val rows = db.archiveTask(id, stationId, activity.currentUserId)
                 if (rows > 0) TaskNotificationManager.cancelTaskNotification(activity.applicationContext, id)
-                successResponse(rows > 0, if (rows > 0) "تمت أرشفة المهمة فعلياً" else "لم يتم العثور على المهمة")
+                successResponse(rows > 0, if (rows > 0) "تمت أرشفة المهمة فعلياً" else "لم يتم العثور على المهمة ضمن المحطة الحالية")
             } catch (e: Exception) {
                 DebugLogger.logException("TaskArchive", e)
                 errorResponse(e.message)
@@ -11510,9 +11529,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.restoreTask(id, activity.currentUserId)
+                requireTaskPermission("update")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val rows = db.restoreTask(id, stationId, activity.currentUserId)
                 if (rows > 0) TaskNotificationManager.synchronizeTask(activity.applicationContext, id)
-                successResponse(rows > 0, if (rows > 0) "تمت استعادة المهمة فعلياً" else "لم يتم العثور على المهمة")
+                successResponse(rows > 0, if (rows > 0) "تمت استعادة المهمة فعلياً" else "لم يتم العثور على المهمة ضمن المحطة الحالية")
             } catch (e: Exception) {
                 DebugLogger.logException("TaskRestore", e)
                 errorResponse(e.message)
@@ -11524,9 +11545,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.resolveTask(id, activity.currentUserId)
+                requireTaskPermission("update")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val rows = db.resolveTask(id, stationId, activity.currentUserId)
                 if (rows > 0) TaskNotificationManager.cancelTaskNotification(activity.applicationContext, id)
-                successResponse(rows > 0, if (rows > 0) "تم حل المهمة فعلياً" else "لم يتم العثور على المهمة")
+                successResponse(rows > 0, if (rows > 0) "تم حل المهمة فعلياً" else "لم يتم العثور على المهمة ضمن المحطة الحالية")
             } catch (e: Exception) {
                 DebugLogger.logException("TaskResolve", e)
                 errorResponse(e.message)
@@ -11538,9 +11561,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.deleteTask(id, activity.currentUserId)
+                requireTaskPermission("delete")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val rows = db.deleteTask(id, stationId, activity.currentUserId)
                 if (rows > 0) TaskNotificationManager.cancelTaskNotification(activity.applicationContext, id)
-                successResponse(rows > 0, if (rows > 0) "تم حذف المهمة فعلياً" else "لم يتم العثور على المهمة")
+                successResponse(rows > 0, if (rows > 0) "تم حذف المهمة فعلياً" else "لم يتم العثور على المهمة ضمن المحطة الحالية")
             } catch (e: Exception) {
                 DebugLogger.logException("TaskDelete", e)
                 errorResponse(e.message)
@@ -11549,9 +11574,16 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun generateTaskReport(jsonData: String = "{}"): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.generateTaskReport(operationalJson(jsonData))) }
-            catch (e: Exception) { DebugLogger.logException("TaskReport", e); errorResponse(e.message) }
+            return try {
+                requireTaskPermission("read")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                dataResponse(db.generateTaskReport(stationId, operationalJson(jsonData)))
+            } catch (e: Exception) {
+                DebugLogger.logException("TaskReport", e)
+                errorResponse(e.message)
+            }
         }
 
         @JavascriptInterface
