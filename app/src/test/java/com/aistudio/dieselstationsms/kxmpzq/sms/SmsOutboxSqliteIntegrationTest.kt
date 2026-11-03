@@ -37,6 +37,11 @@ class SmsOutboxSqliteIntegrationTest {
         database.writableDatabase.delete("sms_outbox", null, null)
         database.writableDatabase.delete("sms_messages", null, null)
         database.writableDatabase.delete("sms_outbound_dedupe", null, null)
+        database.writableDatabase.execSQL("DROP TRIGGER IF EXISTS fail_sms_outbox_insert")
+        database.writableDatabase.execSQL(
+            "CREATE TABLE IF NOT EXISTS test_financial_sms_records (id INTEGER PRIMARY KEY AUTOINCREMENT, amount REAL NOT NULL)"
+        )
+        database.writableDatabase.delete("test_financial_sms_records", null, null)
     }
 
     @After
