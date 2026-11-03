@@ -538,8 +538,7 @@ object SmsOutboxAtomicTransaction {
         database.beginTransaction()
         try {
             val value = persist()
-            val smsEnabled = runCatching { db.getSetting("sms_send_enabled") }
-                .getOrDefault("0") != "0"
+            val smsEnabled = db.getSetting("sms_send_enabled") != "0"
             val smsPermitted = runCatching {
                 ContextCompat.checkSelfPermission(
                     context.applicationContext,
@@ -549,12 +548,9 @@ object SmsOutboxAtomicTransaction {
 
             var queuedMessageId: String? = null
             if (smsEnabled && smsPermitted) {
-                val draft = try {
-                    notificationFactory(value)
-                } catch (exception: Exception) {
-                    Log.e(TAG, "Could not prepare business SMS; business record remains saved", exception)
-                    null
-                }
+                // Database/contact lookup failures abort the transaction; silently committing
+                // a financial event after an unexpected lookup error would lose its SMS.
+                val draft = notificationFactory(value)
 
                 if (draft != null) {
                     val recipient = runCatching { PhoneUtils.normalize(draft.recipient)?.trim() }
@@ -593,12 +589,30 @@ object SmsOutboxAtomicTransaction {
                             put("reserved_at", now)
                             put("sent_at", now)
                         }
-                        database.insertWithOnConflict(
+                        val markerInserted = database.insertWithOnConflict(
                             OUTBOUND_DEDUPE_TABLE,
                             null,
                             reservation,
                             SQLiteDatabase.CONFLICT_IGNORE
                         )
+                        if (markerInserted == -1L) {
+                            val markerUpdated = database.update(
+                                OUTBOUND_DEDUPE_TABLE,
+                                ContentValues().apply {
+                                    put("phone", recipient)
+                                    put("message_hash", sha256(body))
+                                    put("message_preview", body.take(120))
+                                    put("status", "sent")
+                                    put("reserved_at", now)
+                                    put("sent_at", now)
+                                },
+                                "dedupe_key = ?",
+                                arrayOf(dedupeKey)
+                            )
+                            check(markerUpdated == 1) {
+                                "Unable to synchronize the durable outbound dedupe marker"
+                            }
+                        }
                         queuedMessageId = queued.messageId
                     } else {
                         Log.w(TAG, "Business SMS skipped because recipient or message content is invalid")
