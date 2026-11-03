@@ -2,6 +2,7 @@ package com.aistudio.dieselstationsms.kxmpzq
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -18,6 +19,7 @@ import org.robolectric.annotation.Config
 class PendingTasksSQLiteRobolectricTest {
     private lateinit var context: Context
     private lateinit var helper: DatabaseHelper
+    private val stationId = 1
 
     @Before
     fun setUp() {
@@ -36,51 +38,65 @@ class PendingTasksSQLiteRobolectricTest {
 
     private fun addTask(
         type: String,
+        reference: String = "TASK-$type",
         status: String = "قيد التنفيذ",
         priority: String = "متوسطة",
         amount: Double = 125.0
     ): Long = helper.addTask(
         JSONObject()
             .put("task_type", type)
-            .put("reference", "TASK-$type")
+            .put("reference", reference)
             .put("task_date", "2026-11-02")
             .put("amount", amount)
             .put("priority", priority)
             .put("status", status)
             .put("notes", "بيانات اختبار SQLite"),
-        0L
+        stationId
     )
 
+    private fun query(search: String, includeArchived: Boolean = false, includeResolved: Boolean = false): JSONArray =
+        helper.getPendingTasks(
+            stationId,
+            JSONObject()
+                .put("search", search)
+                .put("include_archived", includeArchived)
+                .put("include_resolved", includeResolved)
+                .put("limit", 100)
+        )
+
+    private fun rowById(rows: JSONArray, id: Long): JSONObject? {
+        for (index in 0 until rows.length()) {
+            val row = rows.optJSONObject(index) ?: continue
+            if (row.optLong("id") == id) return row
+        }
+        return null
+    }
+
     @Test
-    fun pendingQueryReturnsPersistedRowsAndHonorsArchiveAndResolveFlags() {
+    fun pendingQueryReturnsPersistedRowsAndHonorsArchiveResolveAndDeleteFlags() {
         val activeId = addTask("مهمة نشطة")
         val completedId = addTask("مهمة مكتملة", status = "مكتملة")
         val archivedId = addTask("مهمة مؤرشفة")
         val deletedId = addTask("مهمة محذوفة")
 
-        assertEquals(1, helper.archiveTask(archivedId, 0L))
-        assertEquals(1, helper.deleteTask(deletedId, 0L))
+        assertEquals(1, helper.archiveTask(archivedId, stationId))
+        assertEquals(1, helper.deleteTask(deletedId, stationId))
 
-        val defaultRows = helper.getPendingTasks(JSONObject().put("limit", 100))
+        val defaultRows = query("TASK-")
         assertEquals(1, defaultRows.length())
         assertEquals(activeId, defaultRows.getJSONObject(0).getLong("id"))
         assertEquals("مهمة نشطة", defaultRows.getJSONObject(0).getString("type"))
         assertEquals("2026-11-02", defaultRows.getJSONObject(0).getString("date"))
 
-        val fullRows = helper.getPendingTasks(
-            JSONObject()
-                .put("include_archived", true)
-                .put("include_resolved", true)
-                .put("limit", 100)
-        )
+        val fullRows = query("TASK-", includeArchived = true, includeResolved = true)
         val ids = (0 until fullRows.length()).map { fullRows.getJSONObject(it).getLong("id") }.toSet()
         assertEquals(setOf(activeId, completedId, archivedId), ids)
         assertTrue("Soft-deleted rows must never return", !ids.contains(deletedId))
     }
 
     @Test
-    fun taskCrudAndReportUseTheSameSQLiteRecords() {
-        val id = addTask("مهمة قبل التعديل")
+    fun taskCrudAndReportUseTheSameStationScopedSQLiteRecords() {
+        val id = addTask("مهمة قبل التعديل", reference = "REF-UPDATED")
 
         val updated = helper.updateTask(
             id,
@@ -92,13 +108,11 @@ class PendingTasksSQLiteRobolectricTest {
                 .put("priority", "عالية")
                 .put("status", "متأخرة")
                 .put("notes", "تم التعديل فعلياً"),
-            0L
+            stationId
         )
         assertEquals(1, updated)
 
-        val matched = helper.getPendingTasks(
-            JSONObject().put("search", "REF-UPDATED").put("limit", 10)
-        )
+        val matched = query("REF-UPDATED")
         assertEquals(1, matched.length())
         val row = matched.getJSONObject(0)
         assertEquals("مهمة بعد التعديل", row.getString("task_type"))
@@ -107,39 +121,49 @@ class PendingTasksSQLiteRobolectricTest {
         assertEquals("متأخرة", row.getString("status"))
         assertEquals("2026-11-01", row.getString("task_date"))
 
-        assertEquals(1, helper.archiveTask(id, 0L))
-        assertEquals(0, helper.getPendingTasks(JSONObject().put("limit", 10)).length())
+        assertEquals(1, helper.archiveTask(id, stationId))
+        assertEquals(0, query("REF-UPDATED").length())
 
-        assertEquals(1, helper.restoreTask(id, 0L))
-        assertEquals(1, helper.getPendingTasks(JSONObject().put("limit", 10)).length())
+        assertEquals(1, helper.restoreTask(id, stationId))
+        assertEquals(1, query("REF-UPDATED").length())
 
-        assertEquals(1, helper.resolveTask(id, 0L))
-        assertEquals(0, helper.getPendingTasks(JSONObject().put("limit", 10)).length())
+        assertEquals(1, helper.resolveTask(id, stationId))
+        assertEquals(0, query("REF-UPDATED").length())
 
-        val fullRows = helper.getPendingTasks(
-            JSONObject().put("include_archived", true).put("include_resolved", true).put("limit", 10)
-        )
+        val fullRows = query("REF-UPDATED", includeArchived = true, includeResolved = true)
         assertEquals(1, fullRows.length())
 
-        val report = helper.generateTaskReport(JSONObject().put("limit", 10))
+        val report = helper.generateTaskReport(
+            stationId,
+            JSONObject().put("search", "REF-UPDATED").put("limit", 100)
+        )
         assertEquals(1, report.length())
         assertNotNull(report.getJSONObject(0).optString("uuid"))
 
-        assertEquals(1, helper.deleteTask(id, 0L))
+        assertEquals(1, helper.deleteTask(id, stationId))
+        assertEquals(0, query("REF-UPDATED", includeArchived = true, includeResolved = true).length())
         assertEquals(
             0,
-            helper.getPendingTasks(
-                JSONObject().put("include_archived", true).put("include_resolved", true).put("limit", 10)
+            helper.generateTaskReport(
+                stationId,
+                JSONObject().put("search", "REF-UPDATED").put("limit", 100)
             ).length()
         )
-        assertEquals(0, helper.generateTaskReport(JSONObject().put("limit", 10)).length())
     }
 
     @Test
-    fun paginationDoesNotRepeatRowsAndHonorsOffset() {
-        val ids = (1..3).map { addTask("مهمة ترقيم $it") }
-        val firstPage = helper.getPendingTasks(JSONObject().put("limit", 2).put("offset", 0))
-        val secondPage = helper.getPendingTasks(JSONObject().put("limit", 2).put("offset", 2))
+    fun paginationDoesNotRepeatRowsAndHonorsOffsetWithinTheCurrentStation() {
+        val ids = (1..3).map { index ->
+            addTask("مهمة ترقيم $index", reference = "PAGED-TASK-$index")
+        }
+        val firstPage = helper.getPendingTasks(
+            stationId,
+            JSONObject().put("search", "PAGED-TASK-").put("limit", 2).put("offset", 0)
+        )
+        val secondPage = helper.getPendingTasks(
+            stationId,
+            JSONObject().put("search", "PAGED-TASK-").put("limit", 2).put("offset", 2)
+        )
 
         assertEquals(2, firstPage.length())
         assertEquals(1, secondPage.length())
@@ -147,5 +171,22 @@ class PendingTasksSQLiteRobolectricTest {
         val secondIds = (0 until secondPage.length()).map { secondPage.getJSONObject(it).getLong("id") }.toSet()
         assertTrue(firstIds.intersect(secondIds).isEmpty())
         assertEquals(ids.toSet(), firstIds + secondIds)
+    }
+
+    @Test
+    fun taskMutationsRejectInvalidStationScopeAndDoNotChangePersistedRows() {
+        val id = addTask("مهمة عزل المحطة", reference = "STATION-ISOLATION")
+        assertEquals(0, helper.updateTask(id, JSONObject().put("notes", "تغيير غير مسموح"), 2))
+        assertEquals(0, helper.archiveTask(id, 2))
+        assertEquals(0, helper.restoreTask(id, 2))
+        assertEquals(0, helper.resolveTask(id, 2))
+        assertEquals(0, helper.deleteTask(id, 2))
+
+        val row = rowById(query("STATION-ISOLATION"), id)
+        assertNotNull(row)
+        assertEquals("بيانات اختبار SQLite", row!!.getString("notes"))
+        assertEquals(0, row.getInt("is_archived"))
+        assertEquals(0, row.getInt("is_resolved"))
+        assertEquals(0, row.getInt("is_deleted"))
     }
 }
