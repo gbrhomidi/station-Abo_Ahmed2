@@ -18557,10 +18557,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try { taskQuery(params, stationId) } finally { dbLock.unlock() }
     }
 
-        dbLock.lock()
-        return try { taskQuery(params) } finally { dbLock.unlock() }
-    }
-
     fun addTask(data: JSONObject, stationId: Int, actorId: Long = 0L): Long {
         require(stationId > 0) { "معرف المحطة غير صالح لإضافة المهمة" }
         val taskType = data.optString("task_type", data.optString("type")).trim()
