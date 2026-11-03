@@ -13240,44 +13240,71 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun generatePaymentReport(jsonData: String = "{}") = operationalReport("finance", "payments", jsonData)
 
-        private fun enqueueFinanceSms(db: DatabaseHelper, partyId: Long, message: String, reference: String) {
-            try {
-                val party = db.getPartyById(partyId) ?: return
-                val contacts = db.getPartyContacts(partyId)
-                var phone: String? = null
-                for (i in 0 until contacts.length()) {
-                    val c = contacts.optJSONObject(i) ?: continue
-                    if (c.optInt("is_primary", 0) == 1 && !c.optString("phone").isNullOrBlank()) {
-                        phone = c.optString("phone")
-                        break
-                    }
-                }
-                if (phone.isNullOrBlank()) {
-                    for (i in 0 until contacts.length()) {
-                        val c = contacts.optJSONObject(i) ?: continue
-                        if (!c.optString("phone").isNullOrBlank()) { phone = c.optString("phone"); break }
-                    }
-                }
-                if (phone.isNullOrBlank()) return
-                val act = getActivity() as? MainActivity ?: return
-                val dedupe = "fin-$reference"
-                kotlinx.coroutines.GlobalScope.launch {
-                    SmsReplyManager(act, db).sendReplyOnce(
-                        phone = phone ?: return@launch,
-                        message = message,
-                        dedupeKey = dedupe
-                    )
-                }
-            } catch (e: Exception) {
-                DebugLogger.logException("FinanceSms", e)
+        private fun resolvePartySmsPhone(db: DatabaseHelper, partyId: Long): String? {
+            if (partyId <= 0L || db.getPartyById(partyId) == null) return null
+            val contacts = db.getPartyContacts(partyId)
+            var fallbackPhone: String? = null
+            for (i in 0 until contacts.length()) {
+                val contact = contacts.optJSONObject(i) ?: continue
+                val phone = contact.optString("phone").trim()
+                if (phone.isBlank()) continue
+                if (contact.optInt("is_primary", 0) == 1) return phone
+                if (fallbackPhone == null) fallbackPhone = phone
             }
+            return fallbackPhone
+        }
+
+        private fun <T> persistWithAtomicSms(
+            db: DatabaseHelper,
+            activity: MainActivity,
+            persist: () -> T,
+            notificationFactory: (T) -> SmsOutboxAtomicTransaction.NotificationDraft?
+        ): T {
+            val outcome = SmsOutboxAtomicTransaction.execute(
+                db = db,
+                context = activity.applicationContext,
+                persist = persist,
+                notificationFactory = notificationFactory
+            )
+            if (outcome.queuedMessageId != null) {
+                runCatching { SmsOutboxWorker.schedule(activity.applicationContext) }
+                    .onFailure { DebugLogger.logException("SMSOutboxSchedule", it) }
+            }
+            return outcome.value
         }
 
         @JavascriptInterface
         fun savePaymentRecord(jsonData: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val obj = JSONObject(jsonData); val id = db.addPayment(obj, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); val cid = obj.optLong("customer_party_id", 0L); if (cid > 0) enqueueFinanceSms(db, cid, "تم تسجيل سداد بمبلغ ${obj.optString("amount")} بتاريخ ${db.currentDateForBridge()}.", "pay-$id"); successResponse(id, "تم حفظ الدفعة بنجاح") }
-            catch (e: Exception) { DebugLogger.logException("Payment", e); errorResponse(e.message) }
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val customerPartyId = obj.optLong("customer_party_id", 0L)
+                val id = persistWithAtomicSms(
+                    db = db,
+                    activity = activity,
+                    persist = { db.addPayment(obj, stationId, activity.currentUserId) },
+                    notificationFactory = { savedId ->
+                        if (customerPartyId <= 0L) null
+                        else {
+                            resolvePartySmsPhone(db, customerPartyId)?.let { phone ->
+                                SmsOutboxAtomicTransaction.NotificationDraft(
+                                    recipient = phone,
+                                    body = "تم تسجيل سداد بمبلغ ${obj.optString("amount")} بتاريخ ${db.currentDateForBridge()}.",
+                                    dedupeKey = "fin-pay-$savedId",
+                                    eventId = "payment:$savedId",
+                                    businessEntityId = "payment:$savedId"
+                                )
+                            }
+                        }
+                    }
+                )
+                successResponse(id, "تم حفظ الدفعة بنجاح")
+            } catch (e: Exception) {
+                DebugLogger.logException("Payment", e)
+                errorResponse(e.message)
+            }
         }
         @JavascriptInterface
         fun updatePaymentRecord(id: Long, jsonData: String): String {
@@ -13311,8 +13338,35 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun saveReceiptRecord(jsonData: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val obj = JSONObject(jsonData); val id = db.addReceipt(obj, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); val cid = obj.optLong("customer_party_id", 0L); if (cid > 0) enqueueFinanceSms(db, cid, "تم تسجيل مقبوضات بمبلغ ${obj.optString("amount")} بتاريخ ${db.currentDateForBridge()}.", "rec-$id"); successResponse(id, "تم حفظ الإيصال بنجاح") }
-            catch (e: Exception) { DebugLogger.logException("Receipt", e); errorResponse(e.message) }
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val customerPartyId = obj.optLong("customer_party_id", 0L)
+                val id = persistWithAtomicSms(
+                    db = db,
+                    activity = activity,
+                    persist = { db.addReceipt(obj, stationId, activity.currentUserId) },
+                    notificationFactory = { savedId ->
+                        if (customerPartyId <= 0L) null
+                        else {
+                            resolvePartySmsPhone(db, customerPartyId)?.let { phone ->
+                                SmsOutboxAtomicTransaction.NotificationDraft(
+                                    recipient = phone,
+                                    body = "تم تسجيل مقبوضات بمبلغ ${obj.optString("amount")} بتاريخ ${db.currentDateForBridge()}.",
+                                    dedupeKey = "fin-rec-$savedId",
+                                    eventId = "receipt:$savedId",
+                                    businessEntityId = "receipt:$savedId"
+                                )
+                            }
+                        }
+                    }
+                )
+                successResponse(id, "تم حفظ الإيصال بنجاح")
+            } catch (e: Exception) {
+                DebugLogger.logException("Receipt", e)
+                errorResponse(e.message)
+            }
         }
         @JavascriptInterface
         fun updateReceiptRecord(id: Long, jsonData: String): String {
@@ -14370,16 +14424,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
 
-    private fun enqueueEmployeeSms(db: DatabaseHelper, employeeId: Long, stationId: Int, message: String, reference: String) {
-            try {
-                val employee = db.getEmployeeById(employeeId, stationId) ?: return
-                val phone = employee.optString("phone").trim().ifBlank { employee.optString("phone2").trim() }
-                if (phone.isBlank()) return
-                GlobalScope.launch {
-                    SmsReplyManager(this@MainActivity, db).sendReplyOnce(phone = phone, message = message, dedupeKey = "hr-$reference")
-                }
-            } catch (e: Exception) { DebugLogger.logException("EmployeeSms", e) }
-        }
 
         @JavascriptInterface
         fun addEmployeePayment(jsonData: String): String {
@@ -14389,10 +14433,41 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val payload = JSONObject(jsonData)
                 val employeeId = payload.optLong("employee_id", 0L)
-                val saved = db.addEmployeePaymentTyped(payload, stationId, activity.currentUserId)
-                if (employeeId > 0L) enqueueEmployeeSms(db, employeeId, stationId, "تم تسجيل دفعة بمبلغ ${payload.optString("amount")} بتاريخ ${db.currentDateForBridge()}.", "payment-$saved")
+                val saved = persistWithAtomicSms(
+                    db = db,
+                    activity = activity,
+                    persist = { db.addEmployeePaymentTyped(payload, stationId, activity.currentUserId) },
+                    notificationFactory = { savedId ->
+                        if (employeeId <= 0L) null
+                        else {
+                            val phone = try {
+                                val employee = db.getEmployeeById(employeeId, stationId)
+                                employee?.let {
+                                    it.optString("phone").trim()
+                                        .ifBlank { it.optString("phone2").trim() }
+                                        .takeIf { value -> value.isNotBlank() }
+                                }
+                            } catch (exception: Exception) {
+                                DebugLogger.logException("EmployeeSmsContact", exception)
+                                null
+                            }
+                            phone?.let {
+                                SmsOutboxAtomicTransaction.NotificationDraft(
+                                    recipient = it,
+                                    body = "تم تسجيل دفعة بمبلغ ${payload.optString("amount")} بتاريخ ${db.currentDateForBridge()}.",
+                                    dedupeKey = "hr-payment-$savedId",
+                                    eventId = "employee-payment:$savedId",
+                                    businessEntityId = "employee-payment:$savedId"
+                                )
+                            }
+                        }
+                    }
+                )
                 successResponse(saved, "تم تسجيل دفعة الموظف")
-            } catch (e: Exception) { DebugLogger.logException("EmployeePayment", e); errorResponse(e.message) }
+            } catch (e: Exception) {
+                DebugLogger.logException("EmployeePayment", e)
+                errorResponse(e.message)
+            }
         }
         @JavascriptInterface
         fun getEmployeeRecords(jsonData: String = "{}") = operationalList("hr", "employees", jsonData)
