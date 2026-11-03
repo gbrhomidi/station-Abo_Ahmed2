@@ -61,6 +61,7 @@ class PendingTasksWorkspaceRobolectricTest {
         val userOne = insertUser(1, "task-workspace-user-one")
         val shiftOne = insertShift(1, "TASK-WORKSPACE-SHIFT-ONE")
         val creditSaleOne = insertCreditSale(1, shiftOne, userOne, "TASK-WORKSPACE-SALE-ONE")
+        val expenseOne = insertOutstandingExpense(1, "TASK-WORKSPACE-EXPENSE-ONE")
         val warehouseOne = insertWarehouse(1, "TASK-WORKSPACE-WH-ONE")
         val lowStockProductOne = insertLowStockProduct(1, warehouseOne, "TASK-WORKSPACE-PRODUCT-ONE")
 
@@ -78,6 +79,12 @@ class PendingTasksWorkspaceRobolectricTest {
         assertEquals(0, credit.getInt("can_edit"))
         assertTrue(credit.getLong("id") < 0L)
 
+        val expense = rowBySource(stationOneRows, "expense", expenseOne)
+        assertEquals("معاملة مالية مستحقة", expense.getString("task_type"))
+        assertEquals("متأخرة", expense.getString("status"))
+        assertEquals(40.0, expense.getDouble("amount"), 0.001)
+        assertEquals(0, expense.getInt("can_edit"))
+
         val stock = rowBySource(stationOneRows, "low_stock", lowStockProductOne)
         assertEquals("منتج منخفض المخزون", stock.getString("task_type"))
         assertEquals("قيد التنفيذ", stock.getString("status"))
@@ -88,10 +95,19 @@ class PendingTasksWorkspaceRobolectricTest {
         val stationTwoRows = helper.getPendingTasks(2)
         assertFalse(containsId(stationTwoRows, manualStationOne))
         assertFalse(containsSource(stationTwoRows, "credit_sale", creditSaleOne))
+        assertFalse(containsSource(stationTwoRows, "expense", expenseOne))
         assertFalse(containsSource(stationTwoRows, "low_stock", lowStockProductOne))
         assertTrue(containsId(stationTwoRows, manualStationTwo))
 
         // Reading the task workspace must never settle, edit, or otherwise mutate source accounting rows.
+        helper.writableDatabase.rawQuery(
+            "SELECT paid_amount, payment_status FROM expenses WHERE id = ?",
+            arrayOf(expenseOne.toString())
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(10.0, cursor.getDouble(0), 0.001)
+            assertEquals("approved", cursor.getString(1))
+        }
         helper.writableDatabase.rawQuery(
             "SELECT remaining_amount, payment_status FROM sales_transactions WHERE id = ?",
             arrayOf(creditSaleOne.toString())
@@ -149,6 +165,16 @@ class PendingTasksWorkspaceRobolectricTest {
         }
         assertTrue(indexNames.contains("idx_tasks_station_pending"))
         assertTrue(indexNames.contains("idx_tasks_station_status_priority"))
+
+        val sourceIndexes = mutableSetOf<String>()
+        listOf("sales_transactions", "expenses", "products").forEach { table ->
+            database.rawQuery("PRAGMA index_list($table)", null).use { cursor ->
+                while (cursor.moveToNext()) sourceIndexes += cursor.getString(cursor.getColumnIndexOrThrow("name"))
+            }
+        }
+        assertTrue(sourceIndexes.contains("idx_expenses_tasks_station_open_due"))
+        assertTrue(sourceIndexes.contains("idx_sales_tasks_station_open_due"))
+        assertTrue(sourceIndexes.contains("idx_products_tasks_station_active"))
 
         repeat(3) { index ->
             helper.addTask(
@@ -219,6 +245,42 @@ class PendingTasksWorkspaceRobolectricTest {
                 put("is_credit", 1)
                 put("due_date", "2020-01-01")
                 put("status", "completed")
+                put("is_deleted", 0)
+            }
+        )
+    }
+
+    private fun insertOutstandingExpense(stationId: Long, suffix: String): Long {
+        val categoryId = helper.writableDatabase.insertOrThrow(
+            "expense_categories",
+            null,
+            ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("category_code", suffix)
+                put("category_name", suffix)
+                put("category_name_ar", suffix)
+                put("is_active", 1)
+                put("is_deleted", 0)
+            }
+        )
+        return helper.writableDatabase.insertOrThrow(
+            "expenses",
+            null,
+            ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("expense_code", suffix)
+                put("expense_category_id", categoryId)
+                put("station_id", stationId)
+                put("payee_name", "مورد الاختبار")
+                put("payee_name_ar", "مورد الاختبار")
+                put("amount", 50.0)
+                put("total_amount", 50.0)
+                put("paid_amount", 10.0)
+                put("description", "مصروف مستحق للاختبار")
+                put("description_ar", "مصروف مستحق للاختبار")
+                put("next_due_date", "2020-01-01")
+                put("status", "approved")
+                put("payment_status", "approved")
                 put("is_deleted", 0)
             }
         )
