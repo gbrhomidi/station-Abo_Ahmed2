@@ -1112,7 +1112,10 @@ class LatestFuelSaleForCustomerRobolectricTest {
         putExisting("deliveries", values, "cash_customer_name", cashCustomerName)
         putExisting("deliveries", values, "is_deleted", 0)
         putExisting("deliveries", values, "deleted_at", null)
-        completeRequiredColumns("deliveries", values, customerId, stationId, parentSaleId)
+        // Match the established SQLite fixture pattern used by saved-location tests:
+        // the invoice and party foreign keys are real, optional delivery metadata
+        // remains at its schema default rather than inventing unrelated FK values.
+        putExisting("deliveries", values, "station_id", stationId)
         return db.insertOrThrow("deliveries", null, values)
     }
 
