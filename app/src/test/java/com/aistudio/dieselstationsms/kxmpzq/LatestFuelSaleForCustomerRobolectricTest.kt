@@ -149,23 +149,14 @@ class LatestFuelSaleForCustomerRobolectricTest {
 
         val deliveryLocation = "موقع التوصيل التاريخي المرتبط بالفاتورة"
         val cashName = "اسم العميل النقدي التاريخي"
-        val deliveryId = helper.addDelivery(
-            JSONObject().apply {
-                put("sale_id", parentSaleId)
-                put("party_id", customer)
-                put("delivery_date", "2026-10-30 10:00:00")
-                put("status", "pending")
-                put("location", deliveryLocation)
-                put("delivery_service_fee", 0.0)
-            },
-            stationId,
-            userId
-        )
-        db.update(
-            "deliveries",
-            ContentValues().apply { put("cash_customer_name", cashName) },
-            "id=? AND station_id=?",
-            arrayOf(deliveryId.toString(), stationId.toString())
+        // Seed a historical SQLite row directly. DatabaseHelper.addDelivery is a
+        // current business operation and intentionally rejects changing historical
+        // fee values before delivery completion; that guard is not under test here.
+        val deliveryId = insertLegacyDeliveryRow(
+            parentSaleId = parentSaleId,
+            customerId = customer,
+            location = deliveryLocation,
+            cashCustomerName = cashName
         )
 
 
@@ -269,17 +260,10 @@ class LatestFuelSaleForCustomerRobolectricTest {
             "id=? AND station_id=?",
             arrayOf(parentSaleId.toString(), stationId.toString())
         )
-        val deliveryId = helper.addDelivery(
-            JSONObject().apply {
-                put("sale_id", parentSaleId)
-                put("party_id", customer)
-                put("delivery_date", "2026-10-30 11:00:00")
-                put("status", "pending")
-                put("location", "موقع توصيل معفى")
-                put("delivery_service_fee", 0.0)
-            },
-            stationId,
-            userId
+        val deliveryId = insertLegacyDeliveryRow(
+            parentSaleId = parentSaleId,
+            customerId = customer,
+            location = "موقع توصيل معفى"
         )
         db.insertOrThrow(
             "delivery_service_fee_ledger",
@@ -1106,6 +1090,30 @@ class LatestFuelSaleForCustomerRobolectricTest {
         } finally {
             db.setForeignKeyConstraintsEnabled(true)
         }
+    }
+
+
+    private fun insertLegacyDeliveryRow(
+        parentSaleId: Long,
+        customerId: Long,
+        location: String,
+        cashCustomerName: String = ""
+    ): Long {
+        val values = ContentValues()
+        putExisting("deliveries", values, "uuid", UUID.randomUUID().toString())
+        putExisting("deliveries", values, "sale_id", parentSaleId)
+        putExisting("deliveries", values, "party_id", customerId)
+        putExisting("deliveries", values, "delivery_date", "2026-10-30 10:30:00")
+        putExisting("deliveries", values, "status", "pending")
+        putExisting("deliveries", values, "location", location)
+        putExisting("deliveries", values, "delivery_location", "")
+        putExisting("deliveries", values, "delivery_service_fee", 0.0)
+        putExisting("deliveries", values, "delivery_fee_mode", DeliveryFeeAccounting.EXEMPT)
+        putExisting("deliveries", values, "cash_customer_name", cashCustomerName)
+        putExisting("deliveries", values, "is_deleted", 0)
+        putExisting("deliveries", values, "deleted_at", null)
+        completeRequiredColumns("deliveries", values, customerId, stationId, parentSaleId)
+        return db.insertOrThrow("deliveries", null, values)
     }
 
     private fun insertProductSale(
