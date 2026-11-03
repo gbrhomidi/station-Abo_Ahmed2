@@ -11,6 +11,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKeys
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.MainActivity
 import com.aistudio.dieselstationsms.kxmpzq.receiver.TaskNotificationReceiver
@@ -37,6 +39,8 @@ object TaskNotificationManager {
     const val CHANNEL_ID = "pending_tasks_alerts"
     private const val CHANNEL_NAME = "تنبيهات المهام المعلقة"
     private const val PREFS_NAME = "task_notification_state"
+    private const val AUTH_PREFS_NAME = "auth_prefs"
+    private const val AUTH_USER_ID_KEY = "user_id"
     private const val KEY_SCHEDULED_IDS = "scheduled_task_ids"
     private const val KEY_LAST_ALERT_PREFIX = "last_alert_day_"
     private const val REMINDER_HOUR = 9
@@ -88,8 +92,12 @@ object TaskNotificationManager {
             android.util.Log.e("TaskNotifications", "Database initialization failed", it)
             return
         }
+        val stationId = currentAuthenticatedStationId(appContext, database) ?: run {
+            android.util.Log.i("TaskNotifications", "Skipping task notification sync because no authenticated station is available")
+            return
+        }
         val rows = runCatching {
-            database.getPendingTasks(JSONObject().apply {
+            database.getPendingTasks(stationId, JSONObject().apply {
                 put("include_archived", false)
                 put("include_resolved", false)
                 put("limit", 5000)
@@ -116,6 +124,34 @@ object TaskNotificationManager {
         preferences.edit().putStringSet(KEY_SCHEDULED_IDS, currentIds).apply()
     }
 
+    /**
+     * Resolve the signed-in user's station from the same encrypted preferences
+     * used by MainActivity. A missing/invalid identity fails closed: background
+     * receivers never scan tasks belonging to every station on the device.
+     */
+    private fun currentAuthenticatedStationId(
+        context: Context,
+        database: DatabaseHelper
+    ): Int? {
+        return runCatching {
+            val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+            val authPreferences = EncryptedSharedPreferences.create(
+                AUTH_PREFS_NAME,
+                masterKeyAlias,
+                context.applicationContext,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+            val userId = authPreferences.getLong(AUTH_USER_ID_KEY, 0L)
+            if (userId <= 0L) return@runCatching null
+            val user = database.getUserById(userId) ?: return@runCatching null
+            if (!user.optString("status").equals("active", ignoreCase = true)) return@runCatching null
+            user.optInt("station_id", 0).takeIf { it > 0 }
+        }.onFailure {
+            android.util.Log.w("TaskNotifications", "Could not resolve the authenticated task station", it)
+        }.getOrNull()
+    }
+
     /** مزامنة مهمة واحدة بعد الإنشاء أو التعديل أو الحل أو الأرشفة. */
     fun synchronizeTask(context: Context, taskId: Long) {
         if (taskId <= 0L) return
@@ -132,8 +168,13 @@ object TaskNotificationManager {
             android.util.Log.e("TaskNotifications", "Database initialization failed", it)
             return
         }
+        val stationId = currentAuthenticatedStationId(appContext, database) ?: run {
+            cancelTaskNotification(appContext, taskId)
+            android.util.Log.i("TaskNotifications", "Skipping task notification because no authenticated station is available")
+            return
+        }
         val rows = runCatching {
-            database.getPendingTasks(JSONObject().apply {
+            database.getPendingTasks(stationId, JSONObject().apply {
                 put("include_archived", false)
                 put("include_resolved", false)
                 put("limit", 5000)
