@@ -119,13 +119,7 @@ class SmsOutboxSqliteIntegrationTest {
         val result = SmsOutboxAtomicTransaction.execute(
             db = database,
             context = context,
-            persist = {
-                database.writableDatabase.insertOrThrow(
-                    "test_financial_sms_records",
-                    null,
-                    ContentValues().apply { put("amount", 100.0) }
-                )
-            },
+            persist = { insertFinancialRecordInsideNestedTransaction(100.0) },
             notificationFactory = { recordId ->
                 SmsOutboxAtomicTransaction.NotificationDraft(
                     recipient = "967771234567",
@@ -166,13 +160,7 @@ class SmsOutboxSqliteIntegrationTest {
             SmsOutboxAtomicTransaction.execute(
                 db = database,
                 context = context,
-                persist = {
-                    database.writableDatabase.insertOrThrow(
-                        "test_financial_sms_records",
-                        null,
-                        ContentValues().apply { put("amount", 250.0) }
-                    )
-                },
+                persist = { insertFinancialRecordInsideNestedTransaction(250.0) },
                 notificationFactory = { recordId ->
                     SmsOutboxAtomicTransaction.NotificationDraft(
                         recipient = "967771234567",
@@ -219,6 +207,23 @@ class SmsOutboxSqliteIntegrationTest {
         assertEquals("QUEUED", outboxStatusFor(queued.messageId))
         assertEquals(0, outboundReservationCount("recovery-orphan"))
         assertEquals("reserved", outboundStatus("recovery-fresh"))
+    }
+
+    /** Mirrors the nested transaction used by DatabaseHelper financial persistence methods. */
+    private fun insertFinancialRecordInsideNestedTransaction(amount: Double): Long {
+        val databaseHandle = database.writableDatabase
+        databaseHandle.beginTransaction()
+        try {
+            val id = databaseHandle.insertOrThrow(
+                "test_financial_sms_records",
+                null,
+                ContentValues().apply { put("amount", amount) }
+            )
+            databaseHandle.setTransactionSuccessful()
+            return id
+        } finally {
+            databaseHandle.endTransaction()
+        }
     }
 
     private fun insertOutboundReservation(key: String, reservedAt: Long) {
