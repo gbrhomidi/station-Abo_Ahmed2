@@ -2466,6 +2466,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_station_pending ON tasks(station_id, is_deleted, is_archived, is_resolved, task_date DESC, id DESC)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_station_status_priority ON tasks(station_id, status, priority, is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_station_reference ON tasks(station_id, reference)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_tasks_station_open_due ON sales_transactions(station_id, status, payment_status, is_deleted, due_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_expenses_tasks_station_open_due ON expenses(station_id, status, payment_status, is_deleted, next_due_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_tasks_station_active ON products(station_id, is_deleted, status, minimum_stock)")
         ensureTaskPermissions(db)
     }
 
@@ -18465,6 +18468,38 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 UNION ALL
 
                 SELECT
+                    CAST(-(3000000000000 + e.id) AS INTEGER) AS id,
+                    ('expense-task-' || e.id) AS uuid,
+                    'معاملة مالية مستحقة' AS task_type,
+                    'معاملة مالية مستحقة' AS type,
+                    COALESCE(NULLIF(e.invoice_number, ''), e.expense_code, CAST(e.id AS TEXT)) AS reference,
+                    COALESCE(NULLIF(e.next_due_date, ''), date(e.created_at)) AS task_date,
+                    COALESCE(NULLIF(e.next_due_date, ''), date(e.created_at)) AS date,
+                    MAX(COALESCE(e.total_amount, 0) - COALESCE(e.paid_amount, 0), 0) AS amount,
+                    CASE
+                        WHEN date(COALESCE(NULLIF(e.next_due_date, ''), e.created_at)) < date('now', 'localtime') THEN 'عالية'
+                        ELSE 'متوسطة'
+                    END AS priority,
+                    CASE
+                        WHEN date(COALESCE(NULLIF(e.next_due_date, ''), e.created_at)) < date('now', 'localtime') THEN 'متأخرة'
+                        ELSE 'غير مدفوعة'
+                    END AS status,
+                    TRIM(COALESCE(e.description_ar, e.description, ''))
+                        || ' — المستفيد: ' || TRIM(COALESCE(e.payee_name_ar, e.payee_name, '')) AS notes,
+                    0 AS is_resolved, 0 AS is_archived, 0 AS is_deleted, NULL AS extra,
+                    NULL AS resolved_at, NULL AS archived_at, e.created_by AS created_by, e.updated_by AS updated_by,
+                    e.created_at AS created_at, e.updated_at AS updated_at,
+                    'expense' AS source_kind, e.id AS source_id, ('E-' || e.id) AS display_id, 0 AS can_edit
+                FROM expenses e
+                WHERE e.station_id = ?
+                  AND e.is_deleted = 0
+                  AND e.status IN ('pending', 'approved')
+                  AND e.payment_status IN ('pending', 'approved')
+                  AND COALESCE(e.total_amount, 0) > COALESCE(e.paid_amount, 0)
+
+                UNION ALL
+
+                SELECT
                     CAST(-(2000000000000 + p.id) AS INTEGER) AS id,
                     ('stock-task-' || p.id) AS uuid,
                     'منتج منخفض المخزون' AS task_type,
@@ -18502,6 +18537,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             LIMIT ? OFFSET ?
         """.trimIndent()
         val queryArgs = mutableListOf<String>().apply {
+            add(stationId.toString())
             add(stationId.toString())
             add(stationId.toString())
             add(stationId.toString())
