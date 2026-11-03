@@ -294,7 +294,7 @@ object DeliveryFeeAccounting {
         if (salePredicates.isEmpty()) return null
         val active = if ("status" in ledgerColumns) " AND LOWER(COALESCE(status,'')) NOT IN ('reversed','cancelled','void')" else ""
         val order = if ("id" in ledgerColumns) "id DESC" else "rowid DESC"
-        val sql = "SELECT * FROM delivery_service_fee_ledger WHERE station_id=? AND amount>0 AND (" +
+        val sql = "SELECT * FROM delivery_service_fee_ledger WHERE station_id=? AND (" +
             salePredicates.joinToString(" OR ") + ")" + active + " ORDER BY " + order + " LIMIT 1"
         return db.rawQuery(sql, arguments.toTypedArray()).use { cursor ->
             if (cursor.moveToFirst()) cursorObject(cursor) else null
@@ -316,20 +316,33 @@ object DeliveryFeeAccounting {
         val deliveries = readLinkedDeliveries(db, parentSaleId, stationId, parent != null)
         val ledger = readDeliveryFeeLedger(db, fuelSaleId, parentSaleId, stationId)
 
-        val feeKeys = listOf("delivery_service_fee", "service_fee", "delivery_fee_amount")
-        val fee = firstPositive(fuelSale, feeKeys)
-            ?: firstPositive(parent, feeKeys)
-            ?: firstPositive(ledger, listOf("amount"))
-            ?: deliveries.firstNotNullOfOrNull { firstPositive(it, feeKeys) }
+        val fee = firstPositive(fuelSale, listOf("delivery_service_fee"))
+            ?: firstPositive(parent, listOf("delivery_service_fee"))
+            ?: ledger?.let { it.optDouble("amount", 0.0).takeIf { value -> value.isFinite() && value >= 0.0 } }
+            ?: if (deliveries.isNotEmpty()) {
+                firstPositive(fuelSale, listOf("service_fee", "delivery_fee_amount"))
+                    ?: firstPositive(parent, listOf("service_fee", "delivery_fee_amount"))
+                    ?: deliveries.firstNotNullOfOrNull {
+                        firstPositive(it, listOf("delivery_service_fee", "service_fee", "delivery_fee_amount"))
+                    }
+            } else {
+                null
+            }
             ?: 0.0
 
-        val modeKeys = listOf("delivery_fee_mode", "fee_mode", "delivery_fee_calculation")
-        val modeRows = listOfNotNull(fuelSale, parent, ledger) + deliveries
-        val mode = modeRows
-            .firstNotNullOfOrNull { row ->
-                firstNonExemptMode(row, modeKeys + if (row === ledger) listOf("mode") else emptyList())
-            }
-            ?: EXEMPT
+        val childMode = firstNonExemptMode(fuelSale, listOf("delivery_fee_mode"))
+        val parentMode = firstNonExemptMode(parent, listOf("delivery_fee_mode"))
+        val ledgerMode = ledger?.let { firstNonBlank(it, listOf("mode"))?.let(::normalizeMode) }
+        val legacyMode = if (ledger == null && deliveries.isNotEmpty()) {
+            firstNonExemptMode(fuelSale, listOf("fee_mode", "delivery_fee_calculation"))
+                ?: firstNonExemptMode(parent, listOf("fee_mode", "delivery_fee_calculation"))
+                ?: deliveries.firstNotNullOfOrNull {
+                    firstNonExemptMode(it, listOf("fee_mode", "delivery_fee_calculation"))
+                }
+        } else {
+            null
+        }
+        val mode = childMode ?: parentMode ?: ledgerMode ?: legacyMode ?: EXEMPT
 
         val locationKeys = listOf("delivery_location", "location", "delivery_address")
         val location = firstNonBlank(fuelSale, locationKeys)
@@ -463,26 +476,36 @@ object DeliveryFeeAccounting {
                             ?.let { deliveryValues.put("cash_customer_name", it) }
                     }
 
-                    val ledgerOwnsDelivery = db.rawQuery(
-                        "SELECT 1 FROM delivery_service_fee_ledger WHERE station_id=? AND delivery_id=? AND amount>0 LIMIT 1",
+                    val deliveryLedger = db.rawQuery(
+                        "SELECT amount,mode FROM delivery_service_fee_ledger WHERE station_id=? AND delivery_id=? ORDER BY id DESC LIMIT 1",
                         arrayOf(stationId.toString(), deliveryId.toString())
-                    ).use { it.moveToFirst() }
+                    ).use { cursor ->
+                        if (cursor.moveToFirst()) JSONObject().apply {
+                            put("amount", cursor.getDouble(0))
+                            put("mode", cursor.getString(1).orEmpty())
+                        } else null
+                    }
                     if ("delivery_service_fee" in deliveryColumns &&
                         delivery.optDouble("delivery_service_fee", 0.0) <= 0.0
                     ) {
-                        val ownLegacyFee = firstPositive(delivery, listOf("service_fee", "delivery_fee_amount"))
-                        val resolvedFee = ownLegacyFee
-                            ?: context.serviceFee.takeIf { linkedDeliveries.size == 1 || ledgerOwnsDelivery }
+                        val ledgerFee = firstPositive(deliveryLedger, listOf("amount"))
+                        val ownLegacyFee = if (deliveryLedger == null) {
+                            firstPositive(delivery, listOf("service_fee", "delivery_fee_amount"))
+                        } else null
+                        val resolvedFee = ledgerFee ?: ownLegacyFee
+                            ?: context.serviceFee.takeIf { deliveryLedger == null && linkedDeliveries.size == 1 }
                         resolvedFee?.let { deliveryValues.put("delivery_service_fee", it) }
                     }
                     if ("delivery_fee_mode" in deliveryColumns &&
                         normalizeMode(delivery.optString("delivery_fee_mode", EXEMPT)) == EXEMPT
                     ) {
-                        val ownLegacyMode = firstNonBlank(delivery, listOf("fee_mode", "delivery_fee_calculation"))
-                            ?.takeIf { normalizeMode(it) != EXEMPT }
-                        val resolvedMode = ownLegacyMode
+                        val ledgerModeValue = deliveryLedger?.let { firstNonBlank(it, listOf("mode")) }
+                        val ownLegacyMode = if (deliveryLedger == null) {
+                            firstNonExemptMode(delivery, listOf("fee_mode", "delivery_fee_calculation"))
+                        } else null
+                        val resolvedMode = ledgerModeValue ?: ownLegacyMode
                             ?: context.feeMode.takeIf {
-                                context.serviceFee > 0.0 && (linkedDeliveries.size == 1 || ledgerOwnsDelivery)
+                                deliveryLedger == null && context.serviceFee > 0.0 && linkedDeliveries.size == 1
                             }
                         resolvedMode?.let { deliveryValues.put("delivery_fee_mode", it) }
                     }
