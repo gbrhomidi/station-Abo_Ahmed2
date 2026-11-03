@@ -161,6 +161,26 @@ class PendingTasksWorkspaceRobolectricTest {
             assertTrue(helper.hasPermission(userId, "tasks.update"))
             assertTrue(helper.hasPermission(userId, "tasks.delete"))
         }
+
+        listOf(1L, 2L).forEach { roleId ->
+            listOf("read", "create", "update", "delete").forEach { action ->
+                val permissionCode = "tasks.$action"
+                val count = helper.writableDatabase.rawQuery(
+                    """
+                    SELECT COUNT(*)
+                    FROM role_permissions rp
+                    INNER JOIN permissions p ON p.id = rp.permission_id
+                    WHERE rp.role_id = ? AND p.permission_code = ?
+                      AND rp.station_id IS NULL AND rp.is_deleted = 0
+                    """.trimIndent(),
+                    arrayOf(roleId.toString(), permissionCode)
+                ).use { cursor ->
+                    require(cursor.moveToFirst())
+                    cursor.getInt(0)
+                }
+                assertEquals("Duplicate or missing $permissionCode grant for role $roleId", 1, count)
+            }
+        }
     }
 
     @Test
