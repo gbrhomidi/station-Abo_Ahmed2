@@ -323,21 +323,17 @@ object DeliveryFeeAccounting {
         val fee = firstPositive(fuelSale, listOf("delivery_service_fee"))
             ?: firstPositive(parent, listOf("delivery_service_fee"))
             ?: ledger?.let { it.optDouble("amount", 0.0).takeIf { value -> value.isFinite() && value >= 0.0 } }
-            ?: if (deliveries.isNotEmpty()) {
-                firstPositive(fuelSale, listOf("service_fee", "delivery_fee_amount"))
-                    ?: firstPositive(parent, listOf("service_fee", "delivery_fee_amount"))
-                    ?: deliveries.firstNotNullOfOrNull {
-                        firstPositive(it, listOf("delivery_service_fee", "service_fee", "delivery_fee_amount"))
-                    }
-            } else {
-                null
+            ?: firstPositive(fuelSale, listOf("service_fee", "delivery_fee_amount"))
+            ?: firstPositive(parent, listOf("service_fee", "delivery_fee_amount"))
+            ?: deliveries.firstNotNullOfOrNull {
+                firstPositive(it, listOf("delivery_service_fee", "service_fee", "delivery_fee_amount"))
             }
             ?: 0.0
 
         val childMode = firstNonExemptMode(fuelSale, listOf("delivery_fee_mode"))
         val parentMode = firstNonExemptMode(parent, listOf("delivery_fee_mode"))
         val ledgerMode = ledger?.let { firstNonBlank(it, listOf("mode"))?.let(::normalizeMode) }
-        val legacyMode = if (ledger == null && deliveries.isNotEmpty()) {
+        val legacyMode = if (ledger == null) {
             firstNonExemptMode(fuelSale, listOf("fee_mode", "delivery_fee_calculation"))
                 ?: firstNonExemptMode(parent, listOf("fee_mode", "delivery_fee_calculation"))
                 ?: deliveries.firstNotNullOfOrNull {

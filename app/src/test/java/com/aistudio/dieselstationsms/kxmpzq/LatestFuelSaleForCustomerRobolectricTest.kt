@@ -132,9 +132,12 @@ class LatestFuelSaleForCustomerRobolectricTest {
         )
 
         val legacyFee = 425.75
+        assertTrue(
+            "The historical sales_transactions.service_fee source must exist in this migration fixture",
+            "service_fee" in tableColumns("sales_transactions")
+        )
         val legacyParentFee = ContentValues().apply {
-            putExisting("sales_transactions", this, "service_fee", legacyFee)
-            if (size() == 0) put("delivery_service_fee", legacyFee)
+            put("service_fee", legacyFee)
             put("delivery_fee_mode", DeliveryFeeAccounting.DRIVER)
         }
         db.update(
@@ -256,11 +259,13 @@ class LatestFuelSaleForCustomerRobolectricTest {
             "SELECT sale_id FROM fuel_sales WHERE id=? AND station_id=?",
             arrayOf(fuelSaleId.toString(), stationId.toString())
         )
+        assertTrue(
+            "The legacy sales_transactions.service_fee column is required for this regression",
+            "service_fee" in tableColumns("sales_transactions")
+        )
         db.update(
             "sales_transactions",
-            ContentValues().apply {
-                putExisting("sales_transactions", this, "service_fee", 700.0)
-            },
+            ContentValues().apply { put("service_fee", 700.0) },
             "id=? AND station_id=?",
             arrayOf(parentSaleId.toString(), stationId.toString())
         )
@@ -1321,6 +1326,9 @@ class LatestFuelSaleForCustomerRobolectricTest {
 
     private fun scalarLong(sql: String, args: Array<String> = emptyArray()): Long =
         db.rawQuery(sql, args).use { cursor -> check(cursor.moveToFirst()) { "Expected a row for: $sql" }; cursor.getLong(0) }
+
+    private fun scalarDouble(sql: String, args: Array<String> = emptyArray()): Double =
+        db.rawQuery(sql, args).use { cursor -> check(cursor.moveToFirst()) { "Expected a row for: $sql" }; cursor.getDouble(0) }
 
     private fun optionalScalarLong(sql: String, args: Array<String> = emptyArray()): Long =
         db.rawQuery(sql, args).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
