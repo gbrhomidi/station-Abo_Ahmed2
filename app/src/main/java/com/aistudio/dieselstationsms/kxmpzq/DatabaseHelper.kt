@@ -2017,9 +2017,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (permissionId > 0L) {
                 adminRoleIds.forEach { roleId ->
                     val values = ContentValues().apply {
-                        put("uuid", "RP-${permissionCode.uppercase().replace('.', '-')}-ROLE-${roleId}-V52")
-                        put("role_id", roleId)
-                        put("permission_id", permissionId)
                         put("can_create", if (permissionCode.endsWith(".create")) 1 else 0)
                         put("can_read", if (permissionCode.endsWith(".read")) 1 else 0)
                         put("can_update", if (permissionCode.endsWith(".update")) 1 else 0)
@@ -2027,9 +2024,37 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("can_export", 1)
                         put("can_print", 0)
                         put("can_approve", 0)
-                        put("created_by", 1L)
+                        put("is_deleted", 0)
+                        put("updated_at", getCurrentDateTime())
                     }
-                    db.insertWithOnConflict("role_permissions", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+                    val existingGrantId = db.rawQuery(
+                        """
+                        SELECT id FROM role_permissions
+                        WHERE role_id = ? AND permission_id = ?
+                          AND station_id IS NULL AND is_deleted = 0
+                        ORDER BY id LIMIT 1
+                        """.trimIndent(),
+                        arrayOf(roleId.toString(), permissionId.toString())
+                    ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+
+                    if (existingGrantId > 0L) {
+                        db.update(
+                            "role_permissions",
+                            values,
+                            "id = ?",
+                            arrayOf(existingGrantId.toString())
+                        )
+                    } else {
+                        values.put(
+                            "uuid",
+                            "RP-${permissionCode.uppercase().replace('.', '-')}-ROLE-${roleId}-V52"
+                        )
+                        values.put("role_id", roleId)
+                        values.put("permission_id", permissionId)
+                        values.putNull("station_id")
+                        values.put("created_by", 1L)
+                        db.insertOrThrow("role_permissions", null, values)
+                    }
                 }
             }
         }
