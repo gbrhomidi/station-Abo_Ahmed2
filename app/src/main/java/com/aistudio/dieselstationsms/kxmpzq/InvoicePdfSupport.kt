@@ -6,8 +6,48 @@ import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import java.io.File
 
+internal data class InvoicePdfPageSlice(
+    val sourceTop: Int,
+    val sourceBottom: Int,
+    val targetHeight: Int
+)
+
 /** Shared invoice filename and PDF acceptance rules. Every page is checked, not only page one. */
 internal object InvoicePdfSupport {
+    /**
+     * Split a full-height WebView capture into A4 source bands. The returned bands are
+     * contiguous and cover every source row exactly once, including the final partial page.
+     */
+    fun calculatePageSlices(
+        sourceWidth: Int,
+        sourceHeight: Int,
+        pageWidth: Int = 595,
+        pageHeight: Int = 842
+    ): List<InvoicePdfPageSlice> {
+        require(sourceWidth > 0 && sourceHeight > 0) { "Source bitmap dimensions must be positive" }
+        require(pageWidth > 0 && pageHeight > 0) { "PDF page dimensions must be positive" }
+
+        val sourcePageHeight = (
+            sourceWidth.toLong() * pageHeight.toLong() / pageWidth.toLong()
+        ).coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        val pageCount = (
+            sourceHeight.toLong() + sourcePageHeight.toLong() - 1L
+        ).div(sourcePageHeight.toLong()).toInt()
+
+        return List(pageCount) { pageIndex ->
+            val top = (pageIndex.toLong() * sourcePageHeight.toLong()).toInt()
+            val bottom = minOf(sourceHeight.toLong(), top.toLong() + sourcePageHeight.toLong()).toInt()
+            val targetHeight = (
+                (bottom - top).toLong() * pageWidth.toLong() / sourceWidth.toLong()
+            ).toInt().coerceIn(1, pageHeight)
+            InvoicePdfPageSlice(
+                sourceTop = top,
+                sourceBottom = bottom,
+                targetHeight = targetHeight
+            )
+        }
+    }
+
     fun sanitizeInvoiceFileName(invoiceNumber: String): String =
         invoiceNumber.trim()
             .map { ch -> if (ch.isLetterOrDigit() || ch == '_' || ch == '-') ch else '_' }

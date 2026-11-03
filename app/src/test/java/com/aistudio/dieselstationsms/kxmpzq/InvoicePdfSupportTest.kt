@@ -3,6 +3,7 @@ package com.aistudio.dieselstationsms.kxmpzq
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -28,6 +29,35 @@ class InvoicePdfSupportTest {
         } finally {
             malformed.delete()
         }
+    }
+
+    @Test fun longInvoicePaginationCoversEverySourceRowWithoutGapsOrOverlap() {
+        val slices = InvoicePdfSupport.calculatePageSlices(
+            sourceWidth = 794,
+            sourceHeight = 2500
+        )
+
+        assertEquals(3, slices.size)
+        assertEquals(0, slices.first().sourceTop)
+        assertEquals(2500, slices.last().sourceBottom)
+        slices.zipWithNext().forEach { (current, next) ->
+            assertEquals(current.sourceBottom, next.sourceTop)
+        }
+        assertTrue(slices.all { it.sourceTop < it.sourceBottom })
+        assertTrue(slices.all { it.targetHeight in 1..842 })
+        assertEquals(841, slices[0].targetHeight)
+        assertEquals(841, slices[1].targetHeight)
+        assertEquals(190, slices[2].targetHeight)
+    }
+
+    @Test fun paginationRejectsInvalidBitmapOrPageGeometry() {
+        var rejected = false
+        try {
+            InvoicePdfSupport.calculatePageSlices(0, 100)
+        } catch (_: IllegalArgumentException) {
+            rejected = true
+        }
+        assertTrue(rejected)
     }
 
     // PdfDocument/PdfRenderer require Android's native PDF implementation, which Robolectric's

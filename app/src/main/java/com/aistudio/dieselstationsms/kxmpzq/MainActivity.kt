@@ -2223,30 +2223,7 @@ class MainActivity : AppCompatActivity() {
 
                             setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
 
-                            settings.apply {
-                                javaScriptEnabled = true
-                                domStorageEnabled = true
-                                databaseEnabled = true
-                                setSupportZoom(true)
-                                builtInZoomControls = true
-                                displayZoomControls = false
-                                // يسمح بتشغيل تنبيه نجاح مسح POS بعد التقاط الكاميرا دون اشتراط لمسة جديدة.
-                                mediaPlaybackRequiresUserGesture = false
-                                allowFileAccess = true
-                                // واجهات التطبيق من android_asset فقط، ولا تحتاج قراءة content:// داخل WebView.
-                                allowContentAccess = false
-                                allowFileAccessFromFileURLs = false
-                                allowUniversalAccessFromFileURLs = false
-                                javaScriptCanOpenWindowsAutomatically = false
-                                mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                                safeBrowsingEnabled = true
-                                setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
-                                cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                                loadsImagesAutomatically = true
-                                setSupportMultipleWindows(false)
-                                userAgentString = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 " +
-                                        "(KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36"
-                            }
+                            StationWebViewConfiguration.configure(settings)
 
                             webViewClient = createWebViewClient()
                             webChromeClient = object : WebChromeClient() {
@@ -10827,21 +10804,21 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     try {
                         val pageWidth = 595
                         val pageHeight = 842
-                        val sourcePageHeight = ((bitmap.width.toDouble() * pageHeight) / pageWidth)
-                            .toInt().coerceAtLeast(1)
-                        val pageCount = ((bitmap.height + sourcePageHeight - 1) / sourcePageHeight)
-                            .coerceAtLeast(1)
+                        val pageSlices = InvoicePdfSupport.calculatePageSlices(
+                            sourceWidth = bitmap.width,
+                            sourceHeight = bitmap.height,
+                            pageWidth = pageWidth,
+                            pageHeight = pageHeight
+                        )
                         val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
-                        for (pageIndex in 0 until pageCount) {
-                            val top = pageIndex * sourcePageHeight
-                            val bottom = minOf(bitmap.height, top + sourcePageHeight)
+                        pageSlices.forEachIndexed { pageIndex, slice ->
                             val page = document.startPage(
                                 PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageIndex + 1).create()
                             )
-                            val source = android.graphics.Rect(0, top, bitmap.width, bottom)
-                            val targetHeight = ((bottom - top).toDouble() * pageWidth / bitmap.width)
-                                .toInt().coerceIn(1, pageHeight)
-                            val target = android.graphics.Rect(0, 0, pageWidth, targetHeight)
+                            val source = android.graphics.Rect(
+                                0, slice.sourceTop, bitmap.width, slice.sourceBottom
+                            )
+                            val target = android.graphics.Rect(0, 0, pageWidth, slice.targetHeight)
                             page.canvas.drawColor(android.graphics.Color.WHITE)
                             page.canvas.drawBitmap(bitmap, source, target, paint)
                             document.finishPage(page)
@@ -10942,6 +10919,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         var captureLooksValid = looksLikeInvoice(bitmap!!)
                         if (!captureLooksValid) {
                             canvas.drawColor(android.graphics.Color.WHITE)
+                            @Suppress("DEPRECATION")
                             val picture = view.capturePicture()
                             if (picture.width > 0 && picture.height > 0) {
                                 canvas.save()

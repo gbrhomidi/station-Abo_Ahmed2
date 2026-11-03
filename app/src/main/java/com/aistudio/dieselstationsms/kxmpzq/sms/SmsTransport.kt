@@ -12,6 +12,20 @@ fun interface SmsTransportSender {
     fun send(job: SmsOutboxRepository.OutboxMessage)
 }
 
+/**
+ * Resolve a requested SIM without silently downgrading an explicit subscription to the
+ * device default. A missing/invalid selection uses the default; a selected SIM is authoritative.
+ */
+internal fun <T> resolveSmsManagerRoute(
+    subscriptionId: Int?,
+    defaultManager: () -> T,
+    subscriptionManager: (Int) -> T
+): T = if (subscriptionId != null && subscriptionId >= 0) {
+    subscriptionManager(subscriptionId)
+} else {
+    defaultManager()
+}
+
 /** نقل SMS الحقيقي فقط؛ النتيجة النهائية تأتي من callback receiver. */
 class SmsTransport(private val context: Context) : SmsTransportSender {
     companion object {
@@ -23,29 +37,35 @@ class SmsTransport(private val context: Context) : SmsTransportSender {
 
         private const val FLAG_BASE = PendingIntent.FLAG_UPDATE_CURRENT
 
-        fun getSmsManager(context: Context, subscriptionId: Int?): SmsManager {
-            // A saved SIM subscription ID can become stale after SIM removal, eSIM changes,
-            // reboot, or a settings migration. Avoid routing through an inactive ID.
-            if (subscriptionId != null && subscriptionId >= 0 &&
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1
-            ) {
-                val isActive = runCatching {
-                    val manager = context.getSystemService(android.telephony.SubscriptionManager::class.java)
-                    manager?.activeSubscriptionInfoList?.any { it.subscriptionId == subscriptionId } == true
-                }.getOrDefault(false)
-                if (isActive) {
-                    return SmsManager.getSmsManagerForSubscriptionId(subscriptionId)
+        fun getSmsManager(context: Context, subscriptionId: Int?): SmsManager =
+            resolveSmsManagerRoute(
+                subscriptionId = subscriptionId,
+                defaultManager = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        context.getSystemService(SmsManager::class.java)
+                            ?: throw IllegalStateException("خدمة إرسال SMS غير متاحة على هذا الجهاز")
+                    } else {
+                        legacyDefaultManager()
+                    }
+                },
+                subscriptionManager = { selectedSubscriptionId ->
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        context.getSystemService(SmsManager::class.java)
+                            ?.createForSubscriptionId(selectedSubscriptionId)
+                            ?: throw IllegalStateException("تعذر إنشاء ناقل SMS لشريحة SIM المحددة")
+                    } else {
+                        legacySubscriptionManager(selectedSubscriptionId)
+                    }
                 }
-            }
-            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                context.getSystemService(SmsManager::class.java) ?: defaultManager()
-            } else {
-                defaultManager()
-            }
-        }
+            )
+
+        // Android 12+ uses the instance API. Keep the old calls only for Android 8–11.
+        @Suppress("DEPRECATION")
+        private fun legacyDefaultManager(): SmsManager = SmsManager.getDefault()
 
         @Suppress("DEPRECATION")
-        private fun defaultManager(): SmsManager = SmsManager.getDefault()
+        private fun legacySubscriptionManager(subscriptionId: Int): SmsManager =
+            SmsManager.getSmsManagerForSubscriptionId(subscriptionId)
     }
 
     override fun send(job: SmsOutboxRepository.OutboxMessage) {

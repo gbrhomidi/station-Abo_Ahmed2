@@ -143,7 +143,7 @@ android {
         unitTests {
             isIncludeAndroidResources = true
             all {
-                it.jvmArgs("-noverify", "-XX:+TieredCompilation", "-XX:TieredStopAtLevel=1")
+                it.jvmArgs("-XX:+TieredCompilation", "-XX:TieredStopAtLevel=1")
             }
         }
     }
