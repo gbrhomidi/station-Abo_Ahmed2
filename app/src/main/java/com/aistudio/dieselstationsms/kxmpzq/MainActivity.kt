@@ -35,6 +35,8 @@ import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.Keep
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -98,11 +100,48 @@ class MainActivity : AppCompatActivity() {
     private var pendingInvoiceFolderPhone: String = ""
     private var pendingInvoiceFolderAction: String = ""
     private var isDatabaseBackupPickerActive: Boolean = false
+
+    private lateinit var webFileChooserLauncher: ActivityResultLauncher<Intent>
+    private lateinit var mapPickerLauncher: ActivityResultLauncher<Intent>
+    private lateinit var vehicleFilePickerLauncher: ActivityResultLauncher<Intent>
+    private lateinit var stationFilePickerLauncher: ActivityResultLauncher<Intent>
+    private lateinit var invoiceFolderPickerLauncher: ActivityResultLauncher<Intent>
+    private lateinit var databaseBackupFolderPickerLauncher: ActivityResultLauncher<Intent>
+    private lateinit var databaseBackupRestorePickerLauncher: ActivityResultLauncher<Intent>
+    private lateinit var securityDeviceUnlockLauncher: ActivityResultLauncher<Intent>
     // Bundle restoration marks an Activity recreation (e.g. rotation), not a fresh launch.
     private var isActivityRecreation: Boolean = false
     private var wasAuthenticatedShellAtRecreation: Boolean = false
 
     private fun currentDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
+    private fun registerActivityResultLaunchers() {
+        webFileChooserLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            handleLaunchedActivityResult(fileChooserRequestCode, result.resultCode, result.data)
+        }
+        mapPickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            handleLaunchedActivityResult(mapPickerRequestCode, result.resultCode, result.data)
+        }
+        vehicleFilePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            handleLaunchedActivityResult(vehicleFilePickerRequestCode, result.resultCode, result.data)
+        }
+        stationFilePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            handleLaunchedActivityResult(stationFilePickerRequestCode, result.resultCode, result.data)
+        }
+        invoiceFolderPickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            handleLaunchedActivityResult(invoiceFolderPickerRequestCode, result.resultCode, result.data)
+        }
+        databaseBackupFolderPickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            handleLaunchedActivityResult(databaseBackupFolderPickerRequestCode, result.resultCode, result.data)
+        }
+        databaseBackupRestorePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            handleLaunchedActivityResult(databaseBackupRestorePickerRequestCode, result.resultCode, result.data)
+        }
+        securityDeviceUnlockLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            handleLaunchedActivityResult(SECURITY_DEVICE_UNLOCK_REQUEST, result.resultCode, result.data)
+        }
+    }
+
 
     companion object {
         private const val TAG = "MainActivity"
@@ -341,6 +380,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        registerActivityResultLaunchers()
         StartupPerformanceMonitor.attachWindow(window)
         activityCreatePerformanceSpan = StartupPerformanceMonitor.beginSpan("activity.onCreate")
         StartupPerformanceMonitor.mark(
@@ -348,6 +388,12 @@ class MainActivity : AppCompatActivity() {
             mapOf("recreated" to (savedInstanceState != null).toString())
         )
         isActivityRecreation = savedInstanceState != null
+        pendingInvoiceFolderHtml = if (savedInstanceState?.getBoolean("pending_invoice_folder_active", false) == true) "pending" else null
+        pendingInvoiceFolderPhone = savedInstanceState?.getString("pending_invoice_folder_phone").orEmpty()
+        pendingInvoiceFolderAction = savedInstanceState?.getString("pending_invoice_folder_action").orEmpty()
+        pendingVehicleFileKind = savedInstanceState?.getString("pending_vehicle_file_kind")
+        pendingStationFileKind = savedInstanceState?.getString("pending_station_file_kind")
+        isDatabaseBackupPickerActive = savedInstanceState?.getBoolean("database_backup_picker_active", false) == true
         wasAuthenticatedShellAtRecreation =
             savedInstanceState?.getBoolean(STATE_WAS_AUTHENTICATED_SHELL, false) == true
         captureNotificationIntent(intent)
@@ -722,6 +768,12 @@ class MainActivity : AppCompatActivity() {
                 securityLockPending
             )
         outState.putBoolean(STATE_WAS_AUTHENTICATED_SHELL, wasAuthenticatedShell)
+        outState.putBoolean("pending_invoice_folder_active", !pendingInvoiceFolderHtml.isNullOrBlank())
+        outState.putString("pending_invoice_folder_phone", pendingInvoiceFolderPhone)
+        outState.putString("pending_invoice_folder_action", pendingInvoiceFolderAction)
+        outState.putString("pending_vehicle_file_kind", pendingVehicleFileKind)
+        outState.putString("pending_station_file_kind", pendingStationFileKind)
+        outState.putBoolean("database_backup_picker_active", isDatabaseBackupPickerActive)
         super.onSaveInstanceState(outState)
     }
 
@@ -811,6 +863,8 @@ class MainActivity : AppCompatActivity() {
         DebugLogger.detachWebView()
         pendingWebPermissionRequest?.deny()
         pendingWebPermissionRequest = null
+        pendingFilePathCallback?.onReceiveValue(null)
+        pendingFilePathCallback = null
 
         try {
             val wv = webView
@@ -2015,7 +2069,7 @@ class MainActivity : AppCompatActivity() {
         }.getOrNull()
         if (credentialIntent != null) {
             try {
-                startActivityForResult(credentialIntent, SECURITY_DEVICE_UNLOCK_REQUEST)
+                securityDeviceUnlockLauncher.launch(credentialIntent)
             } catch (_: Exception) {
                 securityPromptActive = false
                 showSecurityPinFallback()
@@ -2212,7 +2266,7 @@ class MainActivity : AppCompatActivity() {
                                             type = acceptType
                                             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
                                         }
-                                        startActivityForResult(intent, fileChooserRequestCode)
+                                        webFileChooserLauncher.launch(intent)
                                         true
                                     } catch (e: Exception) {
                                         pendingFilePathCallback?.onReceiveValue(null)
@@ -2331,7 +2385,7 @@ class MainActivity : AppCompatActivity() {
         webView?.post { safeEvaluateJs(javascript) }
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    private fun handleLaunchedActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == SECURITY_DEVICE_UNLOCK_REQUEST) {
             onSecurityDeviceUnlockResult(resultCode)
             return
@@ -2573,7 +2627,7 @@ class MainActivity : AppCompatActivity() {
             }
             return
         }
-        super.onActivityResult(requestCode, resultCode, data)
+        DebugLogger.info("ActivityResult", "No handler registered for internal result route=$requestCode")
     }
 
     /**
@@ -3243,12 +3297,11 @@ class MainActivity : AppCompatActivity() {
             val safeLatitude = latitude.takeIf { it.isFinite() && it in -90.0..90.0 } ?: 0.0
             val safeLongitude = longitude.takeIf { it.isFinite() && it in -180.0..180.0 } ?: 0.0
             return try {
-                activity.startActivityForResult(
+                activity.mapPickerLauncher.launch(
                     Intent(activity, MapPickerActivity::class.java).apply {
                         putExtra(MapPickerActivity.EXTRA_INITIAL_LATITUDE, safeLatitude)
                         putExtra(MapPickerActivity.EXTRA_INITIAL_LONGITUDE, safeLongitude)
-                    },
-                    mapPickerRequestCode
+                    }
                 )
                 successResponse(true, "تم فتح محدد الموقع الأصلي")
             } catch (exception: Exception) {
@@ -6869,7 +6922,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     DocumentsContract.buildDocumentUriUsingTree(uri, DocumentsContract.getTreeDocumentId(uri)))
                             }
                         }
-                        activity.startActivityForResult(picker, databaseBackupFolderPickerRequestCode)
+                        activity.databaseBackupFolderPickerLauncher.launch(picker)
                     } catch (error: Exception) {
                         activity.isDatabaseBackupPickerActive = false
                         activity.notifyDatabaseBackupJs("window.onDatabaseBackupFolderSelected",
@@ -6960,7 +7013,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     DocumentsContract.buildDocumentUriUsingTree(uri, DocumentsContract.getTreeDocumentId(uri)))
                             }
                         }
-                        activity.startActivityForResult(picker, databaseBackupRestorePickerRequestCode)
+                        activity.databaseBackupRestorePickerLauncher.launch(picker)
                     } catch (error: Exception) {
                         activity.isDatabaseBackupPickerActive = false
                         activity.notifyDatabaseBackupJs("window.onDatabaseBackupRestoreFileSelected",
@@ -10502,7 +10555,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                                     Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                             }
                             try {
-                                activity.startActivityForResult(picker, invoiceFolderPickerRequestCode)
+                                activity.invoiceFolderPickerLauncher.launch(picker)
                             } catch (e: Exception) {
                                 pendingInvoiceFolderHtml = null
                                 pendingInvoiceFolderPhone = ""
@@ -14321,7 +14374,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 }
-                activity.startActivityForResult(Intent.createChooser(intent, if (normalized == "photo") "اختيار صورة المركبة" else "اختيار وثيقة التسجيل"), vehicleFilePickerRequestCode)
+                activity.vehicleFilePickerLauncher.launch(Intent.createChooser(intent, if (normalized == "photo") "اختيار صورة المركبة" else "اختيار وثيقة التسجيل"))
                 successResponse(1, "تم فتح مدير الملفات")
             } catch (e: Exception) {
                 pendingVehicleFileKind = null
@@ -14348,12 +14401,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 }
-                activity.startActivityForResult(
+                activity.stationFilePickerLauncher.launch(
                     Intent.createChooser(
                         intent,
                         if (normalized == "station_photo") "اختيار صورة المحطة" else "اختيار مخطط المحطة"
-                    ),
-                    stationFilePickerRequestCode
+                    )
                 )
                 successResponse(1, "تم فتح مدير ملفات الهاتف")
             } catch (e: Exception) {
