@@ -8,7 +8,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class MainActivityActivityResultContractTest {
     private val contract = ActivityResultContracts.StartActivityForResult()
 
@@ -44,10 +49,10 @@ class MainActivityActivityResultContractTest {
         val first = Uri.parse("content://example.provider/document/one")
         val second = Uri.parse("content://example.provider/document/two")
         val intent = Intent().apply {
-            clipData = android.content.ClipData.newUri(
-                android.content.ContentResolver.wrap(null),
+            clipData = android.content.ClipData(
                 "documents",
-                first
+                arrayOf("application/octet-stream"),
+                android.content.ClipData.Item(first)
             ).apply {
                 addItem(android.content.ClipData.Item(second))
             }
