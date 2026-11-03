@@ -22,6 +22,9 @@ import kotlinx.coroutines.withContext
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val db = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
+        // Repair interrupted dedupe reservations even when transport is currently disabled.
+        runCatching { SmsOutboxAtomicTransaction.recoverOutboundDedupeReservations(db) }
+            .onFailure { android.util.Log.e("SmsOutboxWorker", "Outbound dedupe recovery failed", it) }
         // Respect the global outbound switch and leave messages durable while permission is absent.
         if (db.getSetting("sms_send_enabled") == "0") return@withContext Result.success()
         if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
@@ -69,6 +72,16 @@ import kotlinx.coroutines.withContext
             WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
                 UNIQUE_WORK_NAME,
                 ExistingWorkPolicy.APPEND_OR_REPLACE,
+                request
+            )
+        }
+
+        /** Schedule one idempotent startup recovery pass without appending duplicate work. */
+        fun scheduleRecovery(context: Context) {
+            val request = OneTimeWorkRequestBuilder<SmsOutboxWorker>().build()
+            WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
+                UNIQUE_WORK_NAME,
+                ExistingWorkPolicy.KEEP,
                 request
             )
         }
