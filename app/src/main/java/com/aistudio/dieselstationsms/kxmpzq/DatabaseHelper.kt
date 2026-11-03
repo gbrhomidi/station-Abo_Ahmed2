@@ -18585,6 +18585,35 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try { taskQuery(params, stationId) } finally { dbLock.unlock() }
     }
 
+    /**
+     * Notification scheduling must use only persisted manual tasks.
+     * Operational projections (sales, expenses and inventory alerts) are
+     * read-only workspace rows and must never consume the notification limit.
+     */
+    fun getPendingManualTasksForNotifications(stationId: Int, limit: Int = 5000): JSONArray {
+        require(stationId > 0) { "معرف المحطة غير صالح لقراءة إشعارات المهام" }
+        val safeLimit = limit.coerceIn(1, 10000)
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                """
+                SELECT t.*, t.task_type AS type, t.task_date AS date
+                FROM tasks t
+                WHERE t.station_id = ?
+                  AND t.is_deleted = 0
+                  AND t.is_archived = 0
+                  AND t.is_resolved = 0
+                  AND t.status <> 'مكتملة'
+                ORDER BY date(t.task_date) ASC, t.id ASC
+                LIMIT ?
+                """.trimIndent(),
+                arrayOf(stationId.toString(), safeLimit.toString())
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
     fun addTask(data: JSONObject, stationId: Int, actorId: Long = 0L): Long {
         require(stationId > 0) { "معرف المحطة غير صالح لإضافة المهمة" }
         val taskType = data.optString("task_type", data.optString("type")).trim()
