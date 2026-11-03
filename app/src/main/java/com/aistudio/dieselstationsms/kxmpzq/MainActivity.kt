@@ -14440,16 +14440,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     notificationFactory = { savedId ->
                         if (employeeId <= 0L) null
                         else {
-                            val phone = try {
-                                val employee = db.getEmployeeById(employeeId, stationId)
-                                employee?.let {
-                                    it.optString("phone").trim()
-                                        .ifBlank { it.optString("phone2").trim() }
-                                        .takeIf { value -> value.isNotBlank() }
-                                }
-                            } catch (exception: Exception) {
-                                DebugLogger.logException("EmployeeSmsContact", exception)
-                                null
+                            val employee = db.getEmployeeById(employeeId, stationId)
+                            val phone = employee?.let {
+                                it.optString("phone").trim()
+                                    .ifBlank { it.optString("phone2").trim() }
+                                    .takeIf { value -> value.isNotBlank() }
                             }
                             phone?.let {
                                 SmsOutboxAtomicTransaction.NotificationDraft(
