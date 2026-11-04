@@ -57,10 +57,23 @@ class ReportsPaginationRobolectricTest {
             arrayOf(stationId.toString())
         )
         if (pumpId <= 0L) {
-            val tankId = scalarLong(
+            var tankId = optionalScalarLong(
                 "SELECT id FROM tanks WHERE station_id = ? AND COALESCE(is_deleted, 0) = 0 ORDER BY id LIMIT 1",
                 arrayOf(stationId.toString())
             )
+            if (tankId <= 0L) {
+                val fuelTypeId = scalarLong("SELECT id FROM fuel_types WHERE COALESCE(is_deleted, 0) = 0 ORDER BY id LIMIT 1")
+                tankId = db.insertOrThrow("tanks", null, ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("tank_code", "RPT-TANK-" + UUID.randomUUID().toString().take(8))
+                    put("tank_name", "Reports Pagination Test Tank")
+                    put("station_id", stationId)
+                    put("fuel_type_id", fuelTypeId)
+                    put("capacity_liters", 50000.0)
+                    put("status", "active")
+                    put("is_deleted", 0)
+                })
+            }
             pumpId = db.insertOrThrow("pumps", null, ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
                 put("pump_code", "RPT-PUMP-" + UUID.randomUUID().toString().take(8))
@@ -132,12 +145,27 @@ class ReportsPaginationRobolectricTest {
         assertTrue(second.getBoolean("has_previous"))
         assertFalse(second.getBoolean("has_next"))
 
+        val beyondLastPage = helper.getOperationalReport(
+            "meter_readings",
+            JSONObject().put("station_id", stationId).put("limit", 2).put("offset", 1000)
+        )
+        assertEquals(2, beyondLastPage.getInt("page"))
+        assertEquals(1, beyondLastPage.getInt("count"))
+        assertEquals(1, beyondLastPage.getJSONArray("rows").length())
+
         val firstIds = (0 until first.getJSONArray("rows").length())
             .map { first.getJSONArray("rows").getJSONObject(it).getLong("id") }
         val secondId = second.getJSONArray("rows").getJSONObject(0).getLong("id")
         assertEquals(3, (firstIds + secondId).distinct().size)
         assertEquals(60.0, first.getJSONObject("totals").getDouble("sold_liters"), 0.001)
         assertEquals(60.0, second.getJSONObject("totals").getDouble("sold_liters"), 0.001)
+
+        val invalidLimit = helper.getOperationalReport(
+            "meter_readings",
+            JSONObject().put("station_id", stationId).put("limit", 0).put("offset", 0)
+        )
+        assertEquals("A zero page size must use the bounded default", 200, invalidLimit.getInt("page_size"))
+        assertEquals(3, invalidLimit.getInt("count"))
     }
 
     @Test

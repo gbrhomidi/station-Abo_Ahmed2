@@ -20705,62 +20705,68 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getOperationalReport(screenKey: String, params: JSONObject = JSONObject()): JSONObject {
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
-        val requestedPageSize = params.optInt("limit", 200)
-        val pageSize = if (requestedPageSize > 0) requestedPageSize.coerceIn(1, 5000) else 0
-        val totalCount = getOperationalTotalCount(screenKey, params)
-        val requestedOffset = params.optInt("offset", 0).coerceAtLeast(0)
-        val lastPageOffset = if (pageSize > 0 && totalCount > 0) ((totalCount - 1) / pageSize) * pageSize else 0
-        val offset = if (pageSize > 0) minOf(requestedOffset, lastPageOffset) else 0
-        val pageParams = JSONObject(params.toString()).apply {
-            put("limit", pageSize)
-            put("offset", offset)
-        }
-        val rows = getOperationalRows(screenKey, pageParams)
-        val totals = JSONObject()
-        spec.numericColumns.forEach { totals.put(it, 0.0) }
-        var balancedReadings = 0
-        var unbalancedReadings = 0
-
-        // Aggregate the complete filtered SQLite result set in Kotlin/SQLite pages.
-        // The WebView never computes report totals from its rendered JavaScript array.
-        val scanParams = JSONObject(params.toString()).apply {
-            put("limit", 1000)
-            put("offset", 0)
-        }
-        var scanOffset = 0
-        while (scanOffset < totalCount) {
-            scanParams.put("offset", scanOffset)
-            val scanRows = getOperationalRows(screenKey, scanParams)
-            if (scanRows.length() == 0) break
-            for (i in 0 until scanRows.length()) {
-                val row = scanRows.optJSONObject(i) ?: continue
-                spec.numericColumns.forEach { key ->
-                    totals.put(key, totals.optDouble(key, 0.0) + row.optDouble(key, 0.0))
-                }
-                if (screenKey == "meter_readings") {
-                    if (row.optInt("is_balanced", 0) == 1) balancedReadings++ else unbalancedReadings++
-                }
+        // Hold the shared reentrant database lock across COUNT, page retrieval and
+        // aggregate scans so concurrent CRUD cannot make their totals disagree.
+        dbLock.lock()
+        return try {
+            val requestedPageSize = params.optInt("limit", 200)
+            val pageSize = if (requestedPageSize > 0) requestedPageSize.coerceIn(1, 5000) else 200
+            val totalCount = getOperationalTotalCount(screenKey, params)
+            val requestedOffset = params.optInt("offset", 0).coerceAtLeast(0)
+            val lastPageOffset = if (totalCount > 0) ((totalCount - 1) / pageSize) * pageSize else 0
+            val offset = minOf(requestedOffset, lastPageOffset)
+            val pageParams = JSONObject(params.toString()).apply {
+                put("limit", pageSize)
+                put("offset", offset)
             }
-            scanOffset += scanRows.length()
-        }
-        if (screenKey == "meter_readings") {
-            totals.put("balanced_count", balancedReadings)
-            totals.put("unbalanced_count", unbalancedReadings)
-        }
+            val rows = getOperationalRows(screenKey, pageParams)
+            val totals = JSONObject()
+            spec.numericColumns.forEach { totals.put(it, 0.0) }
+            var balancedReadings = 0
+            var unbalancedReadings = 0
 
-        val page = if (pageSize > 0) (offset / pageSize) + 1 else 1
-        val totalPages = if (totalCount == 0) 0 else if (pageSize > 0) ((totalCount + pageSize - 1) / pageSize) else 1
-        return JSONObject().apply {
-            put("rows", rows)
-            put("count", rows.length())
-            put("total_count", totalCount)
-            put("page", page)
-            put("page_size", pageSize)
-            put("total_pages", totalPages)
-            put("has_next", pageSize > 0 && page < totalPages)
-            put("has_previous", pageSize > 0 && page > 1)
-            put("totals", totals)
-            put("source", spec.table)
+            // Aggregate the complete filtered SQLite result set in bounded pages.
+            val scanParams = JSONObject(params.toString()).apply {
+                put("limit", 1000)
+                put("offset", 0)
+            }
+            var scanOffset = 0
+            while (scanOffset < totalCount) {
+                scanParams.put("offset", scanOffset)
+                val scanRows = getOperationalRows(screenKey, scanParams)
+                if (scanRows.length() == 0) break
+                for (i in 0 until scanRows.length()) {
+                    val row = scanRows.optJSONObject(i) ?: continue
+                    spec.numericColumns.forEach { key ->
+                        totals.put(key, totals.optDouble(key, 0.0) + row.optDouble(key, 0.0))
+                    }
+                    if (screenKey == "meter_readings") {
+                        if (row.optInt("is_balanced", 0) == 1) balancedReadings++ else unbalancedReadings++
+                    }
+                }
+                scanOffset += scanRows.length()
+            }
+            if (screenKey == "meter_readings") {
+                totals.put("balanced_count", balancedReadings)
+                totals.put("unbalanced_count", unbalancedReadings)
+            }
+
+            val page = (offset / pageSize) + 1
+            val totalPages = if (totalCount == 0) 0 else (totalCount + pageSize - 1) / pageSize
+            JSONObject().apply {
+                put("rows", rows)
+                put("count", rows.length())
+                put("total_count", totalCount)
+                put("page", page)
+                put("page_size", pageSize)
+                put("total_pages", totalPages)
+                put("has_next", page < totalPages)
+                put("has_previous", page > 1)
+                put("totals", totals)
+                put("source", spec.table)
+            }
+        } finally {
+            dbLock.unlock()
         }
     }
 
@@ -31981,7 +31987,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    private fun fuelReportConditions(data: JSONObject, alias: String, includeTankFilter: Boolean = true): Pair<String, MutableList<String>> {
+    private fun fuelReportConditions(data: JSONObject, alias: String): Pair<String, MutableList<String>> {
         val conditions = StringBuilder()
         val args = mutableListOf<String>()
         val fromDate = data.optString("from_date", data.optString("start_date", "")).trim()
@@ -31993,8 +31999,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         if (toDate.isNotBlank()) { conditions.append(" AND date($alias.created_at) <= date(?)"); args += toDate }
         if (fuelTypeId > 0L) { conditions.append(" AND $alias.fuel_type_id = ?"); args += fuelTypeId.toString() }
         if (tankId > 0L) {
-            if (includeTankFilter) { conditions.append(" AND $alias.tank_id = ?"); args += tankId.toString() }
-            else { conditions.append(" AND 1 = 0") }
+            if (alias == "s") {
+                conditions.append(" AND EXISTS (SELECT 1 FROM pumps fuel_filter_pump WHERE fuel_filter_pump.id = s.pump_id AND fuel_filter_pump.tank_id = ? AND fuel_filter_pump.station_id = s.station_id AND fuel_filter_pump.is_deleted = 0)")
+            } else {
+                conditions.append(" AND r.tank_id = ?")
+            }
+            args += tankId.toString()
         }
         if (search.isNotBlank()) {
             val searchExpr = if (alias == "s") {
@@ -32003,8 +32013,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "($alias.refill_code LIKE ? OR f.fuel_name LIKE ? OR COALESCE(p.commercial_name, '') LIKE ? OR COALESCE(p.commercial_name_ar, '') LIKE ? OR COALESCE(t.tank_name, '') LIKE ?)"
             }
             conditions.append(" AND $searchExpr")
-            val searchCount = if (alias == "s") 5 else 5
-            repeat(searchCount) { args += "%$search%" }
+            repeat(5) { args += "%$search%" }
         }
         return conditions.toString() to args
     }
@@ -32017,8 +32026,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val reportType = data.optString("report_type", "summary")
             val includeSales = reportType != "refills"
             val includeRefills = reportType != "sales"
-            val saleFilter = fuelReportConditions(data, "s", includeTankFilter = false)
-            val refillFilter = fuelReportConditions(data, "r", includeTankFilter = true)
+            val saleFilter = fuelReportConditions(data, "s")
+            val refillFilter = fuelReportConditions(data, "r")
             val branches = mutableListOf<String>()
             val args = mutableListOf<String>()
             if (includeSales) {
@@ -32099,25 +32108,31 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getFuelReportPage(data: JSONObject, stationScopeId: Int): JSONObject {
         require(stationScopeId > 0) { "معرف المحطة مطلوب لصفحة تقرير الوقود" }
-        val limit = data.optInt("limit", 50).coerceIn(1, 1000)
-        val totalCount = getFuelReportTotalCount(data, stationScopeId)
-        val requestedOffset = data.optInt("offset", 0).coerceAtLeast(0)
-        val lastPageOffset = if (totalCount > 0) ((totalCount - 1) / limit) * limit else 0
-        val offset = minOf(requestedOffset, lastPageOffset)
-        val query = JSONObject(data.toString()).apply { put("limit", limit); put("offset", offset) }
-        val rows = getFuelReport(query, stationScopeId)
-        val page = (offset / limit) + 1
-        val totalPages = if (totalCount == 0) 0 else (totalCount + limit - 1) / limit
-        return JSONObject().apply {
-            put("rows", rows)
-            put("count", rows.length())
-            put("total_count", totalCount)
-            put("page", page)
-            put("page_size", limit)
-            put("total_pages", totalPages)
-            put("has_next", page < totalPages)
-            put("has_previous", page > 1)
-            put("source", "sales_transactions+tank_refills")
+        // COUNT and page rows must observe one station-scoped database state.
+        dbLock.lock()
+        return try {
+            val limit = data.optInt("limit", 50).coerceIn(1, 1000)
+            val totalCount = getFuelReportTotalCount(data, stationScopeId)
+            val requestedOffset = data.optInt("offset", 0).coerceAtLeast(0)
+            val lastPageOffset = if (totalCount > 0) ((totalCount - 1) / limit) * limit else 0
+            val offset = minOf(requestedOffset, lastPageOffset)
+            val query = JSONObject(data.toString()).apply { put("limit", limit); put("offset", offset) }
+            val rows = getFuelReport(query, stationScopeId)
+            val page = (offset / limit) + 1
+            val totalPages = if (totalCount == 0) 0 else (totalCount + limit - 1) / limit
+            JSONObject().apply {
+                put("rows", rows)
+                put("count", rows.length())
+                put("total_count", totalCount)
+                put("page", page)
+                put("page_size", limit)
+                put("total_pages", totalPages)
+                put("has_next", page < totalPages)
+                put("has_previous", page > 1)
+                put("source", "sales_transactions+tank_refills")
+            }
+        } finally {
+            dbLock.unlock()
         }
     }
 

@@ -38,6 +38,16 @@ need(kpi, /apiCall\('getKPIDashboard', params\)/, 'KPI: dashboard call missing')
 // Operational reporting: row and COUNT queries must share station and filter predicates.
 const rowsMethod = section(db, 'fun getOperationalRows(', 'private fun getOperationalTotalCount(');
 const countMethod = section(db, 'private fun getOperationalTotalCount(', 'fun getOperationalReport(');
+function filterContractSection(source) {
+  const start = source.indexOf('val where = mutableListOf<String>()');
+  const end = source.indexOf('val dateColumn = when (screenKey)', start);
+  return start >= 0 && end > start ? source.slice(start, end) : '';
+}
+const rowFilterContract = filterContractSection(rowsMethod);
+const countFilterContract = filterContractSection(countMethod);
+if (!rowFilterContract || rowFilterContract !== countFilterContract) {
+  failures.push('operational: paged rows and COUNT do not use identical station/search/status/date/filter predicates');
+}
 for (const [label, source] of [['rows', rowsMethod], ['COUNT', countMethod]]) {
   need(source, /appendMeterReadingFilters\(params, where, args\)/, 'operational ' + label + ': meter-reading filters are not shared');
   need(source, /\(station_id = \? OR station_id IS NULL\)/, 'operational ' + label + ': shared template station scope missing');
@@ -73,6 +83,11 @@ need(db, /totals\.put\("unbalanced_count", unbalancedReadings\)/, 'meter reading
 
 // Fuel report: pagination, search, movement type, and count must use the same SQL predicates.
 need(db, /fuelReportConditions/, 'fuel report: shared SQL filter builder missing');
+need(db, /conditions\.append\(" AND EXISTS \(SELECT 1 FROM pumps fuel_filter_pump WHERE fuel_filter_pump\.id = s\.pump_id AND fuel_filter_pump\.tank_id = \? AND fuel_filter_pump\.station_id = s\.station_id AND fuel_filter_pump\.is_deleted = 0\)"\)/, 'fuel report: tank filter is not applied consistently to fuel sales');
+need(db, /val pageSize = if \(requestedPageSize > 0\) requestedPageSize\.coerceIn\(1, 5000\) else 200/, 'operational reports: zero/missing limit is not safely bounded');
+need(db, /dbLock\.lock\(\)[\s\S]{0,160}getOperationalTotalCount\(screenKey, params\)[\s\S]{0,300}finally \{\s*dbLock\.unlock\(\)\s*\}/, 'operational reports: atomic COUNT/rows/totals lock missing');
+need(db, /dbLock\.lock\(\)[\s\S]{0,160}getFuelReportTotalCount\(data, stationScopeId\)[\s\S]{0,300}finally \{\s*dbLock\.unlock\(\)\s*\}/, 'fuel report: atomic COUNT/rows lock missing');
+
 need(db, /getFuelReportTotalCount/, 'fuel report: COUNT query missing');
 need(db, /val includeSales = reportType != "refills"/, 'fuel report: movement/sales inclusion logic missing');
 need(db, /val includeRefills = reportType != "sales"/, 'fuel report: movement/refills inclusion logic missing');
