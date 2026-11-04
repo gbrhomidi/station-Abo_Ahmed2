@@ -4238,10 +4238,24 @@ async function loadCustomerDebtSettings() {
             document.getElementById('pMethod').addEventListener('change', renderPaymentSettlementOptions);
 
             const today = new Date();
-            const monthAgo = new Date();
-            monthAgo.setDate(monthAgo.getDate() - 30);
-            document.getElementById('filterDateFrom').value = businessDayDate(monthAgo);
-            document.getElementById('filterDateTo').value = businessDayDate(today);
+            const queryParams = new URLSearchParams(window.location.search || '');
+            const dueInvoicesDrilldown = queryParams.get('drilldown') === 'due-invoices';
+
+            if (dueInvoicesDrilldown) {
+                // Dashboard KPI counts outstanding invoices maturing from today through
+                // the next seven calendar days. Use the identical due-date window here.
+                const weekLater = new Date(today);
+                weekLater.setDate(weekLater.getDate() + 7);
+                document.getElementById('filterDateFrom').value = businessDayDate(today);
+                document.getElementById('filterDateTo').value = businessDayDate(weekLater);
+                document.getElementById('filterCustomer').value = '';
+                document.getElementById('filterStatus').value = '';
+            } else {
+                const monthAgo = new Date();
+                monthAgo.setDate(monthAgo.getDate() - 30);
+                document.getElementById('filterDateFrom').value = businessDayDate(monthAgo);
+                document.getElementById('filterDateTo').value = businessDayDate(today);
+            }
 
             loadDropdowns();
             setTimeout(async()=>{ await loadCustomerDebtSettings(); await loadDebts(); await refreshDueReminderCandidates(true); }, 600);
