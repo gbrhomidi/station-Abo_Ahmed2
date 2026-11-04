@@ -93,9 +93,11 @@ object DebtDueDateRepository {
         val rows = readDebts(helper.readableDatabase, stationId)
         val output = JSONArray()
         rows.filter { row ->
-            val saleDate = row.createdAt.take(10)
-            (fromDate.isNullOrBlank() || saleDate.isBlank() || saleDate >= fromDate.take(10)) &&
-                (toDate.isNullOrBlank() || saleDate.isBlank() || saleDate <= toDate.take(10))
+            // The caller's date range is a maturity-date filter, matching the dashboard's
+            // due-invoice KPI. Filtering by createdAt hides older invoices that mature soon.
+            val dueDate = row.dueDate.take(10)
+            (fromDate.isNullOrBlank() || (dueDate.isNotBlank() && dueDate >= fromDate.take(10))) &&
+                (toDate.isNullOrBlank() || (dueDate.isNotBlank() && dueDate <= toDate.take(10)))
         }.forEach { output.put(toJson(it)) }
         return output
     }
