@@ -11,7 +11,7 @@ const reports = {
     'generateInventoryReport', 'getWarehouses', 'getCategories', 'getInventoryProductDetails'
   ],
   'screens/customer-reports.html': [
-    'generateCRMReport', 'getCustomers', 'getPartyTypes', 'getCustomerDebts',
+    'generateCRMReport', 'getPartyTypes', 'getCustomerDebts',
     'getPartyCrmBundle', 'getPartyCrmBundleAsync', 'updatePartyCreditLimit'
   ],
   'screens/fuel-reports.html': [
