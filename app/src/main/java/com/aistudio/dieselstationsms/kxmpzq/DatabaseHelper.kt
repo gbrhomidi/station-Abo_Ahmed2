@@ -32091,8 +32091,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val reportType = data.optString("report_type", "summary")
             val includeSales = reportType != "refills"
             val includeRefills = reportType != "sales"
-            val saleFilter = fuelReportConditions(data, "s", includeTankFilter = false)
-            val refillFilter = fuelReportConditions(data, "r", includeTankFilter = true)
+            val saleFilter = fuelReportConditions(data, "s")
+            val refillFilter = fuelReportConditions(data, "r")
             var total = 0
             if (includeSales) {
                 val args = mutableListOf(stationId.toString()); args += saleFilter.second
