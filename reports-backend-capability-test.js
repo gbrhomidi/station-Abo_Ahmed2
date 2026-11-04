@@ -30,8 +30,8 @@ need(db, /fun getFuelReportPage\(data: JSONObject, stationScopeId: Int\): JSONOb
 need(db, /getFuelReportTotalCount/, 'DatabaseHelper: fuel COUNT metadata missing');
 need(db, /conditions\.append\(" AND EXISTS \(SELECT 1 FROM pumps fuel_filter_pump WHERE fuel_filter_pump\.id = s\.pump_id AND fuel_filter_pump\.tank_id = \? AND fuel_filter_pump\.station_id = s\.station_id AND fuel_filter_pump\.is_deleted = 0\)"\)/, 'DatabaseHelper: fuel tank filter must include sales via their pump/tank relation');
 need(db, /val pageSize = if \(requestedPageSize > 0\) requestedPageSize\.coerceIn\(1, 5000\) else 200/, 'DatabaseHelper: operational reports must remain bounded when limit is zero or missing');
-need(db, /dbLock\.lock\(\)[\s\S]{0,160}getOperationalTotalCount\(screenKey, params\)[\s\S]{0,300}finally \{\s*dbLock\.unlock\(\)\s*\}/, 'DatabaseHelper: operational report COUNT/page/aggregate snapshot lock missing');
-need(db, /dbLock\.lock\(\)[\s\S]{0,160}getFuelReportTotalCount\(data, stationScopeId\)[\s\S]{0,300}finally \{\s*dbLock\.unlock\(\)\s*\}/, 'DatabaseHelper: fuel report COUNT/page snapshot lock missing');
+need(db, /fun getOperationalReport\([\s\S]*?dbLock\.lock\(\)[\s\S]*?getOperationalTotalCount\(screenKey, params\)[\s\S]*?finally \{\s*dbLock\.unlock\(\)\s*\}/, 'DatabaseHelper: operational report COUNT/page/aggregate snapshot lock missing');
+need(db, /fun getFuelReportPage\([\s\S]*?dbLock\.lock\(\)[\s\S]*?getFuelReportTotalCount\(data, stationScopeId\)[\s\S]*?finally \{\s*dbLock\.unlock\(\)\s*\}/, 'DatabaseHelper: fuel report COUNT/page snapshot lock missing');
 
 need(db, /val requestedSort = data.optString\("sort_by", "date"\)/, 'DatabaseHelper: allow-listed fuel report sort missing');
 need(db, /val orderBy = if \(sortColumn == "id"\) "id \$sortDirection, type ASC"/, 'DatabaseHelper: deterministic cross-source fuel ordering missing');

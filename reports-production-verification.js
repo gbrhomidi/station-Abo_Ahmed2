@@ -85,8 +85,8 @@ need(db, /totals\.put\("unbalanced_count", unbalancedReadings\)/, 'meter reading
 need(db, /fuelReportConditions/, 'fuel report: shared SQL filter builder missing');
 need(db, /conditions\.append\(" AND EXISTS \(SELECT 1 FROM pumps fuel_filter_pump WHERE fuel_filter_pump\.id = s\.pump_id AND fuel_filter_pump\.tank_id = \? AND fuel_filter_pump\.station_id = s\.station_id AND fuel_filter_pump\.is_deleted = 0\)"\)/, 'fuel report: tank filter is not applied consistently to fuel sales');
 need(db, /val pageSize = if \(requestedPageSize > 0\) requestedPageSize\.coerceIn\(1, 5000\) else 200/, 'operational reports: zero/missing limit is not safely bounded');
-need(db, /dbLock\.lock\(\)[\s\S]{0,160}getOperationalTotalCount\(screenKey, params\)[\s\S]{0,300}finally \{\s*dbLock\.unlock\(\)\s*\}/, 'operational reports: atomic COUNT/rows/totals lock missing');
-need(db, /dbLock\.lock\(\)[\s\S]{0,160}getFuelReportTotalCount\(data, stationScopeId\)[\s\S]{0,300}finally \{\s*dbLock\.unlock\(\)\s*\}/, 'fuel report: atomic COUNT/rows lock missing');
+need(db, /fun getOperationalReport\([\s\S]*?dbLock\.lock\(\)[\s\S]*?getOperationalTotalCount\(screenKey, params\)[\s\S]*?finally \{\s*dbLock\.unlock\(\)\s*\}/, 'operational reports: atomic COUNT/rows/totals lock missing');
+need(db, /fun getFuelReportPage\([\s\S]*?dbLock\.lock\(\)[\s\S]*?getFuelReportTotalCount\(data, stationScopeId\)[\s\S]*?finally \{\s*dbLock\.unlock\(\)\s*\}/, 'fuel report: atomic COUNT/rows lock missing');
 
 need(db, /getFuelReportTotalCount/, 'fuel report: COUNT query missing');
 need(db, /val includeSales = reportType != "refills"/, 'fuel report: movement/sales inclusion logic missing');
