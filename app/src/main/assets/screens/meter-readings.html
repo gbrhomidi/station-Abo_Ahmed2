@@ -2017,22 +2017,30 @@
             } catch(_) {}
         }
 
+        let reportPage = 1;
+        const REPORT_PAGE_SIZE = 50;
+
         function openReport() {
+            reportPage = 1;
             setDateDefaults();
             $('reportResults').innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i><p>اضغط توليد التقرير لعرض البيانات من SQLite.</p></div>';
             populateReportFilters().then(() => openModal(null, 'reportModal'));
         }
 
-        function buildReportSummary(rows) {
-            const totalSold = rows.reduce((s, r) => s + numeric(field(r, ['sold_liters'])), 0);
-            const totalSystem = rows.reduce((s, r) => s + numeric(field(r, ['system_sold_liters'])), 0);
-            const totalDiff = rows.reduce((s, r) => s + numeric(field(r, ['difference'])), 0);
-            const balanced = rows.filter(r => isBalancedValue(field(r, ['is_balanced']))).length;
-            const unbalanced = rows.length - balanced;
-            const totalAdj = rows.reduce((s, r) => s + numeric(field(r, ['adjustment_amount'])), 0);
+        function buildReportSummary(rows, reportData = {}) {
+            const totals = reportData.totals && typeof reportData.totals === 'object'
+                ? reportData.totals : {};
+            const sumRows = key => rows.reduce((sum, row) => sum + numeric(field(row, [key])), 0);
+            const totalCount = numeric(reportData.total_count ?? rows.length);
+            const totalSold = numeric(totals.sold_liters ?? sumRows('sold_liters'));
+            const totalSystem = numeric(totals.system_sold_liters ?? sumRows('system_sold_liters'));
+            const totalDiff = numeric(totals.difference ?? sumRows('difference'));
+            const balanced = numeric(totals.balanced_count ?? rows.filter(r => isBalancedValue(field(r, ['is_balanced']))).length);
+            const unbalanced = numeric(totals.unbalanced_count ?? Math.max(0, totalCount - balanced));
+            const totalAdj = numeric(totals.adjustment_amount ?? sumRows('adjustment_amount'));
             return `
                 <div class="report-summary">
-                    <div class="report-summary-item"><span>إجمالي القراءات</span><strong>${rows.length.toLocaleString('ar')}</strong></div>
+                    <div class="report-summary-item"><span>إجمالي القراءات</span><strong>${totalCount.toLocaleString('ar')}</strong></div>
                     <div class="report-summary-item"><span>اللترات المباعة</span><strong>${numFmt(totalSold)}</strong></div>
                     <div class="report-summary-item"><span>لترات النظام</span><strong>${numFmt(totalSystem)}</strong></div>
                     <div class="report-summary-item"><span>إجمالي الفرق</span><strong>${numFmt(totalDiff)}</strong></div>
@@ -2042,7 +2050,27 @@
                 </div>`;
         }
 
-        async function generateReport() {
+        function renderReportPagination(reportData = {}) {
+            const totalPages = Math.max(0, Number(reportData.total_pages) || 0);
+            if (totalPages <= 1) return '';
+            const page = Math.max(1, Math.min(Number(reportData.page) || reportPage, totalPages));
+            const totalCount = Math.max(0, Number(reportData.total_count) || 0);
+            return `
+                <div class="report-pagination" role="navigation" aria-label="ترقيم تقرير قراءات العدادات"
+                     style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:14px;flex-wrap:wrap">
+                    <button type="button" class="btn" ${page <= 1 ? 'disabled' : ''} onclick="generateReport(${page - 1})">السابق</button>
+                    <span>صفحة ${page.toLocaleString('ar')} من ${totalPages.toLocaleString('ar')} · ${totalCount.toLocaleString('ar')} قراءة</span>
+                    <button type="button" class="btn" ${page >= totalPages ? 'disabled' : ''} onclick="generateReport(${page + 1})">التالي</button>
+                </div>`;
+        }
+
+        async function generateReport(requestedPage) {
+            if (requestedPage === undefined || requestedPage === null) {
+                reportPage = 1;
+            } else {
+                reportPage = Math.max(1, Math.floor(Number(requestedPage) || 1));
+            }
+
             setLoading(true);
             try {
                 let result;
@@ -2059,30 +2087,27 @@
                         balance: $('reportBalanceFilter') ? $('reportBalanceFilter').value : '',
                         report_type: $('reportKindFilter') ? $('reportKindFilter').value : 'detailed',
                         include_archived: true,
-                        limit: 2000
+                        limit: REPORT_PAGE_SIZE,
+                        offset: (reportPage - 1) * REPORT_PAGE_SIZE
                     };
                     result = await invoke('generate' + suffix + 'Report', [JSON.stringify(payload)]);
                 } else {
                     result = { data: state.filtered };
                 }
 
-                let rows = rowsFrom(result);
-                // تصفية إضافية من الواجهة بناءً على الفلاتر المختارة
-                rows = rows.filter(row => {
-                    const period = $('reportPeriodFilter') ? $('reportPeriodFilter').value : '';
-                    const status = $('reportStatusFilter') ? $('reportStatusFilter').value : '';
-                    const balance = $('reportBalanceFilter') ? $('reportBalanceFilter').value : '';
-                    const pumpId = $('reportPumpFilter') ? $('reportPumpFilter').value : '';
-                    if (period && String(field(row, ['period']) || '').toLowerCase() !== period) return false;
-                    if (status && String(field(row, ['status']) || '').toLowerCase() !== status) return false;
-                    if (pumpId && String(field(row, ['pump_id']) || '') !== pumpId) return false;
-                    if (balance === 'balanced' && !isBalancedValue(field(row, ['is_balanced']))) return false;
-                    if (balance === 'unbalanced' && isBalancedValue(field(row, ['is_balanced']))) return false;
-                    return true;
-                });
+                const reportData = dataOf(result) || {};
+                const rows = rowsFrom(result);
+                // All report filters are applied by the station-scoped SQLite query.
+                // Filtering only this page in JavaScript would corrupt the page/count contract.
+                state.filtered = rows;
+                reportPage = Math.max(1, Number(reportData.page) || reportPage);
 
-                $('reportResults').innerHTML = buildReportSummary(rows) + renderReport(rows);
-                toast(`تم توليد التقرير (${rows.length} سجل)`);
+                $('reportResults').innerHTML =
+                    buildReportSummary(rows, reportData) +
+                    renderReport(rows) +
+                    renderReportPagination(reportData);
+                const totalCount = Number(reportData.total_count);
+                toast(`تم توليد التقرير (${rows.length} في الصفحة، ${Number.isFinite(totalCount) ? totalCount : rows.length} إجمالاً)`);
             } catch (e) {
                 toast(e.message || 'فشل التقرير', true);
             } finally {

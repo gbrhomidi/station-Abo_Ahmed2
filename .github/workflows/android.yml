@@ -327,6 +327,14 @@ jobs:
           set -e
           node ./app/src/test/js/business-day.test.js
 
+      - name: Verify reports, pagination and Fuel Readings contracts
+        run: |
+          set -e
+          node ./reports-module-contract-test.js
+          node ./reports-unbounded-query-test.js
+          node ./reports-backend-capability-test.js
+          node ./reports-production-verification.js
+
 
       # ----------------------------------------------------------------------
       # Kotlin / Robolectric regression tests

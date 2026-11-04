@@ -1376,7 +1376,7 @@
       }
     }
   </style>
-  <meta name="reports-bridge-methods" content="getFuelReportPage,getFuelReport,getTanks,getPumps,getFuelTypes">
+  <meta name="reports-bridge-methods" content="getFuelReportPage,getFuelReport,getTanks,getPumps,getFuelTypes,getFuelTransactionDetails">
 <script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script>
     <style>
     /* حاوية فلاتر قابلة للفتح والطي — تبدأ مطوية في كل مرة تُفتح فيها الشاشة */
@@ -1760,30 +1760,42 @@
      * الشكل الفعلي: { rows:[...], count, total_count, page, page_size, ..., success }
      */
     function extractFuelReport(res) {
-      const empty = { success: false, rows: [], total_count: 0, count: 0 };
+      const empty = {
+        success: false, rows: [], count: 0, total_count: 0,
+        page: 1, page_size: 0, total_pages: 0,
+        has_next: false, has_previous: false
+      };
       if (!res) return empty;
 
-      if (Array.isArray(res.rows)) {
+      const payload = res.data && typeof res.data === 'object' && !Array.isArray(res.data)
+        ? res.data : res;
+      if (payload && Array.isArray(payload.rows)) {
         return {
-          success: res.success !== false,
-          rows: res.rows,
-          count: res.count ?? res.rows.length,
-          total_count: res.total_count ?? res.rows.length
-        };
-      }
-      if (res.data && Array.isArray(res.data.rows)) {
-        return {
-          success: res.success !== false,
-          rows: res.data.rows,
-          count: res.data.count ?? res.data.rows.length,
-          total_count: res.data.total_count ?? res.data.rows.length
+          success: res.success !== false && payload.success !== false,
+          rows: payload.rows,
+          count: Number(payload.count ?? payload.rows.length) || 0,
+          total_count: Number(payload.total_count ?? payload.rows.length) || 0,
+          page: Number(payload.page ?? 1) || 1,
+          page_size: Number(payload.page_size ?? 0) || 0,
+          total_pages: Number(payload.total_pages ?? 0) || 0,
+          has_next: payload.has_next === true,
+          has_previous: payload.has_previous === true
         };
       }
       if (Array.isArray(res)) {
-        return { success: true, rows: res, count: res.length, total_count: res.length };
+        return {
+          success: true, rows: res, count: res.length, total_count: res.length,
+          page: 1, page_size: res.length, total_pages: res.length ? 1 : 0,
+          has_next: false, has_previous: false
+        };
       }
       if (res.data && Array.isArray(res.data)) {
-        return { success: res.success !== false, rows: res.data, count: res.data.length, total_count: res.data.length };
+        return {
+          success: res.success !== false, rows: res.data,
+          count: res.data.length, total_count: res.data.length,
+          page: 1, page_size: res.data.length, total_pages: res.data.length ? 1 : 0,
+          has_next: false, has_previous: false
+        };
       }
       return empty;
     }
@@ -1920,6 +1932,8 @@
     };
 
     const pagination = { page: 1, pageSize: 25, totalCount: 0, totalPages: 0 };
+    let fuelSearchTimer = null;
+    let fuelSort = { by: 'date', direction: 'desc' };
 
     let salesTrendChart = null;
     let fuelTypeChart = null;
@@ -2111,12 +2125,19 @@
     // ================================================================
     // 6. توليد التقرير
     // ================================================================
-    async function generateReport() {
+    async function generateReport(requestedPage) {
+      if (requestedPage === undefined || requestedPage === null) {
+        pagination.page = 1;
+      } else {
+        pagination.page = Math.max(1, Math.floor(Number(requestedPage) || 1));
+      }
+
       const from = $('filterDateFrom').value;
       const to = $('filterDateTo').value;
       const fuelType = $('filterFuelType').value;
       const tank = $('filterTank').value;
       const reportType = $('filterReportType').value;
+      const search = String($('fuelSearch') ? $('fuelSearch').value : '').trim();
 
       if (from && to && from > to) {
         showToast('تاريخ البداية يجب أن يسبق تاريخ النهاية', 'error');
@@ -2124,6 +2145,7 @@
       }
 
       state.reportType = reportType;
+      state.searchQuery = search;
       showLoading(true);
 
       try {
@@ -2135,6 +2157,9 @@
           fuel_type_id: fuelType || null,
           tank_id: tank || null,
           report_type: reportType,
+          search: search,
+          sort_by: fuelSort.by,
+          sort_dir: fuelSort.direction,
           limit: pagination.pageSize,
           offset: (pagination.page - 1) * pagination.pageSize
         };
@@ -2146,10 +2171,8 @@
           throw new Error('فشل استخراج بيانات الوقود');
         }
 
-        // تطبيع الصفوف
         let rows = extracted.rows.map(normalizeFuelRow).filter(Boolean);
 
-        // فلترة إضافية حسب النوع في الواجهة
         if (reportType === 'sales') {
           rows = rows.filter(r => r.type === 'sale');
         } else if (reportType === 'refills') {
@@ -2160,10 +2183,12 @@
         state.stats = extracted;
         state.loadedAt = new Date();
         pagination.totalCount = extracted.total_count;
-        pagination.totalPages = pagination.totalCount > 0
-          ? Math.ceil(pagination.totalCount / pagination.pageSize) : 0;
+        pagination.totalPages = extracted.total_pages > 0
+          ? extracted.total_pages
+          : (pagination.totalCount > 0 ? Math.ceil(pagination.totalCount / pagination.pageSize) : 0);
+        pagination.page = pagination.totalPages > 0
+          ? Math.min(extracted.page || pagination.page, pagination.totalPages) : 1;
 
-        // تحليلات
         state.fuelTypes = computeFuelTypeAnalysis(rows);
         state.dailySeries = computeDailySeries(rows);
         state.peakHours = computePeakHours(rows);
@@ -2176,7 +2201,7 @@
         if (rows.length === 0) {
           showToast('لا توجد بيانات مطابقة للفترة المحددة', 'warning');
         } else {
-          showToast(`تم توليد التقرير (${rows.length} سجل)`, 'success');
+          showToast(`تم تحميل الصفحة ${pagination.page} من التقرير (${pagination.totalCount} سجل إجمالاً)`, 'success');
         }
       } catch (err) {
         console.error('generateReport error:', err);
@@ -2228,9 +2253,41 @@
     }
 
     function applyPreset(presetId) {
+      const previousPreset = state.activePreset;
       state.activePreset = presetId;
+
+      if (presetId === 'sales' || presetId === 'refills') {
+        $('filterReportType').value = presetId;
+        fuelSort = { by: 'date', direction: 'desc' };
+      } else if (presetId === 'sale_count') {
+        fuelSort = { by: 'quantity', direction: 'desc' };
+      } else if (presetId === 'big_amount') {
+        fuelSort = { by: 'amount', direction: 'desc' };
+      } else if (presetId === 'fuel_diesel') {
+        const select = $('filterFuelType');
+        const dieselOption = Array.from(select.options).find(option =>
+          option.value && /ديزل|diesel/i.test(option.textContent || '')
+        );
+        if (!dieselOption) {
+          state.activePreset = previousPreset;
+          renderQuickPresets();
+          showToast('لا يوجد نوع وقود مسجل باسم الديزل لتطبيق هذا المرشح', 'warning');
+          return;
+        }
+        $('filterReportType').value = 'summary';
+        select.value = dieselOption.value;
+        fuelSort = { by: 'date', direction: 'desc' };
+      } else {
+        if (presetId === 'all') {
+          if (previousPreset === 'sales' || previousPreset === 'refills') $('filterReportType').value = 'summary';
+          if (previousPreset === 'fuel_diesel') $('filterFuelType').value = '';
+        }
+        fuelSort = { by: 'date', direction: 'desc' };
+      }
+
       renderQuickPresets();
-      applyPresetAndRender();
+      pagination.page = 1;
+      generateReport();
       haptic('light');
     }
 
@@ -2253,22 +2310,9 @@
     }
 
     function applyPresetAndRender() {
-      let filtered = filterByPreset(state.allRows, state.activePreset);
-
-      const q = (state.searchQuery || '').trim().toLowerCase();
-      if (q) {
-        filtered = filtered.filter(r => {
-          const haystack = [
-            r.code,
-            r.fuel_name,
-            r.party_name,
-            r.tank_name,
-            r.status
-          ].map(v => String(v || '').toLowerCase()).join(' ');
-          return haystack.includes(q);
-        });
-      }
-
+      // Search, quick-preset filters and sorting are executed by the station-scoped
+      // SQLite query. Never filter or sort a single page in JavaScript.
+      const filtered = state.allRows;
       state.filteredRows = filtered;
 
       renderTable(filtered);
@@ -2354,8 +2398,8 @@
     }
 
     function goToPage(page) {
-      pagination.page = Math.max(1, Math.min(Number(page) || 1, pagination.totalPages || 1));
-      generateReport();
+      const targetPage = Math.max(1, Math.min(Number(page) || 1, pagination.totalPages || 1));
+      generateReport(targetPage);
     }
 
     // ================================================================
@@ -2946,8 +2990,13 @@
     // 16. البحث والفلترة
     // ================================================================
     function applyFuelSearch(value) {
-      state.searchQuery = value || '';
-      applyPresetAndRender();
+      state.searchQuery = String(value || '');
+      pagination.page = 1;
+      if (fuelSearchTimer) clearTimeout(fuelSearchTimer);
+      fuelSearchTimer = setTimeout(() => {
+        fuelSearchTimer = null;
+        generateReport();
+      }, 350);
     }
 
     // ================================================================
@@ -3130,6 +3179,7 @@
       $('fuelSearch').value = '';
       state.searchQuery = '';
       state.activePreset = 'all';
+      fuelSort = { by: 'date', direction: 'desc' };
       pagination.page = 1;
       renderQuickPresets();
       showToast('تم إعادة تعيين الفلاتر', 'success');

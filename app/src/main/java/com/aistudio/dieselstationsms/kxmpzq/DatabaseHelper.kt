@@ -20392,6 +20392,47 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    /**
+     * Applies meter-reading report filters in the same SQLite predicate builder used by
+     * both page rows and COUNT(*). Keeping these filters server-side prevents a page's
+     * rows from diverging from its total_count after JavaScript post-filtering.
+     */
+    private fun appendMeterReadingFilters(
+        params: JSONObject,
+        where: MutableList<String>,
+        args: MutableList<String>
+    ) {
+        val pumpId = params.optLong("pump_id", 0L)
+        if (pumpId > 0L) {
+            where += "pump_id = ?"
+            args += pumpId.toString()
+        }
+
+        val period = params.optString("period", "").trim()
+        if (period.isNotBlank()) {
+            where += "LOWER(COALESCE(period, '')) = LOWER(?)"
+            args += period
+        }
+
+        when (params.optString("balance", "").trim().lowercase(Locale.US)) {
+            "", "all" -> Unit
+            "balanced", "1", "true" -> where += "COALESCE(is_balanced, 0) = 1"
+            "unbalanced", "0", "false" -> where += "COALESCE(is_balanced, 0) = 0"
+            else -> throw IllegalArgumentException("مرشح توازن قراءة العداد غير صالح")
+        }
+
+        val tankId = params.optLong("tank_id", 0L)
+        val fuelTypeId = params.optLong("fuel_type_id", 0L)
+        if (tankId > 0L) {
+            where += "pump_id IN (SELECT id FROM pumps WHERE tank_id = ?)"
+            args += tankId.toString()
+        }
+        if (fuelTypeId > 0L) {
+            where += "pump_id IN (SELECT p.id FROM pumps p JOIN tanks t ON t.id = p.tank_id WHERE t.fuel_type_id = ?)"
+            args += fuelTypeId.toString()
+        }
+    }
+
     fun getOperationalRows(screenKey: String, params: JSONObject = JSONObject()): JSONArray {
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         dbLock.lock()
@@ -20430,10 +20471,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             } else if (stationId > 0 && screenKey == "deliveries") {
                 where += "EXISTS (SELECT 1 FROM sales_transactions scope_sale WHERE scope_sale.id = deliveries.sale_id AND scope_sale.station_id = ? AND scope_sale.is_deleted = 0)"
                 args += stationId.toString()
-            } else if (stationId > 0 && screenKey == "deliveries") {
-                where += "EXISTS (SELECT 1 FROM sales_transactions scope_sale WHERE scope_sale.id = deliveries.sale_id AND scope_sale.station_id = ? AND scope_sale.is_deleted = 0)"
-                args += stationId.toString()
             }
+
             val includeArchived = params.optBoolean("include_archived", false)
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
             val search = params.optString("search", "").trim()
@@ -20480,12 +20519,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     "product" -> where += "product_id IS NOT NULL AND product_id > 0"
                 }
             }
-            if (screenKey == "meter_readings") {
-                val tankId = params.optLong("tank_id", 0L)
-                val fuelTypeId = params.optLong("fuel_type_id", 0L)
-                if (tankId > 0L) { where += "pump_id IN (SELECT id FROM pumps WHERE tank_id = ?)"; args += tankId.toString() }
-                if (fuelTypeId > 0L) { where += "pump_id IN (SELECT p.id FROM pumps p JOIN tanks t ON t.id = p.tank_id WHERE t.fuel_type_id = ?)"; args += fuelTypeId.toString() }
-            }
+            if (screenKey == "meter_readings") appendMeterReadingFilters(params, where, args)
             if (screenKey in setOf("vehicles", "drivers")) {
                 val partyId = params.optLong("party_id", 0L)
                 val vehicleId = params.optLong("vehicle_id", 0L)
@@ -20531,8 +20565,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val requestedSort = params.optString("sort_by", "id").trim()
             val sortColumn = if (requestedSort in allowedSortColumns && spec.columns.contains(requestedSort) || requestedSort == "id") requestedSort else "id"
             val sortDirection = if (params.optString("sort_dir", "desc").equals("asc", ignoreCase = true)) "ASC" else "DESC"
+            val orderBy = if (sortColumn == "id") "id $sortDirection" else "$sortColumn $sortDirection, id DESC"
             val selectedColumns = if (screenKey in setOf("warehouses", "stock_alerts")) (spec.columns + "created_at").distinct() else spec.columns
-            val sql = "SELECT id, ${selectedColumns.joinToString(", ")} FROM ${spec.table}$whereSql ORDER BY $sortColumn $sortDirection"
+            val sql = "SELECT id, ${selectedColumns.joinToString(", ")} FROM ${spec.table}$whereSql ORDER BY $orderBy"
             val boundedSql = if (limit > 0) sql + " LIMIT ? OFFSET ?" else sql
             if (limit > 0) { pageArgs.add(limit.toString()); pageArgs.add(offset.toString()) }
             db.rawQuery(boundedSql, pageArgs.toTypedArray()).use { cursor -> cursorToJsonArray(cursor) }
@@ -20553,6 +20588,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 where += calibrationStationPredicate(stationId)
             } else if (stationId > 0 && fleetScope != null) {
                 where += fleetScope
+            } else if (stationId > 0 && screenKey in setOf("receipt_templates", "invoice_templates")) {
+                where += "(station_id = ? OR station_id IS NULL)"
+                args += stationId.toString()
             } else if (stationId > 0 && spec.columns.contains("station_id")) {
                 where += "station_id = ?"
                 args += stationId.toString()
@@ -20570,7 +20608,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 where += "EXISTS (SELECT 1 FROM tanks scope_t WHERE scope_t.id = tank_level_log.tank_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
             } else if (stationId > 0 && screenKey == "fuel_quality_tests") {
                 where += "EXISTS (SELECT 1 FROM tank_refills scope_tr JOIN tanks scope_t ON scope_t.id = scope_tr.tank_id WHERE scope_tr.id = fuel_quality_tests.refill_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
+            } else if (stationId > 0 && screenKey == "deliveries") {
+                where += "EXISTS (SELECT 1 FROM sales_transactions scope_sale WHERE scope_sale.id = deliveries.sale_id AND scope_sale.station_id = ? AND scope_sale.is_deleted = 0)"
+                args += stationId.toString()
             }
+
             val includeArchived = params.optBoolean("include_archived", false)
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
             val search = params.optString("search", "").trim()
@@ -20617,12 +20659,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     "product" -> where += "product_id IS NOT NULL AND product_id > 0"
                 }
             }
-            if (screenKey == "meter_readings") {
-                val tankId = params.optLong("tank_id", 0L)
-                val fuelTypeId = params.optLong("fuel_type_id", 0L)
-                if (tankId > 0L) { where += "pump_id IN (SELECT id FROM pumps WHERE tank_id = ?)"; args += tankId.toString() }
-                if (fuelTypeId > 0L) { where += "pump_id IN (SELECT p.id FROM pumps p JOIN tanks t ON t.id = p.tank_id WHERE t.fuel_type_id = ?)"; args += fuelTypeId.toString() }
-            }
+            if (screenKey == "meter_readings") appendMeterReadingFilters(params, where, args)
             if (screenKey in setOf("vehicles", "drivers")) {
                 val partyId = params.optLong("party_id", 0L)
                 val vehicleId = params.optLong("vehicle_id", 0L)
@@ -20670,15 +20707,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         val requestedPageSize = params.optInt("limit", 200)
         val pageSize = if (requestedPageSize > 0) requestedPageSize.coerceIn(1, 5000) else 0
-        val offset = params.optInt("offset", 0).coerceAtLeast(0)
+        val totalCount = getOperationalTotalCount(screenKey, params)
+        val requestedOffset = params.optInt("offset", 0).coerceAtLeast(0)
+        val lastPageOffset = if (pageSize > 0 && totalCount > 0) ((totalCount - 1) / pageSize) * pageSize else 0
+        val offset = if (pageSize > 0) minOf(requestedOffset, lastPageOffset) else 0
         val pageParams = JSONObject(params.toString()).apply {
             put("limit", pageSize)
             put("offset", offset)
         }
         val rows = getOperationalRows(screenKey, pageParams)
-        val totalCount = getOperationalTotalCount(screenKey, params)
         val totals = JSONObject()
         spec.numericColumns.forEach { totals.put(it, 0.0) }
+        var balancedReadings = 0
+        var unbalancedReadings = 0
 
         // Aggregate the complete filtered SQLite result set in Kotlin/SQLite pages.
         // The WebView never computes report totals from its rendered JavaScript array.
@@ -20696,8 +20737,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 spec.numericColumns.forEach { key ->
                     totals.put(key, totals.optDouble(key, 0.0) + row.optDouble(key, 0.0))
                 }
+                if (screenKey == "meter_readings") {
+                    if (row.optInt("is_balanced", 0) == 1) balancedReadings++ else unbalancedReadings++
+                }
             }
             scanOffset += scanRows.length()
+        }
+        if (screenKey == "meter_readings") {
+            totals.put("balanced_count", balancedReadings)
+            totals.put("unbalanced_count", unbalancedReadings)
         }
 
         val page = if (pageSize > 0) (offset / pageSize) + 1 else 1
@@ -31967,8 +32015,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val stationId = stationScopeId
             val reportType = data.optString("report_type", "summary")
-            val includeSales = reportType == "summary" || reportType == "sales"
-            val includeRefills = reportType == "summary" || reportType == "refills"
+            val includeSales = reportType != "refills"
+            val includeRefills = reportType != "sales"
             val saleFilter = fuelReportConditions(data, "s", includeTankFilter = false)
             val refillFilter = fuelReportConditions(data, "r", includeTankFilter = true)
             val branches = mutableListOf<String>()
@@ -32009,7 +32057,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (branches.isEmpty()) return JSONArray()
             val limit = data.optInt("limit", 0).coerceAtLeast(0)
             val offset = data.optInt("offset", 0).coerceAtLeast(0)
-            val sql = branches.joinToString(" UNION ALL ") + " ORDER BY date DESC, id DESC" + if (limit > 0) " LIMIT ? OFFSET ?" else ""
+            val requestedSort = data.optString("sort_by", "date").trim().lowercase(Locale.US)
+            val sortColumn = when (requestedSort) {
+                "amount" -> "amount"
+                "quantity" -> "quantity"
+                "fuel_name" -> "fuel_name"
+                "code" -> "code"
+                "id" -> "id"
+                else -> "date"
+            }
+            val sortDirection = if (data.optString("sort_dir", "desc").equals("asc", ignoreCase = true)) "ASC" else "DESC"
+            val orderBy = if (sortColumn == "id") "id $sortDirection, type ASC" else "$sortColumn $sortDirection, id DESC, type ASC"
+            val sql = branches.joinToString(" UNION ALL ") + " ORDER BY $orderBy" + if (limit > 0) " LIMIT ? OFFSET ?" else ""
             if (limit > 0) { args += limit.toString(); args += offset.toString() }
             readableDatabase.rawQuery(sql, args.toTypedArray()).use { cursorToJsonArray(it) }
         } finally { dbLock.unlock() }
@@ -32021,8 +32080,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val stationId = stationScopeId
             val reportType = data.optString("report_type", "summary")
-            val includeSales = reportType == "summary" || reportType == "sales"
-            val includeRefills = reportType == "summary" || reportType == "refills"
+            val includeSales = reportType != "refills"
+            val includeRefills = reportType != "sales"
             val saleFilter = fuelReportConditions(data, "s", includeTankFilter = false)
             val refillFilter = fuelReportConditions(data, "r", includeTankFilter = true)
             var total = 0
@@ -32041,10 +32100,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun getFuelReportPage(data: JSONObject, stationScopeId: Int): JSONObject {
         require(stationScopeId > 0) { "معرف المحطة مطلوب لصفحة تقرير الوقود" }
         val limit = data.optInt("limit", 50).coerceIn(1, 1000)
-        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val totalCount = getFuelReportTotalCount(data, stationScopeId)
+        val requestedOffset = data.optInt("offset", 0).coerceAtLeast(0)
+        val lastPageOffset = if (totalCount > 0) ((totalCount - 1) / limit) * limit else 0
+        val offset = minOf(requestedOffset, lastPageOffset)
         val query = JSONObject(data.toString()).apply { put("limit", limit); put("offset", offset) }
         val rows = getFuelReport(query, stationScopeId)
-        val totalCount = getFuelReportTotalCount(query, stationScopeId)
         val page = (offset / limit) + 1
         val totalPages = if (totalCount == 0) 0 else (totalCount + limit - 1) / limit
         return JSONObject().apply {

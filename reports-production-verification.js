@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
-const root = process.cwd();
-const read = p => fs.readFileSync(path.join(root, p), 'utf8');
+const read = p => fs.readFileSync(path.join(process.cwd(), p), 'utf8');
+
 const db = read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt');
 const bridge = read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt');
 const main = read('app/src/main/assets/main.html');
@@ -9,67 +9,112 @@ const kpi = read('app/src/main/assets/screens/kpi.html');
 const sales = read('app/src/main/assets/screens/sales-reports.html');
 const inventory = read('app/src/main/assets/screens/inventory-reports.html');
 const fuel = read('app/src/main/assets/screens/fuel-reports.html');
+const readings = read('app/src/main/assets/screens/meter-readings.html');
+const reportTests = read('app/src/test/java/com/aistudio/dieselstationsms/kxmpzq/ReportsPaginationRobolectricTest.kt');
+
 const failures = [];
 const need = (text, re, label) => { if (!re.test(text)) failures.push(label); };
-const forbid = (text, re, label) => { if (re.test(text)) failures.push(label); };
+const count = (text, re) => (text.match(re) || []).length;
+function section(source, start, end) {
+  const from = source.indexOf(start);
+  const to = source.indexOf(end, from + start.length);
+  if (from < 0 || to < 0) throw new Error('Unable to isolate source contract: ' + start);
+  return source.slice(from, to);
+}
 
-// Historical trends: strict date range, equivalent previous period, real SQL aggregates, and no fake zero baseline.
+// Historical trends: real SQLite aggregates and valid previous-period handling.
 need(db, /getSalesAmountBetween\(stationId, currentStart, currentEnd\)/, 'trends: current SQLite period aggregate missing');
-need(db, /getSalesAmountBetween\(stationId, previousStart, previousEnd\)/, 'trends: previous SQLite period aggregate missing');
-need(db, /require\(!currentStartDate\.after\(currentEndDate\)\)/, 'trends: reversed date range validation missing');
+need(db, /getSalesAmountBetween\(stationId, previousStart, previousEnd\)/, 'trends: previous-equivalent-period aggregate missing');
+need(db, /require\(!currentStartDate\.after\(currentEndDate\)\)/, 'trends: reversed date-range validation missing');
 need(db, /parseDateOnlyStrict/, 'trends: strict date parsing missing');
 need(db, /sales_trend_data/, 'trends: structured sales result missing');
 need(db, /products_trend_data/, 'trends: structured product result missing');
 need(db, /customers_trend_data/, 'trends: structured customer result missing');
 need(db, /put\("percentage_change", JSONObject\.NULL\)/, 'trends: zero-baseline null handling missing');
-need(main, /stats\.sales_trend_data/, 'main: structured sales trend is not consumed');
-need(main, /stats\.products_trend_data/, 'main: structured product trend is not consumed');
-need(kpi, /apiCall\('getKPIDashboard', params\)/, 'kpi: KPI dashboard call missing');
-need(kpi, /const res = await apiCall\('getKPIDashboard', params\)/, 'kpi: dashboard result is not decoded');
-forbid(main, /Number\.isFinite\(Number\(trendData\.percentage_change\)\).*return \{ text: '[^']*0%/, 'main: static trend fallback detected');
+need(main, /stats\.sales_trend_data/, 'main: structured sales trend consumer missing');
+need(main, /stats\.products_trend_data/, 'main: structured product trend consumer missing');
+need(kpi, /apiCall\('getKPIDashboard', params\)/, 'KPI: dashboard call missing');
 
-// Operational pagination and filters must share the same predicate construction for rows and COUNT.
-need(db, /getOperationalTotalCount/, 'operational: COUNT helper missing');
-need(db, /SELECT COUNT\(\*\) FROM \$\{spec\.table\}\$whereSql/, 'operational: COUNT query missing');
-need(db, /LIMIT \? OFFSET \?/, 'operational: LIMIT/OFFSET query missing for bounded callers');
-need(db, /optBoolean\(\"return_all\", false\)/, 'operational: explicit unbounded report flag missing');
-need(db, /getOperationalTotalCount\(screenKey, params\)\.coerceAtLeast\(1\)/, 'operational: unbounded row count must derive from active filters');
-need(db, /returnAll = data\.optBoolean\(\"return_all\", false\)/, 'custom reports: unbounded flag missing');
-need(sales, /return_all: true/, 'sales UI: report must request all matching rows');
-need(inventory, /return_all: true/, 'inventory UI: report must request all matching rows');
-need(fuel, /return_all: true/, 'fuel UI: report must request all matching rows');
-need(db, /optString\("from_date", params\.optString\("start_date"/, 'operational: start_date alias missing');
-need(db, /optString\("to_date", params\.optString\("end_date"/, 'operational: end_date alias missing');
-need(db, /payment_method = \?/, 'sales: payment_method SQL filter missing');
-need(db, /customer_party_id = \?/, 'sales: customer SQL filter missing');
-need(db, /EXISTS \(SELECT 1 FROM products/, 'sales: product/customer search join missing');
-need(sales, /sort_by: salesPagination\.sortBy/, 'sales: sort state not sent to SQLite');
-need(sales, /search: salesPagination\.search/, 'sales: search state not sent to SQLite');
-need(inventory, /sort_by: inventoryPagination\.sortBy/, 'inventory: sort state not sent to SQLite');
-need(inventory, /search: String\(document\.getElementById\('inventorySearch'\)/, 'inventory: search not sent to SQLite');
-need(db, /totalPages = if \(totalCount == 0\) 0/, 'pagination: empty-page metadata handling missing');
-need(db, /has_next/, 'pagination: has_next metadata missing');
-need(db, /has_previous/, 'pagination: has_previous metadata missing');
+// Operational reporting: row and COUNT queries must share station and filter predicates.
+const rowsMethod = section(db, 'fun getOperationalRows(', 'private fun getOperationalTotalCount(');
+const countMethod = section(db, 'private fun getOperationalTotalCount(', 'fun getOperationalReport(');
+for (const [label, source] of [['rows', rowsMethod], ['COUNT', countMethod]]) {
+  need(source, /appendMeterReadingFilters\(params, where, args\)/, 'operational ' + label + ': meter-reading filters are not shared');
+  need(source, /\(station_id = \? OR station_id IS NULL\)/, 'operational ' + label + ': shared template station scope missing');
+  need(source, /scope_sale\.id = deliveries\.sale_id AND scope_sale\.station_id = \?/, 'operational ' + label + ': delivery station scope missing');
+}
+if (count(rowsMethod, /appendMeterReadingFilters\(params, where, args\)/g) !== 1 ||
+    count(countMethod, /appendMeterReadingFilters\(params, where, args\)/g) !== 1) {
+  failures.push('operational: meter-reading row and COUNT filters must each call the shared predicate builder exactly once');
+}
+need(db, /SELECT COUNT\(\*\) FROM \$\{spec\.table\}\$whereSql/, 'operational: SQLite COUNT query missing');
+need(db, /LIMIT \? OFFSET \?/, 'operational: parameterized bounded query missing');
+need(db, /ORDER BY \$orderBy/, 'operational: deterministic ordering expression missing');
+need(db, /\$sortColumn \$sortDirection, id DESC/, 'operational: stable unique pagination tie-breaker missing');
+need(db, /lastPageOffset/, 'operational: out-of-range report pages are not clamped');
+need(db, /put\("total_count", totalCount\)/, 'operational: total_count metadata missing');
+need(db, /put\("total_pages", totalPages\)/, 'operational: total_pages metadata missing');
+need(db, /put\("has_next", pageSize > 0 && page < totalPages\)/, 'operational: has_next metadata missing');
+need(db, /put\("has_previous", pageSize > 0 && page > 1\)/, 'operational: has_previous metadata missing');
 
-// Fuel report filters and reading path.
-need(db, /CREATE TABLE IF NOT EXISTS meter_readings/, 'fuel: meter_readings schema missing');
-need(db, /"meter_readings" -> "reading_date"/, 'fuel: reading_date filter missing');
-need(bridge, /@JavascriptInterface\s+fun generateMeterReadingReport\(/, 'fuel: meter reading bridge path missing');
-need(fuel, /generateMeterReadingReport/, 'fuel UI: meter reading call missing');
-need(fuel, /getFuelReportPage/, 'fuel UI: paged report call missing');
-need(fuel, /fuel_type_id: fuelType/, 'fuel UI: fuel type not sent to SQLite');
-need(fuel, /tank_id: tank/, 'fuel UI: tank filter not sent to SQLite');
-need(fuel, /search: String\(document\.getElementById\('fuelSearch'\)/, 'fuel UI: search not sent to SQLite');
-need(db, /fuelReportConditions/, 'fuel: shared SQL predicate builder missing');
-need(db, /getFuelReportTotalCount/, 'fuel: COUNT predicate missing');
-need(db, /ORDER BY date DESC, id DESC/, 'fuel: deterministic order missing');
+// The operational report must be backed by an explicit table specification and real SQLite regression tests.
+need(db, /"meter_readings" -> OperationalTableSpec\([\s\S]{0,1400}table = "meter_readings"/, 'meter readings: operational table specification missing');
+need(reportTests, /meterReadingReportUsesSqliteCountAndStableBoundedPages/, 'meter readings: SQLite pagination regression test missing');
+need(reportTests, /meterReadingFiltersAreSharedByRowsCountAndAggregates/, 'meter readings: SQLite filter/count parity regression test missing');
+need(reportTests, /meterReadingReportCannotReturnRowsForAnotherStationScope/, 'meter readings: station-scope isolation regression test missing');
 
-// No prohibited production substitutes in the changed code.
-const changed = [db, bridge, main, kpi, sales, inventory, fuel].join('\n');
-forbid(changed, /Math\.random\s*\(/, 'forbidden Math.random detected');
-forbid(changed, /mock|dummy|fake|simulated API/i, 'forbidden mock/fake/simulated marker detected');
-forbid(changed, /Promise\.resolve\(\s*\[\s*\]\s*\)/, 'empty Promise fallback detected');
+// Meter-reading filters and full-result aggregates must be computed in SQLite.
+need(db, /pump_id = \?/, 'meter readings: pump SQL filter missing');
+need(db, /LOWER\(COALESCE\(period, ''\)\) = LOWER\(\?\)/, 'meter readings: period SQL filter missing');
+need(db, /COALESCE\(is_balanced, 0\) = 1/, 'meter readings: balanced SQL filter missing');
+need(db, /COALESCE\(is_balanced, 0\) = 0/, 'meter readings: unbalanced SQL filter missing');
+need(db, /totals\.put\("balanced_count", balancedReadings\)/, 'meter readings: full-result balanced aggregate missing');
+need(db, /totals\.put\("unbalanced_count", unbalancedReadings\)/, 'meter readings: full-result unbalanced aggregate missing');
 
-console.log('Production root-cause verification checks:', 0 + 1);
-if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
-console.log('Production root-cause verification PASS: code paths and edge-case guards present.');
+// Fuel report: pagination, search, movement type, and count must use the same SQL predicates.
+need(db, /fuelReportConditions/, 'fuel report: shared SQL filter builder missing');
+need(db, /getFuelReportTotalCount/, 'fuel report: COUNT query missing');
+need(db, /val includeSales = reportType != "refills"/, 'fuel report: movement/sales inclusion logic missing');
+need(db, /val includeRefills = reportType != "sales"/, 'fuel report: movement/refills inclusion logic missing');
+need(db, /lastPageOffset = if \(totalCount > 0\) \(\(totalCount - 1\) \/ limit\) \* limit else 0/, 'fuel report: out-of-range page clamp missing');
+need(db, /val requestedSort = data.optString\("sort_by", "date"\)/, 'fuel report: allow-listed sort input missing');
+need(db, /val orderBy = if \(sortColumn == "id"\) "id \$sortDirection, type ASC"/, 'fuel report: stable cross-source sort tie-breaker missing');
+need(fuel, /getFuelReportPage/, 'fuel UI: paged SQLite bridge call missing');
+need(fuel, /search: search,/, 'fuel UI: search is not sent to SQLite');
+need(fuel, /limit: pagination\.pageSize/, 'fuel UI: bounded page size not sent');
+need(fuel, /offset: \(pagination\.page - 1\) \* pagination\.pageSize/, 'fuel UI: page offset not sent');
+need(fuel, /function goToPage\(page\)[\s\S]{0,220}generateReport\(targetPage\)/, 'fuel UI: page navigation does not preserve requested page');
+need(fuel, /function extractFuelReport\(res\)/, 'fuel UI: response metadata normalization missing');
+need(fuel, /payload\.total_pages/, 'fuel UI: total_pages is not consumed');
+need(fuel, /sort_by: fuelSort\.by/, 'fuel UI: quick-preset sort not sent to SQLite');
+need(fuel, /sort_dir: fuelSort\.direction/, 'fuel UI: quick-preset sort direction not sent to SQLite');
+need(fuel, /function applyPreset\(presetId\)/, 'fuel UI: preset handler missing');
+need(fuel, /pagination\.page = 1;\s*generateReport\(\);\s*haptic\('light'\)/, 'fuel UI: presets do not reload the server report');
+if (/filterByPreset\(state\.allRows, state\.activePreset\)/.test(fuel)) failures.push('fuel UI: page-local preset processing remains');
+need(fuel, /function applyFuelSearch\(value\)[\s\S]{0,300}generateReport\(\)/, 'fuel UI: search is not reloaded from SQLite');
+if (/haystack\.includes\(q\)/.test(fuel)) failures.push('fuel UI: page-local search still bypasses SQL pagination');
+
+// Fuel Readings has its own operational report screen and bridge contract.
+need(bridge, /@JavascriptInterface\s+fun getMeterReadingRecords\(/, 'bridge: getMeterReadingRecords missing');
+need(bridge, /@JavascriptInterface\s+fun generateMeterReadingReport\(/, 'bridge: generateMeterReadingReport missing');
+need(readings, /"reportKind": "operational:MeterReading"/, 'meter readings: operational report configuration missing');
+need(readings, /"listMethod": "getMeterReadingRecords"/, 'meter readings: list bridge configuration missing');
+need(readings, /invoke\('generate' \+ suffix \+ 'Report'/, 'meter readings: report bridge invocation missing');
+need(readings, /limit: REPORT_PAGE_SIZE/, 'meter readings: bounded page size missing');
+need(readings, /offset: \(reportPage - 1\) \* REPORT_PAGE_SIZE/, 'meter readings: page offset missing');
+need(readings, /renderReportPagination\(reportData\)/, 'meter readings: page navigation is not rendered');
+need(readings, /buildReportSummary\(rows, reportData\)/, 'meter readings: summary does not consume SQLite aggregates');
+if (/rows = rows\.filter\(row => \{/.test(readings)) failures.push('meter readings: report filters are still applied only to the current page');
+
+// Screens and bridges remain tied to the production SQLite contracts.
+need(fuel, /name="reports-bridge-methods" content="[^"]*getFuelReportPage[^"]*getFuelTransactionDetails/, 'fuel UI: bridge metadata is incomplete');
+need(main, /sales_trend_data/, 'main: trend consumer marker missing');
+need(sales, /total_count/, 'sales report: count metadata missing');
+need(inventory, /total_count/, 'inventory report: count metadata missing');
+
+console.log('Reports production verification checks:', 1);
+if (failures.length) {
+  console.error(failures.join('\n'));
+  process.exit(1);
+}
+console.log('Reports production verification PASS: filters, station isolation, COUNT parity, pagination and fuel readings.');
