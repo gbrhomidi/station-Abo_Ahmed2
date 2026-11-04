@@ -1357,7 +1357,6 @@
         const rowsFrom=value=>{const raw=dataOf(value);if(Array.isArray(raw))return raw;if(raw&&Array.isArray(raw.rows))return raw.rows;if(raw&&Array.isArray(raw.data))return raw.data;if(raw&&typeof raw==='object')return [raw];return[];};
         const toast=(message,bad=false)=>{const node=$('toast');if(!node)return;node.textContent=message;node.className='toast show';node.style.background=bad?'var(--error)':'#111827';clearTimeout(node._timer);node._timer=setTimeout(()=>node.classList.remove('show'),3500);};
         const setLoading=value=>{const node=$('loadingIndicator');if(node)node.classList.toggle('show',Boolean(value));};
-        const invoke=(method,args=[])=>{if(!bridge||typeof bridge[method]!=='function')return Promise.reject(new Error('العقد '+method+' غير متاح في Android Bridge'));try{return Promise.resolve(parse(bridge[method].apply(bridge,args)));}catch(error){return Promise.reject(error);}};
         const actionText=row=>String(first(row,['action','action_type','log_type','message_type'],'UNKNOWN')).toUpperCase();
         const sourceText=row=>String(first(row,['source_table','table_name','target_table'],'—'));
         const userText=row=>String(first(row,['username','full_name','operator','user_name','user_id'],'غير معروف'));
