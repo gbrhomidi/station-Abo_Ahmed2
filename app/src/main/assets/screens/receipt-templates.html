@@ -2512,6 +2512,17 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
 
             const fullFilename = filename.endsWith('.' + ext) ? filename : filename + '.' + ext;
 
+            if (window.StationExportRuntime && typeof window.StationExportRuntime.openPreparedExport === 'function') {
+                window.StationExportRuntime.openPreparedExport({
+                    blob: new Blob([content], { type: mimeType }),
+                    filename: fullFilename,
+                    label: 'تصدير القوالب',
+                    formats: ['csv', 'xlsx', 'pdf', 'json']
+                });
+                closeModal(null, 'exportSheet');
+                return;
+            }
+
             setLoading(true);
 
             // محاولة استخدام الجسر أولاً

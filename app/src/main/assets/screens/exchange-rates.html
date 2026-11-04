@@ -2078,6 +2078,21 @@ details summary{cursor:pointer; font-weight:700; color:var(--sage-700); text-ali
             const fmt = state.exportFormat;
             const fileName = ($('exportFileName').value || 'exchange_rates').trim();
             if (!state.filtered.length) { toast('لا توجد بيانات لتصديرها', 'warning'); return; }
+
+            if (window.StationExportRuntime && typeof window.StationExportRuntime.openPreparedExport === 'function') {
+                const keys = [...new Set(state.filtered.flatMap(row => Object.keys(row || {})))];
+                const csv = '\ufeff' + [keys, ...state.filtered.map(row => keys.map(k => String(row[k] ?? '').replace(/"/g, '""')))]
+                    .map(row => row.map(v => `"${v}"`).join(',')).join('\n');
+                window.StationExportRuntime.openPreparedExport({
+                    blob: new Blob([csv], { type: 'text/csv;charset=utf-8' }),
+                    filename: fileName,
+                    label: 'تصدير التقرير',
+                    formats: [fmt === 'xlsx' ? 'xlsx' : fmt === 'json' ? 'json' : fmt === 'pdf' ? 'pdf' : 'csv']
+                });
+                closeModal(null, 'exportModal');
+                return;
+            }
+
             setLoading(true);
             try {
                 if (fmt === 'pdf') {

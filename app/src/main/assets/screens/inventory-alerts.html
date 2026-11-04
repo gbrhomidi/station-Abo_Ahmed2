@@ -2341,6 +2341,17 @@ select.form-input option { background: var(--bg-card); color: var(--text-primary
         });
         const csv = '\ufeff' + csvRows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
 
+        if (window.StationExportRuntime && typeof window.StationExportRuntime.openPreparedExport === 'function') {
+          window.StationExportRuntime.openPreparedExport({
+            blob: new Blob([csv], { type: 'text/csv;charset=utf-8' }),
+            filename: fileNameCsv,
+            label: 'تصدير التقرير',
+            formats: ['csv', 'xlsx', 'pdf', 'json']
+          });
+          closeModal(null, 'saveFileModal');
+          return;
+        }
+
         busy(true);
         try {
           let saved = false;

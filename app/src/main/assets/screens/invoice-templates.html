@@ -2459,6 +2459,16 @@ textarea.form-input.code-field { direction: ltr; text-align: left; font-family: 
         const csv = buildCsvFromRows(rows);
         const path = state.csvPath;
 
+        if (window.StationExportRuntime && typeof window.StationExportRuntime.openPreparedExport === 'function') {
+            window.StationExportRuntime.openPreparedExport({
+                blob: new Blob([csv], { type: 'text/csv;charset=utf-8' }),
+                filename: finalName,
+                label: 'تصدير CSV'
+            });
+            closeModal(null, 'csvSheet');
+            return;
+        }
+
         setLoading(true);
         try {
             // المحاولة 1: عبر جسر Android (حفظ حقيقي في المسار المطلوب)
