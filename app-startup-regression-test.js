@@ -15,8 +15,8 @@ assert(!onCreate.includes('migrateLegacySecuritySettings'), 'Security migration 
 assert(!onCreate.includes('clearSessionAfterDeviceRebootIfNeeded'), 'Session DB work must not run in onCreate');
 assert(!onCreate.includes('requestAllPermissions()'), 'Permission dialogs must not block initial screen creation');
 assert(onCreate.indexOf('setContent {') < onCreate.indexOf('initializeStartupDatabase()'), 'Compose must be scheduled before startup DB work');
-assert(/if\s*\(initializeStartupDatabase\(\)\)\s*\{\s*initializeSystem\(\)\s*\}\s*TaskNotificationManager\.reschedulePendingTasksAsync\(applicationContext\)/.test(onCreate), 'Task notifications must be rescheduled only after startup DB and SMS initialization');
-assert(onCreate.indexOf('TaskNotificationManager.reschedulePendingTasksAsync') > onCreate.indexOf('initializeSystem()'), 'Task notification DB reads must not compete with first SQLite initialization');
+assert(/if\s*\(initializeStartupDatabase\(\)\)\s*\{[\s\S]*?initializeSystem\(\)[\s\S]*?if\s*\(startupHealthCheckCompleted\)\s*\{\s*TaskNotificationManager\.reschedulePendingTasksAsync\(applicationContext\)\s*\}/.test(onCreate), 'Task notifications must be rescheduled only after successful startup DB and health initialization');
+assert(onCreate.indexOf('TaskNotificationManager.reschedulePendingTasksAsync') > onCreate.indexOf('startupHealthCheckCompleted'), 'Task notification DB reads must not compete with first SQLite initialization');
 
 const onStartStart = activity.indexOf('override fun onStart()');
 const onStartEnd = activity.indexOf('override fun onResume()', onStartStart);
@@ -136,4 +136,3 @@ verifyStartupWaitRecovery().then(() => {
   console.error(error);
   process.exitCode = 1;
 });
-

@@ -199,6 +199,7 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_LAST_BOOT_COUNT = "last_boot_count"
         private const val KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME = "security_background_at_elapsed_realtime"
         private const val KEY_SECURITY_REAUTH_PENDING = "security_reauthentication_pending"
+        private const val KEY_AUTHENTICATED_SHELL_PENDING_RESTORE = "authenticated_shell_pending_restore"
         private const val STATE_WAS_AUTHENTICATED_SHELL = "state_was_authenticated_shell"
 
 
@@ -459,6 +460,15 @@ class MainActivity : AppCompatActivity() {
         // يفشل التطبيق صراحةً إذا تعذر إنشاء التفضيلات المشفرة؛ لا يوجد مسار تخزين بديل غير آمن.
         initEncryptedPrefs()
 
+        if (savedInstanceState == null &&
+            sharedPrefs.getBoolean(KEY_AUTHENTICATED_SHELL_PENDING_RESTORE, false)
+        ) {
+            // Android may kill the process without a Bundle. Recover the protected route
+            // from encrypted prefs so a still-valid session is not sent to login.html.
+            wasAuthenticatedShellAtRecreation = true
+            isActivityRecreation = true
+        }
+
         try {
             // إنشاء مكونات الحالة لا يفتح SQLite؛ فتح قاعدة البيانات يتم لاحقاً
             // عبر المنسق المشترك على Dispatchers.IO.
@@ -536,6 +546,9 @@ class MainActivity : AppCompatActivity() {
                     } finally {
                         StartupPerformanceMonitor.endSpan(systemInitializationSpan, startupHealthCheckCompleted)
                     }
+                    if (startupHealthCheckCompleted) {
+                        TaskNotificationManager.reschedulePendingTasksAsync(applicationContext)
+                    }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -563,8 +576,6 @@ class MainActivity : AppCompatActivity() {
                         ).show()
                     }
                 }
-            } finally {
-                TaskNotificationManager.reschedulePendingTasksAsync(applicationContext)
             }
         }
 
@@ -854,12 +865,21 @@ class MainActivity : AppCompatActivity() {
             isExternalPickerActive = isDatabaseBackupPickerActive,
             hasOtherStartedActivity = MyApplication.hasOtherStartedActivity(this)
         )
-        if (shouldStartBackgroundClock &&
-            sharedPrefs.getLong(KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME, -1L) < 0L
-        ) {
-            sharedPrefs.edit()
-                .putLong(KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME, android.os.SystemClock.elapsedRealtime())
-                .apply()
+        if (shouldStartBackgroundClock) {
+            val pagePath = webView?.url?.substringBefore('?')?.substringBefore('#').orEmpty()
+            val activeAuthenticatedShell = !currentAuthToken.isNullOrBlank() && currentUserId > 0L &&
+                !webPageOwnsAuthentication() && pagePath.startsWith("file:///android_asset/")
+            val editor = sharedPrefs.edit()
+                .putBoolean(KEY_AUTHENTICATED_SHELL_PENDING_RESTORE, activeAuthenticatedShell)
+            if (activeAuthenticatedShell &&
+                sharedPrefs.getLong(KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME, -1L) < 0L
+            ) {
+                editor.putLong(
+                    KEY_SECURITY_BACKGROUND_AT_ELAPSED_REALTIME,
+                    android.os.SystemClock.elapsedRealtime()
+                )
+            }
+            editor.apply()
         }
 
         // A biometric sheet may be cancelled when another app comes forward. Preserve
@@ -1586,6 +1606,7 @@ class MainActivity : AppCompatActivity() {
             .remove("saved_user_id")
             .remove("saved_timestamp")
             .remove(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH)
+            .putBoolean(KEY_AUTHENTICATED_SHELL_PENDING_RESTORE, false)
             .putInt(KEY_LAST_BOOT_COUNT, bootCount)
             .apply()
         DebugLogger.info("SessionBoot", "Device reboot detected ($previousBootCount -> $bootCount); authentication and Remember-Me cleared")
@@ -2192,7 +2213,10 @@ class MainActivity : AppCompatActivity() {
         currentUserRole = ""
         currentUserName = ""
         // Keep Remember-Me material intact; only the active session token is removed.
-        sharedPrefs.edit().remove(KEY_TOKEN).apply()
+        sharedPrefs.edit()
+            .remove(KEY_TOKEN)
+            .putBoolean(KEY_AUTHENTICATED_SHELL_PENDING_RESTORE, false)
+            .apply()
         updateSecurityLockPending(false)
         securityPromptActive = false
         lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
@@ -9973,6 +9997,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val invalidated = db.invalidateUserSession(token, reason.take(50))
                 activity.currentAuthToken = null
+                activity.sharedPrefs.edit()
+                    .putBoolean(KEY_AUTHENTICATED_SHELL_PENDING_RESTORE, false)
+                    .apply()
                 activity.currentUserId = 0L
                 activity.currentUserRole = ""
                 activity.currentUserName = ""
@@ -15265,6 +15292,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             .remove(KEY_USER_ID)
             .remove(KEY_USER_ROLE)
             .remove(KEY_USER_NAME)
+            .putBoolean(KEY_AUTHENTICATED_SHELL_PENDING_RESTORE, false)
             .apply()
     }
 
