@@ -20402,6 +20402,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         where: MutableList<String>,
         args: MutableList<String>
     ) {
+        // A reading belongs to the active station only when both its pump and nozzle
+        // belong to that same pump/station. Enforce this integrity predicate for every
+        // meter-reading query, not only when a tank or fuel-type filter is selected.
+        where += """
+            EXISTS (
+                SELECT 1
+                FROM pumps report_pump
+                JOIN pump_nozzles report_nozzle
+                  ON report_nozzle.id = meter_readings.nozzle_id
+                 AND report_nozzle.pump_id = meter_readings.pump_id
+                WHERE report_pump.id = meter_readings.pump_id
+                  AND report_pump.station_id = meter_readings.station_id
+                  AND COALESCE(report_pump.is_deleted, 0) = 0
+                  AND COALESCE(report_nozzle.is_deleted, 0) = 0
+            )
+        """.trimIndent()
+
         val pumpId = params.optLong("pump_id", 0L)
         if (pumpId > 0L) {
             where += "pump_id = ?"
@@ -32076,7 +32093,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 else -> "date"
             }
             val sortDirection = if (data.optString("sort_dir", "desc").equals("asc", ignoreCase = true)) "ASC" else "DESC"
-            val orderBy = if (sortColumn == "id") "id $sortDirection, type ASC" else "$sortColumn $sortDirection, id DESC, type ASC"
+            // This query is a UNION ALL. SQLite requires compound-query ORDER BY
+            // expressions to resolve to output columns; bare "id" is ambiguous because
+            // each branch joins tables that also expose an id. Use stable projection
+            // ordinals: type=1, id=2, code=3, date=4, quantity=5, amount=6, fuel_name=7.
+            val sortOrdinal = when (sortColumn) {
+                "id" -> 2
+                "code" -> 3
+                "date" -> 4
+                "quantity" -> 5
+                "amount" -> 6
+                "fuel_name" -> 7
+                else -> 4
+            }
+            val orderBy = if (sortOrdinal == 2) {
+                "2 $sortDirection, 1 ASC"
+            } else {
+                "$sortOrdinal $sortDirection, 2 DESC, 1 ASC"
+            }
             val sql = branches.joinToString(" UNION ALL ") + " ORDER BY $orderBy" + if (limit > 0) " LIMIT ? OFFSET ?" else ""
             if (limit > 0) { args += limit.toString(); args += offset.toString() }
             readableDatabase.rawQuery(sql, args.toTypedArray()).use { cursorToJsonArray(it) }

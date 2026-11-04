@@ -263,7 +263,7 @@ class ReportsPaginationRobolectricTest {
         // Deliberately seed a row whose station_id is the active station but whose
         // pump/nozzle references belong to another station. SQLite's individual FKs
         // permit this; report predicates must still prevent the cross-station relation.
-        db.insertOrThrow("meter_readings", null, ContentValues().apply {
+        val crossStationReadingId = db.insertOrThrow("meter_readings", null, ContentValues().apply {
             val token = UUID.randomUUID().toString()
             put("uuid", token)
             put("reading_code", "RPT-CROSS-STATION-$token")
@@ -283,6 +283,17 @@ class ReportsPaginationRobolectricTest {
             put("status", "verified")
             put("is_deleted", 0)
         })
+
+        val stationOnly = helper.getOperationalReport(
+            "meter_readings",
+            JSONObject().put("station_id", stationId).put("limit", 50)
+        )
+        assertFalse(
+            "A reading with a foreign station's pump/nozzle must never enter this station's report",
+            (0 until stationOnly.getJSONArray("rows").length()).any {
+                stationOnly.getJSONArray("rows").getJSONObject(it).getLong("id") == crossStationReadingId
+            }
+        )
 
         val byForeignTank = helper.getOperationalReport(
             "meter_readings",

@@ -34,7 +34,9 @@ need(db, /fun getOperationalReport\([\s\S]*?dbLock\.lock\(\)[\s\S]*?getOperation
 need(db, /fun getFuelReportPage\([\s\S]*?dbLock\.lock\(\)[\s\S]*?getFuelReportTotalCount\(data, stationScopeId\)[\s\S]*?finally \{\s*dbLock\.unlock\(\)\s*\}/, 'DatabaseHelper: fuel report COUNT/page snapshot lock missing');
 
 need(db, /val requestedSort = data.optString\("sort_by", "date"\)/, 'DatabaseHelper: allow-listed fuel report sort missing');
-need(db, /val orderBy = if \(sortColumn == "id"\) "id \$sortDirection, type ASC"/, 'DatabaseHelper: deterministic cross-source fuel ordering missing');
+need(db, /val sortOrdinal = when \(sortColumn\)[\s\S]*?"fuel_name" -> 7/, 'DatabaseHelper: fuel UNION sort columns must map to the selected projection');
+need(db, /val orderBy = if \(sortOrdinal == 2\) \{\s*"2 \$sortDirection, 1 ASC"\s*\} else \{\s*"\$sortOrdinal \$sortDirection, 2 DESC, 1 ASC"\s*\}/, 'DatabaseHelper: fuel UNION ordering must use unambiguous output ordinals');
+if (/ORDER BY (?:date|id) .*?id DESC, type ASC/.test(db)) failures.push('DatabaseHelper: ambiguous UNION ORDER BY regression detected');
 need(bridge, /@JavascriptInterface\s+fun getFuelReportPage\(/, 'MainActivity: getFuelReportPage bridge missing');
 need(bridge, /@JavascriptInterface\s+fun getMeterReadingRecords\(/, 'MainActivity: meter-reading list bridge missing');
 need(bridge, /@JavascriptInterface\s+fun generateMeterReadingReport\(/, 'MainActivity: meter-reading report bridge missing');
@@ -64,6 +66,9 @@ need(db, /pump_id = \?/, 'meter readings: pump filter missing');
 need(db, /LOWER\(COALESCE\(period, ''\)\) = LOWER\(\?\)/, 'meter readings: period filter missing');
 need(db, /COALESCE\(is_balanced, 0\) = 1/, 'meter readings: balanced filter missing');
 need(db, /COALESCE\(is_balanced, 0\) = 0/, 'meter readings: unbalanced filter missing');
+need(db, /JOIN pump_nozzles report_nozzle/, 'meter readings: report must validate nozzle/pump ownership');
+need(db, /report_pump\.station_id = meter_readings\.station_id/, 'meter readings: report pump must belong to the reading station');
+need(db, /report_nozzle\.pump_id = meter_readings\.pump_id/, 'meter readings: report nozzle must belong to the recorded pump');
 need(db, /pump_id IN \(SELECT id FROM pumps WHERE tank_id = \? AND station_id = meter_readings\.station_id AND COALESCE\(is_deleted, 0\) = 0\)/, 'meter readings: tank-to-pump filter must enforce station ownership');
 need(db, /p\.station_id = meter_readings\.station_id AND t\.station_id = meter_readings\.station_id/, 'meter readings: fuel-type subquery must enforce pump and tank station ownership');
 need(db, /COALESCE\(p\.is_deleted, 0\) = 0 AND COALESCE\(t\.is_deleted, 0\) = 0/, 'meter readings: related pumps and tanks must exclude soft-deleted records');
