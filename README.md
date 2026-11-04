@@ -33,6 +33,7 @@
 - [🧠 نمط MVVM + Repository](#-نمط-mvvm--repository)
 - [📡 نظام SMS المتكامل](#-نظام-sms-المتكامل)
 - [📊 التقارير والإحصائيات](#-التقارير-والإحصائيات)
+- [📤 توثيق التصدير وSAF وDrilldown](docs/ANDROID_EXPORT_SAF_AND_REPORT_DRILLDOWN.md)
 - [🔒 الأمان والنسخ الاحتياطي](#-الأمان-والنسخ-الاحتياطي)
 - [👥 شاشة إدارة المستخدمين وBridges](#-شاشة-إدارة-المستخدمين-وbridges)
 - [🧪 اختبارات DatabaseHelper](#-اختبارات-databasehelper)
@@ -488,6 +489,8 @@ class SMSService(private val context: Context) {
 | **تقرير العميل** | جميع معاملات ومدفوعات عميل محدد | HTML / JSON |
 | **تقرير المخزون المنخفض** | التعبئات التي وصلت للحد الأدنى | Compose UI |
 | **تقرير المبيعات الشهرية** | تحليل شامل مع المقارنة بالشهر السابق | HTML Chart |
+
+تستخدم عمليات التصدير والحفظ على Android منتقي SAF مع كتابة متدفقة على I/O، كما يعتمد فتح المستند من التقرير على عقد Source Trace v2 والتحقق من سجل SQLite والمحطة. راجع [توثيق مسارات التصدير واختبارات الذاكرة وdrilldown](docs/ANDROID_EXPORT_SAF_AND_REPORT_DRILLDOWN.md) للتفاصيل والقيود الخاصة بفحوص Crashlytics وAndroid profiling.
 
 ---
 

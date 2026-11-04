@@ -133,6 +133,42 @@
 
     function base64FromBlob(blob) {
         if (!blob || typeof blob.arrayBuffer !== 'function') return Promise.reject(new Error('ملف التصدير غير صالح'));
+        if (typeof blob.stream === 'function' && typeof btoa === 'function') {
+            return (async function () {
+                const reader = blob.stream().getReader();
+                let encoded = '';
+                const encodeChunkSize = 0x7ffe; // multiple of 3; keeps each temporary binary string bounded
+                let carry = new Uint8Array(0);
+                try {
+                    while (true) {
+                        const next = await reader.read();
+                        if (next.done) break;
+                        const chunk = next.value instanceof Uint8Array ? next.value : new Uint8Array(next.value);
+                        let bytes;
+                        if (carry.length) {
+                            bytes = new Uint8Array(carry.length + chunk.length);
+                            bytes.set(carry, 0);
+                            bytes.set(chunk, carry.length);
+                        } else {
+                            bytes = chunk;
+                        }
+                        const completeLength = bytes.length - (bytes.length % 3);
+                        for (let offset = 0; offset < completeLength; offset += encodeChunkSize) {
+                            const end = Math.min(offset + encodeChunkSize, completeLength);
+                            encoded += btoa(String.fromCharCode.apply(null, bytes.subarray(offset, end)));
+                        }
+                        carry = bytes.slice(completeLength);
+                    }
+                    if (carry.length) encoded += btoa(String.fromCharCode.apply(null, carry));
+                    return encoded;
+                } catch (error) {
+                    try { await reader.cancel(); } catch (_) { /* best-effort cleanup */ }
+                    throw error;
+                } finally {
+                    reader.releaseLock();
+                }
+            }());
+        }
         return blob.arrayBuffer().then(buffer => {
             const bytes = new Uint8Array(buffer); let binary = '';
             const chunk = 0x8000;

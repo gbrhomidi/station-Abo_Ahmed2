@@ -76,6 +76,8 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileInputStream
+import java.io.IOException
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.lang.ref.WeakReference
 import java.security.SecureRandom
@@ -88,6 +90,33 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.io.FileOutputStream
 import java.io.ByteArrayOutputStream
+
+/** Reads an ASCII Base64 String as bytes without allocating a second full-size byte array. */
+private class AsciiStringInputStream(private val value: String) : InputStream() {
+    private var position = 0
+
+    override fun read(): Int {
+        if (position >= value.length) return -1
+        val next = value[position++].code
+        if (next > 0x7f) throw IOException("Base64 export payload must be ASCII")
+        return next
+    }
+
+    override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        if (offset < 0 || length < 0 || length > buffer.size - offset) {
+            throw IndexOutOfBoundsException("Invalid buffer range")
+        }
+        if (length == 0) return 0
+        if (position >= value.length) return -1
+        val count = minOf(length, value.length - position)
+        for (index in 0 until count) {
+            val next = value[position++].code
+            if (next > 0x7f) throw IOException("Base64 export payload must be ASCII")
+            buffer[offset + index] = next.toByte()
+        }
+        return count
+    }
+}
 
 /**
  * ═══════════════════════════════════════════════════════════════
@@ -2418,19 +2447,37 @@ class MainActivity : AppCompatActivity() {
                         val safeName = fileName.replace(Regex("[\\\\/:*?\"<>|\\r\\n\\u0000-\\u001F]"), "_").take(160).ifBlank { "export" }
                         val target = DocumentsContract.createDocument(contentResolver, parentUri, mimeType ?: "application/octet-stream", safeName)
                             ?: throw IllegalStateException("تعذر إنشاء الملف داخل المجلد المحدد")
-                        val bytes = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
-                        contentResolver.openOutputStream(target, "wt")?.use { output ->
-                            output.write(bytes)
-                            output.flush()
-                        } ?: throw IllegalStateException("تعذر الكتابة في المجلد المحدد")
+                        val output = contentResolver.openOutputStream(target, "wt")
+                            ?: throw IllegalStateException("تعذر الكتابة في المجلد المحدد")
+                        var bytesWritten = 0L
+                        output.use { destination ->
+                            android.util.Base64InputStream(
+                                AsciiStringInputStream(encoded),
+                                android.util.Base64.DEFAULT
+                            ).use { decoded ->
+                                val buffer = ByteArray(64 * 1024)
+                                while (true) {
+                                    val count = decoded.read(buffer)
+                                    if (count < 0) break
+                                    if (count > 0) {
+                                        destination.write(buffer, 0, count)
+                                        bytesWritten += count
+                                    }
+                                }
+                            }
+                            destination.flush()
+                        }
                         DebugLogger.info(
                             "ExportFolderPicker",
-                            "phase=completed bytes=${bytes.size} elapsed_ms=${android.os.SystemClock.elapsedRealtime() - startedAt}"
+                            "phase=completed bytes=$bytesWritten elapsed_ms=${android.os.SystemClock.elapsedRealtime() - startedAt}"
                         )
                         JSONObject().put("success", true).put("uri", target.toString())
                             .put("path", target.toString()).put("file_name", safeName)
                     } catch (error: Exception) {
-                        DebugLogger.logException("ExportFolderPicker", error)
+                        DebugLogger.warn(
+                            "ExportFolderPicker",
+                            "phase=failed exception=${error.javaClass.simpleName} elapsed_ms=${android.os.SystemClock.elapsedRealtime() - startedAt}"
+                        )
                         JSONObject().put("success", false)
                             .put("error", error.message ?: "تعذر حفظ ملف التصدير")
                     }
