@@ -226,13 +226,20 @@ class InventoryScreensRobolectricTest {
         )
 
         val productId = createProduct(0.0, 2.0)
-        db.insertOrThrow("inventory_levels", null, ContentValues().apply {
-            put("product_id", productId)
-            put("warehouse_id", warehouseId)
-            put("quantity_on_hand", 3.0)
-            put("quantity_committed", 0.0)
-            put("average_cost", 10.0)
-        })
+        // Use the real stock-movement path: it updates an existing product/warehouse
+        // level when present and inserts one only when absent (UNIQUE-safe).
+        helper.addStockMovement(
+            JSONObject()
+                .put("product_id", productId)
+                .put("warehouse_id", warehouseId)
+                .put("movement_type", "in")
+                .put("movement_subtype", "in")
+                .put("quantity", 3.0)
+                .put("unit_cost", 10.0)
+                .put("notes", "رصيد اختبار يمنع إيقاف المستودع"),
+            1,
+            actorId
+        )
         var blockedByBalance = false
         try {
             helper.deleteOperationalRecord("warehouses", warehouseId, actorId, 1)
