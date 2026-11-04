@@ -188,6 +188,9 @@ class InventoryScreensRobolectricTest {
 
         val stationOneRows = helper.getOperationalRows("warehouses", JSONObject().put("station_id", 1).put("limit", 0))
         val stationTwoRows = helper.getOperationalRows("warehouses", JSONObject().put("station_id", 2).put("limit", 0))
+        val listedWarehouse = (0 until stationOneRows.length()).map { stationOneRows.getJSONObject(it) }
+            .first { it.optLong("id") == warehouseId }
+        assertTrue("Warehouse creation timestamp must be available to reports and sorting", listedWarehouse.optString("created_at").isNotBlank())
         assertTrue((0 until stationOneRows.length()).any { stationOneRows.getJSONObject(it).optLong("id") == warehouseId })
         assertTrue((0 until stationOneRows.length()).none { stationOneRows.getJSONObject(it).optLong("id") == secondStationWarehouseId })
         assertTrue((0 until stationTwoRows.length()).any { stationTwoRows.getJSONObject(it).optLong("id") == secondStationWarehouseId })
@@ -281,6 +284,14 @@ class InventoryScreensRobolectricTest {
         val stationOneRows = stationOne.getJSONArray("rows")
         val productAlert = (0 until stationOneRows.length()).map { stationOneRows.getJSONObject(it) }
             .first { it.optLong("product_id", 0L) == productId }
+        assertTrue("Alert date must be part of the screen's SQLite row contract", productAlert.optString("created_at").isNotBlank())
+        val alertDay = productAlert.getString("created_at").take(10)
+        val dateScoped = helper.getStockAlertRecordsContract(
+            JSONObject().put("limit", 0).put("from_date", alertDay).put("to_date", alertDay), 1
+        )
+        assertTrue((0 until dateScoped.getJSONArray("rows").length()).any {
+            dateScoped.getJSONArray("rows").getJSONObject(it).optLong("product_id") == productId
+        })
         val fuelAlert = (0 until stationOneRows.length()).map { stationOneRows.getJSONObject(it) }
             .first { it.optLong("tank_id", 0L) == stationOneTankId }
         assertEquals("product", productAlert.getString("item_type"))

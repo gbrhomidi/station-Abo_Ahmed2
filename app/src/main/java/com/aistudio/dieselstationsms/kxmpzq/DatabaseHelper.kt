@@ -20531,7 +20531,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val requestedSort = params.optString("sort_by", "id").trim()
             val sortColumn = if (requestedSort in allowedSortColumns && spec.columns.contains(requestedSort) || requestedSort == "id") requestedSort else "id"
             val sortDirection = if (params.optString("sort_dir", "desc").equals("asc", ignoreCase = true)) "ASC" else "DESC"
-            val sql = "SELECT id, ${spec.columns.joinToString(", ")} FROM ${spec.table}$whereSql ORDER BY $sortColumn $sortDirection"
+            val selectedColumns = if (screenKey in setOf("warehouses", "stock_alerts")) (spec.columns + "created_at").distinct() else spec.columns
+            val sql = "SELECT id, ${selectedColumns.joinToString(", ")} FROM ${spec.table}$whereSql ORDER BY $sortColumn $sortDirection"
             val boundedSql = if (limit > 0) sql + " LIMIT ? OFFSET ?" else sql
             if (limit > 0) { pageArgs.add(limit.toString()); pageArgs.add(offset.toString()) }
             db.rawQuery(boundedSql, pageArgs.toTypedArray()).use { cursor -> cursorToJsonArray(cursor) }
