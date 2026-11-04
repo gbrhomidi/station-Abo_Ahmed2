@@ -4258,7 +4258,17 @@ async function loadCustomerDebtSettings() {
             }
 
             loadDropdowns();
-            setTimeout(async()=>{ await loadCustomerDebtSettings(); await loadDebts(); await refreshDueReminderCandidates(true); }, 600);
+            setTimeout(async()=> {
+                await loadCustomerDebtSettings();
+                // User preferences may apply a default "overdue/current" status.
+                // The dashboard KPI counts every open invoice maturing within 7 days,
+                // including partial balances, so this drill-down must show all statuses.
+                if (dueInvoicesDrilldown) {
+                    document.getElementById('filterStatus').value = '';
+                }
+                await loadDebts();
+                await refreshDueReminderCandidates(true);
+            }, 600);
 
             document.querySelectorAll('.modal-overlay').forEach(el => {
                 el.addEventListener('click', function(e) {
