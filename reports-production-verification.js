@@ -78,6 +78,9 @@ need(db, /pump_id = \?/, 'meter readings: pump SQL filter missing');
 need(db, /LOWER\(COALESCE\(period, ''\)\) = LOWER\(\?\)/, 'meter readings: period SQL filter missing');
 need(db, /COALESCE\(is_balanced, 0\) = 1/, 'meter readings: balanced SQL filter missing');
 need(db, /COALESCE\(is_balanced, 0\) = 0/, 'meter readings: unbalanced SQL filter missing');
+need(db, /pump_id IN \(SELECT id FROM pumps WHERE tank_id = \? AND station_id = meter_readings\.station_id AND COALESCE\(is_deleted, 0\) = 0\)/, 'meter readings: tank/pump filter lacks station-isolation predicate');
+need(db, /p\.station_id = meter_readings\.station_id AND t\.station_id = meter_readings\.station_id/, 'meter readings: fuel-type relation can cross station boundaries');
+need(db, /COALESCE\(p\.is_deleted, 0\) = 0 AND COALESCE\(t\.is_deleted, 0\) = 0/, 'meter readings: related pump/tank soft-deletion guards missing');
 need(db, /totals\.put\("balanced_count", balancedReadings\)/, 'meter readings: full-result balanced aggregate missing');
 need(db, /totals\.put\("unbalanced_count", unbalancedReadings\)/, 'meter readings: full-result unbalanced aggregate missing');
 

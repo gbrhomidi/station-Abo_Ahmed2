@@ -760,6 +760,95 @@ class FuelSalesDeliveryFeeRobolectricTest {
         )
     }
 
+
+    @Test
+    fun fuelReportPaginationReturnsDisjointSqlitePagesAndClampsOffsets() {
+        val first = createAndPersistSale(DeliveryFeeAccounting.EXEMPT, 0.0, "موقع تقرير الوقود 1")
+        val second = createAndPersistSale(DeliveryFeeAccounting.EXEMPT, 0.0, "موقع تقرير الوقود 2")
+        val third = createAndPersistSale(DeliveryFeeAccounting.EXEMPT, 0.0, "موقع تقرير الوقود 3")
+
+        val base = JSONObject().put("report_type", "sales").put("limit", 1)
+        val pageOne = helper.getFuelReportPage(JSONObject(base.toString()).put("offset", 0), stationId)
+        val pageTwo = helper.getFuelReportPage(JSONObject(base.toString()).put("offset", 1), stationId)
+        val pageThree = helper.getFuelReportPage(JSONObject(base.toString()).put("offset", 2), stationId)
+        val beyondLastPage = helper.getFuelReportPage(JSONObject(base.toString()).put("offset", 9999), stationId)
+
+        assertEquals(3, pageOne.getInt("total_count"))
+        assertEquals(3, pageOne.getInt("total_pages"))
+        assertEquals(1, pageOne.getInt("page"))
+        assertEquals(1, pageOne.getInt("count"))
+        assertTrue(pageOne.getBoolean("has_next"))
+        assertFalse(pageOne.getBoolean("has_previous"))
+
+        assertEquals(2, pageTwo.getInt("page"))
+        assertEquals(1, pageTwo.getJSONArray("rows").length())
+        assertTrue(pageTwo.getBoolean("has_previous"))
+        assertTrue(pageTwo.getBoolean("has_next"))
+
+        assertEquals(3, pageThree.getInt("page"))
+        assertEquals(1, pageThree.getJSONArray("rows").length())
+        assertTrue(pageThree.getBoolean("has_previous"))
+        assertFalse(pageThree.getBoolean("has_next"))
+
+        val pageIds = listOf(pageOne, pageTwo, pageThree).map {
+            it.getJSONArray("rows").getJSONObject(0).getLong("id")
+        }
+        assertEquals(3, pageIds.distinct().size)
+        assertEquals(
+            setOf(first.parentSaleId, second.parentSaleId, third.parentSaleId),
+            pageIds.toSet()
+        )
+        assertEquals(3, beyondLastPage.getInt("page"))
+        assertEquals(1, beyondLastPage.getJSONArray("rows").length())
+        assertEquals(
+            pageThree.getJSONArray("rows").getJSONObject(0).getLong("id"),
+            beyondLastPage.getJSONArray("rows").getJSONObject(0).getLong("id")
+        )
+    }
+
+    @Test
+    fun fuelMovementReportCountsFuelSalesAndAppliesSearchAndStationScope() {
+        val target = createAndPersistSale(DeliveryFeeAccounting.EXEMPT, 0.0, "موقع تقرير حركات الوقود")
+        createAndPersistSale(DeliveryFeeAccounting.EXEMPT, 0.0, "موقع تقرير حركات الوقود 2")
+        createAndPersistSale(DeliveryFeeAccounting.EXEMPT, 0.0, "موقع تقرير حركات الوقود 3")
+
+        val movement = helper.getFuelReportPage(
+            JSONObject().put("report_type", "movement").put("limit", 10),
+            stationId
+        )
+        assertEquals(3, movement.getInt("total_count"))
+        assertEquals(3, movement.getJSONArray("rows").length())
+        assertTrue((0 until movement.getJSONArray("rows").length()).all {
+            movement.getJSONArray("rows").getJSONObject(it).getString("type") == "sale"
+        })
+
+        val targetCode = db.rawQuery(
+            "SELECT sale_code FROM sales_transactions WHERE id=? AND station_id=?",
+            arrayOf(target.parentSaleId.toString(), stationId.toString())
+        ).use {
+            check(it.moveToFirst())
+            it.getString(0)
+        }
+        val searched = helper.getFuelReportPage(
+            JSONObject()
+                .put("report_type", "sales")
+                .put("search", targetCode)
+                .put("limit", 10),
+            stationId
+        )
+        assertEquals(1, searched.getInt("total_count"))
+        assertEquals(1, searched.getJSONArray("rows").length())
+        assertEquals(target.parentSaleId, searched.getJSONArray("rows").getJSONObject(0).getLong("id"))
+
+        val isolated = helper.getFuelReportPage(
+            JSONObject().put("report_type", "sales").put("limit", 10),
+            stationId + 100000
+        )
+        assertEquals(0, isolated.getInt("total_count"))
+        assertEquals(0, isolated.getInt("total_pages"))
+        assertEquals(0, isolated.getJSONArray("rows").length())
+    }
+
     private fun createAndPersistSale(mode: String, requestedFee: Double, location: String): SavedSale {
         val unitPrice = scalarDouble(
             "SELECT default_sale_price FROM fuel_types WHERE id=? AND is_deleted=0",

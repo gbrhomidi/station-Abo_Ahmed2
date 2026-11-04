@@ -18,15 +18,16 @@ for (const [screen, source] of [['fuel-reports.html', fuelReportCode], ['meter-r
     failures.push(`${screen}: report-generation query is unbounded or uses a hard-coded page size`);
   }
 }
-for (const [label, pattern] of [
-  ['operational query must use bound LIMIT/OFFSET', /LIMIT \? OFFSET \?/],
-  ['operational report must request rows using bounded page params', /put\("limit", pageSize\)[\s\S]{0,120}put\("offset", offset\)/],
-  ['operational report aggregates the full result in bounded scan pages', /put\("limit", 1000\)[\s\S]{0,500}getOperationalRows\(screenKey, scanParams\)/],
-  ['fuel report page must clamp offsets against total_count', /lastPageOffset = if \(totalCount > 0\) \(\(totalCount - 1\) \/ limit\) \* limit else 0/],
-  ['fuel reports must send the requested page offset', /offset: \(pagination\.page - 1\) \* pagination\.pageSize/],
-  ['meter readings must send the requested page offset', /offset: \(reportPage - 1\) \* REPORT_PAGE_SIZE/]
-]) {
-  if (!pattern.test(label.startsWith('fuel') ? fuel : label.startsWith('meter') ? readings : db)) failures.push(label);
+const requiredPatterns = [
+  ['operational query must use bound LIMIT/OFFSET', db, /LIMIT \? OFFSET \?/],
+  ['operational report must request rows using bounded page params', db, /put\("limit", pageSize\)[\s\S]{0,120}put\("offset", offset\)/],
+  ['operational report aggregates the full result in bounded scan pages', db, /put\("limit", 1000\)[\s\S]{0,500}getOperationalRows\(screenKey, scanParams\)/],
+  ['fuel report page must clamp offsets against total_count', db, /fun getFuelReportPage\([\s\S]*?lastPageOffset = if \(totalCount > 0\) \(\(totalCount - 1\) \/ limit\) \* limit else 0[\s\S]*?put\("total_count", totalCount\)/],
+  ['fuel reports must send the requested page offset', fuelReportCode, /offset: \(pagination\.page - 1\) \* pagination\.pageSize/],
+  ['meter readings must send the requested page offset', meterReportCode, /offset: \(reportPage - 1\) \* REPORT_PAGE_SIZE/]
+];
+for (const [label, source, pattern] of requiredPatterns) {
+  if (!pattern.test(source)) failures.push(label);
 }
 
 if (failures.length) {

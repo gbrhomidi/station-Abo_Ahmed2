@@ -20424,11 +20424,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val tankId = params.optLong("tank_id", 0L)
         val fuelTypeId = params.optLong("fuel_type_id", 0L)
         if (tankId > 0L) {
-            where += "pump_id IN (SELECT id FROM pumps WHERE tank_id = ?)"
+            where += "pump_id IN (SELECT id FROM pumps WHERE tank_id = ? AND station_id = meter_readings.station_id AND COALESCE(is_deleted, 0) = 0)"
             args += tankId.toString()
         }
         if (fuelTypeId > 0L) {
-            where += "pump_id IN (SELECT p.id FROM pumps p JOIN tanks t ON t.id = p.tank_id WHERE t.fuel_type_id = ?)"
+            where += "pump_id IN (SELECT p.id FROM pumps p JOIN tanks t ON t.id = p.tank_id WHERE t.fuel_type_id = ? AND p.station_id = meter_readings.station_id AND t.station_id = meter_readings.station_id AND COALESCE(p.is_deleted, 0) = 0 AND COALESCE(t.is_deleted, 0) = 0)"
             args += fuelTypeId.toString()
         }
     }

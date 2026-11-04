@@ -213,6 +213,92 @@ class ReportsPaginationRobolectricTest {
         assertEquals(0, result.getInt("total_pages"))
     }
 
+
+    @Test
+    fun meterReadingTankAndFuelTypeFiltersCannotCrossStationHardware() {
+        val fuelTypeId = scalarLong(
+            "SELECT id FROM fuel_types WHERE COALESCE(is_deleted, 0) = 0 ORDER BY id LIMIT 1"
+        )
+        val foreignStationId = db.insertOrThrow("stations", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("station_code", "RPT-FOREIGN-" + UUID.randomUUID().toString().take(8))
+            put("station_name", "Foreign station for report scope")
+            put("station_name_ar", "محطة أخرى لاختبار عزل القراءات")
+            put("status", "active")
+            put("is_deleted", 0)
+        })
+        val foreignTankId = db.insertOrThrow("tanks", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("tank_code", "RPT-FOREIGN-TANK-" + UUID.randomUUID().toString().take(8))
+            put("tank_name", "Foreign station tank")
+            put("tank_name_ar", "خزان المحطة الأخرى")
+            put("station_id", foreignStationId)
+            put("fuel_type_id", fuelTypeId)
+            put("capacity_liters", 10000.0)
+            put("minimum_level", 500.0)
+            put("maximum_level", 10000.0)
+            put("current_quantity", 5000.0)
+            put("status", "active")
+            put("is_deleted", 0)
+        })
+        val foreignPumpId = db.insertOrThrow("pumps", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("pump_code", "RPT-FOREIGN-PUMP-" + UUID.randomUUID().toString().take(8))
+            put("pump_number", "F")
+            put("station_id", foreignStationId)
+            put("tank_id", foreignTankId)
+            put("status", "active")
+            put("is_deleted", 0)
+        })
+        val foreignNozzleId = db.insertOrThrow("pump_nozzles", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("nozzle_code", "RPT-FOREIGN-NOZ-" + UUID.randomUUID().toString().take(8))
+            put("nozzle_number", "F")
+            put("pump_id", foreignPumpId)
+            put("fuel_type_id", fuelTypeId)
+            put("status", "active")
+            put("is_deleted", 0)
+        })
+
+        // Deliberately seed a row whose station_id is the active station but whose
+        // pump/nozzle references belong to another station. SQLite's individual FKs
+        // permit this; report predicates must still prevent the cross-station relation.
+        db.insertOrThrow("meter_readings", null, ContentValues().apply {
+            val token = UUID.randomUUID().toString()
+            put("uuid", token)
+            put("reading_code", "RPT-CROSS-STATION-$token")
+            put("pump_id", foreignPumpId)
+            put("nozzle_id", foreignNozzleId)
+            put("station_id", stationId)
+            put("reading_date", "2026-11-03")
+            put("period", "morning")
+            put("opening_reading", 100.0)
+            put("closing_reading", 110.0)
+            put("sold_liters", 10.0)
+            put("system_sold_liters", 10.0)
+            put("difference", 0.0)
+            put("difference_percent", 0.0)
+            put("is_balanced", 1)
+            put("read_by", userId)
+            put("status", "verified")
+            put("is_deleted", 0)
+        })
+
+        val byForeignTank = helper.getOperationalReport(
+            "meter_readings",
+            JSONObject().put("station_id", stationId).put("tank_id", foreignTankId).put("limit", 50)
+        )
+        assertEquals(0, byForeignTank.getInt("total_count"))
+        assertEquals(0, byForeignTank.getJSONArray("rows").length())
+
+        val byFuelType = helper.getOperationalReport(
+            "meter_readings",
+            JSONObject().put("station_id", stationId).put("fuel_type_id", fuelTypeId).put("limit", 50)
+        )
+        assertEquals(0, byFuelType.getInt("total_count"))
+        assertEquals(0, byFuelType.getJSONArray("rows").length())
+    }
+
     private fun insertReading(
         date: String,
         period: String,
