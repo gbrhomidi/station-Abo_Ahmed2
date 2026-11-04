@@ -249,7 +249,12 @@
                 catch (_) { if (requestId === state.requestId) { state.busy = false; setStatus('استجابة غير صالحة من مدير التخزين.', 'error'); } return; }
                 if (requestId !== state.requestId) return;
                 state.busy = false;
-                if (result.success) { setStatus('تم حفظ الملف بنجاح.<span class="station-export-path">' + esc(result.path || result.uri || filename) + '</span>', 'success'); setTimeout(close, 1800); }
+                if (result.success) {
+                    setStatus('تم حفظ الملف بنجاح.<span class="station-export-path">' + esc(result.path || result.uri || filename) + '</span>', 'success');
+                    // Android's document picker can pause this WebView and suspend JS timers.
+                    // Dismiss the overlay synchronously when its success callback arrives.
+                    close();
+                }
                 else setStatus(esc(result.error || 'تعذر حفظ الملف في المجلد المحدد'), 'error');
             };
             const raw = window.AndroidInterface.chooseExportFolder(filename, mimeFor(format), await base64FromBlob(blob));
@@ -274,7 +279,9 @@
                 if (ack.success === false) throw new Error(ack.error || 'فشل فتح الطباعة');
             } else if (typeof originalPrint === 'function') originalPrint.call(window);
             setStatus('تم فتح معاينة الطباعة. اختر “حفظ كـ PDF” من نظام Android لتحديد مكان الحفظ.', 'success');
-            setTimeout(close, 1800);
+            // PrintManager backgrounds the Activity; relying on a delayed JS timer leaves
+            // the full-screen export sheet over the page on devices that suspend WebView timers.
+            close();
         } catch (error) { state.busy = false; setStatus(esc(error.message || 'فشل الطباعة'), 'error'); }
     }
 
