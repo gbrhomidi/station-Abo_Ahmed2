@@ -11375,6 +11375,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 requirePricingPermission(key, "read")
+                requireInventoryPermission(key, "read")
                 dataResponse(db.getOperationalRows(key, operationalScopedJson(jsonData)))
             }
             catch (e: Exception) { DebugLogger.logException("OperationalList-$key", e); errorResponse(e.message) }
@@ -11401,6 +11402,31 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+        /**
+         * Inventory routes are authorized in the native bridge, not only in WebView controls.
+         * Deactivation and alert resolution map to inventory.update; export additionally requires
+         * reports.export because the current catalogue has no inventory.export permission.
+         */
+        private fun requireInventoryPermission(screenKey: String, action: String) {
+            if (screenKey !in setOf("warehouses", "stock_alerts")) return
+            val activity = getActivity() ?: throw IllegalStateException("النشاط غير متاح")
+            val db = getDbHelper() ?: throw IllegalStateException("قاعدة البيانات غير متاحة")
+            val userId = activity.currentUserId
+            if (action == "export" && !db.hasPermission(userId, "inventory.read")) {
+                throw SecurityException("ليس لديك صلاحية inventory.read")
+            }
+            val permissionCode = when (action) {
+                "read" -> "inventory.read"
+                "create" -> "inventory.create"
+                "update", "delete", "approve" -> "inventory.update"
+                "export" -> "reports.export"
+                else -> throw IllegalArgumentException("إجراء صلاحيات المخزون غير مدعوم: " + action)
+            }
+            if (!db.hasPermission(userId, permissionCode)) {
+                throw SecurityException("ليس لديك صلاحية تنفيذ العملية: " + permissionCode)
+            }
+        }
+
         private fun requireUsersPermission(action: String) {
             if (!checkPermission("users", action)) {
                 throw SecurityException("ليس لديك صلاحية users.$action")
@@ -11411,6 +11437,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 requirePricingPermission(key, "export")
+                requireInventoryPermission(key, "export")
                 dataResponseObject(db.getOperationalReport(key, operationalScopedJson(jsonData))).toString()
             }
             catch (e: Exception) { DebugLogger.logException("OperationalReport-$key", e); errorResponse(e.message) }
@@ -11421,6 +11448,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 requirePricingPermission(key, "create")
+                requireInventoryPermission(key, "create")
                 if (!SecurityValidator.isTableAllowedForGeneralCrud(key)) return errorResponse("الجدول محمي ويحتاج إلى مسار نطاقي مخصص")
                 val sanitizedJson = SecurityValidator.sanitizeOperationalJson(jsonData)
                 val data = operationalScopedJson(sanitizedJson)
@@ -11447,6 +11475,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 requirePricingPermission(key, "update")
+                requireInventoryPermission(key, "update")
                 if (!SecurityValidator.isTableAllowedForGeneralCrud(key)) return errorResponse("الجدول محمي ويحتاج إلى مسار نطاقي مخصص")
                 val sanitizedJson = SecurityValidator.sanitizeOperationalJson(jsonData)
                 val rows = db.updateOperationalRecord(key, id, operationalScopedJson(sanitizedJson), activity.currentUserId)
@@ -11460,10 +11489,12 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 requirePricingPermission(key, "delete")
+                requireInventoryPermission(key, "delete")
                 if (!SecurityValidator.isTableAllowedForGeneralCrud(key)) return errorResponse("الجدول محمي ويحتاج إلى مسار نطاقي مخصص")
                 if (id <= 0L) return errorResponse("معرف السجل غير صالح")
                 val rows = db.deleteOperationalRecord(key, id, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId))
-                successResponse(rows > 0, if (rows > 0) "تم الحذف فعلياً" else "لم يتم العثور على السجل")
+                val successMessage = if (key == "warehouses") "تم إيقاف تفعيل المستودع مع الحفاظ على سجلاته" else "تم الحذف فعلياً"
+                successResponse(rows > 0, if (rows > 0) successMessage else "لم يتم العثور على السجل")
             }
             catch (e: Exception) { DebugLogger.logException("OperationalDelete-$key", e); errorResponse(e.message) }
         }
@@ -11482,7 +11513,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         private fun operationalResolve(permission: String, key: String, id: Long, note: String): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { requirePricingPermission(key, "approve"); val rows = db.resolveOperationalRecord(key, id, note, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId)); successResponse(rows > 0, if (rows > 0) "تم تنفيذ العملية فعلياً" else "لم يتم العثور على السجل") }
+            return try { requirePricingPermission(key, "approve"); requireInventoryPermission(key, "approve"); val rows = db.resolveOperationalRecord(key, id, note, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId)); successResponse(rows > 0, if (rows > 0) "تم تنفيذ العملية فعلياً" else "لم يتم العثور على السجل") }
             catch (e: Exception) { DebugLogger.logException("OperationalResolve-$key", e); errorResponse(e.message) }
         }
 
@@ -12407,15 +12438,28 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getStockAlertRecords(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                dataResponse(db.getStockAlertRecordsContract(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
+                requireInventoryPermission("stock_alerts", "read")
+                val scoped = operationalScopedJson(jsonData)
+                dataResponse(db.getStockAlertRecordsContract(scoped, scoped.optInt("station_id", 0)))
             } catch (e: Exception) {
                 DebugLogger.logException("StockAlerts", e)
                 errorResponse(e.message)
             }
         }
         @JavascriptInterface
-        fun generateStockAlertReport(jsonData: String = "{}") = operationalReport("inventory", "stock_alerts", jsonData)
+        fun generateStockAlertReport(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                requireInventoryPermission("stock_alerts", "export")
+                val scoped = operationalScopedJson(jsonData)
+                dataResponseObject(
+                    db.getStockAlertRecordsContract(scoped, scoped.optInt("station_id", 0))
+                ).toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("StockAlertReport", e)
+                errorResponse(e.message)
+            }
+        }
         @JavascriptInterface
         fun saveStockAlertRecord(jsonData: String) = operationalSave("inventory", "stock_alerts", jsonData)
         @JavascriptInterface

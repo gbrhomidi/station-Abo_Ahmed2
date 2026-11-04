@@ -20416,9 +20416,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             } else if (stationId > 0 && screenKey == "bad_debts") {
                 where += "EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
             } else if (stationId > 0 && screenKey == "stocktakes") {
-                where += "EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
+                where += "EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId})"
             } else if (stationId > 0 && screenKey == "stocktake_details") {
-                where += "EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
+                where += "EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_st.archived = 0)"
             } else if (stationId > 0 && screenKey == "price_history") {
                 where += "EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
             } else if (stationId > 0 && screenKey == "price_list_items") {
@@ -20439,7 +20439,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val search = params.optString("search", "").trim()
             if (search.isNotBlank() && spec.searchColumns.isNotEmpty()) {
                 if (screenKey == "stock_alerts") {
-                    where += "(alert_type LIKE ? OR alert_level LIKE ? OR EXISTS (SELECT 1 FROM products ap WHERE ap.id = stock_alerts.product_id AND (ap.product_code LIKE ? OR ap.product_name LIKE ? OR ap.product_name_ar LIKE ?)) OR EXISTS (SELECT 1 FROM warehouses aw WHERE aw.station_id = stock_alerts.station_id AND aw.warehouse_name LIKE ?))"
+                    where += "(alert_type LIKE ? OR alert_level LIKE ? OR EXISTS (SELECT 1 FROM products ap WHERE ap.id = stock_alerts.product_id AND ap.station_id = stock_alerts.station_id AND ap.is_deleted = 0 AND (ap.product_code LIKE ? OR ap.product_name LIKE ? OR ap.product_name_ar LIKE ?)) OR EXISTS (SELECT 1 FROM warehouses aw WHERE aw.station_id = stock_alerts.station_id AND aw.warehouse_name LIKE ?))"
                     repeat(6) { args += "%$search%" }
                 } else {
                     where += "(" + spec.searchColumns.joinToString(" OR ") { "$it LIKE ?" } + ")"
@@ -20558,9 +20558,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             } else if (stationId > 0 && screenKey == "bad_debts") {
                 where += "EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
             } else if (stationId > 0 && screenKey == "stocktakes") {
-                where += "EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
+                where += "EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId})"
             } else if (stationId > 0 && screenKey == "stocktake_details") {
-                where += "EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
+                where += "EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_st.archived = 0)"
             } else if (stationId > 0 && screenKey == "price_history") {
                 where += "EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
             } else if (stationId > 0 && screenKey == "price_list_items") {
@@ -20575,7 +20575,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val search = params.optString("search", "").trim()
             if (search.isNotBlank() && spec.searchColumns.isNotEmpty()) {
                 if (screenKey == "stock_alerts") {
-                    where += "(alert_type LIKE ? OR alert_level LIKE ? OR EXISTS (SELECT 1 FROM products ap WHERE ap.id = stock_alerts.product_id AND (ap.product_code LIKE ? OR ap.product_name LIKE ? OR ap.product_name_ar LIKE ?)) OR EXISTS (SELECT 1 FROM warehouses aw WHERE aw.station_id = stock_alerts.station_id AND aw.warehouse_name LIKE ?))"
+                    where += "(alert_type LIKE ? OR alert_level LIKE ? OR EXISTS (SELECT 1 FROM products ap WHERE ap.id = stock_alerts.product_id AND ap.station_id = stock_alerts.station_id AND ap.is_deleted = 0 AND (ap.product_code LIKE ? OR ap.product_name LIKE ? OR ap.product_name_ar LIKE ?)) OR EXISTS (SELECT 1 FROM warehouses aw WHERE aw.station_id = stock_alerts.station_id AND aw.warehouse_name LIKE ?))"
                     repeat(6) { args += "%$search%" }
                 } else {
                     where += "(" + spec.searchColumns.joinToString(" OR ") { "$it LIKE ?" } + ")"
@@ -21269,52 +21269,213 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             synchronizeLiveStockAlerts(writableDatabase, stationScopeId)
-            val params = JSONObject(data.toString()).apply { put("station_id", stationScopeId) }
-            val report = getOperationalReport("stock_alerts", params)
+
+            // Read every product alert first; the merged product + fuel set is paged below.
+            val queryParams = JSONObject(data.toString()).apply {
+                put("station_id", stationScopeId)
+                put("limit", 0)
+                put("offset", 0)
+            }
+            val productRows = getOperationalRows("stock_alerts", queryParams)
             val db = readableDatabase
             val productNames = mutableMapOf<Long, String>()
+            val productPrices = mutableMapOf<Long, Double>()
             db.rawQuery(
-                """SELECT DISTINCT a.product_id, COALESCE(p.product_name_ar, p.product_name, p.product_code, '')
-                   FROM stock_alerts a
-                   LEFT JOIN products p ON p.id = a.product_id AND p.station_id = ? AND p.is_deleted = 0
-                   WHERE a.station_id = ?""",
-                arrayOf(stationScopeId.toString(), stationScopeId.toString())
-            ).use { cursor -> while (cursor.moveToNext()) productNames[cursor.getLong(0)] = cursor.getString(1) ?: "" }
-            val enrichedRows = report.optJSONArray("rows") ?: JSONArray()
-            for (index in 0 until enrichedRows.length()) {
-                enrichedRows.optJSONObject(index)?.let { row ->
-                    row.put("product_name", productNames[row.optLong("product_id", 0L)] ?: "منتج غير متاح")
+                """SELECT id, COALESCE(product_name_ar, product_name, product_code, ''),
+                          COALESCE(purchase_price, 0)
+                   FROM products WHERE station_id = ? AND is_deleted = 0""",
+                arrayOf(stationScopeId.toString())
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val productId = cursor.getLong(0)
+                    productNames[productId] = cursor.getString(1) ?: ""
+                    productPrices[productId] = cursor.getDouble(2)
                 }
             }
-            val statistics = db.rawQuery(
-                """SELECT COUNT(*) AS total_count,
-                          COALESCE(SUM(CASE WHEN a.is_resolved = 0 THEN 1 ELSE 0 END), 0) AS unresolved_count,
-                          COALESCE(SUM(CASE WHEN a.alert_level = 'critical' AND a.is_resolved = 0 THEN 1 ELSE 0 END), 0) AS critical_count,
-                          COALESCE(SUM(CASE WHEN a.alert_type = 'expiry' AND a.is_resolved = 0 THEN 1 ELSE 0 END), 0) AS expiring_count,
-                          COALESCE(SUM(CASE WHEN a.alert_type = 'expiry' AND a.is_resolved = 0 THEN COALESCE(p.purchase_price, 0) * COALESCE(a.current_quantity, 0) ELSE 0 END), 0) AS expiring_value,
-                          COALESCE((SELECT COUNT(*) FROM stocktake_details sd JOIN stocktakes st ON st.id = sd.stocktake_id JOIN warehouses aw ON aw.id = st.warehouse_id WHERE aw.station_id = ? AND aw.is_active = 1 AND st.archived = 0 AND sd.archived = 0), 0) AS audit_items,
-                          COALESCE((SELECT AVG(ABS(sd.variance_value)) FROM stocktake_details sd JOIN stocktakes st ON st.id = sd.stocktake_id JOIN warehouses aw ON aw.id = st.warehouse_id WHERE aw.station_id = ? AND aw.is_active = 1 AND st.archived = 0 AND sd.archived = 0), 0) AS audit_variance
-                   FROM stock_alerts a
-                   LEFT JOIN products p ON p.id = a.product_id
-                   WHERE a.station_id = ?""",
-                arrayOf(stationScopeId.toString(), stationScopeId.toString(), stationScopeId.toString())
+
+            val mergedRows = mutableListOf<JSONObject>()
+            for (index in 0 until productRows.length()) {
+                val row = productRows.optJSONObject(index) ?: continue
+                val productId = row.optLong("product_id", 0L)
+                row.put("item_type", "product")
+                row.put("stock_type", "products")
+                row.put("product_name", productNames[productId] ?: "منتج غير متاح")
+                mergedRows += row
+            }
+
+            // Fuel alerts are live views of tanks. Negative ids cannot collide with stock_alerts ids.
+            val search = data.optString("search", "").trim().lowercase(Locale.US)
+            db.rawQuery(
+                """SELECT t.id AS tank_id, t.tank_code, t.tank_name, t.tank_name_ar,
+                          t.station_id, t.fuel_type_id, t.current_quantity, t.minimum_level,
+                          t.created_at, t.updated_at, f.fuel_code, f.fuel_name, f.fuel_name_ar
+                   FROM tanks t
+                   JOIN fuel_types f ON f.id = t.fuel_type_id
+                   WHERE t.station_id = ?
+                     AND t.is_deleted = 0
+                     AND t.status != 'retired'
+                     AND f.is_deleted = 0
+                     AND f.is_active = 1
+                     AND COALESCE(t.current_quantity, 0) <= COALESCE(t.minimum_level, 0)
+                   ORDER BY t.current_quantity ASC, t.id ASC""",
+                arrayOf(stationScopeId.toString())
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val row = cursorToJsonObject(cursor)
+                    val tankId = row.optLong("tank_id", 0L)
+                    val fuelName = row.optString("fuel_name_ar").ifBlank { row.optString("fuel_name") }
+                    val timestamp = row.optString("updated_at").ifBlank { row.optString("created_at") }
+                    val quantity = row.optDouble("current_quantity", 0.0)
+                    val threshold = row.optDouble("minimum_level", 0.0)
+                    row.put("id", -tankId)
+                    row.put("alert_id", -tankId)
+                    row.put("product_id", JSONObject.NULL)
+                    row.put("product_name", fuelName)
+                    row.put("product_code", row.optString("fuel_code"))
+                    row.put("item_type", "fuel")
+                    row.put("stock_type", "fuel")
+                    row.put("alert_type", if (quantity <= 0.0) "out_of_stock" else "low_stock")
+                    row.put("alert_level", if (quantity <= 0.0) "critical" else "warning")
+                    row.put("threshold_quantity", threshold)
+                    row.put("shortage_quantity", (threshold - quantity).coerceAtLeast(0.0))
+                    row.put("is_resolved", 0)
+                    row.put("resolved_at", JSONObject.NULL)
+                    row.put("resolution_notes", "")
+                    row.put("created_at", timestamp)
+                    if (search.isNotBlank()) {
+                        val haystack = listOf(
+                            fuelName, row.optString("fuel_name"), row.optString("fuel_code"),
+                            row.optString("tank_code"), row.optString("tank_name"),
+                            row.optString("fuel_type_id"), row.optString("tank_id"), "fuel", "وقود"
+                        ).joinToString(" ").lowercase(Locale.US)
+                        if (!haystack.contains(search)) continue
+                    }
+                    mergedRows += row
+                }
+            }
+
+            val statusFilter = data.optString("status", "").trim().lowercase(Locale.US)
+            val levelFilter = data.optString("alert_level", "").trim().lowercase(Locale.US)
+            val typeFilter = data.optString("alert_type", "").trim().lowercase(Locale.US)
+            val itemTypeFilter = data.optString("item_type", "").trim().lowercase(Locale.US)
+            val resolvedFilter = data.optString("is_resolved", "").trim()
+            val fromDate = data.optString("from_date", data.optString("start_date", "")).trim()
+            val toDate = data.optString("to_date", data.optString("end_date", "")).trim()
+
+            val filteredRows = mergedRows.filter { row ->
+                val resolved = row.optInt("is_resolved", 0) == 1
+                val level = row.optString("alert_level", "").lowercase(Locale.US)
+                val type = row.optString("alert_type", "").lowercase(Locale.US)
+                val itemType = row.optString("item_type", "").lowercase(Locale.US)
+                val rowDate = row.optString("created_at").ifBlank { row.optString("updated_at") }.take(10)
+                val statusMatches = when (statusFilter) {
+                    "active", "unresolved", "open" -> !resolved
+                    "resolved" -> resolved
+                    "critical" -> !resolved && level == "critical"
+                    "low_stock", "out_of_stock", "overstock", "expiry" -> type == statusFilter
+                    else -> true
+                }
+                val resolvedMatches = when (resolvedFilter) {
+                    "1", "true" -> resolved
+                    "0", "false" -> !resolved
+                    else -> true
+                }
+                statusMatches &&
+                    resolvedMatches &&
+                    (levelFilter.isBlank() || level == levelFilter) &&
+                    (typeFilter.isBlank() || type == typeFilter) &&
+                    (itemTypeFilter.isBlank() || itemType == itemTypeFilter) &&
+                    (fromDate.isBlank() || (rowDate.isNotBlank() && rowDate >= fromDate)) &&
+                    (toDate.isBlank() || (rowDate.isNotBlank() && rowDate <= toDate))
+            }.toMutableList()
+
+            val ascending = data.optString("sort_dir", "desc").equals("asc", ignoreCase = true)
+            filteredRows.sortWith(Comparator { left, right ->
+                val dateCompare = left.optString("created_at").compareTo(right.optString("created_at"))
+                if (dateCompare != 0) {
+                    if (ascending) dateCompare else -dateCompare
+                } else {
+                    val idCompare = left.optLong("id", 0L).compareTo(right.optLong("id", 0L))
+                    if (ascending) idCompare else -idCompare
+                }
+            })
+
+            val totalCount = filteredRows.size
+            val requestedLimit = data.optInt("limit", 200)
+            val pageSize = if (requestedLimit > 0) requestedLimit.coerceIn(1, 5000) else 0
+            val offset = data.optInt("offset", 0).coerceAtLeast(0)
+            val pageRows = if (pageSize > 0) filteredRows.drop(offset).take(pageSize) else filteredRows
+            val returnedRows = JSONArray()
+            pageRows.forEach { returnedRows.put(it) }
+
+            val unresolvedCount = filteredRows.count { it.optInt("is_resolved", 0) == 0 }
+            val criticalCount = filteredRows.count {
+                it.optInt("is_resolved", 0) == 0 && it.optString("alert_level") == "critical"
+            }
+            val warningCount = filteredRows.count {
+                it.optInt("is_resolved", 0) == 0 && it.optString("alert_level") == "warning"
+            }
+            val resolvedCount = filteredRows.count { it.optInt("is_resolved", 0) == 1 }
+            val expiringRows = filteredRows.filter {
+                it.optString("alert_type") == "expiry" && it.optInt("is_resolved", 0) == 0
+            }
+            val expiringValue = expiringRows.sumOf {
+                (productPrices[it.optLong("product_id", 0L)] ?: 0.0) * it.optDouble("current_quantity", 0.0)
+            }
+            val auditStats = db.rawQuery(
+                """SELECT
+                       COALESCE((SELECT COUNT(*) FROM stocktake_details sd
+                                 JOIN stocktakes st ON st.id = sd.stocktake_id
+                                 JOIN warehouses aw ON aw.id = st.warehouse_id
+                                 WHERE aw.station_id = ? AND st.archived = 0 AND sd.archived = 0), 0) AS audit_items,
+                       COALESCE((SELECT AVG(ABS(sd.variance_value)) FROM stocktake_details sd
+                                 JOIN stocktakes st ON st.id = sd.stocktake_id
+                                 JOIN warehouses aw ON aw.id = st.warehouse_id
+                                 WHERE aw.station_id = ? AND st.archived = 0 AND sd.archived = 0), 0) AS audit_variance""",
+                arrayOf(stationScopeId.toString(), stationScopeId.toString())
             ).use { cursor -> if (cursor.moveToFirst()) cursorToJsonObject(cursor) else JSONObject() }
+
+            val totalPages = if (totalCount == 0) 0 else if (pageSize > 0) {
+                (totalCount + pageSize - 1) / pageSize
+            } else {
+                1
+            }
+            val page = if (pageSize > 0) (offset / pageSize) + 1 else 1
+            val statistics = JSONObject().apply {
+                put("total_count", totalCount)
+                put("unresolved_count", unresolvedCount)
+                put("critical_count", criticalCount)
+                put("warning_count", warningCount)
+                put("resolved_count", resolvedCount)
+                put("expiring_count", expiringRows.size)
+                put("expiring_value", expiringValue)
+                put("audit_items", auditStats.optInt("audit_items", 0))
+                put("audit_variance", auditStats.optDouble("audit_variance", 0.0))
+                put("fuel_count", filteredRows.count { it.optString("item_type") == "fuel" })
+                put("product_count", filteredRows.count { it.optString("item_type") == "product" })
+                put("total_shortage_quantity", filteredRows.sumOf { it.optDouble("shortage_quantity", 0.0) })
+            }
+
             JSONObject().apply {
-                put("rows", enrichedRows)
-                put("records", enrichedRows)
-                put("total_count", report.optInt("total_count", 0))
-                put("page", report.optInt("page", 1))
-                put("page_size", report.optInt("page_size", 200))
-                put("total_pages", report.optInt("total_pages", 0))
-                put("has_next", report.optBoolean("has_next", false))
-                put("has_previous", report.optBoolean("has_previous", false))
+                put("rows", returnedRows)
+                put("records", returnedRows)
+                put("count", returnedRows.length())
+                put("total_count", totalCount)
+                put("page", page)
+                put("page_size", pageSize)
+                put("total_pages", totalPages)
+                put("has_next", pageSize > 0 && offset + returnedRows.length() < totalCount)
+                put("has_previous", pageSize > 0 && offset > 0)
                 put("statistics", statistics)
-                put("critical_count", statistics.optInt("critical_count", 0))
-                put("expiring_count", statistics.optInt("expiring_count", 0))
-                put("expiring_value", statistics.optDouble("expiring_value", 0.0))
-                put("audit_items", statistics.optInt("audit_items", 0))
-                put("audit_variance", statistics.optDouble("audit_variance", 0.0))
-                put("unresolved_count", statistics.optInt("unresolved_count", 0))
+                put("critical_count", criticalCount)
+                put("expiring_count", expiringRows.size)
+                put("expiring_value", expiringValue)
+                put("audit_items", auditStats.optInt("audit_items", 0))
+                put("audit_variance", auditStats.optDouble("audit_variance", 0.0))
+                put("unresolved_count", unresolvedCount)
+                put("resolved_count", resolvedCount)
+                put("fuel_count", filteredRows.count { it.optString("item_type") == "fuel" })
+                put("product_count", filteredRows.count { it.optString("item_type") == "product" })
             }
         } finally {
             dbLock.unlock()
@@ -21494,8 +21655,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 directScope -> " AND station_id = ?"
                 screenKey == "calibration_records" && relationalScope -> " AND " + calibrationStationPredicate(stationId)
                 screenKey == "bad_debts" && relationalScope -> " AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
-                screenKey == "stocktakes" && relationalScope -> " AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
-                screenKey == "stocktake_details" && relationalScope -> " AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
+                screenKey == "stocktakes" && relationalScope -> " AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId})"
+                screenKey == "stocktake_details" && relationalScope -> " AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_st.archived = 0)"
                 screenKey == "price_history" && relationalScope -> " AND EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
                 screenKey == "price_list_items" && relationalScope -> " AND EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
                 screenKey == "tank_level_log" && relationalScope -> " AND EXISTS (SELECT 1 FROM tanks scope_t WHERE scope_t.id = tank_level_log.tank_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
@@ -21516,6 +21677,48 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun deleteOperationalRecord(screenKey: String, id: Long, actorId: Long = 0L, stationId: Int? = null): Int {
         if (screenKey == "tank_refills") return deleteTankRefillRecord(id, stationId ?: 0)
         require(id > 0L) { "معرف السجل غير صالح" }
+        if (screenKey == "warehouses") {
+            val scopedStationId = stationId ?: 0
+            require(scopedStationId > 0) { "معرف المحطة مطلوب لإيقاف تفعيل المستودع" }
+            dbLock.lock()
+            return try {
+                val db = writableDatabase
+                val exists = db.rawQuery(
+                    "SELECT 1 FROM warehouses WHERE id = ? AND station_id = ?",
+                    arrayOf(id.toString(), scopedStationId.toString())
+                ).use { cursor -> cursor.moveToFirst() }
+                if (!exists) {
+                    0
+                } else {
+                    val hasRemainingBalance = db.rawQuery(
+                        """SELECT 1 FROM inventory_levels
+                           WHERE warehouse_id = ?
+                             AND (COALESCE(quantity_on_hand, 0) > 0.000001
+                                  OR COALESCE(quantity_committed, 0) > 0.000001)
+                           LIMIT 1""",
+                        arrayOf(id.toString())
+                    ).use { cursor -> cursor.moveToFirst() }
+                    require(!hasRemainingBalance) {
+                        "لا يمكن إيقاف تفعيل المستودع قبل نقل أو تسوية الأرصدة والكميات المحجوزة الموجودة فيه"
+                    }
+                    val rows = db.update(
+                        "warehouses",
+                        ContentValues().apply {
+                            put("is_active", 0)
+                            put("is_default", 0)
+                        },
+                        "id = ? AND station_id = ?",
+                        arrayOf(id.toString(), scopedStationId.toString())
+                    )
+                    if (rows > 0) {
+                        logActivity("system", "deactivate_warehouse", "إيقاف تفعيل المستودع مع الحفاظ على سجلاته: " + id)
+                    }
+                    rows
+                }
+            } finally {
+                dbLock.unlock()
+            }
+        }
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         dbLock.lock()
         return try {
@@ -21531,8 +21734,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 deliveryScoped -> "id = ? AND is_deleted = 0 AND EXISTS (SELECT 1 FROM sales_transactions scope_sale WHERE scope_sale.id = deliveries.sale_id AND scope_sale.station_id = ? AND scope_sale.is_deleted = 0)"
                 screenKey == "calibration_records" && relationallyScoped -> "id = ? AND " + calibrationStationPredicate(stationId!!)
                 screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
-                screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
-                screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
+                screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId})"
+                screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_st.archived = 0)"
                 screenKey == "price_history" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
                 screenKey == "price_list_items" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
                 screenKey == "tank_level_log" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM tanks scope_t WHERE scope_t.id = tank_level_log.tank_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
@@ -21604,8 +21807,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 scoped -> "id = ? AND station_id = ?"
                 screenKey == "calibration_records" && relationallyScoped -> "id = ? AND " + calibrationStationPredicate(stationId!!)
                 screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
-                screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
-                screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
+                screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId})"
+                screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_st.archived = 0)"
                 screenKey == "price_history" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
                 screenKey == "price_list_items" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
                 screenKey == "tank_level_log" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM tanks scope_t WHERE scope_t.id = tank_level_log.tank_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
