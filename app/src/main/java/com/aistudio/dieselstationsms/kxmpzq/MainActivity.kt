@@ -99,6 +99,9 @@ class MainActivity : AppCompatActivity() {
     private var pendingInvoiceFolderHtml: String? = null
     private var pendingInvoiceFolderPhone: String = ""
     private var pendingInvoiceFolderAction: String = ""
+    private var pendingExportFileName: String? = null
+    private var pendingExportMimeType: String? = null
+    private var pendingExportBase64: String? = null
     private var isDatabaseBackupPickerActive: Boolean = false
 
     private lateinit var webFileChooserLauncher: ActivityResultLauncher<Intent>
@@ -108,6 +111,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var invoiceFolderPickerLauncher: ActivityResultLauncher<Intent>
     private lateinit var databaseBackupFolderPickerLauncher: ActivityResultLauncher<Intent>
     private lateinit var databaseBackupRestorePickerLauncher: ActivityResultLauncher<Intent>
+    private lateinit var exportFolderPickerLauncher: ActivityResultLauncher<Intent>
     private lateinit var securityDeviceUnlockLauncher: ActivityResultLauncher<Intent>
     // Bundle restoration marks an Activity recreation (e.g. rotation), not a fresh launch.
     private var isActivityRecreation: Boolean = false
@@ -136,6 +140,9 @@ class MainActivity : AppCompatActivity() {
         }
         databaseBackupRestorePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             handleLaunchedActivityResult(databaseBackupRestorePickerRequestCode, result.resultCode, result.data)
+        }
+        exportFolderPickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            handleLaunchedActivityResult(exportFolderPickerRequestCode, result.resultCode, result.data)
         }
         securityDeviceUnlockLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             handleLaunchedActivityResult(SECURITY_DEVICE_UNLOCK_REQUEST, result.resultCode, result.data)
@@ -177,6 +184,7 @@ class MainActivity : AppCompatActivity() {
         private val databaseBackupFolderPickerRequestCode = 4212
         private val databaseBackupRestorePickerRequestCode = 4213
         private val SECURITY_DEVICE_UNLOCK_REQUEST = 4214
+        private val exportFolderPickerRequestCode = 4215
         private var pendingVehicleFileKind: String? = null
         private var pendingStationFileKind: String? = null
 
@@ -2365,6 +2373,50 @@ class MainActivity : AppCompatActivity() {
     private fun handleLaunchedActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == SECURITY_DEVICE_UNLOCK_REQUEST) {
             onSecurityDeviceUnlockResult(resultCode)
+            return
+        }
+        if (requestCode == exportFolderPickerRequestCode) {
+            val fileName = pendingExportFileName
+            val mimeType = pendingExportMimeType
+            val encoded = pendingExportBase64
+            pendingExportFileName = null
+            pendingExportMimeType = null
+            pendingExportBase64 = null
+            if (resultCode != RESULT_OK || data?.data == null || fileName.isNullOrBlank() || encoded.isNullOrBlank()) {
+                webView?.post {
+                    safeEvaluateJs("window.onExportFolderResult && window.onExportFolderResult(" +
+                        JSONObject.quote(JSONObject().put("success", false).put("cancelled", true)
+                            .put("error", "تم إلغاء اختيار مجلد التصدير").toString()) + ");")
+                }
+                return
+            }
+            val selectedTree = data.data!!
+            try {
+                val grantFlags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                if (grantFlags != 0) runCatching { contentResolver.takePersistableUriPermission(selectedTree, grantFlags) }
+                val rootId = DocumentsContract.getTreeDocumentId(selectedTree)
+                val parentUri = DocumentsContract.buildDocumentUriUsingTree(selectedTree, rootId)
+                val safeName = fileName.replace(Regex("[\\\\/:*?\"<>|\\r\\n\\u0000-\\u001F]"), "_").take(160).ifBlank { "export" }
+                val target = DocumentsContract.createDocument(contentResolver, parentUri, mimeType ?: "application/octet-stream", safeName)
+                    ?: throw IllegalStateException("تعذر إنشاء الملف داخل المجلد المحدد")
+                val bytes = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
+                contentResolver.openOutputStream(target, "wt")?.use { output ->
+                    output.write(bytes)
+                    output.flush()
+                } ?: throw IllegalStateException("تعذر الكتابة في المجلد المحدد")
+                webView?.post {
+                    safeEvaluateJs("window.onExportFolderResult && window.onExportFolderResult(" +
+                        JSONObject.quote(JSONObject().put("success", true).put("uri", target.toString())
+                            .put("path", target.toString()).put("file_name", safeName).toString()) + ");")
+                }
+            } catch (error: Exception) {
+                DebugLogger.logException("ExportFolderPicker", error)
+                webView?.post {
+                    safeEvaluateJs("window.onExportFolderResult && window.onExportFolderResult(" +
+                        JSONObject.quote(JSONObject().put("success", false)
+                            .put("error", error.message ?: "تعذر حفظ ملف التصدير").toString()) + ");")
+                }
+            }
             return
         }
         if (requestCode == databaseBackupFolderPickerRequestCode) {
@@ -8247,6 +8299,44 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 put("success", true)
                 put("status", "processing")
             }.toString()
+        }
+
+        @JavascriptInterface
+        fun chooseExportFolder(fileName: String, mimeType: String, base64Data: String): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val safeName = fileName.trim().take(160).ifBlank { "export" }
+            val safeMime = mimeType.trim().take(120).ifBlank { "application/octet-stream" }
+            if (base64Data.isBlank()) return errorResponse("بيانات التصدير فارغة")
+            pendingExportFileName = safeName
+            pendingExportMimeType = safeMime
+            pendingExportBase64 = base64Data
+            return try {
+                activity.runOnUiThread {
+                    try {
+                        val picker = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                        }
+                        exportFolderPickerLauncher.launch(picker)
+                    } catch (error: Exception) {
+                        pendingExportFileName = null
+                        pendingExportMimeType = null
+                        pendingExportBase64 = null
+                        webView?.post {
+                            safeEvaluateJs("window.onExportFolderResult && window.onExportFolderResult(" +
+                                JSONObject.quote(JSONObject().put("success", false)
+                                    .put("error", error.message ?: "تعذر فتح مدير التخزين").toString()) + ");")
+                        }
+                    }
+                }
+                JSONObject().put("success", true).put("status", "picker_opened").toString()
+            } catch (error: Exception) {
+                pendingExportFileName = null
+                pendingExportMimeType = null
+                pendingExportBase64 = null
+                errorResponse(error.message ?: "تعذر فتح مدير التخزين")
+            }
         }
 
         @JavascriptInterface

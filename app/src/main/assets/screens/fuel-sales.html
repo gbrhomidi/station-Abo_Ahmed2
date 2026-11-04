@@ -4052,6 +4052,16 @@ function openExportSheet() {
         showAdvancedNotification('قم بتوليد التقرير أولاً قبل التصدير', 'warning', 'تنبيه');
         return;
     }
+    if (window.StationExportRuntime) {
+        const csv = buildCsvContent(state.reportRows);
+        window.StationExportRuntime.openPreparedExport({
+            filename: buildReportFilename(),
+            mime: 'text/csv;charset=utf-8',
+            blob: new Blob([csv], {type: 'text/csv;charset=utf-8'}),
+            formats: ['csv', 'xlsx']
+        });
+        return;
+    }
     const status = $('exportStatus');
     if (status) { status.className = 'export-status'; status.innerHTML = ''; }
     $('exportSheet').classList.add('show');
@@ -4274,6 +4284,10 @@ async function printReport() {
     await new Promise(r => setTimeout(r, 200));
 
     try {
+        if (window.StationExportRuntime) {
+            window.StationExportRuntime.openPrint({filename: filename});
+            return;
+        }
         if (bridge && typeof bridge.printCurrentPageWithTitle === 'function') {
             const raw = bridge.printCurrentPageWithTitle(filename);
             const ack = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -4551,5 +4565,7 @@ reloadData();
 })();
 </script>
 <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
+
+    <script src="file:///android_asset/assets-local/js/export-runtime.js"></script>
 </body>
 </html>
