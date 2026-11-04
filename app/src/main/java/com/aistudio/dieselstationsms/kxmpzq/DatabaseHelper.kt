@@ -21347,7 +21347,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         val haystack = listOf(
                             fuelName, row.optString("fuel_name"), row.optString("fuel_code"),
                             row.optString("tank_code"), row.optString("tank_name"),
-                            row.optString("fuel_type_id"), row.optString("tank_id"), "fuel", "وقود"
+                            row.optString("fuel_type_id"), row.optString("tank_id"),
+                            row.optString("alert_type"), row.optString("alert_level"), "fuel", "وقود"
                         ).joinToString(" ").lowercase(Locale.US)
                         if (!haystack.contains(search)) continue
                     }
@@ -21656,8 +21657,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 directScope -> " AND station_id = ?"
                 screenKey == "calibration_records" && relationalScope -> " AND " + calibrationStationPredicate(stationId)
                 screenKey == "bad_debts" && relationalScope -> " AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
-                screenKey == "stocktakes" && relationalScope -> " AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId})"
-                screenKey == "stocktake_details" && relationalScope -> " AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_st.archived = 0)"
+                screenKey == "stocktakes" && relationalScope -> " AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
+                screenKey == "stocktake_details" && relationalScope -> " AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
                 screenKey == "price_history" && relationalScope -> " AND EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
                 screenKey == "price_list_items" && relationalScope -> " AND EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
                 screenKey == "tank_level_log" && relationalScope -> " AND EXISTS (SELECT 1 FROM tanks scope_t WHERE scope_t.id = tank_level_log.tank_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
@@ -21712,7 +21713,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         arrayOf(id.toString(), scopedStationId.toString())
                     )
                     if (rows > 0) {
-                        logActivity("system", "deactivate_warehouse", "إيقاف تفعيل المستودع مع الحفاظ على سجلاته: " + id)
+                        logActivity("system", "deactivate_warehouse", "إيقاف تفعيل المستودع مع الحفاظ على سجلاته: " + id, scopedStationId, actorId, "warehouses", id)
                     }
                     rows
                 }
@@ -21735,8 +21736,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 deliveryScoped -> "id = ? AND is_deleted = 0 AND EXISTS (SELECT 1 FROM sales_transactions scope_sale WHERE scope_sale.id = deliveries.sale_id AND scope_sale.station_id = ? AND scope_sale.is_deleted = 0)"
                 screenKey == "calibration_records" && relationallyScoped -> "id = ? AND " + calibrationStationPredicate(stationId!!)
                 screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
-                screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId})"
-                screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_st.archived = 0)"
+                screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
+                screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
                 screenKey == "price_history" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
                 screenKey == "price_list_items" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
                 screenKey == "tank_level_log" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM tanks scope_t WHERE scope_t.id = tank_level_log.tank_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
@@ -21808,8 +21809,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 scoped -> "id = ? AND station_id = ?"
                 screenKey == "calibration_records" && relationallyScoped -> "id = ? AND " + calibrationStationPredicate(stationId!!)
                 screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
-                screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId})"
-                screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_st.archived = 0)"
+                screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
+                screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
                 screenKey == "price_history" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
                 screenKey == "price_list_items" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
                 screenKey == "tank_level_log" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM tanks scope_t WHERE scope_t.id = tank_level_log.tank_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
