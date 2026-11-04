@@ -2647,6 +2647,7 @@
         // ===================================================================
         let debtsData = [];
         let allDebtsData = [];
+        let dueInvoicesDrilldownActive = false;
         let paymentInFlight = false;
         let paymentKeysByFingerprint = new Map();
         let paymentSettlementOptions = { cashBoxes: [], bankAccounts: [] };
@@ -2723,7 +2724,10 @@
                     (status === 'current'
                         ? row.status === 'current' || (row.status === 'partial' && (row.days_remaining === null || row.days_remaining === undefined || row.days_remaining >= 0))
                         : row.status === status);
-                return dateMatch && customerMatch && statusMatch;
+                // The dashboard KPI counts only invoices with an outstanding balance.
+                const outstandingMatch = !dueInvoicesDrilldownActive ||
+                    finiteNumber(row.remaining_amount) > 0.000001;
+                return dateMatch && customerMatch && statusMatch && outstandingMatch;
             });
         }
 
@@ -4240,6 +4244,7 @@ async function loadCustomerDebtSettings() {
             const today = new Date();
             const queryParams = new URLSearchParams(window.location.search || '');
             const dueInvoicesDrilldown = queryParams.get('drilldown') === 'due-invoices';
+            dueInvoicesDrilldownActive = dueInvoicesDrilldown;
 
             if (dueInvoicesDrilldown) {
                 // Dashboard KPI counts outstanding invoices maturing from today through
