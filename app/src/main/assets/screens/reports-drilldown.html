@@ -1,3 +1,68 @@
-<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تتبع مصدر التقرير</title><script src="report-source-trace.js"></script></head><body><main style="padding:16px;font-family:Arial"><h2>تتبع مصدر التقرير</h2><div id="status">جاري التحقق...</div><div id="origin"></div><button id="open" disabled>فتح المستند التشغيلي</button></main><script>(function(){const q=new URLSearchParams(location.search);const scope={from_date:q.get('from_date')||'',to_date:q.get('to_date')||''};const input={source_table:q.get('source_table')||'',source_id:Number(q.get('source_id')||0),reference_code:q.get('reference_code')||'',station_id:Number(q.get('station_id')||0),date_scope:scope,document_type:q.get('document_type')||''};const status=document.getElementById('status');try{const c=SourceTraceContract.build(input);status.textContent='العقد جاهز للتحقق من SQLite والمحطة والفترة.';document.getElementById('open').disabled=false;document.getElementById('open').onclick=()=>SourceTraceContract.open(c);document.getElementById('origin').textContent=JSON.stringify(c,null,2)}catch(e){status.textContent=e.message||String(e)}})();</script>
-    <script src="file:///android_asset/assets-local/js/export-runtime.js"></script>
-</body></html>
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>تتبع مصدر التقرير</title>
+  <script src="source-trace-contract.js"></script>
+  <script src="report-source-trace.js"></script>
+</head>
+<body>
+  <main style="padding:16px;font-family:Arial,sans-serif">
+    <h2>تتبع مصدر التقرير</h2>
+    <p id="status" role="status" aria-live="polite">جارٍ التحقق من بيانات المصدر.</p>
+    <pre id="origin" dir="ltr" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+    <button id="open" type="button" disabled>فتح المستند التشغيلي</button>
+  </main>
+  <script>
+    (function () {
+      'use strict';
+      const query = new URLSearchParams(window.location.search);
+      const input = {
+        source_table: query.get('source_table') || '',
+        source_id: Number(query.get('source_id') || 0),
+        reference_code: query.get('reference_code') || '',
+        station_id: Number(query.get('station_id') || 0),
+        date_scope: {
+          from_date: query.get('from_date') || '',
+          to_date: query.get('to_date') || ''
+        },
+        document_type: query.get('document_type') || '',
+        report_context: {}
+      };
+      try {
+        if (query.has('report_context')) {
+          input.report_context = JSON.parse(query.get('report_context') || '{}');
+        }
+      } catch (_) {
+        document.getElementById('status').textContent = 'بيانات سياق التقرير غير صالحة.';
+      }
+
+      const status = document.getElementById('status');
+      const openButton = document.getElementById('open');
+      try {
+        const contract = SourceTraceContract.build(input);
+        document.getElementById('origin').textContent = JSON.stringify(contract, null, 2);
+        status.textContent = 'تم فحص العقد محليًا. اضغط ليتحقق Android من المصدر والمحطة والفترة قبل فتح المستند.';
+        openButton.disabled = false;
+        openButton.addEventListener('click', function () {
+          if (openButton.disabled) return;
+          openButton.disabled = true;
+          status.textContent = 'جارٍ التحقق من سجل المصدر في SQLite...';
+          try {
+            const verified = SourceTraceContract.open(contract);
+            window.location.href = ReportSourceTracePage.destination(verified);
+          } catch (error) {
+            status.textContent = error && error.message ? error.message : 'تعذر التحقق من مصدر المستند.';
+            openButton.disabled = false;
+          }
+        });
+      } catch (error) {
+        status.textContent = error && error.message ? error.message : 'عقد مصدر التقرير غير صالح.';
+        openButton.disabled = true;
+      }
+    }());
+  </script>
+  <script src="file:///android_asset/assets-local/js/export-runtime.js"></script>
+</body>
+</html>

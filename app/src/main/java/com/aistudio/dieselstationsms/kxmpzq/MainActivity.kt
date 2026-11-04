@@ -317,7 +317,20 @@ class MainActivity : AppCompatActivity() {
     private var isWebViewInitialized = false
     private var isErrorPageShown = false
     private var backgroundJob: Job? = null
+    private val exportJobs = Collections.synchronizedSet(mutableSetOf<Job>())
     private var maintenanceJob: Job? = null
+
+    private fun trackExportJob(job: Job) {
+        exportJobs.add(job)
+        job.invokeOnCompletion { exportJobs.remove(job) }
+    }
+
+    private fun cancelExportJobs() {
+        synchronized(exportJobs) {
+            exportJobs.toList().forEach { it.cancel() }
+            exportJobs.clear()
+        }
+    }
 
     private var webAppInterface: WebAppInterface? = null
     private val BRIDGE_INITIALIZED_TAG = 0x7F0F0001
@@ -862,6 +875,7 @@ class MainActivity : AppCompatActivity() {
 
         backgroundJob?.cancel()
         backgroundJob = null
+        cancelExportJobs()
         maintenanceJob?.cancel()
         maintenanceJob = null
 
@@ -2391,30 +2405,39 @@ class MainActivity : AppCompatActivity() {
                 return
             }
             val selectedTree = data.data!!
-            try {
-                val grantFlags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                if (grantFlags != 0) runCatching { contentResolver.takePersistableUriPermission(selectedTree, grantFlags) }
-                val rootId = DocumentsContract.getTreeDocumentId(selectedTree)
-                val parentUri = DocumentsContract.buildDocumentUriUsingTree(selectedTree, rootId)
-                val safeName = fileName.replace(Regex("[\\\\/:*?\"<>|\\r\\n\\u0000-\\u001F]"), "_").take(160).ifBlank { "export" }
-                val target = DocumentsContract.createDocument(contentResolver, parentUri, mimeType ?: "application/octet-stream", safeName)
-                    ?: throw IllegalStateException("تعذر إنشاء الملف داخل المجلد المحدد")
-                val bytes = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
-                contentResolver.openOutputStream(target, "wt")?.use { output ->
-                    output.write(bytes)
-                    output.flush()
-                } ?: throw IllegalStateException("تعذر الكتابة في المجلد المحدد")
-                webView?.post {
-                    safeEvaluateJs("window.onExportFolderResult && window.onExportFolderResult(" +
-                        JSONObject.quote(JSONObject().put("success", true).put("uri", target.toString())
-                            .put("path", target.toString()).put("file_name", safeName).toString()) + ");")
+            val grantFlags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            val startedAt = android.os.SystemClock.elapsedRealtime()
+            lifecycleScope.launch {
+                val result = withContext(Dispatchers.IO) {
+                    try {
+                        if (grantFlags != 0) {
+                            runCatching { contentResolver.takePersistableUriPermission(selectedTree, grantFlags) }
+                        }
+                        val rootId = DocumentsContract.getTreeDocumentId(selectedTree)
+                        val parentUri = DocumentsContract.buildDocumentUriUsingTree(selectedTree, rootId)
+                        val safeName = fileName.replace(Regex("[\\\\/:*?\"<>|\\r\\n\\u0000-\\u001F]"), "_").take(160).ifBlank { "export" }
+                        val target = DocumentsContract.createDocument(contentResolver, parentUri, mimeType ?: "application/octet-stream", safeName)
+                            ?: throw IllegalStateException("تعذر إنشاء الملف داخل المجلد المحدد")
+                        val bytes = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
+                        contentResolver.openOutputStream(target, "wt")?.use { output ->
+                            output.write(bytes)
+                            output.flush()
+                        } ?: throw IllegalStateException("تعذر الكتابة في المجلد المحدد")
+                        DebugLogger.info(
+                            "ExportFolderPicker",
+                            "phase=completed bytes=${bytes.size} elapsed_ms=${android.os.SystemClock.elapsedRealtime() - startedAt}"
+                        )
+                        JSONObject().put("success", true).put("uri", target.toString())
+                            .put("path", target.toString()).put("file_name", safeName)
+                    } catch (error: Exception) {
+                        DebugLogger.logException("ExportFolderPicker", error)
+                        JSONObject().put("success", false)
+                            .put("error", error.message ?: "تعذر حفظ ملف التصدير")
+                    }
                 }
-            } catch (error: Exception) {
-                DebugLogger.logException("ExportFolderPicker", error)
                 webView?.post {
                     safeEvaluateJs("window.onExportFolderResult && window.onExportFolderResult(" +
-                        JSONObject.quote(JSONObject().put("success", false)
-                            .put("error", error.message ?: "تعذر حفظ ملف التصدير").toString()) + ");")
+                        JSONObject.quote(result.toString()) + ");")
                 }
             }
             return
@@ -8372,8 +8395,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         DebugLogger.logException("OperationalExport-$screenKey", e)
                     }
                 }
-                activity.backgroundJob?.cancel()
-                activity.backgroundJob = job
+                activity.trackExportJob(job)
                 JSONObject().apply {
                     put("success", true)
                     put("status", "processing")
@@ -8412,8 +8434,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     DebugLogger.logException("Export", e)
                 }
             }
-            activity.backgroundJob?.cancel()
-            activity.backgroundJob = job
+            activity.trackExportJob(job)
 
             return JSONObject().apply {
                 put("success", true)
@@ -8486,8 +8507,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     DebugLogger.logException("ExportAll", e)
                 }
             }
-            activity.backgroundJob?.cancel()
-            activity.backgroundJob = job
+            activity.trackExportJob(job)
 
             return JSONObject().apply {
                 put("success", true)
@@ -11382,6 +11402,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             // @JavascriptInterface runs on a bridge thread. All WebView and PrintManager
             // access must happen on the UI thread, but return the real launch result to JS.
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val startedAt = android.os.SystemClock.elapsedRealtime()
             val completed = CountDownLatch(1)
             var resultJson: String? = null
             activity.runOnUiThread {
@@ -11419,12 +11440,27 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
             return try {
                 if (!completed.await(5, TimeUnit.SECONDS)) {
+                    DebugLogger.warn(
+                        "NativePrint",
+                        "phase=launch_timeout elapsed_ms=${android.os.SystemClock.elapsedRealtime() - startedAt}"
+                    )
                     errorResponse("انتهت مهلة فتح نافذة الطباعة؛ يرجى المحاولة مجدداً")
                 } else {
+                    val launchSucceeded = runCatching {
+                        JSONObject(resultJson.orEmpty()).optBoolean("success")
+                    }.getOrDefault(false)
+                    DebugLogger.info(
+                        "NativePrint",
+                        "phase=launch_completed elapsed_ms=${android.os.SystemClock.elapsedRealtime() - startedAt} success=$launchSucceeded"
+                    )
                     resultJson ?: errorResponse("تعذر تحديد نتيجة طلب الطباعة")
                 }
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
+                DebugLogger.warn(
+                    "NativePrint",
+                    "phase=wait_interrupted elapsed_ms=${android.os.SystemClock.elapsedRealtime() - startedAt}"
+                )
                 errorResponse("تم إيقاف انتظار الطباعة")
             }
         }

@@ -48,6 +48,27 @@ const { JSDOM } = require('jsdom');
   overlay = window.document.querySelector('.station-export-backdrop');
   assert(!overlay.classList.contains('show'), 'successful Android folder export callback must synchronously dismiss its overlay');
 
+  const activitySource = fs.readFileSync(path.join(__dirname, 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt'), 'utf8');
+  const resultHandler = activitySource.indexOf('private fun handleLaunchedActivityResult');
+  const exportHandlerStart = activitySource.indexOf('if (requestCode == exportFolderPickerRequestCode)', resultHandler);
+  const exportHandlerEnd = activitySource.indexOf('if (requestCode == databaseBackupFolderPickerRequestCode)', exportHandlerStart);
+  const exportHandler = activitySource.slice(exportHandlerStart, exportHandlerEnd);
+  const ioStart = exportHandler.indexOf('withContext(Dispatchers.IO)');
+  const decodeAt = exportHandler.indexOf('Base64.decode(encoded');
+  const writeAt = exportHandler.indexOf('openOutputStream(target');
+  assert(exportHandler.includes('lifecycleScope.launch'), 'SAF persistence must not run in the ActivityResult callback body');
+  assert(ioStart >= 0 && decodeAt > ioStart && writeAt > decodeAt, 'Base64 decoding and document writing must execute on Dispatchers.IO');
+  assert(exportHandler.includes('phase=completed bytes=') && exportHandler.includes('elapsed_ms='), 'export completion logs must include safe size/timing diagnostics');
+  assert(activitySource.includes('phase=launch_timeout elapsed_ms=') && activitySource.includes('phase=launch_completed elapsed_ms='), 'print launch must log latency and timeout outcomes');
+  assert(activitySource.includes('private val exportJobs = Collections.synchronizedSet'), 'export jobs must have lifecycle tracking independent of backgroundJob');
+  for (const method of ['exportOperationalCsv', 'exportToCSV', 'exportAllData']) {
+    const start = activitySource.indexOf(`fun ${method}(`);
+    const end = activitySource.indexOf('@JavascriptInterface', start + 1);
+    const body = activitySource.slice(start, end < 0 ? undefined : end);
+    assert(body.includes('activity.trackExportJob(job)'), `${method} must track its job separately`);
+    assert(!body.includes('activity.backgroundJob?.cancel()'), `${method} must not cancel unrelated activity work`);
+  }
+
   console.log('Android export/print lifecycle acceptance regression PASS');
   dom.window.close();
 })().catch(error => { console.error(error); process.exitCode = 1; });
