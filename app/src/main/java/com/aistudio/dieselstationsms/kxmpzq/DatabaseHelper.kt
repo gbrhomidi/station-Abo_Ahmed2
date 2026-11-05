@@ -17863,6 +17863,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val stats = JSONObject()
         val db = readableDatabase
         val today = businessDate
+        val salesColumns = db.rawQuery("PRAGMA table_info(sales_transactions)", null).use { cursor ->
+            buildSet {
+                while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+            }
+        }
+        val trustedDueDateClause = if ("due_date_source" in salesColumns) {
+            "AND COALESCE(due_date_source,'') IN ('sale_creation','sales_trigger_v3','legacy_rebuilt_snapshot')"
+        } else {
+            "AND 0=1"
+        }
 
         // 1. إجمالي المنتجات النشطة في المحطة
         db.rawQuery(
@@ -17990,6 +18000,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                  AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')
                  AND COALESCE(is_deleted,0)=0
                  AND due_date IS NOT NULL AND TRIM(due_date)<>''
+                 $trustedDueDateClause
                  AND date(due_date) BETWEEN date(?) AND date(?, '+7 days')""",
             arrayOf(stationId.toString(), today, today)
         ).use { cursor ->
@@ -18197,6 +18208,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                      IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')
                  AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')
                  AND due_date IS NOT NULL AND TRIM(due_date)<>''
+                 $trustedDueDateClause
                  AND date(due_date) < date(?)""",
             arrayOf(stationId.toString(), today)
         ).use { cursor ->
@@ -18502,6 +18514,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         val limit = params.optInt("limit", 1000).coerceIn(1, 5000)
         val offset = params.optInt("offset", 0).coerceAtLeast(0)
+        val salesColumns = readableDatabase.rawQuery("PRAGMA table_info(sales_transactions)", null).use { cursor ->
+            buildSet {
+                while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+            }
+        }
+        val saleDueDateExpr = if ("due_date" in salesColumns) "COALESCE(s.due_date,'')" else "''"
+        val saleDueSourceExpr = if ("due_date_source" in salesColumns) "COALESCE(s.due_date_source,'')" else "''"
+        val saleMaturityTrusted = "$saleDueSourceExpr IN ('sale_creation','sales_trigger_v3','legacy_rebuilt_snapshot')"
         val sql = """
             WITH task_rows AS (
                 SELECT
@@ -18521,15 +18541,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     'فاتورة بيع غير مدفوعة' AS task_type,
                     'فاتورة بيع غير مدفوعة' AS type,
                     COALESCE(NULLIF(s.invoice_number, ''), s.sale_code, CAST(s.id AS TEXT)) AS reference,
-                    COALESCE(NULLIF(s.due_date, ''), date(s.created_at)) AS task_date,
-                    COALESCE(NULLIF(s.due_date, ''), date(s.created_at)) AS date,
+                    CASE WHEN $saleMaturityTrusted THEN NULLIF($saleDueDateExpr,'') ELSE NULL END AS task_date,
+                    CASE WHEN $saleMaturityTrusted THEN NULLIF($saleDueDateExpr,'') ELSE NULL END AS date,
                     COALESCE(s.remaining_amount, 0) AS amount,
                     CASE
-                        WHEN date(COALESCE(NULLIF(s.due_date, ''), s.created_at)) < date('now', 'localtime') THEN 'عالية'
+                        WHEN NOT ($saleMaturityTrusted) OR NULLIF($saleDueDateExpr,'') IS NULL THEN 'عالية'
+                        WHEN date($saleDueDateExpr) < date('now', 'localtime') THEN 'عالية'
                         ELSE 'متوسطة'
                     END AS priority,
                     CASE
-                        WHEN date(COALESCE(NULLIF(s.due_date, ''), s.created_at)) < date('now', 'localtime') THEN 'متأخرة'
+                        WHEN NOT ($saleMaturityTrusted) OR NULLIF($saleDueDateExpr,'') IS NULL THEN 'بحاجة مراجعة'
+                        WHEN date($saleDueDateExpr) < date('now', 'localtime') THEN 'متأخرة'
                         ELSE 'غير مدفوعة'
                     END AS status,
                     TRIM(COALESCE(p.commercial_name_ar, p.commercial_name, '')) AS notes,
@@ -18543,10 +18565,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    AND p.station_id = s.station_id
                    AND p.is_deleted = 0
                 WHERE s.station_id = ?
-                  AND s.is_deleted = 0
+                  AND COALESCE(s.is_deleted,0) = 0
                   AND s.status = 'completed'
                   AND s.payment_status IN ('pending', 'partial')
-                  AND COALESCE(s.remaining_amount, 0) > 0
+                  AND COALESCE(s.remaining_amount, 0) > 0.000001
+                  AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(s.payment_method,'')),' ',''),'-','_'))
+                      IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')
 
                 UNION ALL
 
@@ -18556,15 +18580,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     'معاملة مالية مستحقة' AS task_type,
                     'معاملة مالية مستحقة' AS type,
                     COALESCE(NULLIF(e.invoice_number, ''), e.expense_code, CAST(e.id AS TEXT)) AS reference,
-                    COALESCE(NULLIF(e.next_due_date, ''), date(e.created_at)) AS task_date,
-                    COALESCE(NULLIF(e.next_due_date, ''), date(e.created_at)) AS date,
+                    NULLIF(e.next_due_date, '') AS task_date,
+                    NULLIF(e.next_due_date, '') AS date,
                     MAX(COALESCE(e.total_amount, 0) - COALESCE(e.paid_amount, 0), 0) AS amount,
                     CASE
-                        WHEN date(COALESCE(NULLIF(e.next_due_date, ''), e.created_at)) < date('now', 'localtime') THEN 'عالية'
+                        WHEN NULLIF(e.next_due_date, '') IS NULL THEN 'عالية'
+                        WHEN date(e.next_due_date) < date('now', 'localtime') THEN 'عالية'
                         ELSE 'متوسطة'
                     END AS priority,
                     CASE
-                        WHEN date(COALESCE(NULLIF(e.next_due_date, ''), e.created_at)) < date('now', 'localtime') THEN 'متأخرة'
+                        WHEN NULLIF(e.next_due_date, '') IS NULL THEN 'بحاجة مراجعة'
+                        WHEN date(e.next_due_date) < date('now', 'localtime') THEN 'متأخرة'
                         ELSE 'غير مدفوعة'
                     END AS status,
                     TRIM(COALESCE(e.description_ar, e.description, ''))

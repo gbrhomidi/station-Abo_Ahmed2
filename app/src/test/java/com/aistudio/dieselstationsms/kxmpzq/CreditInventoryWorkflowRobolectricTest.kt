@@ -3,6 +3,7 @@ package com.aistudio.dieselstationsms.kxmpzq
 import android.content.ContentValues
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.aistudio.dieselstationsms.kxmpzq.sms.DebtDueDateRepository
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
@@ -125,6 +126,44 @@ class CreditInventoryWorkflowRobolectricTest {
             "SELECT due_date FROM sales_transactions WHERE id=? AND station_id=?",
             arrayOf(saleId.toString(), "1")
         ).use { cursor -> check(cursor.moveToFirst()); cursor.getString(0) })
+
+        // A legacy/unverified date stays visible for review but is never counted as overdue.
+        db.update(
+            "sales_transactions",
+            ContentValues().apply {
+                put("due_date", "2026-10-01")
+                put("due_date_source", "legacy_unverified")
+            },
+            "id=? AND station_id=?",
+            arrayOf(saleId.toString(), "1")
+        )
+        val untrustedStats = helper.getDashboardStatsForDate(1, JSONObject(), "2026-11-05")
+        assertEquals(0, untrustedStats.getInt("overdue_count"))
+        assertEquals(0.0, untrustedStats.getDouble("overdue_amount"), 0.0001)
+        assertEquals(0, untrustedStats.getInt("due_invoices"))
+        val untrustedRows = helper.getPendingTasks(1, JSONObject().put("limit", 5000))
+        val untrustedTask = (0 until untrustedRows.length())
+            .map { untrustedRows.getJSONObject(it) }
+            .first { it.optString("source_kind") == "credit_sale" && it.optLong("source_id") == saleId }
+        assertEquals("بحاجة مراجعة", untrustedTask.getString("status"))
+        assertTrue(untrustedTask.isNull("task_date"))
+
+        // When its date provenance is verified, the same invoice enters overdue once.
+        db.update(
+            "sales_transactions",
+            ContentValues().apply { put("due_date_source", "sale_creation") },
+            "id=? AND station_id=?",
+            arrayOf(saleId.toString(), "1")
+        )
+        val trustedStats = helper.getDashboardStatsForDate(1, JSONObject(), "2026-11-05")
+        assertEquals(1, trustedStats.getInt("overdue_count"))
+        assertEquals(48.0, trustedStats.getDouble("overdue_amount"), 0.0001)
+        val trustedRows = helper.getPendingTasks(1, JSONObject().put("limit", 5000))
+        val trustedTask = (0 until trustedRows.length()).map { trustedRows.getJSONObject(it) }
+            .first { it.optString("source_kind") == "credit_sale" && it.optLong("source_id") == saleId }
+        assertEquals("متأخرة", trustedTask.getString("status"))
+        assertEquals("2026-10-01", trustedTask.getString("task_date"))
+
         db.rawQuery("SELECT current_balance, total_due FROM parties WHERE id = ?", arrayOf(customerId.toString())).use { cursor ->
             assertTrue(cursor.moveToFirst()); assertEquals(48.0, cursor.getDouble(0), 0.0001); assertEquals(48.0, cursor.getDouble(1), 0.0001)
         }
