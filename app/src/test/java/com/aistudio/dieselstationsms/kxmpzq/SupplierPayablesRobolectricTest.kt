@@ -143,7 +143,8 @@ class SupplierPayablesRobolectricTest {
 
         val rows = SupplierPayablesRepository.getSupplierInvoices(db, 1, supplierId)
         assertEquals(2, rows.length())
-        assertEquals("overdue", rows.getJSONObject(1).optString("maturity_status"))
+        assertEquals("overdue", rows.getJSONObject(0).optString("maturity_status"))
+        assertEquals("paid", rows.getJSONObject(1).optString("maturity_status"))
     }
 
     @Test

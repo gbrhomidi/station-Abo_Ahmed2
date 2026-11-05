@@ -280,6 +280,7 @@ object SupplierPayablesRepository {
         val currencyArgs=arrayListOf(stationId.toString(),supplierId.toString(),payment.getLong("currency_id").toString())
         val invoiceFilter=if(explicitInvoiceId>0L) " AND id=?" else ""
         if(explicitInvoiceId>0L) currencyArgs.add(explicitInvoiceId.toString())
+        currencyArgs.add(EPSILON.toString())
         db.rawQuery(
             """SELECT id,remaining_amount FROM supplier_invoices
                WHERE station_id=? AND supplier_id=? $currencyClause $invoiceFilter
