@@ -9708,6 +9708,22 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun makeSupplierPayment(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val data = JSONObject(jsonData.ifBlank { "{}" }).apply { put("station_id", stationId) }
+                require(data.optLong("supplier_party_id", 0L) > 0L) { "حدد المورد قبل السداد" }
+                val paymentId = db.addPayment(data, stationId, activity.currentUserId)
+                successResponse(paymentId, "تم تسجيل دفعة المورد وتخصيصها على الفواتير")
+            } catch (e: Exception) {
+                DebugLogger.logException("SupplierPayment", e)
+                errorResponse(e.message ?: "تعذر تسجيل دفعة المورد")
+            }
+        }
+
+        @JavascriptInterface
         fun getSupplierAging(supplierId: Long, asOfDate: String = ""): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {

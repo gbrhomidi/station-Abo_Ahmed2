@@ -1982,6 +1982,9 @@
                     case 'getSupplierAging': raw = AndroidInterface.getSupplierAging(Number(p.supplier_id || 0), String(p.as_of_date || '')); break;
                     case 'getSupplierInvoices': raw = AndroidInterface.getSupplierInvoices(JSON.stringify(p)); break;
                     case 'getSupplierPayments': raw = AndroidInterface.getSupplierPayments(JSON.stringify(p)); break;
+                    case 'getActiveCashBoxes': raw = AndroidInterface.getActiveCashBoxes(); break;
+                    case 'getBankAccounts': raw = AndroidInterface.getBankAccounts(); break;
+                    case 'makeSupplierPayment': raw = AndroidInterface.makeSupplierPayment(JSON.stringify(p)); break;
                     case 'getPartyById': raw = AndroidInterface.getPartyById(Number(p.id)); break;
                     case 'addSupplier': raw = AndroidInterface.addParty(JSON.stringify({ ...p, party_type: 'supplier', party_type_id: 6 })); break;
                     case 'updateSupplier': raw = AndroidInterface.updateParty(Number(p.id), JSON.stringify({ ...p, party_type: 'supplier', party_type_id: 6 })); break;
@@ -2499,6 +2502,114 @@ let pullStartY = 0,
             }
         }
 
+        let activeSupplierPaymentId = 0;
+
+        async function openSupplierPayment(supplierId) {
+            activeSupplierPaymentId = Number(supplierId || 0);
+            if (activeSupplierPaymentId <= 0) return;
+            const supplier = allSuppliers.find(item => Number(item.id) === activeSupplierPaymentId);
+            document.getElementById('supplierPaymentTitle').textContent =
+                'سداد دفعة — ' + (supplier ? getField(supplier, 'commercial_name_ar', 'commercial_name', 'name') : ('#' + supplierId));
+            document.getElementById('supplierPaymentAmount').value = '';
+            document.getElementById('supplierPaymentNotes').value = '';
+            document.getElementById('supplierPaymentInvoice').innerHTML =
+                '<option value="0">تلقائي — أقدم تاريخ استحقاق أولاً</option>';
+            document.getElementById('supplierPaymentMessage').textContent =
+                'سيتم توزيع الدفعة جزئياً وفق أقدم تاريخ استحقاق، ثم أقدم فاتورة. يمكن اختيار فاتورة واحدة للتخصيص المباشر.';
+            document.getElementById('supplierPaymentModal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            try {
+                const response = await apiCall('getSupplierInvoices', { supplier_id: activeSupplierPaymentId });
+                if (!response.success) throw new Error(response.message || 'تعذر تحميل فواتير المورد');
+                const invoices = Array.isArray(response.data) ? response.data : [];
+                const select = document.getElementById('supplierPaymentInvoice');
+                invoices.filter(item => Number(item.remaining_amount || 0) > 0.000001).forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = String(item.id);
+                    option.textContent = (item.invoice_number || ('فاتورة #' + item.id)) +
+                        ' — متبقٍ ' + formatCurrency(item.remaining_amount);
+                    select.appendChild(option);
+                });
+                await loadSupplierPaymentAccounts();
+            } catch (e) {
+                document.getElementById('supplierPaymentMessage').textContent = e.message || 'تعذر تحميل بيانات السداد';
+            }
+        }
+
+        async function loadSupplierPaymentAccounts() {
+            const method = document.getElementById('supplierPaymentMethod').value;
+            const label = document.getElementById('supplierPaymentAccountLabel');
+            const select = document.getElementById('supplierPaymentAccount');
+            const action = method === 'cash' ? 'getActiveCashBoxes' : 'getBankAccounts';
+            label.firstChild.textContent = method === 'cash' ? 'الصندوق' : 'الحساب البنكي';
+            select.innerHTML = '<option value="">جارٍ التحميل...</option>';
+            try {
+                const response = await apiCall(action, {});
+                if (!response.success) throw new Error(response.message || 'تعذر تحميل حسابات السداد');
+                const rows = Array.isArray(response.data) ? response.data : [];
+                select.innerHTML = '<option value="">اختر وسيلة السداد</option>';
+                rows.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = String(item.id || item.account_id || '');
+                    const name = method === 'cash'
+                        ? (item.box_name_ar || item.box_name || ('صندوق #' + item.id))
+                        : (item.account_name_ar || item.account_name || ('حساب #' + item.id));
+                    option.textContent = name;
+                    select.appendChild(option);
+                });
+                if (!rows.length) select.innerHTML = '<option value="">لا توجد حسابات نشطة متاحة</option>';
+            } catch (e) {
+                select.innerHTML = '<option value="">' + escapeHtml(e.message || 'تعذر تحميل الحسابات') + '</option>';
+            }
+        }
+
+        async function submitSupplierPayment() {
+            const submit = document.getElementById('supplierPaymentSubmit');
+            if (submit.disabled) return;
+            const amount = Number(document.getElementById('supplierPaymentAmount').value || 0);
+            const method = document.getElementById('supplierPaymentMethod').value;
+            const accountId = Number(document.getElementById('supplierPaymentAccount').value || 0);
+            const invoiceId = Number(document.getElementById('supplierPaymentInvoice').value || 0);
+            if (!Number.isFinite(amount) || amount <= 0) {
+                showToast('أدخل مبلغ دفعة أكبر من صفر', 'error');
+                return;
+            }
+            if (activeSupplierPaymentId <= 0 || accountId <= 0) {
+                showToast('حدد المورد ووسيلة السداد أولاً', 'error');
+                return;
+            }
+            const payload = {
+                supplier_party_id: activeSupplierPaymentId,
+                amount: amount,
+                payment_type: method === 'cash' ? 'cash' : 'bank_transfer',
+                payment_method: method,
+                cash_box_id: method === 'cash' ? accountId : 0,
+                bank_account_id: method === 'bank_transfer' ? accountId : 0,
+                supplier_invoice_id: invoiceId,
+                notes: document.getElementById('supplierPaymentNotes').value.trim(),
+                idempotency_key: 'supplier-payment-' + activeSupplierPaymentId + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
+            };
+            submit.disabled = true;
+            try {
+                const response = await apiCall('makeSupplierPayment', payload);
+                if (!response.success) throw new Error(response.message || 'تعذر تسجيل دفعة المورد');
+                closeSupplierPayment();
+                showToast('تم تسجيل دفعة المورد وترحيلها محاسبياً وتخصيصها على الفواتير', 'success');
+                await loadSuppliers();
+            } catch (e) {
+                showToast(e.message || 'فشل تسجيل دفعة المورد', 'error');
+            } finally {
+                submit.disabled = false;
+            }
+        }
+
+        function closeSupplierPayment() {
+            const modal = document.getElementById('supplierPaymentModal');
+            if (modal) modal.style.display = 'none';
+            document.body.style.overflow = '';
+            activeSupplierPaymentId = 0;
+        }
+
         function closeSupplierAging() {
             const modal = document.getElementById('supplierAgingModal');
             if (modal) modal.style.display = 'none';
@@ -2795,6 +2906,9 @@ let pullStartY = 0,
                                 </button>
                                 <button class="card-btn" onclick="event.stopPropagation(); openSupplierAging(${id})">
                                     <i class="fas fa-chart-line"></i> كشف الأعمار
+                                </button>
+                                <button class="card-btn" onclick="event.stopPropagation(); openSupplierPayment(${id})">
+                                    <i class="fas fa-money-bill-wave"></i> سداد دفعة
                                 </button>
                                 <button class="card-btn" onclick="event.stopPropagation(); editSupplier(${id})">
                                     <i class="fas fa-edit"></i> تعديل
@@ -3598,6 +3712,43 @@ let pullStartY = 0,
     </div>
     <div id="supplierAgingSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px;"></div>
     <div id="supplierAgingInvoices" style="overflow:auto;"></div>
+  </div>
+</div>
+
+
+<div id="supplierPaymentModal" style="display:none;position:fixed;inset:0;z-index:4100;background:rgba(5,18,15,.72);padding:18px;overflow:auto;align-items:center;justify-content:center;">
+  <div style="width:min(560px,100%);background:var(--card-bg,#fff);color:var(--text-color,#16231f);border-radius:18px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;">
+      <h2 id="supplierPaymentTitle" style="margin:0;font-size:1.1rem;">سداد دفعة مورد</h2>
+      <button class="card-btn" type="button" onclick="closeSupplierPayment()">إغلاق ✕</button>
+    </div>
+    <div style="display:grid;gap:12px;">
+      <label>مبلغ الدفعة
+        <input id="supplierPaymentAmount" type="number" min="0.01" step="0.01" inputmode="decimal" style="width:100%;margin-top:5px;" placeholder="0.00">
+      </label>
+      <label>تخصيص الدفعة
+        <select id="supplierPaymentInvoice" style="width:100%;margin-top:5px;">
+          <option value="0">تلقائي — أقدم تاريخ استحقاق أولاً</option>
+        </select>
+      </label>
+      <label>وسيلة السداد
+        <select id="supplierPaymentMethod" onchange="loadSupplierPaymentAccounts()" style="width:100%;margin-top:5px;">
+          <option value="cash">نقداً من الصندوق</option>
+          <option value="bank_transfer">تحويل بنكي</option>
+        </select>
+      </label>
+      <label id="supplierPaymentAccountLabel">الصندوق
+        <select id="supplierPaymentAccount" style="width:100%;margin-top:5px;"></select>
+      </label>
+      <label>ملاحظات
+        <textarea id="supplierPaymentNotes" rows="2" style="width:100%;margin-top:5px;" placeholder="سبب أو تفاصيل الدفعة"></textarea>
+      </label>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="card-btn" type="button" onclick="closeSupplierPayment()">إلغاء</button>
+        <button class="card-btn primary" id="supplierPaymentSubmit" type="button" onclick="submitSupplierPayment()">تأكيد السداد</button>
+      </div>
+      <div id="supplierPaymentMessage" style="font-size:.8rem;color:var(--text-muted);"></div>
+    </div>
   </div>
 </div>
 
