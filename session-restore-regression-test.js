@@ -18,6 +18,12 @@ assert(onCreate.indexOf('initEncryptedPrefs()') < onCreate.indexOf(`getBoolean($
 assert(onCreate.includes('wasAuthenticatedShellAtRecreation = true') &&
   onCreate.includes('isActivityRecreation = true'),
   'Process recreation without Bundle restores authenticated-shell context');
+assert(onCreate.includes('processRestartedWithAuthenticatedShell = true'),
+  'A cold process restart is distinguished from ordinary Activity recreation');
+assert(onCreate.includes('.putBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, true)'),
+  'A cold process restart forces the biometric-capable login route');
+assert(source.includes('processRestartedWithAuthenticatedShell = processRestartedWithAuthenticatedShell'),
+  'The cold process restart state reaches the startup reauthentication decision');
 
 const onStopStart = source.indexOf('override fun onStop()');
 const onStopEnd = source.indexOf('override fun onDestroy()', onStopStart);

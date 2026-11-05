@@ -145,6 +145,7 @@ class MainActivity : AppCompatActivity() {
     // Bundle restoration marks an Activity recreation (e.g. rotation), not a fresh launch.
     private var isActivityRecreation: Boolean = false
     private var wasAuthenticatedShellAtRecreation: Boolean = false
+    private var processRestartedWithAuthenticatedShell: Boolean = false
 
     private fun currentDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
@@ -467,6 +468,12 @@ class MainActivity : AppCompatActivity() {
             // from encrypted prefs so a still-valid session is not sent to login.html.
             wasAuthenticatedShellAtRecreation = true
             isActivityRecreation = true
+            processRestartedWithAuthenticatedShell = true
+            // A cold launch after the process/task was closed must go through the
+            // Remember-Me biometric flow, even when the background interval was short.
+            sharedPrefs.edit()
+                .putBoolean(KEY_REQUIRE_LOGIN_ON_NEXT_LAUNCH, true)
+                .apply()
         }
 
         try {
@@ -630,7 +637,8 @@ class MainActivity : AppCompatActivity() {
                     isActivityRecreation = isActivityRecreation,
                     wasAuthenticatedShell = wasAuthenticatedShellAtRecreation,
                     backgroundTimeoutReached = backgroundTimeoutReached,
-                    securityReauthenticationEnabled = requiresSecurityReauthentication()
+                    securityReauthenticationEnabled = requiresSecurityReauthentication(),
+                    processRestartedWithAuthenticatedShell = processRestartedWithAuthenticatedShell
                 )
                 // Consume an elapsed-realtime background marker only after startup security
                 // settings and the current session have both been read successfully.

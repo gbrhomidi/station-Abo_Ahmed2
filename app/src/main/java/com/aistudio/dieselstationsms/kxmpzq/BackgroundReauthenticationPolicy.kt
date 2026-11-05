@@ -25,8 +25,8 @@ internal object BackgroundReauthenticationPolicy {
 
     /**
      * A fresh launch keeps the pre-existing reauthentication behavior. A restored
-     * Activity is different: it must only prompt when a lock was already pending
-     * or its persisted background interval actually reached the configured limit.
+     * Activity is different: it prompts when a lock was already pending, its persisted
+     * background interval reached the limit, or the process restarted with a protected shell.
      */
     fun shouldLockOnStartup(
         hasActiveSession: Boolean,
@@ -35,13 +35,14 @@ internal object BackgroundReauthenticationPolicy {
         isActivityRecreation: Boolean,
         wasAuthenticatedShell: Boolean,
         backgroundTimeoutReached: Boolean,
-        securityReauthenticationEnabled: Boolean
+        securityReauthenticationEnabled: Boolean,
+        processRestartedWithAuthenticatedShell: Boolean = false
     ): Boolean {
         if (!hasActiveSession || loginRequiredOnLaunch) return false
         if (previouslyPending) return true
         return if (isActivityRecreation) {
             // A restored login/lock screen owns its existing authentication flow.
-            wasAuthenticatedShell && backgroundTimeoutReached
+            wasAuthenticatedShell && (backgroundTimeoutReached || processRestartedWithAuthenticatedShell)
         } else {
             backgroundTimeoutReached || securityReauthenticationEnabled
         }

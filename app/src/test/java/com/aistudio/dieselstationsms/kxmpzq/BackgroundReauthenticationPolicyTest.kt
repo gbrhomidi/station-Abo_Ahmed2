@@ -80,6 +80,38 @@ class BackgroundReauthenticationPolicyTest {
     }
 
     @Test
+    fun coldProcessRestartWithPersistedAuthenticatedShellRequiresReauthenticationImmediately() {
+        assertTrue(
+            BackgroundReauthenticationPolicy.shouldLockOnStartup(
+                hasActiveSession = true,
+                loginRequiredOnLaunch = false,
+                previouslyPending = false,
+                isActivityRecreation = true,
+                wasAuthenticatedShell = true,
+                backgroundTimeoutReached = false,
+                securityReauthenticationEnabled = true,
+                processRestartedWithAuthenticatedShell = true
+            )
+        )
+    }
+
+    @Test
+    fun explicitLogoutRequirementStillUsesLoginInsteadOfNativeShellRestore() {
+        assertFalse(
+            BackgroundReauthenticationPolicy.shouldLockOnStartup(
+                hasActiveSession = true,
+                loginRequiredOnLaunch = true,
+                previouslyPending = false,
+                isActivityRecreation = true,
+                wasAuthenticatedShell = true,
+                backgroundTimeoutReached = false,
+                securityReauthenticationEnabled = true,
+                processRestartedWithAuthenticatedShell = true
+            )
+        )
+    }
+
+    @Test
     fun restoredLoginPageKeepsRememberMeAuthenticationWhenBackgroundThresholdReached() {
         val shouldLock = BackgroundReauthenticationPolicy.shouldLockOnStartup(
             hasActiveSession = true,
