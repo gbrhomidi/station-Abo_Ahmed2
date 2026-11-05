@@ -375,7 +375,7 @@ class MainActivity : AppCompatActivity() {
     private var securityPromptActive: Boolean = false
     private var appInForeground: Boolean = false
     private var biometricPrompt: androidx.biometric.BiometricPrompt? = null
-    private var biometricCancellationExpected: Boolean = false
+    private var biometricPromptGeneration: Long = 0L
     private var securityFallbackDialog: androidx.appcompat.app.AlertDialog? = null
     private var lastSecurityInteractionElapsed: Long = android.os.SystemClock.elapsedRealtime()
 
@@ -389,7 +389,7 @@ class MainActivity : AppCompatActivity() {
                 if (timeoutMinutes > 0 &&
                     android.os.SystemClock.elapsedRealtime() - lastSecurityInteractionElapsed >= timeoutMinutes * 60_000L
                 ) {
-                    forceSecurityLogout("security_auto_logout")
+                    forceSecurityLogout("security_auto_logout", allowRememberMeBiometric = true)
                 }
             }
             if (!isDestroyed.get()) handler.postDelayed(this, 5_000L)
@@ -791,7 +791,7 @@ class MainActivity : AppCompatActivity() {
             if (timeoutMinutes > 0 && !currentAuthToken.isNullOrBlank() &&
                 nowElapsed - lastSecurityInteractionElapsed >= timeoutMinutes * 60_000L
             ) {
-                forceSecurityLogout("security_auto_logout")
+                forceSecurityLogout("security_auto_logout", allowRememberMeBiometric = true)
             } else if (securityLockPending &&
                 !authenticationPageOwnsFlow &&
                 !currentAuthToken.isNullOrBlank()
@@ -894,7 +894,7 @@ class MainActivity : AppCompatActivity() {
         // the existing pending-lock state, but do not create a new lock just because
         // the Activity stopped; onResume applies the exact 60-second threshold.
         if (securityPromptActive && !isChangingConfigurations && !isDatabaseBackupPickerActive) {
-            biometricCancellationExpected = true
+            biometricPromptGeneration++
             biometricPrompt?.cancelAuthentication()
             biometricPrompt = null
             securityPromptActive = false
@@ -944,6 +944,12 @@ class MainActivity : AppCompatActivity() {
         pendingWebPermissionRequest = null
         pendingFilePathCallback?.onReceiveValue(null)
         pendingFilePathCallback = null
+        biometricPromptGeneration++
+        biometricPrompt?.cancelAuthentication()
+        biometricPrompt = null
+        securityPromptActive = false
+        securityFallbackDialog?.dismiss()
+        securityFallbackDialog = null
 
         try {
             val wv = webView
@@ -2085,9 +2091,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun hasRememberedBiometricCredentials(): Boolean {
+        if (!::sharedPrefs.isInitialized) return false
+        return sharedPrefs.getBoolean("remember_me", false) &&
+            !sharedPrefs.getString("saved_token", null).isNullOrBlank() &&
+            sharedPrefs.getLong("saved_user_id", 0L) > 0L &&
+            !sharedPrefs.getString("saved_username", null).isNullOrBlank()
+    }
+
     private fun requiresSecurityReauthentication(): Boolean =
         isTrueSetting(securitySettingValue("requireDeviceUnlock")) ||
-            isTrueSetting(securitySettingValue("biometricLockEnabled"))
+            isTrueSetting(securitySettingValue("biometricLockEnabled")) ||
+            hasRememberedBiometricCredentials()
 
     /**
      * login.html and lock-screen.html own their Remember-Me / session authentication.
@@ -2118,7 +2133,9 @@ class MainActivity : AppCompatActivity() {
         if (!appInForeground || !securityLockPending || securityPromptActive || currentAuthToken.isNullOrBlank() || isFinishing) return
         webView?.visibility = View.INVISIBLE
         securityPromptActive = true
-        if (isTrueSetting(securitySettingValue("biometricLockEnabled"))) {
+        if (isTrueSetting(securitySettingValue("biometricLockEnabled")) ||
+            hasRememberedBiometricCredentials()
+        ) {
             showBiometricPrompt(
                 onSuccess = {
                     securityPromptActive = false
@@ -2206,8 +2223,8 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    private fun forceSecurityLogout(reason: String) {
-        biometricCancellationExpected = true
+    private fun forceSecurityLogout(reason: String, allowRememberMeBiometric: Boolean = false) {
+        biometricPromptGeneration++
         biometricPrompt?.cancelAuthentication()
         biometricPrompt = null
         securityFallbackDialog?.dismiss()
@@ -2228,10 +2245,15 @@ class MainActivity : AppCompatActivity() {
         updateSecurityLockPending(false)
         securityPromptActive = false
         lastSecurityInteractionElapsed = android.os.SystemClock.elapsedRealtime()
+        val loginUrl = if (allowRememberMeBiometric) {
+            "file:///android_asset/screens/login.html"
+        } else {
+            "file:///android_asset/screens/login.html?skipBiometricOnce=1"
+        }
         webView?.post {
             if (!isDestroyed.get()) {
                 webView?.visibility = View.VISIBLE
-                webView?.loadUrl("file:///android_asset/screens/login.html?skipBiometricOnce=1")
+                webView?.loadUrl(loginUrl)
             }
         }
     }
@@ -3181,7 +3203,7 @@ class MainActivity : AppCompatActivity() {
         DebugLogger.info("Biometric", "showBiometricPrompt START")
         if (securityPromptActive && biometricPrompt != null) return
         securityPromptActive = true
-        biometricCancellationExpected = false
+        val promptGeneration = ++biometricPromptGeneration
         try {
             Class.forName("androidx.biometric.BiometricPrompt")
         } catch (e: ClassNotFoundException) {
@@ -3208,6 +3230,7 @@ class MainActivity : AppCompatActivity() {
                         result: androidx.biometric.BiometricPrompt.AuthenticationResult
                     ) {
                         super.onAuthenticationSucceeded(result)
+                        if (promptGeneration != biometricPromptGeneration) return
                         DebugLogger.info("Biometric", "Authentication SUCCEEDED")
                         biometricPrompt = null
                         onSuccess()
@@ -3215,19 +3238,16 @@ class MainActivity : AppCompatActivity() {
 
                     override fun onAuthenticationFailed() {
                         super.onAuthenticationFailed()
+                        if (promptGeneration != biometricPromptGeneration) return
                         DebugLogger.warn("Biometric", "Authentication FAILED")
                         onError("failed")
                     }
 
                     override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                         super.onAuthenticationError(errorCode, errString)
+                        if (promptGeneration != biometricPromptGeneration) return
                         DebugLogger.warn("Biometric", "Authentication ERROR: code=$errorCode, message=$errString")
                         biometricPrompt = null
-                        if (biometricCancellationExpected) {
-                            biometricCancellationExpected = false
-                            securityPromptActive = false
-                            return
-                        }
                         when (errorCode) {
                             androidx.biometric.BiometricPrompt.ERROR_USER_CANCELED,
                             androidx.biometric.BiometricPrompt.ERROR_NEGATIVE_BUTTON -> {
@@ -3250,6 +3270,7 @@ class MainActivity : AppCompatActivity() {
             biometricPrompt = prompt
             prompt.authenticate(promptInfo)
         } catch (e: Exception) {
+            if (promptGeneration != biometricPromptGeneration) return
             DebugLogger.logException("Biometric", e)
             biometricPrompt = null
             securityPromptActive = false
