@@ -13,6 +13,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.LocalDate
 import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
@@ -49,6 +50,7 @@ class CreditInventoryWorkflowRobolectricTest {
     }
 
     @Test fun `credit sale posts customer debt once, lowers stock, and creates live alert`() {
+        DebtDueDateRepository.ensureSchema(helper)
         val db = helper.writableDatabase
         val roleId = db.rawQuery("SELECT id FROM roles ORDER BY id LIMIT 1", null).use { check(it.moveToFirst()); it.getLong(0) }
         val actorId = db.insertOrThrow("users", null, ContentValues().apply {
@@ -76,9 +78,11 @@ class CreditInventoryWorkflowRobolectricTest {
             .put("quantity", 5.0).put("minimum_stock", 2.0), 1, actorId)
         helper.adjustProductStock(productId, 5.0, 1, actorId)
         val customerTypeId = db.rawQuery("SELECT id FROM party_types WHERE type_code = 'INDIVIDUAL' AND is_deleted = 0 LIMIT 1", null).use { check(it.moveToFirst()); it.getLong(0) }
+        val term15Id = db.rawQuery("SELECT id FROM payment_terms WHERE code='NET_15' LIMIT 1", null).use { check(it.moveToFirst()); it.getLong(0) }
         val customerId = db.insertOrThrow("parties", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString()); put("party_code", "CUS-${UUID.randomUUID().toString().take(8)}")
             put("party_type_id", customerTypeId); put("station_id", 1); put("commercial_name", "عميل آجل اختبار")
+            put("payment_terms", "صافي 15 يوم"); put("payment_terms_id", term15Id); put("payment_terms_days", 15)
             put("credit_limit", 100.0); put("current_balance", 0.0); put("is_active", 1); put("created_by", actorId)
         })
         db.insertOrThrow("shifts", null, ContentValues().apply {
@@ -93,8 +97,34 @@ class CreditInventoryWorkflowRobolectricTest {
         val first = helper.completeSale(payload, 1, actorId)
         assertTrue(first.optBoolean("success"))
         val saleId = first.getLong("sale_id")
+        val originalMaturity = db.rawQuery(
+            "SELECT business_day,due_date,payment_terms_at_sale,payment_terms_days_at_sale,due_date_source FROM sales_transactions WHERE id=? AND station_id=?",
+            arrayOf(saleId.toString(), "1")
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            val businessDay = cursor.getString(0)
+            assertEquals(LocalDate.parse(businessDay).plusDays(15).toString(), cursor.getString(1))
+            assertEquals("صافي 15 يوم", cursor.getString(2))
+            assertEquals(15, cursor.getInt(3))
+            assertEquals("sale_creation", cursor.getString(4))
+            cursor.getString(1)
+        }
+        // Changing the customer's current terms must not rewrite a previously issued invoice.
+        db.update(
+            "parties",
+            ContentValues().apply {
+                put("payment_terms", "صافي 60 يوم")
+                put("payment_terms_days", 60)
+            },
+            "id=? AND station_id=?",
+            arrayOf(customerId.toString(), "1")
+        )
         val repeat = helper.completeSale(payload, 1, actorId)
         assertTrue(repeat.optBoolean("success")); assertEquals(saleId, repeat.getLong("sale_id"))
+        assertEquals(originalMaturity, db.rawQuery(
+            "SELECT due_date FROM sales_transactions WHERE id=? AND station_id=?",
+            arrayOf(saleId.toString(), "1")
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getString(0) })
         db.rawQuery("SELECT current_balance, total_due FROM parties WHERE id = ?", arrayOf(customerId.toString())).use { cursor ->
             assertTrue(cursor.moveToFirst()); assertEquals(48.0, cursor.getDouble(0), 0.0001); assertEquals(48.0, cursor.getDouble(1), 0.0001)
         }

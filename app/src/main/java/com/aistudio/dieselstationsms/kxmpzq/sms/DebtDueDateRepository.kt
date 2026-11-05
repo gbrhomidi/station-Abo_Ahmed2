@@ -534,7 +534,8 @@ object DebtDueDateRepository {
         if("payment_method" !in sc || "due_date" !in sc) return
         val bases=listOf("business_day","transaction_date","sale_date").filter { it in sc }
         if(bases.isEmpty()) return
-        val basis="COALESCE("+bases.map { "NULLIF(substr(NEW.`"+it+"`,1,10),'')" }.joinToString(",")+")"
+        val basisParts=bases.map { "NULLIF(substr(NEW.`"+it+"`,1,10),'')" }
+        val basis=if(basisParts.size==1) basisParts[0] else "COALESCE("+basisParts.joinToString(",")+")"
         val scope=if("station_id" in pc && "station_id" in sc) " AND p.station_id=NEW.station_id" else ""
         val live=if("is_deleted" in pc) " AND COALESCE(p.is_deleted,0)=0" else ""
         val party="p.id=NEW.`"+customer+"`"+scope+live
@@ -581,7 +582,12 @@ object DebtDueDateRepository {
         val customer=listOf("customer_party_id","customer_id","party_id").firstOrNull { it in sc } ?: return
         if("payment_method" !in sc || "due_date" !in sc || !tableExists(db,"parties")) return
         val bases=listOf("business_day","transaction_date","sale_date").filter { it in sc }
-        val basis=if(bases.isEmpty()) "''" else "COALESCE("+bases.map { "NULLIF(substr(s.`"+it+"`,1,10),'')" }.joinToString(",")+")"
+        val basisParts=bases.map { "NULLIF(substr(s.`"+it+"`,1,10),'')" }
+        val basis=when {
+            basisParts.isEmpty() -> "NULL"
+            basisParts.size==1 -> basisParts[0]
+            else -> "COALESCE("+basisParts.joinToString(",")+")"
+        }
         val scope=if("station_id" in pc && "station_id" in sc) " AND p.station_id=s.station_id" else ""
         val partyLive=if("is_deleted" in pc) " AND COALESCE(p.is_deleted,0)=0" else ""
         val pTerms=if("payment_terms" in pc) "COALESCE(p.payment_terms,'')" else "''"
@@ -633,30 +639,6 @@ object DebtDueDateRepository {
         }
     }
 
-
-    private fun sqlDaysFromTerms(termsExpression: String): String {
-        // Resolve an explicit day unit before looking at a pure numeric value. This avoids
-        // interpreting "50% upfront, Net 30 days" as 50 days.
-        val normalized = "lower(trim($termsExpression))"
-        val parts = StringBuilder("CASE ")
-        parts.append("WHEN $normalized LIKE '%cash%' OR $normalized LIKE '%immediate%' OR $normalized LIKE '%upon receipt%' OR $normalized LIKE '%عند الاستلام%' OR $normalized LIKE '%نقد%' OR $normalized LIKE '%فوري%' THEN 0 ")
-        for (day in 365 downTo 1) {
-            parts.append(
-                "WHEN $normalized LIKE '%$day يوم%' OR $normalized LIKE '%$day يومًا%' " +
-                    "OR $normalized LIKE '%$day day%' OR $normalized LIKE '%$day days%' " +
-                    "OR $normalized LIKE '%net $day%' OR $normalized LIKE '%net$day%' " +
-                    "OR $normalized LIKE '%صافي $day%' OR $normalized = '$day' THEN $day "
-            )
-        }
-        parts.append("ELSE $DEFAULT_TERMS_DAYS END")
-        return parts.toString()
-    }
-
-    private fun dueDateForTerms(terms: String, baseDate: String): String {
-        val days = parseTermsDays(terms)
-        val base = parseDate(baseDate) ?: LocalDate.now()
-        return base.plusDays(days.toLong()).toString()
-    }
 
     fun parseTermsDays(terms:String?):Int {
         val normalized=terms.orEmpty().map { ch ->
