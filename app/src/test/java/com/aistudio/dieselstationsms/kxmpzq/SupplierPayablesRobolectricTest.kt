@@ -57,7 +57,7 @@ class SupplierPayablesRobolectricTest {
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
     }
 
-    private fun createCompletedSupplierPayment(amount: Double, suffix: String): Long =
+    private fun createCompletedSupplierPayment(amount: Double, suffix: String, currencyId: Long? = null): Long =
         db.insertOrThrow("payments", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString())
             put("payment_code", "SP-TEST-$suffix")
@@ -66,6 +66,7 @@ class SupplierPayablesRobolectricTest {
             put("payment_type", "cash")
             put("payment_method", "cash")
             put("amount", amount)
+            if (currencyId != null && currencyId > 0L) put("currency_id", currencyId)
             put("status", "completed")
             put("is_refund", 0)
             put("is_deleted", 0)
@@ -179,5 +180,73 @@ class SupplierPayablesRobolectricTest {
             rejected = true
         }
         assertTrue("Supplier invoices must remain station scoped", rejected)
+    }
+
+    @Test
+    fun reversingSupplierPaymentReopensAffectedInvoicesAndIsIdempotent() {
+        val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 93001, "MAN-93001",
+            120.0, "2026-10-01", null, 1
+        )
+        val paymentId = createCompletedSupplierPayment(50.0, "REVERSE")
+        val allocation = SupplierPayablesRepository.allocatePayment(
+            db, 1, supplierId, paymentId, 50.0, 1, invoiceId
+        )
+        assertEquals(50.0, allocation.getDouble("allocated_amount"), 0.0001)
+
+        val reversed = SupplierPayablesRepository.reversePaymentAllocations(
+            db, 1, supplierId, paymentId, 1, "اختبار عكس دفعة المورد"
+        )
+        assertFalse(reversed.getBoolean("idempotent"))
+        assertEquals(50.0, reversed.getDouble("reversed_amount"), 0.0001)
+        assertEquals(1, reversed.getInt("reopened_invoice_count"))
+
+        db.rawQuery(
+            "SELECT paid_amount,remaining_amount,status FROM supplier_invoices WHERE id=?",
+            arrayOf(invoiceId.toString())
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            assertEquals(0.0, cursor.getDouble(0), 0.0001)
+            assertEquals(120.0, cursor.getDouble(1), 0.0001)
+            assertEquals("open", cursor.getString(2))
+        }
+        db.rawQuery(
+            "SELECT status,reversal_reason,reversed_by FROM supplier_invoice_allocations WHERE payment_id=?",
+            arrayOf(paymentId.toString())
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            assertEquals("reversed", cursor.getString(0))
+            assertEquals("اختبار عكس دفعة المورد", cursor.getString(1))
+            assertEquals(1, cursor.getInt(2))
+        }
+        val repeated = SupplierPayablesRepository.reversePaymentAllocations(
+            db, 1, supplierId, paymentId, 1, "إعادة المحاولة"
+        )
+        assertTrue(repeated.getBoolean("idempotent"))
+        assertEquals(0.0, repeated.getDouble("reversed_amount"), 0.0001)
+    }
+
+    @Test
+    fun legacyPaymentOffsetsAreReportedSeparatelyPerCurrency() {
+        SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 94001, "MAN-94001",
+            40.0, "2026-10-01", 77L, 1
+        )
+        val paymentId = createCompletedSupplierPayment(70.0, "LEGACY-CURRENCY", 77L)
+        val allocation = SupplierPayablesRepository.allocatePayment(
+            db, 1, supplierId, paymentId, 70.0, 1
+        )
+        assertEquals(40.0, allocation.getDouble("allocated_amount"), 0.0001)
+        assertEquals(30.0, allocation.getDouble("unapplied_amount"), 0.0001)
+
+        val aging = SupplierPayablesRepository.getSupplierAging(db, 1, supplierId, "2026-11-05")
+        val offsets = aging.getJSONArray("legacy_payment_offsets_by_currency")
+        assertEquals(1, offsets.length())
+        assertEquals(77L, offsets.getJSONObject(0).getLong("currency_id"))
+        assertEquals(30.0, offsets.getJSONObject(0).getDouble("amount"), 0.0001)
+        assertEquals("legacy_balance_offset_not_invoice_allocated",
+            offsets.getJSONObject(0).getString("classification"))
+        assertEquals(0.0,
+            aging.getDouble("unapplied_legacy_payments_without_currency"), 0.0001)
     }
 }

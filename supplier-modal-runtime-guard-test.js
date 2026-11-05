@@ -8,4 +8,11 @@ expect(source.includes('pointer-events: auto;\n            touch-action: pan-y;'
 expect(source.includes('touch-action: manipulation;') && source.includes('-webkit-user-select: text;'), 'يجب أن تبقى حقول المورد قابلة للمس والكتابة');
 expect(source.includes('firstInput.focus({ preventScroll: true });'), 'يجب أن يتم التركيز دون تمرير قسري');
 expect(!source.includes('station_id: 1'), 'لا يجوز أن يختار مودال المورد محطة ثابتة');
+const detailStart = source.indexOf('async function viewDetails(id)');
+const detailEnd = source.indexOf('function closeDetails()', detailStart);
+const detail = source.slice(detailStart, detailEnd);
+expect(detail.includes("apiCall('getSupplierAging'"), 'تفاصيل المورد يجب أن تقرأ أعمار المستحقات من SQLite');
+expect(detail.includes("apiCall('getSupplierInvoices'"), 'تفاصيل المورد يجب أن تعرض فواتير المورد');
+expect(detail.includes("apiCall('getSupplierPayments'"), 'تفاصيل المورد يجب أن تعرض المدفوعات');
+expect(!detail.includes('تفاصيل الفواتير والمدفوعات والملاحظات المنفصلة غير متاحة'), 'يجب إزالة رسالة عدم توفر كشف المورد');
 console.log('Supplier modal runtime interaction guard contract PASS.');

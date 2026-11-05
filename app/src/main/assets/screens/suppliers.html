@@ -3292,38 +3292,117 @@ let pullStartY = 0,
         async function viewDetails(id) {
             let supplier = allSuppliers.find(s => Number(s.id) === Number(id));
             if (!supplier) { showToast('❌ المورد غير موجود', 'error'); return; }
+            const host = document.getElementById('detailsContent');
+            host.innerHTML = '<div class="empty-state">جارٍ تحميل بيانات المورد وكشف حسابه...</div>';
+            document.getElementById('detailsOverlay').classList.add('show');
+            document.body.style.overflow = 'hidden';
             try {
-                const response = await apiCall('getPartyById', { id });
-                if (response.success && response.data) supplier = response.data;
-            } catch (e) { /* use already loaded party data */ }
-            const name = getField(supplier, 'commercial_name', 'commercialName', 'name') || '---';
-            const legalName = getField(supplier, 'legal_name', 'legalName') || '---';
-            const phone = getField(supplier, 'phone') || '---';
-            const email = getField(supplier, 'email') || '---';
-            const taxNumber = getField(supplier, 'tax_number', 'taxNumber') || '---';
-            const creditLimit = Number(getField(supplier, 'credit_limit', 'creditLimit') || 0);
-            const balance = Number(getField(supplier, 'current_balance', 'currentBalance', 'balance') || 0);
-            const address = getField(supplier, 'address', 'address_line1', 'addressLine1') || '---';
-            const city = getField(supplier, 'city') || '---';
-            const region = getField(supplier, 'region', 'state') || '---';
-            const active = Number(getField(supplier, 'is_active', 'isActive') || 0) === 1;
-            document.getElementById('detailsContent').innerHTML = `
-                <div class="details-header"><h3 class="details-title">📋 تفاصيل المورد</h3><button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button></div>
-                <div class="details-profile"><div class="details-avatar">${escapeHtml(name.substring(0,2))}</div><div class="details-name">${escapeHtml(name)}</div><span class="details-status ${active ? 'active' : 'inactive'}">${active ? 'نشط' : 'غير نشط'}</span></div>
-                <div class="details-section"><div class="details-section-title"><i class="fas fa-info-circle"></i> بيانات الطرف</div>
-                    <div class="details-row"><span class="details-label">الاسم القانوني</span><span class="details-value">${escapeHtml(legalName)}</span></div>
-                    <div class="details-row"><span class="details-label">الهاتف</span><span class="details-value">${escapeHtml(phone)}</span></div>
-                    <div class="details-row"><span class="details-label">البريد</span><span class="details-value">${escapeHtml(email)}</span></div>
-                    <div class="details-row"><span class="details-label">الرقم الضريبي</span><span class="details-value">${escapeHtml(taxNumber)}</span></div>
-                    <div class="details-row"><span class="details-label">العنوان</span><span class="details-value">${escapeHtml(address)} - ${escapeHtml(city)} - ${escapeHtml(region)}</span></div>
-                </div>
-                <div class="details-section"><div class="details-section-title"><i class="fas fa-money-bill-wave"></i> الأرصدة</div>
-                    <div class="details-row"><span class="details-label">الحد الائتماني</span><span class="details-value">${formatCurrency(creditLimit)}</span></div>
-                    <div class="details-row"><span class="details-label">الرصيد الحالي</span><span class="details-value">${formatCurrency(balance)}</span></div>
-                </div>
-                <div class="details-section"><div class="details-section-title"><i class="fas fa-database"></i> حدود البيانات</div><p style="font-size:0.8rem;color:var(--text-muted);">تفاصيل الفواتير والمدفوعات والملاحظات المنفصلة غير متاحة في Schema الحالي؛ المعروض هو سجل الطرف الفعلي.</p></div>
-            `;
-            document.getElementById('detailsOverlay').classList.add('show'); document.body.style.overflow = 'hidden'; hapticFeedback('light');
+                const [partyResponse, agingResponse, invoiceResponse, paymentResponse] = await Promise.all([
+                    apiCall('getPartyById', { id }),
+                    apiCall('getSupplierAging', { supplier_id: Number(id) }),
+                    apiCall('getSupplierInvoices', { supplier_id: Number(id) }),
+                    apiCall('getSupplierPayments', { supplier_id: Number(id) })
+                ]);
+                if (partyResponse.success && partyResponse.data) supplier = partyResponse.data;
+                if (!agingResponse.success) throw new Error(agingResponse.message || 'تعذر تحميل أعمار مستحقات المورد');
+                if (!invoiceResponse.success) throw new Error(invoiceResponse.message || 'تعذر تحميل فواتير المورد');
+                if (!paymentResponse.success) throw new Error(paymentResponse.message || 'تعذر تحميل دفعات المورد');
+
+                const name = getField(supplier, 'commercial_name', 'commercialName', 'name') || '---';
+                const legalName = getField(supplier, 'legal_name', 'legalName') || '---';
+                const phone = getField(supplier, 'phone') || '---';
+                const email = getField(supplier, 'email') || '---';
+                const taxNumber = getField(supplier, 'tax_number', 'taxNumber') || '---';
+                const creditLimit = Number(getField(supplier, 'credit_limit', 'creditLimit') || 0);
+                const balance = Number(getField(supplier, 'current_balance', 'currentBalance', 'balance') || 0);
+                const address = getField(supplier, 'address', 'address_line1', 'addressLine1') || '---';
+                const city = getField(supplier, 'city') || '---';
+                const region = getField(supplier, 'region', 'state') || '---';
+                const active = Number(getField(supplier, 'is_active', 'isActive') || 0) === 1;
+                const aging = agingResponse.data || agingResponse;
+                const currencyTotals = Array.isArray(aging.currency_totals) ? aging.currency_totals : [];
+                const legacyOffsets = Array.isArray(aging.legacy_payment_offsets_by_currency) ? aging.legacy_payment_offsets_by_currency : [];
+                const invoices = Array.isArray(invoiceResponse.data) ? invoiceResponse.data : [];
+                const payments = Array.isArray(paymentResponse.data) ? paymentResponse.data : [];
+                const currencyLabel = currencyId => currencyId ? ('عملة #' + currencyId) : 'العملة الافتراضية';
+
+                const agingHtml = currencyTotals.length ? currencyTotals.map(item => {
+                    const cards = [
+                        ['الرصيد المفتوح', item.open_balance], ['غير مستحق بعد', item.not_due_amount],
+                        ['مستحق اليوم', item.due_today_amount], ['المتأخر', item.overdue_amount],
+                        ['غير محدد الاستحقاق', item.undated_amount], ['متأخر 1–30 يوم', item.overdue_1_30],
+                        ['متأخر 31–60 يوم', item.overdue_31_60], ['متأخر 61–90 يوم', item.overdue_61_90],
+                        ['متأخر أكثر من 90 يوماً', item.overdue_over_90]
+                    ];
+                    return '<div style="margin-top:8px;"><strong>' + escapeHtml(currencyLabel(item.currency_id)) + '</strong>' +
+                        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px;margin-top:7px;">' +
+                        cards.map(pair => '<div style="border:1px solid var(--border-color);border-radius:10px;padding:8px;">' +
+                            '<div style="font-size:.7rem;color:var(--text-muted);">' + escapeHtml(pair[0]) + '</div>' +
+                            '<strong>' + formatCurrency(Number(pair[1] || 0)) + '</strong></div>').join('') + '</div></div>';
+                }).join('') : '<p class="text-muted">لا توجد فواتير مفتوحة في سجل الفواتير الفرعي.</p>';
+
+                const invoiceRows = invoices.length ? invoices.map((item, index) => '<tr>' +
+                    '<td>' + (index + 1) + '</td><td>' + escapeHtml(item.invoice_number || ('#' + item.id)) + '</td>' +
+                    '<td>' + escapeHtml(item.source_type || '—') + '</td><td>' + escapeHtml(item.invoice_date || '—') + '</td>' +
+                    '<td>' + escapeHtml(item.due_date || 'غير محدد') + '</td><td>' + escapeHtml(item.maturity_status || item.status || '—') + '</td>' +
+                    '<td>' + escapeHtml(currencyLabel(item.currency_id)) + '</td>' +
+                    '<td>' + formatCurrency(Number(item.total_amount || 0)) + '</td>' +
+                    '<td>' + formatCurrency(Number(item.paid_amount || 0)) + '</td>' +
+                    '<td>' + formatCurrency(Number(item.remaining_amount || 0)) + '</td></tr>').join('') :
+                    '<tr><td colspan="10" style="text-align:center;padding:12px;">لا توجد فواتير مورد مسجلة في سجل الفواتير الفرعي.</td></tr>';
+
+                const paymentRows = payments.length ? payments.map((item, index) => '<tr>' +
+                    '<td>' + (index + 1) + '</td><td>' + escapeHtml(item.payment_code || ('#' + item.id)) + '</td>' +
+                    '<td>' + escapeHtml(String(item.date || '').slice(0, 10) || '—') + '</td>' +
+                    '<td>' + escapeHtml(item.status || '—') + '</td><td>' + escapeHtml(currencyLabel(item.currency_id)) + '</td>' +
+                    '<td>' + formatCurrency(Number(item.amount || 0)) + '</td>' +
+                    '<td>' + formatCurrency(Number(item.allocated_amount || 0)) + '</td>' +
+                    '<td>' + formatCurrency(Number(item.reversed_amount || 0)) + '</td></tr>').join('') :
+                    '<tr><td colspan="8" style="text-align:center;padding:12px;">لا توجد دفعات مسجلة لهذا المورد.</td></tr>';
+
+                const legacyHtml = legacyOffsets.length ? '<div style="margin-top:10px;"><strong>تسويات رصيد تاريخي غير موزعة على فواتير محددة</strong>' +
+                    '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:7px;">' +
+                    legacyOffsets.map(item => '<div style="padding:8px 10px;border:1px dashed var(--border-color);border-radius:9px;">' +
+                        escapeHtml(currencyLabel(item.currency_id)) + ': <strong>' +
+                        formatCurrency(Number(item.amount || 0)) + '</strong></div>').join('') +
+                    '</div><small style="color:var(--text-muted);">هذه المبالغ مرتبطة برصيد المورد التاريخي، ولا تمثل تخصيصاً مثبتاً على فاتورة بعينها.</small></div>' : '';
+
+                host.innerHTML = `
+                    <div class="details-header"><h3 class="details-title">📋 كشف حساب المورد</h3><button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button></div>
+                    <div class="details-profile"><div class="details-avatar">${escapeHtml(String(name).substring(0,2))}</div><div class="details-name">${escapeHtml(name)}</div><span class="details-status ${active ? 'active' : 'inactive'}">${active ? 'نشط' : 'غير نشط'}</span></div>
+                    <div class="details-section"><div class="details-section-title"><i class="fas fa-info-circle"></i> بيانات الطرف</div>
+                        <div class="details-row"><span class="details-label">الاسم القانوني</span><span class="details-value">${escapeHtml(legalName)}</span></div>
+                        <div class="details-row"><span class="details-label">الهاتف</span><span class="details-value">${escapeHtml(phone)}</span></div>
+                        <div class="details-row"><span class="details-label">البريد</span><span class="details-value">${escapeHtml(email)}</span></div>
+                        <div class="details-row"><span class="details-label">الرقم الضريبي</span><span class="details-value">${escapeHtml(taxNumber)}</span></div>
+                        <div class="details-row"><span class="details-label">العنوان</span><span class="details-value">${escapeHtml(address)} - ${escapeHtml(city)} - ${escapeHtml(region)}</span></div>
+                    </div>
+                    <div class="details-section"><div class="details-section-title"><i class="fas fa-wallet"></i> الرصيد الرقابي للطرف</div>
+                        <div class="details-row"><span class="details-label">الحد الائتماني</span><span class="details-value">${formatCurrency(creditLimit)}</span></div>
+                        <div class="details-row"><span class="details-label">الرصيد الحالي</span><span class="details-value">${formatCurrency(balance)}</span></div>
+                        <small style="color:var(--text-muted);">الرصيد الرقابي للطرف لا يُجمع مع أرصدة عملات الفواتير المختلفة.</small>
+                    </div>
+                    <div class="details-section"><div class="details-section-title"><i class="fas fa-chart-bar"></i> أعمار المستحقات حسب العملة</div>${agingHtml}${legacyHtml}</div>
+                    <div class="details-section"><div class="details-section-title"><i class="fas fa-file-invoice"></i> فواتير المورد</div>
+                        <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:850px;">
+                        <thead><tr>${['#','رقم الفاتورة','المصدر','تاريخ الفاتورة','تاريخ الاستحقاق','الحالة','العملة','الإجمالي','المسدد','المتبقي'].map(x=>'<th style="padding:8px;text-align:right;border-bottom:1px solid var(--border-color);">'+x+'</th>').join('')}</tr></thead>
+                        <tbody>${invoiceRows}</tbody></table></div>
+                    </div>
+                    <div class="details-section"><div class="details-section-title"><i class="fas fa-money-check-alt"></i> المدفوعات والتخصيصات</div>
+                        <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:650px;">
+                        <thead><tr>${['#','رقم الدفعة','التاريخ','الحالة','العملة','مبلغ الدفعة','المخصص حالياً','المعكوس'].map(x=>'<th style="padding:8px;text-align:right;border-bottom:1px solid var(--border-color);">'+x+'</th>').join('')}</tr></thead>
+                        <tbody>${paymentRows}</tbody></table></div>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
+                        <button class="btn btn-primary" onclick="openSupplierPayment(${Number(id)})">تسجيل دفعة</button>
+                        <button class="btn btn-secondary" onclick="openSupplierAging(${Number(id)})">عرض أعمار الديون</button>
+                    </div>`;
+                hapticFeedback('light');
+            } catch (e) {
+                host.innerHTML = '<div class="details-header"><h3 class="details-title">📋 تفاصيل المورد</h3><button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button></div>' +
+                    '<div class="empty-state">' + escapeHtml(e.message || 'تعذر تحميل كشف حساب المورد') + '</div>';
+                showToast(e.message || 'تعذر تحميل كشف حساب المورد', 'error');
+            }
         }
 
         function closeDetails() {

@@ -23030,7 +23030,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.beginTransaction()
         try {
             val row = db.rawQuery(
-                "SELECT amount,status,cash_box_id,bank_account_id,journal_entry_id,payment_code FROM payments WHERE id=? AND station_id=? AND is_deleted=0",
+                "SELECT amount,status,cash_box_id,bank_account_id,journal_entry_id,payment_code,COALESCE(supplier_party_id,0) FROM payments WHERE id=? AND station_id=? AND is_deleted=0",
                 arrayOf(id.toString(), stationScopeId.toString())
             ).use { c ->
                 require(c.moveToFirst()) { "الدفعة غير موجودة ضمن المحطة الحالية" }
@@ -23038,6 +23038,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("amount", c.getDouble(0)); put("status", c.getString(1))
                     put("cash_box_id", c.getLong(2)); put("bank_account_id", c.getLong(3))
                     put("journal_entry_id", c.getLong(4)); put("payment_code", c.getString(5))
+                    put("supplier_party_id", c.getLong(6))
                 }
             }
             require(row.optString("status") == "completed") { "لا يمكن عكس دفعة إلا إذا كانت مكتملة" }
@@ -23110,6 +23111,58 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
 
             reverseJournalEntryWithinTransaction(db, journalId, reason.ifBlank { "عكس الدفعة" }, actorId, stationScopeId)
+
+            // Restore supplier control balance and invoice-level allocations atomically.
+            val supplierId = row.optLong("supplier_party_id", 0L)
+            if (supplierId > 0L) {
+                val supplierState = db.rawQuery(
+                    """SELECT COALESCE(p.current_balance,0),COALESCE(p.total_due,0),
+                              COALESCE(p.total_payments,0)
+                       FROM parties p JOIN party_types pt ON pt.id=p.party_type_id
+                       WHERE p.id=? AND p.station_id=? AND p.is_deleted=0
+                         AND p.is_active=1 AND pt.type_code='SUPPLIER' AND pt.is_deleted=0 LIMIT 1""",
+                    arrayOf(supplierId.toString(), stationScopeId.toString())
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) { "المورد المرتبط بالدفعة غير موجود ضمن المحطة" }
+                    doubleArrayOf(cursor.getDouble(0), cursor.getDouble(1), cursor.getDouble(2))
+                }
+                require(supplierState[2] + 0.01 >= amount) {
+                    "إجمالي مدفوعات المورد لا يسمح بعكس هذه الدفعة؛ يجب تسوية سجل الطرف أولاً"
+                }
+                val restoredBalance = supplierState[0] + amount
+                val restoredDue = supplierState[1] + amount
+                val restoredPayments = (supplierState[2] - amount).coerceAtLeast(0.0)
+                require(db.update(
+                    "parties",
+                    ContentValues().apply {
+                        put("current_balance", restoredBalance)
+                        put("total_due", restoredDue)
+                        put("total_payments", restoredPayments)
+                        put("updated_at", getCurrentDateTime())
+                    },
+                    "id=? AND station_id=? AND is_deleted=0 AND is_active=1",
+                    arrayOf(supplierId.toString(), stationScopeId.toString())
+                ) == 1) { "تعذر استعادة رصيد المورد بعد عكس الدفعة" }
+
+                db.insertOrThrow("supplier_ledger", null, ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("party_id", supplierId)
+                    put("transaction_date", getCurrentDateTime())
+                    put("transaction_type", "supplier_payment_reversal")
+                    put("transaction_id", id)
+                    put("reference_number", row.optString("payment_code"))
+                    put("debit", 0.0)
+                    put("credit", amount)
+                    put("balance", restoredBalance)
+                    put("description", "عكس سداد المورد ${row.optString("payment_code")}: ${reason.trim()}")
+                    put("created_at", getCurrentDateTime())
+                    put("created_by", actorId)
+                })
+                SupplierPayablesRepository.reversePaymentAllocations(
+                    db, stationScopeId, supplierId, id, actorId, reason
+                )
+            }
+
             val rows = db.update(
                 "payments",
                 ContentValues().apply {
