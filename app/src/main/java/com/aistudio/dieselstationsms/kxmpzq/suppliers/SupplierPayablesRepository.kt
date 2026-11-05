@@ -205,6 +205,32 @@ object SupplierPayablesRepository {
         actorId: Long,
         explicitInvoiceId: Long = 0L
     ): JSONObject {
+        if (db.inTransaction()) {
+            return allocatePaymentWithinTransaction(
+                db, stationId, supplierId, paymentId, amount, actorId, explicitInvoiceId
+            )
+        }
+        db.beginTransaction()
+        try {
+            val result = allocatePaymentWithinTransaction(
+                db, stationId, supplierId, paymentId, amount, actorId, explicitInvoiceId
+            )
+            db.setTransactionSuccessful()
+            return result
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    private fun allocatePaymentWithinTransaction(
+        db: SQLiteDatabase,
+        stationId: Int,
+        supplierId: Long,
+        paymentId: Long,
+        amount: Double,
+        actorId: Long,
+        explicitInvoiceId: Long
+    ): JSONObject {
         ensureSchema(db)
         require(stationId > 0 && supplierId > 0L && paymentId > 0L && actorId > 0L) {
             "بيانات تخصيص دفعة المورد غير صالحة"
@@ -238,6 +264,9 @@ object SupplierPayablesRepository {
             arrayOf(paymentId.toString(),stationId.toString())
         ).use { c -> c.moveToFirst(); c.getInt(0)>0 to c.getDouble(1) }
         if (existing.first) {
+            require(abs(existing.second-amount)<=0.01) {
+                "تم تخصيص الدفعة مسبقاً بمبلغ يختلف عن مبلغ الدفعة"
+            }
             return JSONObject().apply {
                 put("success",true);put("idempotent",true)
                 put("allocated_amount",existing.second)
@@ -285,17 +314,18 @@ object SupplierPayablesRepository {
                    WHERE a.supplier_invoice_id=? AND a.status='posted' AND a.is_deleted=0""",
                 arrayOf(invoice.id.toString())
             ).use { c -> c.moveToFirst();c.getDouble(0) }
-            val oldTotal=db.rawQuery(
-                "SELECT total_amount FROM supplier_invoices WHERE id=?",
-                arrayOf(invoice.id.toString())
-            ).use { c -> c.moveToFirst();c.getDouble(0) }
-            val newRemaining=(oldTotal-updated).coerceAtLeast(0.0)
+            val total=db.rawQuery(
+                "SELECT total_amount FROM supplier_invoices WHERE id=? AND station_id=? AND supplier_id=? AND is_deleted=0",
+                arrayOf(invoice.id.toString(),stationId.toString(),supplierId.toString())
+            ).use { c -> require(c.moveToFirst()) { "فاتورة المورد غير موجودة أثناء التخصيص" };c.getDouble(0) }
+            require(updated<=total+0.01) { "إجمالي تخصيصات المورد يتجاوز قيمة الفاتورة" }
+            val newRemaining=(total-updated).coerceAtLeast(0.0)
             val newStatus=when {
                 newRemaining<=EPSILON -> "paid"
                 updated>EPSILON -> "partial"
                 else -> "open"
             }
-            db.update(
+            val changed=db.update(
                 "supplier_invoices",
                 ContentValues().apply {
                     put("paid_amount",updated);put("remaining_amount",newRemaining)
@@ -304,6 +334,7 @@ object SupplierPayablesRepository {
                 "id=? AND station_id=? AND supplier_id=? AND is_deleted=0",
                 arrayOf(invoice.id.toString(),stationId.toString(),supplierId.toString())
             )
+            require(changed==1) { "تعذر تحديث رصيد فاتورة المورد بعد التخصيص" }
             remainingPayment-=part;allocated+=part;allocations++
         }
         if(remainingPayment>EPSILON) {
@@ -322,6 +353,7 @@ object SupplierPayablesRepository {
             put("invoice_allocation_count",allocations)
         }
     }
+
 
     fun getSupplierInvoices(
         db: SQLiteDatabase,
