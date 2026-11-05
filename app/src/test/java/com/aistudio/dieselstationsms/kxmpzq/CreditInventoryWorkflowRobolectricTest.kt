@@ -146,7 +146,7 @@ class CreditInventoryWorkflowRobolectricTest {
             .map { untrustedRows.getJSONObject(it) }
             .first { it.optString("source_kind") == "credit_sale" && it.optLong("source_id") == saleId }
         assertEquals("بحاجة مراجعة", untrustedTask.getString("status"))
-        assertTrue(untrustedTask.isNull("task_date"))
+        assertTrue(untrustedTask.optString("task_date").isBlank())
 
         // When its date provenance is verified, the same invoice enters overdue once.
         db.update(

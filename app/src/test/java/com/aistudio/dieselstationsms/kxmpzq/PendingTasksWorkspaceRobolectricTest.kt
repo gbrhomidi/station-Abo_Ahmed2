@@ -3,6 +3,7 @@ package com.aistudio.dieselstationsms.kxmpzq
 import android.content.ContentValues
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.aistudio.dieselstationsms.kxmpzq.sms.DebtDueDateRepository
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -29,6 +30,7 @@ class PendingTasksWorkspaceRobolectricTest {
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
         helper = DatabaseHelper.getInstance(context)
         helper.writableDatabase
+        DebtDueDateRepository.ensureSchema(helper)
     }
 
     @After
@@ -286,6 +288,9 @@ class PendingTasksWorkspaceRobolectricTest {
                 put("remaining_amount", 25.0)
                 put("is_credit", 1)
                 put("due_date", "2020-01-01")
+                put("due_date_source", "sale_creation")
+                put("due_date_basis", "2019-12-02")
+                put("business_day", "2019-12-02")
                 put("status", "completed")
                 put("is_deleted", 0)
             }
