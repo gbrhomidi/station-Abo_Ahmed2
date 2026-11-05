@@ -17931,7 +17931,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             JOIN sales_transactions s
             ON s.id = p.sale_id
             WHERE s.station_id = ?
-            AND p.station_id = s.station_id
+            AND (p.station_id IS NULL OR p.station_id = s.station_id)
             AND s.is_deleted = 0
             AND COALESCE(p.is_deleted,0) = 0
             AND p.status = 'completed'
