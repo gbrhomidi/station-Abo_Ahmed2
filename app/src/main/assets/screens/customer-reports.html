@@ -2012,7 +2012,7 @@
                 // Age by explicit contractual maturity date only. A creation date is not due date.
                 const dueText = String(row.due_date || '').slice(0,10);
                 let age = null;
-                if (/^\\d{4}-\\d{2}-\\d{2}$/.test(dueText) && /^\\d{4}-\\d{2}-\\d{2}$/.test(today)) {
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dueText) && /^\d{4}-\d{2}-\d{2}$/.test(today)) {
                     const due = Date.parse(dueText + 'T00:00:00Z');
                     const now = Date.parse(today + 'T00:00:00Z');
                     if (Number.isFinite(due) && Number.isFinite(now)) age = Math.max(0, Math.round((now - due) / 86400000));

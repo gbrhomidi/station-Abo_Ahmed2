@@ -17917,7 +17917,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             JOIN sales_transactions s
             ON s.id = p.sale_id
             WHERE s.station_id = ?
+            AND p.station_id = s.station_id
             AND s.is_deleted = 0
+            AND COALESCE(p.is_deleted,0) = 0
             AND p.status = 'completed'
             AND p.business_day = ?
             """,
@@ -17935,8 +17937,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.rawQuery(
             "SELECT COUNT(DISTINCT p.id) FROM parties p " +
                     "JOIN sales_transactions s ON s.customer_party_id = p.id " +
-                    "WHERE s.station_id = ? AND p.is_active = 1 AND p.is_deleted = 0",
-            arrayOf(stationId.toString())
+                    "WHERE s.station_id = ? AND p.station_id = ? AND s.is_deleted = 0 AND p.is_active = 1 AND p.is_deleted = 0",
+            arrayOf(stationId.toString(), stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("active_customers", cursor.getInt(0))
         }
@@ -17949,27 +17951,33 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (cursor.moveToFirst()) stats.put("expiry_soon", cursor.getInt(0))
         }
 
-        // 5. المنتجات منخفضة المخزون في المحطة
+        // 5. المنتجات منخفضة المخزون: اجمع أرصدة مستودعات المحطة لكل منتج ثم عد المنتج مرة واحدة.
         db.rawQuery(
-            """
-            SELECT COUNT(*) FROM products p
-            LEFT JOIN inventory_levels il ON p.id = il.product_id
-            LEFT JOIN warehouses w ON il.warehouse_id = w.id
-            WHERE p.station_id = ? AND p.is_deleted=0 AND p.status='active'
-            AND (il.quantity_on_hand <= p.minimum_stock OR il.quantity_on_hand IS NULL)
-            AND (w.station_id = ? OR w.station_id IS NULL)
-            """.trimIndent(),
-            arrayOf(stationId.toString(), stationId.toString())
+            """SELECT COUNT(*)
+               FROM products p
+               WHERE p.station_id=? AND p.is_deleted=0 AND p.status='active'
+                 AND COALESCE((
+                     SELECT SUM(COALESCE(il.quantity_on_hand,0))
+                     FROM inventory_levels il
+                     JOIN warehouses w ON w.id=il.warehouse_id
+                     WHERE il.product_id=p.id AND w.station_id=p.station_id
+                       AND COALESCE(w.is_deleted,0)=0
+                 ),0) <= COALESCE(p.minimum_stock,0)""",
+            arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("low_stock", cursor.getInt(0))
         }
 
-        // 6. الفواتير المستحقة (خلال أسبوع) في المحطة
+        // 6. الفواتير الآجلة ذات الرصيد المفتوح المستحقة من اليوم وحتى سبعة أيام قادمة (شاملاً).
         db.rawQuery(
             """SELECT COUNT(*) FROM sales_transactions
-               WHERE station_id=? AND remaining_amount > 0
-               AND date(due_date) BETWEEN date(?) AND date(?, '+7 days')
-               AND is_deleted=0""",
+               WHERE station_id=? AND remaining_amount > 0.000001
+                 AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(payment_method,'')),' ',''),'-','_'))
+                     IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')
+                 AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')
+                 AND COALESCE(is_deleted,0)=0
+                 AND due_date IS NOT NULL AND TRIM(due_date)<>''
+                 AND date(due_date) BETWEEN date(?) AND date(?, '+7 days')""",
             arrayOf(stationId.toString(), today, today)
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("due_invoices", cursor.getInt(0))
@@ -17994,17 +18002,25 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         // 9. مديونية العملاء (المبالغ المتبقية للفواتير الآجلة) في المحطة
         db.rawQuery(
-            "SELECT COALESCE(SUM(remaining_amount),0) FROM sales_transactions WHERE station_id=? AND is_credit=1 AND is_deleted=0",
+            """SELECT COALESCE(SUM(remaining_amount),0) FROM sales_transactions
+               WHERE station_id=? AND COALESCE(is_deleted,0)=0
+                 AND remaining_amount > 0.000001
+                 AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(payment_method,'')),' ',''),'-','_'))
+                     IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')
+                 AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')""",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("customer_debts", cursor.getDouble(0))
         }
 
-        // 10. مديونية الموردين المرتبطين بالمحطة (من خلال عمليات التعبئة)
+        // 10. مديونية الموردين: اجمع رصيد كل مورد مرة واحدة، بما يشمل توريد الوقود ومشتريات المنتجات.
         db.rawQuery(
-            "SELECT COALESCE(SUM(p.current_balance),0) FROM parties p " +
-                    "JOIN tank_refills tr ON tr.supplier_id = p.id " +
-                    "WHERE tr.station_id = ? AND p.party_type_id IN (SELECT id FROM party_types WHERE type_code = 'SUPPLIER' AND is_deleted=0) AND p.is_deleted=0",
+            """SELECT COALESCE(SUM(CASE WHEN COALESCE(p.current_balance,0)>0.000001
+                                       THEN p.current_balance ELSE 0 END),0)
+               FROM parties p
+               JOIN party_types pt ON pt.id=p.party_type_id
+               WHERE p.station_id=? AND p.is_deleted=0
+                 AND pt.type_code='SUPPLIER' AND pt.is_deleted=0""",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("supplier_debts", cursor.getDouble(0))
@@ -18024,10 +18040,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (cursor.moveToFirst()) stats.put("inventory_value", cursor.getDouble(0))
         }
 
-        // 12. المهام المعلقة من جدول tasks الفعلي
+        // 12. المهام اليدوية المعلقة للمحطة الحالية؛ العناصر المالية المشتقة تُحسب منفصلة في مساحة المهام.
         db.rawQuery(
-            "SELECT COUNT(*) FROM tasks WHERE is_deleted=0 AND is_archived=0 AND is_resolved=0",
-            null
+            "SELECT COUNT(*) FROM tasks WHERE station_id=? AND is_deleted=0 AND is_archived=0 AND is_resolved=0",
+            arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("pending_tasks", cursor.getInt(0))
         }
@@ -18115,7 +18131,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         // إجمالي المبالغ المستحقة (للعملاء) في المحطة
         db.rawQuery(
-            "SELECT COALESCE(SUM(remaining_amount),0) FROM sales_transactions WHERE station_id=? AND payment_status IN ('pending','partial') AND is_deleted=0",
+            """SELECT COALESCE(SUM(remaining_amount),0) FROM sales_transactions
+               WHERE station_id=? AND COALESCE(is_deleted,0)=0 AND remaining_amount > 0.000001
+                 AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(payment_method,'')),' ',''),'-','_'))
+                     IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')
+                 AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')""",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("total_due", cursor.getDouble(0))
@@ -18157,7 +18177,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         // عدد ومبلغ الفواتير المتأخرة في المحطة
         db.rawQuery(
-            "SELECT COUNT(*), COALESCE(SUM(remaining_amount),0) FROM sales_transactions WHERE station_id=? AND is_credit=1 AND date(due_date) < date(?) AND is_deleted=0",
+            """SELECT COUNT(*), COALESCE(SUM(remaining_amount),0) FROM sales_transactions
+               WHERE station_id=? AND remaining_amount > 0.000001
+                 AND COALESCE(is_deleted,0)=0
+                 AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(payment_method,'')),' ',''),'-','_'))
+                     IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')
+                 AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')
+                 AND due_date IS NOT NULL AND TRIM(due_date)<>''
+                 AND date(due_date) < date(?)""",
             arrayOf(stationId.toString(), today)
         ).use { cursor ->
             if (cursor.moveToFirst()) {
@@ -27931,27 +27958,73 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val movementWhere = if (stationId != null) "id=? AND station_id=? AND movement_type='return' AND is_deleted=0" else "id=? AND movement_type='return' AND is_deleted=0"
-            val movementArgs = if (stationId != null) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
-            val movement = db.rawQuery("SELECT product_id, quantity_change, reference_id, COALESCE(station_id, 0), COALESCE(performed_by, 0) FROM inventory_movements WHERE $movementWhere", movementArgs).use { cursor ->
-                if (!cursor.moveToFirst()) return 0
-                longArrayOf(cursor.getLong(0), cursor.getDouble(1).toBits(), cursor.getLong(2))
+            db.beginTransaction()
+            try {
+                data class ReturnMovement(
+                    val productId: Long,
+                    val quantity: Double,
+                    val saleId: Long,
+                    val stationId: Int,
+                    val performedBy: Long
+                )
+                val movementWhere = if (stationId != null) {
+                    "id=? AND station_id=? AND movement_type='return' AND is_deleted=0"
+                } else {
+                    "id=? AND movement_type='return' AND is_deleted=0"
+                }
+                val movementArgs = if (stationId != null) {
+                    arrayOf(id.toString(), stationId.toString())
+                } else {
+                    arrayOf(id.toString())
+                }
+                val movement = db.rawQuery(
+                    "SELECT product_id, quantity_change, reference_id, COALESCE(station_id, 0), COALESCE(performed_by, 0) FROM inventory_movements WHERE $movementWhere",
+                    movementArgs
+                ).use { cursor ->
+                    if (!cursor.moveToFirst()) return 0
+                    ReturnMovement(
+                        productId = cursor.getLong(0),
+                        quantity = cursor.getDouble(1),
+                        saleId = cursor.getLong(2),
+                        stationId = cursor.getLong(3).toInt(),
+                        performedBy = cursor.getLong(4)
+                    )
+                }
+                require(movement.stationId > 0) { "معرف محطة المرتجع غير صالح" }
+                require(movement.performedBy > 0L) { "معرف منفذ المرتجع غير صالح" }
+                require(movement.quantity.isFinite() && movement.quantity > 0.0) { "كمية المرتجع غير صالحة" }
+                val reversal = addStockMovement(
+                    JSONObject().apply {
+                        put("product_id", movement.productId)
+                        put("quantity", movement.quantity)
+                        put("movement_type", "out")
+                        put("reference_type", "sale_return_reversal")
+                        put("reference_id", movement.saleId)
+                        put("notes", "عكس مرتجع $id")
+                    },
+                    movement.stationId,
+                    movement.performedBy
+                )
+                require(reversal > 0) { "فشل عكس حركة المرتجع" }
+                val rows = db.update(
+                    "inventory_movements",
+                    ContentValues().apply {
+                        put("is_deleted", 1)
+                        put("status", "cancelled")
+                        put("updated_at", getCurrentDateTime())
+                    },
+                    "id=? AND station_id=? AND movement_type='return' AND is_deleted=0",
+                    arrayOf(id.toString(), movement.stationId.toString())
+                )
+                require(rows == 1) { "تعذر إلغاء سجل المرتجع بعد عكس حركته" }
+                db.setTransactionSuccessful()
+                rows
+            } finally {
+                db.endTransaction()
             }
-            val productId = movement[0]
-            val qty = Double.fromBits(movement[1])
-            val saleId = movement[2]
-            val movementStationId = movement[3].toInt()
-            val performedBy = movement[4]
-            require(movementStationId > 0) { "معرف محطة المرتجع غير صالح" }
-            require(performedBy > 0) { "معرف منفذ المرتجع غير صالح" }
-            val reversal = addStockMovement(JSONObject().apply {
-                put("product_id", productId); put("quantity", qty); put("movement_type", "out")
-                put("reference_type", "sale_return_reversal"); put("reference_id", saleId)
-                put("notes", "عكس مرتجع $id")
-            }, movementStationId, performedBy)
-            require(reversal > 0) { "فشل عكس حركة المرتجع" }
-            db.update("inventory_movements", ContentValues().apply { put("is_deleted", 1); put("status", "cancelled"); put("updated_at", getCurrentDateTime()) }, "id=?", arrayOf(id.toString()))
-        } finally { dbLock.unlock() }
+        } finally {
+            dbLock.unlock()
+        }
     }
 
 

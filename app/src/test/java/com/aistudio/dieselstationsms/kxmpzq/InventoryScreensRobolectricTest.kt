@@ -351,4 +351,51 @@ class InventoryScreensRobolectricTest {
         assertTrue(alertsHtml.contains("limit: 0"))
     }
 
+
+    @Test
+    fun deletingReturnReversesInventoryAndSoftDeletesAtomically() {
+        val productId = createProduct(0.0, 1.0)
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        val db = helper.writableDatabase
+        val returnId = helper.addStockMovement(
+            JSONObject()
+                .put("product_id", productId)
+                .put("warehouse_id", warehouseId)
+                .put("movement_type", "return")
+                .put("quantity", 2.5)
+                .put("unit_cost", 10.0)
+                .put("reference_type", "sale_return")
+                .put("reference_id", 987654L)
+                .put("notes", "اختبار عكس المرتجع"),
+            1,
+            actorId
+        )
+        val before = db.rawQuery(
+            "SELECT quantity_on_hand FROM inventory_levels WHERE product_id=? AND warehouse_id=?",
+            arrayOf(productId.toString(), warehouseId.toString())
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getDouble(0) }
+        assertEquals(2.5, before, 0.000001)
+
+        assertEquals(1, helper.deleteReturn(returnId, 1))
+
+        val after = db.rawQuery(
+            "SELECT quantity_on_hand FROM inventory_levels WHERE product_id=? AND warehouse_id=?",
+            arrayOf(productId.toString(), warehouseId.toString())
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getDouble(0) }
+        assertEquals(0.0, after, 0.000001)
+        db.rawQuery(
+            "SELECT is_deleted,status FROM inventory_movements WHERE id=? AND station_id=?",
+            arrayOf(returnId.toString(), "1")
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+            assertEquals("cancelled", cursor.getString(1))
+        }
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_movements WHERE station_id=? AND movement_type='out' AND reference_type='sale_return_reversal' AND reference_id=? AND is_deleted=0",
+            arrayOf("1", "987654")
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getInt(0) })
+        assertTrue(db.rawQuery("PRAGMA foreign_key_check", null).use { !it.moveToFirst() })
+    }
+
 }
