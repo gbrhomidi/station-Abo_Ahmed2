@@ -9706,6 +9706,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun getPaymentTerms(appliesTo: String = "customer"): String {
+            val db=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity=getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId=requireCurrentStationId(db,activity.currentUserId)
+                dataResponse(DebtDueDateRepository.getPaymentTerms(db,stationId,appliesTo))
+            } catch(e:Exception) {
+                DebugLogger.logException("PaymentTerms",e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
         fun getCustomerDebts(fromDate: String?, toDate: String?): String {
             DebugLogger.info("WebAppInterface", "getCustomerDebts called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")

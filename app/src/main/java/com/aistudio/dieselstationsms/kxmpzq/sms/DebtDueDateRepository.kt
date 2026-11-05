@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.BusinessDay
 import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
 import org.json.JSONArray
 import org.json.JSONObject
@@ -44,43 +45,187 @@ object DebtDueDateRepository {
     )
 
     fun ensureSchema(helper: DatabaseHelper) {
-        val db = helper.writableDatabase
-        if (!tableExists(db, "sales_transactions")) return
-        if (tableExists(db, "parties")) {
-            addColumn(db, "parties", "payment_terms", "TEXT NOT NULL DEFAULT '$DEFAULT_TERMS'")
+        val db=helper.writableDatabase
+        if(!tableExists(db,"sales_transactions")) return
+        if(tableExists(db,"parties")) {
+            addColumn(db,"parties","payment_terms","TEXT NOT NULL DEFAULT '$DEFAULT_TERMS'")
+            addColumn(db,"parties","payment_terms_id","INTEGER")
+            addColumn(db,"parties","payment_terms_days","INTEGER")
         }
-        addColumn(db, "sales_transactions", "due_date", "TEXT")
-        addColumn(db, "sales_transactions", "payment_terms_at_sale", "TEXT")
-        if (!triggerExists(db, "trg_debt_due_date_sales_insert_v2") ||
-            !triggerExists(db, "trg_debt_due_date_sales_update_v2")
-        ) createDueDateTriggers(db)
+        addColumn(db,"sales_transactions","due_date","TEXT")
+        addColumn(db,"sales_transactions","payment_terms_at_sale","TEXT")
+        addColumn(db,"sales_transactions","payment_terms_id_at_sale","INTEGER")
+        addColumn(db,"sales_transactions","payment_terms_days_at_sale","INTEGER")
+        addColumn(db,"sales_transactions","due_date_basis","TEXT")
+        addColumn(db,"sales_transactions","due_date_source","TEXT")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS payment_terms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT NOT NULL UNIQUE,
+                name_ar TEXT NOT NULL,
+                name_en TEXT NOT NULL DEFAULT '',
+                days INTEGER NOT NULL CHECK(days BETWEEN 0 AND 365),
+                applies_to TEXT NOT NULL DEFAULT 'both',
+                station_id INTEGER,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """.trimIndent())
+        seedDefaultPaymentTerms(db)
+        migratePartyTerms(db)
+
         db.execSQL("CREATE TABLE IF NOT EXISTS debt_due_date_migrations (migration_key TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
-        val backfillApplied = db.rawQuery(
-            "SELECT 1 FROM debt_due_date_migrations WHERE migration_key='credit-sale-due-date-v2' LIMIT 1", null
+        if(!triggerExists(db,"trg_debt_due_date_sales_insert_v3") ||
+           !triggerExists(db,"trg_debt_due_date_sales_update_v3")) createDueDateTriggers(db)
+
+        val applied=db.rawQuery(
+            "SELECT 1 FROM debt_due_date_migrations WHERE migration_key='credit-sale-due-date-v3' LIMIT 1",
+            null
         ).use { it.moveToFirst() }
-        if (!backfillApplied) {
-            backfillMissingDueDates(db)
-            db.execSQL("INSERT OR IGNORE INTO debt_due_date_migrations(migration_key) VALUES('credit-sale-due-date-v2')")
+        if(!applied) {
+            db.beginTransaction()
+            try {
+                backfillMissingDueDates(db)
+                db.execSQL("INSERT INTO debt_due_date_migrations(migration_key) VALUES('credit-sale-due-date-v3')")
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
         }
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_debt_due_dates_station_date ON sales_transactions(station_id,due_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_payment_terms_scope_active ON payment_terms(station_id,applies_to,is_active,sort_order)")
     }
 
-    /** Store the customer terms explicitly; blank terms always mean Net 30, not "no due date". */
-    fun persistPartyTerms(helper: DatabaseHelper, partyId: Long, stationId: Int, requestedTerms: String?): String {
-        val db = helper.writableDatabase
-        require(partyId > 0L && stationId > 0) { "معرف العميل أو المحطة غير صالح" }
-        require(tableExists(db, "parties")) { "جدول العملاء غير متاح" }
-        val cols = columns(db, "parties")
-        val termsColumn = listOf("payment_terms", "payment_terms_text", "credit_terms").firstOrNull { it in cols }
-            ?: return requestedTerms.orEmpty().trim().ifBlank { DEFAULT_TERMS }
-        val terms = requestedTerms.orEmpty().trim().ifBlank { DEFAULT_TERMS }
-        val stationClause = if ("station_id" in cols) " AND station_id=?" else ""
-        val args = if ("station_id" in cols) arrayOf(partyId.toString(), stationId.toString()) else arrayOf(partyId.toString())
-        val values = ContentValues().apply { put(termsColumn, terms) }
-        if ("updated_at" in cols) values.put("updated_at", java.time.LocalDateTime.now().toString())
-        val changed = db.update("parties", values, "id=?$stationClause", args)
-        check(changed == 1) { "لم يتم حفظ شروط الدفع للعميل المحدد في المحطة الحالية" }
+    private fun seedDefaultPaymentTerms(db: SQLiteDatabase) {
+        val items=listOf(
+            arrayOf("CASH","نقدي / فوري","Cash / Immediate",0,0),
+            arrayOf("NET_7","صافي 7 أيام","Net 7 days",7,10),
+            arrayOf("NET_15","صافي 15 يوماً","Net 15 days",15,20),
+            arrayOf("NET_30","صافي 30 يوم","Net 30 days",30,30),
+            arrayOf("NET_45","صافي 45 يوماً","Net 45 days",45,40),
+            arrayOf("NET_60","صافي 60 يوماً","Net 60 days",60,50),
+            arrayOf("NET_90","صافي 90 يوماً","Net 90 days",90,60)
+        )
+        items.forEach { item ->
+            db.execSQL(
+                """INSERT OR IGNORE INTO payment_terms
+                   (code,name_ar,name_en,days,applies_to,station_id,is_default,is_active,sort_order)
+                   VALUES(?,?,?,?, 'both', NULL, ?, 1, ?)""",
+                arrayOf(item[0],item[1],item[2],item[3],if(item[0]=="NET_30") 1 else 0,item[4])
+            )
+        }
+    }
+
+    private fun findPaymentTermId(db: SQLiteDatabase, days: Int, stationId: Int?): Long? =
+        db.rawQuery(
+            """SELECT id FROM payment_terms WHERE days=? AND is_active=1
+               AND applies_to IN ('both','customer','supplier')
+               AND (station_id IS NULL OR station_id=?)
+               ORDER BY CASE WHEN station_id IS NULL THEN 0 ELSE 1 END,sort_order,id LIMIT 1""",
+            arrayOf(days.toString(),(stationId?:0).toString())
+        ).use { c -> if(c.moveToFirst()) c.getLong(0) else null }
+
+    private fun migratePartyTerms(db: SQLiteDatabase) {
+        if(!tableExists(db,"parties")) return
+        data class PartyTermRow(val id:Long,val station:Int,val days:Int?,val terms:String)
+        val rows=mutableListOf<PartyTermRow>()
+        db.rawQuery(
+            """SELECT id,COALESCE(station_id,0),payment_terms_days,COALESCE(payment_terms,'')
+               FROM parties WHERE COALESCE(is_deleted,0)=0
+                 AND (payment_terms_days IS NULL OR payment_terms_days<0 OR payment_terms_days>365)""",
+            null
+        ).use { c -> while(c.moveToNext()) rows+=PartyTermRow(
+            c.getLong(0),c.getInt(1),if(c.isNull(2)) null else c.getInt(2),c.getString(3).orEmpty()
+        ) }
+        rows.forEach { row ->
+            val days=row.days?.takeIf { it in 0..365 } ?: parseTermsDays(row.terms)
+            val term=findPaymentTermId(db,days,row.station.takeIf { it>0 })
+            val values=ContentValues().apply {
+                put("payment_terms_days",days)
+                if(term!=null) put("payment_terms_id",term) else putNull("payment_terms_id")
+            }
+            val where=if(row.station>0) "id=? AND station_id=?" else "id=?"
+            val args=if(row.station>0) arrayOf(row.id.toString(),row.station.toString()) else arrayOf(row.id.toString())
+            db.update("parties",values,where,args)
+        }
+    }
+
+    fun persistPartyTerms(helper: DatabaseHelper,partyId:Long,stationId:Int,requestedTerms:String?):String {
+        ensureSchema(helper)
+        require(partyId>0L && stationId>0) { "معرف الطرف أو المحطة غير صالح" }
+        val terms=requestedTerms.orEmpty().trim().ifBlank { DEFAULT_TERMS }
+        val days=parseTermsDays(terms)
+        val db=helper.writableDatabase
+        val term=findPaymentTermId(db,days,stationId)
+        val changed=db.update(
+            "parties",
+            ContentValues().apply {
+                put("payment_terms",terms);put("payment_terms_days",days)
+                if(term!=null) put("payment_terms_id",term) else putNull("payment_terms_id")
+                put("updated_at",java.time.LocalDateTime.now().toString())
+            },
+            "id=? AND station_id=? AND is_deleted=0",
+            arrayOf(partyId.toString(),stationId.toString())
+        )
+        check(changed==1) { "لم يتم حفظ شروط الدفع للطرف المحدد في المحطة الحالية" }
         return terms
+    }
+
+    fun applySaleSnapshot(db:SQLiteDatabase,saleId:Long,stationId:Int,partyId:Long,businessDate:String):JSONObject {
+        require(saleId>0L && stationId>0 && partyId>0L) { "بيانات لقطة شروط الدفع غير صالحة" }
+        val party=db.rawQuery(
+            """SELECT COALESCE(payment_terms,'$DEFAULT_TERMS'),payment_terms_days,COALESCE(payment_terms_id,0)
+               FROM parties WHERE id=? AND station_id=? AND is_deleted=0 AND is_active=1 LIMIT 1""",
+            arrayOf(partyId.toString(),stationId.toString())
+        ).use { c ->
+            require(c.moveToFirst()) { "العميل غير موجود أو غير نشط ضمن المحطة" }
+            Triple(c.getString(0).orEmpty().ifBlank { DEFAULT_TERMS },if(c.isNull(1)) null else c.getInt(1),c.getLong(2).takeIf { it>0L })
+        }
+        val terms=party.first
+        val days=party.second?.takeIf { it in 0..365 } ?: parseTermsDays(terms)
+        val base=parseDate(businessDate)
+        val due=base?.plusDays(days.toLong())?.toString()
+        val values=ContentValues().apply {
+            put("payment_terms_at_sale",terms);put("payment_terms_days_at_sale",days)
+            if(party.third!=null) put("payment_terms_id_at_sale",party.third) else putNull("payment_terms_id_at_sale")
+            if(base!=null) {
+                put("due_date_basis",base.toString());put("due_date",due);put("due_date_source","sale_creation")
+            } else {
+                putNull("due_date_basis");putNull("due_date");put("due_date_source","missing_base_date")
+            }
+        }
+        val changed=db.update("sales_transactions",values,"id=? AND station_id=? AND is_deleted=0",arrayOf(saleId.toString(),stationId.toString()))
+        check(changed==1) { "تعذر حفظ شروط الدفع وتاريخ الاستحقاق مع فاتورة البيع" }
+        return JSONObject().apply {
+            put("payment_terms_id",party.third?:JSONObject.NULL);put("payment_terms",terms)
+            put("payment_terms_days",days);put("due_date",due?:JSONObject.NULL)
+            put("due_date_source",if(base==null) "missing_base_date" else "sale_creation")
+        }
+    }
+
+    fun getPaymentTerms(helper:DatabaseHelper,stationId:Int,appliesTo:String="customer"):JSONArray {
+        ensureSchema(helper)
+        require(stationId>0) { "معرف المحطة غير صالح" }
+        val scope=appliesTo.lowercase(Locale.ROOT)
+        require(scope in setOf("customer","supplier","both")) { "نوع شروط الدفع غير صالح" }
+        return helper.readableDatabase.rawQuery(
+            """SELECT id,code,name_ar,name_en,days,applies_to,station_id,is_default,sort_order
+               FROM payment_terms WHERE is_active=1 AND applies_to IN ('both',?)
+                 AND (station_id IS NULL OR station_id=?)
+               ORDER BY CASE WHEN is_default=1 THEN 0 ELSE 1 END,sort_order,id""",
+            arrayOf(scope,stationId.toString())
+        ).use { c ->
+            val out=JSONArray()
+            while(c.moveToNext()) out.put(JSONObject().apply {
+                put("id",c.getLong(0));put("code",c.getString(1));put("name_ar",c.getString(2));put("name_en",c.getString(3))
+                put("days",c.getInt(4));put("applies_to",c.getString(5))
+                put("station_id",if(c.isNull(6)) JSONObject.NULL else c.getInt(6))
+                put("is_default",c.getInt(7)==1);put("sort_order",c.getInt(8))
+            })
+            out
+        }
     }
 
     fun getCustomerDebts(
@@ -110,7 +255,7 @@ object DebtDueDateRepository {
         ensureSchema(helper)
         require(stationId > 0) { "معرف المحطة غير صالح" }
         val maxDays = days.coerceIn(0, 365)
-        val today = LocalDate.now()
+        val today = LocalDate.parse(BusinessDay.currentDate())
         val all = readDebts(helper.readableDatabase, stationId)
         val openByCustomer = all.filter { it.remaining > 0.000001 && it.customerId > 0L }
             .groupBy { it.customerId }
@@ -172,7 +317,7 @@ object DebtDueDateRepository {
     fun getOverdueReminderCandidates(helper: DatabaseHelper, stationId: Int): JSONArray {
         ensureSchema(helper)
         require(stationId > 0) { "معرف المحطة غير صالح" }
-        val today = LocalDate.now()
+        val today = LocalDate.parse(BusinessDay.currentDate())
         val all = readDebts(helper.readableDatabase, stationId)
         val openByCustomer = all.filter { it.remaining > 0.000001 && it.customerId > 0L }
             .groupBy { it.customerId }
@@ -234,30 +379,25 @@ object DebtDueDateRepository {
         for (i in 0 until all.length()) {
             val row = all.optJSONObject(i) ?: continue
             val status = row.optString("status")
-            if (row.optDouble("remaining_amount", 0.0) > 0.000001 && status in setOf("overdue", "doubtful")) out.put(row)
+            if (row.optDouble("remaining_amount", 0.0) > 0.000001 && status == "overdue") out.put(row)
         }
         return out
     }
 
     /** Public so the SMS worker and UI use exactly the same calendar-date arithmetic. */
-    fun daysUntil(dueDate: String?, today: LocalDate = LocalDate.now()): Int? {
+    fun daysUntil(dueDate: String?, today: LocalDate = LocalDate.parse(BusinessDay.currentDate())): Int? {
         val due = parseDate(dueDate) ?: return null
         return java.time.temporal.ChronoUnit.DAYS.between(today, due).toInt()
     }
 
-    fun statusFor(remaining: Double, paid: Double, dueDate: String?, riskLevel: String? = null, today: LocalDate = LocalDate.now()): String {
-        if (remaining <= 0.000001) return "paid"
-        val due = parseDate(dueDate)
-        val daysUntil = due?.let { java.time.temporal.ChronoUnit.DAYS.between(today, it).toInt() }
-        val risk = riskLevel.orEmpty().trim().lowercase(Locale.ROOT)
-        if ((daysUntil != null && daysUntil <= -90) ||
-            risk in setOf("high", "critical", "blacklisted", "مشدد", "مرتفع", "محظور") ||
-            risk.contains("high") || risk.contains("blacklist") || risk.contains("مرتفع") || risk.contains("محظور")
-        ) return "doubtful"
-        if (daysUntil != null && daysUntil < 0) return "overdue"
-        if (paid > 0.000001) return "partial"
+    fun statusFor(remaining:Double,paid:Double,dueDate:String?,riskLevel:String?=null,today:LocalDate=LocalDate.parse(BusinessDay.currentDate())):String {
+        if(remaining<=0.000001) return "paid"
+        val due=parseDate(dueDate) ?: return "undated"
+        if(due.isBefore(today)) return "overdue"
+        if(paid>0.000001) return "partial"
         return "current"
     }
+
 
     private fun readDebts(db: SQLiteDatabase, stationId: Int): List<SaleDebt> {
         if (!tableExists(db, "sales_transactions") || !tableExists(db, "parties")) return emptyList()
@@ -293,7 +433,8 @@ object DebtDueDateRepository {
         val sql = """
             SELECT s.id,s.station_id,COALESCE(s.$customerId,0),$partyNameExpr,$phoneExpr,
                    $invoiceExpr,$saleCodeExpr,$orderExpr,$payment,$dueExpr,$createdExpr,
-                   $totalExpr,$paidExpr,$remainingExpr,$riskExpr,$termsExpr
+                   $totalExpr,$paidExpr,$remainingExpr,$riskExpr,$termsExpr,
+                   COALESCE(s.due_date_source,'')
             FROM sales_transactions s
             LEFT JOIN parties p ON p.id=s.$customerId$stationJoin$partyDeleted
             WHERE s.station_id=? AND $where
@@ -307,12 +448,12 @@ object DebtDueDateRepository {
                 val total = cursor.getDouble(11).coerceAtLeast(0.0)
                 val paid = cursor.getDouble(12).coerceAtLeast(0.0)
                 val remaining = cursor.getDouble(13).coerceAtLeast(0.0)
-                // Guard legacy rows at read time too; the migration/trigger should persist this,
-                // but one malformed historical row must never silently be treated as paid.
-                val effectiveDue = due.ifBlank {
-                    val terms = cursor.getString(15).orEmpty().ifBlank { DEFAULT_TERMS }
-                    dueDateForTerms(terms, created)
-                }
+                // Only source-verified maturity values are eligible for aging and reminders.
+                // Legacy values without provenance are retained in SQLite but classified as UNDATED.
+                val dueSource = if (cursor.columnCount > 16) cursor.getString(16).orEmpty() else ""
+                val effectiveDue = if (dueSource in setOf(
+                    "sale_creation","sales_trigger_v3","legacy_rebuilt_snapshot"
+                )) due else ""
                 val customerIdValue = cursor.getLong(2)
                 val name = cursor.getString(3).orEmpty().trim().ifBlank { if (customerIdValue > 0L) "عميل #$customerIdValue" else "عميل غير مسجل" }
                 val row = SaleDebt(
@@ -386,81 +527,112 @@ object DebtDueDateRepository {
     private fun triggerExists(db: SQLiteDatabase, name: String): Boolean =
         db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=? LIMIT 1", arrayOf(name)).use { it.moveToFirst() }
 
-    private fun createDueDateTriggers(db: SQLiteDatabase) {
-        val s = columns(db, "sales_transactions")
-        val p = columns(db, "parties")
-        val customerColumn = listOf("customer_party_id", "customer_id", "party_id").firstOrNull { it in s } ?: return
-        if ("payment_method" !in s || "due_date" !in s) return
-        val baseParts = listOf("business_day", "transaction_date", "sale_date", "created_at")
-            .filter { it in s }
-            .map { "NULLIF(substr(NEW.`$it`,1,10),'')" }
-            .toMutableList()
-        baseParts += "date('now','localtime')"
-        val baseDate = "COALESCE(${baseParts.joinToString(",")})"
-        val stationScope = if ("station_id" in p && "station_id" in s) " AND p.station_id=NEW.station_id" else ""
-        val notDeleted = if ("is_deleted" in p) " AND COALESCE(p.is_deleted,0)=0" else ""
-        val termsColumn = listOf("payment_terms", "payment_terms_text", "credit_terms").firstOrNull { it in p }
-        val terms = if (termsColumn != null) {
-            "COALESCE((SELECT NULLIF(TRIM(p.`$termsColumn`),'') FROM parties p WHERE p.id=NEW.`$customerColumn`$stationScope$notDeleted LIMIT 1),'$DEFAULT_TERMS')"
-        } else "'$DEFAULT_TERMS'"
-        val days = sqlDaysFromTerms(terms)
-        val creditCondition = "LOWER(REPLACE(REPLACE(TRIM(COALESCE(NEW.payment_method,'')),' ',''),'-','_')) IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')"
-        val remainingCondition = if ("remaining_amount" in s) " AND COALESCE(NEW.remaining_amount,0)>0" else ""
-        val termsSnapshot = if ("payment_terms_at_sale" in s) ", payment_terms_at_sale=COALESCE(NULLIF(payment_terms_at_sale,''),$terms)" else ""
-        val update = "UPDATE sales_transactions SET due_date=date($baseDate, '+' || ($days) || ' days')$termsSnapshot WHERE id=NEW.id AND (due_date IS NULL OR TRIM(due_date)='')"
-        val triggerWhen = "WHEN $creditCondition$remainingCondition AND (NEW.due_date IS NULL OR TRIM(NEW.due_date)='')"
+    private fun createDueDateTriggers(db:SQLiteDatabase) {
+        val sc=columns(db,"sales_transactions")
+        val pc=columns(db,"parties")
+        val customer=listOf("customer_party_id","customer_id","party_id").firstOrNull { it in sc } ?: return
+        if("payment_method" !in sc || "due_date" !in sc) return
+        val bases=listOf("business_day","transaction_date","sale_date").filter { it in sc }
+        if(bases.isEmpty()) return
+        val basis="COALESCE("+bases.map { "NULLIF(substr(NEW.`"+it+"`,1,10),'')" }.joinToString(",")+")"
+        val scope=if("station_id" in pc && "station_id" in sc) " AND p.station_id=NEW.station_id" else ""
+        val live=if("is_deleted" in pc) " AND COALESCE(p.is_deleted,0)=0" else ""
+        val party="p.id=NEW.`"+customer+"`"+scope+live
+        val terms=if("payment_terms" in pc) "COALESCE((SELECT NULLIF(TRIM(p.payment_terms),'') FROM parties p WHERE "+party+" LIMIT 1),'$DEFAULT_TERMS')" else "'$DEFAULT_TERMS'"
+        val days=if("payment_terms_days" in pc) "COALESCE(NEW.payment_terms_days_at_sale,(SELECT p.payment_terms_days FROM parties p WHERE "+party+" LIMIT 1),$DEFAULT_TERMS_DAYS)" else "COALESCE(NEW.payment_terms_days_at_sale,$DEFAULT_TERMS_DAYS)"
+        val termId=if("payment_terms_id" in pc) "(SELECT p.payment_terms_id FROM parties p WHERE "+party+" LIMIT 1)" else "NULL"
+        val credit="LOWER(REPLACE(REPLACE(TRIM(COALESCE(NEW.payment_method,'')),' ',''),'-','_')) IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')"
+        val remaining=if("remaining_amount" in sc) " AND COALESCE(NEW.remaining_amount,0)>0.000001" else ""
+        val sql="UPDATE sales_transactions SET "+
+            "payment_terms_id_at_sale=COALESCE(payment_terms_id_at_sale,"+termId+"),"+
+            "payment_terms_at_sale=COALESCE(NULLIF(payment_terms_at_sale,''),"+terms+"),"+
+            "payment_terms_days_at_sale=COALESCE(payment_terms_days_at_sale,"+days+"),"+
+            "due_date=CASE WHEN "+basis+" IS NOT NULL THEN date("+basis+", '+' || ("+days+") || ' days') ELSE NULL END,"+
+            "due_date_basis="+basis+","+
+            "due_date_source=CASE WHEN "+basis+" IS NOT NULL THEN 'sales_trigger_v3' ELSE 'missing_base_date' END "+
+            "WHERE id=NEW.id AND (due_date IS NULL OR TRIM(due_date)='')"
+        val condition="WHEN "+credit+remaining+" AND (NEW.due_date IS NULL OR TRIM(NEW.due_date)='')"
         db.execSQL("DROP TRIGGER IF EXISTS trg_debt_due_date_sales_insert_v2")
         db.execSQL("DROP TRIGGER IF EXISTS trg_debt_due_date_sales_update_v2")
+        db.execSQL("DROP TRIGGER IF EXISTS trg_debt_due_date_sales_insert_v3")
+        db.execSQL("DROP TRIGGER IF EXISTS trg_debt_due_date_sales_update_v3")
         db.execSQL("""
-            CREATE TRIGGER trg_debt_due_date_sales_insert_v2
-            AFTER INSERT ON sales_transactions
-            $triggerWhen
+            CREATE TRIGGER trg_debt_due_date_sales_insert_v3 AFTER INSERT ON sales_transactions
+            $condition
             BEGIN
-                $update;
+                $sql;
             END
         """.trimIndent())
-        val updateColumns = listOf("payment_method", customerColumn, "remaining_amount")
-            .filter { it in s }.distinct().joinToString(",")
-        if (updateColumns.isNotBlank()) {
-            db.execSQL("""
-                CREATE TRIGGER trg_debt_due_date_sales_update_v2
-                AFTER UPDATE OF $updateColumns ON sales_transactions
-                $triggerWhen
-                BEGIN
-                    $update;
-                END
-            """.trimIndent())
+        val updates=listOf("payment_method",customer,"remaining_amount","business_day","transaction_date","sale_date")
+            .filter { it in sc }.distinct().joinToString(",")
+        if(updates.isNotBlank()) db.execSQL("""
+            CREATE TRIGGER trg_debt_due_date_sales_update_v3 AFTER UPDATE OF $updates ON sales_transactions
+            $condition
+            BEGIN
+                $sql;
+            END
+        """.trimIndent())
+    }
+
+
+    private fun backfillMissingDueDates(db:SQLiteDatabase) {
+        val sc=columns(db,"sales_transactions")
+        val pc=columns(db,"parties")
+        val customer=listOf("customer_party_id","customer_id","party_id").firstOrNull { it in sc } ?: return
+        if("payment_method" !in sc || "due_date" !in sc || !tableExists(db,"parties")) return
+        val bases=listOf("business_day","transaction_date","sale_date").filter { it in sc }
+        val basis=if(bases.isEmpty()) "''" else "COALESCE("+bases.map { "NULLIF(substr(s.`"+it+"`,1,10),'')" }.joinToString(",")+")"
+        val scope=if("station_id" in pc && "station_id" in sc) " AND p.station_id=s.station_id" else ""
+        val partyLive=if("is_deleted" in pc) " AND COALESCE(p.is_deleted,0)=0" else ""
+        val pTerms=if("payment_terms" in pc) "COALESCE(p.payment_terms,'')" else "''"
+        val pDays=if("payment_terms_days" in pc) "p.payment_terms_days" else "NULL"
+        val pTerm=if("payment_terms_id" in pc) "p.payment_terms_id" else "NULL"
+        val sTerms=if("payment_terms_at_sale" in sc) "COALESCE(s.payment_terms_at_sale,'')" else "''"
+        val sDays=if("payment_terms_days_at_sale" in sc) "s.payment_terms_days_at_sale" else "NULL"
+        val sTerm=if("payment_terms_id_at_sale" in sc) "s.payment_terms_id_at_sale" else "NULL"
+        val saleLive=if("is_deleted" in sc) "COALESCE(s.is_deleted,0)=0" else "1=1"
+        val credit="LOWER(REPLACE(REPLACE(TRIM(COALESCE(s.payment_method,'')),' ',''),'-','_')) IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')"
+        val saleStatus=if("status" in sc) "AND LOWER(COALESCE(s.status,'')) NOT IN ('cancelled','refunded','void','reversed')" else ""
+        data class Legacy(val id:Long,val station:Int,val due:String,val source:String,val base:String,val st:String,val sd:Int?,val si:Long?,val pt:String,val pd:Int?,val pi:Long?)
+        val rows=mutableListOf<Legacy>()
+        db.rawQuery(
+            """SELECT s.id,COALESCE(s.station_id,0),COALESCE(s.due_date,''),COALESCE(s.due_date_source,''),
+                      COALESCE($basis,''),$sTerms,$sDays,$sTerm,$pTerms,$pDays,$pTerm
+               FROM sales_transactions s
+               LEFT JOIN parties p ON p.id=s.`$customer`$scope$partyLive
+               WHERE ($credit) AND ($saleLive) $saleStatus""",
+            null
+        ).use { c -> while(c.moveToNext()) rows+=Legacy(
+            c.getLong(0),c.getInt(1),c.getString(2).orEmpty(),c.getString(3).orEmpty(),c.getString(4).orEmpty(),
+            c.getString(5).orEmpty(),if(c.isNull(6)) null else c.getInt(6),if(c.isNull(7)) null else c.getLong(7),
+            c.getString(8).orEmpty(),if(c.isNull(9)) null else c.getInt(9),if(c.isNull(10)) null else c.getLong(10)
+        ) }
+        rows.forEach { row ->
+            if(row.due.isNotBlank()) {
+                if(row.source.isBlank()) db.update(
+                    "sales_transactions",
+                    ContentValues().apply { put("due_date_source","legacy_unverified");putNull("due_date_basis") },
+                    "id=? AND station_id=?",arrayOf(row.id.toString(),row.station.toString())
+                )
+                return@forEach
+            }
+            val snapshot=row.st.isNotBlank() || row.sd!=null || row.si!=null
+            val terms=row.st.ifBlank { row.pt.ifBlank { DEFAULT_TERMS } }
+            val days=(row.sd ?: row.pd ?: parseTermsDays(terms)).takeIf { it in 0..365 } ?: DEFAULT_TERMS_DAYS
+            val termId=row.si ?: row.pi
+            val base=parseDate(row.base)
+            val source=when { base==null -> "missing_base_date";snapshot -> "legacy_rebuilt_snapshot";else -> "legacy_rebuilt_estimated" }
+            val values=ContentValues().apply {
+                put("payment_terms_at_sale",terms);put("payment_terms_days_at_sale",days)
+                if(termId!=null) put("payment_terms_id_at_sale",termId) else putNull("payment_terms_id_at_sale")
+                if(base!=null) { put("due_date_basis",base.toString());put("due_date",base.plusDays(days.toLong()).toString()) }
+                else { putNull("due_date_basis");putNull("due_date") }
+                put("due_date_source",source)
+            }
+            db.update("sales_transactions",values,"id=? AND station_id=? AND (due_date IS NULL OR TRIM(due_date)='')",arrayOf(row.id.toString(),row.station.toString()))
         }
     }
 
-    private fun backfillMissingDueDates(db: SQLiteDatabase) {
-        val s = columns(db, "sales_transactions")
-        val p = columns(db, "parties")
-        val customerColumn = listOf("customer_party_id", "customer_id", "party_id").firstOrNull { it in s } ?: return
-        if ("payment_method" !in s || "due_date" !in s || !tableExists(db, "parties")) return
-        val baseParts = listOf("business_day", "transaction_date", "sale_date", "created_at")
-            .filter { it in s }
-            .map { "NULLIF(substr(`$it`,1,10),'')" }
-            .toMutableList()
-        baseParts += "date('now','localtime')"
-        val baseDate = "COALESCE(${baseParts.joinToString(",")})"
-        val stationScope = if ("station_id" in p && "station_id" in s) " AND p.station_id=sales_transactions.station_id" else ""
-        val notDeleted = if ("is_deleted" in p) " AND COALESCE(p.is_deleted,0)=0" else ""
-        val termsColumn = listOf("payment_terms", "payment_terms_text", "credit_terms").firstOrNull { it in p }
-        val terms = if (termsColumn != null) {
-            "COALESCE((SELECT NULLIF(TRIM(p.`$termsColumn`),'') FROM parties p WHERE p.id=sales_transactions.`$customerColumn`$stationScope$notDeleted LIMIT 1),'$DEFAULT_TERMS')"
-        } else "'$DEFAULT_TERMS'"
-        val days = sqlDaysFromTerms(terms)
-        val creditCondition = "LOWER(REPLACE(REPLACE(TRIM(COALESCE(payment_method,'')),' ',''),'-','_')) IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')"
-        val remainingCondition = if ("remaining_amount" in s) " AND COALESCE(remaining_amount,0)>0" else ""
-        val snap = if ("payment_terms_at_sale" in s) ", payment_terms_at_sale=COALESCE(NULLIF(payment_terms_at_sale,''),$terms)" else ""
-        db.execSQL("""
-            UPDATE sales_transactions
-            SET due_date=date($baseDate, '+' || ($days) || ' days')$snap
-            WHERE (due_date IS NULL OR TRIM(due_date)='')
-              AND $creditCondition$remainingCondition
-        """.trimIndent())
-    }
 
     private fun sqlDaysFromTerms(termsExpression: String): String {
         // Resolve an explicit day unit before looking at a pure numeric value. This avoids
@@ -486,19 +658,22 @@ object DebtDueDateRepository {
         return base.plusDays(days.toLong()).toString()
     }
 
-    private fun parseTermsDays(terms: String?): Int {
-        val text = terms.orEmpty().trim().lowercase(Locale.ROOT)
-        if (text.isBlank()) return DEFAULT_TERMS_DAYS
-        if (listOf("cash", "immediate", "upon receipt", "عند الاستلام", "نقد", "فوري").any { text.contains(it) }) return 0
-        val withDayUnit = Regex("(?:net\\s*|صافي\\s*|خلال\\s*|within\\s*)?(\\d{1,3})\\s*(?:days?|يوم(?:اً|ًا|ين)?|أيام)").find(text)
-            ?.groupValues?.getOrNull(1)?.toIntOrNull()
-        val netPrefix = Regex("(?:net|صافي|خلال|within)\\s*(\\d{1,3})").find(text)
-            ?.groupValues?.getOrNull(1)?.toIntOrNull()
-        val standaloneNumber = if (Regex("^\\d{1,3}$").matches(text)) text.toIntOrNull() else null
-        // A bare/legacy numeric 0 was the CRM's "unspecified" sentinel; treat it as Net 30.
-        // Immediate payment is represented by an explicit cash/immediate term above.
-        return (withDayUnit ?: netPrefix ?: standaloneNumber)
-            ?.takeIf { it > 0 }?.coerceIn(1, 365) ?: DEFAULT_TERMS_DAYS
+    fun parseTermsDays(terms:String?):Int {
+        val normalized=terms.orEmpty().map { ch ->
+            when(ch) {
+                '٠' -> '0';'١' -> '1';'٢' -> '2';'٣' -> '3';'٤' -> '4'
+                '٥' -> '5';'٦' -> '6';'٧' -> '7';'٨' -> '8';'٩' -> '9'
+                else -> ch
+            }
+        }.joinToString("").trim().lowercase(Locale.ROOT)
+        if(normalized.isBlank()) return DEFAULT_TERMS_DAYS
+        val unit=Regex("""(\d{1,3})\s*(?:days?|يوم(?:اً|ًا|ين)?|أيام)""").find(normalized)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        val prefix=Regex("""(?:net|صافي|خلال|within)\s*(\d{1,3})""").find(normalized)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        val number=if(Regex("""^\d{1,3}$""").matches(normalized)) normalized.toIntOrNull() else null
+        val days=unit ?: prefix ?: number
+        if(days!=null) return days.takeIf { it in 0..365 } ?: DEFAULT_TERMS_DAYS
+        if(normalized in setOf("cash","نقد","نقدي","نقداً","فوري","فوراً","عند الاستلام","upon receipt","immediate")) return 0
+        return DEFAULT_TERMS_DAYS
     }
 
     private fun parseDate(value: String?): LocalDate? {

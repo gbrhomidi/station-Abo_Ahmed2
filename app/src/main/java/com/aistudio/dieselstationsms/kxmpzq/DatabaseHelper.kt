@@ -1,5 +1,6 @@
 package com.aistudio.dieselstationsms.kxmpzq
 
+import com.aistudio.dieselstationsms.kxmpzq.sms.DebtDueDateRepository
 import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
@@ -11721,6 +11722,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // ========================================================================
 
     fun addFuelSale(data: JSONObject, stationScopeId: Int, cashierId: Long): Long {
+        DebtDueDateRepository.ensureSchema(this)
         require(stationScopeId > 0) { "معرف المحطة غير صالح" }
         require(cashierId > 0) { "معرف المستخدم غير صالح" }
         val liters = data.optDouble("quantity", 0.0)
@@ -11751,7 +11753,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "العميل مطلوب للبيع الآجل"
             }
         }
-        val dueDate = data.optString("due_date", "").trim().ifBlank { null }
+        // Ignore due_date from the browser. The backend calculates it from the persisted
+        // customer term and the sale's business date inside the write transaction.
         dbLock.lock()
         return try {
             val db = writableDatabase
@@ -11798,7 +11801,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     netAmount = totalAmount,
                     paymentMethod = paymentMethod,
                     isCredit = isCreditSale,
-                    dueDate = dueDate,
+                    dueDate = null,
                     cashierId = cashierId.toInt(),
                     notes = data.optString("notes", ""),
                     orderType = "fuel",
@@ -11812,6 +11815,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     },
                     manageTransaction = false
                 )
+                if (isCreditSale && customerId != null) {
+                    DebtDueDateRepository.applySaleSnapshot(
+                        db,saleId,stationScopeId,customerId.toLong(),BusinessDay.currentDate()
+                    )
+                }
                 val cv = ContentValues().apply {
                     put("uuid", UUID.randomUUID().toString())
                     put("sale_id", saleId)
@@ -12002,6 +12010,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun completeSale(data: JSONObject, stationScopeId: Int, cashierId: Long): JSONObject {
+        DebtDueDateRepository.ensureSchema(this)
         val result = JSONObject()
         require(stationScopeId > 0) { "معرف المحطة غير صالح" }
         require(cashierId > 0) { "معرف المستخدم غير صالح" }
@@ -12115,13 +12124,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 netAmount = netAmount,
                 paymentMethod = paymentMethod,
                 isCredit = isCredit,
-                dueDate = if (data.has("due_date") && !data.isNull("due_date")) data.optString("due_date") else null,
+                dueDate = null,
                 cashierId = cashierId.toInt(),
                 notes = data.optString("notes", ""),
                 orderType = "product",
                 paidAmount = paidAmount,
                 manageTransaction = false
             )
+            if (isCredit) {
+                DebtDueDateRepository.applySaleSnapshot(
+                    db,saleId,stationScopeId,data.optLong("entity_id",0L),BusinessDay.currentDate()
+                )
+            }
             val pricingMetadata = JSONArray()
             prepared.forEach { item -> pricingMetadata.put(JSONObject().apply {
                 put("product_id", item.getLong("product_id"))
