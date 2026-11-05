@@ -391,10 +391,14 @@ class InventoryScreensRobolectricTest {
             assertEquals(1, cursor.getInt(0))
             assertEquals("cancelled", cursor.getString(1))
         }
-        assertEquals(1, db.rawQuery(
-            "SELECT COUNT(*) FROM inventory_movements WHERE station_id=? AND movement_type='out' AND reference_type='sale_return_reversal' AND reference_id=? AND is_deleted=0",
+        db.rawQuery(
+            "SELECT warehouse_id FROM inventory_movements WHERE station_id=? AND movement_type='out' AND reference_type='sale_return_reversal' AND reference_id=? AND is_deleted=0",
             arrayOf("1", "987654")
-        ).use { cursor -> check(cursor.moveToFirst()); cursor.getInt(0) })
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(warehouseId, cursor.getLong(0))
+            assertEquals(1, cursor.count)
+        }
         assertTrue(db.rawQuery("PRAGMA foreign_key_check", null).use { !it.moveToFirst() })
     }
 

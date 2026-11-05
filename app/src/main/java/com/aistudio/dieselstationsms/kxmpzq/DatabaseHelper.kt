@@ -17961,7 +17961,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                      FROM inventory_levels il
                      JOIN warehouses w ON w.id=il.warehouse_id
                      WHERE il.product_id=p.id AND w.station_id=p.station_id
-                       AND COALESCE(w.is_deleted,0)=0
                  ),0) <= COALESCE(p.minimum_stock,0)""",
             arrayOf(stationId.toString())
         ).use { cursor ->
@@ -27965,6 +27964,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     val quantity: Double,
                     val saleId: Long,
                     val stationId: Int,
+                    val warehouseId: Long,
                     val performedBy: Long
                 )
                 val movementWhere = if (stationId != null) {
@@ -27978,7 +27978,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     arrayOf(id.toString())
                 }
                 val movement = db.rawQuery(
-                    "SELECT product_id, quantity_change, reference_id, COALESCE(station_id, 0), COALESCE(performed_by, 0) FROM inventory_movements WHERE $movementWhere",
+                    "SELECT product_id, quantity_change, reference_id, COALESCE(station_id, 0), COALESCE(warehouse_id, 0), COALESCE(performed_by, 0) FROM inventory_movements WHERE $movementWhere",
                     movementArgs
                 ).use { cursor ->
                     if (!cursor.moveToFirst()) return 0
@@ -27987,15 +27987,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         quantity = cursor.getDouble(1),
                         saleId = cursor.getLong(2),
                         stationId = cursor.getLong(3).toInt(),
-                        performedBy = cursor.getLong(4)
+                        warehouseId = cursor.getLong(4),
+                        performedBy = cursor.getLong(5)
                     )
                 }
                 require(movement.stationId > 0) { "معرف محطة المرتجع غير صالح" }
+                require(movement.warehouseId > 0L) { "معرف مستودع المرتجع غير صالح" }
                 require(movement.performedBy > 0L) { "معرف منفذ المرتجع غير صالح" }
                 require(movement.quantity.isFinite() && movement.quantity > 0.0) { "كمية المرتجع غير صالحة" }
                 val reversal = addStockMovement(
                     JSONObject().apply {
                         put("product_id", movement.productId)
+                        put("warehouse_id", movement.warehouseId)
                         put("quantity", movement.quantity)
                         put("movement_type", "out")
                         put("reference_type", "sale_return_reversal")
