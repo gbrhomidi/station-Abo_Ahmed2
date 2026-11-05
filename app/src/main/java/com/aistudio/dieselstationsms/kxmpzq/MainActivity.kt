@@ -1,5 +1,7 @@
 package com.aistudio.dieselstationsms.kxmpzq
 
+import com.aistudio.dieselstationsms.kxmpzq.suppliers.SupplierPayablesRepository
+
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.NotificationChannel
@@ -9702,6 +9704,61 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             } catch (e: Exception) {
                 DebugLogger.logException("Party", e)
                 errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getSupplierAging(supplierId: Long, asOfDate: String = ""): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val database = db.writableDatabase
+                SupplierPayablesRepository.ensureSchema(database)
+                dataResponse(SupplierPayablesRepository.getSupplierAging(database, stationId, supplierId, asOfDate))
+            } catch (e: Exception) {
+                DebugLogger.logException("SupplierAging", e)
+                errorResponse(e.message ?: "تعذر حساب أعمار مستحقات المورد")
+            }
+        }
+
+        @JavascriptInterface
+        fun getSupplierInvoices(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val filter = JSONObject(jsonData.ifBlank { "{}" })
+                val database = db.writableDatabase
+                SupplierPayablesRepository.ensureSchema(database)
+                dataResponse(SupplierPayablesRepository.getSupplierInvoices(
+                    database, stationId, filter.optLong("supplier_id", 0L),
+                    filter.optString("from_date").takeIf { it.isNotBlank() },
+                    filter.optString("to_date").takeIf { it.isNotBlank() }
+                ))
+            } catch (e: Exception) {
+                DebugLogger.logException("SupplierInvoices", e)
+                errorResponse(e.message ?: "تعذر تحميل فواتير الموردين")
+            }
+        }
+
+        @JavascriptInterface
+        fun getSupplierPayments(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val filter = JSONObject(jsonData.ifBlank { "{}" })
+                val database = db.writableDatabase
+                SupplierPayablesRepository.ensureSchema(database)
+                dataResponse(SupplierPayablesRepository.getSupplierPayments(
+                    database, stationId, filter.optLong("supplier_id", 0L),
+                    filter.optString("from_date").takeIf { it.isNotBlank() },
+                    filter.optString("to_date").takeIf { it.isNotBlank() }
+                ))
+            } catch (e: Exception) {
+                DebugLogger.logException("SupplierPayments", e)
+                errorResponse(e.message ?: "تعذر تحميل دفعات الموردين")
             }
         }
 

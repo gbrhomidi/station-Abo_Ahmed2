@@ -1979,6 +1979,9 @@
                 let raw;
                 switch (action) {
                     case 'getSuppliers': raw = AndroidInterface.getSuppliers(); break;
+                    case 'getSupplierAging': raw = AndroidInterface.getSupplierAging(Number(p.supplier_id || 0), String(p.as_of_date || '')); break;
+                    case 'getSupplierInvoices': raw = AndroidInterface.getSupplierInvoices(JSON.stringify(p)); break;
+                    case 'getSupplierPayments': raw = AndroidInterface.getSupplierPayments(JSON.stringify(p)); break;
                     case 'getPartyById': raw = AndroidInterface.getPartyById(Number(p.id)); break;
                     case 'addSupplier': raw = AndroidInterface.addParty(JSON.stringify({ ...p, party_type: 'supplier', party_type_id: 6 })); break;
                     case 'updateSupplier': raw = AndroidInterface.updateParty(Number(p.id), JSON.stringify({ ...p, party_type: 'supplier', party_type_id: 6 })); break;
@@ -2412,15 +2415,94 @@ let pullStartY = 0,
             const to = document.getElementById('reportTo').value;
             const supplier = document.getElementById('reportSupplier').value;
             if (!from || !to) { showToast('❌ الرجاء اختيار نطاق التاريخ', 'error'); return; }
-            if (currentReportType !== 'suppliers' && currentReportType !== 'balance') {
-                showToast('⚠️ تقارير الفواتير والمشتريات والمدفوعات تحتاج جداول مشتريات غير متاحة بهذا العقد', 'warning');
+            try {
+                if (currentReportType === 'invoices' || currentReportType === 'purchases') {
+                    const response = await apiCall('getSupplierInvoices', {
+                        supplier_id: supplier ? Number(supplier) : 0,
+                        from_date: from,
+                        to_date: to
+                    });
+                    if (!response.success) throw new Error(response.message || 'تعذر تحميل فواتير الموردين');
+                    reportData = Array.isArray(response.data) ? response.data : [];
+                } else if (currentReportType === 'payments') {
+                    const response = await apiCall('getSupplierPayments', {
+                        supplier_id: supplier ? Number(supplier) : 0,
+                        from_date: from,
+                        to_date: to
+                    });
+                    if (!response.success) throw new Error(response.message || 'تعذر تحميل دفعات الموردين');
+                    reportData = Array.isArray(response.data) ? response.data : [];
+                } else {
+                    reportData = allSuppliers.filter(s => !supplier || Number(s.id) === Number(supplier));
+                }
+                renderReportResults(reportData);
+                showToast(reportData.length ? 'تم توليد التقرير مباشرة من SQLite' : 'لا توجد بيانات مطابقة للفترة المحددة', reportData.length ? 'success' : 'warning');
+            } catch (e) {
                 reportData = [];
                 renderReportResults([]);
-                return;
+                showToast(e.message || 'تعذر توليد التقرير من SQLite', 'error');
             }
-            reportData = allSuppliers.filter(s => !supplier || Number(s.id) === Number(supplier));
-            renderReportResults(reportData);
-            showToast(reportData.length ? '✅ تم توليد تقرير الموردين من SQLite' : '⚠️ لا توجد بيانات مطابقة', reportData.length ? 'success' : 'warning');
+        }
+
+        async function openSupplierAging(supplierId) {
+            const modal = document.getElementById('supplierAgingModal');
+            const summary = document.getElementById('supplierAgingSummary');
+            const invoicesHost = document.getElementById('supplierAgingInvoices');
+            const supplier = allSuppliers.find(item => Number(item.id) === Number(supplierId));
+            if (!modal || !summary || !invoicesHost) return;
+            const supplierName = supplier ? getField(supplier, 'commercial_name_ar', 'commercial_name', 'name') : ('#' + supplierId);
+            document.getElementById('supplierAgingTitle').textContent = 'كشف أعمار مستحقات المورد — ' + supplierName;
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            summary.innerHTML = '<div class="skeleton-row">جارٍ تحميل الأعمار...</div>';
+            invoicesHost.innerHTML = '';
+            try {
+                const [agingResponse, invoiceResponse] = await Promise.all([
+                    apiCall('getSupplierAging', { supplier_id: Number(supplierId) }),
+                    apiCall('getSupplierInvoices', { supplier_id: Number(supplierId) })
+                ]);
+                if (!agingResponse.success) throw new Error(agingResponse.message || 'تعذر حساب أعمار المورد');
+                if (!invoiceResponse.success) throw new Error(invoiceResponse.message || 'تعذر تحميل فواتير المورد');
+                const aging = agingResponse.data || agingResponse;
+                const invoices = Array.isArray(invoiceResponse.data) ? invoiceResponse.data : [];
+                const totals = Array.isArray(aging.currency_totals) ? aging.currency_totals : [];
+                summary.innerHTML = totals.length ? totals.map(item => {
+                    const currency = item.currency_id ? ('عملة #' + item.currency_id) : 'العملة الافتراضية';
+                    return [
+                        ['الرصيد القائم', item.open_balance],
+                        ['المستحق اليوم', item.due_today_amount],
+                        ['المتأخر', item.overdue_amount],
+                        ['غير محدد الاستحقاق', item.undated_amount]
+                    ].map(pair => '<div style="border:1px solid var(--border-color);border-radius:12px;padding:10px;">' +
+                        '<div style="font-size:.72rem;color:var(--text-muted);">' + escapeHtml(pair[0] + ' — ' + currency) + '</div>' +
+                        '<strong style="font-size:1rem;">' + formatCurrency(pair[1] || 0) + '</strong></div>').join('');
+                }).join('') : '<div class="empty-state">لا توجد فواتير مورد مفتوحة</div>';
+                if (!invoices.length) {
+                    invoicesHost.innerHTML = '<div class="empty-state">لا توجد فواتير مسجلة لهذا المورد.</div>';
+                    return;
+                }
+                const rows = invoices.map((item, index) => '<tr>' +
+                    '<td>' + (index + 1) + '</td>' +
+                    '<td>' + escapeHtml(item.invoice_number || '—') + '</td>' +
+                    '<td>' + escapeHtml(item.invoice_date || '—') + '</td>' +
+                    '<td>' + escapeHtml(item.due_date || 'غير محدد') + '</td>' +
+                    '<td>' + escapeHtml(item.maturity_status || item.status || '—') + '</td>' +
+                    '<td>' + formatCurrency(item.total_amount || 0) + '</td>' +
+                    '<td>' + formatCurrency(item.paid_amount || 0) + '</td>' +
+                    '<td>' + formatCurrency(item.remaining_amount || 0) + '</td></tr>').join('');
+                invoicesHost.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:.82rem;">' +
+                    '<thead><tr>' + ['#','رقم الفاتورة','التاريخ','الاستحقاق','الحالة','الإجمالي','المسدد','المتبقي'].map(x=>'<th style="padding:9px;text-align:right;border-bottom:1px solid var(--border-color);">'+x+'</th>').join('') +
+                    '</tr></thead><tbody>' + rows + '</tbody></table>';
+            } catch (e) {
+                summary.innerHTML = '';
+                invoicesHost.innerHTML = '<div class="empty-state">' + escapeHtml(e.message || 'تعذر تحميل كشف المورد') + '</div>';
+            }
+        }
+
+        function closeSupplierAging() {
+            const modal = document.getElementById('supplierAgingModal');
+            if (modal) modal.style.display = 'none';
+            document.body.style.overflow = '';
         }
 
         function renderReportResults(data) {
@@ -2448,7 +2530,7 @@ let pullStartY = 0,
                         getField(item, 'product_name', 'product') || '---',
                         (parseFloat(getField(item, 'quantity')) || 0).toLocaleString('en'),
                         formatCurrency(getField(item, 'amount', 'value') || 0),
-                        getField(item, 'date', 'created_at') || '---'
+                        getField(item, 'invoice_date', 'date', 'created_at') || '---'
                     ]);
                     break;
                 case 'payments':
@@ -2480,8 +2562,8 @@ let pullStartY = 0,
                         getField(item, 'invoice_number', 'number') || '---',
                         getField(item, 'supplier_name', 'supplier') || '---',
                         formatCurrency(getField(item, 'amount') || 0),
-                        getField(item, 'date', 'created_at') || '---',
-                        getField(item, 'status') || '---'
+                        getField(item, 'invoice_date', 'date', 'created_at') || '---',
+                        getField(item, 'maturity_status', 'status') || '---'
                     ]);
                     break;
                 case 'balance':
@@ -2710,6 +2792,9 @@ let pullStartY = 0,
                             <div class="card-actions">
                                 <button class="card-btn" onclick="event.stopPropagation(); viewDetails(${id})">
                                     <i class="fas fa-eye"></i> تفاصيل
+                                </button>
+                                <button class="card-btn" onclick="event.stopPropagation(); openSupplierAging(${id})">
+                                    <i class="fas fa-chart-line"></i> كشف الأعمار
                                 </button>
                                 <button class="card-btn" onclick="event.stopPropagation(); editSupplier(${id})">
                                     <i class="fas fa-edit"></i> تعديل
@@ -3504,5 +3589,17 @@ let pullStartY = 0,
     <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
 
     <script src="file:///android_asset/assets-local/js/export-runtime.js"></script>
+
+<div id="supplierAgingModal" style="display:none;position:fixed;inset:0;z-index:4000;background:rgba(5,18,15,.72);padding:18px;overflow:auto;align-items:center;justify-content:center;">
+  <div style="width:min(960px,100%);max-height:92vh;overflow:auto;background:var(--card-bg,#fff);color:var(--text-color,#16231f);border-radius:18px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+      <h2 id="supplierAgingTitle" style="margin:0;font-size:1.1rem;">كشف أعمار مستحقات المورد</h2>
+      <button class="card-btn" type="button" onclick="closeSupplierAging()">إغلاق ✕</button>
+    </div>
+    <div id="supplierAgingSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px;"></div>
+    <div id="supplierAgingInvoices" style="overflow:auto;"></div>
+  </div>
+</div>
+
 </body>
 </html>

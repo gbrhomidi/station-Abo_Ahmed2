@@ -274,16 +274,6 @@ object SupplierPayablesRepository {
             if(remainingPayment<=EPSILON) return@forEach
             val part=min(remainingPayment,invoice.remaining)
             if(part<=EPSILON) return@forEach
-            val invoiceRows=db.update(
-                "supplier_invoices",
-                ContentValues().apply {
-                    val newPaid=(invoice.remaining.let { invoice.remaining } - invoice.remaining).coerceAtLeast(0.0)
-                    put("paid_amount",newPaid)
-                },
-                "id=? AND station_id=? AND supplier_id=? AND is_deleted=0",
-                arrayOf(invoice.id.toString(),stationId.toString(),supplierId.toString())
-            )
-            require(invoiceRows==1) { "تعذر تحديث فاتورة المورد أثناء التخصيص" }
             db.insertOrThrow("supplier_invoice_allocations",null,ContentValues().apply {
                 put("uuid",UUID.randomUUID().toString());put("station_id",stationId);put("supplier_id",supplierId)
                 put("supplier_invoice_id",invoice.id);put("payment_id",paymentId)
@@ -366,12 +356,22 @@ object SupplierPayablesRepository {
                 val due=c.getString(6).orEmpty().take(10)
                 val source=c.getString(7).orEmpty()
                 val trusted=source=="purchase_creation"
+                val today=LocalDate.parse(BusinessDay.currentDate())
+                val dueDate=if(trusted) parseDate(due) else null
+                val maturityStatus=when {
+                    c.getDouble(13)<=EPSILON -> "paid"
+                    dueDate==null -> "undated"
+                    dueDate.isBefore(today) -> "overdue"
+                    dueDate.isEqual(today) -> "due_today"
+                    else -> "not_due"
+                }
                 rows.put(JSONObject().apply {
                     put("id",c.getLong(0));put("supplier_id",c.getLong(1));put("source_type",c.getString(2))
                     put("source_id",c.getLong(3));put("invoice_number",c.getString(4))
                     put("invoice_date",c.getString(5).orEmpty().take(10))
                     put("due_date",if(trusted) due else "")
                     put("due_date_source",source)
+                    put("maturity_status",maturityStatus)
                     put("payment_terms",c.getString(8).orEmpty())
                     put("payment_terms_days",if(c.isNull(9)) JSONObject.NULL else c.getInt(9))
                     put("currency_id",if(c.isNull(10)) JSONObject.NULL else c.getLong(10))

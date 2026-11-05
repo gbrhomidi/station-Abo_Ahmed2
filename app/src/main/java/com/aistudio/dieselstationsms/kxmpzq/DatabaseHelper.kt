@@ -1,5 +1,7 @@
 package com.aistudio.dieselstationsms.kxmpzq
 
+import com.aistudio.dieselstationsms.kxmpzq.suppliers.SupplierPayablesRepository
+
 import com.aistudio.dieselstationsms.kxmpzq.sms.DebtDueDateRepository
 import android.content.ContentValues
 import android.content.Context
@@ -12553,10 +12555,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         db, stationScopeId, userId, "purchase", "product_purchase", id, movementCode,
                         "قيد شراء منتجات $movementCode", inventoryAccount, creditAccount, totalCost
                     )
+                    val supplierInvoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+                        db, stationScopeId, supplierId, "product_purchase", id,
+                        data.optString("invoice_number", "").trim().ifBlank { movementCode },
+                        totalCost,
+                        data.optString("invoice_date", BusinessDay.currentDate()),
+                        data.optLong("currency_id", 0L).takeIf { it > 0L },
+                        userId
+                    )
                     if (purchasePaymentMethod == "cash") {
-                        insertSupplierCashPayment(
+                        val supplierPaymentId = insertSupplierCashPayment(
                             db, stationScopeId, supplierId, purchaseCashBoxId, totalCost,
-                            "product", id, journalId, userId, "سداد شراء منتجات نقداً $movementCode"
+                            "product", id, journalId, userId, "سداد شراء منتجات نقداً $movementCode",
+                            data.optLong("currency_id", 0L).takeIf { it > 0L }
+                        )
+                        SupplierPayablesRepository.allocatePayment(
+                            db, stationScopeId, supplierId, supplierPaymentId, totalCost, userId, supplierInvoiceId
                         )
                     }
                     completeFinancialIdempotency(db, "product_purchase", stationScopeId, purchaseIdempotencyKey, id)
@@ -19793,7 +19807,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(supplierId > 0L && stationScopeId > 0) { "معرف المورد والمحطة مطلوبان" }
         dbLock.lock()
         return try {
-            val db = readableDatabase
+            val db = writableDatabase
+            SupplierPayablesRepository.ensureSchema(db)
             db.rawQuery(
                 """SELECT p.id, p.current_balance, p.total_due, p.credit_limit,
                           COALESCE(pt.type_code,'') AS party_type
@@ -19813,6 +19828,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("total_due", cursor.getDouble(cursor.getColumnIndexOrThrow("total_due")))
                     put("credit_limit", cursor.getDouble(cursor.getColumnIndexOrThrow("credit_limit")))
                     put("party_type", cursor.getString(cursor.getColumnIndexOrThrow("party_type")))
+                    put("invoice_aging", SupplierPayablesRepository.getSupplierAging(db, stationScopeId, supplierId))
                 }
             }
         } finally {
@@ -20045,10 +20061,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     db, stationScopeId, actorId, "purchase", "fuel_supply", refillId, refillCode,
                     "قيد توريد الوقود $refillCode", inventoryAccount, creditAccount, netAmount
                 )
+                val supplierInvoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+                    db, stationScopeId, supplierId, "fuel_refill", refillId,
+                    data.optString("invoice_number", "").trim().ifBlank { refillCode },
+                    netAmount,
+                    data.optString("invoice_date", data.optString("order_date", BusinessDay.currentDate())),
+                    data.optLong("currency_id", 0L).takeIf { it > 0L },
+                    actorId
+                )
                 if (paymentMethod == "cash") {
-                    insertSupplierCashPayment(
+                    val supplierPaymentId = insertSupplierCashPayment(
                         db, stationScopeId, supplierId, cashBoxId, netAmount,
-                        "fuel", refillId, supplyJournalId, actorId, "سداد توريد وقود نقداً $refillCode"
+                        "fuel", refillId, supplyJournalId, actorId, "سداد توريد وقود نقداً $refillCode",
+                        data.optLong("currency_id", 0L).takeIf { it > 0L }
+                    )
+                    SupplierPayablesRepository.allocatePayment(
+                        db, stationScopeId, supplierId, supplierPaymentId, netAmount, actorId, supplierInvoiceId
                     )
                 }
 
@@ -22876,7 +22904,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         sourceId: Long,
         journalId: Long,
         actorId: Long,
-        description: String
+        description: String,
+        currencyId: Long? = null
     ): Long {
         val code = "SP-${sourceType.take(5).uppercase(Locale.ROOT)}-$sourceId-${UUID.randomUUID().toString().take(6)}"
         return db.insertOrThrow("payments", null, ContentValues().apply {
@@ -22888,6 +22917,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             put("payment_type", "cash")
             put("payment_method", "cash")
             put("amount", amount)
+            if (currencyId != null && currencyId > 0L) put("currency_id", currencyId)
             put("cash_box_id", cashBoxId)
             put("status", "completed")
             put("operator", actorId.toString())
@@ -23748,6 +23778,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("payment_code", paymentCode)
                     put("station_id", stationScopeId)
                     put("amount", amount)
+                    if (data.has("currency_id") && !data.isNull("currency_id")) put("currency_id", data.optLong("currency_id"))
                     if (customerId > 0) put("customer_party_id", customerId)
                     if (supplierId > 0) put("supplier_party_id", supplierId)
                     put("payment_type", data.optString("payment_type", "cash"))
@@ -23819,6 +23850,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("created_at", getCurrentDateTime())
                         put("created_by", actorId)
                     })
+                    SupplierPayablesRepository.allocatePayment(
+                        db, stationScopeId, supplierId, id, amount, actorId,
+                        data.optLong("supplier_invoice_id", 0L)
+                    )
                 }
                 db.setTransactionSuccessful()
                 id
