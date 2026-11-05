@@ -257,27 +257,37 @@ object SupplierPayablesRepository {
         }
         require(abs(payment.getDouble("amount")-amount)<=0.01) { "مبلغ التخصيص لا يطابق مبلغ الدفعة" }
 
+        data class ExistingAllocation(val exists: Boolean, val amount: Double)
+
         val existing = db.rawQuery(
             """SELECT COUNT(*),COALESCE(SUM(amount),0)
                FROM supplier_invoice_allocations
                WHERE payment_id=? AND station_id=? AND status='posted' AND is_deleted=0""",
             arrayOf(paymentId.toString(),stationId.toString())
-        ).use { c -> c.moveToFirst(); c.getInt(0)>0 to c.getDouble(1) }
-        if (existing.first) {
-            require(abs(existing.second-amount)<=0.01) {
+        ).use { c ->
+            require(c.moveToFirst()) { "تعذر قراءة تخصيصات دفعة المورد" }
+            ExistingAllocation(
+                exists = c.getInt(0) > 0,
+                amount = c.getDouble(1)
+            )
+        }
+        if (existing.exists) {
+            require(abs(existing.amount-amount)<=0.01) {
                 "تم تخصيص الدفعة مسبقاً بمبلغ يختلف عن مبلغ الدفعة"
             }
             return JSONObject().apply {
                 put("success",true);put("idempotent",true)
-                put("allocated_amount",existing.second)
-                put("unapplied_amount",(amount-existing.second).coerceAtLeast(0.0))
+                put("allocated_amount",existing.amount)
+                put("unapplied_amount",(amount-existing.amount).coerceAtLeast(0.0))
             }
         }
 
         data class Candidate(val id:Long,val remaining:Double)
         val candidates=mutableListOf<Candidate>()
-        val currencyClause=" AND COALESCE(currency_id,0)=?"
-        val currencyArgs=arrayListOf(stationId.toString(),supplierId.toString(),payment.getLong("currency_id").toString())
+        val paymentCurrencyId=payment.getLong("currency_id")
+        val currencyClause=if(paymentCurrencyId>0L) " AND currency_id=?" else " AND (currency_id IS NULL OR currency_id=0)"
+        val currencyArgs=arrayListOf(stationId.toString(),supplierId.toString())
+        if(paymentCurrencyId>0L) currencyArgs.add(paymentCurrencyId.toString())
         val invoiceFilter=if(explicitInvoiceId>0L) " AND id=?" else ""
         if(explicitInvoiceId>0L) currencyArgs.add(explicitInvoiceId.toString())
         currencyArgs.add(EPSILON.toString())
@@ -307,7 +317,8 @@ object SupplierPayablesRepository {
             db.insertOrThrow("supplier_invoice_allocations",null,ContentValues().apply {
                 put("uuid",UUID.randomUUID().toString());put("station_id",stationId);put("supplier_id",supplierId)
                 put("supplier_invoice_id",invoice.id);put("payment_id",paymentId)
-                put("allocation_kind","invoice");put("amount",part);put("currency_id",payment.getLong("currency_id"))
+                put("allocation_kind","invoice");put("amount",part)
+                if(paymentCurrencyId>0L) put("currency_id",paymentCurrencyId) else putNull("currency_id")
                 put("status","posted");put("allocated_at",BusinessDay.currentDate());put("created_by",actorId)
             })
             val updated=db.rawQuery(
@@ -343,7 +354,7 @@ object SupplierPayablesRepository {
                 put("uuid",UUID.randomUUID().toString());put("station_id",stationId);put("supplier_id",supplierId)
                 putNull("supplier_invoice_id");put("payment_id",paymentId)
                 put("allocation_kind","unapplied_legacy");put("amount",remainingPayment)
-                put("currency_id",payment.getLong("currency_id"))
+                if(paymentCurrencyId>0L) put("currency_id",paymentCurrencyId) else putNull("currency_id")
                 put("notes","دفعة غير موزعة على فاتورة مسجلة؛ تخصم من رصيد المورد التاريخي")
                 put("status","posted");put("allocated_at",BusinessDay.currentDate());put("created_by",actorId)
             })
