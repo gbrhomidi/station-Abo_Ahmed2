@@ -31,5 +31,13 @@ $('refresh').addEventListener('click',load);load();
 })();
 </script>
 
+<script>
+// Source fields are preserved when an exception is opened from the list.
+function openExceptionSource(row) {
+  var source_table = row && row.source_table;
+  return openReportSourceDrilldown(source_table, row || {}, reportDrilldownFilters());
+}
+</script>
+    <script src="file:///android_asset/assets-local/js/report-drilldown.js"></script>
     <script src="file:///android_asset/assets-local/js/export-runtime.js"></script>
 </body></html>

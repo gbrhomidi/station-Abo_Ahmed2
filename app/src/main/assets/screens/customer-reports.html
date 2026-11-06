@@ -2450,7 +2450,7 @@
                 const status = finiteNumber(c.is_active, 1) === 1 ? 'active' : 'inactive';
                 const balance = finiteNumber(c.current_balance);
                 const totalDue = finiteNumber(c.total_due);
-                const invoiceRows = invoices.slice(0, 50).map(invoice => `
+                const invoiceRows = invoices.map(invoice => `
                     <tr><td>${escapeHtml(invoice.invoice_number || invoice.sale_code || '---')}</td><td>${escapeHtml(String(invoice.created_at || '').slice(0, 10) || '---')}</td><td class="amount">${formatCurrency(invoice.net_amount)}</td><td class="amount">${formatCurrency(invoice.remaining_amount)}</td><td>${escapeHtml(invoice.payment_status || '---')}</td></tr>
                 `).join('');
 	                const name = c.commercial_name || c.commercial_name_ar || 'عميل';

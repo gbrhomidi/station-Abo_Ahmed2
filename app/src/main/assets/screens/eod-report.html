@@ -3137,7 +3137,7 @@
                         '<th style="width:13%;">الدفع</th>' +
                     '</tr></thead>' +
                     '<tbody>' +
-                        rows.slice(0, 200).map(function (s) {
+                        rows.map(function (s) {
                             return '' +
                                 '<tr>' +
                                     '<td>' + escapeHtml(s.invoice_number || s.sale_code || '—') + '</td>' +

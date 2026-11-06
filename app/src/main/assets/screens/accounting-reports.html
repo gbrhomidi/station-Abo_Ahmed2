@@ -1861,7 +1861,7 @@ function renderDataTable(rows) {
     });
 
     var header = '<thead><tr>' + keys.map(function (k) { return '<th>' + esc(k) + '</th>'; }).join('') + '</tr></thead>';
-    var body = '<tbody>' + rows.slice(0, 500).map(function (r) {
+    var body = '<tbody>' + rows.map(function (r) {
         return '<tr>' + keys.map(function (k) {
             var v = r[k];
             if (v === null || v === undefined) return '<td>—</td>';
@@ -2005,7 +2005,7 @@ function renderReportRows(rows, container) {
 
     // For balance sheet, do NOT hide side content; show all keys
     var header = '<thead><tr>' + keys.map(function (k) { return '<th>' + esc(k) + '</th>'; }).join('') + '</tr></thead>';
-    var body = '<tbody>' + rows.slice(0, 500).map(function (r) {
+    var body = '<tbody>' + rows.map(function (r) {
         return '<tr>' + keys.map(function (k) {
             var v = r[k];
             if (v === null || v === undefined) return '<td>—</td>';
@@ -2706,7 +2706,7 @@ function selectedDates(){const f=$('eacFrom').value,t=$('eacTo').value;if(f&&t&&
 function runReport(){const action=$('eacAction').value;let result;switch(action){case 'profit_loss':{const b=window.AndroidInterface;if(!b||typeof b.getProfitReport!=='function')throw new Error('واجهة قائمة الدخل غير متاحة');const d=selectedDates();result=parse(b.getProfitReport(d.from_date,d.to_date));break}
 case 'supplier_aging':result=callExpanded(action,{as_of_date:$('eacAsOf').value||today});break;
 case 'supplier_statement':{const id=Number($('eacSupplierId').value);if(!id)throw new Error('حدد المورد أولاً');const d=selectedDates();result=callExpanded(action,{supplier_id:id,...d});break}
-case 'purchase_invoice_list':case 'purchase_return_list':case 'bank_statement_batches':result=callExpanded(action,action==='bank_statement_batches'?{limit:100}:selectedDates());break;
+case 'purchase_invoice_list':case 'purchase_return_list':case 'bank_statement_batches':result=callExpanded(action,selectedDates());break;
 case 'cash_flow_statement':case 'equity_changes':case 'vat_return':result=callExpanded(action,selectedDates());break;
 default:throw new Error('وظيفة التقرير غير معروفة')}
 lastReport=result;$('eacSummary').innerHTML=summary(result);renderResult('eacRows',result);$('eacRaw').textContent=JSON.stringify(result,null,2);reportMessage('eacReportMessage',result.message||'تم تحميل البيانات من SQLite.',false);return result}
@@ -2803,6 +2803,7 @@ try{renderFiscalPeriods()}catch(e){reportMessage('eacFiscalPeriodMessage',e.mess
 })();
 </script>
 
+    <script src="file:///android_asset/assets-local/js/report-drilldown.js"></script>
     <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
 
     <script src="file:///android_asset/assets-local/js/export-runtime.js"></script>

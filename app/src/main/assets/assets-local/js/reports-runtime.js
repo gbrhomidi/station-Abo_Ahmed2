@@ -184,12 +184,43 @@
         if (message) target.querySelector('span').textContent = message;
     }
 
+    // All report screens use the same filter envelope. Pagination is an
+    // explicit opt-in for a screen that has a page control; otherwise the
+    // bridge receives return_all=true and the UI does not silently truncate
+    // the verified SQLite dataset.
+    function normalizeReportFilters(input) {
+        const source = input && typeof input === 'object' ? input : {};
+        const out = Object.assign({}, source);
+        out.from_date = String(source.from_date || source.start_date || '').trim();
+        out.to_date = String(source.to_date || source.end_date || '').trim();
+        out.search = String(source.search || '').trim();
+        out.return_all = source.return_all !== false;
+        if (source.limit !== undefined && source.limit !== null && String(source.limit).trim() !== '') {
+            const limit = Number(source.limit);
+            if (Number.isFinite(limit) && limit > 0) out.limit = Math.floor(limit);
+        } else if (out.return_all) {
+            delete out.limit;
+            delete out.offset;
+        }
+        return out;
+    }
+
+    function validateReportFilters(input) {
+        const filters = normalizeReportFilters(input);
+        if (filters.from_date && !/^\d{4}-\d{2}-\d{2}$/.test(filters.from_date)) return false;
+        if (filters.to_date && !/^\d{4}-\d{2}-\d{2}$/.test(filters.to_date)) return false;
+        if (filters.from_date && filters.to_date && filters.from_date > filters.to_date) return false;
+        return true;
+    }
+
     global.ReportsRuntime = Object.freeze({
         parseBridgeValue,
         unwrap,
         getStatus,
         renderStatus,
         setState,
+        normalizeReportFilters,
+        validateReportFilters,
         captureContext: function (overrides) {
             return global.ReportContextPersistence ? global.ReportContextPersistence.capture(overrides) : null;
         },

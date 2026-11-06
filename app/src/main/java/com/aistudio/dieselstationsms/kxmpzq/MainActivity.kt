@@ -8264,6 +8264,32 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun getReportSourceDrilldown(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                dataResponse(db.getReportSourceDrilldown(JSONObject(jsonData.ifBlank { "{}" }), stationId))
+            } catch (e: Exception) {
+                DebugLogger.logException("Reports", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getReportExceptions(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                dataResponse(db.getReportExceptions(JSONObject(jsonData.ifBlank { "{}" }), stationId))
+            } catch (e: Exception) {
+                DebugLogger.logException("Reports", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
         fun getProfitReport(fromDate: String?, toDate: String?): String {
             DebugLogger.info("WebAppInterface", "getProfitReport called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")

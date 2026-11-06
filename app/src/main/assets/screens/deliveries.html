@@ -5544,7 +5544,11 @@
                 'info'
             );
 
-            const response = await invoke('getDeliverySaleContext', [saleId]);
+            const querySaleId = saleId;
+            const response = await invoke(
+                'getDeliverySaleContext',
+                [querySaleId]
+            );
 
             const payload = dataOf(response) || response;
 
@@ -5563,8 +5567,8 @@
 
             $('saleContextHelp').style.display = 'block';
             setDeliveryFeeInput(sale.delivery_service_fee ?? sale.service_fee ?? 0);
-            $('f_delivery_fee_mode').value = String(sale.delivery_fee_mode || 'exempt');
-            $('f_location').value = String(sale.delivery_location ?? sale.location ?? '');
+            $('f_delivery_fee_mode').value = sale.delivery_fee_mode || 'exempt';
+            $('f_location').value = String(sale.delivery_location || sale.location || '');
             $('f_cash_customer_name').value = String(sale.cash_customer_name || '');
 
             showLatestSale(sale);

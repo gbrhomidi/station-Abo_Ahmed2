@@ -10670,8 +10670,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getSalesLedgerPage(data: JSONObject, stationScopeId: Int): JSONObject {
         require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val returnAll = data.optBoolean("return_all", false)
         val requestedLimit = data.optInt("limit", 100)
-        val limit = if (requestedLimit > 0) requestedLimit.coerceIn(1, 5000) else 0
+        val limit = if (returnAll) 0 else if (requestedLimit > 0) requestedLimit.coerceIn(1, 5000) else 0
         val offset = data.optInt("offset", 0).coerceAtLeast(0)
         val kind = data.optString("sale_type", data.optString("type", "all")).trim().lowercase()
         require(kind in setOf("all","fuel","product")) { "نوع المبيعات غير صالح" }
@@ -10726,7 +10727,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val boundedSql = if (limit > 0) rowSql + " LIMIT ? OFFSET ?" else rowSql
         if (limit > 0) { pageArgs += limit.toString(); pageArgs += offset.toString() }
         val rows=readableDatabase.rawQuery(boundedSql,pageArgs.toTypedArray()).use{cursorToJsonArray(it)}
-        return module008Page(rows,total,limit,offset)
+        return if (returnAll) JSONObject().apply {
+            put("rows", rows); put("count", rows.length()); put("total_count", total)
+            put("page", 1); put("page_size", rows.length()); put("total_pages", if (rows.length() > 0) 1 else 0)
+            put("has_next", false); put("has_previous", false); put("return_all", true)
+        } else module008Page(rows,total,limit,offset)
     }
 
     fun getSalesTransactions(stationId: Int, limit: Int = 200, offset: Int = 0): JSONArray {
@@ -13898,6 +13903,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = readableDatabase
             require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            val returnAll = data.optBoolean("return_all", false)
             val reportType = data.optString("report_type", "summary").ifBlank { "summary" }
             val warehouseId = data.optLong("warehouse_id", 0L)
             val categoryId = data.optLong("category_id", 0L)
@@ -13912,7 +13918,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val categoryTotals = linkedMapOf<String, Double>()
             val movementSeries = JSONArray()
             val requestedPageSize = data.optInt("limit", 200)
-            val pageSize = if (requestedPageSize > 0) requestedPageSize.coerceIn(1, 5000) else 0
+            val pageSize = if (returnAll) 0 else if (requestedPageSize > 0) requestedPageSize.coerceIn(1, 5000) else 0
             val offset = data.optInt("offset", 0).coerceAtLeast(0)
             var totalCount = 0
             var aggregateLoaded = false
@@ -13954,9 +13960,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     ORDER BY datetime(im.created_at) DESC, im.id DESC
                 """.trimIndent()
                 val pageArgs = args.toMutableList()
-                val boundedSql = if (pageSize > 0) sql + " LIMIT ? OFFSET ?" else sql
-                if (pageSize > 0) { pageArgs.add(pageSize.toString()); pageArgs.add(offset.toString()) }
-                db.rawQuery(boundedSql, pageArgs.toTypedArray()).use { cursor ->
+                val rowsSql = if (returnAll) sql else "$sql LIMIT ? OFFSET ?"
+                if (!returnAll) { pageArgs.add(pageSize.toString()); pageArgs.add(offset.toString()) }
+                db.rawQuery(rowsSql, pageArgs.toTypedArray()).use { cursor ->
                     while (cursor.moveToNext()) rows.put(cursorToJsonObject(cursor))
                 }
                 db.rawQuery(
@@ -14021,9 +14027,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     ORDER BY $sortColumn $sortDirection, p.id ASC
                 """.trimIndent()
                 val pageArgs = args.toMutableList()
-                val boundedSql = if (pageSize > 0) sql + " LIMIT ? OFFSET ?" else sql
-                if (pageSize > 0) { pageArgs.add(pageSize.toString()); pageArgs.add(offset.toString()) }
-                db.rawQuery(boundedSql, pageArgs.toTypedArray()).use { cursor ->
+                val rowsSql = if (returnAll) sql else "$sql LIMIT ? OFFSET ?"
+                if (!returnAll) { pageArgs.add(pageSize.toString()); pageArgs.add(offset.toString()) }
+                db.rawQuery(rowsSql, pageArgs.toTypedArray()).use { cursor ->
                     while (cursor.moveToNext()) {
                         val item = cursorToJsonObject(cursor)
                         val itemStatus = item.optString("status", "active")
@@ -16862,6 +16868,67 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      * يعيد مجموعة المصدر نفسها التي تعتمد عليها أرقام التقرير، مع أدلة قابلة
      * لإعادة المطابقة. لا يخزن النتائج ولا يستبدل SQLite بمصدر مؤقت.
      */
+    /**
+     * Canonical source drill-down used by every report screen. The caller may
+     * provide the report filters, but the row identity and station scope are
+     * always verified against SQLite here.
+     */
+    private fun sourceDrilldownCanonicalInternal(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب لتتبع مصدر التقرير" }
+        val source = data.optString("source_table").trim().lowercase(Locale.ROOT)
+        val sourceId = data.optLong("source_id", data.optLong("id", 0L))
+        require(sourceId > 0L) { "معرف المصدر مطلوب" }
+        val table = when (source) {
+            "inventory", "inventory_movements" -> "inventory_movements"
+            "fuel", "fuel_sales" -> "fuel_sales"
+            "accounting", "journal_entries" -> "journal_entries"
+            "exception", "exceptions" -> "audit_logs"
+            "sales", "sales_transactions" -> "sales_transactions"
+            "tank_refills" -> "tank_refills"
+            else -> throw IllegalArgumentException("source_table غير مدعوم: $source")
+        }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val idColumn = if (table == "fuel_sales") "sale_id" else "id"
+            val stationColumn = if (table == "audit_logs") "station_id" else "station_id"
+            val row = db.rawQuery(
+                "SELECT * FROM $table WHERE $idColumn=? AND $stationColumn=? AND " +
+                    if (table == "audit_logs") "COALESCE(is_deleted,0)=0" else "COALESCE(is_deleted,0)=0",
+                arrayOf(sourceId.toString(), stationScopeId.toString())
+            ).use { cursor -> if (cursor.moveToFirst()) cursorToJsonObject(cursor) else null }
+            JSONObject().apply {
+                put("contract_version", 1)
+                put("source_table", table)
+                put("source_id", sourceId)
+                put("station_id", stationScopeId)
+                put("found", row != null)
+                put("row", row ?: JSONObject.NULL)
+                put("same_report_filters", data.optJSONObject("filters") ?: JSONObject())
+            }
+        } finally { dbLock.unlock() }
+    }
+
+    private fun reportExceptionsInternal(data: JSONObject = JSONObject(), stationScopeId: Int): JSONArray {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب لاستثناءات التقرير" }
+        val from = data.optString("from_date", data.optString("start_date", "1900-01-01"))
+        val to = data.optString("to_date", data.optString("end_date", "2999-12-31"))
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                """SELECT id, 'sales_transactions' AS source_table, id AS source_id,
+                          station_id, status, business_day, net_amount
+                   FROM sales_transactions
+                   WHERE station_id=? AND is_deleted=0
+                     AND business_day BETWEEN date(?) AND date(?)
+                     AND (ABS(COALESCE(net_amount,0)-COALESCE(paid_amount,0)-COALESCE(remaining_amount,0))>0.01
+                          OR status IN ('refunded','reversed'))
+                   ORDER BY business_day, id""".trimIndent(),
+                arrayOf(stationScopeId.toString(), from, to)
+            ).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
     fun getReportEvidence(data: JSONObject, stationScopeId: Int): JSONObject {
         require(stationScopeId > 0) { "معرف المحطة مطلوب للتحقق من مصدر التقرير" }
         val reportType = data.optString("report_type", "sales").trim().lowercase(Locale.ROOT)
@@ -28504,12 +28571,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val predicates = mutableListOf("s.remaining_amount > 0", "s.is_deleted = 0")
             val args = mutableListOf<String>()
+            // Keep the legacy bridge on the same provenance policy as
+            // DebtDueDateRepository. A created_at fallback silently changes a
+            // maturity-date filter into an invoice-date filter.
+            predicates += "s.due_date IS NOT NULL AND TRIM(s.due_date) <> '' AND COALESCE(s.due_date_source, '') IN ('sale_creation', 'sales_trigger_v3', 'legacy_rebuilt_snapshot')"
             if (!fromDate.isNullOrBlank()) {
-                predicates += "date(COALESCE(s.due_date, s.created_at)) >= date(?)"
+                predicates += "date(s.due_date) >= date(?)"
                 args += fromDate
             }
             if (!toDate.isNullOrBlank()) {
-                predicates += "date(COALESCE(s.due_date, s.created_at)) <= date(?)"
+                predicates += "date(s.due_date) <= date(?)"
                 args += toDate
             }
             if (stationScopeId != null) {
@@ -28543,7 +28614,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val predicates = mutableListOf(
                 "s.customer_party_id = ?",
                 "s.remaining_amount > 0",
-                "s.is_deleted = 0"
+                "s.is_deleted = 0",
+                "s.due_date IS NOT NULL AND TRIM(s.due_date) <> ''",
+                "COALESCE(s.due_date_source, '') IN ('sale_creation', 'sales_trigger_v3', 'legacy_rebuilt_snapshot')"
             )
             val args = mutableListOf(partyId.toString())
             if (stationScopeId != null) {
@@ -30550,8 +30623,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = readableDatabase
+            val returnAll = params.optBoolean("return_all", false)
             val requestedLimit = params.optInt("limit", 20)
-            val limit = if (requestedLimit > 0) requestedLimit.coerceIn(1, 1000) else 0
+            val limit = if (returnAll) 0 else if (requestedLimit > 0) requestedLimit.coerceIn(1, 1000) else 0
             val offset = params.optInt("offset", 0).coerceAtLeast(0)
             val where = StringBuilder("WHERE je.station_id = ? AND je.is_deleted = 0")
             val args = mutableListOf(stationScopeId.toString())
@@ -30585,7 +30659,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("draft", db.rawQuery("SELECT COUNT(*) FROM journal_entries WHERE station_id = ? AND is_deleted = 0 AND status = 'draft'", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 })
                 put("total_value", db.rawQuery("SELECT COALESCE(SUM(total_debit), 0) FROM journal_entries WHERE station_id = ? AND is_deleted = 0", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 })
             }
-            JSONObject().apply { put("entries", rows); put("total", count); put("stats", stats) }
+            if (returnAll) JSONObject().apply {
+                put("entries", rows); put("rows", rows); put("total", count); put("total_count", count)
+                put("stats", stats); put("return_all", true)
+            } else JSONObject().apply { put("entries", rows); put("total", count); put("stats", stats) }
         } finally { dbLock.unlock() }
     }
 
@@ -32242,8 +32319,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return conditions.toString() to args
     }
 
+    fun getReportSourceDrilldown(data: JSONObject, stationScopeId: Int): JSONObject {
+        // Contract vocabulary is intentionally explicit: inventory,
+        // inventory_movements, fuel, accounting, journal_entries,
+        // sales_transactions, tank_refills and exception rows all preserve
+        // same_report_filters for the drill-down screen.
+        val supportedSources = setOf("inventory", "inventory_movements", "fuel", "accounting", "exception", "journal_entries", "sales_transactions", "tank_refills")
+        require(data.optString("source_table").trim().lowercase(Locale.ROOT) in supportedSources) { "مصدر التقرير غير مدعوم" }
+        return sourceDrilldownCanonicalInternal(data, stationScopeId)
+    }
+
+    fun getReportExceptions(data: JSONObject = JSONObject(), stationScopeId: Int): JSONArray =
+        reportExceptionsInternal(data, stationScopeId)
+
     fun getFuelReport(data: JSONObject, stationScopeId: Int): JSONArray {
         require(stationScopeId > 0) { "معرف المحطة مطلوب لتقرير الوقود" }
+        val returnAll = data.optBoolean("return_all", false)
         dbLock.lock()
         return try {
             val stationId = stationScopeId
@@ -32288,7 +32379,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 args += stationId.toString(); args += refillFilter.second
             }
             if (branches.isEmpty()) return JSONArray()
-            val limit = data.optInt("limit", 0).coerceAtLeast(0)
+            val limit = if (returnAll) 0 else data.optInt("limit", 0).coerceAtLeast(0)
             val offset = data.optInt("offset", 0).coerceAtLeast(0)
             val requestedSort = data.optString("sort_by", "date").trim().lowercase(Locale.US)
             val sortColumn = when (requestedSort) {
