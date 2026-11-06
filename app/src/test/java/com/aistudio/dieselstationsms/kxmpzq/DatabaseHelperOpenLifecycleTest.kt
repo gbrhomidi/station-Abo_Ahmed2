@@ -216,6 +216,46 @@ class DatabaseHelperOpenLifecycleTest {
         }
     }
 
+    @Test
+    fun backupRestoreRoundTripRestoresTheCommittedDatabaseSnapshot() {
+        val database = helper.writableDatabase
+        database.execSQL("CREATE TABLE restore_round_trip_marker (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
+        database.execSQL("INSERT INTO restore_round_trip_marker(id, value) VALUES (1, 'before-backup')")
+
+        val backupPath = helper.backupDatabase()
+        val backupFile = File(backupPath)
+        try {
+            val preview = helper.getRestorePreview(backupPath)
+            assertTrue("a verified current-schema backup should be restorable", preview.optBoolean("can_restore"))
+
+            helper.writableDatabase.execSQL(
+                "UPDATE restore_round_trip_marker SET value = 'after-backup' WHERE id = 1"
+            )
+            assertEquals("after-backup", markerValue())
+
+            val restored = helper.restoreDatabaseSafe(backupPath)
+            assertTrue("restore must report an integrity-checked success: $restored", restored.optBoolean("success"))
+            assertTrue(restored.optBoolean("integrity_verified"))
+            assertEquals("before-backup", markerValue())
+            assertEquals("ok", helper.readableDatabase.rawQuery("PRAGMA integrity_check", null).use {
+                assertTrue(it.moveToFirst())
+                it.getString(0).lowercase()
+            })
+        } finally {
+            backupFile.delete()
+            File(backupPath + "-wal").delete()
+            File(backupPath + "-shm").delete()
+            helper.close()
+        }
+    }
+
+    private fun markerValue(): String = helper.readableDatabase.rawQuery(
+        "SELECT value FROM restore_round_trip_marker WHERE id = 1", null
+    ).use { cursor ->
+        assertTrue(cursor.moveToFirst())
+        cursor.getString(0)
+    }
+
     private fun pragmaInt(database: SQLiteDatabase, pragma: String): Int =
         database.rawQuery("PRAGMA $pragma", null).use { cursor ->
             assertTrue(cursor.moveToFirst())
