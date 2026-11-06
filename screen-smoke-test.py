@@ -237,10 +237,19 @@ SECURITY_CASES = {
     'security-store': (
         PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/settings/security/SecuritySettingsStore.kt',
         [
-            'EncryptedSharedPreferences.create', 'PBKDF2WithHmacSHA256',
+            'SecurePreferences.open(appContext, PREFS_NAME)', 'PBKDF2WithHmacSHA256',
             'PBKDF2_ITERATIONS = 150_000', 'PBEKeySpec', 'PIN_HASH',
             'PIN_SALT', 'MessageDigest.isEqual', 'MAX_PIN_FAILURES = 5',
             'LOCKOUT_MS = 60_000L', 'fun exportPinCredential()', 'fun importPinCredential',
+        ],
+    ),
+    'secure-preferences-engine': (
+        PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/settings/security/SecurePreferences.kt',
+        [
+            '"AES/GCM/NoPadding"', '"AndroidKeyStore"', 'KeyGenParameterSpec.Builder',
+            'cipher.updateAAD', 'decodeValues(decrypt(', 'readLegacyEncryptedPreferences',
+            '@Suppress("DEPRECATION")', 'context.deleteSharedPreferences(name)',
+            'writeExecutor.submit<Boolean>',
         ],
     ),
     'security-runtime': (
