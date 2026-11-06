@@ -402,7 +402,7 @@ object DebtDueDateRepository {
         ) return false
 
         val today = LocalDate.parse(BusinessDay.currentDate())
-        val openCustomerDebts = readDebts(helper.readableDatabase, stationId).filter {
+        val openCustomerDebts = readDebts(helper.readableDatabase, stationId, onlyCustomerId = customerId).filter {
             it.customerId == customerId && it.remaining > 0.000001
         }
         if (openCustomerDebts.isEmpty()) return false
@@ -483,8 +483,13 @@ object DebtDueDateRepository {
     }
 
 
-    private fun readDebts(db: SQLiteDatabase, stationId: Int): List<SaleDebt> {
+    private fun readDebts(
+        db: SQLiteDatabase,
+        stationId: Int,
+        onlyCustomerId: Long? = null
+    ): List<SaleDebt> {
         if (!tableExists(db, "sales_transactions") || !tableExists(db, "parties")) return emptyList()
+        if (onlyCustomerId != null && onlyCustomerId <= 0L) return emptyList()
         val s = columns(db, "sales_transactions")
         val p = columns(db, "parties")
         val pc = columns(db, "party_contacts")
@@ -528,6 +533,14 @@ object DebtDueDateRepository {
         val termsSourceExpr = if ("payment_terms_source_at_sale" in s) "COALESCE(s.payment_terms_source_at_sale,'')" else "''"
         val baseCredit = "LOWER(REPLACE(REPLACE(TRIM($payment),' ',''),'-','_')) IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')"
         val where = "$baseCredit$saleDeleted$saleStatus"
+        // Keep the client predicate on the raw indexed column. Binding the value lets SQLite
+        // use the station/customer composite index without applying a function to the key.
+        val customerFilter = if (onlyCustomerId != null) " AND s.`$customerId` = ?" else ""
+        // The station-wide API keeps its established result ordering; the targeted validation
+        // path has only one customer's rows and performs its small cohort selection in Kotlin.
+        val orderBy = if (onlyCustomerId == null) {
+            "ORDER BY CASE WHEN $dueExpr='' THEN 1 ELSE 0 END,$dueExpr,s.id"
+        } else ""
         val sql = """
             SELECT s.id,s.station_id,COALESCE(s.$customerId,0),$partyNameExpr,$phoneExpr,
                    $invoiceExpr,$saleCodeExpr,$orderExpr,$payment,$dueExpr,$createdExpr,
@@ -535,11 +548,15 @@ object DebtDueDateRepository {
                    COALESCE(s.due_date_source,''),$termsSourceExpr
             FROM sales_transactions s
             LEFT JOIN parties p ON p.id=s.$customerId$stationJoin$partyDeleted
-            WHERE s.station_id=? AND $where
-            ORDER BY CASE WHEN $dueExpr='' THEN 1 ELSE 0 END,$dueExpr,s.id
+            WHERE s.station_id=? AND $where$customerFilter
+            $orderBy
         """.trimIndent()
         val rows = ArrayList<SaleDebt>()
-        db.rawQuery(sql, arrayOf(stationId.toString())).use { cursor ->
+        val selectionArgs = buildList {
+            add(stationId.toString())
+            onlyCustomerId?.let { add(it.toString()) }
+        }.toTypedArray()
+        db.rawQuery(sql, selectionArgs).use { cursor ->
             while (cursor.moveToNext()) {
                 val due = cursor.getString(9).orEmpty().take(10)
                 val created = cursor.getString(10).orEmpty()
