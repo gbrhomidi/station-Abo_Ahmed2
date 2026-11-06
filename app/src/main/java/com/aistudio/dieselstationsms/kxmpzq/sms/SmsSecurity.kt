@@ -8,9 +8,8 @@ import android.database.sqlite.SQLiteException
 import android.os.Build
 import android.telephony.TelephonyManager
 import android.util.Log
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.settings.security.SecurePreferences
 import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -1729,41 +1728,11 @@ class SmsSecurity(
     // ═══════════════════════════════════════════════════════════════
 
     private fun getSecurePrefs(): SharedPreferences {
-
-        return try {
-
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(
-                    MasterKey.KeyScheme.AES256_GCM
-                )
-                .build()
-
-            EncryptedSharedPreferences.create(
-                context,
-                PREFS_NAME,
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-
-        } catch (e: Exception) {
-
-            /**
-             * نستخدم fallback فقط لضمان عدم تعطيل النظام.
-             *
-             * البيانات المخزنة هنا لا تحتوي على نص الرسالة أو رقم
-             * الهاتف الخام، وإنما Audit Log بعد تنقيته.
-             */
-            Log.e(
-                TAG,
-                "Encrypted preferences unavailable: ${e.javaClass.simpleName}"
-            )
-
-            context.getSharedPreferences(
-                PREFS_NAME,
-                Context.MODE_PRIVATE
-            )
-        }
+        return SecurePreferences.open(
+            context = context,
+            name = PREFS_NAME,
+            allowSanitizedPlaintextLegacy = true
+        )
     }
 
     // ═══════════════════════════════════════════════════════════════

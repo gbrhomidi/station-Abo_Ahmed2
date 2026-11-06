@@ -88,7 +88,12 @@ object DeliveryFeeAccounting {
     fun ensureSchema(helper: DatabaseHelper) {
         val db = helper.writableDatabase
         val schemaKey = "${db.path}:${db.version}"
-        if (schemaKey in ensuredSchemaVersions) return
+        if (schemaKey in ensuredSchemaVersions) {
+            // The durable migration marker may be reset independently of this in-memory
+            // schema cache. Re-check it before returning so recovery/backfill remains idempotent.
+            migrateLegacyDeliveryContext(db)
+            return
+        }
         addColumn(db, "fuel_sales", "delivery_service_fee", "REAL NOT NULL DEFAULT 0")
         addColumn(db, "fuel_sales", "delivery_fee_mode", "TEXT NOT NULL DEFAULT 'exempt'")
         addColumn(db, "fuel_sales", "delivery_location", "TEXT NOT NULL DEFAULT ''")

@@ -3,6 +3,7 @@ package com.aistudio.dieselstationsms.kxmpzq
 import android.content.Context
 import android.os.StatFs
 import android.util.Log
+import com.aistudio.dieselstationsms.kxmpzq.settings.security.AndroidKeystoreAesGcm
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import org.json.JSONArray
@@ -47,6 +48,8 @@ class BackupWorker(
         private const val TAG = "BackupWorker"
 
         private const val BACKUP_PREFIX = "auto_backup_"
+        private const val BACKUP_ENCRYPTION_KEY_ALIAS = "station_backup_payload_v1"
+        private const val BACKUP_ENCRYPTION_AAD = "station-backup-payload:v1"
 
         private const val MAX_BACKUPS = 10
 
@@ -257,7 +260,7 @@ class BackupWorker(
                     backupMethod = "automatic",
                     checksum = checksum,
                     encrypted = true,
-                    encryptionMethod = "AES256_GCM_HKDF_4KB",
+                    encryptionMethod = "AES256_GCM_ANDROID_KEYSTORE_V1",
                     status = "success",
                     startedAtMillis = startedAtMillis,
                     completedAtMillis = completedAtMillis
@@ -448,75 +451,12 @@ class BackupWorker(
     private fun encryptBackup(
         data: String
     ): String {
-
-
-        val tempFile =
-            File(
-                applicationContext.cacheDir,
-                "temp_backup_${System.currentTimeMillis()}.bin"
-            )
-
-
-
         return try {
-
-
-            val masterKey =
-                androidx.security.crypto.MasterKey.Builder(
-                    applicationContext
-                )
-                    .setKeyScheme(
-                        androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM
-                    )
-                    .build()
-
-
-
-            val encryptedFile =
-                androidx.security.crypto.EncryptedFile.Builder(
-
-                    applicationContext,
-
-                    tempFile,
-
-                    masterKey,
-
-                    androidx.security.crypto.EncryptedFile
-                        .FileEncryptionScheme
-                        .AES256_GCM_HKDF_4KB
-
-                )
-                    .build()
-
-
-
-            // الكتابة عبر EncryptedFile
-            encryptedFile
-                .openFileOutput()
-                .use { output ->
-
-
-                    output.write(
-                        data.toByteArray(
-                            Charsets.UTF_8
-                        )
-                    )
-                }
-
-
-
-            // قراءة البيانات المشفرة
-
-            val encryptedBytes =
-                encryptedFile
-                    .openFileInput()
-                    .use { input ->
-
-                        input.readBytes()
-                    }
-
-
-
+            val encryptedBytes = AndroidKeystoreAesGcm.encrypt(
+                alias = BACKUP_ENCRYPTION_KEY_ALIAS,
+                associatedData = BACKUP_ENCRYPTION_AAD.toByteArray(Charsets.UTF_8),
+                plaintext = data.toByteArray(Charsets.UTF_8)
+            )
             android.util.Base64
                 .encodeToString(
                     encryptedBytes,
@@ -542,13 +482,6 @@ class BackupWorker(
 
 
 
-        } finally {
-
-
-            if (tempFile.exists()) {
-
-                tempFile.delete()
-            }
         }
     }
 

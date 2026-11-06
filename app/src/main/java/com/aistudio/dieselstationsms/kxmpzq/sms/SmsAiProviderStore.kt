@@ -1,8 +1,7 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
 import android.content.Context
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import com.aistudio.dieselstationsms.kxmpzq.settings.security.SecurePreferences
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -11,19 +10,11 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * مخزن ملفات المزودين. يخزن المفاتيح داخل EncryptedSharedPreferences فقط.
+ * مخزن ملفات المزودين. يخزن المفاتيح داخل AES-GCM محمي بمفتاح Android Keystore.
  * البيانات العامة تعاد بعد إخفاء المفتاح ولا تسجل قيم المفاتيح في Logcat.
  */
 class SmsAiProviderStore(context: Context) {
-    private val preferences = EncryptedSharedPreferences.create(
-        context.applicationContext,
-        PREFS_NAME,
-        MasterKey.Builder(context.applicationContext)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build(),
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    private val preferences = SecurePreferences.open(context, PREFS_NAME)
 
     @Synchronized
     fun list(): List<SmsAiProviderProfile> = readProfiles().map { resetIfNewDay(it) }

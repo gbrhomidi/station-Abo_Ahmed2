@@ -11,11 +11,10 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKeys
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.MainActivity
 import com.aistudio.dieselstationsms.kxmpzq.receiver.TaskNotificationReceiver
+import com.aistudio.dieselstationsms.kxmpzq.settings.security.SecurePreferences
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -130,14 +129,7 @@ object TaskNotificationManager {
         database: DatabaseHelper
     ): Int? {
         return runCatching {
-            val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
-            val authPreferences = EncryptedSharedPreferences.create(
-                AUTH_PREFS_NAME,
-                masterKeyAlias,
-                context.applicationContext,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
+            val authPreferences = SecurePreferences.open(context, AUTH_PREFS_NAME)
             val userId = authPreferences.getLong(AUTH_USER_ID_KEY, 0L)
             if (userId <= 0L) return@runCatching null
             val user = database.getUserById(userId) ?: return@runCatching null

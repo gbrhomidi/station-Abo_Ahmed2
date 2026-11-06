@@ -15,8 +15,7 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.os.StatFs
 import android.util.Log
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import com.aistudio.dieselstationsms.kxmpzq.settings.security.SecurePreferences
 import java.io.File
 import java.io.FileWriter
 import java.io.IOException
@@ -37,7 +36,7 @@ import java.util.concurrent.locks.ReentrantLock
  * 4. معالجة OutOfMemoryError بشكل آمن
  * 5. تنسيق JSON للتقارير (سهل التحليل)
  * 6. إضافة معلومات إضافية (الذاكرة، التخزين)
- * 7. دعم EncryptedSharedPreferences لتخزين آمن
+ * 7. تخزين آمن بمفاتيح Android Keystore
  * 8. دعم Coroutines لعمليات الخلفية
  *
  * ═══════════════════════════════════════════════════════════════
@@ -69,7 +68,6 @@ class MyApplication : Application() {
             synchronized(startedActivityLock) { startedActivities.any { it !== activity } }
 
         private const val PREFS_NAME = "secure_prefs"
-        private const val MASTER_KEY_ALIAS = "my_app_master_key"
 
         // متغير عام للوصول إلى التطبيق من أي مكان
         @Volatile
@@ -89,16 +87,7 @@ class MyApplication : Application() {
         fun getEncryptedPreferences(): SharedPreferences {
             val context = getAppContext()
             return try {
-                val masterKey = MasterKey.Builder(context)
-                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                    .build()
-                EncryptedSharedPreferences.create(
-                    context,
-                    PREFS_NAME,
-                    masterKey,
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-                )
+                SecurePreferences.open(context, PREFS_NAME)
             } catch (e: Exception) {
                 // لا نرجع إلى تخزين غير مشفر؛ هذه التفضيلات قد تحتوي أسرارًا أو رموز جلسات.
                 Log.e(TAG, "Failed to create encrypted preferences", e)
@@ -149,7 +138,7 @@ class MyApplication : Application() {
         // تهيئة قنوات الإشعارات
         createNotificationChannels()
 
-        // تهيئة EncryptedSharedPreferences مسبقاً
+        // تهيئة التخزين المشفر عبر Android Keystore مسبقاً
         try {
             getEncryptedPreferences()
             Log.d(TAG, "Encrypted preferences initialized")

@@ -50,8 +50,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKeys
 import com.aistudio.dieselstationsms.kxmpzq.receiver.*
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManager
@@ -67,6 +65,7 @@ import com.aistudio.dieselstationsms.kxmpzq.settings.backup.FullDatabaseBackupMa
 import com.aistudio.dieselstationsms.kxmpzq.settings.backup.FullDatabaseBackupScheduler
 import com.aistudio.dieselstationsms.kxmpzq.settings.di.SettingsModule
 import com.aistudio.dieselstationsms.kxmpzq.settings.security.SecuritySettingsStore
+import com.aistudio.dieselstationsms.kxmpzq.settings.security.SecurePreferences
 import com.aistudio.dieselstationsms.kxmpzq.settings.model.ApplicationSettings
 import com.aistudio.dieselstationsms.kxmpzq.ui.theme.MyApplicationTheme
 import com.aistudio.dieselstationsms.kxmpzq.utils.*
@@ -2274,14 +2273,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun initEncryptedPrefs() {
         try {
-            val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
-            sharedPrefs = EncryptedSharedPreferences.create(
-                PREFS_NAME,
-                masterKeyAlias,
-                this,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
+            sharedPrefs = SecurePreferences.open(this, PREFS_NAME)
             securitySettingsStore = SecuritySettingsStore.open(applicationContext)
             DebugLogger.info("Prefs", "Encrypted authentication and security settings initialized")
         } catch (e: Exception) {

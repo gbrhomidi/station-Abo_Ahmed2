@@ -97,22 +97,30 @@ object DebtDueDateRepository {
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payment_terms_scope_active ON payment_terms(station_id,applies_to,is_active,sort_order)")
     }
 
+    private data class PaymentTermSeed(
+        val code: String,
+        val nameAr: String,
+        val nameEn: String,
+        val days: Int,
+        val sortOrder: Int
+    )
+
     private fun seedDefaultPaymentTerms(db: SQLiteDatabase) {
         val items=listOf(
-            arrayOf("CASH","نقدي / فوري","Cash / Immediate",0,0),
-            arrayOf("NET_7","صافي 7 أيام","Net 7 days",7,10),
-            arrayOf("NET_15","صافي 15 يوماً","Net 15 days",15,20),
-            arrayOf("NET_30","صافي 30 يوم","Net 30 days",30,30),
-            arrayOf("NET_45","صافي 45 يوماً","Net 45 days",45,40),
-            arrayOf("NET_60","صافي 60 يوماً","Net 60 days",60,50),
-            arrayOf("NET_90","صافي 90 يوماً","Net 90 days",90,60)
+            PaymentTermSeed("CASH","نقدي / فوري","Cash / Immediate",0,0),
+            PaymentTermSeed("NET_7","صافي 7 أيام","Net 7 days",7,10),
+            PaymentTermSeed("NET_15","صافي 15 يوماً","Net 15 days",15,20),
+            PaymentTermSeed("NET_30","صافي 30 يوم","Net 30 days",30,30),
+            PaymentTermSeed("NET_45","صافي 45 يوماً","Net 45 days",45,40),
+            PaymentTermSeed("NET_60","صافي 60 يوماً","Net 60 days",60,50),
+            PaymentTermSeed("NET_90","صافي 90 يوماً","Net 90 days",90,60)
         )
         items.forEach { item ->
             db.execSQL(
                 """INSERT OR IGNORE INTO payment_terms
                    (code,name_ar,name_en,days,applies_to,station_id,is_default,is_active,sort_order)
                    VALUES(?,?,?,?, 'both', NULL, ?, 1, ?)""",
-                arrayOf(item[0],item[1],item[2],item[3],if(item[0]=="NET_30") 1 else 0,item[4])
+                arrayOf(item.code,item.nameAr,item.nameEn,item.days,if(item.code=="NET_30") 1 else 0,item.sortOrder)
             )
         }
     }

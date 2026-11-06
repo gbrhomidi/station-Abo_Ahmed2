@@ -3,15 +3,13 @@ package com.aistudio.dieselstationsms.kxmpzq.settings.security
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKeys
 import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 
 /**
- * Stores security controls only in AndroidX EncryptedSharedPreferences.
+ * Stores security controls in an AES-GCM payload protected by Android Keystore.
  * PIN values are never persisted as text and are never returned to JavaScript.
  */
 class SecuritySettingsStore internal constructor(
@@ -54,17 +52,9 @@ class SecuritySettingsStore internal constructor(
 
         fun open(context: Context): SecuritySettingsStore {
             val appContext = context.applicationContext
-            val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
-            val encrypted = EncryptedSharedPreferences.create(
-                PREFS_NAME,
-                masterKeyAlias,
-                appContext,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
             // Leave this key absent until legacy SQLite settings have been inspected. The
             // runtime default is encrypted, but an existing explicit "0" must be preserved.
-            return SecuritySettingsStore(encrypted)
+            return SecuritySettingsStore(SecurePreferences.open(appContext, PREFS_NAME))
         }
     }
 

@@ -24,7 +24,7 @@ android {
             localeFilters += listOf("ar", "en")
         }
 
-        // مفاتيح AI لا تدخل BuildConfig أو APK. تُضبط وقت التشغيل في EncryptedSharedPreferences.
+        // مفاتيح AI لا تدخل BuildConfig أو APK. تُضبط وقت التشغيل في تخزين Android Keystore.
     }
 
     signingConfigs {
@@ -191,7 +191,7 @@ dependencies {
     implementation("androidx.biometric:biometric:1.1.0")
 
     // Security
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation(libs.androidx.security.crypto)
     implementation("com.scottyab:rootbeer-lib:0.1.0")
 
     // ═══════════════════════════════════════════════════════════

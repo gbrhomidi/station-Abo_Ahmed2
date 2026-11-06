@@ -29,7 +29,7 @@ firebaseBom = "33.7.0"
 work = "2.9.1"
 
 # Security
-securityCrypto = "1.1.0-alpha06"
+securityCrypto = "1.1.0"
 rootbeer = "0.1.0"
 
 # Serialization
