@@ -487,6 +487,7 @@ object DebtDueDateRepository {
         if (!tableExists(db, "sales_transactions") || !tableExists(db, "parties")) return emptyList()
         val s = columns(db, "sales_transactions")
         val p = columns(db, "parties")
+        val pc = columns(db, "party_contacts")
         if (!setOf("id", "station_id").all { it in s } || "id" !in p) return emptyList()
         val customerId = listOf("customer_party_id", "customer_id", "party_id").firstOrNull { it in s } ?: return emptyList()
         val payment = if ("payment_method" in s) "COALESCE(s.payment_method,'')" else "''"
@@ -505,7 +506,18 @@ object DebtDueDateRepository {
         val orderExpr = listOf("order_type", "sale_type", "transaction_type").firstOrNull { it in s }?.let { "COALESCE(s.`$it`,'')" } ?: "''"
         val partyNameExpr = listOf("commercial_name_ar", "commercial_name", "legal_name", "party_name").firstOrNull { it in p }
             ?.let { "COALESCE(p.`$it`,'')" } ?: "''"
-        val phoneExpr = listOf("phone", "phone_number", "mobile", "phone1").firstOrNull { it in p }?.let { "COALESCE(p.`$it`,'')" } ?: "''"
+        val legacyPhoneExpr = listOf("phone", "phone_number", "mobile", "phone1").firstOrNull { it in p }
+            ?.let { "COALESCE(p.`$it`,'')" }
+        val contactPhoneExpr = if ("party_id" in pc && ("phone" in pc || "phone2" in pc)) {
+            val primaryPhone = if ("phone" in pc) "NULLIF(TRIM(pc.phone),'')" else "NULL"
+            val alternatePhone = if ("phone2" in pc) "NULLIF(TRIM(pc.phone2),'')" else "NULL"
+            val active = if ("is_active" in pc) "COALESCE(pc.is_active,1)=1" else "1=1"
+            val notDeleted = if ("is_deleted" in pc) "COALESCE(pc.is_deleted,0)=0" else "1=1"
+            val primaryOrder = if ("is_primary" in pc) "COALESCE(pc.is_primary,0) DESC," else ""
+            "(SELECT COALESCE($primaryPhone,$alternatePhone,'') FROM party_contacts pc " +
+                "WHERE pc.party_id=p.id AND $active AND $notDeleted ORDER BY $primaryOrder pc.id ASC LIMIT 1)"
+        } else null
+        val phoneExpr = legacyPhoneExpr ?: contactPhoneExpr ?: "''"
         val currentTermsExpr = listOf("payment_terms", "payment_terms_text", "credit_terms").firstOrNull { it in p }?.let { "COALESCE(p.`$it`,'')" } ?: "''"
         val termsExpr = if ("payment_terms_at_sale" in s) "COALESCE(NULLIF(s.payment_terms_at_sale,''),$currentTermsExpr)" else currentTermsExpr
         val riskExpr = listOf("risk_level", "credit_risk", "risk_category").firstOrNull { it in p }?.let { "COALESCE(p.`$it`,'')" } ?: "''"

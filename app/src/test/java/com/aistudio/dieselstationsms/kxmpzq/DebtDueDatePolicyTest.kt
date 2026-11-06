@@ -139,11 +139,11 @@ class DebtDueDatePolicyTest {
         db.execSQL("PRAGMA foreign_keys=OFF")
         val originalPhone="967771234567"
         val partyId=addParty(db,"outbox-revalidation","صافي 0 يوم",0,"explicit_text")
-        val partyColumns=db.rawQuery("PRAGMA table_info(parties)",null).use { c ->
-            buildSet { while(c.moveToNext()) add(c.getString(c.getColumnIndexOrThrow("name"))) }
-        }
-        val phoneColumn=listOf("phone","phone_number","mobile","phone1").first { it in partyColumns }
-        db.update("parties",ContentValues().apply { put(phoneColumn,originalPhone) },"id=?",arrayOf(partyId.toString()))
+        db.insertOrThrow("party_contacts",null,ContentValues().apply {
+            put("uuid","contact-outbox-${System.nanoTime()}");put("party_id",partyId)
+            put("contact_name","Outbox test");put("phone",originalPhone)
+            put("is_primary",1);put("is_active",1);put("is_deleted",0)
+        })
         val today=BusinessDay.currentDate()
         addSale(db,"outbox-revalidation",partyId,today,"sale_creation","explicit_text")
 
@@ -168,7 +168,7 @@ class DebtDueDatePolicyTest {
         db.update("sales_transactions",ContentValues().apply {
             put("paid_amount",0.0);put("remaining_amount",100.0);put("payment_status","pending")
         },"id=?",arrayOf(candidate.getLong("transaction_id").toString()))
-        db.update("parties",ContentValues().apply { put(phoneColumn,"967779999999") },"id=?",arrayOf(partyId.toString()))
+        db.update("party_contacts",ContentValues().apply { put("phone","967779999999") },"party_id=?",arrayOf(partyId.toString()))
         assertFalse("A queued message must not be sent to the customer's old phone",DebtDueDateRepository.isCurrentDebtReminder(helper,eventId,entityId,originalPhone,body))
     }
 
