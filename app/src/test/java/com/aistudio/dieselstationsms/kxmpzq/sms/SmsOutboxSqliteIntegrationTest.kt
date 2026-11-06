@@ -266,6 +266,123 @@ class SmsOutboxSqliteIntegrationTest {
     }
 
     @Test
+    fun debtReminderAndOutboxAreCommittedInOneTransaction() {
+        val (customerId, saleId) = insertDebtFixture()
+        val eventId = "debt-reminder:$customerId:2026-11-06"
+        val result = SmsOutboxAtomicTransaction.execute(
+            db = database,
+            context = context,
+            persist = {
+                database.recordQueuedDebtReminder(
+                    customerId, saleId, "967771234567", "Due today", daysBeforeDue = 0
+                )
+            },
+            notificationFactory = {
+                SmsOutboxAtomicTransaction.NotificationDraft(
+                    recipient = "967771234567",
+                    body = "Due today",
+                    eventId = eventId,
+                    businessEntityId = "party:$customerId",
+                    dedupeKey = "$eventId:967771234567"
+                )
+            }
+        )
+
+        assertNotNull(result.queuedMessageId)
+        assertEquals(1, countWhere("sms_reminders", "transaction_id = ?", saleId.toString()))
+        assertEquals(1, database.readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM sms_logs l JOIN sms_reminders r ON r.id = l.reminder_id WHERE r.transaction_id = ?",
+            arrayOf(saleId.toString())
+        ).use { it.moveToFirst(); it.getInt(0) })
+        assertEquals(1, countWhere("sms_outbox", "event_id = ?", eventId))
+    }
+
+    @Test
+    fun outboxFailureRollsBackDebtReminderAndLegacySmsLog() {
+        val (customerId, saleId) = insertDebtFixture()
+        database.writableDatabase.execSQL(
+            "CREATE TRIGGER fail_sms_outbox_insert BEFORE INSERT ON sms_outbox BEGIN SELECT RAISE(ABORT, 'simulated outbox failure'); END"
+        )
+
+        val failure = runCatching {
+            SmsOutboxAtomicTransaction.execute(
+                db = database,
+                context = context,
+                persist = {
+                    database.recordQueuedDebtReminder(
+                        customerId, saleId, "967771234567", "Due today", daysBeforeDue = 0
+                    )
+                },
+                notificationFactory = {
+                    SmsOutboxAtomicTransaction.NotificationDraft(
+                        recipient = "967771234567",
+                        body = "Due today",
+                        eventId = "debt-reminder-rollback:$saleId",
+                        businessEntityId = "party:$customerId",
+                        dedupeKey = "debt-reminder-rollback:$saleId"
+                    )
+                }
+            )
+        }.exceptionOrNull()
+
+        assertNotNull(failure)
+        assertEquals(0, countWhere("sms_reminders", "transaction_id = ?", saleId.toString()))
+        assertEquals(0, database.readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM sms_logs l JOIN sms_reminders r ON r.id = l.reminder_id WHERE r.transaction_id = ?",
+            arrayOf(saleId.toString())
+        ).use { it.moveToFirst(); it.getInt(0) })
+        assertEquals(0, count("sms_outbox"))
+        assertEquals(0, count("sms_messages"))
+    }
+
+    private fun insertDebtFixture(): Pair<Long, Long> {
+        val db = database.writableDatabase
+        db.execSQL("PRAGMA foreign_keys = OFF")
+        val suffix = System.nanoTime().toString()
+        val customerId = db.insertOrThrow("parties", null, ContentValues().apply {
+            put("uuid", "sms-party-$suffix")
+            put("party_code", "SMS-$suffix")
+            put("party_type_id", 1)
+            put("station_id", 1)
+            put("commercial_name_ar", "SMS test $suffix")
+            put("payment_terms", "صافي 30 يوم")
+            put("payment_terms_days", 30)
+            put("is_active", 1)
+            put("is_deleted", 0)
+        })
+        val saleColumns = db.rawQuery("PRAGMA table_info(sales_transactions)", null).use { cursor ->
+            buildSet { while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name"))) }
+        }
+        val saleValues = ContentValues().apply {
+            put("uuid", "sms-sale-$suffix")
+            put("sale_code", "SMS-SALE-$suffix")
+            put("station_id", 1)
+            put("shift_id", 1)
+            put("customer_party_id", customerId)
+            put("subtotal", 1.0)
+            put("gross_amount", 1.0)
+            put("net_amount", 1.0)
+            put("payment_method", "credit")
+            put("payment_status", "pending")
+            put("paid_amount", 0.0)
+            put("remaining_amount", 1.0)
+            put("status", "completed")
+            put("cashier_id", 1)
+            put("is_deleted", 0)
+            if ("business_day" in saleColumns) put("business_day", "2026-11-06")
+            if ("transaction_date" in saleColumns) put("transaction_date", "2026-11-06")
+            if ("sale_date" in saleColumns) put("sale_date", "2026-11-06")
+        }
+        val saleId = db.insertOrThrow("sales_transactions", null, saleValues)
+        return customerId to saleId
+    }
+
+    private fun countWhere(table: String, where: String, value: String): Int =
+        database.readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM $table WHERE $where", arrayOf(value)
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getInt(0) }
+
+    @Test
     fun staleOutboundReservationsAreReconciledAgainstTheDurableOutbox() {
         val now = System.currentTimeMillis()
         val queued = SmsOutboxRepository.enqueue(

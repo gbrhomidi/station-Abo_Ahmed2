@@ -14440,6 +14440,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!row.optBoolean("eligible", false)) {
                 return JSONObject().put("queued", false).put("reason", "recent_reminder_exists")
             }
+            if (db.getSetting("sms_send_enabled") == "0") {
+                return JSONObject().put("queued", false).put("reason", "sms_disabled")
+            }
             val candidate = row.optLong("transaction_id", 0L)
             if (candidate <= 0L) return JSONObject().put("queued", false).put("reason", "no_due_invoice")
 
@@ -14466,14 +14469,42 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             } else {
                 "مرحبا 🙋\nنذكّركم باقتراب موعد استحقاق الدين ($dueDate).\nالمبلغ المستحق: ${formatYER(dueAmount)}\nإجمالي الرصيد عليكم: ${formatYER(total)}"
             }
-            val queued = queueSms(db, normalizedPhone, message, eventId, "party:$customerId", userId)
-            if (queued.optBoolean("queued", false)) {
-                db.recordQueuedDebtReminder(
-                    customerId, candidate, normalizedPhone, message,
-                    createdBy = userId, daysBeforeDue = days.coerceAtLeast(0)
-                )
-            }
-            return queued.put("customer_name", row.optString("customer_name")).put("balance", total)
+            var newReminder = false
+            val outcome = SmsOutboxAtomicTransaction.execute(
+                db = db,
+                context = this@MainActivity,
+                persist = {
+                    val duplicate = db.readableDatabase.rawQuery(
+                        "SELECT 1 FROM sms_outbox WHERE dedupe_key = ? LIMIT 1",
+                        arrayOf(dedupeKey)
+                    ).use { it.moveToFirst() }
+                    if (duplicate) 0L else {
+                        newReminder = true
+                        db.recordQueuedDebtReminder(
+                            customerId, candidate, normalizedPhone, message,
+                            createdBy = userId, daysBeforeDue = days.coerceAtLeast(0)
+                        )
+                    }
+                },
+                notificationFactory = {
+                    if (!newReminder) null else SmsOutboxAtomicTransaction.NotificationDraft(
+                        recipient = normalizedPhone,
+                        body = SmsMessageNormalizer.normalizeForSms(message),
+                        eventId = eventId,
+                        businessEntityId = "party:$customerId",
+                        dedupeKey = dedupeKey,
+                        priority = SmsBudgetManager.Priority.HIGH
+                    )
+                }
+            )
+            val messageId = outcome.queuedMessageId
+            if (messageId != null) SmsOutboxWorker.schedule(this@MainActivity)
+            return JSONObject()
+                .put("queued", messageId != null)
+                .put("reason", if (messageId == null) "reminder_already_queued" else "")
+                .put("message_id", messageId ?: JSONObject.NULL)
+                .put("customer_name", row.optString("customer_name"))
+                .put("balance", total)
         }
 
         @JavascriptInterface

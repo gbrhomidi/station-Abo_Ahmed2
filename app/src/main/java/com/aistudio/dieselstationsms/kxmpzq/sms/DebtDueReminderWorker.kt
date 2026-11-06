@@ -114,22 +114,35 @@ class DebtDueReminderWorker(
                 ).use { it.moveToFirst() }
                 if (alreadyQueued) continue
 
-                val result = SmsOutboxRepository.enqueue(
+                var newReminder = false
+                val outcome = SmsOutboxAtomicTransaction.execute(
                     db = db,
-                    recipient = phone,
-                    body = SmsMessageNormalizer.normalizeForSms(message),
-                    eventId = eventId,
-                    businessEntityId = "party:$customerId",
-                    priority = SmsBudgetManager.Priority.HIGH,
-                    dedupeKey = dedupeKey
-                ) ?: continue
-
-                // Persist the exact due-day event only after the durable outbox accepted it.
-                db.recordQueuedDebtReminder(
-                    customerId, transactionId, phone, message,
-                    createdBy = userId, daysBeforeDue = 0
+                    context = applicationContext,
+                    persist = {
+                        val duplicate = db.readableDatabase.rawQuery(
+                            "SELECT 1 FROM sms_outbox WHERE dedupe_key = ? LIMIT 1",
+                            arrayOf(dedupeKey)
+                        ).use { it.moveToFirst() }
+                        if (duplicate) 0L else {
+                            newReminder = true
+                            db.recordQueuedDebtReminder(
+                                customerId, transactionId, phone, message,
+                                createdBy = userId, daysBeforeDue = 0
+                            )
+                        }
+                    },
+                    notificationFactory = {
+                        if (!newReminder) null else SmsOutboxAtomicTransaction.NotificationDraft(
+                            recipient = phone,
+                            body = SmsMessageNormalizer.normalizeForSms(message),
+                            eventId = eventId,
+                            businessEntityId = "party:$customerId",
+                            dedupeKey = dedupeKey,
+                            priority = SmsBudgetManager.Priority.HIGH
+                        )
+                    }
                 )
-                if (result.status == "QUEUED" || result.status == "RETRY_PENDING") {
+                if (outcome.queuedMessageId != null) {
                     queuedCount++
                     if (daysRemaining < 0) overdueQueuedCount++
                     if (customerName !in remindedNames) remindedNames += customerName
