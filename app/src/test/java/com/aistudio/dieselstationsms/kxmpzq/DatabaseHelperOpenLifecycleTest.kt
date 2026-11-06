@@ -241,6 +241,18 @@ class DatabaseHelperOpenLifecycleTest {
                 assertTrue(it.moveToFirst())
                 it.getString(0).lowercase()
             })
+            assertFalse(
+                "restore metadata must not contain orphaned foreign keys",
+                helper.readableDatabase.rawQuery("PRAGMA foreign_key_check", null).use { it.moveToFirst() }
+            )
+            val latestRestoreHasBackupReference = helper.readableDatabase.rawQuery(
+                "SELECT status, backup_id FROM restore_history ORDER BY id DESC LIMIT 1", null
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("success", cursor.getString(0))
+                !cursor.isNull(1)
+            }
+            assertTrue("restore history must reference a backup row in the restored database", latestRestoreHasBackupReference)
         } finally {
             backupFile.delete()
             File(backupPath + "-wal").delete()

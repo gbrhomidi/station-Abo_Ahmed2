@@ -25809,6 +25809,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ).use { cursor -> return if (cursor.moveToFirst()) cursor.getLong(0) else null }
     }
 
+    private fun ensureBackupRecordForRestoredFile(file: File, checksum: String): Long {
+        val canonicalPath = file.canonicalPath
+        val existing = readableDatabase.rawQuery(
+            "SELECT id FROM backup_history WHERE file_path = ? ORDER BY id DESC LIMIT 1",
+            arrayOf(canonicalPath)
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else null }
+        return existing ?: recordBackupHistory(
+            path = canonicalPath,
+            backupMethod = "restore_source",
+            checksum = checksum,
+            status = "success"
+        )
+    }
+
     fun recordBackupHistory(
         path: String,
         backupType: String = "full",
@@ -25968,10 +25982,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (!integrity) {
                 close()
                 emergencyFile.copyTo(dbFile, overwrite = true)
-                recordRestoreHistory(preview.optLong("backup_id", 0L).takeIf { it > 0 }, "failed", "تم تنفيذ rollback إلى Emergency Snapshot", "فشل PRAGMA integrity_check بعد الاستعادة")
+                val emergencyBackupId = ensureBackupRecordForRestoredFile(emergencyFile, sha256File(emergencyFile))
+                recordRestoreHistory(emergencyBackupId, "failed", "تم تنفيذ rollback إلى Emergency Snapshot", "فشل PRAGMA integrity_check بعد الاستعادة")
                 return JSONObject().put("success", false).put("rolled_back", true).put("emergency_snapshot", emergencyPath).put("error", "فشل تحقق السلامة؛ تمت استعادة Emergency Snapshot")
             }
-            recordRestoreHistory(preview.optLong("backup_id", 0L).takeIf { it > 0 }, "success", "استعادة آمنة بعد إنشاء Emergency Snapshot")
+            val restoredBackupId = ensureBackupRecordForRestoredFile(file, preview.optString("checksum"))
+            recordRestoreHistory(restoredBackupId, "success", "استعادة آمنة بعد إنشاء Emergency Snapshot")
             JSONObject().put("success", true).put("integrity_verified", true).put("emergency_snapshot", emergencyPath).put("restored_checksum", preview.optString("checksum")).put("message", "تمت الاستعادة الآمنة والتحقق من سلامة قاعدة البيانات")
         } catch (e: Exception) {
             JSONObject().put("success", false).put("error", e.message ?: "فشلت الاستعادة الآمنة")
