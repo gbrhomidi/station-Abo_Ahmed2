@@ -4714,7 +4714,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val id = db.insertParty(data, stationId)
                 if (data.has("payment_terms")) {
                     val terms = DebtDueDateRepository.persistPartyTerms(
-                        db, id, stationId, data.optString("payment_terms").ifBlank { "صافي 30 يوم" }
+                        db, id, stationId, data.optString("payment_terms")
                     )
                     data.put("payment_terms", terms)
                 }
@@ -4738,7 +4738,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val rows = db.updateParty(id, data, stationId)
                 if (rows > 0 && data.has("payment_terms")) {
                     DebtDueDateRepository.persistPartyTerms(
-                        db, id, stationId, data.optString("payment_terms").ifBlank { "صافي 30 يوم" }
+                        db, id, stationId, data.optString("payment_terms")
                     )
                 }
                 successResponse(rows > 0, if (rows > 0) "تم التحديث بنجاح" else "لم يتم العثور على السجل")

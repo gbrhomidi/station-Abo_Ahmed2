@@ -1541,7 +1541,7 @@
                         </div>
                         <div class="form-group">
                             <label>شروط الدفع</label>
-                            <input type="text" class="form-control" id="paymentTerms" placeholder="مثال: صافي 30 يوم" value="صافي 30 يوم">
+                            <input type="text" class="form-control" id="paymentTerms" placeholder="اختياري، مثال: صافي 30 يوم" value="">
                         </div>
                     </div>
 
@@ -2708,7 +2708,7 @@
             document.getElementById('email').value = data ? (data.email || '') : '';
             document.getElementById('address').value = data ? (data.address || '') : '';
             document.getElementById('creditLimit').value = data ? (data.credit_limit ?? 0) : 0;
-            document.getElementById('paymentTerms').value = data ? (data.payment_terms || 'صافي 30 يوم') : 'صافي 30 يوم';
+            document.getElementById('paymentTerms').value = data ? (data.payment_terms || '') : '';
             document.getElementById('fleetSize').value = data ? (data.fleet_size ?? 0) : 0;
             document.getElementById('loyaltyTier').value = data ? (data.loyalty_tier || 'bronze') : 'bronze';
             document.getElementById('loyaltyPoints').value = data ? (data.loyalty_points ?? 0) : 0;
@@ -3359,7 +3359,7 @@
                 email: document.getElementById('email').value.trim(),
                 address: document.getElementById('address').value.trim(),
                 credit_limit: creditLimit,
-                payment_terms: document.getElementById('paymentTerms').value.trim() || 'صافي 30 يوم',
+                payment_terms: document.getElementById('paymentTerms').value.trim(),
                 currency_id: document.getElementById('currencyId').value ? Number(document.getElementById('currencyId').value) : null,
                 assigned_to: document.getElementById('assignedTo').value ? Number(document.getElementById('assignedTo').value) : null,
                 fuel_type_preference_id: document.getElementById('fuelPreference').value ? Number(document.getElementById('fuelPreference').value) : null,

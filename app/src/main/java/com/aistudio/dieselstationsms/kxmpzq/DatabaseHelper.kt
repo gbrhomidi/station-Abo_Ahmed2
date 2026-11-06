@@ -17943,6 +17943,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         getDashboardStatsForDate(stationId, params, BusinessDay.currentDate())
 
     internal fun getDashboardStatsForDate(stationId: Int, params: JSONObject, businessDate: String): JSONObject {
+        DebtDueDateRepository.ensureSchema(this)
         val stats = JSONObject()
         val db = readableDatabase
         val today = businessDate
@@ -17951,8 +17952,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
             }
         }
-        val trustedDueDateClause = if ("due_date_source" in salesColumns) {
-            "AND COALESCE(due_date_source,'') IN ('sale_creation','sales_trigger_v3','legacy_rebuilt_snapshot')"
+        val trustedDueDateClause = if ("due_date_source" in salesColumns && "payment_terms_source_at_sale" in salesColumns) {
+            "AND COALESCE(payment_terms_source_at_sale,'')='explicit_text' AND COALESCE(due_date_source,'') IN ('sale_creation','sales_trigger_v3','sales_trigger_v4','legacy_rebuilt_snapshot')"
         } else {
             "AND 0=1"
         }
@@ -18567,6 +18568,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private fun taskQuery(params: JSONObject, stationId: Int): JSONArray {
         require(stationId > 0) { "معرف المحطة غير صالح لقراءة المهام" }
+        DebtDueDateRepository.ensureSchema(this)
+        val asOfDate = BusinessDay.currentDate()
 
         val manualVisibility = buildString {
             if (!params.optBoolean("include_archived", false)) append(" AND is_archived = 0")
@@ -18605,7 +18608,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
         val saleDueDateExpr = if ("due_date" in salesColumns) "COALESCE(s.due_date,'')" else "''"
         val saleDueSourceExpr = if ("due_date_source" in salesColumns) "COALESCE(s.due_date_source,'')" else "''"
-        val saleMaturityTrusted = "$saleDueSourceExpr IN ('sale_creation','sales_trigger_v3','legacy_rebuilt_snapshot')"
+        val saleTermsSourceExpr = if ("payment_terms_source_at_sale" in salesColumns) "COALESCE(s.payment_terms_source_at_sale,'')" else "''"
+        val saleMaturityTrusted = "$saleTermsSourceExpr='explicit_text' AND $saleDueSourceExpr IN ('sale_creation','sales_trigger_v3','sales_trigger_v4','legacy_rebuilt_snapshot')"
         val sql = """
             WITH task_rows AS (
                 SELECT
@@ -18630,12 +18634,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     COALESCE(s.remaining_amount, 0) AS amount,
                     CASE
                         WHEN NOT ($saleMaturityTrusted) OR NULLIF($saleDueDateExpr,'') IS NULL THEN 'عالية'
-                        WHEN date($saleDueDateExpr) < date('now', 'localtime') THEN 'عالية'
+                        WHEN date($saleDueDateExpr) < date(?) THEN 'عالية'
                         ELSE 'متوسطة'
                     END AS priority,
                     CASE
                         WHEN NOT ($saleMaturityTrusted) OR NULLIF($saleDueDateExpr,'') IS NULL THEN 'بحاجة مراجعة'
-                        WHEN date($saleDueDateExpr) < date('now', 'localtime') THEN 'متأخرة'
+                        WHEN date($saleDueDateExpr) < date(?) THEN 'متأخرة'
                         ELSE 'غير مدفوعة'
                     END AS status,
                     TRIM(COALESCE(p.commercial_name_ar, p.commercial_name, '')) AS notes,
@@ -18669,12 +18673,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     MAX(COALESCE(e.total_amount, 0) - COALESCE(e.paid_amount, 0), 0) AS amount,
                     CASE
                         WHEN NULLIF(e.next_due_date, '') IS NULL THEN 'عالية'
-                        WHEN date(e.next_due_date) < date('now', 'localtime') THEN 'عالية'
+                        WHEN date(e.next_due_date) < date(?) THEN 'عالية'
                         ELSE 'متوسطة'
                     END AS priority,
                     CASE
                         WHEN NULLIF(e.next_due_date, '') IS NULL THEN 'بحاجة مراجعة'
-                        WHEN date(e.next_due_date) < date('now', 'localtime') THEN 'متأخرة'
+                        WHEN date(e.next_due_date) < date(?) THEN 'متأخرة'
                         ELSE 'غير مدفوعة'
                     END AS status,
                     TRIM(COALESCE(e.description_ar, e.description, ''))
@@ -18731,7 +18735,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """.trimIndent()
         val queryArgs = mutableListOf<String>().apply {
             add(stationId.toString())
+            add(asOfDate)
+            add(asOfDate)
             add(stationId.toString())
+            add(asOfDate)
+            add(asOfDate)
             add(stationId.toString())
             add(stationId.toString())
             add(stationId.toString())
@@ -28572,6 +28580,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun getCustomerDebts(fromDate: String?, toDate: String?, stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
+            DebtDueDateRepository.ensureSchema(this)
             val db = readableDatabase
             if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val predicates = mutableListOf("s.remaining_amount > 0", "s.is_deleted = 0")
@@ -28579,7 +28588,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             // Keep the legacy bridge on the same provenance policy as
             // DebtDueDateRepository. A created_at fallback silently changes a
             // maturity-date filter into an invoice-date filter.
-            predicates += "s.due_date IS NOT NULL AND TRIM(s.due_date) <> '' AND COALESCE(s.due_date_source, '') IN ('sale_creation', 'sales_trigger_v3', 'legacy_rebuilt_snapshot')"
+            predicates += "s.due_date IS NOT NULL AND TRIM(s.due_date) <> '' AND COALESCE(s.payment_terms_source_at_sale,'')='explicit_text' AND COALESCE(s.due_date_source, '') IN ('sale_creation', 'sales_trigger_v3', 'sales_trigger_v4', 'legacy_rebuilt_snapshot')"
             if (!fromDate.isNullOrBlank()) {
                 predicates += "date(s.due_date) >= date(?)"
                 args += fromDate
@@ -28611,6 +28620,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(partyId > 0) { "معرف العميل غير صالح" }
         dbLock.lock()
         return try {
+            DebtDueDateRepository.ensureSchema(this)
             val db = readableDatabase
             if (stationScopeId != null) {
                 require(stationScopeId > 0) { "معرف المحطة غير صالح" }
@@ -28621,7 +28631,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "s.remaining_amount > 0",
                 "s.is_deleted = 0",
                 "s.due_date IS NOT NULL AND TRIM(s.due_date) <> ''",
-                "COALESCE(s.due_date_source, '') IN ('sale_creation', 'sales_trigger_v3', 'legacy_rebuilt_snapshot')"
+                "COALESCE(s.payment_terms_source_at_sale,'')='explicit_text'",
+                "COALESCE(s.due_date_source, '') IN ('sale_creation', 'sales_trigger_v3', 'sales_trigger_v4', 'legacy_rebuilt_snapshot')"
             )
             val args = mutableListOf(partyId.toString())
             if (stationScopeId != null) {
@@ -29861,6 +29872,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun savePartyBundle(data: JSONObject, userId: Long = 0L, stationScopeId: Int? = null): Long {
+        if (stationScopeId != null) DebtDueDateRepository.ensureSchema(this)
         dbLock.lock()
         val db = writableDatabase
         db.beginTransaction()
@@ -29874,6 +29886,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val inserted = insertParty(data, stationScopeId)
                 require(inserted > 0) { "لم يتم إنشاء الطرف" }
                 inserted
+            }
+            if (stationScopeId != null && data.has("payment_terms")) {
+                DebtDueDateRepository.persistPartyTerms(this, partyId, stationScopeId, data.optString("payment_terms"))
             }
             db.delete("party_contacts", "party_id = ?", arrayOf(partyId.toString()))
             val contacts = data.optJSONArray("contacts") ?: JSONArray()

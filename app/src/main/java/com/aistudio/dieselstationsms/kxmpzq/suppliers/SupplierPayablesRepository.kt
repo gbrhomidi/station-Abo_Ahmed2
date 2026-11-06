@@ -51,6 +51,7 @@ object SupplierPayablesRepository {
                 payment_terms_id_at_purchase INTEGER,
                 payment_terms_at_purchase TEXT NOT NULL DEFAULT '',
                 payment_terms_days_at_purchase INTEGER,
+                payment_terms_source_at_purchase TEXT,
                 currency_id INTEGER,
                 total_amount REAL NOT NULL CHECK(total_amount >= 0),
                 paid_amount REAL NOT NULL DEFAULT 0 CHECK(paid_amount >= 0),
@@ -62,6 +63,9 @@ object SupplierPayablesRepository {
                 is_deleted INTEGER NOT NULL DEFAULT 0
             )
         """.trimIndent())
+        if("payment_terms_source_at_purchase" !in columns(db,"supplier_invoices")) {
+            db.execSQL("ALTER TABLE supplier_invoices ADD COLUMN payment_terms_source_at_purchase TEXT")
+        }
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS supplier_invoice_allocations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,22 +148,22 @@ object SupplierPayablesRepository {
         val termsExpr = if ("payment_terms" in partyColumns) "COALESCE(payment_terms,'')" else "''"
         val daysExpr = if ("payment_terms_days" in partyColumns) "payment_terms_days" else "NULL"
         val termIdExpr = if ("payment_terms_id" in partyColumns) "payment_terms_id" else "NULL"
+        val termSourceExpr = if ("payment_terms_source" in partyColumns) "payment_terms_source" else "NULL"
         val partyStation = if ("station_id" in partyColumns) " AND station_id=?" else ""
         val args = if ("station_id" in partyColumns) arrayOf(supplierId.toString(),stationId.toString()) else arrayOf(supplierId.toString())
         val terms = db.rawQuery(
-            "SELECT $termsExpr,$daysExpr,$termIdExpr FROM parties WHERE id=?$partyStation AND is_deleted=0 AND is_active=1 LIMIT 1",
+            "SELECT $termsExpr,$daysExpr,$termIdExpr,$termSourceExpr FROM parties WHERE id=?$partyStation AND is_deleted=0 AND is_active=1 LIMIT 1",
             args
         ).use { c ->
             require(c.moveToFirst()) { "المورد غير موجود أو غير نشط ضمن المحطة" }
-            Triple(
-                c.getString(0).orEmpty().ifBlank { "صافي 30 يوم" },
-                if (c.isNull(1)) null else c.getInt(1),
-                if (c.isNull(2)) null else c.getLong(2)
-            )
+            listOf(c.getString(0).orEmpty(),if(c.isNull(1)) null else c.getInt(1),
+                if(c.isNull(2)) null else c.getLong(2),c.getString(3).orEmpty())
         }
-        val days = terms.second?.takeIf { it in 0..365 } ?: DebtDueDateRepository.parseTermsDays(terms.first)
+        val termsText=terms[0] as String
+        val termsSource=terms[3] as String
+        val days=if(termsSource=="explicit_text") (terms[1] as? Int)?.takeIf { it in 0..365 } ?: DebtDueDateRepository.parseTermsDays(termsText) else null
         val base = parseDate(invoiceDate)
-        val due = base?.plusDays(days.toLong())?.toString()
+        val due = if(base!=null && days!=null) base.plusDays(days.toLong()).toString() else null
         val now = BusinessDay.currentDate()
         val id = db.insertOrThrow("supplier_invoices",null,ContentValues().apply {
             put("uuid",UUID.randomUUID().toString())
@@ -171,17 +175,18 @@ object SupplierPayablesRepository {
             if (base != null) {
                 put("invoice_date",base.toString())
                 put("due_date_basis",base.toString())
-                put("due_date",due)
-                put("due_date_source","purchase_creation")
+                if(due!=null) { put("due_date",due);put("due_date_source","purchase_creation") }
+                else { putNull("due_date");put("due_date_source","missing_terms") }
             } else {
                 putNull("invoice_date")
                 putNull("due_date_basis")
                 putNull("due_date")
                 put("due_date_source","missing_base_date")
             }
-            if (terms.third != null) put("payment_terms_id_at_purchase",terms.third)
-            put("payment_terms_at_purchase",terms.first)
-            put("payment_terms_days_at_purchase",days)
+            if (terms[2] != null) put("payment_terms_id_at_purchase",terms[2] as Long)
+            put("payment_terms_at_purchase",termsText)
+            if(days!=null) put("payment_terms_days_at_purchase",days) else putNull("payment_terms_days_at_purchase")
+            if(termsSource.isNotBlank()) put("payment_terms_source_at_purchase",termsSource) else putNull("payment_terms_source_at_purchase")
             if (currencyId != null && currencyId > 0L) put("currency_id",currencyId)
             put("total_amount",amount)
             put("paid_amount",0.0)
@@ -511,6 +516,7 @@ object SupplierPayablesRepository {
             """SELECT i.id,i.supplier_id,i.source_type,i.source_id,i.invoice_number,i.invoice_date,i.due_date,
                       i.due_date_source,i.payment_terms_at_purchase,i.payment_terms_days_at_purchase,
                       i.currency_id,i.total_amount,i.paid_amount,i.remaining_amount,i.status,
+                      COALESCE(i.payment_terms_source_at_purchase,''),
                       COALESCE(p.commercial_name_ar,p.commercial_name,'') AS supplier_name,
                       COALESCE((SELECT SUM(a.amount) FROM supplier_invoice_allocations a
                         WHERE a.supplier_invoice_id=i.id AND a.status='posted' AND a.is_deleted=0),0) AS allocated_amount
@@ -523,7 +529,8 @@ object SupplierPayablesRepository {
             while(c.moveToNext()) {
                 val due=c.getString(6).orEmpty().take(10)
                 val source=c.getString(7).orEmpty()
-                val trusted=source=="purchase_creation"
+                val termsSource=c.getString(15).orEmpty()
+                val trusted=source=="purchase_creation" && termsSource=="explicit_text"
                 val today=LocalDate.parse(BusinessDay.currentDate())
                 val dueDate=if(trusted) parseDate(due) else null
                 val maturityStatus=when {
@@ -538,15 +545,17 @@ object SupplierPayablesRepository {
                     put("source_id",c.getLong(3));put("invoice_number",c.getString(4))
                     put("invoice_date",c.getString(5).orEmpty().take(10))
                     put("due_date",if(trusted) due else "")
+                    put("legacy_due_date",if(!trusted) due else "")
                     put("due_date_source",source)
+                    put("payment_terms_source",termsSource)
                     put("maturity_status",maturityStatus)
                     put("payment_terms",c.getString(8).orEmpty())
                     put("payment_terms_days",if(c.isNull(9)) JSONObject.NULL else c.getInt(9))
                     put("currency_id",if(c.isNull(10)) JSONObject.NULL else c.getLong(10))
                     put("amount",c.getDouble(11));put("total_amount",c.getDouble(11))
                     put("paid_amount",c.getDouble(12));put("remaining_amount",c.getDouble(13))
-                    put("allocated_amount",c.getDouble(16));put("status",c.getString(14))
-                    put("supplier_name",c.getString(15).orEmpty())
+                    put("allocated_amount",c.getDouble(17));put("status",c.getString(14))
+                    put("supplier_name",c.getString(16).orEmpty())
                 })
             }
         }

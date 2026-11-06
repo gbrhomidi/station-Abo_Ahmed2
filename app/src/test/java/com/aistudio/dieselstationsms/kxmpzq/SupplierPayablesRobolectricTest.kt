@@ -9,6 +9,7 @@ import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -180,6 +181,32 @@ class SupplierPayablesRobolectricTest {
             rejected = true
         }
         assertTrue("Supplier invoices must remain station scoped", rejected)
+    }
+
+    @Test
+    fun missingOrLegacyUnverifiedTermsDoNotCreateOperationalSupplierMaturities() {
+        DebtDueDateRepository.persistPartyTerms(helper,supplierId,1,"")
+        val freshId=SupplierPayablesRepository.createPurchaseInvoice(
+            db,1,supplierId,"manual",94001,"MAN-94001",80.0,"2026-10-01",null,1
+        )
+        val legacyId=db.insertOrThrow("supplier_invoices",null,ContentValues().apply {
+            put("uuid",UUID.randomUUID().toString());put("station_id",1);put("supplier_id",supplierId)
+            put("source_type","manual");put("source_id",94002);put("invoice_number","MAN-94002")
+            put("invoice_date","2026-10-01");put("due_date","2026-10-31");put("due_date_basis","2026-10-01")
+            put("due_date_source","purchase_creation");put("payment_terms_at_purchase","صافي 30 يوم")
+            put("payment_terms_days_at_purchase",30);putNull("payment_terms_source_at_purchase")
+            put("total_amount",80.0);put("paid_amount",0.0);put("remaining_amount",80.0)
+            put("status","open");put("created_by",1);put("is_deleted",0)
+        })
+        db.rawQuery("SELECT due_date,due_date_source,payment_terms_days_at_purchase,payment_terms_source_at_purchase FROM supplier_invoices WHERE id=?",arrayOf(freshId.toString())).use { c ->
+            check(c.moveToFirst());assertNull(c.getString(0));assertEquals("missing_terms",c.getString(1));assertTrue(c.isNull(2));assertTrue(c.isNull(3))
+        }
+        val rows=SupplierPayablesRepository.getSupplierInvoices(db,1,supplierId)
+        val fresh=(0 until rows.length()).map { rows.getJSONObject(it) }.first { it.getLong("id")==freshId }
+        val legacy=(0 until rows.length()).map { rows.getJSONObject(it) }.first { it.getLong("id")==legacyId }
+        assertEquals("undated",fresh.getString("maturity_status"));assertEquals("",fresh.getString("due_date"))
+        assertEquals("undated",legacy.getString("maturity_status"));assertEquals("",legacy.getString("due_date"))
+        assertEquals("2026-10-31",legacy.getString("legacy_due_date"))
     }
 
     @Test

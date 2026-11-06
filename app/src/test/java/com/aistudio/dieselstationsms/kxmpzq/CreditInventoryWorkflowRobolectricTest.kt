@@ -84,7 +84,7 @@ class CreditInventoryWorkflowRobolectricTest {
         val customerId = db.insertOrThrow("parties", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString()); put("party_code", "CUS-${UUID.randomUUID().toString().take(8)}")
             put("party_type_id", customerTypeId); put("station_id", 1); put("commercial_name", "عميل آجل اختبار")
-            put("payment_terms", "صافي 15 يوم"); put("payment_terms_id", term15Id); put("payment_terms_days", 15)
+            put("payment_terms", "صافي 15 يوم"); put("payment_terms_id", term15Id); put("payment_terms_days", 15); put("payment_terms_source", "explicit_text")
             put("credit_limit", 100.0); put("current_balance", 0.0); put("is_active", 1); put("created_by", actorId)
         })
         db.insertOrThrow("shifts", null, ContentValues().apply {
