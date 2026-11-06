@@ -12336,7 +12336,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val purchasePaymentMethod = data.optString("payment_method", "").trim().lowercase(Locale.ROOT)
             val purchaseCashBoxId = data.optLong("cash_box_id", 0L)
             val purchaseIdempotencyKey = data.optString("idempotency_key", "").trim()
-            val movementCode = data.optString("movement_code", "INV-${System.currentTimeMillis()}").trim()
+            val movementCode = data.optString("movement_code", "INV-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}").trim()
                 .ifBlank { "INV-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(6)}" }
             val referenceId = data.optLong(
                 "reference_id",
