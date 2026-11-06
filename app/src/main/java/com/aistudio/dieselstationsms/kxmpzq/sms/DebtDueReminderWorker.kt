@@ -37,7 +37,7 @@ class DebtDueReminderWorker(
 
         return try {
             val db = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
-            if (db.getSetting("sms_send_enabled") == "0") return Result.success()
+            val smsEnabled = db.getSetting("sms_send_enabled") != "0"
 
             // Create/repair maturity dates before the reminder query runs. The same
             // date calculation is used by the customer-debt screen and the UI banner.
@@ -60,6 +60,12 @@ class DebtDueReminderWorker(
                 // to the same customer during the same worker cycle.
                 if (customerId > 0L && customerId !in customersDueToday) candidates += row
             }
+            val localEligibleCount = candidates.count { row ->
+                row.optBoolean("eligible", false) &&
+                    row.optDouble("total_outstanding", 0.0) > 0.0 &&
+                    PhoneUtils.normalize(row.optString("phone")) != null &&
+                    row.optString("nearest_due_date").isNotBlank()
+            }
 
             var queuedCount = 0
             var overdueQueuedCount = 0
@@ -77,6 +83,9 @@ class DebtDueReminderWorker(
                 if (customerId <= 0L || transactionId <= 0L || balance <= 0.0 ||
                     phone == null || dueDate.isBlank()
                 ) continue
+                // Keep local alerts useful when SMS is disabled, without creating a
+                // misleading queued message or a persisted SMS event.
+                if (!smsEnabled) continue
 
                 // A reminder already recorded on the due date is enough; a reminder
                 // from yesterday must not suppress the actual due-date notification.
@@ -95,7 +104,9 @@ class DebtDueReminderWorker(
                         "المبلغ المستحق اليوم $dueAmountText ر. ي، وإجمالي الرصيد القائم $balanceText ر. ي. شاكرين تعاونكم."
                 }
 
-                val eventId = "debt-reminder:$stationId:$customerId:$dueDate"
+                val eventId = row.optString("event_id").trim().ifBlank {
+                    "debt-reminder:$stationId:$customerId:$dueDate"
+                }
                 val dedupeKey = "$eventId:$phone"
                 val alreadyQueued = db.readableDatabase.rawQuery(
                     "SELECT 1 FROM sms_outbox WHERE dedupe_key = ? LIMIT 1",
@@ -128,14 +139,28 @@ class DebtDueReminderWorker(
             if (queuedCount > 0 || SmsOutboxRepository.hasPending(db)) {
                 SmsOutboxWorker.schedule(applicationContext)
             }
-            if (queuedCount > 0) postDueReminderNotification(stationId, queuedCount, remindedNames, overdueQueuedCount)
+            if (queuedCount > 0 || (!smsEnabled && localEligibleCount > 0)) {
+                postDueReminderNotification(
+                    stationId,
+                    if (smsEnabled) queuedCount else localEligibleCount,
+                    remindedNames,
+                    overdueQueuedCount,
+                    smsEnabled
+                )
+            }
             Result.success()
         } catch (exception: Exception) {
             Result.retry()
         }
     }
 
-    private fun postDueReminderNotification(stationId: Int, count: Int, names: List<String>, overdueCount: Int) {
+    private fun postDueReminderNotification(
+        stationId: Int,
+        count: Int,
+        names: List<String>,
+        overdueCount: Int,
+        smsEnabled: Boolean
+    ) {
         try {
             val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val channelId = "debt_due_reminders"
@@ -159,10 +184,17 @@ class DebtDueReminderWorker(
             val detail = names.take(3).joinToString("، ")
             val notification = Notification.Builder(applicationContext, channelId)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle("تذكيرات الديون المستحقة")
-                .setContentText("تم تجهيز $count تذكير دين" + if (detail.isBlank()) "" else ": $detail")
+                .setContentTitle(if (smsEnabled) "تذكيرات الديون المستحقة" else "تنبيه ديون مستحقة")
+                .setContentText(
+                    (if (smsEnabled) "تم تجهيز $count تذكير دين" else "يوجد $count دين يحتاج متابعة") +
+                        if (detail.isBlank()) "" else ": $detail"
+                )
                 .setStyle(Notification.BigTextStyle().bigText(
-                    "تمت إضافة $count رسالة تذكير إلى طابور SMS. منها $overdueCount تذكير لمديونيات تجاوزت تاريخ الاستحقاق، والباقي لمستحقات اليوم. ستُرسل وفق إعدادات الرسائل وأذونات الجهاز."
+                    if (smsEnabled) {
+                        "تمت إضافة $count رسالة تذكير إلى طابور SMS. منها $overdueCount تذكير لمديونيات تجاوزت تاريخ الاستحقاق، والباقي لمستحقات اليوم. ستُرسل وفق إعدادات الرسائل وأذونات الجهاز."
+                    } else {
+                        "تم تعطيل SMS، لذلك لم تُرسل أي رسالة. هذا إشعار محلي مستقل لمتابعة الديون المستحقة يدوياً."
+                    }
                 ))
                 .setContentIntent(openApp)
                 .setAutoCancel(true)

@@ -230,9 +230,9 @@ class SupplierPayablesRobolectricTest {
     fun legacyPaymentOffsetsAreReportedSeparatelyPerCurrency() {
         SupplierPayablesRepository.createPurchaseInvoice(
             db, 1, supplierId, "manual", 94001, "MAN-94001",
-            40.0, "2026-10-01", 77L, 1
+            40.0, "2026-10-01", 3L, 1
         )
-        val paymentId = createCompletedSupplierPayment(70.0, "LEGACY-CURRENCY", 77L)
+        val paymentId = createCompletedSupplierPayment(70.0, "LEGACY-CURRENCY", 3L)
         val allocation = SupplierPayablesRepository.allocatePayment(
             db, 1, supplierId, paymentId, 70.0, 1
         )
@@ -242,7 +242,7 @@ class SupplierPayablesRobolectricTest {
         val aging = SupplierPayablesRepository.getSupplierAging(db, 1, supplierId, "2026-11-05")
         val offsets = aging.getJSONArray("legacy_payment_offsets_by_currency")
         assertEquals(1, offsets.length())
-        assertEquals(77L, offsets.getJSONObject(0).getLong("currency_id"))
+        assertEquals(3L, offsets.getJSONObject(0).getLong("currency_id"))
         assertEquals(30.0, offsets.getJSONObject(0).getDouble("amount"), 0.0001)
         assertEquals("legacy_balance_offset_not_invoice_allocated",
             offsets.getJSONObject(0).getString("classification"))

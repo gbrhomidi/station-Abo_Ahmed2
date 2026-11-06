@@ -1962,7 +1962,7 @@
         let dashboardResumeRefreshTimer = null;
         let displaySettingsLoadedAt = 0;
         let displaySettingsLoadPromise = null;
-        const DUE_REMINDER_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+        const DUE_REMINDER_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
         let clockInterval = null;
 
         let sidebarNavData = [];
@@ -3791,7 +3791,7 @@
                         { value: Number(stats.damaged_products_today || 0).toFixed(2), label: 'كمية اليوم (منتج)' }
                     ], cls: 'danger-card', fullWidth: true },
                 { id: 'card-due-invoices', header: 'الفواتير المستحقة', icon: 'fa-file-invoice',
-                    value: stats.due_invoices || 0, label: 'فاتورة خلال أسبوع', cls: 'info-card' },
+                    value: stats.due_invoices || 0, label: 'فاتورة خلال 8 أيام (اليوم + 7)', cls: 'info-card' },
                 { id: 'card-expiry-soon', header: 'المنتهية قريباً', icon: 'fa-hourglass-half',
                     value: stats.expiry_soon || 0, label: 'منتج خلال 30 يومًا',
                     badge: stats.expiry_soon || 0, cls: 'warning-card' },
@@ -3887,7 +3887,7 @@
                 updateStatsCards(stats);
                 if (stats.notifications) showRealNotifications(stats);
                 // Reminder refresh performs multiple synchronous bridge calls. Run it only
-                // once per 24 hours after the first successful dashboard load for this
+                // once per 15 minutes after the first successful dashboard load for this
                 // authenticated user/station, instead of on every resume/focus refresh.
                 const reminderCheckAt = Date.now();
                 if (shouldRefreshMainDueReminders(reminderCheckAt)) {

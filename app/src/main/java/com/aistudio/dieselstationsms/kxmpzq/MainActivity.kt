@@ -14446,7 +14446,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val candidate = row.optLong("transaction_id", 0L)
             if (candidate <= 0L) return JSONObject().put("queued", false).put("reason", "no_due_invoice")
 
-            val eventId = "debt-reminder:$stationId:$customerId:$dueDate"
+            val eventId = row.optString("event_id").trim().ifBlank {
+                "debt-reminder:$stationId:$customerId:$dueDate"
+            }
             val dedupeKey = "$eventId:$normalizedPhone"
             val alreadyQueued = db.readableDatabase.rawQuery(
                 "SELECT 1 FROM sms_outbox WHERE dedupe_key = ? LIMIT 1",
@@ -14514,7 +14516,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     val daysRemaining = row.optInt("days_remaining", 999)
                     val eligible = row.optBoolean("eligible", false)
                     if (!eligible || customerId <= 0L) { skipped++; continue }
-                    if (autoOneDay && daysRemaining > 1) continue
+                    // automatic_one_day means exactly tomorrow; do not include today's
+                    // due invoices or silently expand to the whole requested window.
+                    if (autoOneDay && daysRemaining != 1) continue
                     if (!autoOneDay && requested.isNotEmpty() && customerId !in requested) continue
                     val result = queueDueReminder(db, row, stationId, activity.currentUserId)
                     if (result.optBoolean("queued", false)) queued++ else skipped++

@@ -274,9 +274,11 @@ object DebtDueDateRepository {
             val customerRows = openByCustomer[customerId].orEmpty()
             val outstanding = customerRows.sumOf { it.remaining }.coerceAtLeast(0.0)
             val dueDateKey = nearest.dueDate.take(10)
-            val dueAmount = dueRows.filter { it.dueDate.take(10) == dueDateKey }.sumOf { it.remaining }.coerceAtLeast(0.0)
+            val sameDateRows = dueRows.filter { it.dueDate.take(10) == dueDateKey }
+            val dueAmount = sameDateRows.sumOf { it.remaining }.coerceAtLeast(0.0)
             val phone = PhoneUtils.normalize(nearest.phone)
-            val eventId = "debt-reminder:$stationId:$customerId:${nearest.dueDate.take(10)}"
+            val invoiceSet = sameDateRows.map { it.transactionId }.sorted().joinToString(",")
+            val eventId = "debt-reminder:$stationId:$customerId:$dueDateKey:$invoiceSet"
             val dedupeKey = if (phone != null) "$eventId:$phone" else ""
             val alreadyQueued = dedupeKey.isNotBlank() && hasOutboxDedupeKey(helper.readableDatabase, dedupeKey)
             val eligible = outstanding > 0.000001 && phone != null && !alreadyQueued
@@ -340,7 +342,9 @@ object DebtDueDateRepository {
             val dueAmount = overdueRows.filter { it.dueDate.take(10) == dueDate }
                 .sumOf { it.remaining }.coerceAtLeast(0.0)
             val phone = PhoneUtils.normalize(nearest.phone)
-            val eventId = "debt-reminder:$stationId:$customerId:$dueDate"
+            val invoiceSet = overdueRows.filter { it.dueDate.take(10) == dueDate }
+                .map { it.transactionId }.sorted().joinToString(",")
+            val eventId = "debt-reminder:$stationId:$customerId:$dueDate:$invoiceSet"
             val dedupeKey = if (phone != null) "$eventId:$phone" else ""
             val alreadyQueued = dedupeKey.isNotBlank() && hasOutboxDedupeKey(helper.readableDatabase, dedupeKey)
             output.put(JSONObject().apply {
