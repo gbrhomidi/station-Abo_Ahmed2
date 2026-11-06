@@ -31,6 +31,8 @@ object SmsOutboxRepository {
         val partsCount: Int,
         val attemptCount: Int,
         val subscriptionId: Int?,
+        val eventId: String?,
+        val businessEntityId: String?,
     )
 
     data class EnqueueResult(
@@ -155,7 +157,8 @@ object SmsOutboxRepository {
         try {
             val job = database.rawQuery(
                 """
-                SELECT message_id, recipient, body, parts_count, attempt_count, subscription_id
+                SELECT message_id, recipient, body, parts_count, attempt_count, subscription_id,
+                       event_id, business_entity_id
                 FROM sms_outbox
                 WHERE status IN ('QUEUED','RETRY_PENDING') AND next_attempt_at <= ?
                 ORDER BY CASE priority WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'NORMAL' THEN 2 ELSE 3 END, created_at ASC
@@ -169,7 +172,9 @@ object SmsOutboxRepository {
                     body = cursor.getString(2),
                     partsCount = cursor.getInt(3),
                     attemptCount = cursor.getInt(4),
-                    subscriptionId = if (cursor.isNull(5)) null else cursor.getInt(5)
+                    subscriptionId = if (cursor.isNull(5)) null else cursor.getInt(5),
+                    eventId = if (cursor.isNull(6)) null else cursor.getString(6),
+                    businessEntityId = if (cursor.isNull(7)) null else cursor.getString(7)
                 )
             }
             if (job != null) {
@@ -229,6 +234,31 @@ object SmsOutboxRepository {
         )
         if (changed > 0) syncLegacyStatus(db.writableDatabase, messageId, "cancelled", now)
         return changed > 0
+    }
+
+    /** Cancel a claimed message before transport when its business source is no longer eligible. */
+    fun cancelClaimed(db: DatabaseHelper, messageId: String, reason: String): Boolean {
+        val now = System.currentTimeMillis()
+        val database = db.writableDatabase
+        database.beginTransaction()
+        try {
+            val changed = database.update(
+                "sms_outbox",
+                ContentValues().apply {
+                    put("status", "CANCELLED")
+                    put("failed_at", now)
+                    put("failure_code", "BUSINESS_INELIGIBLE")
+                    put("failure_reason", reason.take(500))
+                },
+                "message_id = ? AND status = 'SENDING'",
+                arrayOf(messageId)
+            )
+            if (changed == 1) syncLegacyStatus(database, messageId, "cancelled", now)
+            database.setTransactionSuccessful()
+            return changed == 1
+        } finally {
+            database.endTransaction()
+        }
     }
 
     fun prepareParts(db: DatabaseHelper, messageId: String, partsCount: Int) {

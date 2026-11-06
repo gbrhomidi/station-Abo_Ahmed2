@@ -44,6 +44,22 @@ import java.util.concurrent.TimeUnit
         while (processed < MAX_BATCH) {
             val job = SmsOutboxRepository.claimNext(db) ?: break
             try {
+                if (!DebtDueDateRepository.isCurrentDebtReminder(
+                        helper = db,
+                        eventId = job.eventId,
+                        businessEntityId = job.businessEntityId,
+                        recipient = job.recipient,
+                        body = job.body
+                    )
+                ) {
+                    SmsOutboxRepository.cancelClaimed(
+                        db,
+                        job.messageId,
+                        "Debt reminder no longer matches the trusted open debt or current recipient"
+                    )
+                    processed++
+                    continue
+                }
                 SmsOutboxRepository.prepareParts(db, job.messageId, job.partsCount)
                 transportSender.send(job)
             } catch (securityException: SecurityException) {

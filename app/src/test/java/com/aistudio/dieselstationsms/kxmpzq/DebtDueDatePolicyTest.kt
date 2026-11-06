@@ -7,6 +7,7 @@ import com.aistudio.dieselstationsms.kxmpzq.sms.DebtDueDateRepository
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -130,6 +131,45 @@ class DebtDueDatePolicyTest {
         assertEquals(setOf(unknownSale),pageIds("undated"))
         val undated=helper.getDebtRemindersPage(1,"undated").getJSONObject(0)
         assertTrue(undated.optString("due_date").isBlank())
+    }
+
+    @Test fun outboxDebtReminderIsRevalidatedAgainstCurrentBalanceAndPhone() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val db=helper.writableDatabase
+        db.execSQL("PRAGMA foreign_keys=OFF")
+        val originalPhone="967771234567"
+        val partyId=addParty(db,"outbox-revalidation","صافي 0 يوم",0,"explicit_text")
+        val partyColumns=db.rawQuery("PRAGMA table_info(parties)",null).use { c ->
+            buildSet { while(c.moveToNext()) add(c.getString(c.getColumnIndexOrThrow("name"))) }
+        }
+        val phoneColumn=listOf("phone","phone_number","mobile","phone1").first { it in partyColumns }
+        db.update("parties",ContentValues().apply { put(phoneColumn,originalPhone) },"id=?",arrayOf(partyId.toString()))
+        val today=BusinessDay.currentDate()
+        addSale(db,"outbox-revalidation",partyId,today,"sale_creation","explicit_text")
+
+        val candidate=DebtDueDateRepository.getDueSoonDebtReminders(helper,1,0).getJSONObject(0)
+        val eventId=candidate.getString("event_id")
+        val entityId="party:$partyId"
+        val body="مرحباً، موعد استحقاق الدين هو اليوم ($today). المبلغ المستحق اليوم 100 وإجمالي الرصيد القائم 100 ر. ي."
+        assertTrue(DebtDueDateRepository.isCurrentDebtReminder(helper,eventId,entityId,originalPhone,body))
+
+        db.update("sales_transactions",ContentValues().apply {
+            put("paid_amount",100.0);put("remaining_amount",0.0);put("payment_status","paid")
+        },"id=?",arrayOf(candidate.getLong("transaction_id").toString()))
+        assertFalse("A fully paid debt must not reach SMS transport",DebtDueDateRepository.isCurrentDebtReminder(helper,eventId,entityId,originalPhone,body))
+
+        db.update("sales_transactions",ContentValues().apply {
+            put("paid_amount",0.0);put("remaining_amount",100.0);put("payment_status","pending")
+        },"id=?",arrayOf(candidate.getLong("transaction_id").toString()))
+        db.update("sales_transactions",ContentValues().apply {
+            put("paid_amount",50.0);put("remaining_amount",50.0);put("payment_status","partial")
+        },"id=?",arrayOf(candidate.getLong("transaction_id").toString()))
+        assertFalse("A partially paid debt must not send a stale amount",DebtDueDateRepository.isCurrentDebtReminder(helper,eventId,entityId,originalPhone,body))
+        db.update("sales_transactions",ContentValues().apply {
+            put("paid_amount",0.0);put("remaining_amount",100.0);put("payment_status","pending")
+        },"id=?",arrayOf(candidate.getLong("transaction_id").toString()))
+        db.update("parties",ContentValues().apply { put(phoneColumn,"967779999999") },"id=?",arrayOf(partyId.toString()))
+        assertFalse("A queued message must not be sent to the customer's old phone",DebtDueDateRepository.isCurrentDebtReminder(helper,eventId,entityId,originalPhone,body))
     }
 
     private fun addParty(db:android.database.sqlite.SQLiteDatabase,key:String,terms:String,days:Int,source:String?):Long {

@@ -376,6 +376,84 @@ object DebtDueDateRepository {
         return output
     }
 
+    /**
+     * Revalidates a queued debt reminder immediately before SMS transport. The event identity
+     * must still describe the currently selected due-date cohort for this customer, the cohort
+     * must have an open balance and a trusted maturity date, and the recipient must match the
+     * customer's current normalized phone number. Non-debt messages are unaffected.
+     */
+    fun isCurrentDebtReminder(
+        helper: DatabaseHelper,
+        eventId: String?,
+        businessEntityId: String?,
+        recipient: String,
+        body: String
+    ): Boolean {
+        if (eventId?.startsWith("debt-reminder:") != true) return true
+        val parts = eventId.split(":", limit = 5)
+        if (parts.size != 5) return false
+        val stationId = parts[1].toIntOrNull()?.takeIf { it > 0 } ?: return false
+        val customerId = parts[2].toLongOrNull()?.takeIf { it > 0L } ?: return false
+        val eventDueDate = parts[3].takeIf { it.length == 10 && parseDate(it) != null } ?: return false
+        if (businessEntityId != "party:$customerId") return false
+        val encodedInvoiceIds = parts[4].split(',').map { it.toLongOrNull() ?: return false }
+        if (encodedInvoiceIds.isEmpty() || encodedInvoiceIds.any { it <= 0L } ||
+            encodedInvoiceIds != encodedInvoiceIds.distinct().sorted()
+        ) return false
+
+        val today = LocalDate.parse(BusinessDay.currentDate())
+        val openCustomerDebts = readDebts(helper.readableDatabase, stationId).filter {
+            it.customerId == customerId && it.remaining > 0.000001
+        }
+        if (openCustomerDebts.isEmpty()) return false
+        val customerDebts = openCustomerDebts.filter { it.dueDate.isNotBlank() }
+        if (customerDebts.isEmpty()) return false
+
+        val dueToday = customerDebts.filter { parseDate(it.dueDate) == today }
+        val expectedDate: LocalDate
+        val expectedRows: List<SaleDebt>
+        if (dueToday.isNotEmpty()) {
+            expectedDate = today
+            expectedRows = dueToday
+        } else {
+            val latestOverdue = customerDebts.mapNotNull { parseDate(it.dueDate) }
+                .filter { it.isBefore(today) }
+                .maxOrNull() ?: return false
+            expectedDate = latestOverdue
+            expectedRows = customerDebts.filter { parseDate(it.dueDate) == latestOverdue }
+        }
+
+        if (expectedDate.toString() != eventDueDate) return false
+        val currentInvoiceIds = expectedRows.map { it.transactionId }.distinct().sorted()
+        if (currentInvoiceIds != encodedInvoiceIds) return false
+        if (expectedRows.sumOf { it.remaining } <= 0.000001) return false
+
+        val currentPhone = PhoneUtils.normalize(expectedRows.first().phone) ?: return false
+        if (PhoneUtils.normalize(recipient) != currentPhone) return false
+
+        val outstanding = openCustomerDebts.sumOf { it.remaining }.coerceAtLeast(0.0)
+        val dueAmount = expectedRows.sumOf { it.remaining }.coerceAtLeast(0.0)
+        val outstandingText = formatReminderAmount(outstanding)
+        val dueAmountText = formatReminderAmount(dueAmount)
+
+        // Do not send stale maturity wording or stale amounts after a partial payment/date roll.
+        return if (expectedDate == today) {
+            body.contains("موعد استحقاق الدين هو اليوم") &&
+                body.contains("المبلغ المستحق اليوم $dueAmountText") &&
+                body.contains("إجمالي الرصيد القائم $outstandingText")
+        } else {
+            body.contains("قد مضى منذ") &&
+                body.contains("المبلغ المتأخر $dueAmountText") &&
+                body.contains("إجمالي الرصيد القائم $outstandingText")
+        }
+    }
+
+    private fun formatReminderAmount(value: Double): String = if (value % 1.0 == 0.0) {
+        value.toLong().toString()
+    } else {
+        String.format(Locale.US, "%,.2f", value)
+    }
+
     fun getOverdueDebts(helper: DatabaseHelper, stationId: Int): JSONArray {
         val all = getCustomerDebts(helper, stationId)
         val out = JSONArray()

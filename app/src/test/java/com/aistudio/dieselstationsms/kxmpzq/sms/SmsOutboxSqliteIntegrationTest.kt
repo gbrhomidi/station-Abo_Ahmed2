@@ -9,6 +9,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -95,6 +96,26 @@ class SmsOutboxSqliteIntegrationTest {
         assertEquals("DELIVERED", status(claimed.messageId))
         assertEquals("delivered", legacyStatus(claimed.messageId))
         assertNull(SmsOutboxRepository.claimNext(database))
+    }
+
+    @Test
+    fun ineligibleClaimedMessageIsCancelledBeforeTransportAndLegacyStatusIsSynced() {
+        val queued = SmsOutboxRepository.enqueue(
+            database,
+            "967771234567",
+            "Debt reminder",
+            eventId = "debt-reminder:1:7:2026-11-06:19",
+            businessEntityId = "party:7",
+            dedupeKey = "debt-reminder-cancel-test"
+        )!!
+        val claimed = SmsOutboxRepository.claimNext(database)!!
+        assertEquals(queued.messageId, claimed.messageId)
+
+        assertTrue(SmsOutboxRepository.cancelClaimed(database, claimed.messageId, "DEBT_PAID"))
+        assertEquals("CANCELLED", status(claimed.messageId))
+        assertEquals("cancelled", legacyStatus(claimed.messageId))
+        assertFalse("Cancellation must be idempotent",SmsOutboxRepository.cancelClaimed(database, claimed.messageId, "DEBT_PAID"))
+        assertNull("Cancelled message must not be claimable again",SmsOutboxRepository.claimNext(database))
     }
 
     @Test
