@@ -289,6 +289,7 @@ class PendingTasksWorkspaceRobolectricTest {
                 put("is_credit", 1)
                 put("due_date", "2020-01-01")
                 put("due_date_source", "sale_creation")
+                put("payment_terms_source_at_sale", "explicit_text")
                 put("due_date_basis", "2019-12-02")
                 put("business_day", "2019-12-02")
                 put("status", "completed")
