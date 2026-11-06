@@ -38,6 +38,7 @@ class SmsOutboxWorkerIntegrationTest {
             .grantPermissions(Manifest.permission.SEND_SMS)
         DatabaseHelper.closeInstance()
         database = DatabaseHelper.getInstance(context)
+        database.setSetting("sms_send_enabled", "1")
         database.writableDatabase.delete("sms_outbox_parts", null, null)
         database.writableDatabase.delete("sms_outbox", null, null)
         database.writableDatabase.delete("sms_messages", null, null)
