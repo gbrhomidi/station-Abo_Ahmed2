@@ -1,7 +1,6 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
 import android.content.ContentValues
-import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.BusinessDay
@@ -394,6 +393,9 @@ object DebtDueDateRepository {
         return java.time.temporal.ChronoUnit.DAYS.between(today, due).toInt()
     }
 
+    // riskLevel remains in the signature for bridge/source compatibility. Credit
+    // risk is intentionally independent from payment/maturity status.
+    @Suppress("UNUSED_PARAMETER")
     fun statusFor(remaining:Double,paid:Double,dueDate:String?,riskLevel:String?=null,today:LocalDate=LocalDate.parse(BusinessDay.currentDate())):String {
         if(remaining<=0.000001) return "paid"
         val due=parseDate(dueDate) ?: return "undated"

@@ -54,7 +54,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 52
+        const val VERSION = 53
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -305,6 +305,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     46 -> ensureApprovalControlSchema(db)
                     47 -> ensureFinanceIntegritySchema(db)
                     51 -> ensureTaskWorkspaceSchema(db)
+                    52 -> ensureDashboardDebtQueryIndexes(db)
                 }
             }
             ensureModule006Schema(db)
@@ -7516,6 +7517,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_date ON sales_transactions(created_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_status ON sales_transactions(status)")
         ensureSalesReportIndexes(db)
+        ensureDashboardDebtQueryIndexes(db)
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_code ON shifts(shift_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_station ON shifts(station_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_date ON shifts(shift_date)")
@@ -18015,7 +18017,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                  AND COALESCE(is_deleted,0)=0
                  AND due_date IS NOT NULL AND TRIM(due_date)<>''
                  $trustedDueDateClause
-                 AND date(due_date) BETWEEN date(?) AND date(?, '+7 days')""",
+                 AND due_date >= substr(?,1,10)
+                 AND due_date < date(substr(?,1,10), '+8 days')""",
             arrayOf(stationId.toString(), today, today)
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("due_invoices", cursor.getInt(0))
@@ -18223,7 +18226,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                  AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')
                  AND due_date IS NOT NULL AND TRIM(due_date)<>''
                  $trustedDueDateClause
-                 AND date(due_date) < date(?)""",
+                 AND due_date < substr(?,1,10)""",
             arrayOf(stationId.toString(), today)
         ).use { cursor ->
             if (cursor.moveToFirst()) {
@@ -33726,6 +33729,25 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         // while retaining a station/date-leading index for broader summaries.
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_station_business_day_deleted_payment ON sales_transactions(station_id, business_day, is_deleted, payment_method)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_station_payment_business_day_deleted ON sales_transactions(station_id, payment_method, business_day, is_deleted)")
+    }
+
+    /**
+     * Composite indexes for the high-frequency dashboard and customer-debt reads.
+     * Keep the station scope first: every caller is station-scoped and this avoids
+     * scanning another station's rows before applying the remaining predicates.
+     */
+    private fun ensureDashboardDebtQueryIndexes(db: SQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_debt_station_deleted_due ON sales_transactions(station_id, is_deleted, due_date, id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_debt_station_customer_deleted ON sales_transactions(station_id, customer_party_id, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_debt_station_method_due ON sales_transactions(station_id, payment_method, due_date, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_dashboard_customer ON parties(station_id, is_deleted, is_active, id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_dashboard_party_type ON parties(station_id, party_type_id, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_dashboard_payments_sale_day ON payments(sale_id, business_day, status, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_dashboard_inventory_warehouse_product ON inventory_levels(warehouse_id, product_id, quantity_on_hand)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_dashboard_warehouses_station ON warehouses(station_id, is_active, id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_dashboard_products_scope_expiry ON products(station_id, is_deleted, status, expiry_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_dashboard_tasks_scope_state ON tasks(station_id, is_deleted, is_archived, is_resolved)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_dashboard_tanks_scope ON tanks(station_id, is_deleted)")
     }
 
     private fun parsePriceInstant(value: String): String = value.trim().replace('T', ' ')

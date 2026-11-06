@@ -11174,10 +11174,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         bitmap = Bitmap.createBitmap(renderWidth, renderHeight, config)
                         val canvas = android.graphics.Canvas(bitmap!!)
                         canvas.drawColor(android.graphics.Color.WHITE)
-                        // OEM WebView implementations differ: capturePicture() may replay a
-                        // blank picture even when the live WebView has painted correctly.
-                        // Try the live view first, inspect its pixels, then retry the legacy
-                        // Picture path only if the first capture is genuinely blank.
+                        // Render the live WebView only. The legacy capturePicture() API is
+                        // deprecated and can replay a stale/blank Picture on modern WebView.
+                        // The bounded retry below gives the live renderer time to paint again.
                         fun bitmapStats(image: Bitmap): Triple<Int, Int, Int> {
                             var visible = 0
                             var lightPaper = 0
@@ -11216,26 +11215,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         val requiredVisibleSamples = maxOf(12, totalSamples / 200)
                         var captureMethod = "webview-draw"
                         var captureLooksValid = looksLikeInvoice(bitmap!!)
-                        if (!captureLooksValid) {
-                            canvas.drawColor(android.graphics.Color.WHITE)
-                            @Suppress("DEPRECATION")
-                            val picture = view.capturePicture()
-                            if (picture.width > 0 && picture.height > 0) {
-                                canvas.save()
-                                canvas.scale(
-                                    renderWidth.toFloat() / picture.width.toFloat(),
-                                    renderHeight.toFloat() / picture.height.toFloat()
-                                )
-                                picture.draw(canvas)
-                                canvas.restore()
-                                val fallbackCounts = bitmapStats(bitmap!!)
-                                visibleSamples = fallbackCounts.first
-                                totalSamples = fallbackCounts.second
-                                lightSamples = fallbackCounts.third
-                                captureLooksValid = looksLikeInvoice(bitmap!!)
-                                captureMethod = "capturePicture-fallback"
-                            }
-                        }
                         lastBitmapDiagnostic = "attempt=" + attempt + ",method=" + captureMethod +
                             ",capture=" + bitmap!!.width + "x" + bitmap!!.height +
                             ",contentHeight=" + cssContentHeight + ",renderHeight=" + renderHeight +

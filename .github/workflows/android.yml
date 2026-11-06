@@ -10,7 +10,7 @@
 #   Validation + Signed Release APK
 #
 # feature/ai-health-sqlite:
-#   Validation + Signed Release APK
+#   Validation only
 #
 # Pull Request -> main:
 #   Validation ONLY
@@ -20,9 +20,7 @@
 # workflow_dispatch:
 #   Validation is allowed from any ref.
 #
-#   Signed Release is allowed ONLY when the selected ref is:
-#     - main
-#     - feature/ai-health-sqlite
+#   Signed Release is allowed ONLY when the selected ref is main.
 #
 # Security
 # ----------------------------------------------------------------------------
@@ -39,7 +37,7 @@
 #
 # Reliability
 # ----------------------------------------------------------------------------
-# - Release requires successful validation.
+# - Release requires successful validation on main only.
 # - Release APK must exist.
 # - Exactly one final Release APK must be produced.
 # - Release APK must be cryptographically verified with apksigner.
@@ -212,7 +210,7 @@ env:
 #   4. Smoke-test verification
 #   5. Screen smoke tests
 #   6. Kotlin / Robolectric regression tests
-#   7. Debug compilation
+#   7. Debug compilation in the same Gradle invocation
 #
 # No Validation APK artifact is uploaded.
 #
@@ -326,6 +324,7 @@ jobs:
         run: |
           set -e
           node ./app/src/test/js/business-day.test.js
+          python3 ./sqlite-query-plan-regression-test.py
 
       - name: Verify reports, pagination and Fuel Readings contracts
         run: |
@@ -344,36 +343,21 @@ jobs:
         run: |
           set -e
 
-          ./gradlew testDebugUnitTest --no-daemon
-
-
-      # ----------------------------------------------------------------------
-      # Debug compilation
-      #
-      # This validates Android compilation without accessing Release signing
-      # secrets or the production keystore.
-      #
-      # No Debug APK is uploaded.
-      # ----------------------------------------------------------------------
-
-      - name: Compile Debug APK
-        run: |
-          set -e
-
-          ./gradlew assembleDebug --no-daemon
+          # Reuse one Gradle configuration/compilation graph for tests and APK.
+          ./gradlew testDebugUnitTest assembleDebug --no-daemon
 
 
 # ============================================================================
 # JOB 2 — SIGNED PRODUCTION RELEASE
 # ============================================================================
 #
-# Release is intentionally restricted to the two explicitly approved branches:
+# Release is intentionally restricted to main; feature branches run validation
+# only to avoid producing unnecessary signed artifacts.
 #
 #   main
-#   feature/ai-health-sqlite
 #
 # Pull Requests never enter this job because github.ref for a Pull Request
-# is not refs/heads/main or refs/heads/feature/ai-health-sqlite.
+# is not refs/heads/main.
 #
 # Release requires:
 #
@@ -397,9 +381,7 @@ jobs:
     # Allowed:
     #
     #   Push -> main
-    #   Push -> feature/ai-health-sqlite
     #   Manual -> main
-    #   Manual -> feature/ai-health-sqlite
     #
     # Not allowed:
     #
@@ -410,8 +392,7 @@ jobs:
     # ------------------------------------------------------------------------
 
     if: >
-      github.ref == 'refs/heads/main' ||
-      github.ref == 'refs/heads/feature/ai-health-sqlite'
+      github.ref == 'refs/heads/main'
 
     runs-on: ubuntu-latest
 
@@ -571,7 +552,8 @@ jobs:
         run: |
           set -e
 
-          ./gradlew clean assembleRelease --no-daemon
+          # A fresh runner already has no stale outputs; keep Gradle cacheable.
+          ./gradlew assembleRelease --no-daemon
 
 
       # ======================================================================
