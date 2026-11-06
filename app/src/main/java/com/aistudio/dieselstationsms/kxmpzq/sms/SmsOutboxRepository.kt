@@ -17,6 +17,9 @@ import org.json.JSONObject
  * مصدر الحقيقة للرسائل الصادرة. الإدراج يعني QUEUED فقط، وليس SENT.
  */
 object SmsOutboxRepository {
+    const val MAX_ATTEMPTS = 3
+
+    /** attemptCount includes the attempt claimed for this message. */
     data class OutboxMessage(
         val messageId: String,
         val recipient: String,
@@ -180,9 +183,11 @@ object SmsOutboxRepository {
                     return null
                 }
                 syncLegacyStatus(database, job.messageId, "sending", now)
+                database.setTransactionSuccessful()
+                return job.copy(attemptCount = job.attemptCount + 1)
             }
             database.setTransactionSuccessful()
-            return job
+            return null
         } finally {
             database.endTransaction()
         }
@@ -303,7 +308,7 @@ object SmsOutboxRepository {
                     "SELECT attempt_count FROM sms_outbox WHERE message_id = ? LIMIT 1",
                     arrayOf(messageId)
                 ).use { if (it.moveToFirst()) it.getInt(0) else 1 }
-                val retry = attempt < 3
+                val retry = attempt < MAX_ATTEMPTS
                 database.update(
                     "sms_outbox",
                     ContentValues().apply {
