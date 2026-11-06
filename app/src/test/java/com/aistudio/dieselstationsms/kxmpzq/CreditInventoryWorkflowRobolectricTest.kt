@@ -8,6 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -171,6 +172,15 @@ class CreditInventoryWorkflowRobolectricTest {
         assertEquals(1.0, db.rawQuery("SELECT quantity FROM products WHERE id = ?", arrayOf(productId.toString())).use { it.moveToFirst(); it.getDouble(0) }, 0.0001)
         val alerts = helper.getStockAlertRecordsContract(JSONObject(), 1).getJSONArray("rows")
         assertTrue((0 until alerts.length()).any { alerts.getJSONObject(it).getLong("product_id") == productId && alerts.getJSONObject(it).getInt("is_resolved") == 0 })
+        listOf("cancelled", "refunded").forEach { excludedStatus ->
+            db.update("sales_transactions", ContentValues().apply { put("status", excludedStatus) },
+                "id=? AND station_id=?", arrayOf(saleId.toString(), "1"))
+            val debts = DebtDueDateRepository.getCustomerDebts(helper, 1)
+            assertFalse("$excludedStatus invoices must not appear in customer debts",
+                (0 until debts.length()).any { debts.getJSONObject(it).optLong("transaction_id") == saleId })
+        }
+        db.update("sales_transactions", ContentValues().apply { put("status", "completed") },
+            "id=? AND station_id=?", arrayOf(saleId.toString(), "1"))
         assertTrue(db.rawQuery("PRAGMA foreign_key_check", null).use { !it.moveToFirst() })
     }
 

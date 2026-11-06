@@ -442,8 +442,9 @@ object DebtDueDateRepository {
         val stationJoin = if ("station_id" in p) " AND p.station_id=s.station_id" else ""
         val partyDeleted = if ("is_deleted" in p) " AND COALESCE(p.is_deleted,0)=0" else ""
         val saleDeleted = if ("is_deleted" in s) " AND COALESCE(s.is_deleted,0)=0" else ""
+        val saleStatus = if ("status" in s) " AND LOWER(COALESCE(s.status,'')) NOT IN ('cancelled','refunded','void','reversed')" else ""
         val baseCredit = "LOWER(REPLACE(REPLACE(TRIM($payment),' ',''),'-','_')) IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')"
-        val where = "$baseCredit$saleDeleted"
+        val where = "$baseCredit$saleDeleted$saleStatus"
         val sql = """
             SELECT s.id,s.station_id,COALESCE(s.$customerId,0),$partyNameExpr,$phoneExpr,
                    $invoiceExpr,$saleCodeExpr,$orderExpr,$payment,$dueExpr,$createdExpr,

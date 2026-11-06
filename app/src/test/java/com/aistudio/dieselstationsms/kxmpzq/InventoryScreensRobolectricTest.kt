@@ -353,7 +353,7 @@ class InventoryScreensRobolectricTest {
 
 
     @Test
-    fun deletingReturnReversesInventoryAndSoftDeletesAtomically() {
+    fun deletingLegacyReturnReversesInventoryAndSoftDeletesAtomically() {
         val productId = createProduct(0.0, 1.0)
         val warehouseId = helper.ensureOperationalWarehouse(1)
         val db = helper.writableDatabase
@@ -364,7 +364,7 @@ class InventoryScreensRobolectricTest {
                 .put("movement_type", "return")
                 .put("quantity", 2.5)
                 .put("unit_cost", 10.0)
-                .put("reference_type", "sale_return")
+                .put("reference_type", "legacy_return")
                 .put("reference_id", 987654L)
                 .put("notes", "اختبار عكس المرتجع"),
             1,
@@ -400,6 +400,76 @@ class InventoryScreensRobolectricTest {
             assertEquals(1, cursor.count)
         }
         assertTrue(db.rawQuery("PRAGMA foreign_key_check", null).use { !it.moveToFirst() })
+    }
+
+    @Test
+    fun deletingFinancialSaleReturnIsRejectedWithoutChangingInventoryOrTheOriginalMovement() {
+        val productId = createProduct(0.0, 1.0)
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        val db = helper.writableDatabase
+        val returnId = helper.addStockMovement(
+            JSONObject()
+                .put("product_id", productId)
+                .put("warehouse_id", warehouseId)
+                .put("movement_type", "return")
+                .put("quantity", 2.5)
+                .put("unit_cost", 10.0)
+                .put("reference_type", "sale_return")
+                .put("reference_id", 987655L)
+                .put("notes", "مرتجع مالي لا يجوز عكس مخزونه منفرداً"),
+            1,
+            actorId
+        )
+
+        val rejected = runCatching { helper.deleteReturn(returnId, 1) }.isFailure
+        assertTrue("A sale return must not be reversed by changing inventory alone", rejected)
+        assertEquals(2.5, db.rawQuery(
+            "SELECT quantity_on_hand FROM inventory_levels WHERE product_id=? AND warehouse_id=?",
+            arrayOf(productId.toString(), warehouseId.toString())
+        ).use { check(it.moveToFirst()); it.getDouble(0) }, 0.000001)
+        db.rawQuery(
+            "SELECT is_deleted,status FROM inventory_movements WHERE id=? AND station_id=?",
+            arrayOf(returnId.toString(), "1")
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+            assertEquals("completed", cursor.getString(1))
+        }
+    }
+
+    @Test
+    fun dashboardCountsUniqueLowStockProductsAcrossActiveWarehousesOnlyForTheirStation() {
+        val db = helper.writableDatabase
+        val before = helper.getDashboardStatsForDate(1, JSONObject(), "2026-11-05").getInt("low_stock")
+        val productId = createProduct(1.0, 10.0)
+        val firstWarehouse = helper.ensureOperationalWarehouse(1)
+        val secondWarehouse = db.insertOrThrow("warehouses", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("station_id", 1)
+            put("warehouse_name", "مستودع إضافي ${UUID.randomUUID().toString().take(8)}")
+            put("is_active", 1)
+        })
+        val inactiveWarehouse = db.insertOrThrow("warehouses", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("station_id", 1)
+            put("warehouse_name", "مستودع غير نشط ${UUID.randomUUID().toString().take(8)}")
+            put("is_active", 0)
+        })
+        val otherStationWarehouse = helper.ensureOperationalWarehouse(2)
+        assertEquals(1, db.update("inventory_levels", ContentValues().apply { put("quantity_on_hand", 2.0) },
+            "product_id=? AND warehouse_id=?", arrayOf(productId.toString(), firstWarehouse.toString())))
+        db.insertOrThrow("inventory_levels", null, ContentValues().apply {
+            put("product_id", productId); put("warehouse_id", secondWarehouse); put("quantity_on_hand", 3.0)
+        })
+        db.insertOrThrow("inventory_levels", null, ContentValues().apply {
+            put("product_id", productId); put("warehouse_id", inactiveWarehouse); put("quantity_on_hand", 100.0)
+        })
+        db.insertOrThrow("inventory_levels", null, ContentValues().apply {
+            put("product_id", productId); put("warehouse_id", otherStationWarehouse); put("quantity_on_hand", 100.0)
+        })
+
+        val after = helper.getDashboardStatsForDate(1, JSONObject(), "2026-11-05").getInt("low_stock")
+        assertEquals("The two active warehouses contribute one product-level KPI; inactive and other-station stock is ignored", before + 1, after)
     }
 
 }

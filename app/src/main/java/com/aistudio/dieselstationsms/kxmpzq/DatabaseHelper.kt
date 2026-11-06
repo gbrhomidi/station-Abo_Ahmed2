@@ -18067,7 +18067,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                      SELECT SUM(COALESCE(il.quantity_on_hand,0))
                      FROM inventory_levels il
                      JOIN warehouses w ON w.id=il.warehouse_id
-                     WHERE il.product_id=p.id AND w.station_id=p.station_id
+                     WHERE il.product_id=p.id AND w.station_id=p.station_id AND w.is_active=1
                  ),0) <= COALESCE(p.minimum_stock,0)""",
             arrayOf(stationId.toString())
         ).use { cursor ->
@@ -28163,7 +28163,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     val saleId: Long,
                     val stationId: Int,
                     val warehouseId: Long,
-                    val performedBy: Long
+                    val performedBy: Long,
+                    val referenceType: String
                 )
                 val movementWhere = if (stationId != null) {
                     "id=? AND station_id=? AND movement_type='return' AND is_deleted=0"
@@ -28176,7 +28177,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     arrayOf(id.toString())
                 }
                 val movement = db.rawQuery(
-                    "SELECT product_id, quantity_change, reference_id, COALESCE(station_id, 0), COALESCE(warehouse_id, 0), COALESCE(performed_by, 0) FROM inventory_movements WHERE $movementWhere",
+                    "SELECT product_id, quantity_change, reference_id, COALESCE(station_id, 0), COALESCE(warehouse_id, 0), COALESCE(performed_by, 0), COALESCE(reference_type, '') FROM inventory_movements WHERE $movementWhere",
                     movementArgs
                 ).use { cursor ->
                     if (!cursor.moveToFirst()) return 0
@@ -28186,8 +28187,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         saleId = cursor.getLong(2),
                         stationId = cursor.getLong(3).toInt(),
                         warehouseId = cursor.getLong(4),
-                        performedBy = cursor.getLong(5)
+                        performedBy = cursor.getLong(5),
+                        referenceType = cursor.getString(6).orEmpty()
                     )
+                }
+                require(movement.referenceType != "sale_return") {
+                    "لا يمكن حذف مرتجع مرتبط بفواتير وحركات مالية بعكس المخزون وحده؛ يلزم مسار عكس محاسبي كامل"
                 }
                 require(movement.stationId > 0) { "معرف محطة المرتجع غير صالح" }
                 require(movement.warehouseId > 0L) { "معرف مستودع المرتجع غير صالح" }
