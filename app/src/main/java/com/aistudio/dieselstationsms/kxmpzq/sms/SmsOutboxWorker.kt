@@ -73,7 +73,24 @@ import java.util.concurrent.TimeUnit
                     )
                 } else {
                     SmsOutboxRepository.prepareParts(db, job.messageId, job.partsCount)
-                    transportSender.send(job)
+                    // The batch result is only a pre-filter. Re-read this customer's current
+                    // debt and phone after part preparation, immediately before transport.
+                    if (!DebtDueDateRepository.isCurrentDebtReminder(
+                            helper = db,
+                            eventId = job.eventId,
+                            businessEntityId = job.businessEntityId,
+                            recipient = job.recipient,
+                            body = job.body
+                        )
+                    ) {
+                        SmsOutboxRepository.cancelClaimed(
+                            db,
+                            job.messageId,
+                            "Debt reminder failed final pre-transport revalidation"
+                        )
+                    } else {
+                        transportSender.send(job)
+                    }
                 }
             } catch (securityException: SecurityException) {
                 SmsOutboxRepository.markFailed(db, job.messageId, "SEND_SMS_PERMISSION", securityException.message.orEmpty(), retry = false)

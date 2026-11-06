@@ -411,10 +411,10 @@ object DebtDueDateRepository {
     }
 
     /**
-     * Validates a bounded Outbox batch using one customer-scoped debt read per station,
-     * rather than one station scan/query per message. Non-debt notifications pass through;
-     * malformed debt events fail closed. The worker's batch limit bounds SQL bind parameters
-     * and the time between this snapshot and transport.
+     * Pre-validates a bounded Outbox batch using one customer-scoped debt read per station,
+     * rather than one station-wide scan per message. The worker performs an individual final
+     * revalidation after this pre-filter and immediately before each transport. Non-debt
+     * notifications pass through; malformed debt events fail closed.
      */
     fun validateDebtReminderBatch(
         helper: DatabaseHelper,

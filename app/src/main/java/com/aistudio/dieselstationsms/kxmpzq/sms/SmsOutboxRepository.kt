@@ -253,7 +253,16 @@ object SmsOutboxRepository {
                 "message_id = ? AND status = 'SENDING'",
                 arrayOf(messageId)
             )
-            if (changed == 1) syncLegacyStatus(database, messageId, "cancelled", now)
+            if (changed == 1) {
+                // A final pre-transport validation can reject the message after parts were
+                // prepared. Remove only unsent parts; no transport callback can own them yet.
+                database.delete(
+                    "sms_outbox_parts",
+                    "message_id = ? AND status = 'PENDING'",
+                    arrayOf(messageId)
+                )
+                syncLegacyStatus(database, messageId, "cancelled", now)
+            }
             database.setTransactionSuccessful()
             return changed == 1
         } finally {

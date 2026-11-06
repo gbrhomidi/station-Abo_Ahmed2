@@ -110,10 +110,20 @@ class SmsOutboxSqliteIntegrationTest {
         )!!
         val claimed = SmsOutboxRepository.claimNext(database)!!
         assertEquals(queued.messageId, claimed.messageId)
+        SmsOutboxRepository.prepareParts(database, claimed.messageId, claimed.partsCount)
+        assertTrue(
+            "The fixture must contain prepared, unsent parts",
+            countWhere("sms_outbox_parts", "message_id = ? AND status = 'PENDING'", claimed.messageId) > 0
+        )
 
         assertTrue(SmsOutboxRepository.cancelClaimed(database, claimed.messageId, "DEBT_PAID"))
         assertEquals("CANCELLED", status(claimed.messageId))
         assertEquals("cancelled", legacyStatus(claimed.messageId))
+        assertEquals(
+            "Cancelled claims must not leave transportable pending parts",
+            0,
+            countWhere("sms_outbox_parts", "message_id = ? AND status = 'PENDING'", claimed.messageId)
+        )
         assertFalse("Cancellation must be idempotent",SmsOutboxRepository.cancelClaimed(database, claimed.messageId, "DEBT_PAID"))
         assertNull("Cancelled message must not be claimable again",SmsOutboxRepository.claimNext(database))
     }
