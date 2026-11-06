@@ -39,29 +39,42 @@ import java.util.concurrent.TimeUnit
         SmsOutboxRepository.failDeliveryTimeouts(db).forEach { messageId ->
             SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, messageId)
         }
-        var processed = 0
-
-        while (processed < MAX_BATCH) {
+        val batch = mutableListOf<SmsOutboxRepository.OutboxMessage>()
+        while (batch.size < MAX_BATCH) {
             val job = SmsOutboxRepository.claimNext(db) ?: break
+            batch += job
+        }
+
+        val eligibleMessageIds = try {
+            DebtDueDateRepository.validateDebtReminderBatch(db, batch)
+        } catch (exception: Exception) {
+            // Fail closed: no claimed message is sent when the batch snapshot cannot be read.
+            batch.forEach { job ->
+                SmsOutboxRepository.markFailed(
+                    db,
+                    job.messageId,
+                    "DEBT_REVALIDATION_ERROR",
+                    exception.javaClass.simpleName,
+                    retry = SmsOutboxRepository.shouldRetryAfterAttempt(job.attemptCount)
+                )
+                SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, job.messageId)
+            }
+            return@withContext Result.retry()
+        }
+
+        val processed = batch.size
+        batch.forEach { job ->
             try {
-                if (!DebtDueDateRepository.isCurrentDebtReminder(
-                        helper = db,
-                        eventId = job.eventId,
-                        businessEntityId = job.businessEntityId,
-                        recipient = job.recipient,
-                        body = job.body
-                    )
-                ) {
+                if (job.messageId !in eligibleMessageIds) {
                     SmsOutboxRepository.cancelClaimed(
                         db,
                         job.messageId,
                         "Debt reminder no longer matches the trusted open debt or current recipient"
                     )
-                    processed++
-                    continue
+                } else {
+                    SmsOutboxRepository.prepareParts(db, job.messageId, job.partsCount)
+                    transportSender.send(job)
                 }
-                SmsOutboxRepository.prepareParts(db, job.messageId, job.partsCount)
-                transportSender.send(job)
             } catch (securityException: SecurityException) {
                 SmsOutboxRepository.markFailed(db, job.messageId, "SEND_SMS_PERMISSION", securityException.message.orEmpty(), retry = false)
                 SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, job.messageId)
@@ -75,7 +88,6 @@ import java.util.concurrent.TimeUnit
                 )
                 SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, job.messageId)
             }
-            processed++
         }
 
         if (SmsOutboxRepository.hasPending(db) && processed >= MAX_BATCH) Result.retry() else Result.success()

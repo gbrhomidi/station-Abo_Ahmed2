@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.ContentValues
 import androidx.test.core.app.ApplicationProvider
 import com.aistudio.dieselstationsms.kxmpzq.sms.DebtDueDateRepository
+import com.aistudio.dieselstationsms.kxmpzq.sms.SmsOutboxRepository
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -147,11 +148,43 @@ class DebtDueDatePolicyTest {
         val today=BusinessDay.currentDate()
         addSale(db,"outbox-revalidation",partyId,today,"sale_creation","explicit_text")
 
-        val candidate=DebtDueDateRepository.getDueSoonDebtReminders(helper,1,0).getJSONObject(0)
+        val secondPhone="967771112222"
+        val secondPartyId=addParty(db,"outbox-revalidation-second","صافي 0 يوم",0,"explicit_text")
+        db.insertOrThrow("party_contacts",null,ContentValues().apply {
+            put("uuid","contact-outbox-second-${System.nanoTime()}");put("party_id",secondPartyId)
+            put("contact_name","Outbox test second");put("phone",secondPhone)
+            put("is_primary",1);put("is_active",1);put("is_deleted",0)
+        })
+        addSale(db,"outbox-revalidation-second",secondPartyId,today,"sale_creation","explicit_text")
+
+        val reminderRows=DebtDueDateRepository.getDueSoonDebtReminders(helper,1,0)
+        val candidates=(0 until reminderRows.length()).map { reminderRows.getJSONObject(it) }
+        val candidate=candidates.first { it.getLong("customer_party_id")==partyId }
+        val secondCandidate=candidates.first { it.getLong("customer_party_id")==secondPartyId }
         val eventId=candidate.getString("event_id")
         val entityId="party:$partyId"
         val body="مرحباً، موعد استحقاق الدين هو اليوم ($today). المبلغ المستحق اليوم 100 وإجمالي الرصيد القائم 100 ر. ي."
         assertTrue(DebtDueDateRepository.isCurrentDebtReminder(helper,eventId,entityId,originalPhone,body))
+
+        val batch=(1..100).map { index ->
+            val source=if (index % 2 == 0) candidate else secondCandidate
+            val phone=if (index % 2 == 0) originalPhone else secondPhone
+            SmsOutboxRepository.OutboxMessage(
+                messageId="batch-validation-$index",
+                recipient=phone,
+                body=body,
+                partsCount=1,
+                attemptCount=0,
+                subscriptionId=null,
+                eventId=source.getString("event_id"),
+                businessEntityId="party:${source.getLong("customer_party_id")}"
+            )
+        }
+        assertEquals(
+            "All current reminders in a 100-message batch should validate from the station/customer-scoped read",
+            batch.map { it.messageId }.toSet(),
+            DebtDueDateRepository.validateDebtReminderBatch(helper,batch)
+        )
 
         db.update("sales_transactions",ContentValues().apply {
             put("paid_amount",100.0);put("remaining_amount",0.0);put("payment_status","paid")

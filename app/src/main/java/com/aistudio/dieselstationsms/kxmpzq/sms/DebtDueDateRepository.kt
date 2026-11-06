@@ -52,6 +52,14 @@ object DebtDueDateRepository {
         val terms: String
     )
 
+    private data class ParsedDebtReminder(
+        val message: SmsOutboxRepository.OutboxMessage,
+        val stationId: Int,
+        val customerId: Long,
+        val dueDate: String,
+        val invoiceIds: List<Long>
+    )
+
     fun ensureSchema(helper: DatabaseHelper) {
         val db=helper.writableDatabase
         if(!tableExists(db,"sales_transactions")) return
@@ -389,22 +397,84 @@ object DebtDueDateRepository {
         recipient: String,
         body: String
     ): Boolean {
-        if (eventId?.startsWith("debt-reminder:") != true) return true
-        val parts = eventId.split(":", limit = 5)
-        if (parts.size != 5) return false
-        val stationId = parts[1].toIntOrNull()?.takeIf { it > 0 } ?: return false
-        val customerId = parts[2].toLongOrNull()?.takeIf { it > 0L } ?: return false
-        val eventDueDate = parts[3].takeIf { it.length == 10 && parseDate(it) != null } ?: return false
-        if (businessEntityId != "party:$customerId") return false
-        val encodedInvoiceIds = parts[4].split(',').map { it.toLongOrNull() ?: return false }
-        if (encodedInvoiceIds.isEmpty() || encodedInvoiceIds.any { it <= 0L } ||
-            encodedInvoiceIds != encodedInvoiceIds.distinct().sorted()
-        ) return false
+        val message = SmsOutboxRepository.OutboxMessage(
+            messageId = "single-message-validation",
+            recipient = recipient,
+            body = body,
+            partsCount = 1,
+            attemptCount = 0,
+            subscriptionId = null,
+            eventId = eventId,
+            businessEntityId = businessEntityId
+        )
+        return message.messageId in validateDebtReminderBatch(helper, listOf(message))
+    }
+
+    /**
+     * Validates a bounded Outbox batch using one customer-scoped debt read per station,
+     * rather than one station scan/query per message. Non-debt notifications pass through;
+     * malformed debt events fail closed. The worker's batch limit bounds SQL bind parameters
+     * and the time between this snapshot and transport.
+     */
+    fun validateDebtReminderBatch(
+        helper: DatabaseHelper,
+        messages: List<SmsOutboxRepository.OutboxMessage>
+    ): Set<String> {
+        val eligibleMessageIds = linkedSetOf<String>()
+        val parsedReminders = mutableListOf<ParsedDebtReminder>()
+
+        messages.forEach { message ->
+            if (message.eventId?.startsWith("debt-reminder:") != true) {
+                eligibleMessageIds += message.messageId
+            } else {
+                parseDebtReminder(message)?.let(parsedReminders::add)
+            }
+        }
+        if (parsedReminders.isEmpty()) return eligibleMessageIds
 
         val today = LocalDate.parse(BusinessDay.currentDate())
-        val openCustomerDebts = readDebts(helper.readableDatabase, stationId, onlyCustomerId = customerId).filter {
-            it.customerId == customerId && it.remaining > 0.000001
+        val database = helper.readableDatabase
+        parsedReminders.groupBy { it.stationId }.forEach { (stationId, stationMessages) ->
+            val customerIds = stationMessages.map { it.customerId }.toSet()
+            val debtsByCustomer = readDebts(
+                db = database,
+                stationId = stationId,
+                onlyCustomerIds = customerIds
+            ).groupBy { it.customerId }
+
+            stationMessages.forEach { reminder ->
+                val customerDebts = debtsByCustomer[reminder.customerId].orEmpty()
+                if (isCurrentDebtReminderForCustomer(reminder, customerDebts, today)) {
+                    eligibleMessageIds += reminder.message.messageId
+                }
+            }
         }
+        return eligibleMessageIds
+    }
+
+    private fun parseDebtReminder(
+        message: SmsOutboxRepository.OutboxMessage
+    ): ParsedDebtReminder? {
+        val parts = message.eventId?.split(":", limit = 5) ?: return null
+        if (parts.size != 5) return null
+        val stationId = parts[1].toIntOrNull()?.takeIf { it > 0 } ?: return null
+        val customerId = parts[2].toLongOrNull()?.takeIf { it > 0L } ?: return null
+        val eventDueDate = parts[3].takeIf { it.length == 10 && parseDate(it) != null } ?: return null
+        if (message.businessEntityId != "party:$customerId") return null
+        val invoiceIds = parts[4].split(',').map { it.toLongOrNull() ?: return null }
+        if (invoiceIds.isEmpty() || invoiceIds.any { it <= 0L } ||
+            invoiceIds != invoiceIds.distinct().sorted()
+        ) return null
+
+        return ParsedDebtReminder(message, stationId, customerId, eventDueDate, invoiceIds)
+    }
+
+    private fun isCurrentDebtReminderForCustomer(
+        reminder: ParsedDebtReminder,
+        debts: List<SaleDebt>,
+        today: LocalDate
+    ): Boolean {
+        val openCustomerDebts = debts.filter { it.remaining > 0.000001 }
         if (openCustomerDebts.isEmpty()) return false
         val customerDebts = openCustomerDebts.filter { it.dueDate.isNotBlank() }
         if (customerDebts.isEmpty()) return false
@@ -423,18 +493,19 @@ object DebtDueDateRepository {
             expectedRows = customerDebts.filter { parseDate(it.dueDate) == latestOverdue }
         }
 
-        if (expectedDate.toString() != eventDueDate) return false
+        if (expectedDate.toString() != reminder.dueDate) return false
         val currentInvoiceIds = expectedRows.map { it.transactionId }.distinct().sorted()
-        if (currentInvoiceIds != encodedInvoiceIds) return false
+        if (currentInvoiceIds != reminder.invoiceIds) return false
         if (expectedRows.sumOf { it.remaining } <= 0.000001) return false
 
         val currentPhone = PhoneUtils.normalize(expectedRows.first().phone) ?: return false
-        if (PhoneUtils.normalize(recipient) != currentPhone) return false
+        if (PhoneUtils.normalize(reminder.message.recipient) != currentPhone) return false
 
         val outstanding = openCustomerDebts.sumOf { it.remaining }.coerceAtLeast(0.0)
         val dueAmount = expectedRows.sumOf { it.remaining }.coerceAtLeast(0.0)
         val outstandingText = formatReminderAmount(outstanding)
         val dueAmountText = formatReminderAmount(dueAmount)
+        val body = reminder.message.body
 
         // Do not send stale maturity wording or stale amounts after a partial payment/date roll.
         return if (expectedDate == today) {
@@ -486,10 +557,12 @@ object DebtDueDateRepository {
     private fun readDebts(
         db: SQLiteDatabase,
         stationId: Int,
-        onlyCustomerId: Long? = null
+        onlyCustomerIds: Set<Long>? = null
     ): List<SaleDebt> {
         if (!tableExists(db, "sales_transactions") || !tableExists(db, "parties")) return emptyList()
-        if (onlyCustomerId != null && onlyCustomerId <= 0L) return emptyList()
+        if (onlyCustomerIds != null &&
+            (onlyCustomerIds.isEmpty() || onlyCustomerIds.any { it <= 0L })
+        ) return emptyList()
         val s = columns(db, "sales_transactions")
         val p = columns(db, "parties")
         val pc = columns(db, "party_contacts")
@@ -535,10 +608,15 @@ object DebtDueDateRepository {
         val where = "$baseCredit$saleDeleted$saleStatus"
         // Keep the client predicate on the raw indexed column. Binding the value lets SQLite
         // use the station/customer composite index without applying a function to the key.
-        val customerFilter = if (onlyCustomerId != null) " AND s.`$customerId` = ?" else ""
+        val sortedCustomerIds = onlyCustomerIds?.sorted()
+        val customerFilter = when {
+            sortedCustomerIds == null -> ""
+            sortedCustomerIds.size == 1 -> " AND s.`$customerId` = ?"
+            else -> " AND s.`$customerId` IN (${List(sortedCustomerIds.size) { "?" }.joinToString(",")})"
+        }
         // The station-wide API keeps its established result ordering; the targeted validation
-        // path has only one customer's rows and performs its small cohort selection in Kotlin.
-        val orderBy = if (onlyCustomerId == null) {
+        // path reads a bounded set of customers and performs cohort selection in Kotlin.
+        val orderBy = if (sortedCustomerIds == null) {
             "ORDER BY CASE WHEN $dueExpr='' THEN 1 ELSE 0 END,$dueExpr,s.id"
         } else ""
         val sql = """
@@ -554,7 +632,7 @@ object DebtDueDateRepository {
         val rows = ArrayList<SaleDebt>()
         val selectionArgs = buildList {
             add(stationId.toString())
-            onlyCustomerId?.let { add(it.toString()) }
+            sortedCustomerIds?.forEach { add(it.toString()) }
         }.toTypedArray()
         db.rawQuery(sql, selectionArgs).use { cursor ->
             while (cursor.moveToNext()) {
