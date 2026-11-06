@@ -115,6 +115,39 @@ class SmsOutboxSqliteIntegrationTest {
     }
 
     @Test
+    fun claimedAttemptCounterIsOneBasedAndStopsAtTheConfiguredLimit() {
+        val queued = SmsOutboxRepository.enqueue(
+            database, "967771234567", "Attempt limit body", dedupeKey = "attempt-limit-dedupe"
+        )!!
+        var now = System.currentTimeMillis() + 1_000L
+
+        repeat(SmsOutboxRepository.MAX_ATTEMPTS) { attemptIndex ->
+            val claimed = SmsOutboxRepository.claimNext(database, now)
+            assertNotNull(claimed)
+            assertEquals(attemptIndex + 1, claimed!!.attemptCount)
+            val shouldRetry = SmsOutboxRepository.shouldRetryAfterAttempt(claimed.attemptCount)
+            assertEquals(attemptIndex + 1 < SmsOutboxRepository.MAX_ATTEMPTS, shouldRetry)
+
+            SmsOutboxRepository.markFailed(
+                database,
+                queued.messageId,
+                "TEMPORARY_TEST_FAILURE",
+                "simulated transport failure",
+                retry = shouldRetry,
+                now = now
+            )
+            assertEquals(
+                if (shouldRetry) "RETRY_PENDING" else "FAILED",
+                status(queued.messageId)
+            )
+            now += 60_000L
+        }
+
+        assertEquals(SmsOutboxRepository.MAX_ATTEMPTS, attemptCount(queued.messageId))
+        assertNull(SmsOutboxRepository.claimNext(database, now))
+    }
+
+    @Test
     fun financialRecordAndNotificationAreCommittedAtomically() {
         shadowOf(context.applicationContext as Application)
             .grantPermissions(Manifest.permission.SEND_SMS)
@@ -473,6 +506,12 @@ class SmsOutboxSqliteIntegrationTest {
     private fun count(table: String): Int =
         database.readableDatabase.rawQuery("SELECT COUNT(*) FROM $table", null)
             .use { cursor -> check(cursor.moveToFirst()); cursor.getInt(0) }
+
+    private fun attemptCount(messageId: String): Int =
+        database.readableDatabase.rawQuery(
+            "SELECT attempt_count FROM sms_outbox WHERE message_id = ?",
+            arrayOf(messageId)
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getInt(0) }
 
     private class RecordingTransport : SmsTransportSender {
         val sentMessageIds = mutableListOf<String>()

@@ -19,6 +19,10 @@ import org.json.JSONObject
 object SmsOutboxRepository {
     const val MAX_ATTEMPTS = 3
 
+    /** attemptNumber is one-based and includes the currently claimed attempt. */
+    fun shouldRetryAfterAttempt(attemptNumber: Int): Boolean =
+        attemptNumber in 1 until MAX_ATTEMPTS
+
     /** attemptCount includes the attempt claimed for this message. */
     data class OutboxMessage(
         val messageId: String,
@@ -308,7 +312,7 @@ object SmsOutboxRepository {
                     "SELECT attempt_count FROM sms_outbox WHERE message_id = ? LIMIT 1",
                     arrayOf(messageId)
                 ).use { if (it.moveToFirst()) it.getInt(0) else 1 }
-                val retry = attempt < MAX_ATTEMPTS
+                val retry = shouldRetryAfterAttempt(attempt)
                 database.update(
                     "sms_outbox",
                     ContentValues().apply {

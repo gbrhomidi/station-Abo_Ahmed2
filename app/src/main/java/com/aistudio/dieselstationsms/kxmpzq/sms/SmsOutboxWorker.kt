@@ -55,7 +55,7 @@ import java.util.concurrent.TimeUnit
                     job.messageId,
                     exception.javaClass.simpleName,
                     exception.message.orEmpty(),
-                    retry = job.attemptCount < MAX_ATTEMPTS
+                    retry = SmsOutboxRepository.shouldRetryAfterAttempt(job.attemptCount)
                 )
                 SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, job.messageId)
             }
@@ -70,8 +70,6 @@ import java.util.concurrent.TimeUnit
         private const val PERIODIC_RECOVERY_WORK_NAME = "sms-outbox-recovery-periodic"
         private const val RECOVERY_INTERVAL_MINUTES = 15L
         private const val MAX_BATCH = 20
-        private const val MAX_ATTEMPTS = SmsOutboxRepository.MAX_ATTEMPTS
-
         fun schedule(context: Context) {
             val request = OneTimeWorkRequestBuilder<SmsOutboxWorker>().build()
             WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
