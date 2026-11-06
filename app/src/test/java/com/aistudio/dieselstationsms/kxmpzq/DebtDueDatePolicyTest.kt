@@ -99,6 +99,7 @@ class DebtDueDatePolicyTest {
     @Test fun legacyReminderQueriesMatchKotlinTrustedDateEligibility() {
         DebtDueDateRepository.ensureSchema(helper)
         val db=helper.writableDatabase
+        db.execSQL("PRAGMA foreign_keys=OFF")
         val today=LocalDate.parse(BusinessDay.currentDate())
         val past=today.minusDays(1).toString()
         val future=today.plusDays(5).toString()
