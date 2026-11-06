@@ -346,7 +346,6 @@ class SmsOutboxSqliteIntegrationTest {
             put("station_id", 1)
             put("commercial_name_ar", "SMS test $suffix")
             put("payment_terms", "صافي 30 يوم")
-            put("payment_terms_days", 30)
             put("is_active", 1)
             put("is_deleted", 0)
         })
