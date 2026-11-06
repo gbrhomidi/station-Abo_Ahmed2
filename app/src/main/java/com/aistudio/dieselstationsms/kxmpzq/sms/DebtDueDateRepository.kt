@@ -21,6 +21,17 @@ import java.util.Locale
  */
 object DebtDueDateRepository {
     private val creditMethods = setOf("credit", "credit_sale", "credit_account", "on_account", "آجل", "اجل", "بيع آجل", "على الحساب")
+    private val trustedDueDateSources = setOf("sale_creation", "sales_trigger_v3", "sales_trigger_v4", "legacy_rebuilt_snapshot")
+
+    fun isTrustedDueDate(termsSource: String?, dueDateSource: String?): Boolean =
+        termsSource == "explicit_text" && dueDateSource in trustedDueDateSources
+
+    /** SQL predicate for trusted, non-empty maturity dates; alias is restricted to a SQL identifier. */
+    fun trustedDueDateSql(alias: String): String {
+        require(Regex("^[A-Za-z_][A-Za-z0-9_]*$").matches(alias)) { "اسم مستعار SQL غير صالح" }
+        val sources = trustedDueDateSources.sorted().joinToString(",") { "'$it'" }
+        return "TRIM(COALESCE($alias.due_date,''))<>'' AND COALESCE($alias.payment_terms_source_at_sale,'')='explicit_text' AND COALESCE($alias.due_date_source,'') IN ($sources)"
+    }
 
     private data class SaleDebt(
         val transactionId: Long,
@@ -449,9 +460,7 @@ object DebtDueDateRepository {
                 // Legacy values without provenance are retained in SQLite but classified as UNDATED.
                 val dueSource = if (cursor.columnCount > 16) cursor.getString(16).orEmpty() else ""
                 val termsSource = if (cursor.columnCount > 17) cursor.getString(17).orEmpty() else ""
-                val effectiveDue = if (termsSource == "explicit_text" && dueSource in setOf(
-                    "sale_creation","sales_trigger_v3","sales_trigger_v4","legacy_rebuilt_snapshot"
-                )) due else ""
+                val effectiveDue = if (isTrustedDueDate(termsSource, dueSource)) due else ""
                 val customerIdValue = cursor.getLong(2)
                 val name = cursor.getString(3).orEmpty().trim().ifBlank { if (customerIdValue > 0L) "عميل #$customerIdValue" else "عميل غير مسجل" }
                 val row = SaleDebt(

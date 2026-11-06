@@ -96,6 +96,41 @@ class DebtDueDatePolicyTest {
         assertEquals("",oldTask.getString("task_date"))
     }
 
+    @Test fun legacyReminderQueriesMatchKotlinTrustedDateEligibility() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val db=helper.writableDatabase
+        val today=LocalDate.parse(BusinessDay.currentDate())
+        val past=today.minusDays(1).toString()
+        val future=today.plusDays(5).toString()
+        val unknownParty=addParty(db,"untrusted-reminder","NET 30",30,null)
+        val overdueParty=addParty(db,"trusted-overdue","NET 30",30,"explicit_text")
+        val soonParty=addParty(db,"trusted-soon","NET 30",30,"explicit_text")
+        val unknownSale=addSale(db,"untrusted-overdue",unknownParty,past,"sale_creation")
+        val trustedOverdue=addSale(db,"trusted-overdue",overdueParty,past,"sale_creation","explicit_text")
+        val trustedSoon=addSale(db,"trusted-soon",soonParty,future,"sale_creation","explicit_text")
+
+        val overdueRows=helper.getOverduePayments(1)
+        val overdueIds=(0 until overdueRows.length())
+            .map { overdueRows.getJSONObject(it).getLong("id") }.toSet()
+        assertEquals(setOf(trustedOverdue),overdueIds)
+
+        val soonRows=helper.getDueSoonDebtReminders(1,10)
+        val sqliteSoonIds=(0 until soonRows.length()).map { soonRows.getJSONObject(it).getLong("transaction_id") }.toSet()
+        val kotlinSoon=DebtDueDateRepository.getDueSoonDebtReminders(helper,1,10)
+        val kotlinSoonIds=(0 until kotlinSoon.length()).map { kotlinSoon.getJSONObject(it).getLong("transaction_id") }.toSet()
+        assertEquals(setOf(trustedSoon),sqliteSoonIds)
+        assertEquals(sqliteSoonIds,kotlinSoonIds)
+
+        fun pageIds(status:String)=helper.getDebtRemindersPage(1,status).let { rows ->
+            (0 until rows.length()).map { rows.getJSONObject(it).getLong("debt_id") }.toSet()
+        }
+        assertEquals(setOf(trustedOverdue),pageIds("overdue"))
+        assertEquals(setOf(trustedSoon),pageIds("pending"))
+        assertEquals(setOf(unknownSale),pageIds("undated"))
+        val undated=helper.getDebtRemindersPage(1,"undated").getJSONObject(0)
+        assertTrue(undated.isNull("due_date"))
+    }
+
     private fun addParty(db:android.database.sqlite.SQLiteDatabase,key:String,terms:String,days:Int,source:String?):Long {
         val values=ContentValues().apply {
             put("uuid","party-$key");put("party_code","P-$key");put("party_type_id",1);put("station_id",1)
@@ -106,18 +141,19 @@ class DebtDueDatePolicyTest {
         return db.insertOrThrow("parties",null,values)
     }
 
-    private fun addSale(db:android.database.sqlite.SQLiteDatabase,key:String,partyId:Long,dueDate:String?,dueSource:String?):Long {
+    private fun addSale(db:android.database.sqlite.SQLiteDatabase,key:String,partyId:Long,dueDate:String?,dueSource:String?,termsSourceAtSale:String?=null):Long {
         val salesColumns=db.rawQuery("PRAGMA table_info(sales_transactions)",null).use { c ->
             buildSet { while(c.moveToNext()) add(c.getString(c.getColumnIndexOrThrow("name"))) }
         }
         val values=ContentValues().apply {
             put("uuid","sale-$key");put("sale_code","SALE-$key");put("station_id",1);put("shift_id",1)
             put("customer_party_id",partyId);put("subtotal",100.0);put("gross_amount",100.0);put("net_amount",100.0)
-            put("payment_method","credit");put("payment_status","pending");put("paid_amount",0.0);put("remaining_amount",100.0)
+            put("payment_method","credit");put("payment_status","pending");put("is_credit",1);put("paid_amount",0.0);put("remaining_amount",100.0)
             put("status","completed");put("cashier_id",1);put("is_deleted",0)
             listOf("business_day","transaction_date","sale_date").firstOrNull { it in salesColumns }?.let { put(it,"2026-11-01") }
             if(dueDate!=null) put("due_date",dueDate)
             if(dueSource!=null) put("due_date_source",dueSource)
+            if(termsSourceAtSale!=null) put("payment_terms_source_at_sale",termsSourceAtSale)
         }
         return db.insertOrThrow("sales_transactions",null,values)
     }

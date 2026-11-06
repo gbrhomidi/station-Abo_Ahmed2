@@ -25654,13 +25654,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      */
     fun getOverduePayments(stationScopeId: Int): JSONArray {
         require(stationScopeId > 0) { "معرف المحطة مطلوب لتقرير الديون المتأخرة" }
+        DebtDueDateRepository.ensureSchema(this)
+        val trustedDueDate = DebtDueDateRepository.trustedDueDateSql("s")
         dbLock.lock()
         return try {
             readableDatabase.rawQuery(
                 """
-                 SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.station_id, s.liters, s.quantity, s.product_id, s.fuel_type_id, s.order_type, s.net_amount, s.gross_amount, s.paid_amount, s.remaining_amount, s.due_date, s.payment_status, s.payment_method, s.is_credit, s.invoice_number, s.created_at, p.commercial_name AS customer_name, p.commercial_name_ar AS customer_name_ar, p.legal_name AS customer_legal_name, ${primaryPartyContactSql("p", "phone")} AS customer_phone, f.fuel_code, f.fuel_name, f.fuel_name_ar, pr.product_name, pr.product_name_ar, pr.product_code FROM sales_transactions s LEFT JOIN parties p ON s.customer_party_id = p.id LEFT JOIN fuel_types f ON s.fuel_type_id = f.id AND f.is_deleted = 0 LEFT JOIN products pr ON s.product_id = pr.id AND pr.is_deleted = 0 WHERE s.remaining_amount > 0 AND date(s.due_date) < date('now') AND s.is_deleted = 0 AND s.station_id = ? AND p.station_id = s.station_id AND p.is_deleted = 0 ORDER BY s.due_date ASC, s.id ASC
+                 SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.station_id, s.liters, s.quantity, s.product_id, s.fuel_type_id, s.order_type, s.net_amount, s.gross_amount, s.paid_amount, s.remaining_amount, s.due_date, s.payment_status, s.payment_method, s.is_credit, s.invoice_number, s.created_at, p.commercial_name AS customer_name, p.commercial_name_ar AS customer_name_ar, p.legal_name AS customer_legal_name, ${primaryPartyContactSql("p", "phone")} AS customer_phone, f.fuel_code, f.fuel_name, f.fuel_name_ar, pr.product_name, pr.product_name_ar, pr.product_code FROM sales_transactions s LEFT JOIN parties p ON s.customer_party_id = p.id LEFT JOIN fuel_types f ON s.fuel_type_id = f.id AND f.is_deleted = 0 LEFT JOIN products pr ON s.product_id = pr.id AND pr.is_deleted = 0 WHERE s.remaining_amount > 0 AND $trustedDueDate AND date(s.due_date) < date(?) AND s.is_deleted = 0 AND s.station_id = ? AND p.station_id = s.station_id AND p.is_deleted = 0 ORDER BY s.due_date ASC, s.id ASC
                  """.trimIndent(),
-                arrayOf(stationScopeId.toString())
+                arrayOf(BusinessDay.currentDate(), stationScopeId.toString())
             ).use { cursor ->
                 cursorToJsonArray(cursor)
             }
@@ -28819,10 +28821,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      */
     fun getDueSoonDebtReminders(stationScopeId: Int, days: Int = 10): JSONArray {
         require(stationScopeId > 0 && days >= 0) { "معلمات الاستحقاق غير صالحة" }
+        DebtDueDateRepository.ensureSchema(this)
+        val trustedDueDate = DebtDueDateRepository.trustedDueDateSql("s")
         dbLock.lock()
         return try {
             val db = readableDatabase
-            val today = getCurrentDate()
+            val today = BusinessDay.currentDate()
             val sql = """
                 WITH date_bounds AS (
                     SELECT date(?) AS today, date(?, '+' || ? || ' day') AS end_date
@@ -28830,17 +28834,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 SELECT p.id AS customer_party_id,
                        p.commercial_name AS customer_name,
                        COALESCE(${primaryPartyContactSql("p", "phone")}, '') AS phone,
-                       SUM(CASE WHEN s.due_date IS NOT NULL
+                       SUM(CASE WHEN $trustedDueDate
                                   AND date(s.due_date) BETWEEN date_bounds.today AND date_bounds.end_date
                                 THEN s.remaining_amount ELSE 0 END) AS due_soon_amount,
                        SUM(s.remaining_amount) AS total_outstanding,
-                       MIN(CASE WHEN s.due_date IS NOT NULL
+                       MIN(CASE WHEN $trustedDueDate
                                   AND date(s.due_date) BETWEEN date_bounds.today AND date_bounds.end_date
                                 THEN date(s.due_date) END) AS nearest_due_date,
-                       MIN(CASE WHEN s.due_date IS NOT NULL
+                       MIN(CASE WHEN $trustedDueDate
                                   AND date(s.due_date) BETWEEN date_bounds.today AND date_bounds.end_date
                                 THEN s.id END) AS transaction_id,
-                       MIN(CASE WHEN s.due_date IS NOT NULL
+                       MIN(CASE WHEN $trustedDueDate
                                   AND date(s.due_date) BETWEEN date_bounds.today AND date_bounds.end_date
                                 THEN CAST(julianday(date(s.due_date)) - julianday(date_bounds.today) AS INTEGER) END) AS days_remaining,
                        (SELECT MAX(COALESCE(sl.created_at, ''))
@@ -33041,6 +33045,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getDebtRemindersPage(stationId: Int, status: String? = null): JSONArray {
         require(stationId > 0) { "معرف المحطة غير صالح" }
+        DebtDueDateRepository.ensureSchema(this)
+        val trustedDueDate = DebtDueDateRepository.trustedDueDateSql("s")
+        val asOfDate = BusinessDay.currentDate()
         val arr = JSONArray()
         dbLock.lock()
         try {
@@ -33056,10 +33063,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "p.is_deleted = 0",
                 "p.is_active = 1"
             )
-            val args = mutableListOf(stationId.toString(), stationId.toString())
+            val args = mutableListOf(asOfDate, stationId.toString(), stationId.toString())
             when (status) {
-                "overdue" -> predicates += "date(s.due_date) < date('now')"
-                "pending" -> predicates += "(s.due_date IS NULL OR date(s.due_date) >= date('now'))"
+                "overdue" -> { predicates += "($trustedDueDate) AND date(s.due_date) < date(?)"; args += asOfDate }
+                "pending" -> { predicates += "($trustedDueDate) AND date(s.due_date) >= date(?)"; args += asOfDate }
+                "undated" -> predicates += "NOT ($trustedDueDate)"
             }
             val query = """
                 SELECT s.id AS debt_id,
@@ -33067,8 +33075,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        p.commercial_name AS customer_name,
                        COALESCE(${primaryPartyContactSql("p", "phone")}, '') AS phone,
                        s.remaining_amount AS outstanding_amount,
-                       s.due_date,
-                       CASE WHEN s.due_date IS NOT NULL AND date(s.due_date) < date('now') THEN 1 ELSE 0 END AS is_overdue,
+                       CASE WHEN $trustedDueDate THEN s.due_date ELSE NULL END AS due_date,
+                       CASE WHEN ($trustedDueDate) AND date(s.due_date) < date(?) THEN 1 ELSE 0 END AS is_overdue,
                        (SELECT MAX(COALESCE(sl.created_at,''))
                           FROM sms_logs sl
                          WHERE sl.customer_party_id=s.customer_party_id
@@ -33077,7 +33085,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 FROM sales_transactions s
                 JOIN parties p ON p.id=s.customer_party_id
                 WHERE ${predicates.joinToString(" AND ")}
-                ORDER BY CASE WHEN s.due_date IS NULL THEN 1 ELSE 0 END, date(s.due_date) ASC, s.id ASC
+                ORDER BY CASE WHEN $trustedDueDate THEN 0 ELSE 1 END, date(s.due_date) ASC, s.id ASC
                 LIMIT 500
             """.trimIndent()
             db.rawQuery(query, args.toTypedArray()).use { c ->
