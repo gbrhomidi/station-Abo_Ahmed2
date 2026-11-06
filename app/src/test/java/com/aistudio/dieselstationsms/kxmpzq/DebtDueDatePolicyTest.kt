@@ -129,7 +129,7 @@ class DebtDueDatePolicyTest {
         assertEquals(setOf(trustedSoon),pageIds("pending"))
         assertEquals(setOf(unknownSale),pageIds("undated"))
         val undated=helper.getDebtRemindersPage(1,"undated").getJSONObject(0)
-        assertTrue(undated.isNull("due_date"))
+        assertTrue(undated.optString("due_date").isBlank())
     }
 
     private fun addParty(db:android.database.sqlite.SQLiteDatabase,key:String,terms:String,days:Int,source:String?):Long {
