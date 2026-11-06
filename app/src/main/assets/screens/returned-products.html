@@ -1941,7 +1941,7 @@
                 <i class="fas fa-dollar-sign"></i>
             </div>
             <div class="kpi-value" id="kpiTotalValue">0.00</div>
-            <div class="kpi-label">💰 إجمالي قيمة المرتجعات</div>
+            <div class="kpi-label">💰 إجمالي تكلفة المخزون المرتجع</div>
             <div class="kpi-trend up">
                 <i class="fas fa-arrow-up"></i>
                 <span id="trendValue">+0%</span>
@@ -2031,7 +2031,7 @@
                             <th>المنتج</th>
                             <th>العميل</th>
                             <th>الكمية</th>
-                            <th>القيمة</th>
+                            <th>تكلفة المخزون</th>
                             <th>السبب</th>
                             <th>التاريخ</th>
                             <th>الحالة</th>
@@ -2056,7 +2056,7 @@
                     <span class="value" id="footerTotalQty">0.0</span>
                 </span>
                 <span class="total-item">
-                    <span class="label">القيمة الإجمالية:</span>
+                    <span class="label">إجمالي تكلفة المخزون:</span>
                     <span class="value" id="footerTotalValue">0.00</span>
                 </span>
                 <span class="total-item">
@@ -2148,7 +2148,7 @@
             </div>
             <div class="modal-body">
                 <input type="hidden" id="editId" value="0" />
-                <div class="form-row">
+                <div class="form-row" id="returnIdentityFields">
                     <div class="form-group">
                         <label>رقم الفاتورة *</label>
                         <input id="fInvoiceNumber" type="text" placeholder="أدخل رقم الفاتورة الأصلية" required />
@@ -2159,21 +2159,11 @@
                             <option value="">اختر المنتج</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label>العميل</label>
-                        <select id="fCustomerId">
-                            <option value="">اختر العميل</option>
-                        </select>
-                    </div>
                 </div>
-                <div class="form-row">
+                <div class="form-row" id="returnQuantityFields">
                     <div class="form-group">
                         <label>الكمية *</label>
                         <input id="fQuantity" type="number" step="0.01" placeholder="أدخل الكمية" />
-                    </div>
-                    <div class="form-group">
-                        <label>القيمة *</label>
-                        <input id="fValue" type="number" step="0.01" placeholder="أدخل القيمة" />
                     </div>
                 </div>
                 <div class="form-group">
@@ -2183,20 +2173,6 @@
                 <div class="form-group">
                     <label>ملاحظات</label>
                     <textarea id="fNotes" placeholder="ملاحظات إضافية"></textarea>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>الحالة</label>
-                        <select id="fStatus">
-                            <option value="completed">مكتمل</option>
-                            <option value="pending">قيد الانتظار</option>
-                            <option value="cancelled">ملغي</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>تاريخ الإرجاع</label>
-                        <input id="fReturnDate" type="date" />
-                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -2337,6 +2313,7 @@
                 let raw;
                 switch (action) {
                     case 'getReturns': raw = AndroidInterface.getReturns(JSON.stringify(p)); break;
+                    case 'addReturn': raw = AndroidInterface.addReturn(JSON.stringify(p)); break;
                     case 'saveReturn': raw = AndroidInterface.processSaleReturn(JSON.stringify(p)); break;
                     case 'processReturn': raw = AndroidInterface.processSaleReturn(JSON.stringify(p)); break;
                     case 'updateReturn': raw = AndroidInterface.updateReturn(Number(p.id), JSON.stringify(p)); break;
@@ -2464,7 +2441,6 @@
                     product_id: productId || null,
                     customer_id: customerId || null,
                     status: status || null,
-                    station_id: 1
                 };
                 const result = await apiCall('getReturns', params);
                 if (result.success && result.data) {
@@ -2507,8 +2483,13 @@
                 const customerName = item.customer_name || '---';
                 const reason = item.reason || '---';
                 const quantity = parseFloat(item.quantity || 0);
-                const value = parseFloat(item.value || item.total_value || 0);
+                const value = parseFloat(item.stock_cost != null ? item.stock_cost : (item.value || item.total_value || 0));
                 const date = item.return_date ? new Date(item.return_date).toLocaleDateString('en-GB') : '---';
+                const isFinancialReturn = item.reference_type === 'sale_return';
+                const managementActions = isFinancialReturn
+                    ? '<span class="status-badge" title="المرتجع مرتبط بآثار مالية؛ العرض فقط من هذه الشاشة">مالي - عرض فقط</span>'
+                    : `<button class="btn-action edit" onclick="openEditModal(${item.id})" title="تعديل السبب والملاحظات فقط"><i class="fas fa-edit"></i></button>
+                       <button class="btn-action delete" onclick="deleteReturn(${item.id})" title="عكس حركة المخزون"><i class="fas fa-trash"></i></button>`;
 
                 return `
                         <tr>
@@ -2522,12 +2503,7 @@
                             <td>${date}</td>
                             <td>${getStatusBadge(item.status)}</td>
                             <td>
-                                <button class="btn-action edit" onclick="openEditModal(${item.id})" title="تعديل">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn-action delete" onclick="deleteReturn(${item.id})" title="حذف">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                ${managementActions}
                                 <button class="btn-action view" onclick="viewDetails(${item.id})" title="تفاصيل">
                                     <i class="fas fa-eye"></i>
                                 </button>
@@ -2805,18 +2781,13 @@
             const id = parseInt(document.getElementById('editId').value) || 0;
             const invoiceNumber = document.getElementById('fInvoiceNumber').value.trim();
             const productId = document.getElementById('fProductId').value;
-            const customerId = document.getElementById('fCustomerId').value || null;
             const quantity = parseFloat(document.getElementById('fQuantity').value);
-            const value = parseFloat(document.getElementById('fValue').value);
             const reason = document.getElementById('fReason').value.trim();
             const notes = document.getElementById('fNotes').value.trim();
-            const status = document.getElementById('fStatus').value;
-            const returnDate = document.getElementById('fReturnDate').value || businessDayDate();
 
-            if (!invoiceNumber) { showToast('❌ رقم الفاتورة الأصلية مطلوب', 'error'); return; }
-            if (!productId) { showToast('❌ الرجاء اختيار المنتج', 'error'); return; }
-            if (!quantity || quantity <= 0) { showToast('❌ الرجاء إدخال كمية صحيحة', 'error'); return; }
-            if (!value || value < 0) { showToast('❌ الرجاء إدخال قيمة صحيحة', 'error'); return; }
+            if (id === 0 && !invoiceNumber) { showToast('❌ رقم الفاتورة الأصلية مطلوب', 'error'); return; }
+            if (id === 0 && !productId) { showToast('❌ الرجاء اختيار المنتج', 'error'); return; }
+            if (id === 0 && (!quantity || quantity <= 0)) { showToast('❌ الرجاء إدخال كمية صحيحة', 'error'); return; }
             if (!reason) { showToast('❌ الرجاء إدخال سبب الإرجاع', 'error'); return; }
 
             showLoading(true);
@@ -2825,15 +2796,9 @@
                     id: id,
                     invoice_number: invoiceNumber,
                     product_id: parseInt(productId),
-                    customer_id: customerId ? parseInt(customerId) : null,
                     quantity: quantity,
-                    value: value,
                     reason: reason,
-                    notes: notes,
-                    status: status,
-                    return_date: returnDate,
-                    station_id: 1,
-                    created_by: 1
+                    notes: notes
                 };
                 const action = id > 0 ? 'updateReturn' : 'addReturn';
                 const result = await apiCall(action, params);
@@ -2855,13 +2820,13 @@
         async function deleteReturn(id) {
             if (!id) return;
             const confirmed = await Swal.fire({
-                title: 'حذف المرتجع؟',
-                text: 'هل أنت متأكد من حذف هذا السجل؟',
+                title: 'عكس حركة المرتجع؟',
+                text: 'سيُسجل عكس مخزني للحركة القديمة ويُلغى سجلها؛ لا يستخدم هذا الإجراء للمرتجعات المرتبطة بفاتورة مالية.',
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#ef4444',
                 cancelButtonColor: '#10b981',
-                confirmButtonText: 'نعم، حذف',
+                confirmButtonText: 'نعم، عكس الحركة',
                 cancelButtonText: 'إلغاء'
             });
             if (!confirmed.isConfirmed) return;
@@ -2887,16 +2852,14 @@
         // ===================================================================
         function openAddModal() {
             document.getElementById('editId').value = '0';
+            document.getElementById('returnIdentityFields').hidden = false;
+            document.getElementById('returnQuantityFields').hidden = false;
             document.getElementById('fInvoiceNumber').value = '';
             document.getElementById('formModalTitle').textContent = '➕ إضافة مرتجع';
             document.getElementById('fProductId').value = '';
-            document.getElementById('fCustomerId').value = '';
             document.getElementById('fQuantity').value = '';
-            document.getElementById('fValue').value = '';
             document.getElementById('fReason').value = '';
             document.getElementById('fNotes').value = '';
-            document.getElementById('fStatus').value = 'completed';
-            document.getElementById('fReturnDate').value = businessDayDate();
             document.getElementById('formModal').classList.add('show');
             document.body.style.overflow = 'hidden';
             loadDropdowns();
@@ -2905,18 +2868,16 @@
         function openEditModal(id) {
             const item = returnsData.find(d => d.id === id);
             if (!item) { showToast('❌ المرتجع غير موجود', 'error'); return; }
+            if (item.reference_type === 'sale_return') {
+                showToast('هذا مرتجع مالي؛ لا يمكن تعديله من شاشة الحركات. استخدم إجراء عكس محاسبي معتمد.', 'warning');
+                return;
+            }
             document.getElementById('editId').value = item.id;
-            document.getElementById('fInvoiceNumber').value = item.invoice_number || '';
-            document.getElementById('formModalTitle').textContent = '✏️ تعديل مرتجع';
-            document.getElementById('fProductId').value = item.product_id || '';
-            document.getElementById('fCustomerId').value = item.customer_id || '';
-            document.getElementById('fQuantity').value = item.quantity || '';
-            document.getElementById('fValue').value = item.value || item.total_value || '';
+            document.getElementById('returnIdentityFields').hidden = true;
+            document.getElementById('returnQuantityFields').hidden = true;
+            document.getElementById('formModalTitle').textContent = '✏️ تعديل السبب والملاحظات';
             document.getElementById('fReason').value = item.reason || '';
             document.getElementById('fNotes').value = item.notes || '';
-            document.getElementById('fStatus').value = item.status || 'completed';
-            document.getElementById('fReturnDate').value = item.return_date ? item.return_date.split('T')[0] : new Date().toISOString()
-                .split('T')[0];
             document.getElementById('formModal').classList.add('show');
             document.body.style.overflow = 'hidden';
             loadDropdowns();
@@ -2960,7 +2921,7 @@
                     <div class="details-section">
                         <div class="details-section-title"><i class="fas fa-box"></i> التفاصيل</div>
                         <div class="details-row"><span class="details-label">الكمية</span><span class="details-value">${formatNumber(item.quantity || 0)}</span></div>
-                        <div class="details-row"><span class="details-label">القيمة</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(item.value || item.total_value || 0)}</span></div>
+                        <div class="details-row"><span class="details-label">تكلفة المخزون المرتجع</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(item.stock_cost != null ? item.stock_cost : (item.value || item.total_value || 0))}</span></div>
                         <div class="details-row"><span class="details-label">السبب</span><span class="details-value" style="font-size:0.8rem;">${escapeHtml(item.reason || '---')}</span></div>
                         <div class="details-row"><span class="details-label">ملاحظات</span><span class="details-value" style="font-size:0.8rem;">${escapeHtml(item.notes || '---')}</span></div>
                     </div>
@@ -3119,7 +3080,7 @@
                 `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل الملخص...</p></div>`;
 
             try {
-                const result = await apiCall('getDashboardStats', { station_id: 1 });
+                const result = await apiCall('getDashboardStats', {});
                 if (result.success && result.data) {
                     const stats = result.data;
                     body.innerHTML = `
@@ -3178,7 +3139,7 @@
                 `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل المخزون...</p></div>`;
 
             try {
-                const result = await apiCall('getLowStockItems', { station_id: 1 });
+                const result = await apiCall('getLowStockItems', {});
                 if (result.success && result.data) {
                     const items = result.data;
                     if (items.length === 0) {
@@ -3225,7 +3186,7 @@
                 const monthAgo = new Date();
                 monthAgo.setDate(monthAgo.getDate() - 30);
                 const from = businessDayDate(monthAgo);
-                const countResult = await apiCall('getReturns', { start_date: from, end_date: today, station_id: 1 });
+                const countResult = await apiCall('getReturns', { start_date: from, end_date: today });
                 let totalCount = 0;
                 if (countResult.success && countResult.data) {
                     totalCount = countResult.data.length;
@@ -3413,8 +3374,8 @@
         async function loadDropdowns() {
             try {
                 const [productsRes, customersRes] = await Promise.all([
-                    apiCall('getProducts', { station_id: 1 }),
-                    apiCall('getCustomers', { station_id: 1 })
+                    apiCall('getProducts', {}),
+                    apiCall('getCustomers', {})
                 ]);
 
                 const productSel = document.getElementById('fProductId');
@@ -3426,12 +3387,10 @@
                     filterProductSel.innerHTML = '<option value="">جميع المنتجات</option>' + opts;
                 }
 
-                const customerSel = document.getElementById('fCustomerId');
                 const filterCustomerSel = document.getElementById('filterCustomer');
                 if (customersRes.success && customersRes.data) {
                     const opts = customersRes.data.map(c =>
                         `<option value="${c.id}">${c.commercial_name || c.name || 'عميل'}</option>`).join('');
-                    customerSel.innerHTML = '<option value="">اختر العميل</option>' + opts;
                     filterCustomerSel.innerHTML = '<option value="">جميع العملاء</option>' + opts;
                 }
             } catch (e) {

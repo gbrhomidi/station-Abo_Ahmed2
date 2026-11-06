@@ -28151,10 +28151,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             data.optString("start_date").takeIf { it.isNotBlank() }?.let { where += "date(im.created_at) >= date(?)"; args += it }
             data.optString("end_date").takeIf { it.isNotBlank() }?.let { where += "date(im.created_at) <= date(?)"; args += it }
             val sql = """SELECT im.id, im.product_id, p.product_name, p.product_name_ar, im.quantity_change AS quantity,
-                    im.total_cost AS value, im.reason, im.created_at AS return_date, im.status,
-                    im.reference_id, s.invoice_number, im.performed_by AS created_by
+                    im.total_cost AS stock_cost, im.total_cost AS value, im.reason, im.remarks AS notes,
+                    im.created_at AS return_date, im.status,
+                    im.reference_id, im.reference_type, s.invoice_number, s.customer_party_id AS customer_id,
+                    COALESCE(cp.commercial_name_ar,cp.commercial_name,cp.legal_name,'') AS customer_name,
+                    im.performed_by AS created_by
                     FROM inventory_movements im LEFT JOIN products p ON p.id=im.product_id
-                    LEFT JOIN sales_transactions s ON s.id=im.reference_id WHERE ${where.joinToString(" AND ")}
+                    LEFT JOIN sales_transactions s ON s.id=im.reference_id AND im.reference_type='sale_return'
+                    LEFT JOIN parties cp ON cp.id=s.customer_party_id AND cp.station_id=im.station_id AND cp.is_deleted=0
+                    WHERE ${where.joinToString(" AND ")}
                     ORDER BY im.created_at DESC LIMIT 500"""
             readableDatabase.rawQuery(sql, args.toTypedArray()).use { cursorToJsonArray(it) }
         } finally { dbLock.unlock() }
@@ -28170,12 +28175,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 if (data.has("notes")) put("remarks", data.optString("notes"))
                 put("updated_at", getCurrentDateTime())
             }
-            writableDatabase.update("inventory_movements", values, "id=? AND station_id=? AND movement_type='return' AND is_deleted=0", arrayOf(id.toString(), stationId.toString()))
+            writableDatabase.update(
+                "inventory_movements",
+                values,
+                "id=? AND station_id=? AND movement_type='return' AND is_deleted=0 AND COALESCE(reference_type,'')<>'sale_return'",
+                arrayOf(id.toString(), stationId.toString())
+            )
         } finally { dbLock.unlock() }
     }
 
-    fun deleteReturn(id: Long, stationId: Int? = null): Int {
-        if (stationId != null) require(stationId > 0) { "معرف المحطة غير صالح" }
+    fun deleteReturn(id: Long, stationId: Int): Int {
+        require(stationId > 0) { "معرف محطة غير صالح" }
         dbLock.lock()
         return try {
             val db = writableDatabase
@@ -28190,16 +28200,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     val performedBy: Long,
                     val referenceType: String
                 )
-                val movementWhere = if (stationId != null) {
-                    "id=? AND station_id=? AND movement_type='return' AND is_deleted=0"
-                } else {
-                    "id=? AND movement_type='return' AND is_deleted=0"
-                }
-                val movementArgs = if (stationId != null) {
-                    arrayOf(id.toString(), stationId.toString())
-                } else {
-                    arrayOf(id.toString())
-                }
+                val movementWhere = "id=? AND station_id=? AND movement_type='return' AND is_deleted=0"
+                val movementArgs = arrayOf(id.toString(), stationId.toString())
                 val movement = db.rawQuery(
                     "SELECT product_id, quantity_change, reference_id, COALESCE(station_id, 0), COALESCE(warehouse_id, 0), COALESCE(performed_by, 0), COALESCE(reference_type, '') FROM inventory_movements WHERE $movementWhere",
                     movementArgs

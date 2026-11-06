@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -376,6 +377,11 @@ class InventoryScreensRobolectricTest {
         ).use { cursor -> check(cursor.moveToFirst()); cursor.getDouble(0) }
         assertEquals(2.5, before, 0.000001)
 
+        assertEquals("a different station must not match the id/station placeholders", 0, helper.deleteReturn(returnId, 2))
+        assertEquals(2.5, db.rawQuery(
+            "SELECT quantity_on_hand FROM inventory_levels WHERE product_id=? AND warehouse_id=?",
+            arrayOf(productId.toString(), warehouseId.toString())
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getDouble(0) }, 0.000001)
         assertEquals(1, helper.deleteReturn(returnId, 1))
 
         val after = db.rawQuery(
@@ -423,6 +429,15 @@ class InventoryScreensRobolectricTest {
 
         val rejected = runCatching { helper.deleteReturn(returnId, 1) }.isFailure
         assertTrue("A sale return must not be reversed by changing inventory alone", rejected)
+        assertEquals(
+            "financial return facts must not be edited through the legacy movement endpoint",
+            0,
+            helper.updateReturn(returnId, JSONObject().put("station_id", 1).put("reason", "تعديل غير مسموح"))
+        )
+        val displayed = helper.getReturns(JSONObject().put("station_id", 1))
+            .let { rows -> (0 until rows.length()).map { rows.getJSONObject(it) }.first { it.getLong("id") == returnId } }
+        assertEquals("sale_return", displayed.getString("reference_type"))
+        assertEquals(25.0, displayed.getDouble("stock_cost"), 0.000001)
         assertEquals(2.5, db.rawQuery(
             "SELECT quantity_on_hand FROM inventory_levels WHERE product_id=? AND warehouse_id=?",
             arrayOf(productId.toString(), warehouseId.toString())
@@ -435,6 +450,16 @@ class InventoryScreensRobolectricTest {
             assertEquals(0, cursor.getInt(0))
             assertEquals("completed", cursor.getString(1))
         }
+    }
+
+    @Test
+    fun returnScreenUsesNativeAddRouteAndDoesNotSubmitHardCodedIdentity() {
+        val html = context.assets.open("screens/returned-products.html").bufferedReader().use { it.readText() }
+        assertTrue(html.contains("case 'addReturn': raw = AndroidInterface.addReturn(JSON.stringify(p)); break;"))
+        assertTrue(html.contains("item.reference_type === 'sale_return'"))
+        assertFalse("station identity must come from the authenticated native bridge", html.contains("station_id: 1"))
+        assertFalse("actor identity must come from the authenticated native bridge", html.contains("created_by: 1"))
+        assertFalse("the sale return amount is calculated from the invoice, not entered in the form", html.contains("id=\"fValue\""))
     }
 
     @Test

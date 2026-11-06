@@ -276,4 +276,27 @@ class SupplierPayablesRobolectricTest {
         assertEquals(0.0,
             aging.getDouble("unapplied_legacy_payments_without_currency"), 0.0001)
     }
+
+    @Test
+    fun supplierOutstandingBalanceIsNotMultipliedByTheNumberOfInvoices() {
+        SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 95001, "MAN-95001",
+            100.0, "2026-11-01", null, 1
+        )
+        SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 95002, "MAN-95002",
+            200.0, "2026-11-02", null, 1
+        )
+        assertEquals(1, db.update("parties", ContentValues().apply {
+            put("current_balance", 300.0)
+            put("total_due", 300.0)
+        }, "id=? AND station_id=?", arrayOf(supplierId.toString(), "1")))
+
+        val result = helper.getSupplierOutstandingBalance(supplierId, 1)
+        assertEquals(300.0, result.getDouble("current_balance"), 0.0001)
+        assertEquals(300.0, result.getDouble("total_due"), 0.0001)
+        val currencyTotals = result.getJSONObject("invoice_aging").getJSONArray("currency_totals")
+        assertEquals(1, currencyTotals.length())
+        assertEquals(300.0, currencyTotals.getJSONObject(0).getDouble("open_balance"), 0.0001)
+    }
 }
