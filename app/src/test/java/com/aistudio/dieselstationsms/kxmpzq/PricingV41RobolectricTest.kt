@@ -92,12 +92,12 @@ class PricingV41RobolectricTest {
 
             if (sourceVersion <= 41) {
                 oldDb.execSQL("DROP INDEX IF EXISTS idx_price_list_items_quantity_limit")
-                oldDb.execSQL("ALTER TABLE price_list_items DROP COLUMN quantity_limit")
-                oldDb.execSQL("ALTER TABLE price_list_items DROP COLUMN quantity_sold")
-                oldDb.execSQL("ALTER TABLE sale_items DROP COLUMN cost_price")
-                oldDb.execSQL("ALTER TABLE sale_items DROP COLUMN total_cost")
-                oldDb.execSQL("ALTER TABLE fuel_sales DROP COLUMN cost_per_liter")
-                oldDb.execSQL("ALTER TABLE fuel_sales DROP COLUMN cost_amount")
+                dropColumnForHistoricalFixture(oldDb, "price_list_items", "quantity_limit")
+                dropColumnForHistoricalFixture(oldDb, "price_list_items", "quantity_sold")
+                dropColumnForHistoricalFixture(oldDb, "sale_items", "cost_price")
+                dropColumnForHistoricalFixture(oldDb, "sale_items", "total_cost")
+                dropColumnForHistoricalFixture(oldDb, "fuel_sales", "cost_per_liter")
+                dropColumnForHistoricalFixture(oldDb, "fuel_sales", "cost_amount")
             }
             if (sourceVersion == 40) {
                 oldDb.execSQL("DROP INDEX IF EXISTS idx_price_lists_resolution")
@@ -107,13 +107,13 @@ class PricingV41RobolectricTest {
                 oldDb.execSQL("DROP TRIGGER IF EXISTS trg_fuel_types_sale_price_history")
                 oldDb.execSQL("DROP TRIGGER IF EXISTS trg_products_sale_price_history")
                 oldDb.execSQL("DROP TABLE IF EXISTS fuel_price_history")
-                oldDb.execSQL("ALTER TABLE sales_transactions DROP COLUMN business_day")
-                oldDb.execSQL("ALTER TABLE price_lists DROP COLUMN occasion_code")
-                oldDb.execSQL("ALTER TABLE price_lists DROP COLUMN occasion_name_ar")
-                oldDb.execSQL("ALTER TABLE price_lists DROP COLUMN applies_when")
-                oldDb.execSQL("ALTER TABLE price_lists DROP COLUMN clearance_mode")
-                oldDb.execSQL("ALTER TABLE price_lists DROP COLUMN clearance_stock_below")
-                oldDb.execSQL("ALTER TABLE price_lists DROP COLUMN priority")
+                dropColumnForHistoricalFixture(oldDb, "sales_transactions", "business_day")
+                dropColumnForHistoricalFixture(oldDb, "price_lists", "occasion_code")
+                dropColumnForHistoricalFixture(oldDb, "price_lists", "occasion_name_ar")
+                dropColumnForHistoricalFixture(oldDb, "price_lists", "applies_when")
+                dropColumnForHistoricalFixture(oldDb, "price_lists", "clearance_mode")
+                dropColumnForHistoricalFixture(oldDb, "price_lists", "clearance_stock_below")
+                dropColumnForHistoricalFixture(oldDb, "price_lists", "priority")
             }
 
             // Force the real SQLiteOpenHelper upgrade dispatcher to run each step
@@ -458,5 +458,32 @@ class PricingV41RobolectricTest {
             assertEquals(actorId, it.getLong(2))
             assertEquals("اختبار V41", it.getString(3))
         }
+    }
+
+    /**
+     * SQLite refuses DROP COLUMN while an index still mentions that column.
+     * Historical fixtures must remove those dependent indexes first, just as a
+     * real schema downgrade/rebuild would, instead of making the test depend on
+     * whichever indexes a fresh schema happened to create.
+     */
+    private fun dropColumnForHistoricalFixture(db: android.database.sqlite.SQLiteDatabase, table: String, column: String) {
+        val dependentIndexes = db.rawQuery("PRAGMA index_list(`$table`)", null).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                    val sql = db.rawQuery(
+                        "SELECT sql FROM sqlite_master WHERE type='index' AND name=?",
+                        arrayOf(name)
+                    ).use { definition -> if (definition.moveToFirst()) definition.getString(0).orEmpty() else "" }
+                    if (sql.contains(column, ignoreCase = true)) add(name)
+                }
+            }
+        }
+        dependentIndexes.forEach { db.execSQL("DROP INDEX IF EXISTS `${it.replace("`", "``")}`") }
+        val present = db.rawQuery("PRAGMA table_info(`$table`)", null).use { cursor ->
+            generateSequence { if (cursor.moveToNext()) cursor.getString(cursor.getColumnIndexOrThrow("name")) else null }
+                .any { it == column }
+        }
+        if (present) db.execSQL("ALTER TABLE `$table` DROP COLUMN `$column`")
     }
 }
