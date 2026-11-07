@@ -21,7 +21,11 @@
 
 ## Local non-Android evidence
 
-The POS, reports, SQLite, accounting, security-scope, business-day, inventory, payment/refund, and query-plan regression commands listed above passed on the post-fix working tree. The exact commit and CI run must be recorded after push.
+The POS, reports, SQLite, accounting, security-scope, business-day, inventory, payment/refund, and query-plan regression commands listed above passed on the post-fix working tree.
+
+- Verified code commit: `7c90212f7b8ba87804fd7a7a820eda26e22d6732`
+- GitHub Actions validation run: https://github.com/gbrhomidi/station-Abo_Ahmed2/actions/runs/42388162664
+- Validation result: PASS (Debug/Kotlin/Robolectric job succeeded).
 
 ## Release gates not executable in this environment
 
