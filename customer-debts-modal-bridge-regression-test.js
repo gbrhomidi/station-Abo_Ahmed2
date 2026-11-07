@@ -21,7 +21,7 @@ expect(source.includes('paymentSettlement!==f.settlementType'), 'يجب تطبي
 
 
 expect(source.includes('<h2>إدارة ديون العملاء</h2>'), 'يجب اعتماد عنوان إدارة ديون العملاء');
-const debtHeader = source.match(/<header class="top-bar">([\\s\\S]*?)<\\/header>/);
+const debtHeader = source.match(/<header class="top-bar">([\s\S]*?)<\/header>/);
 expect(debtHeader, 'تعذر تحديد الشريط العلوي لشاشة ديون العملاء');
 expect(!debtHeader[1].includes('onclick="openAIAdvisor()"'), 'يجب حذف أيقونة المستشار من الشريط العلوي');
 expect(source.includes("document.getElementById('filterDateFrom').value = '';"), 'يجب فتح شاشة الديون دون قيد تاريخ افتراضي');
