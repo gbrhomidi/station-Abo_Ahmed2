@@ -56,7 +56,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 57
+        const val VERSION = 58
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -334,7 +334,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             DebtDueDateRepository.ensureSchema(db)
             SupplierPayablesRepository.ensureSchema(db)
             // Apply the idempotent SMS attempt schema for every upgraded database,
-            // including installations already at V56 after an interrupted/partial rollout.
+            // including installations previously opened at V57 before the Stage 6 schema repair completed.
             SmsOutboxSchema.ensureSchema(db)
             db.setTransactionSuccessful()
         } finally {
