@@ -10,7 +10,7 @@
 #   Validation + Signed Release APK
 #
 # feature/ai-health-sqlite:
-#   Validation only
+#   Validation + Signed Release APK
 #
 # Pull Request -> main:
 #   Validation ONLY
@@ -20,7 +20,7 @@
 # workflow_dispatch:
 #   Validation is allowed from any ref.
 #
-#   Signed Release is allowed ONLY when the selected ref is main.
+#   Signed Release is allowed only on main or feature/ai-health-sqlite.
 #
 # Security
 # ----------------------------------------------------------------------------
@@ -37,7 +37,7 @@
 #
 # Reliability
 # ----------------------------------------------------------------------------
-# - Release requires successful validation on main only.
+# - Release requires successful validation on main or feature/ai-health-sqlite.
 # - Release APK must exist.
 # - Exactly one final Release APK must be produced.
 # - Release APK must be cryptographically verified with apksigner.
@@ -351,13 +351,14 @@ jobs:
 # JOB 2 — SIGNED PRODUCTION RELEASE
 # ============================================================================
 #
-# Release is intentionally restricted to main; feature branches run validation
-# only to avoid producing unnecessary signed artifacts.
+# Signed Release is enabled for the production branch and the explicitly
+# requested development branch. Both must pass the full validation job before
+# signing secrets become available.
 #
 #   main
+#   feature/ai-health-sqlite
 #
-# Pull Requests never enter this job because github.ref for a Pull Request
-# is not refs/heads/main.
+# Pull Requests remain validation-only and never receive signing secrets.
 #
 # Release requires:
 #
@@ -380,19 +381,20 @@ jobs:
     #
     # Allowed:
     #
-    #   Push -> main
-    #   Manual -> main
+    #   Push / Manual -> main
+    #   Push / Manual -> feature/ai-health-sqlite
     #
     # Not allowed:
     #
-    #   Pull Request
+    #   Pull Requests
     #   Other branches
     #   Tags
     #
     # ------------------------------------------------------------------------
 
     if: >
-      github.ref == 'refs/heads/main'
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/feature/ai-health-sqlite'
 
     runs-on: ubuntu-latest
 
