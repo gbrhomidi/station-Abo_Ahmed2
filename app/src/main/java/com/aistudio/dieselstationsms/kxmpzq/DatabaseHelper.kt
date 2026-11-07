@@ -252,6 +252,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureApprovalControlSchema(db)
             ensurePricingV42Schema(db)
             ensureOpenCompatibilitySchema(db)
+            DebtDueDateRepository.ensureSchema(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
         } finally {
@@ -326,6 +327,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensurePricingV41Schema(db)
             ensurePricingV42Schema(db)
             ensureOpenCompatibilitySchema(db)
+            DebtDueDateRepository.ensureSchema(db)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -11741,7 +11743,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // ========================================================================
 
     fun addFuelSale(data: JSONObject, stationScopeId: Int, cashierId: Long): Long {
-        DebtDueDateRepository.ensureSchema(this)
         require(stationScopeId > 0) { "معرف المحطة غير صالح" }
         require(cashierId > 0) { "معرف المستخدم غير صالح" }
         val liters = data.optDouble("quantity", 0.0)
@@ -12029,7 +12030,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun completeSale(data: JSONObject, stationScopeId: Int, cashierId: Long): JSONObject {
-        DebtDueDateRepository.ensureSchema(this)
         val result = JSONObject()
         require(stationScopeId > 0) { "معرف المحطة غير صالح" }
         require(cashierId > 0) { "معرف المستخدم غير صالح" }
@@ -17951,7 +17951,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val requestedFrom = params.optString("from_date", "")
         val requestedTo = params.optString("to_date", "")
         IsoCivilDate.requireOptionalRange(requestedFrom, requestedTo)
-        DebtDueDateRepository.ensureSchema(this)
         val stats = JSONObject()
         val db = readableDatabase
         val today = businessDate
@@ -18576,7 +18575,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private fun taskQuery(params: JSONObject, stationId: Int): JSONArray {
         require(stationId > 0) { "معرف المحطة غير صالح لقراءة المهام" }
-        DebtDueDateRepository.ensureSchema(this)
         val asOfDate = BusinessDay.currentDate()
 
         val manualVisibility = buildString {
@@ -25662,7 +25660,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      */
     fun getOverduePayments(stationScopeId: Int): JSONArray {
         require(stationScopeId > 0) { "معرف المحطة مطلوب لتقرير الديون المتأخرة" }
-        DebtDueDateRepository.ensureSchema(this)
         val trustedDueDate = DebtDueDateRepository.trustedDueDateSql("s")
         dbLock.lock()
         return try {
@@ -28609,7 +28606,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         IsoCivilDate.requireOptionalRange(fromDate, toDate)
         dbLock.lock()
         return try {
-            DebtDueDateRepository.ensureSchema(this)
             val db = readableDatabase
             if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val predicates = mutableListOf("s.remaining_amount > 0", "s.is_deleted = 0")
@@ -28649,7 +28645,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(partyId > 0) { "معرف العميل غير صالح" }
         dbLock.lock()
         return try {
-            DebtDueDateRepository.ensureSchema(this)
             val db = readableDatabase
             if (stationScopeId != null) {
                 require(stationScopeId > 0) { "معرف المحطة غير صالح" }
@@ -28830,7 +28825,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      */
     fun getDueSoonDebtReminders(stationScopeId: Int, days: Int = 10): JSONArray {
         require(stationScopeId > 0 && days >= 0) { "معلمات الاستحقاق غير صالحة" }
-        DebtDueDateRepository.ensureSchema(this)
         val trustedDueDate = DebtDueDateRepository.trustedDueDateSql("s")
         dbLock.lock()
         return try {
@@ -29903,7 +29897,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun savePartyBundle(data: JSONObject, userId: Long = 0L, stationScopeId: Int? = null): Long {
-        if (stationScopeId != null) DebtDueDateRepository.ensureSchema(this)
         dbLock.lock()
         val db = writableDatabase
         db.beginTransaction()
@@ -33055,7 +33048,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getDebtRemindersPage(stationId: Int, status: String? = null): JSONArray {
         require(stationId > 0) { "معرف المحطة غير صالح" }
-        DebtDueDateRepository.ensureSchema(this)
         val trustedDueDate = DebtDueDateRepository.trustedDueDateSql("s")
         val asOfDate = BusinessDay.currentDate()
         val arr = JSONArray()

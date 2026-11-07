@@ -48,6 +48,27 @@ class DebtDueDatePolicyTest {
         assertNull(DebtDueDateRepository.parseTermsDays("NET 999 days"))
     }
 
+    @Test fun parserPreservesKnownVsUnknownReasonsWithoutFallback() {
+        val known = DebtDueDateRepository.parseTermsResult("صافي ٣٠ يوم")
+        assertTrue(known is DebtDueDateRepository.TermsParseResult.Known)
+        val knownValue = known as DebtDueDateRepository.TermsParseResult.Known
+        assertEquals(30, knownValue.days)
+        assertEquals("explicit_text", knownValue.source)
+        val unknown = DebtDueDateRepository.parseTermsResult("شروط غير واضحة")
+        assertTrue(unknown is DebtDueDateRepository.TermsParseResult.Unknown)
+        assertEquals("unsupported_terms_format", (unknown as DebtDueDateRepository.TermsParseResult.Unknown).reason)
+        assertNull(DebtDueDateRepository.parseTermsDays(null))
+    }
+
+    @Test fun maturityStatusSeparatesDueTodayFromLegacyPaymentStatus() {
+        val today = LocalDate.parse("2026-11-05")
+        assertEquals("DUE_TODAY", DebtDueDateRepository.maturityStatusFor(100.0, "2026-11-05", today))
+        assertEquals("OVERDUE", DebtDueDateRepository.maturityStatusFor(100.0, "2026-11-04", today))
+        assertEquals("NOT_DUE", DebtDueDateRepository.maturityStatusFor(100.0, "2026-11-06", today))
+        assertEquals("UNDATED", DebtDueDateRepository.maturityStatusFor(100.0, null, today))
+        assertEquals("PAID", DebtDueDateRepository.maturityStatusFor(0.0, "2026-11-04", today))
+    }
+
     @Test fun creditRiskDoesNotOverrideMaturityState() {
         val today=LocalDate.parse("2026-11-05")
         assertEquals("current",DebtDueDateRepository.statusFor(100.0,0.0,"2026-11-15","critical",today))

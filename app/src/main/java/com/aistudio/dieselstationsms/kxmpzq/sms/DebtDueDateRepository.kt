@@ -23,6 +23,16 @@ object DebtDueDateRepository {
     private val creditMethods = setOf("credit", "credit_sale", "credit_account", "on_account", "آجل", "اجل", "بيع آجل", "على الحساب")
     private val trustedDueDateSources = setOf("sale_creation", "sales_trigger_v3", "sales_trigger_v4", "legacy_rebuilt_snapshot")
 
+    sealed class TermsParseResult {
+        data class Known(
+            val days: Int,
+            val basis: String = "business_day",
+            val source: String = "explicit_text"
+        ) : TermsParseResult()
+
+        data class Unknown(val reason: String, val normalized: String = "") : TermsParseResult()
+    }
+
     fun isTrustedDueDate(termsSource: String?, dueDateSource: String?): Boolean =
         termsSource == "explicit_text" && dueDateSource in trustedDueDateSources
 
@@ -60,8 +70,17 @@ object DebtDueDateRepository {
         val invoiceIds: List<Long>
     )
 
+    /** Compatibility entry point for explicit schema initialization. */
     fun ensureSchema(helper: DatabaseHelper) {
-        val db=helper.writableDatabase
+        ensureSchema(helper.writableDatabase)
+    }
+
+    /**
+     * Initializes the debt schema on the SQLiteOpenHelper lifecycle connection.
+     * Normal read paths must not call this method; DatabaseHelper invokes it from
+     * its transactional onCreate/onUpgrade flow.
+     */
+    fun ensureSchema(db: SQLiteDatabase) {
         if(!tableExists(db,"sales_transactions")) return
         if(tableExists(db,"parties")) {
             addColumn(db,"parties","payment_terms","TEXT")
@@ -143,7 +162,6 @@ object DebtDueDateRepository {
         ).use { c -> if(c.moveToFirst()) c.getLong(0) else null }
 
     fun persistPartyTerms(helper: DatabaseHelper,partyId:Long,stationId:Int,requestedTerms:String?):String {
-        ensureSchema(helper)
         require(partyId>0L && stationId>0) { "معرف الطرف أو المحطة غير صالح" }
         val terms=requestedTerms.orEmpty().trim()
         val days=parseTermsDays(terms)
@@ -204,7 +222,6 @@ object DebtDueDateRepository {
     }
 
     fun getPaymentTerms(helper:DatabaseHelper,stationId:Int,appliesTo:String="customer"):JSONArray {
-        ensureSchema(helper)
         require(stationId>0) { "معرف المحطة غير صالح" }
         val scope=appliesTo.lowercase(Locale.ROOT)
         require(scope in setOf("customer","supplier","both")) { "نوع شروط الدفع غير صالح" }
@@ -234,7 +251,6 @@ object DebtDueDateRepository {
     ): JSONArray {
         require(stationId > 0) { "معرف المحطة غير صالح" }
         IsoCivilDate.requireOptionalRange(fromDate, toDate)
-        ensureSchema(helper)
         val rows = readDebts(helper.readableDatabase, stationId)
         val output = JSONArray()
         rows.filter { row ->
@@ -253,7 +269,6 @@ object DebtDueDateRepository {
      * days=0 means due today; negative/overdue balances are not automatically re-reminded.
      */
     fun getDueSoonDebtReminders(helper: DatabaseHelper, stationId: Int, days: Int): JSONArray {
-        ensureSchema(helper)
         require(stationId > 0) { "معرف المحطة غير صالح" }
         val maxDays = days.coerceIn(0, 365)
         val today = LocalDate.parse(BusinessDay.currentDate())
@@ -318,7 +333,6 @@ object DebtDueDateRepository {
      * app does not send a repeated daily reminder for the same maturity date.
      */
     fun getOverdueReminderCandidates(helper: DatabaseHelper, stationId: Int): JSONArray {
-        ensureSchema(helper)
         require(stationId > 0) { "معرف المحطة غير صالح" }
         val today = LocalDate.parse(BusinessDay.currentDate())
         val all = readDebts(helper.readableDatabase, stationId)
@@ -547,6 +561,21 @@ object DebtDueDateRepository {
         return "current"
     }
 
+    /** Calendar maturity dimension kept separate from the legacy mixed status field. */
+    fun maturityStatusFor(
+        remaining: Double,
+        dueDate: String?,
+        today: LocalDate = LocalDate.parse(BusinessDay.currentDate())
+    ): String {
+        if (remaining <= 0.000001) return "PAID"
+        val due = parseDate(dueDate) ?: return "UNDATED"
+        return when {
+            due.isBefore(today) -> "OVERDUE"
+            due == today -> "DUE_TODAY"
+            else -> "NOT_DUE"
+        }
+    }
+
 
     private fun readDebts(
         db: SQLiteDatabase,
@@ -702,6 +731,7 @@ object DebtDueDateRepository {
             put("overdue_amount", overdueAmount)
             put("payment_status", status)
             put("status", status)
+            put("maturity_status", maturityStatusFor(row.remaining, row.dueDate))
             put("days_remaining", days ?: JSONObject.NULL)
             put("days_overdue", daysOverdue)
             put("risk_level", row.riskLevel)
@@ -767,7 +797,7 @@ object DebtDueDateRepository {
 
     // Historical due-date reconstruction is intentionally not implemented in this phase.
     // Add it only as a separately reviewed, explicitly authorized migration in a later phase.
-    fun parseTermsDays(terms:String?):Int? {
+    fun parseTermsResult(terms: String?): TermsParseResult {
         val normalized=terms.orEmpty().map { ch ->
             when(ch) {
                 '٠' -> '0';'١' -> '1';'٢' -> '2';'٣' -> '3';'٤' -> '4'
@@ -775,8 +805,8 @@ object DebtDueDateRepository {
                 else -> ch
             }
         }.joinToString("").trim().lowercase(Locale.ROOT)
-        if(normalized.isBlank()) return null
-        if(normalized in setOf("cash","نقد","نقدي","نقداً","فوري","فوراً","عند الاستلام","upon receipt","immediate")) return 0
+        if(normalized.isBlank()) return TermsParseResult.Unknown("empty_terms")
+        if(normalized in setOf("cash","نقد","نقدي","نقداً","فوري","فوراً","عند الاستلام","upon receipt","immediate")) return TermsParseResult.Known(0)
         val explicit=Regex("""(?:net|صافي|خلال|within)\s*(\d{1,3})(?:\s*(?:days?|يوم(?:اً|ًا|ين)?|أيام))?""")
             .findAll(normalized).mapNotNull { it.groupValues.getOrNull(1)?.toIntOrNull() }.toList()
         val exactDays=Regex("""^(\d{1,3})\s*(?:days?|يوم(?:اً|ًا|ين)?|أيام)$""")
@@ -784,12 +814,18 @@ object DebtDueDateRepository {
         val exactNumber=if(Regex("""^\d{1,3}$""").matches(normalized)) normalized.toIntOrNull() else null
         val days=when {
             explicit.size==1 -> explicit.single()
-            explicit.size>1 -> return null
+            explicit.size>1 -> return TermsParseResult.Unknown("conflicting_explicit_terms", normalized)
             exactDays!=null -> exactDays
             exactNumber!=null -> exactNumber
-            else -> return null
+            else -> return TermsParseResult.Unknown("unsupported_terms_format", normalized)
         }
-        return days.takeIf { it in 0..365 }
+        return if (days in 0..365) TermsParseResult.Known(days) else TermsParseResult.Unknown("days_out_of_range", normalized)
+    }
+
+    /** Compatibility adapter; callers that need provenance must use parseTermsResult. */
+    fun parseTermsDays(terms:String?):Int? = when (val result = parseTermsResult(terms)) {
+        is TermsParseResult.Known -> result.days
+        is TermsParseResult.Unknown -> null
     }
 
     private fun parseDate(value: String?): LocalDate? = IsoCivilDate.parse(value)
