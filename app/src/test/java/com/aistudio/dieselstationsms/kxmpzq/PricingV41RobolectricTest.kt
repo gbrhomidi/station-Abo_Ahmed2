@@ -645,4 +645,3 @@ class PricingV41RobolectricTest {
         }
     }
 }
-}
