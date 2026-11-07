@@ -8972,8 +8972,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("commercial_name", data.optString("commercial_name", data.optString("party_name", "")))
                 put("commercial_name_ar", data.optString("commercial_name_ar", data.optString("party_name_ar", "")))
                 put("legal_name", data.optString("legal_name", ""))
-                put("tax_number", data.optString("tax_number", ""))
-                put("commercial_register", data.optString("commercial_register", ""))
+                val taxNumber = data.optString("tax_number", "").trim()
+                if (taxNumber.isEmpty()) putNull("tax_number") else put("tax_number", taxNumber)
+                val commercialRegister = data.optString("commercial_register", "").trim()
+                if (commercialRegister.isEmpty()) putNull("commercial_register") else put("commercial_register", commercialRegister)
                 put("vat_number", data.optString("vat_number", "").trim())
                 put("credit_limit", data.optDouble("credit_limit", 0.0))
                 if (data.has("current_balance")) put("current_balance", data.optDouble("current_balance", 0.0))
@@ -9040,8 +9042,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("commercial_name", data.optString("commercial_name", data.optString("party_name", "")))
                 put("commercial_name_ar", data.optString("commercial_name_ar", data.optString("party_name_ar", "")))
                 put("legal_name", data.optString("legal_name", ""))
-                put("tax_number", data.optString("tax_number", ""))
-                put("commercial_register", data.optString("commercial_register", ""))
+                if (data.has("tax_number")) {
+                    val taxNumber = data.optString("tax_number", "").trim()
+                    if (taxNumber.isEmpty()) putNull("tax_number") else put("tax_number", taxNumber)
+                }
+                if (data.has("commercial_register")) {
+                    val commercialRegister = data.optString("commercial_register", "").trim()
+                    if (commercialRegister.isEmpty()) putNull("commercial_register") else put("commercial_register", commercialRegister)
+                }
                 if (data.has("vat_number")) put("vat_number", data.optString("vat_number").trim())
                 put("credit_limit", data.optDouble("credit_limit", 0.0))
                 if (data.has("current_balance")) put("current_balance", data.optDouble("current_balance", 0.0))
