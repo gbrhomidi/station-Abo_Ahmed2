@@ -1,0 +1,20 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const root = __dirname;
+const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
+const repo = read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/sms/DebtDueDateRepository.kt');
+const db = read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt');
+const reminders = read('app/src/main/assets/screens/debt-reminders.html');
+const customerReports = read('app/src/main/assets/screens/customer-reports.html');
+
+assert.doesNotMatch(repo, /legacy_rebuilt_snapshot/, 'التاريخ المعاد بناؤه لا يجوز أن يكون مصدراً تشغيلياً موثوقاً');
+assert.match(repo, /remainingExpr = if \("remaining_amount" in s\) "MAX\(COALESCE\(s\.remaining_amount,0\),0\)"/, 'مصدر الرصيد المحفوظ يجب أن يكون المصدر الأول');
+assert.doesNotMatch(reminders, /d\.total_amount - d\.paid_amount/, 'واجهة التذكيرات لا يجوز أن تعيد حساب الرصيد');
+assert.match(reminders, /raw\.maturity_status/, 'واجهة التذكيرات يجب أن تستهلك تصنيف Kotlin');
+assert.match(reminders, /maturity_status/, 'واجهة التذكيرات يجب أن تعرض حالة الاستحقاق من المصدر الموحد');
+assert.doesNotMatch(customerReports, /calendarDayDifference\(dueText, today\)/, 'تقرير العملاء لا يجوز أن يعيد حساب العمر من تاريخ الجهاز');
+assert.match(customerReports, /row\.maturity_status/, 'تقرير العملاء يجب أن يستهلك maturity_status الموحد');
+assert.doesNotMatch(db, /legacy_rebuilt_snapshot/, 'لا يجوز أن تكرر DatabaseHelper مصدراً تاريخياً محظوراً');
+console.log('Stage 4 debt-unification regression PASS.');

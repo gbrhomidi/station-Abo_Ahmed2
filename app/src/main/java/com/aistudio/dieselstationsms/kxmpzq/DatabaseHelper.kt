@@ -17960,7 +17960,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
         }
         val trustedDueDateClause = if ("due_date_source" in salesColumns && "payment_terms_source_at_sale" in salesColumns) {
-            "AND COALESCE(payment_terms_source_at_sale,'')='explicit_text' AND COALESCE(due_date_source,'') IN ('sale_creation','sales_trigger_v3','sales_trigger_v4','legacy_rebuilt_snapshot')"
+            "AND COALESCE(payment_terms_source_at_sale,'')='explicit_text' AND COALESCE(due_date_source,'') IN ('sale_creation','sales_trigger_v3','sales_trigger_v4')"
         } else {
             "AND 0=1"
         }
@@ -18615,7 +18615,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val saleDueDateExpr = if ("due_date" in salesColumns) "COALESCE(s.due_date,'')" else "''"
         val saleDueSourceExpr = if ("due_date_source" in salesColumns) "COALESCE(s.due_date_source,'')" else "''"
         val saleTermsSourceExpr = if ("payment_terms_source_at_sale" in salesColumns) "COALESCE(s.payment_terms_source_at_sale,'')" else "''"
-        val saleMaturityTrusted = "$saleTermsSourceExpr='explicit_text' AND $saleDueSourceExpr IN ('sale_creation','sales_trigger_v3','sales_trigger_v4','legacy_rebuilt_snapshot')"
+        val saleMaturityTrusted = DebtDueDateRepository.trustedDueDateSql("s")
         val sql = """
             WITH task_rows AS (
                 SELECT
@@ -28613,7 +28613,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             // Keep the legacy bridge on the same provenance policy as
             // DebtDueDateRepository. A created_at fallback silently changes a
             // maturity-date filter into an invoice-date filter.
-            predicates += "s.due_date IS NOT NULL AND TRIM(s.due_date) <> '' AND s.due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(s.due_date,'+0 days')=s.due_date AND COALESCE(s.payment_terms_source_at_sale,'')='explicit_text' AND COALESCE(s.due_date_source, '') IN ('sale_creation', 'sales_trigger_v3', 'sales_trigger_v4', 'legacy_rebuilt_snapshot')"
+            predicates += "s.due_date IS NOT NULL AND TRIM(s.due_date) <> '' AND s.due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(s.due_date,'+0 days')=s.due_date AND COALESCE(s.payment_terms_source_at_sale,'')='explicit_text' AND COALESCE(s.due_date_source, '') IN ('sale_creation', 'sales_trigger_v3', 'sales_trigger_v4')"
             if (!fromDate.isNullOrEmpty()) {
                 predicates += "date(s.due_date) >= date(?)"
                 args += fromDate!!
@@ -28656,7 +28656,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "s.is_deleted = 0",
                 "s.due_date IS NOT NULL AND TRIM(s.due_date) <> ''",
                 "COALESCE(s.payment_terms_source_at_sale,'')='explicit_text'",
-                "COALESCE(s.due_date_source, '') IN ('sale_creation', 'sales_trigger_v3', 'sales_trigger_v4', 'legacy_rebuilt_snapshot')"
+                "COALESCE(s.due_date_source, '') IN ('sale_creation', 'sales_trigger_v3', 'sales_trigger_v4')"
             )
             val args = mutableListOf(partyId.toString())
             if (stationScopeId != null) {

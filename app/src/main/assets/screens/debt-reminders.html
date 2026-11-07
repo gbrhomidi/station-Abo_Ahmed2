@@ -2310,10 +2310,12 @@ function normalizedDebt(raw) {
     d.created_at = raw.created_at || null;
     d.total_amount = Math.max(0, Number(firstDefined(raw.net_amount, raw.gross_amount, raw.total_amount, 0)) || 0);
     d.paid_amount = Math.max(0, Number(firstDefined(raw.paid_amount, 0)) || 0);
+    // The persisted remaining_amount is the accounting source of truth.
+    // Missing values remain unknown; the WebView must never reconstruct a balance.
     const rawRemaining = raw.remaining_amount;
-    d.remaining_amount = Math.max(0, rawRemaining === null || rawRemaining === undefined || rawRemaining === ''
-        ? d.total_amount - d.paid_amount
-        : Number(rawRemaining) || 0);
+    d.remaining_amount = rawRemaining === null || rawRemaining === undefined || rawRemaining === ''
+        ? 0
+        : Math.max(0, Number(rawRemaining) || 0);
     d.fuel_type_id = raw.fuel_type_id || null;
     d.product_id = raw.product_id || null;
     d.liters = Number(raw.liters || 0);
@@ -2325,8 +2327,11 @@ function normalizedDebt(raw) {
     d.station_id = raw.station_id || null;
     d.customer_phone = String(firstDefined(raw.customer_phone, raw.phone, '') || '').trim();
     d.risk_level = String(raw.risk_level || raw.risk_classification || '').trim().toLowerCase();
-    d.days_remaining = calendarDayDelta(d.due_date);
-    d.days_overdue = d.days_remaining === null ? 0 : Math.max(0, -d.days_remaining);
+    // Maturity is classified by Kotlin against BusinessDay; do not use device time here.
+    d.maturity_status = String(raw.maturity_status || '').trim().toUpperCase();
+    d.days_remaining = Number.isFinite(Number(raw.days_remaining)) ? Number(raw.days_remaining) : null;
+    d.days_overdue = Number.isFinite(Number(raw.days_overdue)) ? Math.max(0, Number(raw.days_overdue)) :
+        (d.days_remaining === null ? 0 : Math.max(0, -d.days_remaining));
     return d;
 }
 function computeDaysOverdue(due) {
@@ -2335,20 +2340,15 @@ function computeDaysOverdue(due) {
 }
 function statusOf(debt) {
     if (debt.remaining_amount <= 0.000001) return { key: 'paid', label: 'مدفوع', icon: 'fa-check-circle', cls: 'paid' };
-    const risk = String(debt.risk_level || '').toLowerCase();
-    const highRisk = ['high','critical','blacklisted','مرتفع','محظور'].includes(risk) ||
-        risk.includes('high') || risk.includes('critical') || risk.includes('blacklist') || risk.includes('مرتفع') || risk.includes('محظور');
-    const days = debt.days_remaining === undefined ? calendarDayDelta(debt.due_date) : debt.days_remaining;
-    if (String(debt.payment_status || debt.status || '').toLowerCase() === 'doubtful' ||
-        highRisk || (days !== null && days <= -90)) {
-        return { key: 'doubtful', label: 'مشكوك في تحصيله', icon: 'fa-triangle-exclamation', cls: 'doubtful' };
+    const maturity = String(debt.maturity_status || '').toUpperCase();
+    if (maturity === 'OVERDUE') return { key: 'overdue', label: 'متأخر', icon: 'fa-exclamation-circle', cls: 'overdue' };
+    if (maturity === 'DUE_TODAY') return { key: 'due_today', label: 'مستحق اليوم', icon: 'fa-clock', cls: 'due-soon' };
+    if (maturity === 'NOT_DUE') return { key: 'due_soon', label: 'مستحق قريباً', icon: 'fa-clock', cls: 'due-soon' };
+    if (String(debt.payment_status || debt.status || '').toLowerCase() === 'partial' || debt.paid_amount > 0.000001) {
+        return { key: 'partial', label: 'مدفوع جزئياً', icon: 'fa-coins', cls: 'pending' };
     }
-    if (days !== null && days < 0) return { key: 'overdue', label: 'متأخر', icon: 'fa-exclamation-circle', cls: 'overdue' };
-    if (days !== null && days <= 3) return { key: 'due_soon', label: 'مستحق قريباً', icon: 'fa-clock', cls: 'due-soon' };
-    if (debt.paid_amount > 0.000001) return { key: 'partial', label: 'مدفوع جزئياً', icon: 'fa-coins', cls: 'pending' };
-    return { key: 'pending', label: debt.due_date ? 'مستحق' : 'تاريخ الاستحقاق غير محدد', icon: 'fa-hourglass-half', cls: 'pending' };
+    return { key: 'pending', label: maturity === 'UNDATED' ? 'تاريخ الاستحقاق غير محدد' : 'قيد المراجعة', icon: 'fa-hourglass-half', cls: 'pending' };
 }
-
 /* ============================================================
    6. التصنيف الدقيق
    ============================================================ */

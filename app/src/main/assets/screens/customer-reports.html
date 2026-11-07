@@ -2005,18 +2005,14 @@
                 { key: '61-90', label: '61–89 يوم', min: 61, max: 89 },
                 { key: '90+', label: '90 يومًا فأكثر / مشكوك في تحصيله', min: 90, max: Number.MAX_SAFE_INTEGER }
             ];
-            const today = typeof businessDayDate === 'function' ? businessDayDate() : IsoCivilDate.datePart(new Date().toISOString(), true);
             const groups = new Map();
             (Array.isArray(rows) ? rows : []).forEach(row => {
                 const amount = Math.max(0, finiteNumber(row.remaining_amount));
                 if (amount <= 0) return;
-                // Age by explicit contractual maturity date only. A creation date is not due date.
-                const dueText = row.due_date || '';
-                let age = null;
-                if (IsoCivilDate.isValidIsoDate(dueText) && IsoCivilDate.isValidIsoDate(today)) {
-                    const days = IsoCivilDate.calendarDayDifference(dueText, today);
-                    if (days !== null) age = Math.max(0, days);
-                }
+                // Kotlin is authoritative for maturity against BusinessDay.
+                const maturity = String(row.maturity_status || '').toUpperCase();
+                const age = maturity === 'OVERDUE' && Number.isFinite(Number(row.days_remaining))
+                    ? Math.max(0, -Number(row.days_remaining)) : null;
                 const bucket = age === null ? null : buckets.find(item => age >= item.min && age <= item.max);
                 const key = String(row.customer_party_id || row.customer_id || 0);
                 if (!groups.has(key)) groups.set(key, { customer_id: Number(key), customer_name: row.customer_name || row.commercial_name || '---', phone: row.customer_phone || row.phone || '', total: 0, buckets: Object.fromEntries(buckets.map(item => [item.key, 0])), undated: 0, doubtful: 0, overdue: 0 });

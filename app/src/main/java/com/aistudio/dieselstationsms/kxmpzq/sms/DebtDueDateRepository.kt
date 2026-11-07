@@ -21,7 +21,7 @@ import java.util.Locale
  */
 object DebtDueDateRepository {
     private val creditMethods = setOf("credit", "credit_sale", "credit_account", "on_account", "آجل", "اجل", "بيع آجل", "على الحساب")
-    private val trustedDueDateSources = setOf("sale_creation", "sales_trigger_v3", "sales_trigger_v4", "legacy_rebuilt_snapshot")
+    private val trustedDueDateSources = setOf("sale_creation", "sales_trigger_v3", "sales_trigger_v4")
 
     sealed class TermsParseResult {
         data class Known(
