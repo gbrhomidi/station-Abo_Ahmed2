@@ -92,6 +92,7 @@ object SupplierPayablesRepository {
         if ("reversed_at" !in allocationColumns) db.execSQL("ALTER TABLE supplier_invoice_allocations ADD COLUMN reversed_at TEXT")
         if ("reversal_reason" !in allocationColumns) db.execSQL("ALTER TABLE supplier_invoice_allocations ADD COLUMN reversal_reason TEXT")
         if ("reversed_by" !in allocationColumns) db.execSQL("ALTER TABLE supplier_invoice_allocations ADD COLUMN reversed_by INTEGER")
+        if ("unapplied_reason" !in allocationColumns) db.execSQL("ALTER TABLE supplier_invoice_allocations ADD COLUMN unapplied_reason TEXT")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_supplier_invoice_aging ON supplier_invoices(station_id,supplier_id,due_date,status,is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_supplier_invoice_date ON supplier_invoices(station_id,supplier_id,invoice_date,is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_supplier_invoice_alloc_invoice ON supplier_invoice_allocations(station_id,supplier_invoice_id,status,is_deleted)")
@@ -104,7 +105,33 @@ object SupplierPayablesRepository {
         db.execSQL("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_supplier_legacy_unapplied_once
             ON supplier_invoice_allocations(payment_id)
-            WHERE supplier_invoice_id IS NULL AND status='posted' AND is_deleted=0
+            WHERE supplier_invoice_id IS NULL AND allocation_kind='unapplied_legacy' AND status='posted' AND is_deleted=0
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TRIGGER IF NOT EXISTS trg_supplier_alloc_insert_guard
+            BEFORE INSERT ON supplier_invoice_allocations
+            WHEN NEW.status='posted' AND NEW.is_deleted=0
+            BEGIN
+                SELECT RAISE(ABORT,'supplier_allocation_scope_mismatch') WHERE NOT EXISTS (
+                    SELECT 1 FROM payments p WHERE p.id=NEW.payment_id AND p.station_id=NEW.station_id
+                      AND p.supplier_party_id=NEW.supplier_id AND p.status='completed' AND COALESCE(p.is_deleted,0)=0
+                      AND ((NEW.currency_id IS NULL OR NEW.currency_id<=0) AND (p.currency_id IS NULL OR p.currency_id<=0)
+                           OR NEW.currency_id>0 AND p.currency_id=NEW.currency_id));
+                SELECT RAISE(ABORT,'supplier_allocation_invoice_mismatch')
+                WHERE NEW.supplier_invoice_id IS NOT NULL AND NOT EXISTS (
+                    SELECT 1 FROM supplier_invoices i WHERE i.id=NEW.supplier_invoice_id
+                      AND i.station_id=NEW.station_id AND i.supplier_id=NEW.supplier_id AND i.is_deleted=0
+                      AND ((NEW.currency_id IS NULL OR NEW.currency_id<=0) AND (i.currency_id IS NULL OR i.currency_id<=0)
+                           OR NEW.currency_id>0 AND i.currency_id=NEW.currency_id));
+                SELECT RAISE(ABORT,'supplier_payment_overallocation') WHERE
+                    (SELECT COALESCE(SUM(a.amount),0) FROM supplier_invoice_allocations a
+                     WHERE a.payment_id=NEW.payment_id AND a.status='posted' AND a.is_deleted=0) + NEW.amount
+                    > (SELECT amount FROM payments WHERE id=NEW.payment_id) + 0.01;
+                SELECT RAISE(ABORT,'supplier_invoice_overallocation') WHERE NEW.supplier_invoice_id IS NOT NULL AND
+                    (SELECT COALESCE(SUM(a.amount),0) FROM supplier_invoice_allocations a
+                     WHERE a.supplier_invoice_id=NEW.supplier_invoice_id AND a.status='posted' AND a.is_deleted=0) + NEW.amount
+                    > (SELECT total_amount FROM supplier_invoices WHERE id=NEW.supplier_invoice_id) + 0.01;
+            END
         """.trimIndent())
     }
 
@@ -120,7 +147,6 @@ object SupplierPayablesRepository {
         currencyId: Long?,
         actorId: Long
     ): Long {
-        ensureSchema(db)
         require(stationId > 0 && supplierId > 0L && sourceId > 0L && actorId > 0L) {
             "بيانات فاتورة المورد غير صالحة"
         }
@@ -130,18 +156,30 @@ object SupplierPayablesRepository {
         require(amount.isFinite() && amount > EPSILON) { "مبلغ فاتورة المورد غير صالح" }
 
         val existing = db.rawQuery(
-            """SELECT id,supplier_id,total_amount FROM supplier_invoices
+            """SELECT id,supplier_id,total_amount,invoice_number,invoice_date,currency_id
+               FROM supplier_invoices
                WHERE station_id=? AND source_type=? AND source_id=? AND is_deleted=0 LIMIT 1""",
             arrayOf(stationId.toString(),sourceType,sourceId.toString())
         ).use { c ->
-            if (c.moveToFirst()) longArrayOf(c.getLong(0),c.getLong(1),c.getDouble(2).toBits()) else null
+            if (c.moveToFirst()) JSONObject().apply {
+                put("id", c.getLong(0)); put("supplier_id", c.getLong(1)); put("amount", c.getDouble(2))
+                put("invoice_number", c.getString(3).orEmpty()); put("invoice_date", c.getString(4).orEmpty())
+                put("currency_id", if (c.isNull(5)) JSONObject.NULL else c.getLong(5))
+            } else null
         }
         if (existing != null) {
-            require(existing[1] == supplierId) { "مصدر الشراء مرتبط بمورد مختلف" }
-            require(abs(Double.fromBits(existing[2]) - amount) <= 0.01) {
-                "مبلغ فاتورة المورد المصدر يختلف عن المبلغ المسجل مسبقاً"
+            val normalizedNumber = invoiceNumber.trim().ifBlank { "$sourceType-$sourceId" }
+            val normalizedDate = parseDate(invoiceDate)?.toString().orEmpty()
+            val existingCurrency = existing.optLong("currency_id", 0L)
+            val requestedCurrency = currencyId?.takeIf { it > 0L } ?: 0L
+            require(existing.getLong("supplier_id") == supplierId &&
+                abs(existing.getDouble("amount") - amount) <= 0.01 &&
+                existing.optString("invoice_number") == normalizedNumber &&
+                existing.optString("invoice_date") == normalizedDate &&
+                existingCurrency == requestedCurrency) {
+                "تعارض بصمة فاتورة المورد للمصدر نفسه؛ لم يتم تحديث السجل السابق"
             }
-            return existing[0]
+            return existing.getLong("id")
         }
 
         val partyColumns = columns(db,"parties")
@@ -240,7 +278,6 @@ object SupplierPayablesRepository {
         actorId: Long,
         explicitInvoiceId: Long
     ): JSONObject {
-        ensureSchema(db)
         require(stationId > 0 && supplierId > 0L && paymentId > 0L && actorId > 0L) {
             "بيانات تخصيص دفعة المورد غير صالحة"
         }
@@ -304,8 +341,11 @@ object SupplierPayablesRepository {
             """SELECT id,remaining_amount FROM supplier_invoices
                WHERE station_id=? AND supplier_id=? $currencyClause $invoiceFilter
                  AND is_deleted=0 AND status IN ('open','partial') AND remaining_amount>?
-               ORDER BY CASE WHEN due_date IS NULL OR TRIM(due_date)='' THEN 1 ELSE 0 END,
-                        date(due_date),date(invoice_date),id""",
+               ORDER BY CASE WHEN due_date_source='purchase_creation' AND payment_terms_source_at_purchase='explicit_text'
+                                      AND due_date IS NOT NULL AND TRIM(due_date)<>'' THEN 0 ELSE 1 END,
+                        CASE WHEN due_date_source='purchase_creation' AND payment_terms_source_at_purchase='explicit_text' THEN date(due_date) END,
+                        CASE WHEN invoice_date IS NULL OR TRIM(invoice_date)='' THEN 1 ELSE 0 END,
+                        date(invoice_date),id""",
             currencyArgs.toTypedArray()
         ).use { c -> while(c.moveToNext()) candidates += Candidate(c.getLong(0),c.getDouble(1).coerceAtLeast(0.0)) }
 
@@ -362,7 +402,13 @@ object SupplierPayablesRepository {
             db.insertOrThrow("supplier_invoice_allocations",null,ContentValues().apply {
                 put("uuid",UUID.randomUUID().toString());put("station_id",stationId);put("supplier_id",supplierId)
                 putNull("supplier_invoice_id");put("payment_id",paymentId)
-                put("allocation_kind","unapplied_legacy");put("amount",remainingPayment)
+                put("allocation_kind", "unapplied_legacy")
+                put("unapplied_reason", when {
+                    paymentCurrencyId <= 0L && candidates.isEmpty() -> "unknown_currency_or_no_eligible_invoice"
+                    candidates.isNotEmpty() -> "current_payment_excess_after_invoice_allocation"
+                    else -> "historical_or_unmatched_supplier_balance"
+                })
+                put("amount",remainingPayment)
                 if(paymentCurrencyId>0L) put("currency_id",paymentCurrencyId) else putNull("currency_id")
                 put("notes","دفعة غير موزعة على فاتورة مسجلة؛ تخصم من رصيد المورد التاريخي")
                 put("status","posted");put("allocated_at",BusinessDay.currentDate());put("created_by",actorId)
@@ -388,7 +434,6 @@ object SupplierPayablesRepository {
         actorId: Long,
         reason: String
     ): JSONObject {
-        ensureSchema(db)
         require(stationId > 0 && supplierId > 0L && paymentId > 0L && actorId > 0L) {
             "بيانات عكس تخصيص دفعة المورد غير صالحة"
         }
@@ -501,9 +546,9 @@ object SupplierPayablesRepository {
         stationId: Int,
         supplierId: Long = 0L,
         fromDate: String? = null,
-        toDate: String? = null
+        toDate: String? = null,
+        asOfDate: String? = null
     ): JSONArray {
-        ensureSchema(db)
         require(stationId>0) { "معرف المحطة غير صالح" }
         if(supplierId>0L) requireSupplierScope(db,supplierId,stationId)
         val where=mutableListOf("i.station_id=?","i.is_deleted=0")
@@ -531,7 +576,7 @@ object SupplierPayablesRepository {
                 val source=c.getString(7).orEmpty()
                 val termsSource=c.getString(15).orEmpty()
                 val trusted=source=="purchase_creation" && termsSource=="explicit_text"
-                val today=LocalDate.parse(BusinessDay.currentDate())
+                val today=parseDate(asOfDate) ?: LocalDate.parse(BusinessDay.currentDate())
                 val dueDate=if(trusted) parseDate(due) else null
                 val maturityStatus=when {
                     c.getDouble(13)<=EPSILON -> "paid"
@@ -569,7 +614,6 @@ object SupplierPayablesRepository {
         fromDate: String? = null,
         toDate: String? = null
     ): JSONArray {
-        ensureSchema(db)
         require(stationId>0) { "معرف المحطة غير صالح" }
         val where=mutableListOf("p.station_id=?","p.supplier_party_id IS NOT NULL","p.is_deleted=0","p.status IN ('completed','refunded')")
         val args=mutableListOf(stationId.toString())
@@ -612,12 +656,12 @@ object SupplierPayablesRepository {
         require(supplierId>0L && stationId>0) { "معرف المورد والمحطة مطلوبان" }
         requireSupplierScope(db,supplierId,stationId)
         val asOf=parseDate(asOfDate) ?: LocalDate.parse(BusinessDay.currentDate())
-        val invoices=getSupplierInvoices(db,stationId,supplierId)
+        val invoices=getSupplierInvoices(db,stationId,supplierId, asOfDate=asOf.toString())
         val byCurrency=linkedMapOf<Long,JSONObject>()
         val legacyOffsets = JSONArray()
         var unallocatedWithoutCurrency = 0.0
         db.rawQuery(
-            """SELECT COALESCE(currency_id,0),COALESCE(SUM(amount),0),COUNT(*)
+            """SELECT COALESCE(currency_id,0),COALESCE(unapplied_reason,'historical_or_unmatched_supplier_balance'),COALESCE(SUM(amount),0),COUNT(*)
                FROM supplier_invoice_allocations
                WHERE station_id=? AND supplier_id=? AND supplier_invoice_id IS NULL
                  AND allocation_kind='unapplied_legacy'
@@ -628,13 +672,15 @@ object SupplierPayablesRepository {
         ).use { cursor ->
             while (cursor.moveToNext()) {
                 val currencyId = cursor.getLong(0)
-                val amount = cursor.getDouble(1)
+                val reason = cursor.getString(1).orEmpty()
+                val amount = cursor.getDouble(2)
                 if (currencyId <= 0L) unallocatedWithoutCurrency += amount
                 legacyOffsets.put(JSONObject().apply {
                     put("currency_id", if(currencyId > 0L) currencyId else JSONObject.NULL)
                     put("amount", amount)
-                    put("allocation_count", cursor.getInt(2))
-                    put("classification", "legacy_balance_offset_not_invoice_allocated")
+                    put("allocation_count", cursor.getInt(3))
+                    put("classification", reason)
+                    put("legacy_balance_offset_not_invoice_allocated", reason == "historical_or_unmatched_supplier_balance")
                 })
             }
         }
@@ -683,6 +729,97 @@ object SupplierPayablesRepository {
             put("unapplied_legacy_payments_without_currency",unallocatedWithoutCurrency)
             put("invoice_count",currencyRows.let { arr -> (0 until arr.length()).sumOf { arr.getJSONObject(it).getInt("invoice_count") } })
         }
+    }
+
+    /** Read-only statement: invoices/payments affect the running balance; allocations are links only. */
+    fun getSupplierStatement(
+        db: SQLiteDatabase,
+        stationId: Int,
+        supplierId: Long,
+        fromDate: String? = null,
+        toDate: String? = null
+    ): JSONObject {
+        require(stationId > 0 && supplierId > 0) { "معرف المورد والمحطة مطلوبان" }
+        requireSupplierScope(db, supplierId, stationId)
+        val from = parseDate(fromDate)
+        val to = parseDate(toDate)
+        require(fromDate.isNullOrBlank() || from != null) { "تاريخ بداية كشف المورد غير صالح" }
+        require(toDate.isNullOrBlank() || to != null) { "تاريخ نهاية كشف المورد غير صالح" }
+        require(from == null || to == null || !from.isAfter(to)) { "نطاق كشف المورد غير صالح" }
+        data class Movement(val date: String, val type: String, val reference: String, val id: Long, val currency: Long, val increase: Double, val decrease: Double, val details: JSONObject)
+        val movements = mutableListOf<Movement>()
+        val opening = linkedMapOf<Long, Double>()
+        val invoices = getSupplierInvoices(db, stationId, supplierId)
+        for (i in 0 until invoices.length()) {
+            val row = invoices.getJSONObject(i)
+            val date = row.optString("invoice_date").take(10)
+            val amount = row.optDouble("total_amount", 0.0)
+            val currency = row.optLong("currency_id", 0L)
+            if (from != null && parseDate(date)?.isBefore(from) == true) opening[currency] = (opening[currency] ?: 0.0) + amount
+            if ((from == null || parseDate(date)?.let { !it.isBefore(from) } == true) &&
+                (to == null || parseDate(date)?.let { !it.isAfter(to) } == true)) {
+                movements += Movement(date, "supplier_invoice", row.optString("invoice_number"), row.optLong("id"), currency, amount, 0.0, row)
+            }
+        }
+        val payments = getSupplierPayments(db, stationId, supplierId)
+        for (i in 0 until payments.length()) {
+            val row = payments.getJSONObject(i)
+            val date = row.optString("date").take(10)
+            val parsed = parseDate(date)
+            val currency = row.optLong("currency_id", 0L)
+            val signedIncrease = if (row.optString("status") == "refunded") row.optDouble("amount", 0.0) else 0.0
+            val decrease = if (row.optString("status") == "refunded") 0.0 else row.optDouble("amount", 0.0)
+            val net = signedIncrease - decrease
+            if (from != null && parsed?.isBefore(from) == true) opening[currency] = (opening[currency] ?: 0.0) + net
+            if ((from == null || parsed?.let { !it.isBefore(from) } == true) &&
+                (to == null || parsed?.let { !it.isAfter(to) } == true)) {
+                val links = JSONArray()
+                db.rawQuery("SELECT supplier_invoice_id,amount,status,COALESCE(unapplied_reason,'') FROM supplier_invoice_allocations WHERE payment_id=? AND station_id=? ORDER BY id", arrayOf(row.optLong("id").toString(), stationId.toString())).use { c ->
+                    while (c.moveToNext()) links.put(JSONObject().apply {
+                        put("supplier_invoice_id", if (c.isNull(0)) JSONObject.NULL else c.getLong(0)); put("amount", c.getDouble(1)); put("status", c.getString(2)); put("unapplied_reason", c.getString(3).orEmpty())
+                    })
+                }
+                val details = JSONObject(row.toString()).put("allocation_links", links)
+                movements += Movement(date, if (row.optString("status") == "refunded") "supplier_payment_reversal" else "supplier_payment", row.optString("payment_code"), row.optLong("id"), currency, signedIncrease, decrease, details)
+            }
+        }
+        movements.sortWith(compareBy<Movement>({ it.date }, { it.type }, { it.reference }, { it.id }))
+        val running = opening.toMutableMap()
+        val out = JSONArray()
+        movements.forEach { m ->
+            running[m.currency] = (running[m.currency] ?: 0.0) + m.increase - m.decrease
+            out.put(JSONObject().apply {
+                put("date", m.date); put("reference", m.reference); put("movement_type", m.type); put("movement_id", m.id)
+                put("currency_id", if (m.currency > 0) m.currency else JSONObject.NULL); put("increase", m.increase); put("decrease", m.decrease)
+                put("running_balance", running[m.currency] ?: 0.0); put("details", m.details)
+            })
+        }
+        return JSONObject().apply {
+            put("station_id", stationId); put("supplier_id", supplierId); put("from_date", from?.toString() ?: ""); put("to_date", to?.toString() ?: "")
+            put("opening_balances", JSONObject().apply { opening.forEach { (k, v) -> put(if (k > 0) k.toString() else "unknown", v) } })
+            put("movements", out); put("allocations_are_links", true)
+        }
+    }
+
+    /** Read-only reconciliation workpaper; it classifies differences and never repairs data. */
+    fun reconcileSupplier(db: SQLiteDatabase, stationId: Int, supplierId: Long, asOfDate: String? = null): JSONObject {
+        requireSupplierScope(db, supplierId, stationId)
+        val aging = getSupplierAging(db, stationId, supplierId, asOfDate)
+        val exceptions = JSONArray()
+        var openInvoices = 0.0
+        for (i in 0 until aging.getJSONArray("currency_totals").length()) openInvoices += aging.getJSONArray("currency_totals").getJSONObject(i).optDouble("open_balance", 0.0)
+        var unapplied = 0.0
+        db.rawQuery("SELECT COALESCE(SUM(amount),0) FROM supplier_invoice_allocations WHERE station_id=? AND supplier_id=? AND supplier_invoice_id IS NULL AND status='posted' AND is_deleted=0", arrayOf(stationId.toString(), supplierId.toString())).use { if (it.moveToFirst()) unapplied = it.getDouble(0) }
+        val expected = openInvoices - unapplied
+        val ledger = db.rawQuery("SELECT COALESCE(SUM(credit-debit),0) FROM supplier_ledger WHERE party_id=?", arrayOf(supplierId.toString())).use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
+        val party = db.rawQuery("SELECT current_balance,total_due,total_payments FROM parties WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(supplierId.toString(), stationId.toString())).use { c -> require(c.moveToFirst()) { "المورد غير موجود" }; JSONObject().apply { put("current_balance", c.getDouble(0)); put("total_due", c.getDouble(1)); put("total_payments", c.getDouble(2)) } }
+        val gl = db.rawQuery("SELECT COALESCE(SUM(ji.credit-ji.debit),0) FROM journal_entry_items ji JOIN journal_entries je ON je.id=ji.journal_entry_id WHERE ji.supplier_party_id=? AND je.station_id=? AND je.status='posted' AND COALESCE(je.is_deleted,0)=0", arrayOf(supplierId.toString(), stationId.toString())).use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
+        fun exception(code: String, amount: Double, message: String) { exceptions.put(JSONObject().apply { put("code", code); put("amount", amount); put("message", message); put("supplier_id", supplierId); put("station_id", stationId) }) }
+        if (abs(expected - ledger) > 0.01) exception("ledger_balance_mismatch", expected - ledger, "الرصيد المتوقع لا يطابق دفتر المورد")
+        if (abs(expected - party.optDouble("current_balance")) > 0.01) exception("party_balance_mismatch", expected - party.optDouble("current_balance"), "الرصيد المتوقع لا يطابق رصيد الطرف")
+        if (abs(expected - gl) > 0.01) exception("gl_control_balance_mismatch", expected - gl, "الرصيد المتوقع لا يطابق حساب الأستاذ")
+        db.rawQuery("SELECT COUNT(*) FROM supplier_invoice_allocations a LEFT JOIN supplier_invoices i ON i.id=a.supplier_invoice_id WHERE a.station_id=? AND a.supplier_id=? AND a.supplier_invoice_id IS NOT NULL AND (i.id IS NULL OR i.station_id<>a.station_id OR i.supplier_id<>a.supplier_id)", arrayOf(stationId.toString(), supplierId.toString())).use { if (it.moveToFirst() && it.getInt(0) > 0) exception("orphan_allocation", it.getInt(0).toDouble(), "تخصيصات تشير إلى فواتير غير صالحة") }
+        return JSONObject().apply { put("station_id", stationId); put("supplier_id", supplierId); put("as_of_date", asOfDate ?: BusinessDay.currentDate()); put("open_invoice_balance", openInvoices); put("unapplied_supplier_credits", unapplied); put("expected_control_balance", expected); put("supplier_ledger_balance", ledger); put("party_balance", party); put("gl_control_balance", gl); put("exceptions", exceptions); put("status", if (exceptions.length() == 0) "reconciled" else "reconciliation_required"); put("repairs_performed", false) }
     }
 
     private fun requireSupplierScope(db: SQLiteDatabase, supplierId: Long, stationId: Int) {

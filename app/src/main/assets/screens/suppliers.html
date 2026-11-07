@@ -1982,6 +1982,8 @@
                     case 'getSupplierAging': raw = AndroidInterface.getSupplierAging(Number(p.supplier_id || 0), String(p.as_of_date || '')); break;
                     case 'getSupplierInvoices': raw = AndroidInterface.getSupplierInvoices(JSON.stringify(p)); break;
                     case 'getSupplierPayments': raw = AndroidInterface.getSupplierPayments(JSON.stringify(p)); break;
+                    case 'getSupplierStatement': raw = AndroidInterface.runExpandedAccounting('supplier_statement', JSON.stringify(p)); break;
+                    case 'getSupplierReconciliation': raw = AndroidInterface.runExpandedAccounting('supplier_reconciliation', JSON.stringify(p)); break;
                     case 'getActiveCashBoxes': raw = AndroidInterface.getActiveCashBoxes(); break;
                     case 'getBankAccounts': raw = AndroidInterface.getBankAccounts(); break;
                     case 'makeSupplierPayment': raw = AndroidInterface.makeSupplierPayment(JSON.stringify(p)); break;
@@ -3297,16 +3299,20 @@ let pullStartY = 0,
             document.getElementById('detailsOverlay').classList.add('show');
             document.body.style.overflow = 'hidden';
             try {
-                const [partyResponse, agingResponse, invoiceResponse, paymentResponse] = await Promise.all([
+                const [partyResponse, agingResponse, invoiceResponse, paymentResponse, statementResponse, reconciliationResponse] = await Promise.all([
                     apiCall('getPartyById', { id }),
                     apiCall('getSupplierAging', { supplier_id: Number(id) }),
                     apiCall('getSupplierInvoices', { supplier_id: Number(id) }),
-                    apiCall('getSupplierPayments', { supplier_id: Number(id) })
+                    apiCall('getSupplierPayments', { supplier_id: Number(id) }),
+                    apiCall('getSupplierStatement', { supplier_id: Number(id) }),
+                    apiCall('getSupplierReconciliation', { supplier_id: Number(id) })
                 ]);
                 if (partyResponse.success && partyResponse.data) supplier = partyResponse.data;
                 if (!agingResponse.success) throw new Error(agingResponse.message || 'تعذر تحميل أعمار مستحقات المورد');
                 if (!invoiceResponse.success) throw new Error(invoiceResponse.message || 'تعذر تحميل فواتير المورد');
                 if (!paymentResponse.success) throw new Error(paymentResponse.message || 'تعذر تحميل دفعات المورد');
+                if (!statementResponse.success) throw new Error(statementResponse.message || 'تعذر تحميل كشف حساب المورد');
+                if (!reconciliationResponse.success) throw new Error(reconciliationResponse.message || 'تعذر تحميل تقرير مصالحة المورد');
 
                 const name = getField(supplier, 'commercial_name', 'commercialName', 'name') || '---';
                 const legalName = getField(supplier, 'legal_name', 'legalName') || '---';
@@ -3324,6 +3330,9 @@ let pullStartY = 0,
                 const legacyOffsets = Array.isArray(aging.legacy_payment_offsets_by_currency) ? aging.legacy_payment_offsets_by_currency : [];
                 const invoices = Array.isArray(invoiceResponse.data) ? invoiceResponse.data : [];
                 const payments = Array.isArray(paymentResponse.data) ? paymentResponse.data : [];
+                const statement = statementResponse.data || statementResponse;
+                const reconciliation = reconciliationResponse.data || reconciliationResponse;
+                const reconciliationExceptions = Array.isArray(reconciliation.exceptions) ? reconciliation.exceptions : [];
                 const currencyLabel = currencyId => currencyId ? ('عملة #' + currencyId) : 'العملة الافتراضية';
 
                 const agingHtml = currencyTotals.length ? currencyTotals.map(item => {
@@ -3387,6 +3396,12 @@ let pullStartY = 0,
                         <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:850px;">
                         <thead><tr>${['#','رقم الفاتورة','المصدر','تاريخ الفاتورة','تاريخ الاستحقاق','الحالة','العملة','الإجمالي','المسدد','المتبقي'].map(x=>'<th style="padding:8px;text-align:right;border-bottom:1px solid var(--border-color);">'+x+'</th>').join('')}</tr></thead>
                         <tbody>${invoiceRows}</tbody></table></div>
+                    </div>
+                    <div class="details-section"><div class="details-section-title"><i class="fas fa-book"></i> كشف الحساب المركزي</div>
+                        <div class="details-row"><span class="details-label">عدد الحركات</span><span class="details-value">${Array.isArray(statement.movements) ? statement.movements.length : 0}</span></div>
+                        <div class="details-row"><span class="details-label">حالة المصالحة</span><span class="details-value">${escapeHtml(reconciliation.status || 'يحتاج مراجعة')}</span></div>
+                        <div class="details-row"><span class="details-label">الاستثناءات</span><span class="details-value">${reconciliationExceptions.length}</span></div>
+                        <small style="color:var(--text-muted);">التخصيصات تظهر كرابط توثيقي ولا تخصم الرصيد مرة ثانية. لا يقوم هذا التقرير بأي إصلاح تلقائي.</small>
                     </div>
                     <div class="details-section"><div class="details-section-title"><i class="fas fa-money-check-alt"></i> المدفوعات والتخصيصات</div>
                         <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:650px;">

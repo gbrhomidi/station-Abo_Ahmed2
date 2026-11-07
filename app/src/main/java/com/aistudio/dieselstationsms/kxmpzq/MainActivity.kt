@@ -12634,7 +12634,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val readActions = setOf(
-                "supplier_aging", "supplier_statement", "purchase_invoice_list", "purchase_return_list",
+                "supplier_aging", "supplier_statement", "supplier_reconciliation", "purchase_invoice_list", "purchase_return_list",
                 "vat_return", "cash_flow_statement", "equity_changes", "bank_reconciliation", "bank_statement_batches"
             )
             val createActions = setOf("purchase_invoice_create", "purchase_return_create", "bank_statement_import")
@@ -12655,6 +12655,24 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     return errorResponse("بيانات الوظيفة المحاسبية غير صالحة")
                 }
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
+                if (action == "supplier_statement" || action == "supplier_reconciliation") {
+                    val supplierId = request.optLong("supplier_id", 0L)
+                    require(supplierId > 0L) { "معرف المورد مطلوب" }
+                    val database = db.writableDatabase
+                    val result = if (action == "supplier_statement") {
+                        SupplierPayablesRepository.getSupplierStatement(
+                            database, stationId, supplierId,
+                            request.optString("from_date").takeIf { it.isNotBlank() },
+                            request.optString("to_date").takeIf { it.isNotBlank() }
+                        )
+                    } else {
+                        SupplierPayablesRepository.reconcileSupplier(
+                            database, stationId, supplierId,
+                            request.optString("as_of_date").takeIf { it.isNotBlank() }
+                        )
+                    }
+                    return dataResponse(result)
+                }
                 val service = ExpandedAccountingService(db, db.writableDatabase, stationId, activity.currentUserId)
                 val result = service.execute(action, request)
                 if (result.optBoolean("success") && action !in readActions) {

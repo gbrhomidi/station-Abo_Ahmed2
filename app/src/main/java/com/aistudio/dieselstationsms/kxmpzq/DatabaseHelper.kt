@@ -55,7 +55,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 53
+        const val VERSION = 54
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -253,6 +253,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensurePricingV42Schema(db)
             ensureOpenCompatibilitySchema(db)
             DebtDueDateRepository.ensureSchema(db)
+            SupplierPayablesRepository.ensureSchema(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
         } finally {
@@ -309,6 +310,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     47 -> ensureFinanceIntegritySchema(db)
                     51 -> ensureTaskWorkspaceSchema(db)
                     52 -> ensureDashboardDebtQueryIndexes(db)
+                    53 -> SupplierPayablesRepository.ensureSchema(db)
                 }
             }
             ensureModule006Schema(db)
@@ -328,6 +330,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensurePricingV42Schema(db)
             ensureOpenCompatibilitySchema(db)
             DebtDueDateRepository.ensureSchema(db)
+            SupplierPayablesRepository.ensureSchema(db)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -19892,7 +19895,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = writableDatabase
-            SupplierPayablesRepository.ensureSchema(db)
             db.rawQuery(
                 """SELECT p.id, p.current_balance, p.total_due, p.credit_limit,
                           COALESCE(pt.type_code,'') AS party_type
