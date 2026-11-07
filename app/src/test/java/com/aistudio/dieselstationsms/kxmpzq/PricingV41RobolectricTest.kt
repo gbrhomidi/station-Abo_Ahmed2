@@ -484,6 +484,23 @@ class PricingV41RobolectricTest {
             generateSequence { if (cursor.moveToNext()) cursor.getString(cursor.getColumnIndexOrThrow("name")) else null }
                 .any { it == column }
         }
-        if (present) db.execSQL("ALTER TABLE `$table` DROP COLUMN `$column`")
+        if (present) {
+            try {
+                db.execSQL("ALTER TABLE `$table` DROP COLUMN `$column`")
+            } catch (error: android.database.sqlite.SQLiteException) {
+                val indexes = db.rawQuery("PRAGMA index_list(`$table`)", null).use { cursor ->
+                    buildList {
+                        while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+                    }
+                }
+                val objects = db.rawQuery(
+                    "SELECT type || ':' || name || ':' || COALESCE(sql,'') FROM sqlite_master WHERE sql LIKE ?",
+                    arrayOf("%$column%")
+                ).use { cursor ->
+                    buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+                }
+                throw AssertionError("تعذر تجهيز Fixture V40 بإسقاط $table.$column؛ الفهارس المتبقية=$indexes؛ objects=$objects", error)
+            }
+        }
     }
 }
