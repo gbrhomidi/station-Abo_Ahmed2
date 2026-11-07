@@ -124,7 +124,7 @@ internal object SmsOutboxSchema {
                         break
                     }
                 } while (cursor.moveToNext())
-                }
+            }
             found
         }
         if (!exists) db.execSQL("ALTER TABLE `$table` ADD COLUMN `$column` $definition")

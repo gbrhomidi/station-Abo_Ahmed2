@@ -111,16 +111,18 @@ class DatabaseHelperCompatibilityMatrixTest {
     }
 
     private fun assertSmsAttemptSchema(database: SQLiteDatabase) {
-        val leaseColumns = database.rawQuery("PRAGMA table_info(sms_outbox)", null).use { cursor ->
-            val nameIndex = cursor.getColumnIndexOrThrow("name")
-            val names = mutableSetOf<String>()
-            while (cursor.moveToNext()) names += cursor.getString(nameIndex)
-            names
+        listOf(
+            "claimed_at" to "claim timestamp must be persisted",
+            "lease_until" to "lease expiry must be persisted",
+            "attempt_token" to "attempt token must be persisted",
+            "claim_generation" to "claim generation must be persisted"
+        ).forEach { (column, message) ->
+            val exists = database.rawQuery(
+                "SELECT 1 FROM pragma_table_info('sms_outbox') WHERE name = ? LIMIT 1",
+                arrayOf(column)
+            ).use { it.moveToFirst() }
+            assertTrue(message, exists)
         }
-        assertTrue("claim timestamp must be persisted", "claimed_at" in leaseColumns)
-        assertTrue("lease expiry must be persisted", "lease_until" in leaseColumns)
-        assertTrue("attempt token must be persisted", "attempt_token" in leaseColumns)
-        assertTrue("claim generation must be persisted", "claim_generation" in leaseColumns)
 
         val attemptTables = listOf(
             "sms_outbox_attempts",
