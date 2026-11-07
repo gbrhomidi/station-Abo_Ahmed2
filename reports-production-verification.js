@@ -25,7 +25,7 @@ function section(source, start, end) {
 // Historical trends: real SQLite aggregates and valid previous-period handling.
 need(db, /getSalesAmountBetween\(stationId, currentStart, currentEnd\)/, 'trends: current SQLite period aggregate missing');
 need(db, /getSalesAmountBetween\(stationId, previousStart, previousEnd\)/, 'trends: previous-equivalent-period aggregate missing');
-need(db, /require\(!currentStartDate\.after\(currentEndDate\)\)/, 'trends: reversed date-range validation missing');
+need(db, /require\(!currentStartDate\.(?:after\(currentEndDate\)|isAfter\(currentEndDate\))\)/, 'trends: reversed date-range validation missing');
 need(db, /parseDateOnlyStrict/, 'trends: strict date parsing missing');
 need(db, /sales_trend_data/, 'trends: structured sales result missing');
 need(db, /products_trend_data/, 'trends: structured product result missing');
