@@ -9816,7 +9816,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
-                DebtDueDateRepository.ensureSchema(db)
                 dataResponse(DebtDueDateRepository.getCustomerDebts(db, stationId, fromDate, toDate))
             } catch (e: Exception) {
                 DebugLogger.logException("Debts", e)
@@ -14330,8 +14329,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     .firstOrNull { it.optLong("transaction_id", 0L) == debtId || it.optLong("sale_id", 0L) == debtId }
                 requireNotNull(debt) { "الدين غير موجود ضمن ديون المحطة الحالية" }
                 require(debt.optDouble("remaining_amount", 0.0) > 0.000001) { "هذا الدين مسدد ولا يحتاج إلى تذكير" }
-                val dueDate = debt.optString("due_date").trim().take(10)
-                require(dueDate.isNotBlank()) { "لا يوجد تاريخ استحقاق صالح لهذا الدين؛ راجع شروط الدفع للعميل" }
+                val dueDate = IsoCivilDate.requireValid(debt.optString("due_date"), "تاريخ استحقاق الدين")
                 val customerId = debt.optLong("customer_party_id", 0L)
                 val phone = PhoneUtils.normalize(debt.optString("customer_phone", debt.optString("phone")))
                 require(customerId > 0L && phone != null) { "بيانات العميل أو رقم الهاتف غير صالح" }

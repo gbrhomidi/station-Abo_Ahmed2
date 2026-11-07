@@ -2486,10 +2486,13 @@
                 const value = parseFloat(item.stock_cost != null ? item.stock_cost : (item.value || item.total_value || 0));
                 const date = item.return_date ? new Date(item.return_date).toLocaleDateString('en-GB') : '---';
                 const isFinancialReturn = item.reference_type === 'sale_return';
+                const isReversibleLegacyReturn = item.reference_type === 'legacy_return';
                 const managementActions = isFinancialReturn
                     ? '<span class="status-badge" title="المرتجع مرتبط بآثار مالية؛ العرض فقط من هذه الشاشة">مالي - عرض فقط</span>'
-                    : `<button class="btn-action edit" onclick="openEditModal(${item.id})" title="تعديل السبب والملاحظات فقط"><i class="fas fa-edit"></i></button>
-                       <button class="btn-action delete" onclick="deleteReturn(${item.id})" title="عكس حركة المخزون"><i class="fas fa-trash"></i></button>`;
+                    : isReversibleLegacyReturn
+                    ? `<button class="btn-action edit" onclick="openEditModal(${item.id})" title="تعديل السبب والملاحظات فقط"><i class="fas fa-edit"></i></button>
+                       <button class="btn-action delete" onclick="deleteReturn(${item.id})" title="عكس حركة المخزون"><i class="fas fa-trash"></i></button>`
+                    : '<span class="status-badge" title="نوع المرجع غير موثق؛ لا يمكن التعديل أو العكس قبل التحقق">غير مصنف - للقراءة فقط</span>';
 
                 return `
                         <tr>

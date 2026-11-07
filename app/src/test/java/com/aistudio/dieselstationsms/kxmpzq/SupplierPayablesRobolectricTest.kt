@@ -299,4 +299,60 @@ class SupplierPayablesRobolectricTest {
         assertEquals(1, currencyTotals.length())
         assertEquals(300.0, currencyTotals.getJSONObject(0).getDouble("open_balance"), 0.0001)
     }
+
+    @Test
+    fun dashboardSupplierDebtDoesNotFanOutThreeInvoicesAndTwoPaymentsAcrossStations() {
+        val invoices = listOf(
+            SupplierPayablesRepository.createPurchaseInvoice(
+                db, 1, supplierId, "manual", 95101, "DASH-MAN-95101", 100.0, "2026-11-01", null, 1
+            ),
+            SupplierPayablesRepository.createPurchaseInvoice(
+                db, 1, supplierId, "manual", 95102, "DASH-MAN-95102", 200.0, "2026-11-02", null, 1
+            ),
+            SupplierPayablesRepository.createPurchaseInvoice(
+                db, 1, supplierId, "manual", 95103, "DASH-MAN-95103", 300.0, "2026-11-03", null, 1
+            )
+        )
+        val firstPayment = createCompletedSupplierPayment(150.0, "DASH-1")
+        val secondPayment = createCompletedSupplierPayment(50.0, "DASH-2")
+        SupplierPayablesRepository.allocatePayment(db, 1, supplierId, firstPayment, 150.0, 1)
+        SupplierPayablesRepository.allocatePayment(db, 1, supplierId, secondPayment, 50.0, 1)
+
+        val remainingInvoices = SupplierPayablesRepository.getSupplierAging(db, 1, supplierId, "2026-11-05")
+            .getJSONArray("currency_totals")
+        assertEquals(1, remainingInvoices.length())
+        assertEquals(400.0, remainingInvoices.getJSONObject(0).getDouble("open_balance"), 0.0001)
+        assertEquals(3, db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_invoice_allocations WHERE station_id=1 AND status='posted' AND is_deleted=0 AND supplier_invoice_id IN (?,?,?)",
+            invoices.map { it.toString() }.toTypedArray()
+        ).use { check(it.moveToFirst()); it.getInt(0) })
+
+        val partyTypeId = db.rawQuery(
+            "SELECT id FROM party_types WHERE type_code='SUPPLIER' AND is_deleted=0 LIMIT 1", null
+        ).use { check(it.moveToFirst()); it.getLong(0) }
+        val sameStationSupplier = helper.insertParty(
+            JSONObject().put("party_type_id", partyTypeId).put("party_type", "supplier")
+                .put("commercial_name", "Second dashboard supplier").put("commercial_name_ar", "مورد ثانٍ")
+                .put("is_active", true), 1
+        )
+        val otherStationSupplier = helper.insertParty(
+            JSONObject().put("party_type_id", partyTypeId).put("party_type", "supplier")
+                .put("commercial_name", "Other-station dashboard supplier").put("commercial_name_ar", "مورد محطة أخرى")
+                .put("is_active", true), 2
+        )
+        assertEquals(1, db.update("parties", ContentValues().apply {
+            put("current_balance", 400.0); put("total_due", 400.0)
+        }, "id=? AND station_id=?", arrayOf(supplierId.toString(), "1")))
+        assertEquals(1, db.update("parties", ContentValues().apply {
+            put("current_balance", 25.0); put("total_due", 25.0)
+        }, "id=? AND station_id=?", arrayOf(sameStationSupplier.toString(), "1")))
+        assertEquals(1, db.update("parties", ContentValues().apply {
+            put("current_balance", 900.0); put("total_due", 900.0)
+        }, "id=? AND station_id=?", arrayOf(otherStationSupplier.toString(), "2")))
+
+        // POL-09/POL-11 remain pending owner approval. This one-currency fixture only
+        // proves the current dashboard query does not multiply a supplier by invoice/payment rows.
+        val dashboard = helper.getDashboardStatsForDate(1, JSONObject(), "2026-11-05")
+        assertEquals(425.0, dashboard.getDouble("supplier_debts"), 0.0001)
+    }
 }

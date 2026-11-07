@@ -4,9 +4,10 @@
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport" />
     <title>نظام إدارة محطات الوقود – ديون العملاء</title>
-        <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
+    <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
 <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet" />
     <link href="file:///android_asset/assets-local/css/all.min.css" rel="stylesheet" />
+    <script src="file:///android_asset/assets-local/js/iso-civil-date.js"></script>
     <script src="file:///android_asset/assets-local/js/sweetalert2@11">
     </script>
     <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js">
@@ -2675,11 +2676,11 @@
             const customerId = finiteNumber(row.customer_party_id ?? row.customer_id ?? row.party_id);
             // Never substitute invoice creation time for a missing maturity date:
             // doing so incorrectly turns an undated current debt into an overdue debt.
-            const dueDate = String(row.due_date || '').slice(0, 10);
+            const dueDate = IsoCivilDate.isValidIsoDate(row.due_date) ? row.due_date : '';
             const explicitStatus = String(row.payment_status ?? row.status ?? '').toLowerCase();
-            const today = String(businessDayDate()).slice(0, 10);
-            const dueDays = /^\d{4}-\d{2}-\d{2}$/.test(dueDate) && /^\d{4}-\d{2}-\d{2}$/.test(today)
-                ? Math.round((Date.parse(dueDate + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / 86400000)
+            const today = businessDayDate();
+            const dueDays = dueDate && IsoCivilDate.isValidIsoDate(today)
+                ? IsoCivilDate.calendarDayDifference(today, dueDate)
                 : null;
             const risk = String(row.risk_level || row.risk_classification || '').trim().toLowerCase();
             const highRisk = ['high','critical','blacklisted','مرتفع','محظور'].includes(risk) ||
@@ -2687,6 +2688,7 @@
             let status;
             if (remaining <= 0.000001) status = 'paid';
             else if (explicitStatus === 'doubtful' || highRisk || (dueDays !== null && dueDays <= -90)) status = 'doubtful';
+            else if (dueDays === null) status = 'undated';
             else if (dueDays !== null && dueDays < 0) status = 'overdue';
             else if (paid > 0.000001) status = 'partial';
             else status = 'current';
@@ -2715,10 +2717,12 @@
             const to = document.getElementById('filterDateTo').value;
             const customerId = document.getElementById('filterCustomer').value;
             const status = document.getElementById('filterStatus').value;
+            if (!IsoCivilDate.isValidDateRange(from, to)) return [];
             return data.filter((row) => {
                 // Filter by maturity only; invoice creation is not its due date.
-                const date = String(row.due_date || '').slice(0, 10);
-                const dateMatch = (!from || (!!date && date >= from)) && (!to || (!!date && date <= to));
+                const date = row.due_date || '';
+                const dateValid = IsoCivilDate.isValidIsoDate(date);
+                const dateMatch = (!from || (dateValid && date >= from)) && (!to || (dateValid && date <= to));
                 const customerMatch = !customerId || String(row.customer_party_id) === String(customerId);
                 const statusMatch = !status ||
                     (status === 'current'
@@ -2759,8 +2763,8 @@
         async function loadDebts() {
             const from = document.getElementById('filterDateFrom').value;
             const to = document.getElementById('filterDateTo').value;
-            if (from && to && from > to) {
-                showToast('❌ تاريخ البداية يجب أن يسبق تاريخ النهاية', 'error');
+            if (!IsoCivilDate.isValidDateRange(from, to)) {
+                showToast('❌ نطاق التاريخ غير صالح؛ تحقق من اليوم التقويمي وترتيب البداية والنهاية', 'error');
                 return false;
             }
 
@@ -2830,7 +2834,7 @@ function updateDebtViewButtons() {
                 const total = finiteNumber(item.net_amount ?? item.total_debt);
                 const paid = finiteNumber(item.paid_amount);
                 const remaining = finiteNumber(item.remaining_amount);
-                const due = String(item.due_date || '').slice(0,10) || 'غير محدد';
+                const due = IsoCivilDate.isValidIsoDate(item.due_date) ? item.due_date : 'غير محدد';
                 const warning = debtScreenSettings.highlightOverdue && ['overdue','doubtful'].includes(item.status) ? ' border-color:var(--danger);' : '';
                 return '<article class="debt-card" style="' + warning + '">' +
                     '<div class="debt-card-head"><div><div class="debt-card-name">' + escapeHtml(item.customer_name || 'عميل غير مسمى') + '</div>' +
@@ -2870,7 +2874,7 @@ function updateDebtViewButtons() {
                 const warning = debtScreenSettings.highlightOverdue && group.overdue ? ' style="border-color:var(--danger)"' : '';
                 const children = group.rows.map(function(item) {
                     const invoice = item.invoice_number || item.sale_code || ('فاتورة #' + item.id);
-                    const due = String(item.due_date || '').slice(0,10) || 'غير محدد';
+                    const due = IsoCivilDate.isValidIsoDate(item.due_date) ? item.due_date : 'غير محدد';
                     return '<div class="debt-tree-item"><div class="debt-tree-item-main"><strong>' + escapeHtml(invoice) + '</strong>' +
                         '<small>الاستحقاق: ' + escapeHtml(due) + ' · الحالة: ' + escapeHtml(getStatusLabel(item.status)) + '</small>' +
                         '<strong>المتبقي: ' + formatCurrency(item.remaining_amount) + '</strong></div>' +
@@ -2938,7 +2942,7 @@ function updateDebtViewButtons() {
             const debtors = new Set();
             const today = businessDayDate();
             const paidToday = Array.isArray(runtimeState.todayPayments) ? runtimeState.todayPayments.reduce((sum, payment) => {
-                const date = String(payment.created_at || payment.payment_date || payment.paid_at || '').slice(0, 10);
+                const date = IsoCivilDate.datePart(payment.created_at || payment.payment_date || payment.paid_at, true);
                 return date === today ? sum + finiteNumber(payment.amount) : sum;
             }, 0) : null;
 
@@ -3036,7 +3040,7 @@ function updateDebtViewButtons() {
             const today = new Date();
             const byDate = new Map();
             data.forEach((item) => {
-                const date = String(item.created_at || item.due_date || '').slice(0, 10);
+                const date = IsoCivilDate.datePart(item.created_at || item.due_date, true);
                 if (date) byDate.set(date, (byDate.get(date) || 0) + finiteNumber(item.remaining_amount));
             });
             for (let offset = 6; offset >= 0; offset -= 1) {
@@ -3520,7 +3524,7 @@ function updateDebtViewButtons() {
                 const invoiceRows = sales.slice(0, 50).map((sale) => `
                     <tr>
                         <td>${escapeHtml(sale.invoice_number || sale.sale_code || '---')}</td>
-                        <td>${sale.due_date ? escapeHtml(String(sale.due_date).slice(0, 10)) : '---'}</td>
+                        <td>${IsoCivilDate.isValidIsoDate(sale.due_date) ? escapeHtml(sale.due_date) : '---'}</td>
                         <td class="amount">${formatCurrency(sale.net_amount || 0)}</td>
                         <td class="amount">${formatCurrency(sale.paid_amount || 0)}</td>
                         <td class="amount ${finiteNumber(sale.remaining_amount) > 0 ? 'credit' : 'debit'}">${formatCurrency(sale.remaining_amount || 0)}</td>
@@ -3588,7 +3592,7 @@ function updateDebtViewButtons() {
                 const sales=salesResult.success && Array.isArray(salesResult.data)?salesResult.data:[];
                 const paymentsAll=paymentsResult.success && Array.isArray(paymentsResult.data)?paymentsResult.data:[];
                 const payments=paymentsAll.filter(function(p){return finiteNumber(p.customer_party_id ?? p.customer_id ?? p.party_id)===id;});
-                const fmtDate=function(v){return String(v || '').slice(0,10) || '---';};
+                const fmtDate=function(v){return IsoCivilDate.datePart(v,true)||'---';};
                 let html='<div class="details-header"><h3 class="details-title">📜 سجل معاملات العميل</h3><button class="details-back" type="button" onclick="closeDetails()">↩ رجوع</button><button class="details-close" aria-label="إغلاق السجل" onclick="closeDetails()"><i class="fas fa-times"></i></button></div>';
                 html+='<div class="details-section"><div class="details-section-title"><i class="fas fa-book"></i> قيود دفتر الأستاذ</div>';
                 if(ledger.length){
@@ -3695,7 +3699,7 @@ function updateDebtViewButtons() {
                 formatCurrency(row.net_amount),
                 formatCurrency(row.paid_amount),
                 formatCurrency(row.remaining_amount),
-                String(row.due_date || '---').slice(0, 10),
+                IsoCivilDate.isValidIsoDate(row.due_date) ? row.due_date : '---',
                 getStatusLabel(row.status)
             ]);
             if (typeof doc.autoTable === 'function') {
@@ -3780,14 +3784,14 @@ function updateDebtViewButtons() {
                 const overdue=overdueRows.reduce(function(sum,r){return sum+finiteNumber(r.remaining_amount);},0);
                 const partial=rows.filter(function(r){return r.status==='partial';});
                 const ids=new Set(rows.map(function(r){return finiteNumber(r.customer_party_id??r.customer_id);}).filter(function(id){return id>0;}));
-                const paidToday=payments.filter(function(p){return String(p.created_at||p.payment_date||'').slice(0,10)===today;}).reduce(function(sum,p){return sum+finiteNumber(p.amount);},0);
-                const paidMonth=payments.filter(function(p){return String(p.created_at||p.payment_date||'').slice(0,7)===month;}).reduce(function(sum,p){return sum+finiteNumber(p.amount);},0);
+                const paidToday=payments.filter(function(p){return IsoCivilDate.datePart(p.created_at||p.payment_date,true)===today;}).reduce(function(sum,p){return sum+finiteNumber(p.amount);},0);
+                const paidMonth=payments.filter(function(p){const date=IsoCivilDate.datePart(p.created_at||p.payment_date,true);return !!date&&date.slice(0,7)===month;}).reduce(function(sum,p){return sum+finiteNumber(p.amount);},0);
                 const groups=new Map();
                 rows.forEach(function(r){const id=String(r.customer_party_id??r.customer_id??'');if(!groups.has(id))groups.set(id,{id:finiteNumber(id),name:r.customer_name||'---',phone:r.customer_phone||'---',count:0,total:0,overdue:0});const g=groups.get(id);g.count++;g.total+=finiteNumber(r.remaining_amount);if(r.status==='overdue'||r.status==='doubtful')g.overdue+=finiteNumber(r.remaining_amount);});
                 const top=Array.from(groups.values()).sort(function(a,b){return b.total-a.total;}).slice(0,5);
                 const topRows=top.length?top.map(function(g){return '<tr><td>'+escapeHtml(g.name)+'</td><td>'+g.count+'</td><td class="amount">'+formatCurrency(g.total)+'</td><td class="amount">'+formatCurrency(g.overdue)+'</td><td><button class="btn-action view" onclick="viewCustomerDetails('+g.id+')" title="تفاصيل العميل"><i class="fas fa-eye"></i></button><button class="btn-action history" onclick="viewHistory('+g.id+')" title="السجل"><i class="fas fa-history"></i></button></td></tr>';}).join(''):'<tr><td colspan="5"><div class="empty-state">لا توجد أرصدة ديون مفتوحة.</div></td></tr>';
                 const recent=payments.slice().sort(function(a,b){return String(b.created_at||'').localeCompare(String(a.created_at||''));}).slice(0,5);
-                const recentRows=recent.length?recent.map(function(p){return '<tr><td>'+escapeHtml(String(p.created_at||'').slice(0,10)||'---')+'</td><td>'+escapeHtml(p.customer_name||p.commercial_name||('عميل #'+(p.customer_party_id||p.customer_id||'')))+'</td><td>'+escapeHtml(p.payment_code||('#'+p.id))+'</td><td class="amount">'+formatCurrency(p.amount)+'</td></tr>';}).join(''):'<tr><td colspan="4"><div class="empty-state">لا توجد عمليات تحصيل مسجلة في مصدر المدفوعات.</div></td></tr>';
+                const recentRows=recent.length?recent.map(function(p){return '<tr><td>'+escapeHtml(IsoCivilDate.datePart(p.created_at,true)||'---')+'</td><td>'+escapeHtml(p.customer_name||p.commercial_name||('عميل #'+(p.customer_party_id||p.customer_id||'')))+'</td><td>'+escapeHtml(p.payment_code||('#'+p.id))+'</td><td class="amount">'+formatCurrency(p.amount)+'</td></tr>';}).join(''):'<tr><td colspan="4"><div class="empty-state">لا توجد عمليات تحصيل مسجلة في مصدر المدفوعات.</div></td></tr>';
                 body.innerHTML='<div class="report-workspace"><div class="report-kpi-grid">'+
                     '<div class="debt-summary-card"><strong>'+formatCurrency(total)+'</strong><span>إجمالي الرصيد المفتوح</span></div>'+
                     '<div class="debt-summary-card"><strong>'+formatCurrency(overdue)+'</strong><span>قيمة الديون المتأخرة</span></div>'+
@@ -3854,14 +3858,13 @@ function updateDebtViewButtons() {
                 { key: '61-90', label: '61–90 يوم', min: 61, max: 89, count: 0, amount: 0 },
                 { key: '90+', label: '90 يومًا فأكثر / مشكوك في تحصيله', min: 90, max: Number.MAX_SAFE_INTEGER, count: 0, amount: 0 }
             ];
-            const todayText = String(businessDayDate()).slice(0, 10);
-            const today = Date.parse(todayText + 'T00:00:00Z');
+            const todayText = businessDayDate();
             data.forEach((row) => {
-                const dueDate = String(row.due_date || '').slice(0,10);
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return;
-                const due = Date.parse(dueDate + 'T00:00:00Z');
-                if (!Number.isFinite(due) || !Number.isFinite(today)) return;
-                const ageDays = Math.max(0, Math.round((today - due) / 86400000));
+                const dueDate = row.due_date || '';
+                if (!IsoCivilDate.isValidIsoDate(dueDate) || !IsoCivilDate.isValidIsoDate(todayText)) return;
+                const age = IsoCivilDate.calendarDayDifference(dueDate, todayText);
+                if (age === null) return;
+                const ageDays = Math.max(0, age);
                 const bucket = buckets.find(item => ageDays >= item.min && ageDays <= item.max);
                 if (!bucket) return;
                 bucket.count += 1;
@@ -3871,7 +3874,9 @@ function updateDebtViewButtons() {
         }
 
         function getReportFilters() {
-            return {from:document.getElementById('reportDateFrom')?.value||'',to:document.getElementById('reportDateTo')?.value||'',
+            const from=document.getElementById('reportDateFrom')?.value||'',to=document.getElementById('reportDateTo')?.value||'';
+            if(!IsoCivilDate.isValidDateRange(from,to))throw new Error('نطاق تاريخ التقرير غير صالح؛ تحقق من اليوم التقويمي وترتيب البداية والنهاية.');
+            return {from:from,to:to,
                 customerId:document.getElementById('reportCustomer')?.value||'',status:document.getElementById('reportStatus')?.value||'',
                 min:document.getElementById('reportMinAmount')?.value||'',max:document.getElementById('reportMaxAmount')?.value||'',
                 aging:document.getElementById('reportAgingBucket')?.value||'',
@@ -3880,8 +3885,8 @@ function updateDebtViewButtons() {
                 settlementType:document.getElementById('reportSettlementType')?.value||'',
                 type:document.getElementById('reportType')?.value||'balances'};
         }
-        function reportDateMatches(value,from,to){const date=String(value||'').slice(0,10);return (!from||!date||date>=from)&&(!to||!date||date<=to);}
-        function reportAgeDays(value){const date=String(value||'').slice(0,10),today=String(businessDayDate()).slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{4}-\d{2}-\d{2}$/.test(today))return null;const a=Date.parse(date+'T00:00:00Z'),b=Date.parse(today+'T00:00:00Z');return Number.isFinite(a)&&Number.isFinite(b)?Math.max(0,Math.round((b-a)/86400000)):null;}
+        function reportDateMatches(value,from,to,allowTimestamp){if(!IsoCivilDate.isValidDateRange(from,to))return false;const date=IsoCivilDate.datePart(value,allowTimestamp===true);if((from||to)&&!date)return false;if(!date)return true;return (!from||date>=from)&&(!to||date<=to);}
+        function reportAgeDays(value){const date=IsoCivilDate.datePart(value,false),today=businessDayDate();if(!date||!IsoCivilDate.isValidIsoDate(today))return null;const age=IsoCivilDate.calendarDayDifference(date,today);return age===null?null:Math.max(0,age);}
         function reportAgingMatches(age,bucket){if(!bucket)return true;if(age===null||age===undefined)return false;if(bucket==='0-30')return age<=30;if(bucket==='31-60')return age>=31&&age<=60;if(bucket==='61-90')return age>=61&&age<=89;if(bucket==='90+')return age>=90;return true;}
         function validateReportAmountFilters(f){
             const min=f.min===''?null:finiteNumber(f.min,NaN),max=f.max===''?null:finiteNumber(f.max,NaN);
@@ -3894,9 +3899,9 @@ function updateDebtViewButtons() {
             const f=getReportFilters(),limits=validateReportAmountFilters(f);
             return debtReportState.debts.filter(function(row){
                 const remaining=finiteNumber(row.remaining_amount),status=String(row.status||row.payment_status||'').toLowerCase();
-                const dueDate=String(row.due_date||'').slice(0,10);
+                const dueDate=row.due_date||'';
                 const age=reportAgeDays(dueDate);
-                if(!reportDateMatches(dueDate,f.from,f.to))return false;
+                if(!reportDateMatches(dueDate,f.from,f.to,false))return false;
                 if(f.customerId&&String(row.customer_party_id??row.customer_id)!==String(f.customerId))return false;
                 if(['current','overdue','doubtful','partial','paid'].indexOf(f.status)>=0) {
                     const statusMatch = f.status==='current'
@@ -3918,7 +3923,7 @@ function updateDebtViewButtons() {
             const f=getReportFilters(),limits=validateReportAmountFilters(f);
             return debtReportState.payments.filter(function(p){
                 const date=p.created_at||p.payment_date||p.date,amount=finiteNumber(p.amount);
-                if(!reportDateMatches(date,f.from,f.to))return false;
+                if(!reportDateMatches(date,f.from,f.to,true))return false;
                 if(f.customerId&&String(p.customer_party_id??p.customer_id??p.party_id)!==String(f.customerId))return false;
                 if(['completed','pending','cancelled','failed'].indexOf(f.status)>=0&&String(p.status||'').toLowerCase()!==f.status)return false;
                 if(f.paymentMethod&&String(p.payment_method||p.payment_type||'').toLowerCase()!==f.paymentMethod)return false;
@@ -3951,7 +3956,7 @@ function updateDebtViewButtons() {
             const target=document.getElementById('reportOutput');
             try{
                 const f=getReportFilters(),debts=getReportFilteredDebts(),payments=getReportFilteredPayments();
-                const money=function(v){return formatCurrency(v);},dateText=function(v){return String(v||'').slice(0,10)||'---';};
+                const money=function(v){return formatCurrency(v);},dateText=function(v){return IsoCivilDate.datePart(v,true)||'---';};
                 renderDebtReportKpis(debts,payments);
                 if(f.type==='payments'){
                     const rows=payments.map(function(p){return {date:dateText(p.created_at||p.payment_date),customer:p.customer_name||p.commercial_name||'---',
@@ -3987,7 +3992,7 @@ function updateDebtViewButtons() {
                     ]);
                     const ledger=reads[0].success&&Array.isArray(reads[0].data)?reads[0].data:[];
                     if(ledger.length){
-                        const rows=ledger.filter(function(r){return reportDateMatches(r.transaction_date||r.created_at,f.from,f.to);}).map(function(r){return {
+                        const rows=ledger.filter(function(r){return reportDateMatches(r.transaction_date||r.created_at,f.from,f.to,true);}).map(function(r){return {
                             date:dateText(r.transaction_date||r.created_at),type:r.transaction_type||'قيد',reference:r.reference_number||r.transaction_id||'---',
                             debit:money(r.debit),credit:money(r.credit),balance:money(r.balance)};});
                         setDebtReportOutput('كشف حركة العميل من دفتر الأستاذ',[

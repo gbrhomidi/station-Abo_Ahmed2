@@ -1,5 +1,6 @@
 package com.aistudio.dieselstationsms.kxmpzq
 
+import com.aistudio.dieselstationsms.kxmpzq.utils.IsoCivilDate
 import com.aistudio.dieselstationsms.kxmpzq.suppliers.SupplierPayablesRepository
 
 import com.aistudio.dieselstationsms.kxmpzq.sms.DebtDueDateRepository
@@ -55,6 +56,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
         const val VERSION = 53
+        private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -17926,23 +17928,21 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ).use { cursor -> return if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0 }
     }
 
-    private fun parseDateOnlyStrict(value: String): Date? {
-        return try {
-            SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }.parse(value)
-        } catch (_: Exception) { null }
-    }
+    private fun parseDateOnlyStrict(value: String): java.time.LocalDate? = IsoCivilDate.parse(value)
 
     private fun shiftDate(dateText: String, days: Int): String {
         val parsed = parseDateOnlyStrict(dateText) ?: error("تاريخ غير صالح: $dateText")
-        val calendar = Calendar.getInstance().apply { time = parsed }
-        calendar.add(Calendar.DAY_OF_YEAR, days)
-        return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(calendar.time)
+        return parsed.plusDays(days.toLong()).toString()
     }
 
     fun getDashboardStats(stationId: Int, params: JSONObject = JSONObject()): JSONObject =
         getDashboardStatsForDate(stationId, params, BusinessDay.currentDate())
 
     internal fun getDashboardStatsForDate(stationId: Int, params: JSONObject, businessDate: String): JSONObject {
+        IsoCivilDate.requireValid(businessDate, "تاريخ العمل")
+        val requestedFrom = params.optString("from_date", "")
+        val requestedTo = params.optString("to_date", "")
+        IsoCivilDate.requireOptionalRange(requestedFrom, requestedTo)
         DebtDueDateRepository.ensureSchema(this)
         val stats = JSONObject()
         val db = readableDatabase
@@ -18084,6 +18084,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                  AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')
                  AND COALESCE(is_deleted,0)=0
                  AND due_date IS NOT NULL AND TRIM(due_date)<>''
+                 AND due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+                 AND date(due_date,'+0 days')=due_date
                  $trustedDueDateClause
                  AND due_date >= substr(?,1,10)
                  AND due_date < date(substr(?,1,10), '+8 days')""",
@@ -18158,14 +18160,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
 
         // 13. حساب اتجاه المبيعات من فترتين متكافئتين فعليتين في SQLite
-        val requestedFrom = params.optString("from_date", "").trim()
-        val requestedTo = params.optString("to_date", "").trim()
-        val currentEnd = if (requestedTo.isNotBlank()) requestedTo else today
-        val currentStart = if (requestedFrom.isNotBlank()) requestedFrom else currentEnd
+        val currentEnd = if (requestedTo.isNotEmpty()) requestedTo else today
+        val currentStart = if (requestedFrom.isNotEmpty()) requestedFrom else currentEnd
         val currentStartDate = parseDateOnlyStrict(currentStart) ?: error("تاريخ بداية غير صالح: $currentStart")
         val currentEndDate = parseDateOnlyStrict(currentEnd) ?: error("تاريخ نهاية غير صالح: $currentEnd")
-        require(!currentStartDate.after(currentEndDate)) { "تاريخ البداية يجب أن يسبق أو يساوي تاريخ النهاية" }
-        val periodDays = (((currentEndDate.time - currentStartDate.time) / 86400000L).toInt() + 1).coerceAtLeast(1)
+        require(!currentStartDate.isAfter(currentEndDate)) { "تاريخ البداية يجب أن يسبق أو يساوي تاريخ النهاية" }
+        val periodDays = (java.time.temporal.ChronoUnit.DAYS.between(currentStartDate, currentEndDate).toInt() + 1).coerceAtLeast(1)
         val previousEnd = shiftDate(currentStart, -1)
         val previousStart = shiftDate(previousEnd, -(periodDays - 1))
         val todaySales = getSalesAmountBetween(stationId, currentStart, currentEnd)
@@ -28180,8 +28180,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             writableDatabase.update(
                 "inventory_movements",
                 values,
-                "id=? AND station_id=? AND movement_type='return' AND is_deleted=0 AND COALESCE(reference_type,'')<>'sale_return'",
-                arrayOf(id.toString(), stationId.toString())
+                "id=? AND station_id=? AND movement_type='return' AND is_deleted=0 AND reference_type=?",
+                arrayOf(id.toString(), stationId.toString(), REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE)
             )
         } finally { dbLock.unlock() }
     }
@@ -28219,8 +28219,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         referenceType = cursor.getString(6).orEmpty()
                     )
                 }
-                require(movement.referenceType != "sale_return") {
-                    "لا يمكن حذف مرتجع مرتبط بفواتير وحركات مالية بعكس المخزون وحده؛ يلزم مسار عكس محاسبي كامل"
+                require(movement.referenceType == REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE) {
+                    "لا يمكن عكس مرتجع غير مصنف كمرتجع مخزني قديم موثوق؛ يلزم تحديد مصدره أولاً"
                 }
                 require(movement.stationId > 0) { "معرف محطة المرتجع غير صالح" }
                 require(movement.warehouseId > 0L) { "معرف مستودع المرتجع غير صالح" }
@@ -28598,6 +28598,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      * ملاحظة: جسر getCustomerDebts في MainActivity يستدعي هذه الدالة دون تغيير.
      */
     fun getCustomerDebts(fromDate: String?, toDate: String?, stationScopeId: Int? = null): JSONArray {
+        IsoCivilDate.requireOptionalRange(fromDate, toDate)
         dbLock.lock()
         return try {
             DebtDueDateRepository.ensureSchema(this)
@@ -28608,14 +28609,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             // Keep the legacy bridge on the same provenance policy as
             // DebtDueDateRepository. A created_at fallback silently changes a
             // maturity-date filter into an invoice-date filter.
-            predicates += "s.due_date IS NOT NULL AND TRIM(s.due_date) <> '' AND COALESCE(s.payment_terms_source_at_sale,'')='explicit_text' AND COALESCE(s.due_date_source, '') IN ('sale_creation', 'sales_trigger_v3', 'sales_trigger_v4', 'legacy_rebuilt_snapshot')"
-            if (!fromDate.isNullOrBlank()) {
+            predicates += "s.due_date IS NOT NULL AND TRIM(s.due_date) <> '' AND s.due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(s.due_date,'+0 days')=s.due_date AND COALESCE(s.payment_terms_source_at_sale,'')='explicit_text' AND COALESCE(s.due_date_source, '') IN ('sale_creation', 'sales_trigger_v3', 'sales_trigger_v4', 'legacy_rebuilt_snapshot')"
+            if (!fromDate.isNullOrEmpty()) {
                 predicates += "date(s.due_date) >= date(?)"
-                args += fromDate
+                args += fromDate!!
             }
-            if (!toDate.isNullOrBlank()) {
+            if (!toDate.isNullOrEmpty()) {
                 predicates += "date(s.due_date) <= date(?)"
-                args += toDate
+                args += toDate!!
             }
             if (stationScopeId != null) {
                 predicates += "s.station_id = ? AND p.station_id = ? AND p.is_deleted = 0"
@@ -30055,13 +30056,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun generateCRMReport(data: JSONObject, stationScopeId: Int? = null): JSONArray {
+        val startDate = data.optString("start_date", "")
+        val endDate = data.optString("end_date", "")
+        IsoCivilDate.requireOptionalRange(startDate, endDate)
         dbLock.lock()
         return try {
             val db = readableDatabase
             if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val reportType = data.optString("report_type", "parties")
-            val startDate = data.optString("start_date").trim()
-            val endDate = data.optString("end_date").trim()
             val requestedPartyType = data.optInt("party_type", 0)
             val requestedStatus = if (data.isNull("status")) -1 else data.optInt("status", -1)
             val where = StringBuilder("p.is_deleted = 0")

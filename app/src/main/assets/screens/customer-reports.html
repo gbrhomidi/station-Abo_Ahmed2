@@ -6,9 +6,10 @@
   <title>
    نظام إدارة محطات الوقود – تقارير العملاء
   </title>
-      <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
+  <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
 <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
   <link href="file:///android_asset/assets-local/css/all.min.css" rel="stylesheet">
+  <script src="file:///android_asset/assets-local/js/iso-civil-date.js"></script>
   <script src="file:///android_asset/assets-local/js/sweetalert2@11">
   </script>
   <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js">
@@ -2004,18 +2005,17 @@
                 { key: '61-90', label: '61–89 يوم', min: 61, max: 89 },
                 { key: '90+', label: '90 يومًا فأكثر / مشكوك في تحصيله', min: 90, max: Number.MAX_SAFE_INTEGER }
             ];
-            const today = String((typeof businessDayDate === 'function' ? businessDayDate() : new Date().toISOString().slice(0,10))).slice(0,10);
+            const today = typeof businessDayDate === 'function' ? businessDayDate() : IsoCivilDate.datePart(new Date().toISOString(), true);
             const groups = new Map();
             (Array.isArray(rows) ? rows : []).forEach(row => {
                 const amount = Math.max(0, finiteNumber(row.remaining_amount));
                 if (amount <= 0) return;
                 // Age by explicit contractual maturity date only. A creation date is not due date.
-                const dueText = String(row.due_date || '').slice(0,10);
+                const dueText = row.due_date || '';
                 let age = null;
-                if (/^\d{4}-\d{2}-\d{2}$/.test(dueText) && /^\d{4}-\d{2}-\d{2}$/.test(today)) {
-                    const due = Date.parse(dueText + 'T00:00:00Z');
-                    const now = Date.parse(today + 'T00:00:00Z');
-                    if (Number.isFinite(due) && Number.isFinite(now)) age = Math.max(0, Math.round((now - due) / 86400000));
+                if (IsoCivilDate.isValidIsoDate(dueText) && IsoCivilDate.isValidIsoDate(today)) {
+                    const days = IsoCivilDate.calendarDayDifference(dueText, today);
+                    if (days !== null) age = Math.max(0, days);
                 }
                 const bucket = age === null ? null : buckets.find(item => age >= item.min && age <= item.max);
                 const key = String(row.customer_party_id || row.customer_id || 0);
@@ -2071,8 +2071,8 @@
                 showToast('❌ الرجاء اختيار نطاق التاريخ', 'error');
                 return false;
             }
-            if (from > to) {
-                showToast('❌ تاريخ البداية يجب أن يسبق تاريخ النهاية', 'error');
+            if (!IsoCivilDate.isValidDateRange(from, to)) {
+                showToast('❌ نطاق التاريخ غير صالح؛ تحقق من اليوم التقويمي وترتيب البداية والنهاية', 'error');
                 return false;
             }
             const minDebt = document.getElementById('filterDebtMin').value;
@@ -2154,7 +2154,7 @@
                         <td class="amount">${formatCurrency(item.total_sales)}</td>
                         <td>${formatNumber(item.invoice_count)}</td>
                         <td class="amount">${formatCurrency(item.average_invoice)}</td>
-                        <td>${item.last_activity ? escapeHtml(String(item.last_activity).slice(0, 10)) : 'غير متاح'}</td>
+                        <td>${IsoCivilDate.datePart(item.last_activity, true) || 'غير متاح'}</td>
                         <td>${formatNumber(item.loyalty_points)}</td>
                         <td><span class="status-badge ${riskClass}">${riskLabel}</span></td>
                         <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
@@ -2267,7 +2267,7 @@
             // نشاط العملاء الفعلي حسب آخر عملية مسجلة، دون توليد بيانات محاكاة.
             const activityMap = {};
             data.forEach(item => {
-                const date = String(item.last_activity || '').slice(0, 10);
+                const date = IsoCivilDate.datePart(item.last_activity, true);
                 if (date) activityMap[date] = (activityMap[date] || 0) + 1;
             });
             const activityDates = Object.keys(activityMap).sort().slice(-30);
@@ -2451,7 +2451,7 @@
                 const balance = finiteNumber(c.current_balance);
                 const totalDue = finiteNumber(c.total_due);
                 const invoiceRows = invoices.map(invoice => `
-                    <tr><td>${escapeHtml(invoice.invoice_number || invoice.sale_code || '---')}</td><td>${escapeHtml(String(invoice.created_at || '').slice(0, 10) || '---')}</td><td class="amount">${formatCurrency(invoice.net_amount)}</td><td class="amount">${formatCurrency(invoice.remaining_amount)}</td><td>${escapeHtml(invoice.payment_status || '---')}</td></tr>
+                    <tr><td>${escapeHtml(invoice.invoice_number || invoice.sale_code || '---')}</td><td>${IsoCivilDate.datePart(invoice.created_at, true) || '---'}</td><td class="amount">${formatCurrency(invoice.net_amount)}</td><td class="amount">${formatCurrency(invoice.remaining_amount)}</td><td>${escapeHtml(invoice.payment_status || '---')}</td></tr>
                 `).join('');
 	                const name = c.commercial_name || c.commercial_name_ar || 'عميل';
                 content.innerHTML = `

@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
 <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet" />
 <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css" />
+<script src="file:///android_asset/assets-local/js/iso-civil-date.js"></script>
 <script src="file:///android_asset/assets-local/js/sweetalert2@11"></script>
 <script src="file:///android_asset/assets-local/js/xlsx.full.min.js"></script>
 <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
@@ -2287,15 +2288,13 @@ async function safeInvoke(method, args = []) {
    5. تطبيع الدين
    ============================================================ */
 function localDateKey(date = new Date()) {
-    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+    return businessDayDate(date);
 }
 function calendarDayDelta(dateValue) {
-    const due = String(dateValue || '').trim().slice(0, 10);
+    const due = dateValue;
     const today = localDateKey();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(due) || !/^\d{4}-\d{2}-\d{2}$/.test(today)) return null;
-    const dueTime = Date.parse(due + 'T00:00:00Z');
-    const todayTime = Date.parse(today + 'T00:00:00Z');
-    return Number.isFinite(dueTime) && Number.isFinite(todayTime) ? Math.round((dueTime - todayTime) / 86400000) : null;
+    if (!IsoCivilDate.isValidIsoDate(due) || !IsoCivilDate.isValidIsoDate(today)) return null;
+    return IsoCivilDate.calendarDayDifference(today, due);
 }
 function normalizedDebt(raw) {
     const d = { ...raw };
@@ -2307,7 +2306,7 @@ function normalizedDebt(raw) {
     d.invoice_number = firstDefined(raw.invoice_number, '—');
     d.sale_code = firstDefined(raw.sale_code, '—');
     // Creation time is not a maturity date. Missing due dates must never be marked overdue by age alone.
-    d.due_date = String(raw.due_date || '').slice(0, 10) || null;
+    d.due_date = IsoCivilDate.isValidIsoDate(raw.due_date) ? raw.due_date : null;
     d.created_at = raw.created_at || null;
     d.total_amount = Math.max(0, Number(firstDefined(raw.net_amount, raw.gross_amount, raw.total_amount, 0)) || 0);
     d.paid_amount = Math.max(0, Number(firstDefined(raw.paid_amount, 0)) || 0);
@@ -2668,7 +2667,7 @@ function filtered() {
 }
 function hasReminder(debt) {
     const customerId = Number(debt.customer_id || debt.customer_party_id || 0);
-    const dueDate = String(debt.due_date || '').slice(0, 10);
+    const dueDate = IsoCivilDate.isValidIsoDate(debt.due_date) ? debt.due_date : '';
     return state.notifications.some(n =>
         String(n.reference_id) === String(debt.id) ||
         String(n.reference_id) === String(debt.transaction_id)
@@ -3450,7 +3449,7 @@ function renderPaymentsTable() {
     });
     const todayISO = today();
     const todayTotal = rows
-        .filter(p => String(p.created_at || '').slice(0, 10) === todayISO)
+        .filter(p => IsoCivilDate.datePart(p.created_at, true) === todayISO)
         .reduce((s, p) => s + Number(p.amount || 0), 0);
 
     $('paymentsStats').innerHTML = `
@@ -3558,9 +3557,14 @@ function openReportsModal() {
 function generateReports() {
     const from = $('reportFrom').value;
     const to = $('reportTo').value;
+    if (!IsoCivilDate.isValidDateRange(from, to)) {
+        state.reportRows = [];
+        showToast('نطاق تاريخ التقرير غير صالح؛ تحقق من اليوم التقويمي وترتيب البداية والنهاية.', 'error');
+        return;
+    }
     let rows = state.debts.filter(d => {
-        const date = String(d.due_date || '').slice(0, 10);
-        if ((from || to) && !date) return false;
+        const date = d.due_date || '';
+        if ((from || to) && !IsoCivilDate.isValidIsoDate(date)) return false;
         if (from && date < from) return false;
         if (to && date > to) return false;
         return true;

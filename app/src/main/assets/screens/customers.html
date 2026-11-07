@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css" />
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
     <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
+    <script src="file:///android_asset/assets-local/js/iso-civil-date.js"></script>
     <style>
         /* ============================================================
            المتغيرات وإعادة الضبط
@@ -3536,6 +3537,11 @@
                 showToast('يرجى اختيار الفترة الزمنية', 'warning');
                 return;
             }
+            if (!IsoCivilDate.isValidDateRange(fromDate, toDate)) {
+                reportRequestInFlight = false;
+                showToast('نطاق التاريخ غير صالح؛ تحقق من اليوم التقويمي وترتيب البداية والنهاية.', 'error');
+                return;
+            }
             showLoading(true);
             try {
                 let result;
@@ -3556,8 +3562,8 @@
                         result = await apiCall('get_payments');
                         if (result.success) {
                             reportData = (Array.isArray(result.data) ? result.data : []).filter(item => {
-                                const date = String(item.created_at || item.payment_date || '').slice(0, 10);
-                                return (!fromDate || !date || date >= fromDate) && (!toDate || !date || date <= toDate);
+                                const date = IsoCivilDate.datePart(item.created_at || item.payment_date, true);
+                                return !!date && date >= fromDate && date <= toDate;
                             });
                             renderPaymentsReport(reportData);
                         }
@@ -3641,17 +3647,16 @@
                 { label: '90 يومًا فأكثر / مشكوك في تحصيله', min: 90, max: Number.MAX_SAFE_INTEGER, count: 0, amount: 0 },
                 { label: 'تاريخ استحقاق غير محدد', min: null, max: null, count: 0, amount: 0 }
             ];
-            const todayText = String(businessDayDate()).slice(0, 10);
-            const today = Date.parse(todayText + 'T00:00:00Z');
+            const todayText = businessDayDate();
             data.forEach(item => {
                 const amount = Math.max(0, numberValue(item.remaining_amount));
                 if (!amount) return;
                 // Never treat invoice creation as a contractual due date.
-                const dueText = String(item.due_date || '').slice(0, 10);
+                const dueText = item.due_date || '';
                 let age = null;
-                if (/^\d{4}-\d{2}-\d{2}$/.test(dueText)) {
-                    const due = Date.parse(dueText + 'T00:00:00Z');
-                    if (Number.isFinite(due) && Number.isFinite(today)) age = Math.max(0, Math.round((today - due) / 86400000));
+                if (IsoCivilDate.isValidIsoDate(dueText) && IsoCivilDate.isValidIsoDate(todayText)) {
+                    const days = IsoCivilDate.calendarDayDifference(dueText, todayText);
+                    if (days !== null) age = Math.max(0, days);
                 }
                 const bucket = age === null ? buckets[4] : buckets.find(entry => entry.min !== null && age >= entry.min && age <= entry.max);
                 if (bucket) { bucket.count += 1; bucket.amount += amount; }

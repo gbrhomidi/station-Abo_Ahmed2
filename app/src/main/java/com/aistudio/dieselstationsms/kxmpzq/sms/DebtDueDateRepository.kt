@@ -4,11 +4,11 @@ import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.BusinessDay
+import com.aistudio.dieselstationsms.kxmpzq.utils.IsoCivilDate
 import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
-import java.time.format.DateTimeParseException
 import java.util.Locale
 
 /**
@@ -232,15 +232,18 @@ object DebtDueDateRepository {
         fromDate: String? = null,
         toDate: String? = null
     ): JSONArray {
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        IsoCivilDate.requireOptionalRange(fromDate, toDate)
         ensureSchema(helper)
         val rows = readDebts(helper.readableDatabase, stationId)
         val output = JSONArray()
         rows.filter { row ->
             // The caller's date range is a maturity-date filter, matching the dashboard's
             // due-invoice KPI. Filtering by createdAt hides older invoices that mature soon.
-            val dueDate = row.dueDate.take(10)
-            (fromDate.isNullOrBlank() || (dueDate.isNotBlank() && dueDate >= fromDate.take(10))) &&
-                (toDate.isNullOrBlank() || (dueDate.isNotBlank() && dueDate <= toDate.take(10)))
+            val dueDate = row.dueDate
+            val dueDateIsValid = IsoCivilDate.isValid(dueDate)
+            (fromDate.isNullOrEmpty() || (dueDateIsValid && dueDate >= fromDate)) &&
+                (toDate.isNullOrEmpty() || (dueDateIsValid && dueDate <= toDate))
         }.forEach { output.put(toJson(it)) }
         return output
     }
@@ -271,8 +274,8 @@ object DebtDueDateRepository {
             val daysRemaining = java.time.temporal.ChronoUnit.DAYS.between(today, due).toInt()
             val customerRows = openByCustomer[customerId].orEmpty()
             val outstanding = customerRows.sumOf { it.remaining }.coerceAtLeast(0.0)
-            val dueDateKey = nearest.dueDate.take(10)
-            val sameDateRows = dueRows.filter { it.dueDate.take(10) == dueDateKey }
+            val dueDateKey = nearest.dueDate
+            val sameDateRows = dueRows.filter { it.dueDate == dueDateKey }
             val dueAmount = sameDateRows.sumOf { it.remaining }.coerceAtLeast(0.0)
             val phone = PhoneUtils.normalize(nearest.phone)
             val invoiceSet = sameDateRows.map { it.transactionId }.sorted().joinToString(",")
@@ -293,13 +296,13 @@ object DebtDueDateRepository {
                 put("sale_code", nearest.saleCode)
                 put("order_type", nearest.orderType)
                 put("payment_method", nearest.paymentMethod)
-                put("nearest_due_date", nearest.dueDate.take(10))
-                put("due_date", nearest.dueDate.take(10))
+                put("nearest_due_date", nearest.dueDate)
+                put("due_date", nearest.dueDate)
                 put("days_remaining", daysRemaining)
                 put("due_soon_amount", dueAmount)
                 put("total_outstanding", outstanding)
                 put("remaining_amount", nearest.remaining)
-                put("last_reminder_at", if (alreadyQueued) nearest.dueDate.take(10) else "")
+                put("last_reminder_at", if (alreadyQueued) nearest.dueDate else "")
                 put("eligible", eligible)
                 put("station_id", stationId)
                 put("event_id", eventId)
@@ -331,16 +334,16 @@ object DebtDueDateRepository {
             // Use the most recent overdue maturity for context while including the customer's
             // full open balance in the reminder message.
             val nearest = overdueRows.maxByOrNull { parseDate(it.dueDate) ?: LocalDate.MIN } ?: return@forEach
-            val dueDate = nearest.dueDate.take(10)
+            val dueDate = nearest.dueDate
             val due = parseDate(dueDate) ?: return@forEach
             val daysRemaining = java.time.temporal.ChronoUnit.DAYS.between(today, due).toInt()
             if (daysRemaining >= 0) return@forEach
             val customerRows = openByCustomer[customerId].orEmpty()
             val totalOutstanding = customerRows.sumOf { it.remaining }.coerceAtLeast(0.0)
-            val dueAmount = overdueRows.filter { it.dueDate.take(10) == dueDate }
+            val dueAmount = overdueRows.filter { it.dueDate == dueDate }
                 .sumOf { it.remaining }.coerceAtLeast(0.0)
             val phone = PhoneUtils.normalize(nearest.phone)
-            val invoiceSet = overdueRows.filter { it.dueDate.take(10) == dueDate }
+            val invoiceSet = overdueRows.filter { it.dueDate == dueDate }
                 .map { it.transactionId }.sorted().joinToString(",")
             val eventId = "debt-reminder:$stationId:$customerId:$dueDate:$invoiceSet"
             val dedupeKey = if (phone != null) "$eventId:$phone" else ""
@@ -789,17 +792,7 @@ object DebtDueDateRepository {
         return days.takeIf { it in 0..365 }
     }
 
-    private fun parseDate(value: String?): LocalDate? {
-        val text = value.orEmpty().trim()
-        if (text.length < 10) return null
-        return try {
-            LocalDate.parse(text.substring(0, 10))
-        } catch (_: DateTimeParseException) {
-            null
-        } catch (_: Exception) {
-            null
-        }
-    }
+    private fun parseDate(value: String?): LocalDate? = IsoCivilDate.parse(value)
 
     private fun hasOutboxDedupeKey(db: SQLiteDatabase, dedupeKey: String): Boolean {
         if (!tableExists(db, "sms_outbox") || "dedupe_key" !in columns(db, "sms_outbox")) return false

@@ -21,6 +21,7 @@ class InventoryScreensRobolectricTest {
     private lateinit var context: Context
     private lateinit var helper: DatabaseHelper
     private var actorId: Long = 0L
+    private var stationTwoActorId: Long = 0L
 
     @Before
     fun setUp() {
@@ -40,6 +41,14 @@ class InventoryScreensRobolectricTest {
             put("role_id", roleId)
             put("station_id", 1)
         })
+        stationTwoActorId = db.insertOrThrow("users", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("username", "inventory-screen-station2-${UUID.randomUUID().toString().take(8)}")
+            put("password_hash", "test-only")
+            put("full_name", "اختبار محطة ثانية")
+            put("role_id", roleId)
+            put("station_id", 2)
+        })
     }
 
     @After
@@ -48,7 +57,7 @@ class InventoryScreensRobolectricTest {
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
     }
 
-    private fun createProduct(quantity: Double, minimum: Double): Long {
+    private fun createProduct(quantity: Double, minimum: Double, stationId: Int = 1, userId: Long = actorId): Long {
         val db = helper.writableDatabase
         val categoryId = db.rawQuery("SELECT id FROM product_categories WHERE is_deleted = 0 ORDER BY id LIMIT 1", null).use {
             check(it.moveToFirst()); it.getLong(0)
@@ -64,9 +73,22 @@ class InventoryScreensRobolectricTest {
             .put("purchase_price", 10.0)
             .put("sale_price", 12.0)
             .put("quantity", quantity)
-            .put("minimum_stock", minimum), 1, actorId)
-        helper.adjustProductStock(productId, quantity, 1, actorId)
+            .put("minimum_stock", minimum), stationId, userId)
+        helper.adjustProductStock(productId, quantity, stationId, userId)
         return productId
+    }
+
+    private fun addLegacyReturn(productId: Long, warehouseId: Long, referenceType: String?, referenceId: Long): Long {
+        val data = JSONObject()
+            .put("product_id", productId)
+            .put("warehouse_id", warehouseId)
+            .put("movement_type", "return")
+            .put("quantity", 2.5)
+            .put("unit_cost", 10.0)
+            .put("reference_id", referenceId)
+            .put("notes", "اختبار حركة مرتجع")
+        if (referenceType != null) data.put("reference_type", referenceType)
+        return helper.addStockMovement(data, 1, actorId)
     }
 
     private fun createLowFuelTank(stationId: Int, codeSuffix: String): Long {
@@ -383,6 +405,7 @@ class InventoryScreensRobolectricTest {
             arrayOf(productId.toString(), warehouseId.toString())
         ).use { cursor -> check(cursor.moveToFirst()); cursor.getDouble(0) }, 0.000001)
         assertEquals(1, helper.deleteReturn(returnId, 1))
+        assertEquals("retry after a successful delete must not create another reversal", 0, helper.deleteReturn(returnId, 1))
 
         val after = db.rawQuery(
             "SELECT quantity_on_hand FROM inventory_levels WHERE product_id=? AND warehouse_id=?",
@@ -453,25 +476,116 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun deletingOrUpdatingUnknownReturnReferenceFailsClosed() {
+        val productId = createProduct(0.0, 1.0)
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        val db = helper.writableDatabase
+        val unknownId = addLegacyReturn(productId, warehouseId, "imported_unknown_v5", 987656L)
+        val emptyId = addLegacyReturn(productId, warehouseId, "", 987657L)
+        val nullId = addLegacyReturn(productId, warehouseId, null, 987658L)
+        assertEquals(1, db.update("inventory_movements", ContentValues().apply { putNull("reference_type") },
+            "id=? AND station_id=?", arrayOf(nullId.toString(), "1")))
+
+        listOf(unknownId, emptyId, nullId).forEach { id ->
+            assertTrue("unclassified returns must not be reversed", runCatching { helper.deleteReturn(id, 1) }.isFailure)
+            assertEquals("unclassified returns must not be edited", 0,
+                helper.updateReturn(id, JSONObject().put("station_id", 1).put("reason", "غير مسموح")))
+            db.rawQuery("SELECT is_deleted FROM inventory_movements WHERE id=? AND station_id=?", arrayOf(id.toString(), "1")).use {
+                check(it.moveToFirst()); assertEquals(0, it.getInt(0))
+            }
+        }
+        assertEquals(7.5, db.rawQuery(
+            "SELECT quantity_on_hand FROM inventory_levels WHERE product_id=? AND warehouse_id=?",
+            arrayOf(productId.toString(), warehouseId.toString())
+        ).use { check(it.moveToFirst()); it.getDouble(0) }, 0.000001)
+        assertEquals(0, db.rawQuery("SELECT COUNT(*) FROM inventory_movements WHERE reference_type='sale_return_reversal'", null)
+            .use { check(it.moveToFirst()); it.getInt(0) })
+    }
+
+    @Test
+    fun failedReturnOriginUpdateRollsBackCreatedReversalAndInventory() {
+        val productId = createProduct(0.0, 1.0)
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        val db = helper.writableDatabase
+        val returnId = addLegacyReturn(productId, warehouseId, "legacy_return", 987659L)
+        db.execSQL("""CREATE TRIGGER test_fail_legacy_return_soft_delete
+            BEFORE UPDATE ON inventory_movements
+            WHEN OLD.id=$returnId AND OLD.movement_type='return'
+            BEGIN SELECT RAISE(ABORT, 'forced original update failure'); END""")
+
+        assertTrue(runCatching { helper.deleteReturn(returnId, 1) }.isFailure)
+        assertEquals(2.5, db.rawQuery(
+            "SELECT quantity_on_hand FROM inventory_levels WHERE product_id=? AND warehouse_id=?",
+            arrayOf(productId.toString(), warehouseId.toString())
+        ).use { check(it.moveToFirst()); it.getDouble(0) }, 0.000001)
+        assertEquals(0, db.rawQuery("SELECT COUNT(*) FROM inventory_movements WHERE reference_type='sale_return_reversal' AND reference_id=987659", null)
+            .use { check(it.moveToFirst()); it.getInt(0) })
+        assertEquals(0, db.rawQuery("SELECT is_deleted FROM inventory_movements WHERE id=?", arrayOf(returnId.toString()))
+            .use { check(it.moveToFirst()); it.getInt(0) })
+        db.execSQL("DROP TRIGGER test_fail_legacy_return_soft_delete")
+    }
+
+    @Test
+    fun failedReturnReversalInsertRollsBackWithoutChangingOriginalOrInventory() {
+        val productId = createProduct(0.0, 1.0)
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        val db = helper.writableDatabase
+        val returnId = addLegacyReturn(productId, warehouseId, "legacy_return", 987660L)
+        db.execSQL("""CREATE TRIGGER test_fail_return_reversal_insert
+            BEFORE INSERT ON inventory_movements
+            WHEN NEW.reference_type='sale_return_reversal'
+            BEGIN SELECT RAISE(ABORT, 'forced reversal insert failure'); END""")
+
+        assertTrue(runCatching { helper.deleteReturn(returnId, 1) }.isFailure)
+        assertEquals(2.5, db.rawQuery(
+            "SELECT quantity_on_hand FROM inventory_levels WHERE product_id=? AND warehouse_id=?",
+            arrayOf(productId.toString(), warehouseId.toString())
+        ).use { check(it.moveToFirst()); it.getDouble(0) }, 0.000001)
+        assertEquals(0, db.rawQuery("SELECT COUNT(*) FROM inventory_movements WHERE reference_type='sale_return_reversal' AND reference_id=987660", null)
+            .use { check(it.moveToFirst()); it.getInt(0) })
+        assertEquals(0, db.rawQuery("SELECT is_deleted FROM inventory_movements WHERE id=?", arrayOf(returnId.toString()))
+            .use { check(it.moveToFirst()); it.getInt(0) })
+        db.execSQL("DROP TRIGGER test_fail_return_reversal_insert")
+    }
+
+    @Test
     fun returnScreenUsesNativeAddRouteAndDoesNotSubmitHardCodedIdentity() {
         val html = context.assets.open("screens/returned-products.html").bufferedReader().use { it.readText() }
         assertTrue(html.contains("case 'addReturn': raw = AndroidInterface.addReturn(JSON.stringify(p)); break;"))
         assertTrue(html.contains("item.reference_type === 'sale_return'"))
+        assertTrue(html.contains("item.reference_type === 'legacy_return'"))
         assertFalse("station identity must come from the authenticated native bridge", html.contains("station_id: 1"))
         assertFalse("actor identity must come from the authenticated native bridge", html.contains("created_by: 1"))
         assertFalse("the sale return amount is calculated from the invoice, not entered in the form", html.contains("id=\"fValue\""))
     }
 
     @Test
+    fun legacyDashboardReadsTheLowStockKeyReturnedByNativeStats() {
+        val html = context.assets.open("screens/dashboard.html").bufferedReader().use { it.readText() }
+        assertTrue(html.contains("data.low_stock)"))
+        assertFalse(html.contains("data.low_stock_count"))
+    }
+
+    @Test
     fun dashboardCountsUniqueLowStockProductsAcrossActiveWarehousesOnlyForTheirStation() {
         val db = helper.writableDatabase
         val before = helper.getDashboardStatsForDate(1, JSONObject(), "2026-11-05").getInt("low_stock")
+        val beforeProducts = helper.getDashboardStatsForDate(1, JSONObject(), "2026-11-05").getInt("total_products")
+        val stationTwoBefore = helper.getDashboardStatsForDate(2, JSONObject(), "2026-11-05").getInt("low_stock")
         val productId = createProduct(1.0, 10.0)
+        val aboveLimitProductId = createProduct(3.3334, 10.0)
+        val otherStationProductId = createProduct(0.0, 10.0, 2, stationTwoActorId)
         val firstWarehouse = helper.ensureOperationalWarehouse(1)
         val secondWarehouse = db.insertOrThrow("warehouses", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString())
             put("station_id", 1)
             put("warehouse_name", "مستودع إضافي ${UUID.randomUUID().toString().take(8)}")
+            put("is_active", 1)
+        })
+        val thirdWarehouse = db.insertOrThrow("warehouses", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("station_id", 1)
+            put("warehouse_name", "مستودع ثالث ${UUID.randomUUID().toString().take(8)}")
             put("is_active", 1)
         })
         val inactiveWarehouse = db.insertOrThrow("warehouses", null, ContentValues().apply {
@@ -487,14 +601,48 @@ class InventoryScreensRobolectricTest {
             put("product_id", productId); put("warehouse_id", secondWarehouse); put("quantity_on_hand", 3.0)
         })
         db.insertOrThrow("inventory_levels", null, ContentValues().apply {
+            put("product_id", productId); put("warehouse_id", thirdWarehouse); put("quantity_on_hand", 5.0)
+        })
+        db.insertOrThrow("inventory_levels", null, ContentValues().apply {
+            put("product_id", aboveLimitProductId); put("warehouse_id", secondWarehouse); put("quantity_on_hand", 3.3333)
+        })
+        db.insertOrThrow("inventory_levels", null, ContentValues().apply {
+            put("product_id", aboveLimitProductId); put("warehouse_id", thirdWarehouse); put("quantity_on_hand", 3.3334)
+        })
+        db.insertOrThrow("inventory_levels", null, ContentValues().apply {
             put("product_id", productId); put("warehouse_id", inactiveWarehouse); put("quantity_on_hand", 100.0)
         })
         db.insertOrThrow("inventory_levels", null, ContentValues().apply {
             put("product_id", productId); put("warehouse_id", otherStationWarehouse); put("quantity_on_hand", 100.0)
         })
 
-        val after = helper.getDashboardStatsForDate(1, JSONObject(), "2026-11-05").getInt("low_stock")
-        assertEquals("The two active warehouses contribute one product-level KPI; inactive and other-station stock is ignored", before + 1, after)
+        val scopedRows = db.rawQuery(
+            "SELECT il.quantity_on_hand FROM inventory_levels il JOIN warehouses w ON w.id=il.warehouse_id WHERE il.product_id=? AND w.station_id=1 AND w.is_active=1",
+            arrayOf(productId.toString())
+        ).use { cursor ->
+            val quantities = mutableListOf<Double>()
+            while (cursor.moveToNext()) quantities += cursor.getDouble(0)
+            quantities
+        }
+        assertEquals(3, scopedRows.size)
+        assertEquals("three active warehouses sum to the exact minimum boundary", 10.0, scopedRows.sum(), 0.000001)
+        val aboveLimitRows = db.rawQuery(
+            "SELECT il.quantity_on_hand FROM inventory_levels il JOIN warehouses w ON w.id=il.warehouse_id WHERE il.product_id=? AND w.station_id=1 AND w.is_active=1",
+            arrayOf(aboveLimitProductId.toString())
+        ).use { cursor ->
+            val quantities = mutableListOf<Double>()
+            while (cursor.moveToNext()) quantities += cursor.getDouble(0)
+            quantities
+        }
+        assertEquals(3, aboveLimitRows.size)
+        assertEquals("independent active-warehouse reference puts the second product just above minimum stock",
+            10.0001, aboveLimitRows.sum(), 0.000001)
+        val after = helper.getDashboardStatsForDate(1, JSONObject(), "2026-11-05")
+        assertEquals("Only the product exactly at its minimum is low; a second product just above it is not", before + 1, after.getInt("low_stock"))
+        assertEquals(beforeProducts + 2, after.getInt("total_products"))
+        assertEquals("a low-stock product and foreign warehouse balance in station 1 must not leak into station 2", stationTwoBefore + 1,
+            helper.getDashboardStatsForDate(2, JSONObject(), "2026-11-05").getInt("low_stock"))
+        assertTrue(otherStationProductId > 0L)
     }
 
 }
