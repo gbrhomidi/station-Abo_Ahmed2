@@ -24,7 +24,7 @@ class SmsTransportCallbackReceiver : BroadcastReceiver() {
                 DatabaseInitializationCoordinator.awaitDatabase(appContext)
                 handleCallback(appContext, intent, callbackResultCode)
             } catch (error: Exception) {
-                Log.e("SmsTransportCallback", "Failed to initialize SQLite for SMS callback", error)
+                Log.e("SmsTransportCallback", "SQLite callback processing failed (${error.javaClass.simpleName})")
             } finally {
                 pending.finish()
             }
@@ -38,6 +38,8 @@ class SmsTransportCallbackReceiver : BroadcastReceiver() {
     internal fun handleCallback(context: Context, intent: Intent?, callbackResultCode: Int) {
         if (intent == null) return
         val messageId = intent.getStringExtra(SmsTransport.EXTRA_MESSAGE_ID) ?: return
+        val attemptToken = intent.getStringExtra(SmsTransport.EXTRA_ATTEMPT_TOKEN)
+            ?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) } ?: return
         val partIndex = intent.getIntExtra(SmsTransport.EXTRA_PART_INDEX, -1)
         if (partIndex < 0) return
 
@@ -45,36 +47,24 @@ class SmsTransportCallbackReceiver : BroadcastReceiver() {
         if (action != SmsTransport.ACTION_SENT && action != SmsTransport.ACTION_DELIVERED) return
         val delivered = action == SmsTransport.ACTION_DELIVERED
         val success = callbackResultCode == Activity.RESULT_OK
-        val code = if (success) "OK" else callbackResultCode.toString()
-        val reason = if (success) "" else intent.getStringExtra("error")
-            ?: when (callbackResultCode) {
-                android.telephony.SmsManager.RESULT_ERROR_GENERIC_FAILURE -> "فشل عام في إرسال SMS؛ تحقق من الشبكة ومركز الرسائل (SMSC)."
-                android.telephony.SmsManager.RESULT_ERROR_RADIO_OFF -> "راديو الهاتف أو شريحة SIM غير متاحين للإرسال؛ تحقق من تفعيل الشريحة ووضع الطيران وتغطية الشبكة."
-                android.telephony.SmsManager.RESULT_ERROR_NULL_PDU -> "تعذر إنشاء حزمة SMS (PDU) من محتوى الرسالة."
-                android.telephony.SmsManager.RESULT_ERROR_NO_SERVICE -> "لا توجد خدمة شبكة خلوية متاحة لإرسال SMS."
-                else -> "فشل إرسال SMS برمز Android: $callbackResultCode"
-            }
+        val code = if (success) "OK" else when (callbackResultCode) {
+            android.telephony.SmsManager.RESULT_ERROR_GENERIC_FAILURE -> "RESULT_ERROR_GENERIC_FAILURE"
+            android.telephony.SmsManager.RESULT_ERROR_RADIO_OFF -> "RESULT_ERROR_RADIO_OFF"
+            android.telephony.SmsManager.RESULT_ERROR_NULL_PDU -> "RESULT_ERROR_NULL_PDU"
+            android.telephony.SmsManager.RESULT_ERROR_NO_SERVICE -> "RESULT_ERROR_NO_SERVICE"
+            else -> "ANDROID_RESULT_${callbackResultCode}"
+        }
 
         runCatching {
             val db = DatabaseHelper.getInstance(context.applicationContext)
             SmsOutboxRepository.recordPartResult(
-                db = db,
-                messageId = messageId,
-                partIndex = partIndex,
-                delivered = delivered,
-                success = success,
-                resultCode = code,
-                reason = reason
+                db = db, messageId = messageId, partIndex = partIndex,
+                delivered = delivered, success = success, resultCode = code,
+                attemptToken = attemptToken
             )
-            if (!success) {
-                SmsFailureNotificationPublisher.publishForMessage(
-                    context.applicationContext,
-                    db,
-                    messageId
-                )
-            }
-        }.onFailure {
-            Log.e("SmsTransportCallback", "Failed to persist SMS callback", it)
+            SmsFailureNotificationPublisher.publishForMessage(context.applicationContext, db, messageId)
+        }.onFailure { error ->
+            Log.e("SmsTransportCallback", "Callback persistence failed (${error.javaClass.simpleName})")
         }
     }
 }

@@ -32,19 +32,25 @@ object SmsFailureNotificationPublisher {
         }
         ensureChannel(context)
         val retrying = failure.status == "RETRY_PENDING"
-        val title = if (retrying) "تعذر تسليم رسالة SMS — ستتم إعادة المحاولة" else "فشل تسليم رسالة SMS"
+        val uncertain = failure.code in setOf("UNKNOWN", "PARTIAL_UNKNOWN", "DELIVERY_UNCONFIRMED")
+        val title = when {
+            uncertain -> "نتيجة إرسال رسالة SMS غير مؤكدة"
+            retrying -> "تعذر إرسال رسالة SMS — ستتم إعادة المحاولة"
+            else -> "تعذر إرسال رسالة SMS"
+        }
         val body = buildString {
             append("الوجهة: ")
-            append(failure.recipient)
+            append(maskRecipient(failure.recipient))
             append("\n")
-            append(if (retrying) "سيعيد النظام المحاولة تلقائياً." else "تحتاج الرسالة إلى متابعة يدوية.")
+            append(when (failure.code) {
+                "PARTIAL_UNKNOWN" -> "قد تكون بعض أجزاء الرسالة قد وصلت. أوقف النظام الإعادة التلقائية لتجنب التكرار."
+                "UNKNOWN" -> "لا يمكن إثبات قبول الشبكة للرسالة أو رفضها. لن يعيد النظام إرسالها تلقائياً."
+                "DELIVERY_UNCONFIRMED" -> "قُبل طلب الإرسال من Android، لكن لم يصل تأكيد تسليم من الشبكة. لن يعاد الإرسال تلقائياً."
+                else -> if (retrying) "سيعيد النظام المحاولة تلقائياً بعد مهلة انتظار." else "تحتاج الرسالة إلى متابعة يدوية."
+            })
             if (failure.code.isNotBlank()) {
-                append("\nرمز الخطأ: ")
+                append("\nرمز الحالة: ")
                 append(failure.code)
-            }
-            if (failure.reason.isNotBlank()) {
-                append("\nالتفاصيل: ")
-                append(failure.reason)
             }
         }
         val dedupeKey = sha256("$messageId|${failure.status}|${failure.code}|${failure.reason}")
@@ -111,6 +117,11 @@ object SmsFailureNotificationPublisher {
                 reason = cursor.getString(3).orEmpty()
             )
         }
+
+    private fun maskRecipient(value: String): String {
+        val digits = value.filter(Char::isDigit)
+        return if (digits.length <= 4) "••••" else "••••••" + digits.takeLast(4)
+    }
 
     private fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return

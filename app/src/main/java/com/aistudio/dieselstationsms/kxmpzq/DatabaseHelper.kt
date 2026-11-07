@@ -4,6 +4,7 @@ import com.aistudio.dieselstationsms.kxmpzq.utils.IsoCivilDate
 import com.aistudio.dieselstationsms.kxmpzq.suppliers.SupplierPayablesRepository
 
 import com.aistudio.dieselstationsms.kxmpzq.sms.DebtDueDateRepository
+import com.aistudio.dieselstationsms.kxmpzq.sms.SmsOutboxSchema
 import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
@@ -55,7 +56,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 54
+        const val VERSION = 55
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -377,6 +378,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             createUserOtpVerificationsTable(db)
             createSmsOutboundDedupeTable(db)
             createSmsPlatformTables(db)
+            SmsOutboxSchema.ensureSchema(db)
             createSmsCognitiveTables(db)
             ensureActivityPermissions(db)
             ensurePartyTypePermissions(db)

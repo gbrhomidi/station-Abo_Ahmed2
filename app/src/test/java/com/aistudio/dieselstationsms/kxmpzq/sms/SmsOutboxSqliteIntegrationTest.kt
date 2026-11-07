@@ -35,6 +35,9 @@ class SmsOutboxSqliteIntegrationTest {
         context = ApplicationProvider.getApplicationContext()
         DatabaseHelper.closeInstance()
         database = DatabaseHelper.getInstance(context)
+        database.writableDatabase.delete("sms_outbox_attempt_parts", null, null)
+        database.writableDatabase.delete("sms_outbox_attempts", null, null)
+        database.writableDatabase.delete("sms_outbox_late_callbacks", null, null)
         database.writableDatabase.delete("sms_outbox_parts", null, null)
         database.writableDatabase.delete("sms_outbox", null, null)
         database.writableDatabase.delete("sms_messages", null, null)
@@ -75,26 +78,29 @@ class SmsOutboxSqliteIntegrationTest {
             database, "967771234567", "Integration lifecycle", dedupeKey = "lifecycle-dedupe"
         )!!
         val fakeTransport = RecordingTransport()
-
         val claimed = SmsOutboxRepository.claimNext(database)
         assertNotNull(claimed)
         assertEquals(queued.messageId, claimed!!.messageId)
-        SmsOutboxRepository.prepareParts(database, claimed.messageId, claimed.partsCount)
-        fakeTransport.send(claimed)
+        assertTrue(claimed.attemptToken.isNotBlank())
+        val sending = SmsOutboxRepository.beginTransport(database, claimed)!!
+        SmsOutboxRepository.prepareParts(database, sending.messageId, sending.partsCount, sending.attemptToken)
+        fakeTransport.send(sending)
 
-        assertEquals(listOf(claimed.messageId), fakeTransport.sentMessageIds)
-        assertEquals("SENDING", status(claimed.messageId))
-
-        SmsOutboxRepository.recordPartResult(
-            database, claimed.messageId, 0, delivered = false, success = true, resultCode = "RESULT_OK"
-        )
-        assertEquals("DELIVERY_PENDING", status(claimed.messageId))
+        assertEquals(listOf(sending.messageId), fakeTransport.sentMessageIds)
+        assertEquals("SENDING", status(sending.messageId))
 
         SmsOutboxRepository.recordPartResult(
-            database, claimed.messageId, 0, delivered = true, success = true, resultCode = "RESULT_OK"
+            database, sending.messageId, 0, delivered = false, success = true,
+            resultCode = "RESULT_OK", attemptToken = sending.attemptToken
         )
-        assertEquals("DELIVERED", status(claimed.messageId))
-        assertEquals("delivered", legacyStatus(claimed.messageId))
+        assertEquals("DELIVERY_PENDING", status(sending.messageId))
+
+        SmsOutboxRepository.recordPartResult(
+            database, sending.messageId, 0, delivered = true, success = true,
+            resultCode = "RESULT_OK", attemptToken = sending.attemptToken
+        )
+        assertEquals("DELIVERED", status(sending.messageId))
+        assertEquals("delivered", legacyStatus(sending.messageId))
         assertNull(SmsOutboxRepository.claimNext(database))
     }
 
@@ -116,7 +122,7 @@ class SmsOutboxSqliteIntegrationTest {
             countWhere("sms_outbox_parts", "message_id = ? AND status = 'PENDING'", claimed.messageId) > 0
         )
 
-        assertTrue(SmsOutboxRepository.cancelClaimed(database, claimed.messageId, "DEBT_PAID"))
+        assertTrue(SmsOutboxRepository.cancelClaimed(database, claimed.messageId, "DEBT_PAID", claimed.attemptToken))
         assertEquals("CANCELLED", status(claimed.messageId))
         assertEquals("cancelled", legacyStatus(claimed.messageId))
         assertEquals(
@@ -124,7 +130,7 @@ class SmsOutboxSqliteIntegrationTest {
             0,
             countWhere("sms_outbox_parts", "message_id = ? AND status = 'PENDING'", claimed.messageId)
         )
-        assertFalse("Cancellation must be idempotent",SmsOutboxRepository.cancelClaimed(database, claimed.messageId, "DEBT_PAID"))
+        assertFalse("Cancellation must be idempotent", SmsOutboxRepository.cancelClaimed(database, claimed.messageId, "DEBT_PAID", claimed.attemptToken))
         assertNull("Cancelled message must not be claimable again",SmsOutboxRepository.claimNext(database))
     }
 
@@ -134,14 +140,15 @@ class SmsOutboxSqliteIntegrationTest {
             database, "967771234567", "Retry body", dedupeKey = "retry-dedupe"
         )!!
         val claimed = SmsOutboxRepository.claimNext(database)!!
+        val sending = SmsOutboxRepository.beginTransport(database, claimed, now = 1_000_000L)!!
         SmsOutboxRepository.markFailed(
-            database, claimed.messageId, "TEMPORARY_TEST_FAILURE", "simulated carrier failure",
-            retry = true, now = 1_000_000L
+            database, sending.messageId, "TEMPORARY_TEST_FAILURE", "simulated carrier failure",
+            retry = true, now = 1_000_000L, attemptToken = sending.attemptToken, jitterMs = 0L
         )
 
         assertEquals("RETRY_PENDING", status(queued.messageId))
-        assertNull(SmsOutboxRepository.claimNext(database, now = 1_059_999L))
-        assertNotNull(SmsOutboxRepository.claimNext(database, now = 1_060_000L))
+        assertNull(SmsOutboxRepository.claimNext(database, now = 1_029_999L))
+        assertNotNull(SmsOutboxRepository.claimNext(database, now = 1_030_000L))
         assertTrue(SmsOutboxRepository.hasPending(database))
     }
 
@@ -155,23 +162,18 @@ class SmsOutboxSqliteIntegrationTest {
         repeat(SmsOutboxRepository.MAX_ATTEMPTS) { attemptIndex ->
             val claimed = SmsOutboxRepository.claimNext(database, now)
             assertNotNull(claimed)
-            assertEquals(attemptIndex + 1, claimed!!.attemptCount)
-            val shouldRetry = SmsOutboxRepository.shouldRetryAfterAttempt(claimed.attemptCount)
+            val sending = SmsOutboxRepository.beginTransport(database, claimed!!, now)!!
+            assertEquals(attemptIndex + 1, sending.attemptCount)
+            val shouldRetry = SmsOutboxRepository.shouldRetryAfterAttempt(sending.attemptCount)
             assertEquals(attemptIndex + 1 < SmsOutboxRepository.MAX_ATTEMPTS, shouldRetry)
 
             SmsOutboxRepository.markFailed(
-                database,
-                queued.messageId,
-                "TEMPORARY_TEST_FAILURE",
-                "simulated transport failure",
-                retry = shouldRetry,
-                now = now
+                database, queued.messageId, "TEMPORARY_TEST_FAILURE",
+                "simulated transport failure", retry = shouldRetry, now = now,
+                attemptToken = sending.attemptToken, jitterMs = 0L
             )
-            assertEquals(
-                if (shouldRetry) "RETRY_PENDING" else "FAILED",
-                status(queued.messageId)
-            )
-            now += 60_000L
+            assertEquals(if (shouldRetry) "RETRY_PENDING" else "FAILED", status(queued.messageId))
+            now += SmsOutboxRepository.retryDelayMs(attemptIndex + 1, 0L)
         }
 
         assertEquals(SmsOutboxRepository.MAX_ATTEMPTS, attemptCount(queued.messageId))
@@ -399,6 +401,134 @@ class SmsOutboxSqliteIntegrationTest {
         assertEquals(0, count("sms_messages"))
     }
 
+    @Test
+    fun expiredLeaseUsesUnknownOutcomeInsteadOfRequeueingOldQueuedMessage() {
+        val queued = SmsOutboxRepository.enqueue(
+            database, "967771234567", "Lease recovery", dedupeKey = "lease-recovery"
+        )!!
+        val now = System.currentTimeMillis() + 5_000L
+        database.writableDatabase.update(
+            "sms_outbox",
+            ContentValues().apply { put("next_attempt_at", 0L); put("queued_at", now - 86_400_000L) },
+            "message_id = ?", arrayOf(queued.messageId)
+        )
+        val claimed = SmsOutboxRepository.claimNext(database, now)!!
+        assertTrue(claimed.attemptToken.isNotBlank())
+
+        assertTrue(SmsOutboxRepository.recoverStuck(database, now + 60_000L).isEmpty())
+        assertEquals("SENDING", status(queued.messageId))
+
+        val recovered = SmsOutboxRepository.recoverStuck(database, now + 10 * 60 * 1000L + 1L)
+        assertEquals(listOf(queued.messageId), recovered)
+        assertEquals("FAILED", status(queued.messageId))
+        assertEquals("UNKNOWN", submissionOutcome(queued.messageId))
+        assertNull(SmsOutboxRepository.claimNext(database, now + 10 * 60 * 1000L + 2L))
+    }
+
+    @Test
+    fun callbackFromPreviousAttemptIsRecordedButCannotChangeCurrentLease() {
+        val queued = SmsOutboxRepository.enqueue(
+            database, "967771234567", "Stale callback", dedupeKey = "stale-callback"
+        )!!
+        val now = System.currentTimeMillis() + 2_000L
+        val firstClaim = SmsOutboxRepository.claimNext(database, now)!!
+        val firstSend = SmsOutboxRepository.beginTransport(database, firstClaim, now)!!
+        SmsOutboxRepository.markFailed(
+            database, queued.messageId, "RESULT_ERROR_NO_SERVICE", "no service",
+            retry = true, now = now, attemptToken = firstSend.attemptToken, jitterMs = 0L
+        )
+        val secondClaim = SmsOutboxRepository.claimNext(database, now + 30_000L)!!
+        assertTrue(firstSend.attemptToken != secondClaim.attemptToken)
+
+        SmsOutboxRepository.recordPartResult(
+            database, queued.messageId, 0, delivered = false, success = true,
+            resultCode = "OK", attemptToken = firstSend.attemptToken
+        )
+        assertEquals("SENDING", status(queued.messageId))
+        assertEquals(1, countWhere("sms_outbox_late_callbacks", "message_id = ?", queued.messageId))
+        assertEquals(secondClaim.attemptToken, currentAttemptToken(queued.messageId))
+    }
+
+    @Test
+    fun multipartPartialAcceptanceIsTerminalAndNeverReplaysTheWholeMessage() {
+        val queued = SmsOutboxRepository.enqueue(
+            database, "967771234567", "X".repeat(320), dedupeKey = "multipart-partial"
+        )!!
+        val claimed = SmsOutboxRepository.claimNext(database)!!
+        val sending = SmsOutboxRepository.beginTransport(database, claimed)!!
+        assertTrue(sending.partsCount >= 2)
+        SmsOutboxRepository.prepareParts(database, queued.messageId, sending.partsCount, sending.attemptToken)
+
+        for (index in 0 until sending.partsCount) {
+            SmsOutboxRepository.recordPartResult(
+                database, queued.messageId, index, delivered = false,
+                success = index == 0, resultCode = if (index == 0) "OK" else "RESULT_ERROR_NO_SERVICE",
+                attemptToken = sending.attemptToken
+            )
+        }
+
+        assertEquals("FAILED", status(queued.messageId))
+        assertEquals("PARTIAL_UNKNOWN", submissionOutcome(queued.messageId))
+        assertNull(SmsOutboxRepository.claimNext(database))
+    }
+
+    @Test
+    fun missingDeliveryReceiptBecomesUnconfirmedAndDoesNotTriggerRetry() {
+        val queued = SmsOutboxRepository.enqueue(
+            database, "967771234567", "Delivery confirmation", dedupeKey = "delivery-unconfirmed"
+        )!!
+        val claimed = SmsOutboxRepository.claimNext(database)!!
+        val sending = SmsOutboxRepository.beginTransport(database, claimed)!!
+        SmsOutboxRepository.recordPartResult(
+            database, queued.messageId, 0, delivered = false, success = true,
+            resultCode = "OK", attemptToken = sending.attemptToken
+        )
+        assertEquals("DELIVERY_PENDING", status(queued.messageId))
+        database.writableDatabase.update(
+            "sms_outbox",
+            ContentValues().apply { put("sent_at", System.currentTimeMillis() - 20 * 60 * 1000L) },
+            "message_id = ?", arrayOf(queued.messageId)
+        )
+
+        assertEquals(listOf(queued.messageId), SmsOutboxRepository.failDeliveryTimeouts(database, 15 * 60 * 1000L))
+        assertEquals("FAILED", status(queued.messageId))
+        assertEquals("DELIVERY_UNCONFIRMED", submissionOutcome(queued.messageId))
+        assertNull(SmsOutboxRepository.claimNext(database))
+    }
+
+    @Test
+    fun retryBackoffIsExponentialBoundedAndJitterIsClamped() {
+        assertEquals(30_000L, SmsOutboxRepository.retryDelayMs(1, 0L))
+        assertEquals(60_000L, SmsOutboxRepository.retryDelayMs(2, 0L))
+        assertEquals(120_000L, SmsOutboxRepository.retryDelayMs(3, 0L))
+        assertEquals(36_000L, SmsOutboxRepository.retryDelayMs(1, Long.MAX_VALUE))
+        assertEquals(24_000L, SmsOutboxRepository.retryDelayMs(1, Long.MIN_VALUE))
+    }
+
+    @Test
+    fun migrationMarksLegacySendingRowUnknownWithoutDeletingMessage() {
+        val queued = SmsOutboxRepository.enqueue(
+            database, "967771234567", "Legacy sending", dedupeKey = "legacy-sending"
+        )!!
+        database.writableDatabase.update(
+            "sms_outbox",
+            ContentValues().apply { put("status", "SENDING"); putNull("attempt_token") },
+            "message_id = ?", arrayOf(queued.messageId)
+        )
+        val db = database.writableDatabase
+        db.beginTransaction()
+        try {
+            SmsOutboxSchema.ensureSchema(db)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        assertEquals("FAILED", status(queued.messageId))
+        assertEquals("UNKNOWN", submissionOutcome(queued.messageId))
+        assertEquals("failed", legacyStatus(queued.messageId))
+        assertEquals(1, countWhere("sms_outbox", "message_id = ?", queued.messageId))
+    }
+
     private fun insertDebtFixture(): Pair<Long, Long> {
         val db = database.writableDatabase
         db.execSQL("PRAGMA foreign_keys = OFF")
@@ -537,6 +667,18 @@ class SmsOutboxSqliteIntegrationTest {
     private fun count(table: String): Int =
         database.readableDatabase.rawQuery("SELECT COUNT(*) FROM $table", null)
             .use { cursor -> check(cursor.moveToFirst()); cursor.getInt(0) }
+
+    private fun submissionOutcome(messageId: String): String =
+        database.readableDatabase.rawQuery(
+            "SELECT submission_outcome FROM sms_outbox WHERE message_id = ?",
+            arrayOf(messageId)
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getString(0) }
+
+    private fun currentAttemptToken(messageId: String): String =
+        database.readableDatabase.rawQuery(
+            "SELECT attempt_token FROM sms_outbox WHERE message_id = ?",
+            arrayOf(messageId)
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getString(0) }
 
     private fun attemptCount(messageId: String): Int =
         database.readableDatabase.rawQuery(

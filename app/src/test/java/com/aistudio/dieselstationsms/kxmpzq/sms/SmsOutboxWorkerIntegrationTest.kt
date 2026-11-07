@@ -12,6 +12,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -37,6 +38,9 @@ class SmsOutboxWorkerIntegrationTest {
         DatabaseHelper.closeInstance()
         database = DatabaseHelper.getInstance(context)
         database.setSetting("sms_send_enabled", "1")
+        database.writableDatabase.delete("sms_outbox_attempt_parts", null, null)
+        database.writableDatabase.delete("sms_outbox_attempts", null, null)
+        database.writableDatabase.delete("sms_outbox_late_callbacks", null, null)
         database.writableDatabase.delete("sms_outbox_parts", null, null)
         database.writableDatabase.delete("sms_outbox", null, null)
         database.writableDatabase.delete("sms_messages", null, null)
@@ -66,14 +70,17 @@ class SmsOutboxWorkerIntegrationTest {
         assertEquals(listOf(queued.messageId), sender.sentMessageIds)
         assertEquals("SENDING", status(queued.messageId))
 
-        // The production callback persistence path records carrier outcomes after transport send.
+        // Callback persistence is owned by the exact claim attempt.
+        val sentJob = sender.sentJobs.single()
+        assertTrue(sentJob.attemptToken.isNotBlank())
         SmsOutboxRepository.recordPartResult(
             database,
             queued.messageId,
             0,
             delivered = false,
             success = true,
-            resultCode = "RESULT_OK"
+            resultCode = "RESULT_OK",
+            attemptToken = sentJob.attemptToken
         )
         assertEquals("DELIVERY_PENDING", status(queued.messageId))
         SmsOutboxRepository.recordPartResult(
@@ -82,7 +89,8 @@ class SmsOutboxWorkerIntegrationTest {
             0,
             delivered = true,
             success = true,
-            resultCode = "RESULT_OK"
+            resultCode = "RESULT_OK",
+            attemptToken = sentJob.attemptToken
         )
         assertEquals("DELIVERED", status(queued.messageId))
         assertEquals("delivered", legacyStatus(queued.messageId))
@@ -100,6 +108,7 @@ class SmsOutboxWorkerIntegrationTest {
 
     private class RecordingTransport {
         val sentMessageIds = mutableListOf<String>()
+        val sentJobs = mutableListOf<SmsOutboxRepository.OutboxMessage>()
 
         fun factory(): WorkerFactory = object : WorkerFactory() {
             override fun createWorker(
@@ -111,6 +120,7 @@ class SmsOutboxWorkerIntegrationTest {
                 return SmsOutboxWorker(appContext, workerParameters, object : SmsTransportSender {
                     override fun send(job: SmsOutboxRepository.OutboxMessage) {
                         sentMessageIds += job.messageId
+                        sentJobs += job
                     }
                 })
             }

@@ -29,6 +29,9 @@ class SmsTransportCallbackReceiverIntegrationTest {
         context = ApplicationProvider.getApplicationContext()
         DatabaseHelper.closeInstance()
         database = DatabaseHelper.getInstance(context)
+        database.writableDatabase.delete("sms_outbox_attempt_parts", null, null)
+        database.writableDatabase.delete("sms_outbox_attempts", null, null)
+        database.writableDatabase.delete("sms_outbox_late_callbacks", null, null)
         database.writableDatabase.delete("sms_outbox_parts", null, null)
         database.writableDatabase.delete("sms_outbox", null, null)
         database.writableDatabase.delete("sms_messages", null, null)
@@ -45,19 +48,20 @@ class SmsTransportCallbackReceiverIntegrationTest {
             database, "967771234567", "Receiver lifecycle", dedupeKey = "receiver-lifecycle"
         )!!
         val claimed = SmsOutboxRepository.claimNext(database)!!
-        SmsOutboxRepository.prepareParts(database, claimed.messageId, claimed.partsCount)
+        val sending = SmsOutboxRepository.beginTransport(database, claimed)!!
+        SmsOutboxRepository.prepareParts(database, sending.messageId, sending.partsCount, sending.attemptToken)
         val receiver = SmsTransportCallbackReceiver()
 
-        receiver.handleCallback(context, callbackIntent(SmsTransport.ACTION_SENT, queued.messageId), Activity.RESULT_OK)
+        receiver.handleCallback(context, callbackIntent(SmsTransport.ACTION_SENT, queued.messageId, sending.attemptToken), Activity.RESULT_OK)
         assertEquals("DELIVERY_PENDING", status(queued.messageId))
         assertEquals("sent", legacyStatus(queued.messageId))
 
-        receiver.handleCallback(context, callbackIntent(SmsTransport.ACTION_DELIVERED, queued.messageId), Activity.RESULT_OK)
+        receiver.handleCallback(context, callbackIntent(SmsTransport.ACTION_DELIVERED, queued.messageId, sending.attemptToken), Activity.RESULT_OK)
         assertEquals("DELIVERED", status(queued.messageId))
         assertEquals("delivered", legacyStatus(queued.messageId))
 
         // A delayed SENT callback must not downgrade an already confirmed delivery.
-        receiver.handleCallback(context, callbackIntent(SmsTransport.ACTION_SENT, queued.messageId), Activity.RESULT_OK)
+        receiver.handleCallback(context, callbackIntent(SmsTransport.ACTION_SENT, queued.messageId, sending.attemptToken), Activity.RESULT_OK)
         assertEquals("DELIVERED", status(queued.messageId))
         assertEquals("delivered", legacyStatus(queued.messageId))
     }
@@ -68,18 +72,50 @@ class SmsTransportCallbackReceiverIntegrationTest {
             database, "967771234567", "Receiver failure", dedupeKey = "receiver-failure"
         )!!
         val claimed = SmsOutboxRepository.claimNext(database)!!
-        SmsOutboxRepository.prepareParts(database, claimed.messageId, claimed.partsCount)
+        val sending = SmsOutboxRepository.beginTransport(database, claimed)!!
+        SmsOutboxRepository.prepareParts(database, sending.messageId, sending.partsCount, sending.attemptToken)
         val receiver = SmsTransportCallbackReceiver()
 
         receiver.handleCallback(
             context,
-            callbackIntent(SmsTransport.ACTION_SENT, queued.messageId),
+            callbackIntent(SmsTransport.ACTION_SENT, queued.messageId, sending.attemptToken),
             SmsManager.RESULT_ERROR_NO_SERVICE
         )
 
         assertEquals("RETRY_PENDING", status(queued.messageId))
-        assertEquals(SmsManager.RESULT_ERROR_NO_SERVICE.toString(), failureCode(queued.messageId))
+        assertEquals("RESULT_ERROR_NO_SERVICE", failureCode(queued.messageId))
         assertEquals("failed", legacyStatus(queued.messageId))
+    }
+
+    @Test
+    fun callbackFromPreviousAttemptCannotMutateCurrentAttempt() {
+        val queued = SmsOutboxRepository.enqueue(
+            database, "967771234567", "Stale callback receiver", dedupeKey = "receiver-stale"
+        )!!
+        val first = SmsOutboxRepository.beginTransport(database, SmsOutboxRepository.claimNext(database)!!)!!
+        SmsOutboxRepository.markFailed(
+            database, queued.messageId, "RESULT_ERROR_NO_SERVICE", "no service",
+            retry = true, attemptToken = first.attemptToken, jitterMs = 0L
+        )
+        val second = SmsOutboxRepository.claimNext(database, System.currentTimeMillis() + 31_000L)!!
+        val receiver = SmsTransportCallbackReceiver()
+
+        receiver.handleCallback(
+            context, callbackIntent(SmsTransport.ACTION_SENT, queued.messageId, first.attemptToken),
+            Activity.RESULT_OK
+        )
+
+        assertEquals("SENDING", status(queued.messageId))
+        val oldCallbacks = database.readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM sms_outbox_late_callbacks WHERE message_id = ? AND attempt_token = ?",
+            arrayOf(queued.messageId, first.attemptToken)
+        ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
+        assertEquals(1, oldCallbacks)
+        val activeToken = database.readableDatabase.rawQuery(
+            "SELECT attempt_token FROM sms_outbox WHERE message_id = ?",
+            arrayOf(queued.messageId)
+        ).use { cursor -> cursor.moveToFirst(); cursor.getString(0) }
+        assertEquals(second.attemptToken, activeToken)
     }
 
     @Test
@@ -105,9 +141,10 @@ class SmsTransportCallbackReceiverIntegrationTest {
         assertEquals("queued", legacyStatus(queued.messageId))
     }
 
-    private fun callbackIntent(action: String, messageId: String) =
+    private fun callbackIntent(action: String, messageId: String, attemptToken: String) =
         Intent(action).apply {
             putExtra(SmsTransport.EXTRA_MESSAGE_ID, messageId)
+            putExtra(SmsTransport.EXTRA_ATTEMPT_TOKEN, attemptToken)
             putExtra(SmsTransport.EXTRA_PART_INDEX, 0)
         }
 

@@ -3,6 +3,7 @@ package com.aistudio.dieselstationsms.kxmpzq.sms
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.telephony.SmsManager
 import java.util.ArrayList
@@ -34,6 +35,7 @@ class SmsTransport(private val context: Context) : SmsTransportSender {
         const val EXTRA_MESSAGE_ID = "message_id"
         const val EXTRA_PART_INDEX = "part_index"
         const val EXTRA_SUBSCRIPTION_ID = "subscription_id"
+        const val EXTRA_ATTEMPT_TOKEN = "attempt_token"
 
         private const val FLAG_BASE = PendingIntent.FLAG_UPDATE_CURRENT
 
@@ -69,6 +71,7 @@ class SmsTransport(private val context: Context) : SmsTransportSender {
     }
 
     override fun send(job: SmsOutboxRepository.OutboxMessage) {
+        require(job.attemptToken.matches(Regex("[0-9a-fA-F-]{36}"))) { "SMS attempt token is required" }
         val manager = getSmsManager(context, job.subscriptionId)
         val parts = SmsBudgetManager.divideMessage(job.body)
         require(parts.isNotEmpty()) { "SMS body produced no parts" }
@@ -76,8 +79,8 @@ class SmsTransport(private val context: Context) : SmsTransportSender {
         val sentIntents = ArrayList<PendingIntent>(parts.size)
         val deliveryIntents = ArrayList<PendingIntent>(parts.size)
         parts.forEachIndexed { index, _ ->
-            sentIntents += callbackPendingIntent(ACTION_SENT, job.messageId, index)
-            deliveryIntents += callbackPendingIntent(ACTION_DELIVERED, job.messageId, index)
+            sentIntents += callbackPendingIntent(ACTION_SENT, job.messageId, job.attemptToken, index)
+            deliveryIntents += callbackPendingIntent(ACTION_DELIVERED, job.messageId, job.attemptToken, index)
         }
 
         if (parts.size == 1) {
@@ -99,13 +102,18 @@ class SmsTransport(private val context: Context) : SmsTransportSender {
         }
     }
 
-    private fun callbackPendingIntent(action: String, messageId: String, partIndex: Int): PendingIntent {
+    private fun callbackPendingIntent(action: String, messageId: String, attemptToken: String, partIndex: Int): PendingIntent {
+        val callbackIdentity = "station-sms://callback/${Uri.encode(action)}/${Uri.encode(messageId)}/${Uri.encode(attemptToken)}/$partIndex"
         val intent = Intent(context, SmsTransportCallbackReceiver::class.java).apply {
             this.action = action
+            data = Uri.parse(callbackIdentity)
             putExtra(EXTRA_MESSAGE_ID, messageId)
+            putExtra(EXTRA_ATTEMPT_TOKEN, attemptToken)
             putExtra(EXTRA_PART_INDEX, partIndex)
         }
-        val requestCode = (messageId.hashCode() * 31 + partIndex * 2 + if (action == ACTION_SENT) 0 else 1) and 0x7fffffff
+        // The data URI is part of PendingIntent identity; an older attempt cannot overwrite
+        // a newer attempt's sent/delivery callbacks, even if the numeric request code collides.
+        val requestCode = callbackIdentity.hashCode() and 0x7fffffff
         val flags = FLAG_BASE or if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
         return PendingIntent.getBroadcast(context, requestCode, intent, flags)
     }

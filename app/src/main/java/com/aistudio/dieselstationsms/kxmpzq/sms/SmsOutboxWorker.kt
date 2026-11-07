@@ -15,6 +15,7 @@ import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
+import java.util.UUID
 
 /** عامل النقل الصادر. QUEUED لا تصبح SENT إلا عبر PendingIntent callback. */
  class SmsOutboxWorker @JvmOverloads constructor(
@@ -25,89 +26,132 @@ import java.util.concurrent.TimeUnit
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val db = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
-        // Repair interrupted dedupe reservations even when transport is currently disabled.
-        runCatching { SmsOutboxAtomicTransaction.recoverOutboundDedupeReservations(db) }
-            .onFailure { android.util.Log.e("SmsOutboxWorker", "Outbound dedupe recovery failed", it) }
-        // Respect the global outbound switch and leave messages durable while permission is absent.
-        if (db.getSetting("sms_send_enabled") == "0") return@withContext Result.success()
-        if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
-            return@withContext Result.success()
+
+        // Reconcile expired leases and missing delivery receipts even when sending is disabled.
+        SmsOutboxRepository.recoverStuck(db).forEach { messageId ->
+            SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, messageId)
         }
-        // Restore messages failed only because SEND_SMS was denied, once permission is restored.
-        SmsOutboxRepository.requeuePermissionFailures(db)
-        SmsOutboxRepository.recoverStuck(db)
         SmsOutboxRepository.failDeliveryTimeouts(db).forEach { messageId ->
             SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, messageId)
         }
+        runCatching { SmsOutboxAtomicTransaction.recoverOutboundDedupeReservations(db) }
+            .onFailure {
+                android.util.Log.e(
+                    "SmsOutboxWorker",
+                    "Outbound dedupe recovery failed (${it.javaClass.simpleName})"
+                )
+            }
+
+        if (db.getSetting("sms_send_enabled") == "0") return@withContext Result.success()
+        if (ContextCompat.checkSelfPermission(
+                applicationContext,
+                Manifest.permission.SEND_SMS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return@withContext Result.success()
+        }
+
+        // Restore messages failed only because SEND_SMS was denied, once permission is restored.
+        SmsOutboxRepository.requeuePermissionFailures(db)
+        val workerLeaseOwner = UUID.randomUUID().toString()
         val batch = mutableListOf<SmsOutboxRepository.OutboxMessage>()
         while (batch.size < MAX_BATCH) {
-            val job = SmsOutboxRepository.claimNext(db) ?: break
+            val job = SmsOutboxRepository.claimNext(db, leaseOwner = workerLeaseOwner) ?: break
             batch += job
         }
 
         val eligibleMessageIds = try {
             DebtDueDateRepository.validateDebtReminderBatch(db, batch)
         } catch (exception: Exception) {
-            // Fail closed: no claimed message is sent when the batch snapshot cannot be read.
+            // No carrier call started: release claims without consuming a transport attempt.
             batch.forEach { job ->
-                SmsOutboxRepository.markFailed(
-                    db,
-                    job.messageId,
-                    "DEBT_REVALIDATION_ERROR",
-                    exception.javaClass.simpleName,
-                    retry = SmsOutboxRepository.shouldRetryAfterAttempt(job.attemptCount)
+                SmsOutboxRepository.releaseClaimForLocalRetry(
+                    db, job, "DEBT_REVALIDATION_ERROR"
                 )
-                SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, job.messageId)
             }
             return@withContext Result.retry()
         }
 
         val processed = batch.size
         batch.forEach { job ->
+            var transportStarted = false
             try {
                 if (job.messageId !in eligibleMessageIds) {
                     SmsOutboxRepository.cancelClaimed(
                         db,
                         job.messageId,
-                        "Debt reminder no longer matches the trusted open debt or current recipient"
+                        "Debt reminder no longer matches the trusted open debt or current recipient",
+                        job.attemptToken
                     )
                 } else {
-                    SmsOutboxRepository.prepareParts(db, job.messageId, job.partsCount)
-                    // The batch result is only a pre-filter. Re-read this customer's current
-                    // debt and phone after part preparation, immediately before transport.
-                    if (!DebtDueDateRepository.isCurrentDebtReminder(
-                            helper = db,
-                            eventId = job.eventId,
-                            businessEntityId = job.businessEntityId,
-                            recipient = job.recipient,
-                            body = job.body
-                        )
-                    ) {
+                    SmsOutboxRepository.prepareParts(
+                        db, job.messageId, job.partsCount, job.attemptToken
+                    )
+
+                    // The batch result is only a pre-filter. Re-read the current debt, recipient,
+                    // and exact body immediately before crossing the carrier-submission boundary.
+                    val stillEligible = DebtDueDateRepository.isCurrentDebtReminder(
+                        helper = db,
+                        eventId = job.eventId,
+                        businessEntityId = job.businessEntityId,
+                        recipient = job.recipient,
+                        body = job.body
+                    )
+                    if (!stillEligible) {
                         SmsOutboxRepository.cancelClaimed(
                             db,
                             job.messageId,
-                            "Debt reminder failed final pre-transport revalidation"
+                            "Debt reminder failed final pre-transport revalidation",
+                            job.attemptToken
                         )
                     } else {
-                        transportSender.send(job)
+                        val submittingJob = SmsOutboxRepository.beginTransport(db, job)
+                        if (submittingJob != null) {
+                            transportStarted = true
+                            transportSender.send(submittingJob)
+                        }
                     }
                 }
             } catch (securityException: SecurityException) {
-                SmsOutboxRepository.markFailed(db, job.messageId, "SEND_SMS_PERMISSION", securityException.message.orEmpty(), retry = false)
-                SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, job.messageId)
+                if (transportStarted) {
+                    SmsOutboxRepository.markFailed(
+                        db,
+                        job.messageId,
+                        "SEND_SMS_PERMISSION",
+                        securityException.javaClass.simpleName,
+                        retry = false,
+                        attemptToken = job.attemptToken
+                    )
+                    SmsFailureNotificationPublisher.publishForMessage(
+                        applicationContext, db, job.messageId
+                    )
+                } else {
+                    SmsOutboxRepository.releaseClaimForLocalRetry(
+                        db, job, "PRE_TRANSPORT_SECURITY_CHECK"
+                    )
+                }
             } catch (exception: Exception) {
-                SmsOutboxRepository.markFailed(
-                    db,
-                    job.messageId,
-                    exception.javaClass.simpleName,
-                    exception.message.orEmpty(),
-                    retry = SmsOutboxRepository.shouldRetryAfterAttempt(job.attemptCount)
-                )
-                SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, job.messageId)
+                if (transportStarted) {
+                    // Once SmsManager is entered, an exception does not prove rejection by the modem.
+                    SmsOutboxRepository.markSubmissionUnknown(
+                        db, job, exception.javaClass.simpleName
+                    )
+                    SmsFailureNotificationPublisher.publishForMessage(
+                        applicationContext, db, job.messageId
+                    )
+                } else {
+                    SmsOutboxRepository.releaseClaimForLocalRetry(
+                        db, job, exception.javaClass.simpleName
+                    )
+                }
             }
         }
 
-        if (SmsOutboxRepository.hasPending(db) && processed >= MAX_BATCH) Result.retry() else Result.success()
+        if (SmsOutboxRepository.hasPending(db) && processed >= MAX_BATCH) {
+            Result.retry()
+        } else {
+            Result.success()
+        }
     }
 
     companion object {
