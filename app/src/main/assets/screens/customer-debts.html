@@ -700,6 +700,11 @@
             color: var(--warning);
             border-color: rgba(245, 158, 11, 0.3);
         }
+        .status-badge.undated {
+            background: rgba(100, 116, 139, 0.12);
+            color: var(--text-muted);
+            border-color: rgba(100, 116, 139, 0.3);
+        }
         .data-table .btn-action {
             background: none;
             border: none;
@@ -1948,7 +1953,7 @@
     <header class="top-bar">
         <div class="header-top">
             <div class="top-title">
-                <h2>إدارة ديون العملاء و المتأخرات</h2>
+                <h2>إدارة ديون العملاء</h2>
             </div>
             <div class="header-actions">
                 <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
@@ -1956,9 +1961,6 @@
                 </button>
                 <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
                     <i class="fas fa-moon" id="themeIcon"></i>
-                </button>
-                <button class="icon-btn" onclick="openAIAdvisor()" style="border-color:rgba(16,185,129,0.3);" title="المستشار الذكي">
-                    <i class="fas fa-robot" style="color:var(--emerald-primary);"></i>
                 </button>
             </div>
         </div>
@@ -1983,6 +1985,7 @@
                 <select id="filterStatus">
                     <option value="">جميع الحالات</option>
                     <option value="current">غير متأخر</option>
+                    <option value="undated">غير محدد الاستحقاق</option>
                     <option value="overdue">متأخر</option>
                     <option value="doubtful">مشكوك في تحصيله</option>
                     <option value="partial">مدفوع جزئياً</option>
@@ -2595,6 +2598,7 @@
         function getStatusLabel(st) {
             const map = {
                 'current': 'غير متأخر',
+                'undated': 'غير محدد الاستحقاق',
                 'overdue': 'متأخر',
                 'doubtful': 'مشكوك في تحصيله',
                 'partial': 'مدفوع جزئياً',
@@ -2606,6 +2610,7 @@
         function getStatusClass(st) {
             const map = {
                 'current': 'current',
+                'undated': 'undated',
                 'overdue': 'overdue',
                 'doubtful': 'doubtful',
                 'partial': 'partial',
@@ -2712,6 +2717,19 @@
             };
         }
 
+        function getDebtFilterDate(row) {
+            const maturityDate = String(row && row.due_date || '').trim();
+            if (dueInvoicesDrilldownActive) {
+                return IsoCivilDate.isValidIsoDate(maturityDate) ? maturityDate : '';
+            }
+            if (IsoCivilDate.isValidIsoDate(maturityDate)) return maturityDate;
+            const invoiceDate = IsoCivilDate.datePart(
+                String(row && (row.created_at || row.transaction_date || row.business_day) || ''),
+                true
+            );
+            return invoiceDate || '';
+        }
+
         function filterDebts(data) {
             const from = document.getElementById('filterDateFrom').value;
             const to = document.getElementById('filterDateTo').value;
@@ -2719,8 +2737,9 @@
             const status = document.getElementById('filterStatus').value;
             if (!IsoCivilDate.isValidDateRange(from, to)) return [];
             return data.filter((row) => {
-                // Filter by maturity only; invoice creation is not its due date.
-                const date = row.due_date || '';
+                // Prefer a verified maturity date. Legacy invoices without a trusted due date
+                // remain filterable by their real invoice date instead of disappearing.
+                const date = getDebtFilterDate(row);
                 const dateValid = IsoCivilDate.isValidIsoDate(date);
                 const dateMatch = (!from || (dateValid && date >= from)) && (!to || (dateValid && date <= to));
                 const customerMatch = !customerId || String(row.customer_party_id) === String(customerId);
@@ -2770,10 +2789,13 @@
 
             showLoading(true);
             try {
-                const result = await apiCall('getCustomerDebts', {
-                    start_date: from || null,
-                    end_date: to || null
-                });
+                // The general debt screen applies all selected filters to the complete
+                // station-scoped SQLite result. Only the dashboard maturity drill-down
+                // constrains the native query to its due-date window.
+                const nativeDateFilter = dueInvoicesDrilldownActive
+                    ? { start_date: from || null, end_date: to || null }
+                    : { start_date: null, end_date: null };
+                const result = await apiCall('getCustomerDebts', nativeDateFilter);
                 if (!result.success) throw new Error(result.error || 'فشل تحميل ديون العملاء من SQLite');
                 const rows = Array.isArray(result.data) ? result.data : [];
                 allDebtsData = rows.map(normalizeDebtRow);
@@ -3001,12 +3023,14 @@ function updateDebtViewButtons() {
             let current = 0,
                 overdue = 0,
                 doubtful = 0,
-                partial = 0;
+                partial = 0,
+                undated = 0;
             data.forEach(item => {
                 if (item.status === 'current') current++;
                 else if (item.status === 'overdue') overdue++;
                 else if (item.status === 'doubtful') doubtful++;
                 else if (item.status === 'partial') partial++;
+                else if (item.status === 'undated') undated++;
             });
 
             const ctx1 = document.getElementById('statusChart').getContext('2d');
@@ -3014,10 +3038,10 @@ function updateDebtViewButtons() {
             statusChart = new Chart(ctx1, {
                 type: 'doughnut',
                 data: {
-                    labels: ['غير متأخر', 'متأخر', 'مشكوك في تحصيله', 'مدفوع جزئياً'],
+                    labels: ['غير متأخر', 'متأخر', 'مشكوك في تحصيله', 'مدفوع جزئياً', 'غير محدد الاستحقاق'],
                     datasets: [{
-                        data: [current, overdue, doubtful, partial],
-                        backgroundColor: ['#10b981', '#ef4444', '#be185d', '#f59e0b'],
+                        data: [current, overdue, doubtful, partial, undated],
+                        backgroundColor: ['#10b981', '#ef4444', '#be185d', '#f59e0b', '#64748b'],
                         borderColor: 'transparent',
                         borderWidth: 0
                     }]
@@ -4088,7 +4112,7 @@ async function loadCustomerDebtSettings() {
             const rawView=String(read(0,'table')), rawStatus=String(read(1,'')), rawDays=finiteNumber(read(2,10),10), rawReport=String(read(3,'balances')), rawHighlight=String(read(4,'1'));
             debtScreenSettings={
                 defaultView:['table','cards','tree'].indexOf(rawView)>=0?rawView:'table',
-                defaultStatus:['','current','overdue','doubtful','partial'].indexOf(rawStatus)>=0?rawStatus:'',
+                defaultStatus:['','current','undated','overdue','doubtful','partial'].indexOf(rawStatus)>=0?rawStatus:'',
                 dueSoonDays:Math.max(1,Math.min(365,Math.round(rawDays||10))),
                 defaultReport:['balances','overdue','doubtful','aging','customers','invoices','payments','statement'].indexOf(rawReport)>=0?rawReport:'balances',
                 highlightOverdue:rawHighlight!=='0'
@@ -4107,7 +4131,7 @@ async function loadCustomerDebtSettings() {
             const report=document.getElementById('debtSettingDefaultReport').value;
             const highlight=document.getElementById('debtSettingHighlightOverdue').checked?'1':'0';
             const feedback=document.getElementById('debtSettingsFeedback');
-            if(['table','cards','tree'].indexOf(view)<0||['','current','overdue','doubtful','partial'].indexOf(status)<0||
+            if(['table','cards','tree'].indexOf(view)<0||['','current','undated','overdue','doubtful','partial'].indexOf(status)<0||
                !Number.isInteger(days)||days<1||days>365||
                ['balances','overdue','doubtful','aging','customers','invoices','payments','statement'].indexOf(report)<0){
                 if(feedback){feedback.hidden=false;feedback.textContent='تحقق من القيم؛ عدد الأيام يجب أن يكون عدداً صحيحاً من 1 إلى 365.';feedback.style.color='var(--danger)';}return;
@@ -4131,7 +4155,7 @@ async function loadCustomerDebtSettings() {
             loadCustomerDebtSettings().then(function(value){
                 body.innerHTML='<div class="report-workspace"><section class="report-panel"><div class="report-panel-title"><i class="fas fa-sliders-h"></i> تفضيلات شاشة ديون العملاء</div><div class="debt-settings-stack">'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">طريقة العرض الافتراضية</span><span class="debt-setting-desc">جدول أو بطاقات أو شجرة مجمعة حسب العميل.</span></div><select id="debtSettingDefaultView"><option value="table">جدول</option><option value="cards">بطاقات</option><option value="tree">شجرة</option></select></div>'+
-                    '<div class="debt-setting-row"><div><span class="debt-setting-label">حالة الديون الافتراضية</span><span class="debt-setting-desc">فلتر اختياري عند فتح الشاشة، ويمكن تغييره من شريط الفلاتر.</span></div><select id="debtSettingDefaultStatus"><option value="">جميع الحالات</option><option value="current">غير متأخر</option><option value="overdue">متأخر</option><option value="doubtful">مشكوك في تحصيله</option><option value="partial">مدفوع جزئياً</option></select></div>'+
+                    '<div class="debt-setting-row"><div><span class="debt-setting-label">حالة الديون الافتراضية</span><span class="debt-setting-desc">فلتر اختياري عند فتح الشاشة، ويمكن تغييره من شريط الفلاتر.</span></div><select id="debtSettingDefaultStatus"><option value="">جميع الحالات</option><option value="current">غير متأخر</option><option value="undated">غير محدد الاستحقاق</option><option value="overdue">متأخر</option><option value="doubtful">مشكوك في تحصيله</option><option value="partial">مدفوع جزئياً</option></select></div>'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">نافذة تذكير الاستحقاق بالأيام</span><span class="debt-setting-desc">نطاق قائمة تنبيهات الديون القريبة في هذه الشاشة.</span></div><input id="debtSettingDueDays" type="number" min="1" max="365" step="1" value="'+value.dueSoonDays+'"></div>'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">التقرير الافتراضي</span><span class="debt-setting-desc">التقرير الذي يظهر أولاً عند فتح التقارير.</span></div><select id="debtSettingDefaultReport"><option value="balances">أرصدة ديون العملاء</option><option value="overdue">الديون المتأخرة</option><option value="doubtful">الديون المشكوك في تحصيلها</option><option value="aging">أعمار الديون</option><option value="customers">ملخص حسب العميل</option><option value="invoices">الفواتير ذات الرصيد المتبقي</option><option value="payments">عمليات التحصيل والتسديد</option><option value="statement">كشف حركة عميل</option></select></div>'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">إبراز الديون المتأخرة</span><span class="debt-setting-desc">تنسيق تحذيري للديون المتأخرة في عرض البطاقات والشجرة.</span></div><label class="debt-setting-check"><input id="debtSettingHighlightOverdue" type="checkbox" '+(value.highlightOverdue?'checked':'')+'> تفعيل الإبراز</label></div>'+
@@ -4261,10 +4285,10 @@ async function loadCustomerDebtSettings() {
                 document.getElementById('filterCustomer').value = '';
                 document.getElementById('filterStatus').value = '';
             } else {
-                const monthAgo = new Date();
-                monthAgo.setDate(monthAgo.getDate() - 30);
-                document.getElementById('filterDateFrom').value = businessDayDate(monthAgo);
-                document.getElementById('filterDateTo').value = businessDayDate(today);
+                // Start with the complete debt ledger. A default maturity window hides
+                // historical invoices whose due dates predate the trusted-date policy.
+                document.getElementById('filterDateFrom').value = '';
+                document.getElementById('filterDateTo').value = '';
             }
 
             loadDropdowns();
