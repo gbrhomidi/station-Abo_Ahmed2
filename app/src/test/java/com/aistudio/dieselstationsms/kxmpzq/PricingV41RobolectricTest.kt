@@ -461,46 +461,175 @@ class PricingV41RobolectricTest {
     }
 
     /**
-     * SQLite refuses DROP COLUMN while an index still mentions that column.
-     * Historical fixtures must remove those dependent indexes first, just as a
-     * real schema downgrade/rebuild would, instead of making the test depend on
-     * whichever indexes a fresh schema happened to create.
+     * Rebuilds a current table into a historical test-fixture shape.
+     *
+     * SQLite DROP COLUMN support and its restrictions vary across Android/Robolectric
+     * SQLite builds. Rebuilding from sqlite_master keeps this migration test portable
+     * while preserving the existing rows, table constraints, unrelated indexes,
+     * triggers, and AUTOINCREMENT state. Objects that depend on the removed column
+     * are intentionally omitted because they did not exist in the historical schema.
      */
-    private fun dropColumnForHistoricalFixture(db: android.database.sqlite.SQLiteDatabase, table: String, column: String) {
-        val dependentIndexes = db.rawQuery("PRAGMA index_list(`$table`)", null).use { cursor ->
-            buildList {
-                while (cursor.moveToNext()) {
-                    val name = cursor.getString(cursor.getColumnIndexOrThrow("name"))
-                    val sql = db.rawQuery(
-                        "SELECT sql FROM sqlite_master WHERE type='index' AND name=?",
-                        arrayOf(name)
-                    ).use { definition -> if (definition.moveToFirst()) definition.getString(0).orEmpty() else "" }
-                    if (sql.contains(column, ignoreCase = true)) add(name)
+    private fun dropColumnForHistoricalFixture(
+        db: android.database.sqlite.SQLiteDatabase,
+        table: String,
+        column: String
+    ) {
+        fun quoteIdentifier(identifier: String): String =
+            "`\u0024{identifier.replace("`", "``")}`"
+
+        fun columnsOf(tableName: String): List<String> =
+            db.rawQuery("PRAGMA table_info(${quoteIdentifier(tableName)})", null).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
                 }
             }
+
+        val originalColumns = columnsOf(table)
+        if (column !in originalColumns) return
+
+        val createSql = db.rawQuery(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+            arrayOf(table)
+        ).use { cursor ->
+            check(cursor.moveToFirst()) { "Missing CREATE TABLE SQL for historical fixture table $table" }
+            cursor.getString(0)
         }
-        dependentIndexes.forEach { db.execSQL("DROP INDEX IF EXISTS `${it.replace("`", "``")}`") }
-        val present = db.rawQuery("PRAGMA table_info(`$table`)", null).use { cursor ->
-            generateSequence { if (cursor.moveToNext()) cursor.getString(cursor.getColumnIndexOrThrow("name")) else null }
-                .any { it == column }
-        }
-        if (present) {
-            try {
-                db.execSQL("ALTER TABLE `$table` DROP COLUMN `$column`")
-            } catch (error: android.database.sqlite.SQLiteException) {
-                val indexes = db.rawQuery("PRAGMA index_list(`$table`)", null).use { cursor ->
-                    buildList {
-                        while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+
+        val opening = createSql.indexOf('(')
+        check(opening >= 0) { "Invalid CREATE TABLE SQL for $table" }
+
+        // Split the top-level column/constraint list without splitting commas inside
+        // type declarations, CHECK expressions, DEFAULT values, or quoted identifiers.
+        val definitions = mutableListOf<String>()
+        var depth = 1
+        var quote: Char? = null
+        var segmentStart = opening + 1
+        var closing = -1
+        var index = opening + 1
+        while (index < createSql.length) {
+            val ch = createSql[index]
+            if (quote != null) {
+                if (quote == ']' && ch == ']') {
+                    quote = null
+                } else if (quote != ']' && ch == quote) {
+                    if (index + 1 < createSql.length && createSql[index + 1] == quote) {
+                        index++
+                    } else {
+                        quote = null
                     }
                 }
-                val objects = db.rawQuery(
-                    "SELECT type || ':' || name || ':' || COALESCE(sql,'') FROM sqlite_master WHERE sql LIKE ?",
-                    arrayOf("%$column%")
-                ).use { cursor ->
-                    buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+            } else {
+                when (ch) {
+                    '\'', '"', '`' -> quote = ch
+                    '[' -> quote = ']'
+                    '(' -> depth++
+                    ')' -> {
+                        depth--
+                        if (depth == 0) {
+                            definitions += createSql.substring(segmentStart, index).trim()
+                            closing = index
+                            break
+                        }
+                    }
+                    ',' -> if (depth == 1) {
+                        definitions += createSql.substring(segmentStart, index).trim()
+                        segmentStart = index + 1
+                    }
                 }
-                throw AssertionError("تعذر تجهيز Fixture V40 بإسقاط $table.$column؛ الفهارس المتبقية=$indexes؛ objects=$objects", error)
+            }
+            index++
+        }
+        check(closing > opening && definitions.isNotEmpty()) { "Could not parse CREATE TABLE body for $table" }
+
+        fun definedColumnName(definition: String): String? {
+            val value = definition.trimStart()
+            if (value.isEmpty()) return null
+            val firstWord = value.takeWhile { !it.isWhitespace() && it != '(' }
+            if (firstWord.equals("CONSTRAINT", true) ||
+                firstWord.equals("PRIMARY", true) ||
+                firstWord.equals("UNIQUE", true) ||
+                firstWord.equals("CHECK", true) ||
+                firstWord.equals("FOREIGN", true)
+            ) return null
+
+            return when (value.first()) {
+                '"', '`' -> value.drop(1).takeWhile { it != value.first() }
+                '[' -> value.drop(1).takeWhile { it != ']' }
+                else -> firstWord
             }
         }
+
+        val retainedDefinitions = definitions.filterNot {
+            definedColumnName(it)?.equals(column, ignoreCase = true) == true
+        }
+        check(retainedDefinitions.size < definitions.size) {
+            "Column $table.$column was reported by PRAGMA table_info but not found in CREATE TABLE SQL"
+        }
+
+        val temporaryTable = "${table}__historical_fixture"
+        check(db.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            arrayOf(temporaryTable)
+        ).use { it.moveToFirst() }.not()) { "Temporary fixture table already exists: $temporaryTable" }
+
+        val prefix = createSql.substring(0, opening)
+        val tablePrefixPattern = Regex(
+            """(?i)^(CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?)(?:`|")?${Regex.escape(table)}(?:`|")?\\s*$"""
+        )
+        val prefixMatch = tablePrefixPattern.find(prefix)
+            ?: error("Could not safely replace table name in CREATE TABLE SQL for $table")
+        val temporaryPrefix = prefixMatch.groupValues[1] + quoteIdentifier(temporaryTable)
+        val historicalCreateSql = temporaryPrefix +
+            "(" + retainedDefinitions.joinToString(", ") + ")" +
+            createSql.substring(closing + 1)
+
+        val dependentColumn = Regex(
+            "(?i)(?<![A-Za-z0-9_])${Regex.escape(column)}(?![A-Za-z0-9_])"
+        )
+        val schemaObjects = db.rawQuery(
+            """SELECT type, sql FROM sqlite_master
+               WHERE tbl_name=? AND type IN ('index','trigger') AND sql IS NOT NULL
+               ORDER BY CASE type WHEN 'index' THEN 0 ELSE 1 END, name""".trimIndent(),
+            arrayOf(table)
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    val sql = cursor.getString(1)
+                    if (!dependentColumn.containsMatchIn(sql)) add(sql)
+                }
+            }
+        }
+
+        check(!db.inTransaction()) { "Historical fixture rebuild must start outside a SQLite transaction" }
+        val foreignKeysWereEnabled = db.rawQuery("PRAGMA foreign_keys", null).use {
+            it.moveToFirst() && it.getInt(0) != 0
+        }
+        if (foreignKeysWereEnabled) db.setForeignKeyConstraintsEnabled(false)
+
+        try {
+            db.beginTransaction()
+            try {
+                db.execSQL(historicalCreateSql)
+                val rebuiltColumns = columnsOf(temporaryTable).toSet()
+                val copyColumns = originalColumns.filter { it in rebuiltColumns }
+                check(copyColumns.isNotEmpty()) { "No shared columns remain while rebuilding $table" }
+                val columnList = copyColumns.joinToString(", ") { quoteIdentifier(it) }
+                db.execSQL(
+                    "INSERT INTO ${quoteIdentifier(temporaryTable)} ($columnList) " +
+                        "SELECT $columnList FROM ${quoteIdentifier(table)}"
+                )
+                db.execSQL("DROP TABLE ${quoteIdentifier(table)}")
+                db.execSQL(
+                    "ALTER TABLE ${quoteIdentifier(temporaryTable)} RENAME TO ${quoteIdentifier(table)}"
+                )
+                schemaObjects.forEach(db::execSQL)
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+        } finally {
+            if (foreignKeysWereEnabled) db.setForeignKeyConstraintsEnabled(true)
+        }
     }
+}
 }
