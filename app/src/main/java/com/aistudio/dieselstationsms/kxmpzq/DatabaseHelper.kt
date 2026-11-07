@@ -10665,10 +10665,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val pageArgs = args.toMutableList().apply { add(limit.toString()); add(offset.toString()) }
         val rows = db.rawQuery("""SELECT fs.id AS fuel_sale_id, fs.sale_id, s.sale_code, s.invoice_number, fs.shift_id, fs.pump_id, fs.fuel_type_id,
                     COALESCE(f.fuel_name, f.fuel_name_ar, '') AS fuel_name,
-                    MAX(0, fs.quantity - COALESCE((SELECT SUM(a.quantity) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.adjustment_type IN ('return','damage') AND a.status='posted'),0)) AS quantity,
-                    fs.quantity AS original_quantity, fs.price_per_liter,
-                    MAX(0, fs.total_amount - COALESCE((SELECT SUM(a.amount) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.status='posted'),0)) AS total_amount,
-                    fs.total_amount AS original_total_amount,
+                    COALESCE(fs.quantity,0) AS quantity,
+                    COALESCE(fs.quantity,0) + COALESCE((SELECT SUM(a.quantity) FROM fuel_sale_adjustments a
+                        WHERE a.sale_id=fs.sale_id AND a.station_id=fs.station_id
+                          AND a.adjustment_type IN ('return','damage') AND a.status='posted'),0) AS original_quantity,
+                    fs.price_per_liter,
+                    COALESCE(fs.total_amount,0) AS total_amount,
+                    COALESCE(fs.total_amount,0) + COALESCE((SELECT SUM(a.amount) FROM fuel_sale_adjustments a
+                        WHERE a.sale_id=fs.sale_id AND a.station_id=fs.station_id AND a.status='posted'),0) AS original_total_amount,
                     CASE
                         WHEN COALESCE(fs.gross_quantity,0)>0 THEN fs.gross_quantity
                         WHEN COALESCE(fs.delivery_fee_mode,'')='deduct_from_sales'
@@ -10687,8 +10691,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     COALESCE(fs.delivery_location,'') AS delivery_location,
                     COALESCE(fs.cash_customer_name,'') AS cash_customer_name,
                     COALESCE(fs.delivery_fee_display_total,fs.total_amount) AS delivery_fee_display_total,
-                    COALESCE((SELECT SUM(CASE WHEN a.adjustment_type='return' THEN a.quantity ELSE 0 END) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.status='posted'),0) AS returned_quantity,
-                    COALESCE((SELECT SUM(CASE WHEN a.adjustment_type='damage' THEN a.quantity ELSE 0 END) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.status='posted'),0) AS damaged_quantity,
+                    COALESCE((SELECT SUM(CASE WHEN a.adjustment_type='return' THEN a.quantity ELSE 0 END) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.station_id=fs.station_id AND a.status='posted'),0) AS returned_quantity,
+                    COALESCE((SELECT SUM(CASE WHEN a.adjustment_type='damage' THEN a.quantity ELSE 0 END) FROM fuel_sale_adjustments a WHERE a.sale_id=fs.sale_id AND a.station_id=fs.station_id AND a.status='posted'),0) AS damaged_quantity,
                     fs.payment_method, fs.customer_id, fs.vehicle_plate, fs.sale_date, fs.sale_time, fs.notes, fs.created_at
                     FROM fuel_sales fs JOIN sales_transactions s ON s.id = fs.sale_id LEFT JOIN fuel_types f ON f.id = fs.fuel_type_id
                     WHERE $whereSql ORDER BY $sortColumn $direction LIMIT ? OFFSET ?""", pageArgs.toTypedArray()).use { cursorToJsonArray(it) }
@@ -18114,6 +18118,21 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             arrayOf(stationId.toString(), today, today)
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("due_invoices", cursor.getInt(0))
+        }
+
+        // Fuel returns and damage use the posted adjustment ledger and the current business date.
+        db.rawQuery(
+            """SELECT
+                   COALESCE(SUM(CASE WHEN adjustment_type='return' THEN quantity ELSE 0 END),0),
+                   COALESCE(SUM(CASE WHEN adjustment_type='damage' THEN quantity ELSE 0 END),0)
+               FROM fuel_sale_adjustments
+               WHERE station_id=? AND status='posted' AND date(created_at)=date(?)""",
+            arrayOf(stationId.toString(), today)
+        ).use { cursor ->
+            if (cursor.moveToFirst()) {
+                stats.put("returned_fuel_today", cursor.getDouble(0))
+                stats.put("damaged_fuel_today", cursor.getDouble(1))
+            }
         }
 
         // 7. كمية المنتجات المرتجعة اليوم في المحطة
@@ -28014,7 +28033,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val sale = db.rawQuery("""SELECT s.id,s.shift_id,s.customer_party_id,s.net_amount,s.paid_amount,s.remaining_amount,s.payment_method,s.status,
                                                 fs.id AS fuel_sale_id,fs.quantity,fs.total_amount,fs.pump_id
                                          FROM sales_transactions s JOIN fuel_sales fs ON fs.sale_id=s.id
-                                         WHERE s.id=? AND s.station_id=? AND s.is_deleted=0 AND fs.is_deleted=0 LIMIT 1""", arrayOf(saleId.toString(), stationId.toString())).use { c ->
+                                         WHERE s.id=? AND s.station_id=? AND s.is_deleted=0 AND fs.is_deleted=0
+                                           AND fs.station_id=? AND (?=0 OR fs.id=?) LIMIT 1""",
+                    arrayOf(saleId.toString(), stationId.toString(), stationId.toString(), fuelSaleId.toString(), fuelSaleId.toString())).use { c ->
                     require(c.moveToFirst()) { "عملية بيع الوقود غير موجودة" }
                     JSONObject().apply {
                         put("shift_id", c.getLong(1)); put("customer_party_id", if(c.isNull(2)) JSONObject.NULL else c.getLong(2))
@@ -28023,10 +28044,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("quantity", c.getDouble(9)); put("total_amount", c.getDouble(10)); put("pump_id", if(c.isNull(11)) JSONObject.NULL else c.getLong(11))
                     }
                 }
-                val adjustedBefore = db.rawQuery("SELECT COALESCE(SUM(quantity),0) FROM fuel_sale_adjustments WHERE sale_id=? AND status='posted'", arrayOf(saleId.toString())).use { c -> if(c.moveToFirst()) c.getDouble(0) else 0.0 }
-                val available = (sale.getDouble("quantity") - adjustedBefore).coerceAtLeast(0.0)
-                require(qty <= available + 1e-9) { "الكمية تتجاوز الكمية المتاحة للتصحيح: $available" }
-                val amount = (sale.getDouble("total_amount") * (qty / sale.getDouble("quantity"))).coerceAtLeast(0.0)
+                // fuel_sales.quantity and total_amount are reduced in this same transaction
+                // after every posted adjustment. Subtracting the adjustment ledger again
+                // double-counts prior returns and incorrectly rejects later partial returns.
+                val available = sale.getDouble("quantity").coerceAtLeast(0.0)
+                val saleQuantity = sale.getDouble("quantity")
+                val saleAmount = sale.getDouble("total_amount")
+                require(saleQuantity > 1e-9 && available > 1e-9 && qty <= available + 1e-9) {
+                    "الكمية تتجاوز الكمية المتاحة للتصحيح: $available"
+                }
+                require(saleAmount.isFinite() && saleAmount > 0.0) { "قيمة البيع المتبقية غير صالحة" }
+                val amount = (saleAmount * (qty / saleQuantity)).coerceIn(0.0, saleAmount)
                 require(amount > 0.0) { "قيمة التصحيح غير صالحة" }
                 var tankId = 0L
                 if (type == "return") {

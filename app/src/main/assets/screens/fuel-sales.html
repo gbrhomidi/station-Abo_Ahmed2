@@ -4382,7 +4382,7 @@ async function populateFuelAdjustmentSaleSelect() {
             const date = String(r.sale_date || '').trim();
             const time = String(r.sale_time || '').trim();
             const fuel = r.fuel_name_ar || r.fuel_name || ('وقود #' + (r.fuel_type_id || ''));
-            const qty = numeric(r.quantity).toFixed(2);
+            const qty = numeric(r.original_quantity ?? r.quantity).toFixed(2);
             const dt = [date, time].filter(Boolean).join(' ');
             return '<option value="' + saleId + '">#' + saleId + ' — ' + esc(dt) + ' — ' + esc(fuel) + ' — ' + qty + ' لتر</option>';
         }).join('');
@@ -4440,8 +4440,8 @@ async function saveFuelAdjustment() {
         showAdvancedNotification('الكمية يجب أن تكون أكبر من صفر', 'warning', 'تنبيه');
         return;
     }
-    if (available > 0 && qty > available + 1e-9) {
-        showAdvancedNotification('الكمية تتجاوز المتاح (' + available.toFixed(2) + ' لتر)', 'warning', 'تنبيه');
+    if (!(available > 0) || qty > available + 1e-9) {
+        showAdvancedNotification('الكمية تتجاوز المتاح (' + available.toFixed(2) + ' لتر) أو لا توجد كمية متبقية', 'warning', 'تنبيه');
         return;
     }
     if (!reason) {
@@ -4454,7 +4454,7 @@ async function saveFuelAdjustment() {
     try {
         const payload = {
             sale_id: saleId,
-            fuel_sale_id: saleId,
+            fuel_sale_id: Number((fuelAdjustmentRow && fuelAdjustmentRow.fuel_sale_id) || 0),
             adjustment_type: $('fuelAdjustmentType').value || 'return',
             quantity: qty,
             reason: reason,

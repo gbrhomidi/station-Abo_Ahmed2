@@ -18,6 +18,9 @@ function verifyStaticWorkflowContracts() {
     expect(source.includes('original_quantity'), 'واجهة الوقود لا تعرض الكمية الأصلية قبل التصحيحات');
     expect(source.includes('returned_quantity'), 'واجهة الوقود لا تعرض كمية المرتجع');
     expect(source.includes('damaged_quantity'), 'واجهة الوقود لا تعرض كمية التالف');
+    expect(source.includes('fuel_sale_id: Number((fuelAdjustmentRow && fuelAdjustmentRow.fuel_sale_id) || 0)'), 'مسار المرتجع لا يرسل معرف سجل الوقود الصحيح');
+    expect(source.includes('original_quantity ?? r.quantity'), 'قائمة المرتجعات لا تعرض الكمية الأصلية المباعة');
+    expect(source.includes('!(available > 0)'), 'واجهة المرتجع لا تمنع الإرجاع بعد نفاد الرصيد');
     expect(source.includes('showDeliveryAction(saleId)'), 'زر التوصيل لا يتفعل بعد الحفظ الفعلي');
     expect(/window\.location\.href\s*=\s*'deliveries\.html\?sale_id='\s*\+\s*encodeURIComponent\(id\)/.test(source), 'زر توصيل الطلب لا يستدعي شاشة deliveries.html');
 

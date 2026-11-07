@@ -849,7 +849,167 @@ class FuelSalesDeliveryFeeRobolectricTest {
         assertEquals(0, isolated.getJSONArray("rows").length())
     }
 
-    private fun createAndPersistSale(mode: String, requestedFee: Double, location: String): SavedSale {
+    @Test
+    fun sequentialPartialFuelReturnsRestoreRemainingQuantityAndPopulateDashboard() {
+        assertTrue("The return test requires an active pump connected to a station tank", pumpId > 0L)
+        val tankId = scalarLong(
+            "SELECT tank_id FROM pumps WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'",
+            arrayOf(pumpId.toString(), stationId.toString())
+        )
+        val tankBeforeSale = scalarDouble(
+            "SELECT current_quantity FROM tanks WHERE id=? AND station_id=? AND is_deleted=0",
+            arrayOf(tankId.toString(), stationId.toString())
+        )
+        val customerId = ensureTestCustomer()
+        val saved = createAndPersistSale(
+            DeliveryFeeAccounting.EXEMPT, 0.0,
+            "موقع اختبار مرتجعات الوقود " + UUID.randomUUID().toString().take(8),
+            paymentMethod = "credit",
+            customerId = customerId
+        )
+        val originalQuantity = saved.grossQuantity
+        val originalFuelAmount = saved.fuelAmount
+        assertEquals(10.0, originalQuantity, 0.000001)
+        assertEquals(originalQuantity, saved.fuelQuantity, 0.000001)
+
+        fun postReturn(quantity: Double, label: String): JSONObject =
+            helper.processFuelSaleAdjustment(JSONObject().apply {
+                put("station_id", stationId)
+                put("created_by", userId)
+                put("sale_id", saved.parentSaleId)
+                put("fuel_sale_id", saved.fuelSaleId)
+                put("adjustment_type", "return")
+                put("quantity", quantity)
+                put("reason", label)
+                put("idempotency_key", "fuel-return-test-" + UUID.randomUUID())
+            })
+
+        fun fuelRow(): JSONObject {
+            val rows = helper.getFuelSalesPage(JSONObject().put("limit", 100), stationId)
+                .getJSONArray("rows")
+            return (0 until rows.length()).map { rows.getJSONObject(it) }
+                .first { it.optLong("sale_id") == saved.parentSaleId }
+        }
+
+        val first = postReturn(4.0, "إرجاع جزئي أول")
+        assertTrue("The first partial return must be committed: $first", first.optBoolean("success"))
+        var row = fuelRow()
+        assertEquals(6.0, row.getDouble("quantity"), 0.000001)
+        assertEquals(10.0, row.getDouble("original_quantity"), 0.000001)
+        assertEquals(4.0, row.getDouble("returned_quantity"), 0.000001)
+        assertEquals(originalFuelAmount * 0.6, row.getDouble("total_amount"), 0.01)
+        assertEquals(originalFuelAmount, row.getDouble("original_total_amount"), 0.01)
+
+        // The ledger already includes the previous return; the mutation must use
+        // fuel_sales.quantity's live remainder, rather than deducting that ledger again.
+        val second = postReturn(3.0, "إرجاع جزئي ثان")
+        assertTrue("The second partial return against six remaining litres must succeed: $second",
+            second.optBoolean("success"))
+        row = fuelRow()
+        assertEquals(3.0, row.getDouble("quantity"), 0.000001)
+        assertEquals(10.0, row.getDouble("original_quantity"), 0.000001)
+        assertEquals(7.0, row.getDouble("returned_quantity"), 0.000001)
+
+        // Returning the final three litres is the full return of the original sale.
+        val finalReturn = postReturn(3.0, "إرجاع كامل للكمية المتبقية")
+        assertTrue("The final full-balance return must succeed: $finalReturn",
+            finalReturn.optBoolean("success"))
+        row = fuelRow()
+        assertEquals(0.0, row.getDouble("quantity"), 0.000001)
+        assertEquals(10.0, row.getDouble("original_quantity"), 0.000001)
+        assertEquals(10.0, row.getDouble("returned_quantity"), 0.000001)
+        assertEquals(0.0, row.getDouble("total_amount"), 0.01)
+        assertEquals(originalFuelAmount, row.getDouble("original_total_amount"), 0.01)
+
+        assertEquals(3L, scalarLong(
+            """SELECT COUNT(*) FROM fuel_sale_adjustments
+               WHERE sale_id=? AND station_id=? AND adjustment_type='return' AND status='posted'""",
+            arrayOf(saved.parentSaleId.toString(), stationId.toString())
+        ))
+        assertEquals(originalQuantity, scalarDouble(
+            """SELECT COALESCE(SUM(quantity),0) FROM fuel_sale_adjustments
+               WHERE sale_id=? AND station_id=? AND adjustment_type='return' AND status='posted'""",
+            arrayOf(saved.parentSaleId.toString(), stationId.toString())
+        ), 0.000001)
+        assertEquals(tankBeforeSale, scalarDouble(
+            "SELECT current_quantity FROM tanks WHERE id=? AND station_id=?",
+            arrayOf(tankId.toString(), stationId.toString())
+        ), 0.01)
+        assertEquals(0.0, scalarDouble(
+            "SELECT current_balance FROM parties WHERE id=? AND station_id=?",
+            arrayOf(customerId.toString(), stationId.toString())
+        ), 0.01)
+
+        val parentState = db.rawQuery(
+            "SELECT liters,net_amount,remaining_amount,status FROM sales_transactions WHERE id=? AND station_id=?",
+            arrayOf(saved.parentSaleId.toString(), stationId.toString())
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            listOf(cursor.getDouble(0), cursor.getDouble(1), cursor.getDouble(2)) to cursor.getString(3)
+        }
+        assertEquals(0.0, parentState.first[0], 0.000001)
+        assertEquals(0.0, parentState.first[1], 0.01)
+        assertEquals(0.0, parentState.first[2], 0.01)
+        assertEquals("refunded", parentState.second)
+
+        val dashboard = helper.getDashboardStatsForDate(
+            stationId, JSONObject(), BusinessDay.currentDate()
+        )
+        assertEquals("Fuel returns must populate main.html's litre KPI",
+            10.0, dashboard.getDouble("returned_fuel_today"), 0.000001)
+        assertEquals("Returns must not be counted as fuel damage",
+            0.0, dashboard.getDouble("damaged_fuel_today"), 0.000001)
+
+        var overReturnRejected = false
+        try {
+            postReturn(0.01, "محاولة إرجاع تتجاوز الكمية المتاحة")
+        } catch (_: IllegalArgumentException) {
+            overReturnRejected = true
+        }
+        assertTrue("SQLite must reject another return after the complete balance is exhausted",
+            overReturnRejected)
+        assertEquals(3L, scalarLong(
+            """SELECT COUNT(*) FROM fuel_sale_adjustments
+               WHERE sale_id=? AND station_id=? AND adjustment_type='return' AND status='posted'""",
+            arrayOf(saved.parentSaleId.toString(), stationId.toString())
+        ))
+    }
+
+    private fun ensureTestCustomer(): Long {
+        val partyTypeId = scalarLong(
+            """SELECT id FROM party_types
+               WHERE type_code IN ('INDIVIDUAL','COMPANY','GOVERNMENT','TRANSPORT','CONTRACTOR')
+                 AND is_deleted=0 AND is_active=1
+               ORDER BY CASE type_code WHEN 'INDIVIDUAL' THEN 0 WHEN 'COMPANY' THEN 1 ELSE 2 END, id
+               LIMIT 1"""
+        )
+        val suffix = UUID.randomUUID().toString().replace("-", "").take(10)
+        return db.insertOrThrow("parties", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("party_code", "FUEL-RETURN-$suffix")
+            put("party_type_id", partyTypeId)
+            put("station_id", stationId)
+            put("legal_name", "Fuel Return Regression $suffix")
+            put("commercial_name", "Fuel Return Regression $suffix")
+            put("commercial_name_ar", "عميل اختبار المرتجعات $suffix")
+            put("credit_limit", 0.0)
+            put("current_balance", 0.0)
+            put("total_due", 0.0)
+            put("is_active", 1)
+            put("is_deleted", 0)
+            put("created_by", userId)
+            put("created_at", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()))
+            put("updated_at", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()))
+        })
+    }
+
+    private fun createAndPersistSale(
+        mode: String,
+        requestedFee: Double,
+        location: String,
+        paymentMethod: String = "cash",
+        customerId: Long = 0L
+    ): SavedSale {
         val unitPrice = scalarDouble(
             "SELECT default_sale_price FROM fuel_types WHERE id=? AND is_deleted=0",
             arrayOf(fuelTypeId.toString())
@@ -861,7 +1021,7 @@ class FuelSalesDeliveryFeeRobolectricTest {
         val fuelAmount = round((grossAmount - if (mode == DeliveryFeeAccounting.DEDUCT_FROM_SALES) feeAmount else 0.0) * 100.0) / 100.0
         val fuelQuantity = if (mode == DeliveryFeeAccounting.DEDUCT_FROM_SALES) fuelAmount / unitPrice else grossQuantity
         val invoiceTotal = grossAmount + if (mode == DeliveryFeeAccounting.ADD_TO_SALES || mode == DeliveryFeeAccounting.DRIVER) feeAmount else 0.0
-        val input = buildFuelSaleInput(mode, feeAmount, location).apply {
+        val input = buildFuelSaleInput(mode, feeAmount, location, paymentMethod, customerId).apply {
             put("quantity", fuelQuantity)
             put("price_per_liter", unitPrice)
             put("total_amount", fuelAmount)
@@ -880,7 +1040,7 @@ class FuelSalesDeliveryFeeRobolectricTest {
             rawMode = mode,
             location = location,
             cashCustomerName = "",
-            paymentMethod = "cash",
+            paymentMethod = paymentMethod,
             originalQuantity = grossQuantity,
             originalAmount = grossAmount,
             schemaAlreadyEnsured = true
@@ -895,7 +1055,10 @@ class FuelSalesDeliveryFeeRobolectricTest {
         )
     }
 
-    private fun buildFuelSaleInput(mode: String, fee: Double, location: String): JSONObject {
+    private fun buildFuelSaleInput(
+        mode: String, fee: Double, location: String,
+        paymentMethod: String = "cash", customerId: Long = 0L
+    ): JSONObject {
         val now = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
         return JSONObject().apply {
             put("fuel_type_id", fuelTypeId)
@@ -905,7 +1068,8 @@ class FuelSalesDeliveryFeeRobolectricTest {
                 "SELECT default_sale_price FROM fuel_types WHERE id=?",
                 arrayOf(fuelTypeId.toString())
             ))
-            put("payment_method", "cash")
+            put("payment_method", paymentMethod)
+            if (customerId > 0L) put("customer_id", customerId)
             put("delivery_service_fee", fee)
             put("delivery_fee_mode", mode)
             put("delivery_location", location)

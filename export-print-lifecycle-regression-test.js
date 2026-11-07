@@ -23,15 +23,22 @@ const { JSDOM } = require('jsdom');
   runtime.openPrint({ filename: 'acceptance-report', nativePrint: () => JSON.stringify({ success: true }) });
   let overlay = window.document.querySelector('.station-export-backdrop');
   assert(overlay && overlay.classList.contains('show'), 'print sheet should open before submission');
+  assert.equal(window.getComputedStyle(overlay).pointerEvents, 'auto', 'visible export sheet must accept user input');
+  assert.equal(overlay.getAttribute('aria-hidden'), 'false', 'visible export sheet must be exposed to accessibility services');
   window.document.querySelector('.station-export-method').click();
   assert(!overlay.classList.contains('show'), 'successful Android print launch must synchronously dismiss the overlay');
+  assert.equal(window.getComputedStyle(overlay).pointerEvents, 'none', 'closed print sheet must not intercept the source screen');
+  assert.equal(window.getComputedStyle(overlay).visibility, 'hidden', 'closed print sheet must be removed from hit testing');
+  assert.equal(overlay.getAttribute('aria-hidden'), 'true', 'closed print sheet must be hidden from accessibility services');
 
   // Returning from Android Print UI must leave the web page available for another action.
   runtime.openPrint({ filename: 'acceptance-report-2', nativePrint: () => JSON.stringify({ success: true }) });
   overlay = window.document.querySelector('.station-export-backdrop');
   assert(overlay.classList.contains('show'), 'a subsequent print request must remain interactive');
+  assert.equal(window.getComputedStyle(overlay).pointerEvents, 'auto', 'reopened export sheet must accept input');
   window.document.querySelector('.station-export-method').click();
   assert(!overlay.classList.contains('show'), 'subsequent print request must also dismiss its overlay');
+  assert.equal(window.getComputedStyle(overlay).pointerEvents, 'none', 'subsequent print must leave the source page interactive');
 
   const exportBlob = {
     type: 'text/csv',
@@ -53,6 +60,8 @@ const { JSDOM } = require('jsdom');
   await new Promise(resolve => setTimeout(resolve, 0));
   overlay = window.document.querySelector('.station-export-backdrop');
   assert(!overlay.classList.contains('show'), 'successful Android folder export callback must synchronously dismiss its overlay');
+  assert.equal(window.getComputedStyle(overlay).pointerEvents, 'none', 'successful folder export must release source-screen touch input');
+  assert.equal(window.getComputedStyle(overlay).visibility, 'hidden', 'successful folder export must leave no transparent full-screen layer');
 
   const activitySource = fs.readFileSync(path.join(__dirname, 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt'), 'utf8');
   const resultHandler = activitySource.indexOf('private fun handleLaunchedActivityResult');

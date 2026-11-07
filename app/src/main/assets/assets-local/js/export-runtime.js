@@ -42,8 +42,8 @@
         if (state.sheet) return state.sheet;
         const style = document.createElement('style');
         style.textContent = `
-            .station-export-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:2147483000;opacity:0;transition:opacity .2s}
-            .station-export-backdrop.show{opacity:1}
+            .station-export-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:2147483000;opacity:0;pointer-events:none;visibility:hidden;transition:opacity .2s,visibility .2s}
+            .station-export-backdrop.show{opacity:1;pointer-events:auto;visibility:visible}
             .station-export-sheet{position:fixed;left:0;right:0;bottom:0;background:var(--card-bg,#fff);color:var(--text-primary,#17202a);border-radius:22px 22px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.25);padding:18px 16px calc(18px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .25s ease;z-index:2147483001;max-height:82vh;overflow:auto;direction:rtl}
             .station-export-backdrop.show .station-export-sheet{transform:translateY(0)}
             .station-export-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;font-weight:800;font-size:1rem}
@@ -61,6 +61,7 @@
         const backdrop = document.createElement('div');
         backdrop.className = 'station-export-backdrop';
         backdrop.innerHTML = `<div class="station-export-sheet" role="dialog" aria-modal="true" aria-label="خيارات التصدير"><div class="station-export-head"><span><i class="fas fa-file-export"></i> خيارات التصدير والحفظ</span><button class="station-export-close" type="button" aria-label="إغلاق">×</button></div><label class="station-export-section" for="stationExportName">اسم الملف</label><input id="stationExportName" class="station-export-name" type="text" autocomplete="off" spellcheck="false"><div class="station-export-section">الصيغة</div><div class="station-export-options station-export-formats"></div><div class="station-export-section">طريقة الحفظ</div><div class="station-export-options station-export-delivery"></div><div class="station-export-status" aria-live="polite"></div></div>`;
+        backdrop.setAttribute('aria-hidden', 'true');
         document.body.appendChild(backdrop);
         backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
         backdrop.querySelector('.station-export-close').addEventListener('click', close);
@@ -71,6 +72,7 @@
     function close() {
         if (!state.sheet) return;
         state.sheet.classList.remove('show');
+        state.sheet.setAttribute('aria-hidden', 'true');
         state.pending = null; state.expected = null; state.busy = false; state.selectedFormat = null; state.delivery = null; state.requestId++;
     }
 
@@ -104,6 +106,7 @@
             add(deliveryList, 'folder', 'تصدير اختياري', 'فتح مدير التخزين لاختيار أو إنشاء المجلد والمسار', 'fa-folder-open', () => save(state.selectedFormat), 'station-export-method');
         }
         setStatus(options.blob ? 'عدّل الاسم إن رغبت، ثم اختر الصيغة وطريقة الحفظ.' : 'اختر الإجراء المطلوب من القائمة.', '');
+        sheet.setAttribute('aria-hidden', 'false');
         sheet.classList.add('show');
     }
 
