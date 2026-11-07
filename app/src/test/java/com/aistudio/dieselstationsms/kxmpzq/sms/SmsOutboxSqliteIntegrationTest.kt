@@ -116,7 +116,7 @@ class SmsOutboxSqliteIntegrationTest {
         )!!
         val claimed = SmsOutboxRepository.claimNext(database)!!
         assertEquals(queued.messageId, claimed.messageId)
-        SmsOutboxRepository.prepareParts(database, claimed.messageId, claimed.partsCount)
+        SmsOutboxRepository.prepareParts(database, claimed.messageId, claimed.partsCount, claimed.attemptToken)
         assertTrue(
             "The fixture must contain prepared, unsent parts",
             countWhere("sms_outbox_parts", "message_id = ? AND status = 'PENDING'", claimed.messageId) > 0
@@ -452,11 +452,19 @@ class SmsOutboxSqliteIntegrationTest {
     @Test
     fun multipartPartialAcceptanceIsTerminalAndNeverReplaysTheWholeMessage() {
         val queued = SmsOutboxRepository.enqueue(
-            database, "967771234567", "X".repeat(320), dedupeKey = "multipart-partial"
+            database, "967771234567", "Multipart fixture", dedupeKey = "multipart-partial"
         )!!
+        // Isolate the outbox's multipart state machine from SmsManager's provider-specific
+        // divideMessage implementation (which Robolectric API 26 does not emulate reliably).
+        database.writableDatabase.update(
+            "sms_outbox",
+            ContentValues().apply { put("parts_count", 2) },
+            "message_id = ?",
+            arrayOf(queued.messageId)
+        )
         val claimed = SmsOutboxRepository.claimNext(database)!!
         val sending = SmsOutboxRepository.beginTransport(database, claimed)!!
-        assertTrue(sending.partsCount >= 2)
+        assertEquals(2, sending.partsCount)
         SmsOutboxRepository.prepareParts(database, queued.messageId, sending.partsCount, sending.attemptToken)
 
         for (index in 0 until sending.partsCount) {

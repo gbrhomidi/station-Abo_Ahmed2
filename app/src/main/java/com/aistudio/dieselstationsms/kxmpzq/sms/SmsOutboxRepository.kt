@@ -24,7 +24,7 @@ object SmsOutboxRepository {
     fun shouldRetryAfterAttempt(attemptNumber: Int): Boolean =
         attemptNumber in 1 until MAX_ATTEMPTS
 
-    /** attemptCount includes the attempt claimed for this message. */
+    /** attemptCount counts carrier submissions; claimCount counts local leases. */
     data class OutboxMessage(
         val messageId: String,
         val recipient: String,
@@ -328,7 +328,7 @@ object SmsOutboxRepository {
 
     fun markFailed(
         db: DatabaseHelper, messageId: String, code: String, reason: String, retry: Boolean,
-        now: Long = System.currentTimeMillis(), attemptToken: String? = null, jitterMs: Long? = null
+        now: Long = System.currentTimeMillis(), attemptToken: String, jitterMs: Long? = null
     ) {
         val database = db.writableDatabase
         database.beginTransaction()
@@ -342,11 +342,11 @@ object SmsOutboxRepository {
                 database.setTransactionSuccessful()
                 return
             }
-            if (!attemptToken.isNullOrBlank() && current.first != attemptToken) {
+            if (attemptToken.isBlank() || current.first != attemptToken) {
                 database.setTransactionSuccessful()
                 return
             }
-            val token = attemptToken?.takeIf { it.isNotBlank() } ?: current.first
+            val token = attemptToken
             val safeCode = code.filter { it.isLetterOrDigit() || it == '_' || it == '-' }.take(80).ifBlank { "TRANSPORT_FAILURE" }
             val shouldQueue = retry && shouldRetryAfterAttempt(current.second)
             val changed = database.update(
@@ -471,27 +471,43 @@ object SmsOutboxRepository {
         }
     }
 
-    fun prepareParts(db: DatabaseHelper, messageId: String, partsCount: Int, attemptToken: String? = null) {
+    fun prepareParts(
+        db: DatabaseHelper,
+        messageId: String,
+        partsCount: Int,
+        attemptToken: String
+    ) {
         require(partsCount > 0) { "SMS must contain at least one part" }
+        require(attemptToken.isNotBlank()) { "SMS attempt token is required" }
         val database = db.writableDatabase
         database.beginTransaction()
         try {
-            if (!attemptToken.isNullOrBlank()) {
-                val ownsLease = database.rawQuery(
-                    "SELECT 1 FROM sms_outbox WHERE message_id = ? AND attempt_token = ? AND status = 'SENDING' LIMIT 1",
-                    arrayOf(messageId, attemptToken)
-                ).use { it.moveToFirst() }
-                check(ownsLease) { "Cannot prepare SMS parts without the active attempt lease" }
-                for (index in 0 until partsCount) {
-                    database.insertWithOnConflict("sms_outbox_attempt_parts", null, ContentValues().apply {
-                        put("attempt_token", attemptToken); put("message_id", messageId); put("part_index", index)
-                    }, SQLiteDatabase.CONFLICT_IGNORE)
-                }
-            }
+            val ownsLease = database.rawQuery(
+                "SELECT 1 FROM sms_outbox WHERE message_id = ? AND attempt_token = ? AND status = 'SENDING' LIMIT 1",
+                arrayOf(messageId, attemptToken)
+            ).use { it.moveToFirst() }
+            check(ownsLease) { "Cannot prepare SMS parts without the active attempt lease" }
             for (index in 0 until partsCount) {
-                database.insertWithOnConflict("sms_outbox_parts", null, ContentValues().apply {
-                    put("message_id", messageId); put("part_index", index); put("status", "PENDING")
-                }, SQLiteDatabase.CONFLICT_IGNORE)
+                database.insertWithOnConflict(
+                    "sms_outbox_attempt_parts",
+                    null,
+                    ContentValues().apply {
+                        put("attempt_token", attemptToken)
+                        put("message_id", messageId)
+                        put("part_index", index)
+                    },
+                    SQLiteDatabase.CONFLICT_IGNORE
+                )
+                database.insertWithOnConflict(
+                    "sms_outbox_parts",
+                    null,
+                    ContentValues().apply {
+                        put("message_id", messageId)
+                        put("part_index", index)
+                        put("status", "PENDING")
+                    },
+                    SQLiteDatabase.CONFLICT_IGNORE
+                )
             }
             database.setTransactionSuccessful()
         } finally {
@@ -501,9 +517,9 @@ object SmsOutboxRepository {
 
     fun recordPartResult(
         db: DatabaseHelper, messageId: String, partIndex: Int, delivered: Boolean,
-        success: Boolean, resultCode: String, reason: String = "", attemptToken: String? = null
+        success: Boolean, resultCode: String, reason: String = "", attemptToken: String
     ) {
-        val token = attemptToken?.takeIf { it.isNotBlank() } ?: return
+        val token = attemptToken.takeIf { it.isNotBlank() } ?: return
         if (partIndex < 0) return
         val now = System.currentTimeMillis()
         val database = db.writableDatabase
