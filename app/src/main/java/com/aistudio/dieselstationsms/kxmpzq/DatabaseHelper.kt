@@ -28034,7 +28034,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                                                 fs.id AS fuel_sale_id,fs.quantity,fs.total_amount,fs.pump_id
                                          FROM sales_transactions s JOIN fuel_sales fs ON fs.sale_id=s.id
                                          WHERE s.id=? AND s.station_id=? AND s.is_deleted=0 AND fs.is_deleted=0
-                                           AND fs.station_id=? AND (?=0 OR fs.id=?) LIMIT 1""",
+                                           AND fs.station_id=? AND (CAST(? AS INTEGER)=0 OR fs.id=?) LIMIT 1""",
                     arrayOf(saleId.toString(), stationId.toString(), stationId.toString(), fuelSaleId.toString(), fuelSaleId.toString())).use { c ->
                     require(c.moveToFirst()) { "عملية بيع الوقود غير موجودة" }
                     JSONObject().apply {

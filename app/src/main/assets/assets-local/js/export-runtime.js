@@ -266,8 +266,12 @@
         try {
             const blob = await blobForFormat(state.pending.blob, format); const url = URL.createObjectURL(blob);
             const a = document.createElement('a'); a.href = url; a.download = filenameFor(format); document.body.appendChild(a);
-            originalAnchorClick.call(a); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500);
-            state.busy = false; setStatus('تم بدء تنزيل الملف عبر المتصفح.', 'success'); setTimeout(close, 1200);
+            originalAnchorClick.call(a);
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+            // Browser downloads can background the Android Activity and suspend WebView timers.
+            // Close synchronously after dispatch so the full-screen sheet cannot block the page.
+            close();
         } catch (error) { state.busy = false; setStatus(esc(error.message || 'فشل تجهيز التنزيل'), 'error'); }
     }
 

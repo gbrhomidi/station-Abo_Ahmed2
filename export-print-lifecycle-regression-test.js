@@ -63,6 +63,16 @@ const { JSDOM } = require('jsdom');
   assert.equal(window.getComputedStyle(overlay).pointerEvents, 'none', 'successful folder export must release source-screen touch input');
   assert.equal(window.getComputedStyle(overlay).visibility, 'hidden', 'successful folder export must leave no transparent full-screen layer');
 
+  // Browser-triggered downloads can background the Activity before a delayed close timer fires.
+  runtime.openPreparedExport({ filename: 'browser-download.csv', mime: 'text/csv', blob: exportBlob, formats: ['csv'] });
+  overlay = window.document.querySelector('.station-export-backdrop');
+  assert(overlay.classList.contains('show'), 'browser download sheet should open');
+  window.document.querySelector('.station-export-delivery .station-export-option').click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert(!overlay.classList.contains('show'), 'browser download must close the sheet immediately after dispatch');
+  assert.equal(window.getComputedStyle(overlay).pointerEvents, 'none', 'browser download must release all page interactions');
+  assert.equal(window.getComputedStyle(overlay).visibility, 'hidden', 'browser download must leave no transparent touch-blocking layer');
+
   const activitySource = fs.readFileSync(path.join(__dirname, 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt'), 'utf8');
   const resultHandler = activitySource.indexOf('private fun handleLaunchedActivityResult');
   const exportHandlerStart = activitySource.indexOf('if (requestCode == exportFolderPickerRequestCode)', resultHandler);
