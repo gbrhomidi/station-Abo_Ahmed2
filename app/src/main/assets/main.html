@@ -1831,6 +1831,7 @@
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
 </head>
 <body>
+<div id="reportsDataSource" hidden aria-hidden="true"><span>مصدر بيانات التقرير</span></div>
 
     <!-- ============ شاشة التحميل ============ -->
     <div class="loading-overlay" id="loadingOverlay">
@@ -2415,8 +2416,9 @@
             const maxX = Math.max(padding, w - tw - padding);
             const maxY = Math.max(padding, h - th - padding);
 
-            const x = padding + Math.random() * Math.max(0, maxX - padding);
-            const y = padding + Math.random() * Math.max(0, maxY - padding);
+            const phase = (Date.now() / 1000) % 1;
+            const x = padding + phase * Math.max(0, maxX - padding);
+            const y = padding + (1 - phase) * Math.max(0, maxY - padding);
 
             text.style.left = x + 'px';
             text.style.top = y + 'px';

@@ -1385,6 +1385,7 @@
   <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
+<div id="reportsDataSource" hidden aria-hidden="true"><span>مصدر بيانات التقرير</span></div>
 <!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
     <i class="fas fa-arrow-down"></i>
@@ -2254,7 +2255,7 @@
 
     function resetKPIs() {
       $('kpiTotalKPIs').textContent = '0';
-      $('kpiAchievement').textContent = '0%';
+      $('kpiAchievement').textContent = '—';
       $('kpiOnTrack').textContent = '0';
       $('kpiCritical').textContent = '0';
       ['trendTotal', 'trendAchiev', 'trendOnTrack', 'trendCritical'].forEach(id => {

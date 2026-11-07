@@ -1190,6 +1190,7 @@
 
   <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
+<div id="reportsDataSource" hidden aria-hidden="true"><span>مصدر بيانات التقرير</span></div>
 <!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
    <i class="fas fa-arrow-down">
@@ -1355,7 +1356,7 @@
      <i class="fas fa-arrow-up">
      </i>
      <span id="trendTotal">
-      +0%
+      —
      </span>
     </div>
    </div>
@@ -1374,7 +1375,7 @@
      <i class="fas fa-arrow-up">
      </i>
      <span id="trendDebt">
-      +0%
+      —
      </span>
     </div>
    </div>
@@ -1393,7 +1394,7 @@
      <i class="fas fa-arrow-up">
      </i>
      <span id="trendAvg">
-      +0%
+      —
      </span>
     </div>
    </div>
@@ -1412,7 +1413,7 @@
      <i class="fas fa-arrow-down">
      </i>
      <span id="trendRisk">
-      -0%
+      —
      </span>
     </div>
    </div>
@@ -2260,7 +2261,7 @@
                 }
             });
 
-            // نشاط العملاء الفعلي حسب آخر عملية مسجلة، دون توليد بيانات محاكاة.
+            // نشاط العملاء الفعلي حسب آخر عملية مسجلة، دون توليد بيانات إضافية.
             const activityMap = {};
             data.forEach(item => {
                 const date = IsoCivilDate.datePart(item.last_activity, true);

@@ -4873,6 +4873,8 @@ function stopScanner() {
 }
 
 // ============================================================
+// ============================================================
+// 6. دوال المنتجات والجدول
 // 9. دوال المنتجات
 // ============================================================
 function newSaleOperationKey() {
@@ -5784,7 +5786,7 @@ async function printReceipt() {
         }
 
         await loadCurrentStationLogo();
-        renderReceiptForPrint(invoice);
+        renderReceiptForPrint(response.data || response);
 
         // إجبار المتصفح على إعادة حساب الأبعاد (Reflow) لضمان رؤية العناصر المخفية
         const posInv = document.getElementById('posInvoice');

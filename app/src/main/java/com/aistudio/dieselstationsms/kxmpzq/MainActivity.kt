@@ -11340,6 +11340,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                         settings.domStorageEnabled = false
                         settings.allowFileAccess = true
                         settings.allowContentAccess = false
+                        settings.allowUniversalAccessFromFileURLs = false
+                        settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                        settings.safeBrowsingEnabled = true
                         settings.loadsImagesAutomatically = true
                         setBackgroundColor(android.graphics.Color.WHITE)
                         // Keep WebView's default rendering pipeline. Forcing a software

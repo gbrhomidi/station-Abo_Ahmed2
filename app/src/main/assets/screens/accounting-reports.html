@@ -897,8 +897,10 @@ select.form-input option{background:var(--bg-secondary);color:var(--text-primary
 
   <script src="file:///android_asset/assets-local/js/business-day.js"></script>
     <meta name="reports-bridge-methods" content="getKPIDashboard,getEodReport,getBalanceSheet,getChartTrialBalance,getLedgerEntries,getProfitReport,getJournalEntries,getOverdueReport,saveBalanceSheet">
+  <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 </head>
 <body>
+<div id="reportsDataSource" hidden aria-hidden="true"><span>مصدر بيانات التقرير</span></div>
 
 <div class="offline-banner" id="offlineBanner">
   <i class="fas fa-triangle-exclamation"></i>

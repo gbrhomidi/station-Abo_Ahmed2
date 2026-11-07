@@ -10,9 +10,9 @@ SOURCE = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(
 )
 source = SOURCE.read_text(encoding="utf-8")
 match = re.search(
-    r"CREATE TABLE IF NOT EXISTS payments\s*\((.*?)\n\s*\);",
+    r"CREATE TABLE IF NOT EXISTS payments\s*\((.*?)^\s*\)\s*\"\"\"\)",
     source,
-    flags=re.IGNORECASE | re.DOTALL,
+    flags=re.IGNORECASE | re.DOTALL | re.MULTILINE,
 )
 if not match:
     raise SystemExit(f"Could not extract payments DDL from {SOURCE}")

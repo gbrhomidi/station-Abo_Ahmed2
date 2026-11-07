@@ -1394,8 +1394,10 @@
     .report-filter-collapsible.is-open { max-height:1200px; opacity:1; visibility:visible; }
     </style>
 
+  <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 </head>
 <body>
+<div id="reportsDataSource" hidden aria-hidden="true"><span>مصدر بيانات التقرير</span></div>
 
   <!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
@@ -1465,6 +1467,7 @@
           <option value="sales">المبيعات</option>
           <option value="refills">التزود</option>
           <option value="movement">الحركات</option>
+          <option value="readings">قراءات العدادات</option>
         </select>
       </div>
       <div class="filter-actions">
@@ -2125,7 +2128,25 @@
     // ================================================================
     // 6. توليد التقرير
     // ================================================================
+    async function generateMeterReadingReport() {
+      const payload = {
+        from_date: String($('filterDateFrom')?.value || ''),
+        to_date: String($('filterDateTo')?.value || ''),
+        return_all: true,
+        screen_key: 'meter_readings'
+      };
+      const raw = window.AndroidInterface && typeof window.AndroidInterface.generateMeterReadingReport === 'function'
+        ? window.AndroidInterface.generateMeterReadingReport(JSON.stringify(payload))
+        : null;
+      const parsed = raw ? parseBridge(raw) : { success: false, rows: [] };
+      const rows = extractArray(parsed);
+      state.rows = rows.map(normalizeFuelRow);
+      renderTable(state.rows);
+      return parsed;
+    }
+
     async function generateReport(requestedPage) {
+      if ($('filterReportType').value === 'readings') return generateMeterReadingReport();
       if (requestedPage === undefined || requestedPage === null) {
         pagination.page = 1;
       } else {
@@ -3526,6 +3547,7 @@
 
     // تصدير الواجهات العامة
     window.generateReport = generateReport;
+    window.generateMeterReadingReport = generateMeterReadingReport;
     window.resetFilters = resetFilters;
     window.exportCSV = exportCSV;
     window.exportPDF = exportPDF;
