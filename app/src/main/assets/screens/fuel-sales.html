@@ -2146,6 +2146,8 @@ const CFG = {
         {label:'الإجمالي', key:'total_amount', type:'number', required:true, readonly:true},
         {label:'طريقة الدفع', key:'payment_method', type:'select', required:true},
         {label:'العميل', key:'customer_id', type:'select', required:false},
+        {label:'شروط الدفع', key:'payment_terms_id', type:'select', required:false, full:true},
+        {label:'تاريخ الاستحقاق المتوقع', key:'payment_terms_preview', type:'payment_terms_preview', required:false, full:true},
         {label:'تاريخ البيع', key:'sale_date', type:'date', required:true, readonly:true},
         {label:'وقت البيع', key:'sale_time', type:'time', required:true, readonly:true},
         {label:'رسوم خدمة التوصيل واحتسابها', key:'delivery_fee_configuration', type:'delivery_fee_configuration', required:false, full:true},
@@ -2742,6 +2744,12 @@ function inputHtml(def, row) {
             '<input id="deliveryServiceFeeInput" class="form-input" data-key="delivery_service_fee" type="number" min="0" step="0.01" inputmode="decimal" value="' + esc(fee) + '"></div>' +
             '</div></div>';
     }
+    if (def.type === 'payment_terms_preview') {
+        return '<div class="form-group full" data-payment-terms-preview-group="true" style="display:none">' +
+            '<label class="form-label">' + esc(def.label) + '</label>' +
+            '<input id="paymentTermsDueDatePreview" class="form-input readonly" type="date" readonly tabindex="-1" aria-readonly="true">' +
+            '</div>';
+    }
     if (def.key === 'delivery_fee_display_total') {
         const numericValue = row && row.delivery_fee_display_total !== undefined
             ? row.delivery_fee_display_total
@@ -2855,12 +2863,14 @@ async function getSaleFormLookupData() {
         const pumps = parseOptionalBridgeResult(response.pumps);
         const fuels = parseOptionalBridgeResult(response.fuels);
         const customers = parseOptionalBridgeResult(response.customers);
+        const paymentTerms = parseOptionalBridgeResult(response.paymentTerms);
         state.saleFormLookupCache = {
             loadedAt: Date.now(),
             shift: dataOf(shift),
             pumps: rowsFrom(pumps),
             fuels: rowsFrom(fuels),
-            customers: rowsFrom(customers)
+            customers: rowsFrom(customers),
+            paymentTerms: rowsFrom(paymentTerms)
         };
         return state.saleFormLookupCache;
     })().finally(() => {
@@ -3020,6 +3030,66 @@ async function loadSavedDeliveryLocationSuggestions(openToken, row=null) {
         .join('');
 }
 
+
+function explicitCustomerPaymentTermDays(customer) {
+    const stored = field(customer, ['payment_terms_days','paymentTermsDays']);
+    if (stored !== '') {
+        const days = Number(stored);
+        if (Number.isInteger(days) && days >= 0 && days <= 365) return days;
+    }
+    const raw = String(field(customer, ['payment_terms','payment_terms_text','credit_terms']) || '')
+        .replace(/[٠-٩]/g, ch => String('٠١٢٣٤٥٦٧٨٩'.indexOf(ch))).trim();
+    if (/^(cash|نقد|نقدي|نقداً|فوري|فوراً|عند الاستلام|upon receipt|immediate)$/i.test(raw)) return 0;
+    const match = /(?:net|صافي|خلال|within)\s*(\d{1,3})/i.exec(raw);
+    if (!match) return null;
+    const days = Number(match[1]);
+    return Number.isInteger(days) && days >= 0 && days <= 365 ? days : null;
+}
+
+function preferredFuelPaymentTermId(customer, terms) {
+    const savedId = Number(field(customer, ['payment_terms_id','payment_term_id']) || 0);
+    if (savedId > 0 && terms.some(term => Number(term.id) === savedId)) return String(savedId);
+    const days = explicitCustomerPaymentTermDays(customer);
+    if (days === null) return '';
+    const match = terms.find(term => Number(term.days) === days);
+    return match ? String(match.id) : '';
+}
+
+function updateFuelPaymentTermsVisibility() {
+    const select = document.querySelector('[data-key="payment_terms_id"]');
+    const payment = document.querySelector('[data-key="payment_method"]');
+    const customer = document.querySelector('[data-key="customer_id"]');
+    const preview = document.querySelector('[data-payment-terms-preview-group="true"]');
+    if (!select || !payment || !customer) return;
+    const method = String(payment.value || '').trim().toLowerCase();
+    const isCredit = ['credit','credit_sale','credit_account','on_account','آجل','اجل'].includes(method);
+    const visible = isCredit && Number(customer.value || 0) > 0;
+    const group = select.closest('.form-group');
+    if (group) group.style.display = visible ? '' : 'none';
+    if (preview) preview.style.display = visible ? '' : 'none';
+    select.required = visible && !state.editing;
+    select.disabled = Boolean(state.editing);
+    if (!visible && !state.editing) select.value = '';
+    updateFuelPaymentTermsPreview();
+}
+
+function updateFuelPaymentTermsPreview() {
+    const select = document.querySelector('[data-key="payment_terms_id"]');
+    const dateInput = document.getElementById('paymentTermsDueDatePreview');
+    const saleDate = document.querySelector('[data-key="sale_date"]')?.value || '';
+    if (!dateInput) return;
+    const option = select?.options?.[select.selectedIndex];
+    const days = option && option.value ? Number(option.dataset.days) : NaN;
+    if (!saleDate || !Number.isInteger(days) || days < 0 || days > 365) { dateInput.value = ''; return; }
+    const parts = saleDate.slice(0,10).split('-').map(Number);
+    if (parts.length !== 3 || parts.some(value => !Number.isInteger(value) || value <= 0)) { dateInput.value = ''; return; }
+    const date = new Date(Date.UTC(parts[0],parts[1]-1,parts[2]));
+    if (date.getUTCFullYear() !== parts[0] || date.getUTCMonth() !== parts[1]-1 ||
+        date.getUTCDate() !== parts[2]) { dateInput.value = ''; return; }
+    date.setUTCDate(date.getUTCDate() + days);
+    dateInput.value = date.toISOString().slice(0,10);
+}
+
 async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
     const lookups = await getSaleFormLookupData();
     if (!isCurrentFuelForm(openToken)) return;
@@ -3062,6 +3132,28 @@ async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
         else if (row && hasCashName && ['cash','نقدي','نقداً'].includes(String(field(row,['payment_method']) || '').trim().toLowerCase())) {
             customerEl.value = 'cash_sale';
         } else customerEl.value = '';
+    }
+
+    const termSelect = document.querySelector('[data-key="payment_terms_id"]');
+    if (termSelect) {
+        const terms = Array.isArray(lookups.paymentTerms) ? lookups.paymentTerms : [];
+        termSelect.innerHTML = '<option value="">اختر شروط الدفع من الجدول...</option>' +
+            terms.map(term => '<option value="' + esc(term.id) + '" data-days="' + esc(term.days) + '">' +
+                esc(term.name_ar || term.code || 'شرط دفع') + ' — ' +
+                esc(Number(term.days) === 0 ? 'في يوم البيع' : 'بعد ' + term.days + ' يوم') +
+                '</option>').join('');
+        const selectedCustomerId = Number(customerEl?.value || 0);
+        const selectedCustomer = lookups.customers.find(item =>
+            Number(field(item,['id','party_id','customer_id'])) === selectedCustomerId
+        );
+        const savedTermId = Number(field(row,['payment_terms_id_at_sale','payment_terms_id']) || 0);
+        termSelect.value = savedTermId > 0 && terms.some(term => Number(term.id) === savedTermId)
+            ? String(savedTermId)
+            : (row ? '' : preferredFuelPaymentTermId(selectedCustomer, terms));
+        termSelect.onchange = () => {
+            state.lastSuccessfulSaleFingerprint = null;
+            updateFuelPaymentTermsPreview();
+        };
     }
 
     const feeModeEl = document.querySelector('[data-key="delivery_fee_mode"]');
@@ -3136,6 +3228,7 @@ async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
     });
 
     bindFuelCalculation(!row);
+    updateFuelPaymentTermsVisibility();
     updateDeliveryFeeDisplay();
     recordFuelSalePerformance('form-interactive', state.formOpenStartedAt);
 
@@ -3327,10 +3420,28 @@ function bindFuelCalculation(resolveDynamic=true) {
     if (customer) customer.onchange = () => {
         if (customer.value === 'cash_sale' && payment) payment.value = 'cash';
         updateCashCustomerVisibility();
+        const selectedCustomer = (state.saleFormLookupCache.customers || []).find(item =>
+            Number(field(item,['id','party_id','customer_id'])) === Number(customer.value || 0)
+        );
+        const termSelect = document.querySelector('[data-key="payment_terms_id"]');
+        if (termSelect && !state.editing) {
+            termSelect.value = preferredFuelPaymentTermId(selectedCustomer, state.saleFormLookupCache.paymentTerms || []);
+        }
+        updateFuelPaymentTermsVisibility();
         if (resolveDynamic) { loadActivePromotions(); refreshResolvedFuelPrice(); }
     };
     if (payment) payment.onchange = () => {
         updateCashCustomerVisibility();
+        if (payment.value === 'credit' && customer?.value && !state.editing) {
+            const selectedCustomer = (state.saleFormLookupCache.customers || []).find(item =>
+                Number(field(item,['id','party_id','customer_id'])) === Number(customer.value || 0)
+            );
+            const termSelect = document.querySelector('[data-key="payment_terms_id"]');
+            if (termSelect && !termSelect.value) {
+                termSelect.value = preferredFuelPaymentTermId(selectedCustomer, state.saleFormLookupCache.paymentTerms || []);
+            }
+        }
+        updateFuelPaymentTermsVisibility();
     };
     updateCashCustomerVisibility();
     const occ = document.querySelector('[data-key="occasion_code"]');
@@ -3460,6 +3571,18 @@ async function saveForm() {
     if (customerId > 0) { payload.customer_id = customerId; } else { delete payload.customer_id; }
     if (payload.payment_method === 'credit' && customerId <= 0) {
         return toast('اختر عميلاً حقيقياً للبيع الآجل', true, 'form');
+    }
+    if (state.editing) {
+        // Invoice terms are immutable; operational edits must not rewrite the original snapshot.
+        delete payload.payment_terms_id;
+    } else if (payload.payment_method === 'credit') {
+        const termId = Number(payload.payment_terms_id || 0);
+        const available = state.saleFormLookupCache.paymentTerms || [];
+        if (!termId || !available.some(term => Number(term.id) === termId)) {
+            return toast('اختر شرط الدفع من جدول شروط الدفع قبل حفظ البيع الآجل', true, 'form');
+        }
+    } else {
+        delete payload.payment_terms_id;
     }
     if (!payload.shift_id) return toast('لا توجد وردية مفتوحة حالياً', true, 'form');
     if (!payload.pump_id) return toast('اختر المضخة', true, 'form');

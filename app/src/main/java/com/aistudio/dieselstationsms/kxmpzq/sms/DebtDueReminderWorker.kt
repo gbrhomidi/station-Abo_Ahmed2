@@ -1,11 +1,13 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.work.CoroutineWorker
 import androidx.work.Data
@@ -38,8 +40,11 @@ class DebtDueReminderWorker(
         return try {
             val db = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
             val smsEnabled = db.getSetting("sms_send_enabled") != "0"
+            val smsPermissionGranted = applicationContext.checkSelfPermission(Manifest.permission.SEND_SMS) ==
+                PackageManager.PERMISSION_GRANTED
+            val smsDispatchAllowed = smsEnabled && smsPermissionGranted
 
-            // Create/repair maturity dates before the reminder query runs. The same
+            // Use the same trusted due-date source consumed by debt screens and reports. The same
             // date calculation is used by the customer-debt screen and the UI banner.
             DebtDueDateRepository.ensureSchema(db)
             val dueRows = DebtDueDateRepository.getDueSoonDebtReminders(db, stationId, 0)
@@ -60,12 +65,15 @@ class DebtDueReminderWorker(
                 // to the same customer during the same worker cycle.
                 if (customerId > 0L && customerId !in customersDueToday) candidates += row
             }
-            val localEligibleCount = candidates.count { row ->
-                row.optBoolean("eligible", false) &&
-                    row.optDouble("total_outstanding", 0.0) > 0.0 &&
-                    PhoneUtils.normalize(row.optString("phone")) != null &&
+            // Local alerts do not require a phone number or SMS transport permission.
+            val localReminderRows = candidates.filter { row ->
+                row.optDouble("total_outstanding", 0.0) > 0.0 &&
                     row.optString("nearest_due_date").isNotBlank()
             }
+            val localEligibleCount = localReminderRows.size
+            val localReminderNames = localReminderRows.map {
+                it.optString("customer_name").trim().ifBlank { "عميل" }
+            }.distinct()
 
             var queuedCount = 0
             var overdueQueuedCount = 0
@@ -83,9 +91,8 @@ class DebtDueReminderWorker(
                 if (customerId <= 0L || transactionId <= 0L || balance <= 0.0 ||
                     phone == null || dueDate.isBlank()
                 ) continue
-                // Keep local alerts useful when SMS is disabled, without creating a
-                // misleading queued message or a persisted SMS event.
-                if (!smsEnabled) continue
+                // Do not queue a carrier message unless both permission and setting allow it.
+                if (!smsDispatchAllowed) continue
 
                 // A reminder already recorded on the due date is enough; a reminder
                 // from yesterday must not suppress the actual due-date notification.
@@ -152,13 +159,15 @@ class DebtDueReminderWorker(
             if (queuedCount > 0 || SmsOutboxRepository.hasPending(db)) {
                 SmsOutboxWorker.schedule(applicationContext)
             }
-            if (queuedCount > 0 || (!smsEnabled && localEligibleCount > 0)) {
+            if (queuedCount > 0 || (!smsDispatchAllowed && localEligibleCount > 0)) {
+                val hasQueuedSms = queuedCount > 0
                 postDueReminderNotification(
                     stationId,
-                    if (smsEnabled) queuedCount else localEligibleCount,
-                    remindedNames,
+                    if (hasQueuedSms) queuedCount else localEligibleCount,
+                    if (hasQueuedSms) remindedNames else localReminderNames,
                     overdueQueuedCount,
-                    smsEnabled
+                    smsEnabled,
+                    smsPermissionGranted
                 )
             }
             Result.success()
@@ -172,7 +181,8 @@ class DebtDueReminderWorker(
         count: Int,
         names: List<String>,
         overdueCount: Int,
-        smsEnabled: Boolean
+        smsEnabled: Boolean,
+        smsPermissionGranted: Boolean
     ) {
         try {
             val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -195,18 +205,22 @@ class DebtDueReminderWorker(
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
             )
             val detail = names.take(3).joinToString("، ")
+            val smsDispatchAllowed = smsEnabled && smsPermissionGranted
             val notification = Notification.Builder(applicationContext, channelId)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle(if (smsEnabled) "تذكيرات الديون المستحقة" else "تنبيه ديون مستحقة")
+                .setContentTitle(if (smsDispatchAllowed) "تذكيرات الديون المستحقة" else "تنبيه ديون مستحقة")
                 .setContentText(
-                    (if (smsEnabled) "تم تجهيز $count تذكير دين" else "يوجد $count دين يحتاج متابعة") +
+                    (if (smsDispatchAllowed) "تم تجهيز $count تذكير دين" else "يوجد $count دين يحتاج متابعة") +
                         if (detail.isBlank()) "" else ": $detail"
                 )
                 .setStyle(Notification.BigTextStyle().bigText(
-                    if (smsEnabled) {
-                        "تمت إضافة $count رسالة تذكير إلى طابور SMS. منها $overdueCount تذكير لمديونيات تجاوزت تاريخ الاستحقاق، والباقي لمستحقات اليوم. ستُرسل وفق إعدادات الرسائل وأذونات الجهاز."
-                    } else {
-                        "تم تعطيل SMS، لذلك لم تُرسل أي رسالة. هذا إشعار محلي مستقل لمتابعة الديون المستحقة يدوياً."
+                    when {
+                        smsDispatchAllowed ->
+                            "تمت إضافة $count رسالة تذكير إلى طابور SMS. منها $overdueCount تذكير لمديونيات تجاوزت تاريخ الاستحقاق، والباقي لمستحقات اليوم. ستُرسل وفق إعدادات الرسائل وأذونات الجهاز."
+                        !smsEnabled ->
+                            "إرسال SMS معطّل من الإعدادات؛ لم تُرسل أي رسالة. هذا إشعار محلي لمتابعة الديون المستحقة."
+                        else ->
+                            "لم تُرسل رسائل SMS لأن التطبيق لا يملك صلاحية الإرسال. تم إبقاء التذكير محلياً حتى تُمنح الصلاحية."
                     }
                 ))
                 .setContentIntent(openApp)

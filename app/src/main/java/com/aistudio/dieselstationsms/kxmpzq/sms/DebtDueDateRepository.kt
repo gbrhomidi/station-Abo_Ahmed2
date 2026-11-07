@@ -221,6 +221,116 @@ object DebtDueDateRepository {
         }
     }
 
+
+    /**
+     * Attaches a selected payment_terms row to a newly-created credit invoice.
+     * The date basis is read from the persisted invoice, never from browser input.
+     * An existing SQLite transaction is reused; otherwise this method owns one.
+     */
+    fun applySelectedPaymentTermSnapshot(
+        db: SQLiteDatabase, saleId: Long, stationId: Int, partyId: Long, paymentTermId: Long
+    ): JSONObject {
+        require(saleId > 0L && stationId > 0 && partyId > 0L && paymentTermId > 0L) {
+            "معرف الفاتورة أو المحطة أو العميل أو شرط الدفع غير صالح"
+        }
+        require(tableExists(db, "sales_transactions") && tableExists(db, "payment_terms") &&
+            tableExists(db, "parties")) { "جداول الفواتير أو شروط الدفع غير مهيأة" }
+        val saleColumns = columns(db, "sales_transactions")
+        val customerColumn = listOf("customer_party_id", "customer_id", "party_id")
+            .firstOrNull { it in saleColumns } ?: throw IllegalStateException("تعذر تحديد عميل الفاتورة")
+        require("payment_method" in saleColumns) { "طريقة الدفع غير محفوظة في الفاتورة" }
+        val bases = listOf("business_day", "transaction_date", "sale_date").filter { it in saleColumns }
+        require(bases.isNotEmpty()) { "لا يوجد تاريخ عمل أو تاريخ معاملة محفوظ للفاتورة" }
+
+        data class SaleContext(
+            val customerId: Long, val paymentMethod: String, val deleted: Boolean,
+            val status: String, val remaining: Double, val baseDate: LocalDate?
+        )
+        val ownsTransaction = !db.inTransaction()
+        if (ownsTransaction) db.beginTransaction()
+        try {
+            val sale = db.rawQuery(
+                buildString {
+                    append("SELECT COALESCE(`$customerColumn`,0),LOWER(TRIM(COALESCE(payment_method,''))),")
+                    append(if ("is_deleted" in saleColumns) "COALESCE(is_deleted,0)," else "0,")
+                    append(if ("status" in saleColumns) "LOWER(TRIM(COALESCE(status,'')))," else "'' ,")
+                    append(if ("remaining_amount" in saleColumns) "COALESCE(remaining_amount,0)," else "1,")
+                    append(bases.joinToString(",") { "`$it`" })
+                    append(" FROM sales_transactions WHERE id=? AND station_id=? LIMIT 1")
+                },
+                arrayOf(saleId.toString(), stationId.toString())
+            ).use { c ->
+                require(c.moveToFirst()) { "الفاتورة غير موجودة ضمن المحطة المحددة" }
+                SaleContext(
+                    c.getLong(0), c.getString(1).orEmpty(), c.getInt(2) != 0, c.getString(3).orEmpty(),
+                    c.getDouble(4),
+                    (0 until bases.size).asSequence().mapNotNull { parseDate(c.getString(5 + it)) }.firstOrNull()
+                )
+            }
+            require(sale.customerId == partyId) { "العميل المحدد لا يطابق العميل المرتبط بالفاتورة" }
+            require(!sale.deleted) { "لا يمكن تعيين شروط دفع لفاتورة محذوفة" }
+            val method = sale.paymentMethod.lowercase(Locale.ROOT).replace(" ", "").replace("-", "_")
+            require(method in setOf("credit","credit_sale","credit_account","on_account","آجل","اجل","بيعآجل","علىالحساب")) {
+                "شروط الدفع الآجل لا تطبق على فاتورة نقدية"
+            }
+            require(sale.status !in setOf("cancelled","canceled","refunded","void","reversed")) {
+                "لا يمكن تعيين شروط دفع لفاتورة ملغاة أو معكوسة"
+            }
+            require(sale.remaining > 0.000001) { "الفاتورة لا تحتوي رصيداً متبقياً يستلزم الاستحقاق" }
+            val partyActive = db.rawQuery(
+                """SELECT 1 FROM parties WHERE id=? AND station_id=?
+                   AND COALESCE(is_active,1)=1 AND COALESCE(is_deleted,0)=0 LIMIT 1""",
+                arrayOf(partyId.toString(), stationId.toString())
+            ).use { it.moveToFirst() }
+            require(partyActive) { "العميل غير نشط أو لا يتبع المحطة الحالية" }
+            val term = db.rawQuery(
+                """SELECT id,name_ar,days FROM payment_terms
+                   WHERE id=? AND is_active=1 AND applies_to IN ('both','customer')
+                     AND (station_id IS NULL OR station_id=?) LIMIT 1""",
+                arrayOf(paymentTermId.toString(), stationId.toString())
+            ).use { c ->
+                require(c.moveToFirst()) { "شرط الدفع غير نشط أو غير متاح لهذه المحطة أو لنوع العميل" }
+                Triple(c.getLong(0), c.getString(1).orEmpty(), c.getInt(2))
+            }
+            require(term.third in 0..365) { "عدد أيام شرط الدفع خارج النطاق المسموح" }
+
+            val due = sale.baseDate?.plusDays(term.third.toLong())
+            val values = ContentValues().apply {
+                put("payment_terms_at_sale", term.second)
+                put("payment_terms_id_at_sale", term.first)
+                put("payment_terms_days_at_sale", term.third)
+                put("payment_terms_source_at_sale", "explicit_text")
+                if (sale.baseDate != null && due != null) {
+                    put("due_date_basis", sale.baseDate.toString())
+                    put("due_date", due.toString())
+                    put("due_date_source", "sale_creation")
+                } else {
+                    putNull("due_date_basis")
+                    putNull("due_date")
+                    put("due_date_source", "missing_base_date")
+                }
+            }
+            val where = "id=? AND station_id=? AND `$customerColumn`=?" +
+                if ("is_deleted" in saleColumns) " AND COALESCE(is_deleted,0)=0" else ""
+            check(db.update(
+                "sales_transactions", values, where,
+                arrayOf(saleId.toString(), stationId.toString(), partyId.toString())
+            ) == 1) { "تعذر تثبيت نسخة شروط الدفع على الفاتورة" }
+
+            if (ownsTransaction) db.setTransactionSuccessful()
+            return JSONObject().apply {
+                put("success", true); put("sale_id", saleId)
+                put("payment_terms_id", term.first); put("payment_terms", term.second)
+                put("payment_terms_days", term.third)
+                put("due_date_basis", sale.baseDate?.toString() ?: JSONObject.NULL)
+                put("due_date", due?.toString() ?: JSONObject.NULL)
+                put("due_date_source", if (due == null) "missing_base_date" else "sale_creation")
+            }
+        } finally {
+            if (ownsTransaction && db.inTransaction()) db.endTransaction()
+        }
+    }
+
     fun getPaymentTerms(helper:DatabaseHelper,stationId:Int,appliesTo:String="customer"):JSONArray {
         require(stationId>0) { "معرف المحطة غير صالح" }
         val scope=appliesTo.lowercase(Locale.ROOT)

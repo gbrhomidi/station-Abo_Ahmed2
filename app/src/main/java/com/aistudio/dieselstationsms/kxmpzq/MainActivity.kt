@@ -1208,24 +1208,23 @@ class MainActivity : AppCompatActivity() {
     private fun startSMSService() {
         if (isDestroyed.get()) return
 
-        // Resume durable outbox entries after SMS permission is granted and
-        // persist a station-scoped due-date reminder schedule for background use.
-        if (isPermissionGranted(Manifest.permission.SEND_SMS)) {
-            runCatching {
-                val db = dbHelper
+        // Keep local station-scoped debt reminders scheduled even when SMS permission
+        // is absent. Carrier messages remain gated by the SMS permission and setting.
+        runCatching {
+            val db = dbHelper
+            val userId = currentUserId
+            val stationId = db.getUserById(userId)?.optInt("station_id", 0) ?: 0
+            if (userId > 0L && stationId > 0) {
+                DebtDueReminderWorker.schedule(this, stationId, userId)
+            }
+            if (isPermissionGranted(Manifest.permission.SEND_SMS)) {
                 SmsOutboxRepository.requeuePermissionFailures(db)
                 if (SmsOutboxRepository.hasPending(db)) {
                     SmsOutboxWorker.schedule(this)
                 }
-
-                val userId = currentUserId
-                val stationId = db.getUserById(userId)?.optInt("station_id", 0) ?: 0
-                if (userId > 0L && stationId > 0) {
-                    DebtDueReminderWorker.schedule(this, stationId, userId)
-                }
-            }.onFailure {
-                DebugLogger.warn("SMS", "Unable to resume pending SMS/reminder work: ${it.message}")
             }
+        }.onFailure {
+            DebugLogger.warn("SMS", "Unable to resume pending SMS/reminder work: ${it.message}")
         }
         if (isSMSServiceRunning()) return
 
@@ -1251,7 +1250,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun scheduleDebtReminderWork(userId: Long) {
-        if (userId <= 0L || !isPermissionGranted(Manifest.permission.SEND_SMS)) return
+        if (userId <= 0L) return
         runCatching {
             val stationId = dbHelper.getUserById(userId)?.optInt("station_id", 0) ?: 0
             if (stationId > 0) {
@@ -3375,6 +3374,10 @@ class MainActivity : AppCompatActivity() {
                                     put("pumps", getPumps())
                                     put("fuels", getFuelTypes())
                                     put("customers", getCustomers())
+                                    val helper = getDbHelper()
+                                        ?: throw IllegalStateException("قاعدة البيانات غير متاحة")
+                                    val stationScopeId = requireCurrentStationId(helper, activity.currentUserId)
+                                    put("paymentTerms", DebtDueDateRepository.getPaymentTerms(helper, stationScopeId, "customer"))
                                 }.toString()
                                 "nozzles" -> getPumpNozzles(args.optString(0, "{}"))
                                 "resolvedPrice" -> getResolvedFuelSalePrice(args.optString(0, "{}"))
@@ -4949,10 +4952,33 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val data = JSONObject(jsonData).apply { put("station_id", stationId) }
+                val selectedPaymentTermId = data.optLong("payment_terms_id", 0L)
+                data.remove("payment_terms_id")
+                val isCreditSale = data.optString("payment_type", "").trim() in
+                    setOf("credit", "آجل", "credit_sale", "credit_account")
+                require(selectedPaymentTermId >= 0L) { "شرط الدفع المحدد غير صالح" }
+                if (selectedPaymentTermId > 0L) {
+                    require(isCreditSale) { "لا يجوز تطبيق شروط دفع آجلة على فاتورة نقدية" }
+                }
                 val result = db.completeSale(data, stationId, activity.currentUserId)
-                if (result.optBoolean("success", false) &&
-                    data.optString("payment_type", "").trim() in setOf("credit", "آجل", "credit_sale", "credit_account")) {
+                if (result.optBoolean("success", false) && isCreditSale) {
                     val saleId = result.optLong("sale_id", 0L)
+                    if (saleId > 0L && selectedPaymentTermId > 0L) {
+                        try {
+                            val snapshot = DebtDueDateRepository.applySelectedPaymentTermSnapshot(
+                                db.writableDatabase, saleId, stationId,
+                                data.optLong("entity_id", 0L), selectedPaymentTermId
+                            )
+                            result.put("payment_terms_snapshot", snapshot)
+                        } catch (snapshotError: Exception) {
+                            // Sale is committed at this point: surface the snapshot error
+                            // without incorrectly reporting a failed sale and risking duplicates.
+                            DebugLogger.logException("PosPaymentTermsSnapshot", snapshotError)
+                            result.put("payment_terms_snapshot", JSONObject()
+                                .put("success", false)
+                                .put("message", snapshotError.message ?: "تعذر تثبيت شروط الدفع على الفاتورة"))
+                        }
+                    }
                     if (saleId > 0L) result.put("sms", queueCreditSaleSms(db, saleId, stationId, activity.currentUserId))
                 }
                 dataResponse(result)
@@ -13481,6 +13507,17 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     put("cashier_id", currentUserId)
                     put("station_id", stationScopeId)
                 }
+                val selectedPaymentTermId = input.optLong("payment_terms_id", 0L)
+                input.remove("payment_terms_id")
+                require(selectedPaymentTermId >= 0L) { "شرط الدفع المحدد غير صالح" }
+                val creditSale = input.optString("payment_method", "").trim() in
+                    setOf("credit", "آجل", "credit_sale", "credit_account")
+                if (creditSale) {
+                    require(selectedPaymentTermId > 0L) { "اختر شرط الدفع من جدول شروط الدفع قبل حفظ البيع الآجل" }
+                    require(input.optLong("customer_id", 0L) > 0L) { "اختر عميلاً قبل حفظ البيع الآجل" }
+                } else {
+                    require(selectedPaymentTermId == 0L) { "شروط الدفع المحددة لا تطبق على البيع النقدي" }
+                }
 
                 // Run schema upgrades once; fee persistence skips duplicate schema/PRAGMA work.
                 DeliveryFeeAccounting.ensureSchema(db)
@@ -13537,6 +13574,17 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 database.beginTransaction()
                 try {
                     saleId = db.addFuelSale(input, stationScopeId, currentUserId)
+                    if (selectedPaymentTermId > 0L) {
+                        val parentSaleId = database.rawQuery(
+                            "SELECT COALESCE(sale_id,0) FROM fuel_sales WHERE id=? AND station_id=? LIMIT 1",
+                            arrayOf(saleId.toString(), stationScopeId.toString())
+                        ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+                        require(parentSaleId > 0L) { "لم يتم العثور على فاتورة العميل المرتبطة ببيع الوقود" }
+                        DebtDueDateRepository.applySelectedPaymentTermSnapshot(
+                            database, parentSaleId, stationScopeId,
+                            input.optLong("customer_id", 0L), selectedPaymentTermId
+                        )
+                    }
                     val nozzleId = input.optLong("nozzle_id", 0L)
                     if (nozzleId > 0L) {
                         database.execSQL(

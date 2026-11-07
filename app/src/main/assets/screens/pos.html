@@ -3918,6 +3918,16 @@ body.invoice-print-mode #posInvoice {
           <button type="button" class="btn btn-primary w-100" id="openCreditCustomerModalBtn"><i class="fas fa-search"></i> بحث واختيار عميل</button>
         </div>
       </div>
+      <div class="horizontal-row" id="paymentTermsRow" style="display:none;">
+        <div class="field-group">
+          <label class="form-label" for="paymentTermsId">شروط الدفع</label>
+          <select id="paymentTermsId" class="form-control"><option value="">اختر شرط الدفع...</option></select>
+        </div>
+        <div class="field-group">
+          <label class="form-label" for="paymentTermsDueDate">تاريخ الاستحقاق المتوقع</label>
+          <input type="date" id="paymentTermsDueDate" class="form-control" readonly aria-readonly="true">
+        </div>
+      </div>
       <div id="customerDetailsContainer" class="customer-info-grid" style="display: none;"></div>
       <div class="customer-action-buttons">
         <button class="btn btn-primary" id="addCustomerBtn">إضافة عميل</button>
@@ -4325,6 +4335,7 @@ function apiCall(action, params) {
             case 'getNextInvoiceNumber': raw = AndroidInterface.getNextInvoiceNumber(); break;
             case 'completeSale': raw = AndroidInterface.completeSale(JSON.stringify(p)); break;
             case 'getCustomers': raw = AndroidInterface.getCustomers(); break;
+            case 'getPaymentTerms': raw = AndroidInterface.getPaymentTerms(String(p.applies_to || 'customer')); break;
             case 'getCurrentStationProfile': raw = AndroidInterface.getCurrentStationProfile(); break;
             case 'getStationFilePreviewDataUrl': raw = AndroidInterface.getStationFilePreviewDataUrl(String(p.uri || '')); break;
             case 'getEntityTypes': raw = AndroidInterface.getEntityTypes(); break;
@@ -4520,6 +4531,7 @@ let currentRowEffect = '';
 let isSleepMode = false;
 let creditCustomers = [];
 let selectedCreditCustomer = null;
+let paymentTermRows = [];
 let lastSaleId = null;
 let lastInvoiceNumber = '';
 let selectedReturnSale = null;
@@ -5393,6 +5405,11 @@ function resetForm() {
     document.getElementById('customerId').value = '';
     document.getElementById('customerDetailsContainer').style.display = 'none';
     selectedCreditCustomer = null;
+    const termsSelect = document.getElementById('paymentTermsId');
+    if (termsSelect) termsSelect.value = '';
+    const duePreview = document.getElementById('paymentTermsDueDate');
+    if (duePreview) duePreview.value = '';
+    updatePosPaymentTermsVisibility();
     document.getElementById('subtotal').value = '0.00';
     document.getElementById('discountAmount').value = '0.00';
     document.getElementById('taxAmount').value = '0.00';
@@ -5425,10 +5442,16 @@ function completeSale() {
     const selectedEntityId = Number(document.getElementById('customerId')?.value || 0);
     let entityId = selectedEntityId > 0 ? selectedEntityId : null;
 
+    let selectedPaymentTermId = 0;
     if (isCredit) {
         entityId = selectedEntityId;
         if (!entityId || !selectedCreditCustomer || Number(selectedCreditCustomer.id || selectedCreditCustomer.party_id || selectedCreditCustomer.entity_id) !== entityId) {
             showToast('اختر عميلاً نشطاً للبيع الآجل', 'error');
+            return;
+        }
+        selectedPaymentTermId = Number(document.getElementById('paymentTermsId')?.value || 0);
+        if (!selectedPaymentTermId || !paymentTermRows.some(term => Number(term.id) === selectedPaymentTermId)) {
+            showToast('اختر شرط الدفع من جدول شروط الدفع قبل ترحيل الفاتورة الآجلة', 'error');
             return;
         }
     }
@@ -5455,6 +5478,7 @@ function completeSale() {
         service_fee: serviceFee,
         total_amount: total,
         amount_paid: paid,
+        payment_terms_id: isCredit ? selectedPaymentTermId : 0,
         transaction_time: businessDayDateTime(),
         occasion_code: document.getElementById('occasionCode')?.value.trim() || null,
         idempotency_key: activeSaleOperationKey || (activeSaleOperationKey = newSaleOperationKey())
@@ -5471,8 +5495,13 @@ function completeSale() {
                 lastSaleId = sale.sale_id;
                 lastInvoiceNumber = sale.invoice_number || document.getElementById('invoiceNumber').value;
                 const saleSms = sale.sms || {};
+                const termSnapshot = sale.payment_terms_snapshot || {};
+                const termWarning = isCredit && termSnapshot.success === false
+                    ? ' — تعذر تثبيت شرط الدفع على الفاتورة: ' + (termSnapshot.message || 'خطأ غير معروف')
+                    : '';
                 showToast('تم ترحيل البيع وتحديث المخزون فعلياً' +
-                    (isCredit ? (saleSms.queued ? ' — تم وضع SMS في طابور الإرسال' : ' — تعذر تجهيز SMS: ' + (saleSms.reason || 'غير معروف')) : ''), 'success');
+                    (isCredit ? (saleSms.queued ? ' — تم وضع SMS في طابور الإرسال' : ' — تعذر تجهيز SMS: ' + (saleSms.reason || 'غير معروف')) : '') +
+                    termWarning, termWarning ? 'warning' : 'success');
                 // Archive the already-committed invoice independently; PDF errors must not repeat the sale.
                 window._invoiceArchivePromise = queueInvoicePdfArchive(lastInvoiceNumber);
                 resetForm();
@@ -6526,6 +6555,96 @@ function loadCustomers() {
         .catch(error => { creditCustomers = []; console.error('Error loading customers:', error); showToast(error.message || 'تعذر جلب العملاء للبيع الآجل', 'error'); });
 }
 
+
+function paymentTermDaysFromCustomer(customer) {
+    if (!customer) return null;
+    const rawDays = customer.payment_terms_days ?? customer.paymentTermsDays;
+    if (rawDays !== null && rawDays !== undefined && String(rawDays).trim() !== '') {
+        const days = Number(rawDays);
+        if (Number.isInteger(days) && days >= 0 && days <= 365) return days;
+    }
+    const text = String(customer.payment_terms || customer.payment_terms_text || customer.credit_terms || '')
+        .replace(/[٠-٩]/g, ch => String('٠١٢٣٤٥٦٧٨٩'.indexOf(ch))).trim();
+    if (/^(cash|نقد|نقدي|نقداً|فوري|فوراً|عند الاستلام|upon receipt|immediate)$/i.test(text)) return 0;
+    const match = /(?:net|صافي|خلال|within)\s*(\d{1,3})/i.exec(text);
+    if (!match) return null;
+    const days = Number(match[1]);
+    return Number.isInteger(days) && days >= 0 && days <= 365 ? days : null;
+}
+
+function preferredPosPaymentTermId(customer) {
+    if (!customer) return '';
+    const savedId = Number(customer.payment_terms_id || customer.payment_term_id || 0);
+    if (savedId > 0 && paymentTermRows.some(term => Number(term.id) === savedId)) return String(savedId);
+    const days = paymentTermDaysFromCustomer(customer);
+    if (days === null) return '';
+    const match = paymentTermRows.find(term => Number(term.days) === days);
+    return match ? String(match.id) : '';
+}
+
+function updatePosPaymentTermsPreview() {
+    const select = document.getElementById('paymentTermsId');
+    const preview = document.getElementById('paymentTermsDueDate');
+    if (!select || !preview) return;
+    const option = select.options[select.selectedIndex];
+    const days = option && option.value ? Number(option.dataset.days) : NaN;
+    if (!Number.isInteger(days) || days < 0 || days > 365) { preview.value = ''; return; }
+    const base = String(businessDayDateTime() || '').slice(0,10);
+    const parts = base.split('-').map(Number);
+    if (parts.length !== 3 || parts.some(value => !Number.isInteger(value) || value <= 0)) { preview.value = ''; return; }
+    const date = new Date(Date.UTC(parts[0],parts[1]-1,parts[2]));
+    if (date.getUTCFullYear() !== parts[0] || date.getUTCMonth() !== parts[1]-1 ||
+        date.getUTCDate() !== parts[2]) { preview.value = ''; return; }
+    date.setUTCDate(date.getUTCDate() + days);
+    preview.value = date.toISOString().slice(0,10);
+}
+
+function syncPosPaymentTermForCustomer(customer) {
+    const select = document.getElementById('paymentTermsId');
+    if (!select) return;
+    select.value = preferredPosPaymentTermId(customer);
+    updatePosPaymentTermsPreview();
+}
+
+function updatePosPaymentTermsVisibility() {
+    const row = document.getElementById('paymentTermsRow');
+    const select = document.getElementById('paymentTermsId');
+    const credit = document.getElementById('paymentType')?.value === 'آجل';
+    const customerId = Number(document.getElementById('customerId')?.value || 0);
+    const visible = credit && customerId > 0;
+    if (row) row.style.display = visible ? '' : 'none';
+    if (select) { select.required = visible; select.disabled = !visible; }
+    updatePosPaymentTermsPreview();
+}
+
+function loadPaymentTerms() {
+    return apiCall('getPaymentTerms', {applies_to:'customer'})
+        .then(response => {
+            const raw = response.data || response;
+            paymentTermRows = Array.isArray(raw) ? raw : (Array.isArray(raw.rows) ? raw.rows : []);
+            const select = document.getElementById('paymentTermsId');
+            if (!select) return;
+            select.innerHTML = '<option value="">اختر شرط الدفع...</option>';
+            paymentTermRows.forEach(term => {
+                const option = document.createElement('option');
+                option.value = String(term.id);
+                option.dataset.days = String(term.days);
+                const days = Number(term.days);
+                option.textContent = String(term.name_ar || term.code || 'شرط دفع') +
+                    (days === 0 ? ' — في يوم البيع' : ' — بعد ' + days + ' يوم');
+                select.appendChild(option);
+            });
+            syncPosPaymentTermForCustomer(selectedCreditCustomer);
+            updatePosPaymentTermsVisibility();
+        })
+        .catch(error => {
+            paymentTermRows = [];
+            const select = document.getElementById('paymentTermsId');
+            if (select) select.innerHTML = '<option value="">تعذر تحميل شروط الدفع</option>';
+            showToast(error.message || 'تعذر تحميل شروط الدفع من SQLite', 'error');
+        });
+}
+
 function loadEntityTypes() {
     apiCall('getEntityTypes', {})
         .then(data => {
@@ -6603,6 +6722,8 @@ function selectCreditCustomer(customer) {
     document.getElementById('customerId').value = String(customerId);
     if (customer.party_type_id) document.getElementById('entityTypeSelect').value = String(customer.party_type_id);
     displayCustomerDetails(customer);
+    syncPosPaymentTermForCustomer(customer);
+    updatePosPaymentTermsVisibility();
     closeModal('customerSearchModal');
 }
 
@@ -7193,6 +7314,7 @@ document.addEventListener('DOMContentLoaded', () => {
     generateInvoiceNumber();
     loadEntityTypes();
     loadCustomers();
+    loadPaymentTerms();
 
     document.getElementById('darkModeToggle').addEventListener('click', toggleMode);
     document.getElementById('homeButton').addEventListener('click', function () { window.location.href = '../main.html'; });
@@ -7258,17 +7380,28 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('amountPaid').readOnly = false;
             selectedCreditCustomer = null;
             closeModal('customerSearchModal');
+            const termsSelect = document.getElementById('paymentTermsId');
+            if (termsSelect) termsSelect.value = '';
         }
+        updatePosPaymentTermsVisibility();
     });
     document.getElementById('entityTypeSelect').addEventListener('change', function() {
         if (this.value) loadCustomersByEntityType(this.value);
         else document.getElementById('customerNameField').style.display = 'none';
     });
     document.getElementById('customerId').addEventListener('change', function() {
+        const selected = creditCustomers.find(customer =>
+            customerDatabaseId(customer) === Number(this.value || 0)
+        ) || null;
+        selectedCreditCustomer = selected;
         loadCustomerDetails(this.value);
+        if (selected) syncPosPaymentTermForCustomer(selected);
+        else if (document.getElementById('paymentTermsId')) document.getElementById('paymentTermsId').value = '';
+        updatePosPaymentTermsVisibility();
         loadActivePromotions();
         document.querySelectorAll('#productsTableBody tr').forEach(row => resolveProductRowPrice(row));
     });
+    document.getElementById('paymentTermsId').addEventListener('change', updatePosPaymentTermsPreview);
     document.getElementById('occasionCode').addEventListener('change', function() {
         document.querySelectorAll('#productsTableBody tr').forEach(row => resolveProductRowPrice(row));
     });

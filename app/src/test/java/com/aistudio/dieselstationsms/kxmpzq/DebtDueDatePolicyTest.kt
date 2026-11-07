@@ -147,6 +147,78 @@ class DebtDueDatePolicyTest {
         assertEquals("",oldTask.getString("task_date"))
     }
 
+
+    @Test fun selectedPaymentTermIsSnapshottedAndSurvivesCustomerProfileChanges() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val db = helper.writableDatabase
+        db.execSQL("PRAGMA foreign_keys=OFF")
+        val customerId = addParty(db, "selected-term-customer", "صافي 30 يوم", 30, "explicit_text")
+        val saleId = addSale(db, "selected-term-invoice", customerId, null, null, "explicit_text")
+        val netSevenId = db.rawQuery(
+            "SELECT id FROM payment_terms WHERE code='NET_7' AND station_id IS NULL LIMIT 1", null
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+
+        val applied = DebtDueDateRepository.applySelectedPaymentTermSnapshot(db, saleId, 1, customerId, netSevenId)
+        assertTrue(applied.getBoolean("success"))
+        assertEquals(7, applied.getInt("payment_terms_days"))
+        assertEquals("2026-11-08", applied.getString("due_date"))
+
+        DebtDueDateRepository.persistPartyTerms(helper, customerId, 1, "صافي 0 يوم")
+        db.rawQuery(
+            """SELECT payment_terms_id_at_sale,payment_terms_days_at_sale,payment_terms_source_at_sale,
+                      payment_terms_at_sale,due_date,due_date_basis,due_date_source
+               FROM sales_transactions WHERE id=? AND station_id=1""",
+            arrayOf(saleId.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals(netSevenId, c.getLong(0))
+            assertEquals(7, c.getInt(1))
+            assertEquals("explicit_text", c.getString(2))
+            assertEquals("صافي 7 أيام", c.getString(3))
+            assertEquals("2026-11-08", c.getString(4))
+            assertEquals("2026-11-01", c.getString(5))
+            assertEquals("sale_creation", c.getString(6))
+        }
+        val rows = DebtDueDateRepository.getCustomerDebts(helper, 1)
+        val debt = (0 until rows.length()).map { rows.getJSONObject(it) }
+            .first { it.getLong("transaction_id") == saleId }
+        assertEquals("2026-11-08", debt.getString("due_date"))
+        assertEquals("current", debt.getString("status"))
+    }
+
+    @Test fun selectedPaymentTermRejectsDifferentCustomerAndPreservesOriginalSnapshot() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val db = helper.writableDatabase
+        db.execSQL("PRAGMA foreign_keys=OFF")
+        val customerId = addParty(db, "selected-term-owner", "صافي 30 يوم", 30, "explicit_text")
+        val otherCustomerId = addParty(db, "selected-term-other", "صافي 15 يوم", 15, "explicit_text")
+        val saleId = addSale(db, "selected-term-owner-invoice", customerId, null, null, "explicit_text")
+        val netThirtyId = db.rawQuery(
+            "SELECT id FROM payment_terms WHERE code='NET_30' AND station_id IS NULL LIMIT 1", null
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val netSevenId = db.rawQuery(
+            "SELECT id FROM payment_terms WHERE code='NET_7' AND station_id IS NULL LIMIT 1", null
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+
+        DebtDueDateRepository.applySelectedPaymentTermSnapshot(db, saleId, 1, customerId, netThirtyId)
+        var rejected = false
+        try {
+            DebtDueDateRepository.applySelectedPaymentTermSnapshot(db, saleId, 1, otherCustomerId, netSevenId)
+        } catch (_: IllegalArgumentException) {
+            rejected = true
+        }
+        assertTrue("A payment term cannot be attached using a different customer identity", rejected)
+        db.rawQuery(
+            "SELECT due_date,payment_terms_days_at_sale,payment_terms_id_at_sale FROM sales_transactions WHERE id=?",
+            arrayOf(saleId.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals("2026-12-01", c.getString(0))
+            assertEquals(30, c.getInt(1))
+            assertEquals(netThirtyId, c.getLong(2))
+        }
+    }
+
     @Test fun legacyReminderQueriesMatchKotlinTrustedDateEligibility() {
         DebtDueDateRepository.ensureSchema(helper)
         val db=helper.writableDatabase
