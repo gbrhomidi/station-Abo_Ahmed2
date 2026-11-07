@@ -399,18 +399,27 @@ object SupplierPayablesRepository {
             remainingPayment-=part;allocated+=part;allocations++
         }
         if(remainingPayment>EPSILON) {
+            val unappliedReason = when {
+                paymentCurrencyId <= 0L && candidates.isEmpty() -> "unknown_currency_or_no_eligible_invoice"
+                candidates.isNotEmpty() -> "current_payment_excess_after_invoice_allocation"
+                else -> "historical_or_unmatched_supplier_balance"
+            }
+            val unappliedNotes = when (unappliedReason) {
+                "current_payment_excess_after_invoice_allocation" ->
+                    "فائض دفعة حالية بعد تخصيص الفواتير المؤهلة؛ يبقى رصيداً دائناً غير موزع."
+                "unknown_currency_or_no_eligible_invoice" ->
+                    "دفعة غير موزعة بسبب غموض العملة أو عدم وجود فاتورة مؤهلة؛ تتطلب المطابقة."
+                else ->
+                    "رصيد مورد تاريخي أو غير مطابق لفاتورة مسجلة؛ يعرض كتسوية منفصلة."
+            }
             db.insertOrThrow("supplier_invoice_allocations",null,ContentValues().apply {
                 put("uuid",UUID.randomUUID().toString());put("station_id",stationId);put("supplier_id",supplierId)
                 putNull("supplier_invoice_id");put("payment_id",paymentId)
                 put("allocation_kind", "unapplied_legacy")
-                put("unapplied_reason", when {
-                    paymentCurrencyId <= 0L && candidates.isEmpty() -> "unknown_currency_or_no_eligible_invoice"
-                    candidates.isNotEmpty() -> "current_payment_excess_after_invoice_allocation"
-                    else -> "historical_or_unmatched_supplier_balance"
-                })
+                put("unapplied_reason", unappliedReason)
                 put("amount",remainingPayment)
                 if(paymentCurrencyId>0L) put("currency_id",paymentCurrencyId) else putNull("currency_id")
-                put("notes","دفعة غير موزعة على فاتورة مسجلة؛ تخصم من رصيد المورد التاريخي")
+                put("notes",unappliedNotes)
                 put("status","posted");put("allocated_at",BusinessDay.currentDate());put("created_by",actorId)
             })
         }

@@ -254,7 +254,7 @@ class SupplierPayablesRobolectricTest {
     }
 
     @Test
-    fun legacyPaymentOffsetsAreReportedSeparatelyPerCurrency() {
+    fun currentPaymentExcessOffsetsAreReportedSeparatelyPerCurrency() {
         SupplierPayablesRepository.createPurchaseInvoice(
             db, 1, supplierId, "manual", 94001, "MAN-94001",
             40.0, "2026-10-01", 3L, 1
@@ -271,10 +271,40 @@ class SupplierPayablesRobolectricTest {
         assertEquals(1, offsets.length())
         assertEquals(3L, offsets.getJSONObject(0).getLong("currency_id"))
         assertEquals(30.0, offsets.getJSONObject(0).getDouble("amount"), 0.0001)
-        assertEquals("legacy_balance_offset_not_invoice_allocated",
+        assertEquals("current_payment_excess_after_invoice_allocation",
             offsets.getJSONObject(0).getString("classification"))
+        assertFalse(offsets.getJSONObject(0).getBoolean("legacy_balance_offset_not_invoice_allocated"))
         assertEquals(0.0,
             aging.getDouble("unapplied_legacy_payments_without_currency"), 0.0001)
+    }
+
+    @Test
+    fun preMigrationUnappliedSupplierPaymentsKeepLegacyClassificationPerCurrency() {
+        val paymentId = createCompletedSupplierPayment(25.0, "LEGACY-UNAPPLIED", 3L)
+        db.insertOrThrow("supplier_invoice_allocations", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("station_id", 1)
+            put("supplier_id", supplierId)
+            putNull("supplier_invoice_id")
+            put("payment_id", paymentId)
+            put("allocation_kind", "unapplied_legacy")
+            put("amount", 25.0)
+            put("currency_id", 3L)
+            put("status", "posted")
+            put("is_deleted", 0)
+            put("allocated_at", "2026-11-05")
+            put("created_by", 1)
+            // Deliberately omit unapplied_reason to represent a row created before v54.
+        })
+
+        val offsets = SupplierPayablesRepository.getSupplierAging(db, 1, supplierId, "2026-11-05")
+            .getJSONArray("legacy_payment_offsets_by_currency")
+        assertEquals(1, offsets.length())
+        assertEquals(3L, offsets.getJSONObject(0).getLong("currency_id"))
+        assertEquals(25.0, offsets.getJSONObject(0).getDouble("amount"), 0.0001)
+        assertEquals("historical_or_unmatched_supplier_balance",
+            offsets.getJSONObject(0).getString("classification"))
+        assertTrue(offsets.getJSONObject(0).getBoolean("legacy_balance_offset_not_invoice_allocated"))
     }
 
     @Test
