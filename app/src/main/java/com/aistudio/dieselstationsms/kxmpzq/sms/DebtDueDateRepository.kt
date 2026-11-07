@@ -94,22 +94,13 @@ object DebtDueDateRepository {
             )
         """.trimIndent())
         seedDefaultPaymentTerms(db)
-        db.execSQL("CREATE TABLE IF NOT EXISTS debt_due_date_migrations (migration_key TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
         if(!triggerExists(db,"trg_debt_due_date_sales_insert_v4") ||
            !triggerExists(db,"trg_debt_due_date_sales_update_v4")) createDueDateTriggers(db)
 
-        val applied=db.rawQuery(
-            "SELECT 1 FROM debt_due_date_migrations WHERE migration_key='credit-sale-due-date-v3' LIMIT 1",
-            null
-        ).use { it.moveToFirst() }
-        if(!applied) {
-            db.beginTransaction()
-            try {
-                backfillMissingDueDates(db)
-                db.execSQL("INSERT INTO debt_due_date_migrations(migration_key) VALUES('credit-sale-due-date-v3')")
-                db.setTransactionSuccessful()
-            } finally { db.endTransaction() }
-        }
+        // Phase 1 is a policy and protection gate, not a historical migration.
+        // Never mutate existing sales while a read path, worker, bridge, or screen
+        // asks for the debt schema. Historical reconstruction must be a separate,
+        // explicitly approved operation in a later phase with dry-run and rollback.
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_debt_due_dates_station_date ON sales_transactions(station_id,due_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payment_terms_scope_active ON payment_terms(station_id,applies_to,is_active,sort_order)")
     }
@@ -771,84 +762,8 @@ object DebtDueDateRepository {
     }
 
 
-    private fun backfillMissingDueDates(db:SQLiteDatabase) {
-        val sc=columns(db,"sales_transactions")
-        val pc=columns(db,"parties")
-        val customer=listOf("customer_party_id","customer_id","party_id").firstOrNull { it in sc } ?: return
-        if("payment_method" !in sc || "due_date" !in sc || !tableExists(db,"parties")) return
-        val bases=listOf("business_day","transaction_date","sale_date").filter { it in sc }
-        val basisParts=bases.map { "NULLIF(substr(s.`"+it+"`,1,10),'')" }
-        val basis=when {
-            basisParts.isEmpty() -> "NULL"
-            basisParts.size==1 -> basisParts[0]
-            else -> "COALESCE("+basisParts.joinToString(",")+")"
-        }
-        val scope=if("station_id" in pc && "station_id" in sc) " AND p.station_id=s.station_id" else ""
-        val partyLive=if("is_deleted" in pc) " AND COALESCE(p.is_deleted,0)=0" else ""
-        val pTerms=if("payment_terms" in pc) "COALESCE(p.payment_terms,'')" else "''"
-        val pDays=if("payment_terms_days" in pc) "p.payment_terms_days" else "NULL"
-        val pTerm=if("payment_terms_id" in pc) "p.payment_terms_id" else "NULL"
-        val sTerms=if("payment_terms_at_sale" in sc) "COALESCE(s.payment_terms_at_sale,'')" else "''"
-        val sDays=if("payment_terms_days_at_sale" in sc) "s.payment_terms_days_at_sale" else "NULL"
-        val sTerm=if("payment_terms_id_at_sale" in sc) "s.payment_terms_id_at_sale" else "NULL"
-        val saleLive=if("is_deleted" in sc) "COALESCE(s.is_deleted,0)=0" else "1=1"
-        val credit="LOWER(REPLACE(REPLACE(TRIM(COALESCE(s.payment_method,'')),' ',''),'-','_')) IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')"
-        val saleStatus=if("status" in sc) "AND LOWER(COALESCE(s.status,'')) NOT IN ('cancelled','refunded','void','reversed')" else ""
-        data class Legacy(val id:Long,val station:Int,val due:String,val source:String,val base:String,val st:String,val sd:Int?,val si:Long?,val pt:String,val pd:Int?,val pi:Long?,val termsSource:String)
-        val rows=mutableListOf<Legacy>()
-        db.rawQuery(
-            """SELECT s.id,COALESCE(s.station_id,0),COALESCE(s.due_date,''),COALESCE(s.due_date_source,''),
-                      COALESCE($basis,''),$sTerms,$sDays,$sTerm,$pTerms,$pDays,$pTerm
-                      ,COALESCE(s.payment_terms_source_at_sale,'')
-               FROM sales_transactions s
-               LEFT JOIN parties p ON p.id=s.`$customer`$scope$partyLive
-               WHERE ($credit) AND ($saleLive) $saleStatus""",
-            null
-        ).use { c -> while(c.moveToNext()) rows+=Legacy(
-            c.getLong(0),c.getInt(1),c.getString(2).orEmpty(),c.getString(3).orEmpty(),c.getString(4).orEmpty(),
-            c.getString(5).orEmpty(),if(c.isNull(6)) null else c.getInt(6),if(c.isNull(7)) null else c.getLong(7),
-            c.getString(8).orEmpty(),if(c.isNull(9)) null else c.getInt(9),if(c.isNull(10)) null else c.getLong(10),c.getString(11).orEmpty()
-        ) }
-        rows.forEach { row ->
-            if(row.due.isNotBlank()) {
-                if(row.source.isBlank()) db.update(
-                    "sales_transactions",
-                    ContentValues().apply { put("due_date_source","legacy_unverified");putNull("due_date_basis") },
-                    "id=? AND station_id=?",arrayOf(row.id.toString(),row.station.toString())
-                )
-                return@forEach
-            }
-            val base=parseDate(row.base)
-            if(row.termsSource!="explicit_text") {
-                db.update("sales_transactions",ContentValues().apply {
-                    putNull("due_date")
-                    if(base!=null) { put("due_date_basis",base.toString());put("due_date_source","missing_terms") }
-                    else { putNull("due_date_basis");put("due_date_source","missing_base_date") }
-                },"id=? AND station_id=? AND (due_date IS NULL OR TRIM(due_date)='')",arrayOf(row.id.toString(),row.station.toString()))
-                return@forEach
-            }
-            val snapshot=row.st.isNotBlank() || row.sd!=null || row.si!=null
-            val terms=row.st.ifBlank { row.pt }
-            val days=(row.sd ?: row.pd ?: parseTermsDays(terms))?.takeIf { it in 0..365 }
-            if(days==null) {
-                db.update("sales_transactions",ContentValues().apply { putNull("due_date");put("due_date_source","missing_terms") },
-                    "id=? AND station_id=? AND (due_date IS NULL OR TRIM(due_date)='')",arrayOf(row.id.toString(),row.station.toString()))
-                return@forEach
-            }
-            val termId=row.si ?: row.pi
-            val source=when { base==null -> "missing_base_date";snapshot -> "legacy_rebuilt_snapshot";else -> "legacy_rebuilt_estimated" }
-            val values=ContentValues().apply {
-                put("payment_terms_at_sale",terms);put("payment_terms_days_at_sale",days)
-                if(termId!=null) put("payment_terms_id_at_sale",termId) else putNull("payment_terms_id_at_sale")
-                if(base!=null) { put("due_date_basis",base.toString());put("due_date",base.plusDays(days.toLong()).toString()) }
-                else { putNull("due_date_basis");putNull("due_date") }
-                put("due_date_source",source)
-            }
-            db.update("sales_transactions",values,"id=? AND station_id=? AND (due_date IS NULL OR TRIM(due_date)='')",arrayOf(row.id.toString(),row.station.toString()))
-        }
-    }
-
-
+    // Historical due-date reconstruction is intentionally not implemented in this phase.
+    // Add it only as a separately reviewed, explicitly authorized migration in a later phase.
     fun parseTermsDays(terms:String?):Int? {
         val normalized=terms.orEmpty().map { ch ->
             when(ch) {

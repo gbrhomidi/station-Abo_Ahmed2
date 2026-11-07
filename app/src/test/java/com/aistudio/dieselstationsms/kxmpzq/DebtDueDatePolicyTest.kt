@@ -68,6 +68,30 @@ class DebtDueDatePolicyTest {
         assertTrue(db.rawQuery("PRAGMA table_info(sales_transactions)",null).use { c -> var found=false;while(c.moveToNext()) if(c.getString(c.getColumnIndexOrThrow("name"))=="payment_terms_source_at_sale") found=true;found })
     }
 
+    @Test fun schemaInitializationDoesNotBackfillHistoricalSales() {
+        val db=helper.writableDatabase
+        val partyId=addParty(db,"historical-no-backfill","صافي 30 يوم",30,"explicit_text")
+        val saleId=addSale(db,"historical-no-backfill",partyId,null,null,"explicit_text")
+
+        DebtDueDateRepository.ensureSchema(helper)
+
+        db.rawQuery(
+            "SELECT due_date,due_date_source FROM sales_transactions WHERE id=?",
+            arrayOf(saleId.toString())
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            assertTrue("schema setup must not write a historical due date", cursor.isNull(0))
+            assertTrue("schema setup must not label a historical reconstruction", cursor.isNull(1))
+        }
+        assertFalse(
+            "historical migration bookkeeping must not be created by the read/schema path",
+            db.rawQuery(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='debt_due_date_migrations'",
+                null
+            ).use { it.moveToFirst() }
+        )
+    }
+
     @Test fun unknownLegacyTermsAreNotEligibleButExplicitTermsCreateDueDates() {
         DebtDueDateRepository.ensureSchema(helper)
         val db=helper.writableDatabase
