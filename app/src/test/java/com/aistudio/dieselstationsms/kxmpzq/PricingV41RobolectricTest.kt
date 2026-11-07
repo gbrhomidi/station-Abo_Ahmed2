@@ -475,7 +475,7 @@ class PricingV41RobolectricTest {
         column: String
     ) {
         fun quoteIdentifier(identifier: String): String =
-            "`\u0024{identifier.replace("`", "``")}`"
+            "`" + identifier.replace("`", "``") + "`"
 
         fun columnsOf(tableName: String): List<String> =
             db.rawQuery("PRAGMA table_info(${quoteIdentifier(tableName)})", null).use { cursor ->
@@ -574,7 +574,7 @@ class PricingV41RobolectricTest {
 
         val prefix = createSql.substring(0, opening)
         val tablePrefixPattern = Regex(
-            """(?i)^(CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?)(?:`|")?${Regex.escape(table)}(?:`|")?\\s*$"""
+            """(?i)^(CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?)(?:`|")?${Regex.escape(table)}(?:`|")?\s*$"""
         )
         val prefixMatch = tablePrefixPattern.find(prefix)
             ?: error("Could not safely replace table name in CREATE TABLE SQL for $table")
@@ -586,6 +586,12 @@ class PricingV41RobolectricTest {
         val dependentColumn = Regex(
             "(?i)(?<![A-Za-z0-9_])${Regex.escape(column)}(?![A-Za-z0-9_])"
         )
+        val previousSequence = runCatching {
+            db.rawQuery("SELECT seq FROM sqlite_sequence WHERE name=?", arrayOf(table)).use {
+                if (it.moveToFirst()) it.getLong(0) else null
+            }
+        }.getOrNull()
+
         val schemaObjects = db.rawQuery(
             """SELECT type, sql FROM sqlite_master
                WHERE tbl_name=? AND type IN ('index','trigger') AND sql IS NOT NULL
@@ -622,6 +628,13 @@ class PricingV41RobolectricTest {
                 db.execSQL(
                     "ALTER TABLE ${quoteIdentifier(temporaryTable)} RENAME TO ${quoteIdentifier(table)}"
                 )
+                previousSequence?.let { sequence ->
+                    db.execSQL("DELETE FROM sqlite_sequence WHERE name=?", arrayOf(table))
+                    db.execSQL(
+                        "INSERT INTO sqlite_sequence(name, seq) VALUES (?, ?)",
+                        arrayOf(table, sequence)
+                    )
+                }
                 schemaObjects.forEach(db::execSQL)
                 db.setTransactionSuccessful()
             } finally {
