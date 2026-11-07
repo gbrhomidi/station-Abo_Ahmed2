@@ -53,13 +53,6 @@ class DatabaseHelperCompatibilityMatrixTest {
             // and attempt tables were durably installed.
             database.beginTransaction()
             try {
-                val legacyCreateSql = database.rawQuery(
-                    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sms_outbox'",
-                    null
-                ).use { cursor ->
-                    assertTrue("fresh database must contain sms_outbox", cursor.moveToFirst())
-                    cursor.getString(0)
-                }
                 val queuedRows = database.rawQuery("SELECT COUNT(*) FROM sms_outbox", null).use {
                     assertTrue(it.moveToFirst())
                     it.getInt(0)
@@ -70,7 +63,37 @@ class DatabaseHelperCompatibilityMatrixTest {
                 database.execSQL("DROP TABLE sms_outbox_attempts")
                 database.execSQL("DROP TABLE sms_outbox_late_callbacks")
                 database.execSQL("DROP TABLE sms_outbox")
-                database.execSQL(legacyCreateSql)
+                database.execSQL("""
+                    CREATE TABLE sms_outbox (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        message_id TEXT NOT NULL UNIQUE,
+                        event_id TEXT,
+                        conversation_id TEXT,
+                        business_entity_id TEXT,
+                        channel TEXT NOT NULL DEFAULT 'sms',
+                        provider_message_id TEXT,
+                        recipient TEXT NOT NULL,
+                        body TEXT NOT NULL,
+                        parts_count INTEGER NOT NULL DEFAULT 1,
+                        priority TEXT NOT NULL DEFAULT 'NORMAL',
+                        status TEXT NOT NULL DEFAULT 'QUEUED',
+                        attempt_count INTEGER NOT NULL DEFAULT 0,
+                        created_at INTEGER NOT NULL,
+                        queued_at INTEGER NOT NULL,
+                        sent_at INTEGER,
+                        delivered_at INTEGER,
+                        failed_at INTEGER,
+                        failure_code TEXT,
+                        failure_reason TEXT,
+                        subscription_id INTEGER,
+                        dedupe_key TEXT NOT NULL UNIQUE,
+                        next_attempt_at INTEGER NOT NULL DEFAULT 0,
+                        last_part_index INTEGER NOT NULL DEFAULT 0,
+                        CHECK(parts_count > 0),
+                        CHECK(attempt_count >= 0),
+                        CHECK(status IN ('DRAFT','QUEUED','SENDING','SENT','DELIVERY_PENDING','DELIVERED','FAILED','RETRY_PENDING','CANCELLED','EXPIRED'))
+                    )
+                """.trimIndent())
                 database.version = 57
                 database.setTransactionSuccessful()
             } finally {

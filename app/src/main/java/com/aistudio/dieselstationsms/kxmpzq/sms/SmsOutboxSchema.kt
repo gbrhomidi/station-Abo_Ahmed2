@@ -117,12 +117,14 @@ internal object SmsOutboxSchema {
         val exists = db.rawQuery("PRAGMA table_info(`$table`)", null).use { cursor ->
             val nameIndex = cursor.getColumnIndexOrThrow("name")
             var found = false
-            while (cursor.moveToNext()) {
-                if (cursor.getString(nameIndex).equals(column, ignoreCase = true)) {
-                    found = true
-                    break
+            if (cursor.moveToFirst()) {
+                do {
+                    if (cursor.getString(nameIndex).equals(column, ignoreCase = true)) {
+                        found = true
+                        break
+                    }
+                } while (cursor.moveToNext())
                 }
-            }
             found
         }
         if (!exists) db.execSQL("ALTER TABLE `$table` ADD COLUMN `$column` $definition")

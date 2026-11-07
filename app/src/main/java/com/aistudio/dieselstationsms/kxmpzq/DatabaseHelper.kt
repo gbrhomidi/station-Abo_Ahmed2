@@ -6925,6 +6925,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 dedupe_key TEXT NOT NULL UNIQUE,
                 next_attempt_at INTEGER NOT NULL DEFAULT 0,
                 last_part_index INTEGER NOT NULL DEFAULT 0,
+                claimed_at INTEGER,
+                lease_until INTEGER,
+                lease_owner TEXT,
+                attempt_token TEXT,
+                claim_generation INTEGER NOT NULL DEFAULT 0,
+                claim_count INTEGER NOT NULL DEFAULT 0,
+                submission_outcome TEXT NOT NULL DEFAULT 'NONE',
                 CHECK(parts_count > 0),
                 CHECK(attempt_count >= 0),
                 CHECK(status IN ('DRAFT','QUEUED','SENDING','SENT','DELIVERY_PENDING','DELIVERED','FAILED','RETRY_PENDING','CANCELLED','EXPIRED'))
