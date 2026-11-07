@@ -69,7 +69,11 @@ class DebtDueDatePolicyTest {
     }
 
     @Test fun schemaInitializationDoesNotBackfillHistoricalSales() {
+        DebtDueDateRepository.ensureSchema(helper)
         val db=helper.writableDatabase
+        db.execSQL("DROP TRIGGER IF EXISTS trg_debt_due_date_sales_insert_v4")
+        db.execSQL("DROP TRIGGER IF EXISTS trg_debt_due_date_sales_update_v4")
+        db.execSQL("PRAGMA foreign_keys=OFF")
         val partyId=addParty(db,"historical-no-backfill","صافي 30 يوم",30,"explicit_text")
         val saleId=addSale(db,"historical-no-backfill",partyId,null,null,"explicit_text")
 
