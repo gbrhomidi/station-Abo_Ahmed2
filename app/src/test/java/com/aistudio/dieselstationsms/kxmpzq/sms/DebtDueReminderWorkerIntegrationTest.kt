@@ -57,7 +57,7 @@ class DebtDueReminderWorkerIntegrationTest {
     @After
     fun tearDown() {
         runCatching {
-            WorkManager.getInstance(context).cancelAllWork().get(10, TimeUnit.SECONDS)
+            WorkManager.getInstance(context).cancelAllWork()
         }
         DatabaseInitializationCoordinator.resetForTests()
         DatabaseHelper.closeInstance()
