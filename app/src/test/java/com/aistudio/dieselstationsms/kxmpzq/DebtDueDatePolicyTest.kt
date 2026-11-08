@@ -218,10 +218,10 @@ class DebtDueDatePolicyTest {
 
     @Test fun customerTermListExcludesCashAndSupplierTermsAfterLegacyScopeMigration() {
         DebtDueDateRepository.ensureSchema(helper)
-        val db = helper.writableDatabase
-        // Simulate an installation where the built-in catalogue was previously seeded as BOTH.
-        db.execSQL("UPDATE payment_terms SET applies_to='both' WHERE station_id IS NULL AND code IN ('AFTER_1','AFTER_3','NET_7','NET_15','NET_30','NET_45','NET_60','NET_90')")
-        db.insertOrThrow("payment_terms", null, ContentValues().apply {
+        val legacyDb = helper.writableDatabase
+        // Simulate a real V59 catalogue: built-ins were incorrectly shared by customers and suppliers.
+        legacyDb.execSQL("UPDATE payment_terms SET applies_to='both' WHERE station_id IS NULL AND code IN ('AFTER_1','AFTER_3','NET_7','NET_15','NET_30','NET_45','NET_60','NET_90')")
+        legacyDb.insertOrThrow("payment_terms", null, ContentValues().apply {
             put("code", "SUPPLIER_ONLY_TEST")
             put("name_ar", "شرط مورد اختباري")
             put("name_en", "Supplier-only test term")
@@ -232,9 +232,28 @@ class DebtDueDatePolicyTest {
             put("is_active", 1)
             put("sort_order", 900)
         })
+        val supplierTypeId = legacyDb.rawQuery(
+            "SELECT id FROM party_types WHERE type_code='SUPPLIER' AND is_deleted=0 AND is_active=1 LIMIT 1",
+            null
+        ).use { cursor -> assertTrue(cursor.moveToFirst()); cursor.getLong(0) }
+        val supplierId = legacyDb.insertOrThrow("parties", null, ContentValues().apply {
+            put("uuid", "supplier-term-scope-${System.nanoTime()}")
+            put("party_code", "SUPPLIER-TERM-${System.nanoTime()}")
+            put("party_type_id", supplierTypeId)
+            put("station_id", 1)
+            put("legal_name", "Supplier term scope acceptance")
+            put("commercial_name_ar", "مورد اختبار نطاق شروط الدفع")
+            put("is_active", 1)
+            put("is_deleted", 0)
+        })
 
-        // ensureSchema is the idempotent migration entry used by DatabaseHelper.onCreate/onUpgrade.
-        DebtDueDateRepository.ensureSchema(helper)
+        // Force SQLiteOpenHelper through the actual V59 -> V60 migration path.
+        legacyDb.version = 59
+        DatabaseHelper.closeInstance()
+        helper = DatabaseHelper.getInstance(context)
+        val migratedDb = helper.writableDatabase
+        assertEquals("The V59 -> V60 upgrade must execute for existing installations", 60, migratedDb.version)
+
         val rows = DebtDueDateRepository.getPaymentTerms(helper, 1, "customer")
         assertEquals(8, rows.length())
         for (i in 0 until rows.length()) {
@@ -249,24 +268,10 @@ class DebtDueDatePolicyTest {
         assertEquals("supplier", suppliers.getJSONObject(0).getString("applies_to"))
         assertEquals("SUPPLIER_ONLY_TEST", suppliers.getJSONObject(0).getString("code"))
 
-        val supplierTypeId = db.rawQuery(
-            "SELECT id FROM party_types WHERE type_code='SUPPLIER' AND is_deleted=0 AND is_active=1 LIMIT 1",
-            null
-        ).use { cursor -> assertTrue(cursor.moveToFirst()); cursor.getLong(0) }
-        val supplierId = db.insertOrThrow("parties", null, ContentValues().apply {
-            put("uuid", "supplier-term-scope-${System.nanoTime()}")
-            put("party_code", "SUPPLIER-TERM-${System.nanoTime()}")
-            put("party_type_id", supplierTypeId)
-            put("station_id", 1)
-            put("legal_name", "Supplier term scope acceptance")
-            put("commercial_name_ar", "مورد اختبار نطاق شروط الدفع")
-            put("is_active", 1)
-            put("is_deleted", 0)
-        })
         assertEquals("صافي 14 يوم", DebtDueDateRepository.persistPartyTerms(
             helper, supplierId, 1, "صافي 14 يوم"
         ))
-        val persistedSupplierTermId = db.rawQuery(
+        val persistedSupplierTermId = migratedDb.rawQuery(
             "SELECT payment_terms_id FROM parties WHERE id=? AND station_id=1",
             arrayOf(supplierId.toString())
         ).use { cursor -> assertTrue(cursor.moveToFirst()); cursor.getLong(0) }

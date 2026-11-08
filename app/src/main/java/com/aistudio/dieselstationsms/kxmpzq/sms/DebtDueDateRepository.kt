@@ -179,6 +179,29 @@ object DebtDueDateRepository {
         reconstructProvableHistoricalDueDates(db)
     }
 
+    /**
+     * Existing V59 installations already have the payment_terms table, but its original
+     * DEFAULT was 'both' and the built-in rows may also have been seeded with that scope.
+     * Run this repair as an explicit SQLiteOpenHelper upgrade transaction so installed
+     * databases receive the same customer-only catalogue as fresh installations.
+     */
+    fun migrateV59ToV60(db: SQLiteDatabase) {
+        check(db.inTransaction()) { "V59-to-V60 migration requires the onUpgrade transaction" }
+        if (!tableExists(db, "sales_transactions")) return
+        ensureSchema(db)
+
+        val invalidBuiltInScopes = db.rawQuery(
+            """SELECT COUNT(*) FROM payment_terms
+               WHERE station_id IS NULL
+                 AND code IN ('AFTER_1','AFTER_3','NET_7','NET_15','NET_30','NET_45','NET_60','NET_90')
+                 AND applies_to<>'customer'""",
+            null
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+        check(invalidBuiltInScopes == 0L) {
+            "Built-in payment terms were not migrated to the customer scope"
+        }
+    }
+
     /** Rebuild only from immutable invoice-time terms plus a stored invoice-time basis. */
     private fun reconstructProvableHistoricalDueDates(db: SQLiteDatabase) {
         val saleColumns = columns(db, "sales_transactions")

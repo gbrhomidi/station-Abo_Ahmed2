@@ -56,7 +56,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 59
+        const val VERSION = 60
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -314,6 +314,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     52 -> ensureDashboardDebtQueryIndexes(db)
                     53 -> SupplierPayablesRepository.ensureSchema(db)
                     58 -> DebtDueDateRepository.migrateV58ToV59(db)
+                    59 -> DebtDueDateRepository.migrateV59ToV60(db)
                 }
             }
             ensureModule006Schema(db)
