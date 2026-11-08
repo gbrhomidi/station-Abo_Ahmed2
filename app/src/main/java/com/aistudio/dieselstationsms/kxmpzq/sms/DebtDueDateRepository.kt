@@ -224,12 +224,14 @@ object DebtDueDateRepository {
     private fun seedDefaultPaymentTerms(db: SQLiteDatabase) {
         val items=listOf(
             PaymentTermSeed("CASH","نقدي / فوري","Cash / Immediate",0,0),
-            PaymentTermSeed("NET_7","صافي 7 أيام","Net 7 days",7,10),
-            PaymentTermSeed("NET_15","صافي 15 يوماً","Net 15 days",15,20),
-            PaymentTermSeed("NET_30","صافي 30 يوم","Net 30 days",30,30),
-            PaymentTermSeed("NET_45","صافي 45 يوماً","Net 45 days",45,40),
-            PaymentTermSeed("NET_60","صافي 60 يوماً","Net 60 days",60,50),
-            PaymentTermSeed("NET_90","صافي 90 يوماً","Net 90 days",90,60)
+            PaymentTermSeed("AFTER_1","بعد يوم واحد","After 1 day",1,10),
+            PaymentTermSeed("AFTER_3","بعد 3 أيام","After 3 days",3,20),
+            PaymentTermSeed("NET_7","بعد 7 أيام","After 7 days",7,30),
+            PaymentTermSeed("NET_15","بعد 15 يوماً","After 15 days",15,40),
+            PaymentTermSeed("NET_30","بعد 30 يوماً","After 30 days",30,50),
+            PaymentTermSeed("NET_45","بعد 45 يوماً","After 45 days",45,60),
+            PaymentTermSeed("NET_60","بعد 60 يوماً","After 60 days",60,70),
+            PaymentTermSeed("NET_90","بعد 90 يوماً","After 90 days",90,80)
         )
         items.forEach { item ->
             db.execSQL(
@@ -237,6 +239,11 @@ object DebtDueDateRepository {
                    (code,name_ar,name_en,days,applies_to,station_id,is_default,is_active,sort_order)
                    VALUES(?,?,?,?, 'both', NULL, ?, 1, ?)""",
                 arrayOf(item.code,item.nameAr,item.nameEn,item.days,if(item.code=="NET_30") 1 else 0,item.sortOrder)
+            )
+            // Catalogue labels may be updated; immutable invoice snapshots are not.
+            db.execSQL(
+                "UPDATE payment_terms SET name_ar=?, name_en=?, days=?, sort_order=? WHERE code=? AND station_id IS NULL",
+                arrayOf(item.nameAr, item.nameEn, item.days, item.sortOrder, item.code)
             )
         }
     }
@@ -430,7 +437,7 @@ object DebtDueDateRepository {
         require(scope in setOf("customer","supplier","both")) { "نوع شروط الدفع غير صالح" }
         return helper.readableDatabase.rawQuery(
             """SELECT id,code,name_ar,name_en,days,applies_to,station_id,is_default,sort_order
-               FROM payment_terms WHERE is_active=1 AND applies_to IN ('both',?)
+               FROM payment_terms WHERE is_active=1 AND days>0 AND applies_to IN ('both',?)
                  AND (station_id IS NULL OR station_id=?)
                ORDER BY CASE WHEN is_default=1 THEN 0 ELSE 1 END,sort_order,id""",
             arrayOf(scope,stationId.toString())
@@ -1010,7 +1017,8 @@ object DebtDueDateRepository {
         }.joinToString("").trim().lowercase(Locale.ROOT)
         if(normalized.isBlank()) return TermsParseResult.Unknown("empty_terms")
         if(normalized in setOf("cash","نقد","نقدي","نقداً","فوري","فوراً","عند الاستلام","upon receipt","immediate")) return TermsParseResult.Known(0)
-        val explicit=Regex("""(?:net|صافي|خلال|within)\s*(\d{1,3})(?:\s*(?:days?|يوم(?:اً|ًا|ين)?|أيام))?""")
+        if(normalized in setOf("بعد يوم", "بعد يوم واحد", "after 1 day", "after one day")) return TermsParseResult.Known(1)
+        val explicit=Regex("""(?:net|صافي|خلال|within|بعد|after)\s*(\d{1,3})(?:\s*(?:days?|يوم(?:اً|ًا|ين)?|أيام))?""")
             .findAll(normalized).mapNotNull { it.groupValues.getOrNull(1)?.toIntOrNull() }.toList()
         val exactDays=Regex("""^(\d{1,3})\s*(?:days?|يوم(?:اً|ًا|ين)?|أيام)$""")
             .matchEntire(normalized)?.groupValues?.getOrNull(1)?.toIntOrNull()

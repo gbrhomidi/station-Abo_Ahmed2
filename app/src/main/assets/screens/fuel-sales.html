@@ -978,6 +978,8 @@ body.sidebar-is-open .sidebar-toggle {
 
 .form-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .form-group.full { grid-column: 1 / -1; }
+.form-group.payment-terms-field { grid-column: auto; min-width: 0; width: 100%; }
+.form-group.payment-terms-field .form-input { min-width: 0; width: 100%; }
 .delivery-fee-composite { display:flex; flex-direction:row; align-items:flex-end; gap:8px; width:100%; min-width:0; }
 .delivery-fee-composite .delivery-fee-cell { display:flex; flex-direction:column; gap:4px; flex:1 1 0; min-width:0; }
 .delivery-fee-composite .form-input { width:100%; min-width:0; padding:8px 6px; font-size:.76rem; }
@@ -2146,8 +2148,8 @@ const CFG = {
         {label:'الإجمالي', key:'total_amount', type:'number', required:true, readonly:true},
         {label:'طريقة الدفع', key:'payment_method', type:'select', required:true},
         {label:'العميل', key:'customer_id', type:'select', required:false},
-        {label:'شروط الدفع', key:'payment_terms_id', type:'select', required:false, full:true},
-        {label:'تاريخ الاستحقاق المتوقع', key:'payment_terms_preview', type:'payment_terms_preview', required:false, full:true},
+        {label:'شروط الدفع', key:'payment_terms_id', type:'select', required:false},
+        {label:'تاريخ الاستحقاق المتوقع', key:'payment_terms_preview', type:'payment_terms_preview', required:false},
         {label:'تاريخ البيع', key:'sale_date', type:'date', required:true, readonly:true},
         {label:'وقت البيع', key:'sale_time', type:'time', required:true, readonly:true},
         {label:'رسوم خدمة التوصيل واحتسابها', key:'delivery_fee_configuration', type:'delivery_fee_configuration', required:false, full:true},
@@ -2745,7 +2747,7 @@ function inputHtml(def, row) {
             '</div></div>';
     }
     if (def.type === 'payment_terms_preview') {
-        return '<div class="form-group full" data-payment-terms-preview-group="true" style="display:none">' +
+        return '<div class="form-group payment-terms-field" data-payment-terms-preview-group="true" style="display:none">' +
             '<label class="form-label">' + esc(def.label) + '</label>' +
             '<input id="paymentTermsDueDatePreview" class="form-input readonly" type="date" readonly tabindex="-1" aria-readonly="true">' +
             '</div>';
@@ -2772,7 +2774,8 @@ function inputHtml(def, row) {
             + '<textarea class="form-input" data-key="' + esc(def.key) + '" rows="3" ' + req + '>' + esc(value) + '</textarea></div>';
     }
     if (def.type === 'select') {
-        return '<div class="form-group' + (def.full?' full':'') + '"><label class="form-label">' + esc(def.label) + (def.required?' *':'') + '</label>'
+        const paymentTermsClass = def.key === 'payment_terms_id' ? ' payment-terms-field' : '';
+        return '<div class="form-group' + paymentTermsClass + (def.full?' full':'') + '"><label class="form-label">' + esc(def.label) + (def.required?' *':'') + '</label>'
             + '<select class="form-input' + cls + '" data-key="' + esc(def.key) + '" ' + req + ' ' + ro + '><option value="">اختر...</option></select></div>';
     }
     const cashCustomerWrapper = def.key === 'cash_customer_name'
@@ -3137,10 +3140,10 @@ async function loadSaleFormLookups(row=null, openToken=state.formOpenSequence) {
     const termSelect = document.querySelector('[data-key="payment_terms_id"]');
     if (termSelect) {
         const terms = Array.isArray(lookups.paymentTerms) ? lookups.paymentTerms : [];
+        const labels = {1:'بعد يوم واحد',3:'بعد 3 أيام',7:'بعد 7 أيام',15:'بعد 15 يوماً',30:'بعد 30 يوماً',45:'بعد 45 يوماً',60:'بعد 60 يوماً',90:'بعد 90 يوماً'};
         termSelect.innerHTML = '<option value="">اختر شروط الدفع من الجدول...</option>' +
             terms.map(term => '<option value="' + esc(term.id) + '" data-days="' + esc(term.days) + '">' +
-                esc(term.name_ar || term.code || 'شرط دفع') + ' — ' +
-                esc(Number(term.days) === 0 ? 'في يوم البيع' : 'بعد ' + term.days + ' يوم') +
+                esc(labels[Number(term.days)] || ('بعد ' + Number(term.days) + ' يوماً')) +
                 '</option>').join('');
         const selectedCustomerId = Number(customerEl?.value || 0);
         const selectedCustomer = lookups.customers.find(item =>

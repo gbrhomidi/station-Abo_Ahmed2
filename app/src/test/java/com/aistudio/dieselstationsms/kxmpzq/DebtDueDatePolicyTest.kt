@@ -81,12 +81,29 @@ class DebtDueDatePolicyTest {
         DebtDueDateRepository.ensureSchema(helper)
         val db=helper.readableDatabase
         assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='payment_terms'",null).use { it.moveToFirst() })
-        assertEquals(7,db.rawQuery("SELECT COUNT(*) FROM payment_terms WHERE is_active=1",null).use { it.moveToFirst();it.getInt(0) })
+        assertEquals(9,db.rawQuery("SELECT COUNT(*) FROM payment_terms WHERE is_active=1",null).use { it.moveToFirst();it.getInt(0) })
+        assertEquals(listOf(1,3,7,15,30,45,60,90), db.rawQuery(
+            "SELECT days FROM payment_terms WHERE is_active=1 AND days>0 AND applies_to IN ('both','customer') ORDER BY sort_order,id", null
+        ).use { c -> buildList { while (c.moveToNext()) add(c.getInt(0)) } })
+        assertEquals("بعد يوم واحد", db.rawQuery("SELECT name_ar FROM payment_terms WHERE code='AFTER_1'", null).use { it.moveToFirst(); it.getString(0) })
+        assertEquals("بعد 3 أيام", db.rawQuery("SELECT name_ar FROM payment_terms WHERE code='AFTER_3'", null).use { it.moveToFirst(); it.getString(0) })
         assertEquals(30,db.rawQuery("SELECT days FROM payment_terms WHERE code='NET_30'",null).use { it.moveToFirst();it.getInt(0) })
         assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='trg_debt_due_date_sales_insert_v4'",null).use { it.moveToFirst() })
         assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='trg_debt_due_date_sales_update_v4'",null).use { it.moveToFirst() })
         assertTrue(db.rawQuery("PRAGMA table_info(parties)",null).use { c -> var found=false;while(c.moveToNext()) if(c.getString(c.getColumnIndexOrThrow("name"))=="payment_terms_source") found=true;found })
         assertTrue(db.rawQuery("PRAGMA table_info(sales_transactions)",null).use { c -> var found=false;while(c.moveToNext()) if(c.getString(c.getColumnIndexOrThrow("name"))=="payment_terms_source_at_sale") found=true;found })
+    }
+
+    @Test fun customerTermListExcludesCashAndUsesShortLabels() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val rows = DebtDueDateRepository.getPaymentTerms(helper, 1, "customer")
+        assertEquals(8, rows.length())
+        for (i in 0 until rows.length()) {
+            val row = rows.getJSONObject(i)
+            assertTrue(row.getInt("days") > 0)
+            assertTrue(row.getString("name_ar").startsWith("بعد "))
+            assertFalse(row.getString("name_ar").contains("صافي"))
+        }
     }
 
     @Test fun schemaInitializationDoesNotBackfillHistoricalSales() {

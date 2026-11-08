@@ -375,8 +375,8 @@ input:focus, select:focus, textarea:focus, .modal-input:focus, .quantity-input:f
     border-color: var(--gold-primary) !important;
     transition: box-shadow 0.2s, outline 0.2s;
 }
-.horizontal-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
-.horizontal-row > div { flex: 1; min-width: 120px; }
+.horizontal-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; width: 100%; min-width: 0; }
+.horizontal-row > div { min-width: 0; width: 100%; }
 
 #invoiceNumber, #invoiceNumber.form-control {
     color: #dc2626 !important;
@@ -6617,7 +6617,7 @@ function updatePosPaymentTermsVisibility() {
     updatePosPaymentTermsPreview();
 }
 
-function loadPaymentTerms() {
+    function loadPaymentTerms() {
     return apiCall('getPaymentTerms', {applies_to:'customer'})
         .then(response => {
             const raw = response.data || response;
@@ -6630,8 +6630,9 @@ function loadPaymentTerms() {
                 option.value = String(term.id);
                 option.dataset.days = String(term.days);
                 const days = Number(term.days);
-                option.textContent = String(term.name_ar || term.code || 'شرط دفع') +
-                    (days === 0 ? ' — في يوم البيع' : ' — بعد ' + days + ' يوم');
+                const labels = {1:'بعد يوم واحد',3:'بعد 3 أيام',7:'بعد 7 أيام',15:'بعد 15 يوماً',30:'بعد 30 يوماً',45:'بعد 45 يوماً',60:'بعد 60 يوماً',90:'بعد 90 يوماً'};
+                option.textContent = labels[days] || ('بعد ' + days + ' يوماً');
+                option.title = String(term.name_ar || term.code || option.textContent);
                 select.appendChild(option);
             });
             syncPosPaymentTermForCustomer(selectedCreditCustomer);

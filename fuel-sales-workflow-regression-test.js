@@ -73,7 +73,8 @@ async function verifyNewSaleModalRuntime(inlineScript) {
                     shift: { shift_id: 8 },
                     pumps: [{ id: 3, pump_name: 'مضخة اختبار' }],
                     fuels: [{ id: 2, fuel_name: 'ديزل', default_sale_price: 2.5 }],
-                    customers: [{ id: 11, commercial_name_ar: 'عميل آجل للاختبار' }]
+                    customers: [{ id: 11, commercial_name_ar: 'عميل آجل للاختبار' }],
+                    paymentTerms: [{ id: 21, code: 'AFTER_1', name_ar: 'بعد يوم واحد', days: 1, applies_to: 'customer' }]
                 };
             } else if (operation === 'nozzles') {
                 result = [{ id: 5, nozzle_number: 'فوهة اختبار', fuel_type_id: 2 }];
@@ -152,6 +153,9 @@ async function verifyNewSaleModalRuntime(inlineScript) {
         expect(customer.value === '', 'اختيار المبيعات النقدية لم يُمسح عند التحويل إلى البيع الآجل');
         customer.value = '11';
         customer.dispatchEvent(new window.Event('change', { bubbles: true }));
+        const paymentTerm = form.querySelector('[data-key="payment_terms_id"]');
+        paymentTerm.value = '21';
+        paymentTerm.dispatchEvent(new window.Event('change', { bubbles: true }));
 
         const deliveryLocation = form.querySelector('[data-key="delivery_location"]');
         const deliveryFee = form.querySelector('[data-key="delivery_service_fee"]');
