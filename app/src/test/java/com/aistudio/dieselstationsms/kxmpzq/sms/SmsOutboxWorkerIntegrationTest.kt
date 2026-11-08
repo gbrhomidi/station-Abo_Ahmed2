@@ -106,6 +106,18 @@ class SmsOutboxWorkerIntegrationTest {
         val today = BusinessDay.currentDate()
         val queued = mutableListOf<SmsOutboxRepository.OutboxMessage>()
         val debtRows = mutableListOf<Pair<Long, Long>>()
+        val probe = SmsOutboxRepository.enqueue(
+            database,
+            "967771234567",
+            "Concurrent transport probe",
+            dedupeKey = "load-transport-probe"
+        )!!
+        database.writableDatabase.update(
+            "sms_outbox",
+            ContentValues().apply { put("created_at", 0L) },
+            "message_id = ?",
+            arrayOf(probe.messageId)
+        )
         val saleColumns = database.readableDatabase.rawQuery(
             "PRAGMA table_info(sales_transactions)", null
         ).use { cursor ->
@@ -176,7 +188,7 @@ class SmsOutboxWorkerIntegrationTest {
         val transport = object : SmsTransportSender {
             override fun send(job: SmsOutboxRepository.OutboxMessage) {
                 sentMessageIds += job.messageId
-                if (sentMessageIds.size == 1) {
+                if (job.messageId == probe.messageId) {
                     transportStarted.countDown()
                     check(updateCommitted.await(10, TimeUnit.SECONDS)) {
                         "Concurrent payment/contact update did not finish while transport was active"
@@ -218,7 +230,7 @@ class SmsOutboxWorkerIntegrationTest {
         }
 
         try {
-            repeat(5) {
+            repeat(6) {
                 val worker = TestListenableWorkerBuilder.from(context, SmsOutboxWorker::class.java)
                     .setWorkerFactory(object : WorkerFactory() {
                         override fun createWorker(
@@ -238,10 +250,10 @@ class SmsOutboxWorkerIntegrationTest {
             updater.shutdownNow()
         }
 
-        assertEquals("Only the message whose transport began before the update may be submitted", 1, sentMessageIds.size)
+        assertEquals("Only the non-debt probe may be submitted before the concurrent update", listOf(probe.messageId), sentMessageIds)
         assertEquals(1, countStatus("SENDING"))
-        assertEquals(99, countStatus("CANCELLED"))
-        assertEquals("No queued debt reminder may remain after all five 20-message batches", 0, countStatus("QUEUED"))
+        assertEquals(100, countStatus("CANCELLED"))
+        assertEquals("No queued debt reminder may remain after all six 20-message batches", 0, countStatus("QUEUED"))
     }
 
     private fun status(id: String): String =
