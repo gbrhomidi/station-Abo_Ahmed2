@@ -111,6 +111,25 @@ class CreditInventoryWorkflowRobolectricTest {
             assertEquals("sale_creation", cursor.getString(4))
             cursor.getString(1)
         }
+        val salesBeforeFailure = db.rawQuery("SELECT COUNT(*) FROM sales_transactions WHERE station_id=1", null).use { it.moveToFirst(); it.getInt(0) }
+        val stockBeforeFailure = db.rawQuery("SELECT quantity_on_hand FROM inventory_levels WHERE product_id=? ORDER BY warehouse_id LIMIT 1", arrayOf(productId.toString())).use { it.moveToFirst(); it.getDouble(0) }
+        db.execSQL("""
+            CREATE TRIGGER reject_new_sale_snapshot BEFORE UPDATE OF due_date_source ON sales_transactions
+            WHEN OLD.due_date_source='sales_trigger_v4' AND NEW.due_date_source='sale_creation'
+            BEGIN SELECT RAISE(ABORT, 'forced payment-term snapshot failure'); END
+        """.trimIndent())
+        val retryKey = "credit-snapshot-failure-${UUID.randomUUID()}"
+        val failedSave = helper.completeSale(
+            JSONObject(payload.toString()).put("idempotency_key", retryKey)
+                .put("products", JSONArray().put(JSONObject().put("product_id", productId).put("quantity", 0.25))),
+            1, actorId
+        )
+        db.execSQL("DROP TRIGGER reject_new_sale_snapshot")
+        assertFalse("POS must fail when its invoice-time due-date snapshot cannot be persisted", failedSave.optBoolean("success"))
+        assertEquals(salesBeforeFailure, db.rawQuery("SELECT COUNT(*) FROM sales_transactions WHERE station_id=1", null).use { it.moveToFirst(); it.getInt(0) })
+        assertEquals(stockBeforeFailure, db.rawQuery("SELECT quantity_on_hand FROM inventory_levels WHERE product_id=? ORDER BY warehouse_id LIMIT 1", arrayOf(productId.toString())).use { it.moveToFirst(); it.getDouble(0) }, 0.0001)
+        assertEquals(0, db.rawQuery("SELECT COUNT(*) FROM financial_idempotency_keys WHERE idempotency_key=?", arrayOf(retryKey)).use { it.moveToFirst(); it.getInt(0) })
+
         // Changing the customer's current terms must not rewrite a previously issued invoice.
         db.update(
             "parties",
