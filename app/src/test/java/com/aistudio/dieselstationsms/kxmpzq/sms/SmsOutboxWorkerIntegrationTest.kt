@@ -116,14 +116,18 @@ class SmsOutboxWorkerIntegrationTest {
         database.setSetting("sms_send_enabled", "1")
         database.setSetting("debt_reminder_days_before_due", "3")
         // Scheduling twice must update the same durable station work item, not create
-        // duplicate periodic workers; changing the authenticated user updates its input.
+        // duplicate periodic workers or replace its stable WorkRequest identity.
         DebtDueReminderWorker.schedule(context, 1, userId)
+        val firstScheduled = WorkManager.getInstance(context)
+            .getWorkInfosForUniqueWork("debt-due-sms-reminders-station-1")
+            .get(10, TimeUnit.SECONDS)
+        assertEquals(1, firstScheduled.size)
         DebtDueReminderWorker.schedule(context, 1, userId + 1L)
         val scheduled = WorkManager.getInstance(context)
             .getWorkInfosForUniqueWork("debt-due-sms-reminders-station-1")
             .get(10, TimeUnit.SECONDS)
         assertEquals(1, scheduled.size)
-        assertEquals(userId + 1L, scheduled.single().inputData.getLong("debt_reminder_user_id", 0L))
+        assertEquals(firstScheduled.single().id, scheduled.single().id)
 
         val requestData = Data.Builder()
             .putInt("debt_reminder_station_id", 1)
