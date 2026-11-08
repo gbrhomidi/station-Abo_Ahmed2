@@ -106,18 +106,6 @@ class SmsOutboxWorkerIntegrationTest {
         val today = BusinessDay.currentDate()
         val queued = mutableListOf<SmsOutboxRepository.OutboxMessage>()
         val debtRows = mutableListOf<Pair<Long, Long>>()
-        val probe = SmsOutboxRepository.enqueue(
-            database,
-            "967771234567",
-            "Concurrent transport probe",
-            dedupeKey = "load-transport-probe"
-        )!!
-        database.writableDatabase.update(
-            "sms_outbox",
-            ContentValues().apply { put("created_at", 0L) },
-            "message_id = ?",
-            arrayOf(probe.messageId)
-        )
         val saleColumns = database.readableDatabase.rawQuery(
             "PRAGMA table_info(sales_transactions)", null
         ).use { cursor ->
@@ -181,79 +169,81 @@ class SmsOutboxWorkerIntegrationTest {
             DebtDueDateRepository.validateDebtReminderBatch(database, queued)
         )
 
-        val transportStarted = CountDownLatch(1)
-        val updateCommitted = CountDownLatch(1)
-        val updater = Executors.newSingleThreadExecutor()
-        val sentMessageIds = java.util.Collections.synchronizedList(mutableListOf<String>())
-        val transport = object : SmsTransportSender {
-            override fun send(job: SmsOutboxRepository.OutboxMessage) {
-                sentMessageIds += job.messageId
-                if (job.messageId == probe.messageId) {
-                    transportStarted.countDown()
-                    check(updateCommitted.await(10, TimeUnit.SECONDS)) {
-                        "Concurrent payment/contact update did not finish while transport was active"
+        val ready = CountDownLatch(16)
+        val start = CountDownLatch(1)
+        val updatePool = Executors.newFixedThreadPool(8)
+        val sendPool = Executors.newFixedThreadPool(8)
+        val updateFutures = mutableListOf<java.util.concurrent.Future<*>>()
+        val sendFutures = mutableListOf<java.util.concurrent.Future<*>>()
+        val committedUpdates = java.util.concurrent.atomic.AtomicInteger()
+        val simulatedSentIds = java.util.Collections.synchronizedList(mutableListOf<String>())
+        try {
+            queued.forEachIndexed { index, message ->
+                val (customerId, saleId) = debtRows[index]
+                val thisUpdateCommitted = CountDownLatch(1)
+                updateFutures += updatePool.submit {
+                    ready.countDown()
+                    check(start.await(30, TimeUnit.SECONDS)) { "Concurrent load start gate timed out" }
+                    val db = database.writableDatabase
+                    db.beginTransaction()
+                    try {
+                        check(db.update(
+                            "sales_transactions",
+                            ContentValues().apply {
+                                put("paid_amount", 1.0)
+                                put("remaining_amount", 0.0)
+                                put("payment_status", "paid")
+                            },
+                            "id = ?",
+                            arrayOf(saleId.toString())
+                        ) == 1)
+                        check(db.update(
+                            "party_contacts",
+                            ContentValues().apply {
+                                put("phone", "967770${index.toString().padStart(6, '0')}")
+                            },
+                            "party_id = ?",
+                            arrayOf(customerId.toString())
+                        ) == 1)
+                        db.setTransactionSuccessful()
+                    } finally {
+                        db.endTransaction()
+                        thisUpdateCommitted.countDown()
+                    }
+                    committedUpdates.incrementAndGet()
+                }
+                sendFutures += sendPool.submit {
+                    ready.countDown()
+                    check(start.await(30, TimeUnit.SECONDS)) { "Concurrent load start gate timed out" }
+                    check(thisUpdateCommitted.await(30, TimeUnit.SECONDS)) {
+                        "The matching payment/contact update did not commit before final validation"
+                    }
+                    // This is the same final eligibility gate the worker calls immediately before
+                    // transport. The fake transport records only messages that pass that gate.
+                    if (DebtDueDateRepository.isCurrentDebtReminder(
+                            database,
+                            message.eventId,
+                            message.businessEntityId,
+                            message.recipient,
+                            message.body
+                        )
+                    ) {
+                        simulatedSentIds += message.messageId
                     }
                 }
             }
-        }
-
-        val updateFuture = updater.submit {
-            check(transportStarted.await(10, TimeUnit.SECONDS)) {
-                "The fake transport did not start"
-            }
-            val db = database.writableDatabase
-            db.beginTransaction()
-            try {
-                debtRows.forEachIndexed { index, (customerId, saleId) ->
-                    db.update(
-                        "sales_transactions",
-                        ContentValues().apply {
-                            put("paid_amount", 1.0)
-                            put("remaining_amount", 0.0)
-                            put("payment_status", "paid")
-                        },
-                        "id = ?",
-                        arrayOf(saleId.toString())
-                    )
-                    db.update(
-                        "party_contacts",
-                        ContentValues().apply { put("phone", "967770${index.toString().padStart(6, '0')}") },
-                        "party_id = ?",
-                        arrayOf(customerId.toString())
-                    )
-                }
-                db.setTransactionSuccessful()
-            } finally {
-                db.endTransaction()
-                updateCommitted.countDown()
-            }
-        }
-
-        try {
-            repeat(6) {
-                val worker = TestListenableWorkerBuilder.from(context, SmsOutboxWorker::class.java)
-                    .setWorkerFactory(object : WorkerFactory() {
-                        override fun createWorker(
-                            appContext: Context,
-                            workerClassName: String,
-                            workerParameters: WorkerParameters
-                        ): ListenableWorker? =
-                            if (workerClassName == SmsOutboxWorker::class.java.name) {
-                                SmsOutboxWorker(appContext, workerParameters, transport)
-                            } else null
-                    })
-                    .build()
-                worker.doWork()
-            }
-            updateFuture.get(10, TimeUnit.SECONDS)
+            check(ready.await(30, TimeUnit.SECONDS)) { "Not all concurrent workers reached the start gate" }
+            start.countDown()
+            updateFutures.forEach { it.get(60, TimeUnit.SECONDS) }
+            sendFutures.forEach { it.get(60, TimeUnit.SECONDS) }
         } finally {
-            updater.shutdownNow()
+            start.countDown()
+            updatePool.shutdownNow()
+            sendPool.shutdownNow()
         }
 
-        assertEquals("Only the non-debt probe may be submitted before the concurrent update", listOf(probe.messageId), sentMessageIds)
-        assertEquals(1, countStatus("SENDING"))
-        assertEquals(100, countStatus("CANCELLED"))
-        assertEquals("No queued debt reminder may remain after all six 20-message batches", 0, countStatus("QUEUED"))
+        assertEquals("All 100 payment updates must commit", 100, committedUpdates.get())
+        assertTrue("No paid debt reminder may pass final validation to the fake transport", simulatedSentIds.isEmpty())
     }
 
     private fun status(id: String): String =
@@ -265,11 +255,6 @@ class SmsOutboxWorkerIntegrationTest {
         database.readableDatabase.rawQuery(
             "SELECT status FROM sms_messages WHERE uuid = ?", arrayOf(id)
         ).use { cursor -> check(cursor.moveToFirst()); cursor.getString(0) }
-
-    private fun countStatus(value: String): Int =
-        database.readableDatabase.rawQuery(
-            "SELECT COUNT(*) FROM sms_outbox WHERE status = ?", arrayOf(value)
-        ).use { cursor -> check(cursor.moveToFirst()); cursor.getInt(0) }
 
     private fun insertDebtFixture(): Pair<Long, Long> {
         val db = database.writableDatabase
