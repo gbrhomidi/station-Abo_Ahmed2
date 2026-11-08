@@ -135,6 +135,19 @@ class DebtDueDatePolicyTest {
         assertEquals(20.0, customerBRow.getDouble("undated_amount"), 0.000001)
         assertEquals(1, customerBRow.getInt("undated_invoice_count"))
 
+        val bundle = DebtDueDateRepository.getCustomerDebtReportBundle(
+            helper, 1, "2026-11-07", "2026-11-10", "2026-11-08"
+        )
+        assertEquals("2026-11-08", bundle.getString("as_of_date"))
+        val bundleSummary = bundle.getJSONObject("summary")
+        assertEquals(summary.getDouble("total_customer_debts"), bundleSummary.getDouble("total_customer_debts"), 0.000001)
+        assertEquals(summary.getDouble("total_overdue_amount"), bundleSummary.getDouble("total_overdue_amount"), 0.000001)
+        val bundleInvoices = bundle.getJSONArray("invoices")
+        assertEquals(3, bundleInvoices.length())
+        assertEquals(
+            setOf(overdueId, dueTodayId, futureId),
+            (0 until bundleInvoices.length()).map { bundleInvoices.getJSONObject(it).getLong("transaction_id") }.toSet()
+        )
         val invoiceRows = DebtDueDateRepository.getCustomerDebts(helper, 1, asOfDate = "2026-11-08")
         val overdueJson = (0 until invoiceRows.length()).map { invoiceRows.getJSONObject(it) }
             .single { it.getLong("transaction_id") == overdueId }

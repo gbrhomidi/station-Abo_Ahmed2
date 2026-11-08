@@ -38,11 +38,11 @@ def find_browser() -> str:
 
 def prepare_html(source_path: Path, temporary_path: Path, width: int) -> None:
     html = source_path.read_text(encoding="utf-8", errors="replace")
-    viewport_tags = re.findall(r"<meta\\b[^>]*>", html, flags=re.I)
+    viewport_tags = re.findall(r"<meta\b[^>]*>", html, flags=re.I)
     viewport_tag = next((
         tag for tag in viewport_tags
-        if re.search(r"""\\bname\\s*=\\s*["']viewport["']""", tag, re.I)
-        and re.search(r"""\\bcontent\\s*=\\s*["'][^"']*\\bwidth\\s*=\\s*device-width""", tag, re.I)
+        if re.search(r"""\bname\s*=\s*["']viewport["']""", tag, re.I)
+        and re.search(r"""\bcontent\s*=\s*["'][^"']*\bwidth\s*=\s*device-width""", tag, re.I)
     ), None)
     if viewport_tag is None:
         raise RuntimeError(f"{source_path.name} does not declare a device-width viewport")
