@@ -496,7 +496,53 @@ object DebtDueDateRepository {
         require(stationId > 0) { "معرف المحطة غير صالح" }
         IsoCivilDate.requireValid(asOfDate, "تاريخ العمل")
         val today = LocalDate.parse(asOfDate)
-        val allRows = readDebts(helper.readableDatabase, stationId)
+        return buildCustomerDebtSummary(
+            readDebts(helper.readableDatabase, stationId),
+            stationId,
+            asOfDate,
+            today
+        )
+    }
+
+    /**
+     * Summary and invoice-aging rows are derived from the exact same readDebts()
+     * snapshot and operating date. This prevents totals and invoice rows from
+     * splitting across midnight or a concurrent payment update.
+     */
+    fun getCustomerDebtReportBundle(
+        helper: DatabaseHelper,
+        stationId: Int,
+        fromDate: String? = null,
+        toDate: String? = null,
+        asOfDate: String = BusinessDay.currentDate()
+    ): JSONObject {
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        IsoCivilDate.requireOptionalRange(fromDate, toDate)
+        IsoCivilDate.requireValid(asOfDate, "تاريخ العمل")
+        val today = LocalDate.parse(asOfDate)
+        val rows = readDebts(helper.readableDatabase, stationId)
+        val invoices = JSONArray()
+        rows.filter { row ->
+            val dueDate = row.dueDate
+            val validDueDate = IsoCivilDate.isValid(dueDate)
+            (fromDate.isNullOrEmpty() || (validDueDate && dueDate >= fromDate)) &&
+                (toDate.isNullOrEmpty() || (validDueDate && dueDate <= toDate))
+        }.forEach { invoices.put(toJson(it, today)) }
+        val summary = buildCustomerDebtSummary(rows, stationId, asOfDate, today)
+        return JSONObject().apply {
+            put("station_id", stationId)
+            put("as_of_date", asOfDate)
+            put("summary", summary)
+            put("invoices", invoices)
+        }
+    }
+
+    private fun buildCustomerDebtSummary(
+        allRows: List<SaleDebt>,
+        stationId: Int,
+        asOfDate: String,
+        today: LocalDate
+    ): JSONObject {
         val openRows = allRows.filter { it.remaining > 0.000001 }
         val overdueRows = openRows.filter { parseDate(it.dueDate)?.isBefore(today) == true }
         val dueTodayRows = openRows.filter { parseDate(it.dueDate) == today }
@@ -576,7 +622,6 @@ object DebtDueDateRepository {
             put("customer_balances", customerBalances)
         }
     }
-
     /**
      * Returns one nearest-due invoice per customer for the requested calendar-day window.
      * days=0 means due today; negative/overdue balances are not automatically re-reminded.

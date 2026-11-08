@@ -9848,6 +9848,24 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+        @JavascriptInterface
+        fun getCustomerDebtReportBundle(fromDate: String?, toDate: String?): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val businessDate = BusinessDay.currentDate()
+                dataResponse(
+                    DebtDueDateRepository.getCustomerDebtReportBundle(
+                        db, stationId, fromDate, toDate, businessDate
+                    )
+                )
+            } catch (e: Exception) {
+                DebugLogger.logException("CustomerDebtReportBundle", e)
+                errorResponse(e.message)
+            }
+        }
+
         // ============================================================
         // 26. إدارة بيانات الاعتماد (Remember Me + Biometric Auto-Login)
         // ============================================================

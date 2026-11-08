@@ -14,6 +14,8 @@ const customerReport = read('app/src/main/assets/screens/customer-reports.html')
 const dashboard = read('app/src/main/assets/screens/dashboard.html');
 
 assert.ok(repository.includes('fun getCustomerDebtSummary('), 'one repository summary must exist');
+assert.ok(repository.includes('fun getCustomerDebtReportBundle('), 'one repository report bundle must exist');
+assert.ok(repository.includes('val summary = buildCustomerDebtSummary(rows, stationId, asOfDate, today)'), 'summary and invoice-aging must derive from one row snapshot');
 assert.ok(repository.includes('readDebts(helper.readableDatabase, stationId)'), 'summary must use the invoice-level canonical read');
 assert.ok(repository.includes('val remainingExpr = if ("remaining_amount" in s)'), 'saved SQLite remaining balance remains the preferred balance source');
 assert.ok(repository.includes('val today = LocalDate.parse(asOfDate)'), 'maturity classification must use one explicit as-of date');
@@ -24,9 +26,13 @@ assert.ok(database.includes('reportType == "customers"'), 'customer CRM report m
 
 assert.ok(activity.includes('db.getDashboardStatsForDate(stationId, params, businessDate)'), 'dashboard must use one business-date snapshot');
 assert.ok(activity.includes('fun getCustomerDebtSummary()'), 'summary bridge must be exposed to the customer report');
+assert.ok(activity.includes('fun getCustomerDebtReportBundle(fromDate: String?, toDate: String?)'), 'one report bundle bridge must expose summary and invoices');
+assert.ok(activity.includes('DebtDueDateRepository.getCustomerDebtReportBundle('), 'bridge must invoke one-snapshot repository bundle');
 assert.ok(activity.includes('DebtDueDateRepository.getCustomerDebtSummary(db, stationId, businessDate)'), 'summary bridge must return the repository result');
 
-assert.ok(customerReport.includes('case \'getCustomerDebtSummary\''), 'customer report must call the summary bridge');
+assert.ok(customerReport.includes('case \'getCustomerDebtReportBundle\''), 'customer report must call the one-snapshot report bundle');
+assert.ok(customerReport.includes('const debtSummary = debtBundleResult.data.summary;'), 'summary must come from the report bundle');
+assert.ok(customerReport.includes('runtimeState.rawAgingDebts = debtBundleResult.data.invoices;'), 'Aging invoices must come from the same row snapshot');
 assert.ok(customerReport.includes('const debtByCustomerId = new Map('), 'customer rows must be mapped by their party ID');
 assert.ok(customerReport.includes('debt_summary_source: \'DebtDueDateRepository.readDebts\''), 'customer balances must be explicitly marked as repository sourced');
 assert.ok(customerReport.includes('current_balance: balance'), 'denormalized party balance must be replaced');

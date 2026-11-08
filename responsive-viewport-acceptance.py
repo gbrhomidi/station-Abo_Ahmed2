@@ -36,8 +36,21 @@ def find_browser() -> str:
     raise RuntimeError("Chromium/Chrome is required for real viewport acceptance; no browser executable was found.")
 
 
-def prepare_html(source_path: Path, temporary_path: Path) -> None:
+def prepare_html(source_path: Path, temporary_path: Path, width: int) -> None:
     html = source_path.read_text(encoding="utf-8", errors="replace")
+    viewport_tags = re.findall(r"<meta\\b[^>]*>", html, flags=re.I)
+    viewport_tag = next((
+        tag for tag in viewport_tags
+        if re.search(r"""\\bname\\s*=\\s*["']viewport["']""", tag, re.I)
+        and re.search(r"""\\bcontent\\s*=\\s*["'][^"']*\\bwidth\\s*=\\s*device-width""", tag, re.I)
+    ), None)
+    if viewport_tag is None:
+        raise RuntimeError(f"{source_path.name} does not declare a device-width viewport")
+    # Headless desktop Chromium otherwise defaults to a 500 CSS-pixel layout viewport.
+    # Change only the temporary test copy after asserting that the shipped screen uses
+    # width=device-width, so media-query/CSS geometry is measured at the requested width.
+    fixed_viewport = f'<meta name="viewport" content="width={width}, initial-scale=1.0, maximum-scale=1.0">'
+    html = html.replace(viewport_tag, fixed_viewport, 1)
 
     # The acceptance is for CSS/DOM geometry, not Android bridge availability or network APIs.
     html = re.sub(r"(?is)<script\b[^>]*>.*?</script\s*>", "", html)
@@ -166,23 +179,25 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="station-responsive-") as directory:
         temp_root = Path(directory)
         for screen in SCREENS:
-            prepared = temp_root / f"{screen.stem}-viewport.html"
-            prepare_html(screen, prepared)
             for width in VIEWPORT_WIDTHS:
                 total += 1
+                prepared = temp_root / f"{screen.stem}-{width}px.html"
+                prepare_html(screen, prepared, width)
                 result = measure(browser, prepared, width)
                 client = int(result.get("clientWidth", 0))
                 document_width = int(result.get("documentScrollWidth", 0))
                 body_width = int(result.get("bodyScrollWidth", 0))
+                inner = int(result.get("innerWidth", 0))
                 passed = (
-                    client == width
+                    inner == width
+                    and client == width
                     and document_width <= width + 1
                     and body_width <= width + 1
                 )
                 label = "PASS" if passed else "FAIL"
                 print(
                     f"{label} {screen.relative_to(ASSETS)} @ {width}px "
-                    f"(client={client}, document={document_width}, body={body_width})"
+                    f"(inner={result.get('innerWidth')}, client={client}, document={document_width}, body={body_width})"
                 )
                 if not passed:
                     failures.append({
