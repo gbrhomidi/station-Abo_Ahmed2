@@ -11804,8 +11804,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "العميل مطلوب للبيع الآجل"
             }
         }
-        // Ignore due_date from the browser. The backend calculates it from the persisted
-        // customer term and the sale's business date inside the write transaction.
+        // Ignore due_date from the browser. The backend calculates it from the explicitly
+        // selected payment term and persisted invoice date inside the write transaction.
         dbLock.lock()
         return try {
             val db = writableDatabase

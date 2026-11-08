@@ -231,6 +231,108 @@ class DebtDueDatePolicyTest {
         assertEquals("2026-11-11", snapshot.getString("due_date"))
     }
 
+    @Test fun selectedNetThirtyTermCreatesInvoiceTimeSnapshot() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val db = helper.writableDatabase
+        db.execSQL("PRAGMA foreign_keys=OFF")
+        val customerId = addParty(db, "net-thirty-customer", "صافي 7 أيام", 7, "explicit_text")
+        val saleId = addSale(db, "net-thirty-invoice", customerId, null, null, "explicit_text")
+        val netThirtyId = db.rawQuery(
+            "SELECT id FROM payment_terms WHERE code='NET_30' AND station_id IS NULL LIMIT 1", null
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+
+        val snapshot = DebtDueDateRepository.applySelectedPaymentTermSnapshot(
+            db, saleId, 1, customerId, netThirtyId, allowExistingSnapshot = true
+        )
+
+        assertEquals(30, snapshot.getInt("payment_terms_days"))
+        assertEquals("2026-12-01", snapshot.getString("due_date"))
+        db.rawQuery("SELECT due_date_basis,due_date_source FROM sales_transactions WHERE id=?", arrayOf(saleId.toString())).use { c ->
+            check(c.moveToFirst())
+            assertEquals("2026-11-01", c.getString(0))
+            assertEquals("sale_creation", c.getString(1))
+        }
+    }
+
+    @Test fun selectedTermRejectsInvalidForeignStationAndCashSaleTerms() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val db = helper.writableDatabase
+        db.execSQL("PRAGMA foreign_keys=OFF")
+        val customerId = addParty(db, "term-scope-customer", "صافي 30 يوم", 30, "explicit_text")
+        val saleId = addSale(db, "term-scope-invoice", customerId, null, null, "explicit_text")
+        val foreignStationTermId = db.insertOrThrow("payment_terms", null, ContentValues().apply {
+            put("code", "OTHER-STATION-${System.nanoTime()}")
+            put("name_ar", "شرط محطة أخرى"); put("name_en", "Other station")
+            put("days", 10); put("applies_to", "customer"); put("station_id", 2)
+            put("is_active", 1); put("sort_order", 99)
+        })
+        val netSevenId = db.rawQuery(
+            "SELECT id FROM payment_terms WHERE code='NET_7' AND station_id IS NULL LIMIT 1", null
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+
+        listOf(Long.MAX_VALUE, foreignStationTermId).forEach { termId ->
+            var rejected = false
+            try {
+                DebtDueDateRepository.applySelectedPaymentTermSnapshot(
+                    db, saleId, 1, customerId, termId, allowExistingSnapshot = true
+                )
+            } catch (_: IllegalArgumentException) {
+                rejected = true
+            }
+            assertTrue("Invalid or cross-station payment terms must be rejected", rejected)
+        }
+
+        val cashSaleId = addSale(db, "term-scope-cash-invoice", customerId, null, null)
+        db.update("sales_transactions", ContentValues().apply {
+            put("payment_method", "cash"); put("is_credit", 0)
+        }, "id=?", arrayOf(cashSaleId.toString()))
+        var cashRejected = false
+        try {
+            DebtDueDateRepository.applySelectedPaymentTermSnapshot(
+                db, cashSaleId, 1, customerId, netSevenId, allowExistingSnapshot = true
+            )
+        } catch (_: IllegalArgumentException) {
+            cashRejected = true
+        }
+        assertTrue("Cash invoices must not enter the credit-term flow", cashRejected)
+    }
+
+    @Test fun newCreditInvoiceCannotCommitWithoutAValidDateBasis() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val db = helper.writableDatabase
+        db.execSQL("PRAGMA foreign_keys=OFF")
+        val customerId = addParty(db, "missing-invoice-date", "صافي 30 يوم", 30, "explicit_text")
+        val saleId = addSale(db, "missing-invoice-date-invoice", customerId, null, null, "explicit_text")
+        db.execSQL("DROP TRIGGER IF EXISTS trg_debt_due_date_sales_insert_v4")
+        db.execSQL("DROP TRIGGER IF EXISTS trg_debt_due_date_sales_update_v4")
+        val columns = db.rawQuery("PRAGMA table_info(sales_transactions)", null).use { c ->
+            buildSet { while (c.moveToNext()) add(c.getString(c.getColumnIndexOrThrow("name"))) }
+        }
+        val withoutDates = ContentValues().apply {
+            putNull("transaction_date"); putNull("business_day"); putNull("due_date")
+            putNull("due_date_basis"); putNull("due_date_source")
+            if ("sale_date" in columns) putNull("sale_date")
+        }
+        db.update("sales_transactions", withoutDates, "id=?", arrayOf(saleId.toString()))
+        val netSevenId = db.rawQuery(
+            "SELECT id FROM payment_terms WHERE code='NET_7' AND station_id IS NULL LIMIT 1", null
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+
+        var rejected = false
+        try {
+            DebtDueDateRepository.applySelectedPaymentTermSnapshot(
+                db, saleId, 1, customerId, netSevenId, allowExistingSnapshot = true
+            )
+        } catch (_: IllegalArgumentException) {
+            rejected = true
+        }
+        assertTrue("A credit invoice without an invoice-time basis must not be accepted", rejected)
+        db.rawQuery("SELECT due_date FROM sales_transactions WHERE id=?", arrayOf(saleId.toString())).use { c ->
+            check(c.moveToFirst())
+            assertTrue("Rejected invoice must remain without a fabricated due date", c.isNull(0))
+        }
+    }
+
     @Test fun selectedPaymentTermRejectsDifferentCustomerAndPreservesOriginalSnapshot() {
         DebtDueDateRepository.ensureSchema(helper)
         val db = helper.writableDatabase

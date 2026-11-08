@@ -391,21 +391,17 @@ object DebtDueDateRepository {
             }
             require(term.third in 0..365) { "عدد أيام شرط الدفع خارج النطاق المسموح" }
 
-            val due = sale.baseDate?.plusDays(term.third.toLong())
+            val baseDate = sale.baseDate
+                ?: throw IllegalArgumentException("لا يمكن اعتماد فاتورة آجلة دون تاريخ أساس صالح للاستحقاق")
+            val due = baseDate.plusDays(term.third.toLong())
             val values = ContentValues().apply {
                 put("payment_terms_at_sale", term.second)
                 put("payment_terms_id_at_sale", term.first)
                 put("payment_terms_days_at_sale", term.third)
                 put("payment_terms_source_at_sale", "explicit_text")
-                if (sale.baseDate != null && due != null) {
-                    put("due_date_basis", sale.baseDate.toString())
-                    put("due_date", due.toString())
-                    put("due_date_source", "sale_creation")
-                } else {
-                    putNull("due_date_basis")
-                    putNull("due_date")
-                    put("due_date_source", "missing_base_date")
-                }
+                put("due_date_basis", baseDate.toString())
+                put("due_date", due.toString())
+                put("due_date_source", "sale_creation")
             }
             val where = "id=? AND station_id=? AND `$customerColumn`=?" +
                 if ("is_deleted" in saleColumns) " AND COALESCE(is_deleted,0)=0" else ""
@@ -419,9 +415,9 @@ object DebtDueDateRepository {
                 put("success", true); put("sale_id", saleId)
                 put("payment_terms_id", term.first); put("payment_terms", term.second)
                 put("payment_terms_days", term.third)
-                put("due_date_basis", sale.baseDate?.toString() ?: JSONObject.NULL)
-                put("due_date", due?.toString() ?: JSONObject.NULL)
-                put("due_date_source", if (due == null) "missing_base_date" else "sale_creation")
+                put("due_date_basis", baseDate.toString())
+                put("due_date", due.toString())
+                put("due_date_source", "sale_creation")
             }
         } finally {
             if (ownsTransaction && db.inTransaction()) db.endTransaction()
