@@ -106,7 +106,7 @@ class CreditInventoryWorkflowRobolectricTest {
             check(cursor.moveToFirst())
             val businessDay = cursor.getString(0)
             assertEquals(LocalDate.parse(businessDay).plusDays(15).toString(), cursor.getString(1))
-            assertEquals("صافي 15 يوم", cursor.getString(2))
+            assertEquals("صافي 15 يوماً", cursor.getString(2))
             assertEquals(15, cursor.getInt(3))
             assertEquals("sale_creation", cursor.getString(4))
             cursor.getString(1)

@@ -102,7 +102,7 @@ class DatabaseHelperCompatibilityMatrixTest {
 
             DatabaseHelper.closeInstance()
             val upgraded = DatabaseHelper.getInstance(context).writableDatabase
-            assertEquals("V57 must be upgraded to V58", 58, upgraded.version)
+            assertEquals("V57 must be upgraded to V59", 59, upgraded.version)
             assertSmsAttemptSchema(upgraded)
         } finally {
             DatabaseHelper.closeInstance()
