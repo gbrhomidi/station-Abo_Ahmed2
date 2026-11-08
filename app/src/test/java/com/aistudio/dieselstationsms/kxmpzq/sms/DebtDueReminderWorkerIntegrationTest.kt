@@ -226,6 +226,9 @@ class DebtDueReminderWorkerIntegrationTest {
             ))
         }
         val notificationId = 0xD3B7 + (stationId and 0x0FFF)
+        // Robolectric replaces an existing notification with the same ID instead of
+        // appending another entry. Remove stale state so the count assertion is stable.
+        manager.cancel(notificationId)
         val notificationsBefore = shadowOf(manager).getAllNotifications().size
         manager.notify(notificationId, Notification.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("Stale debt").build())
