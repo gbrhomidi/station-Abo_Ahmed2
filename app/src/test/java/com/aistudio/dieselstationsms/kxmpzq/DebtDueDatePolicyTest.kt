@@ -95,6 +95,16 @@ class DebtDueDatePolicyTest {
             put("remaining_amount", 20.0)
             put("business_day", "2026-11-20")
         }, "id=?", arrayOf(undatedId.toString()))
+        // The insert trigger derives a due date from the customer's default terms. Clear
+        // that derived snapshot so this row intentionally exercises the UNDATED contract.
+        db.update("sales_transactions", ContentValues().apply {
+            putNull("due_date")
+            putNull("due_date_basis")
+            putNull("due_date_source")
+            putNull("payment_terms_at_sale")
+            putNull("payment_terms_days_at_sale")
+            putNull("payment_terms_source_at_sale")
+        }, "id=?", arrayOf(undatedId.toString()))
         db.update("sales_transactions", ContentValues().apply {
             put("paid_amount", 100.0)
             put("remaining_amount", 0.0)
