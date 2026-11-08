@@ -1070,6 +1070,12 @@ class FuelSalesDeliveryFeeRobolectricTest {
             ))
             put("payment_method", paymentMethod)
             if (customerId > 0L) put("customer_id", customerId)
+            if (paymentMethod == "credit") {
+                put("payment_terms_id", scalarLong(
+                    "SELECT id FROM payment_terms WHERE code='NET_7' AND is_active=1 AND (station_id IS NULL OR station_id=?) ORDER BY station_id DESC LIMIT 1",
+                    arrayOf(stationId.toString())
+                ))
+            }
             put("delivery_service_fee", fee)
             put("delivery_fee_mode", mode)
             put("delivery_location", location)

@@ -117,6 +117,31 @@ class DebtDueDatePolicyTest {
         )
     }
 
+    @Test fun historicalReconstructionRequiresAnInvoiceTimeSnapshotAndIsIdempotent() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val db = helper.writableDatabase
+        db.execSQL("DROP TRIGGER IF EXISTS trg_debt_due_date_sales_insert_v4")
+        db.execSQL("DROP TRIGGER IF EXISTS trg_debt_due_date_sales_update_v4")
+        db.execSQL("PRAGMA foreign_keys=OFF")
+        val customerId = addParty(db, "historical-snapshot-proof", "صافي 90 يوم", 90, "explicit_text")
+        val saleId = addSale(db, "historical-snapshot-proof-invoice", customerId, null, null, "explicit_text")
+        db.update("sales_transactions", ContentValues().apply {
+            put("payment_terms_at_sale", "صافي 7 أيام")
+            put("payment_terms_days_at_sale", 7)
+            put("payment_terms_source_at_sale", "explicit_text")
+            put("due_date_basis", "2026-11-01")
+        }, "id=?", arrayOf(saleId.toString()))
+
+        DebtDueDateRepository.ensureSchema(helper)
+        DebtDueDateRepository.ensureSchema(helper)
+
+        db.rawQuery("SELECT due_date,due_date_source FROM sales_transactions WHERE id=?", arrayOf(saleId.toString())).use { c ->
+            check(c.moveToFirst())
+            assertEquals("2026-11-08", c.getString(0))
+            assertEquals("historical_snapshot_reconstruction", c.getString(1))
+        }
+    }
+
     @Test fun unknownLegacyTermsAreNotEligibleButExplicitTermsCreateDueDates() {
         DebtDueDateRepository.ensureSchema(helper)
         val db=helper.writableDatabase
@@ -158,7 +183,7 @@ class DebtDueDatePolicyTest {
             "SELECT id FROM payment_terms WHERE code='NET_7' AND station_id IS NULL LIMIT 1", null
         ).use { c -> check(c.moveToFirst()); c.getLong(0) }
 
-        val applied = DebtDueDateRepository.applySelectedPaymentTermSnapshot(db, saleId, 1, customerId, netSevenId)
+        val applied = DebtDueDateRepository.applySelectedPaymentTermSnapshot(db, saleId, 1, customerId, netSevenId, allowExistingSnapshot = true)
         assertTrue(applied.getBoolean("success"))
         assertEquals(7, applied.getInt("payment_terms_days"))
         assertEquals("2026-11-08", applied.getString("due_date"))
@@ -186,6 +211,26 @@ class DebtDueDatePolicyTest {
         assertEquals("current", debt.getString("status"))
     }
 
+    @Test fun transactionDateTakesPrecedenceOverBusinessDayForNewInvoiceDueDate() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val db = helper.writableDatabase
+        db.execSQL("PRAGMA foreign_keys=OFF")
+        val customerId = addParty(db, "transaction-date-priority", "صافي 30 يوم", 30, "explicit_text")
+        val saleId = addSale(db, "transaction-date-priority-invoice", customerId, null, null, "explicit_text")
+        db.update("sales_transactions", ContentValues().apply {
+            put("business_day", "2026-11-01")
+            put("transaction_date", "2026-11-04")
+        }, "id=?", arrayOf(saleId.toString()))
+        val netSevenId = db.rawQuery(
+            "SELECT id FROM payment_terms WHERE code='NET_7' AND station_id IS NULL LIMIT 1", null
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+
+        val snapshot = DebtDueDateRepository.applySelectedPaymentTermSnapshot(db, saleId, 1, customerId, netSevenId, allowExistingSnapshot = true)
+
+        assertEquals("2026-11-04", snapshot.getString("due_date_basis"))
+        assertEquals("2026-11-11", snapshot.getString("due_date"))
+    }
+
     @Test fun selectedPaymentTermRejectsDifferentCustomerAndPreservesOriginalSnapshot() {
         DebtDueDateRepository.ensureSchema(helper)
         val db = helper.writableDatabase
@@ -200,7 +245,7 @@ class DebtDueDatePolicyTest {
             "SELECT id FROM payment_terms WHERE code='NET_7' AND station_id IS NULL LIMIT 1", null
         ).use { c -> check(c.moveToFirst()); c.getLong(0) }
 
-        DebtDueDateRepository.applySelectedPaymentTermSnapshot(db, saleId, 1, customerId, netThirtyId)
+        DebtDueDateRepository.applySelectedPaymentTermSnapshot(db, saleId, 1, customerId, netThirtyId, allowExistingSnapshot = true)
         var rejected = false
         try {
             DebtDueDateRepository.applySelectedPaymentTermSnapshot(db, saleId, 1, otherCustomerId, netSevenId)
@@ -208,6 +253,13 @@ class DebtDueDatePolicyTest {
             rejected = true
         }
         assertTrue("A payment term cannot be attached using a different customer identity", rejected)
+        var rewriteRejected = false
+        try {
+            DebtDueDateRepository.applySelectedPaymentTermSnapshot(db, saleId, 1, customerId, netSevenId)
+        } catch (_: IllegalArgumentException) {
+            rewriteRejected = true
+        }
+        assertTrue("A saved invoice snapshot cannot be rewritten outside a new-sale transaction", rewriteRejected)
         db.rawQuery(
             "SELECT due_date,payment_terms_days_at_sale,payment_terms_id_at_sale FROM sales_transactions WHERE id=?",
             arrayOf(saleId.toString())

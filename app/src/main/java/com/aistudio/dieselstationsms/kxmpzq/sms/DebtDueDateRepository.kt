@@ -21,7 +21,7 @@ import java.util.Locale
  */
 object DebtDueDateRepository {
     private val creditMethods = setOf("credit", "credit_sale", "credit_account", "on_account", "آجل", "اجل", "بيع آجل", "على الحساب")
-    private val trustedDueDateSources = setOf("sale_creation", "sales_trigger_v3", "sales_trigger_v4")
+    private val trustedDueDateSources = setOf("sale_creation", "sales_trigger_v3", "sales_trigger_v4", "historical_snapshot_reconstruction")
 
     sealed class TermsParseResult {
         data class Known(
@@ -89,6 +89,7 @@ object DebtDueDateRepository {
             addColumn(db,"parties","payment_terms_source","TEXT")
         }
         addColumn(db,"sales_transactions","due_date","TEXT")
+        addColumn(db,"sales_transactions","transaction_date","TEXT")
         addColumn(db,"sales_transactions","payment_terms_at_sale","TEXT")
         addColumn(db,"sales_transactions","payment_terms_id_at_sale","INTEGER")
         addColumn(db,"sales_transactions","payment_terms_days_at_sale","INTEGER")
@@ -116,12 +117,39 @@ object DebtDueDateRepository {
         if(!triggerExists(db,"trg_debt_due_date_sales_insert_v4") ||
            !triggerExists(db,"trg_debt_due_date_sales_update_v4")) createDueDateTriggers(db)
 
-        // Phase 1 is a policy and protection gate, not a historical migration.
-        // Never mutate existing sales while a read path, worker, bridge, or screen
-        // asks for the debt schema. Historical reconstruction must be a separate,
-        // explicitly approved operation in a later phase with dry-run and rollback.
+        // Historical repair is evidence-gated: only invoice-time terms and an
+        // invoice-time basis may reconstruct missing dates, never current customer defaults.
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_debt_due_dates_station_date ON sales_transactions(station_id,due_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payment_terms_scope_active ON payment_terms(station_id,applies_to,is_active,sort_order)")
+        reconstructProvableHistoricalDueDates(db)
+    }
+
+    /** Rebuild only from immutable invoice-time terms plus a stored invoice-time basis. */
+    private fun reconstructProvableHistoricalDueDates(db: SQLiteDatabase) {
+        val saleColumns = columns(db, "sales_transactions")
+        val required = setOf(
+            "payment_terms_source_at_sale", "payment_terms_days_at_sale", "payment_terms_at_sale",
+            "due_date_basis", "due_date", "due_date_source"
+        )
+        if (!required.all { it in saleColumns }) return
+        val ownsTransaction = !db.inTransaction()
+        if (ownsTransaction) db.beginTransaction()
+        try {
+            db.execSQL(
+                """UPDATE sales_transactions
+                   SET due_date=date(due_date_basis,'+' || payment_terms_days_at_sale || ' days'),
+                       due_date_source='historical_snapshot_reconstruction'
+                   WHERE (due_date IS NULL OR TRIM(due_date)='')
+                     AND COALESCE(payment_terms_source_at_sale,'')='explicit_text'
+                     AND payment_terms_at_sale IS NOT NULL AND TRIM(payment_terms_at_sale)<>''
+                     AND payment_terms_days_at_sale BETWEEN 0 AND 365
+                     AND due_date_basis GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+                     AND date(due_date_basis,'+0 days')=due_date_basis"""
+            )
+            if (ownsTransaction) db.setTransactionSuccessful()
+        } finally {
+            if (ownsTransaction && db.inTransaction()) db.endTransaction()
+        }
     }
 
     private data class PaymentTermSeed(
@@ -228,7 +256,8 @@ object DebtDueDateRepository {
      * An existing SQLite transaction is reused; otherwise this method owns one.
      */
     fun applySelectedPaymentTermSnapshot(
-        db: SQLiteDatabase, saleId: Long, stationId: Int, partyId: Long, paymentTermId: Long
+        db: SQLiteDatabase, saleId: Long, stationId: Int, partyId: Long, paymentTermId: Long,
+        allowExistingSnapshot: Boolean = false, allowSettledInvoice: Boolean = false
     ): JSONObject {
         require(saleId > 0L && stationId > 0 && partyId > 0L && paymentTermId > 0L) {
             "معرف الفاتورة أو المحطة أو العميل أو شرط الدفع غير صالح"
@@ -239,7 +268,7 @@ object DebtDueDateRepository {
         val customerColumn = listOf("customer_party_id", "customer_id", "party_id")
             .firstOrNull { it in saleColumns } ?: throw IllegalStateException("تعذر تحديد عميل الفاتورة")
         require("payment_method" in saleColumns) { "طريقة الدفع غير محفوظة في الفاتورة" }
-        val bases = listOf("business_day", "transaction_date", "sale_date").filter { it in saleColumns }
+        val bases = listOf("transaction_date", "business_day", "sale_date").filter { it in saleColumns }
         require(bases.isNotEmpty()) { "لا يوجد تاريخ عمل أو تاريخ معاملة محفوظ للفاتورة" }
 
         data class SaleContext(
@@ -276,7 +305,14 @@ object DebtDueDateRepository {
             require(sale.status !in setOf("cancelled","canceled","refunded","void","reversed")) {
                 "لا يمكن تعيين شروط دفع لفاتورة ملغاة أو معكوسة"
             }
-            require(sale.remaining > 0.000001) { "الفاتورة لا تحتوي رصيداً متبقياً يستلزم الاستحقاق" }
+            require(allowSettledInvoice || sale.remaining > 0.000001) { "الفاتورة لا تحتوي رصيداً متبقياً يستلزم الاستحقاق" }
+            if (!allowExistingSnapshot) {
+                val hasSnapshot = db.rawQuery(
+                    "SELECT 1 FROM sales_transactions WHERE id=? AND station_id=? AND (payment_terms_at_sale IS NOT NULL OR payment_terms_id_at_sale IS NOT NULL OR due_date IS NOT NULL) LIMIT 1",
+                    arrayOf(saleId.toString(), stationId.toString())
+                ).use { it.moveToFirst() }
+                require(!hasSnapshot) { "لقطة شروط الدفع للفواتير المحفوظة غير قابلة للتعديل؛ يلزم مسار تصحيح محاسبي موثق" }
+            }
             val partyActive = db.rawQuery(
                 """SELECT 1 FROM parties WHERE id=? AND station_id=?
                    AND COALESCE(is_active,1)=1 AND COALESCE(is_deleted,0)=0 LIMIT 1""",
@@ -858,7 +894,7 @@ object DebtDueDateRepository {
         val pc=columns(db,"parties")
         val customer=listOf("customer_party_id","customer_id","party_id").firstOrNull { it in sc } ?: return
         if("payment_method" !in sc || "due_date" !in sc) return
-        val bases=listOf("business_day","transaction_date","sale_date").filter { it in sc }
+        val bases=listOf("transaction_date","business_day","sale_date").filter { it in sc }
         if(bases.isEmpty()) return
         val basisParts=bases.map { "NULLIF(substr(NEW.`"+it+"`,1,10),'')" }
         val basis=if(basisParts.size==1) basisParts[0] else "COALESCE("+basisParts.joinToString(",")+")"

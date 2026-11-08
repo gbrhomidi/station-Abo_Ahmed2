@@ -94,7 +94,7 @@ class CreditInventoryWorkflowRobolectricTest {
         })
 
         val key = "credit-${UUID.randomUUID()}"
-        val payload = JSONObject().put("payment_type", "credit").put("entity_id", customerId).put("amount_paid", 0.0).put("idempotency_key", key)
+        val payload = JSONObject().put("payment_type", "credit").put("entity_id", customerId).put("payment_terms_id", term15Id).put("amount_paid", 0.0).put("idempotency_key", key)
             .put("products", JSONArray().put(JSONObject().put("product_id", productId).put("quantity", 4.0)))
         val first = helper.completeSale(payload, 1, actorId)
         assertTrue(first.optBoolean("success"))

@@ -56,7 +56,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 58
+        const val VERSION = 59
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -9817,7 +9817,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         deliveryTime: String? = null,
         orderType: String = "sale",
         paidAmount: Double? = null,
-        manageTransaction: Boolean = true
+        manageTransaction: Boolean = true,
+        transactionDate: String? = null
     ): Long {
         return insertSaleTransactionInternal(
             writableDatabase,
@@ -9843,7 +9844,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             deliveryTime = deliveryTime,
             orderType = orderType,
             paidAmount = paidAmount,
-            manageTransaction = manageTransaction
+            manageTransaction = manageTransaction,
+            transactionDate = transactionDate
         )
     }
 
@@ -9871,7 +9873,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         deliveryTime: String? = null,
         orderType: String = "sale",
         paidAmount: Double? = null,
-        manageTransaction: Boolean = true
+        manageTransaction: Boolean = true,
+        transactionDate: String? = null
     ): Long {
         require(stationId > 0) { "معرف المحطة غير صالح" }
         require(shiftId > 0) { "معرف الوردية غير صالح" }
@@ -9969,6 +9972,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("remarks", notes)
                     put("order_type", orderType)
                     put("business_day", BusinessDay.currentDate())
+                    val invoiceDate = transactionDate?.trim()?.take(10)?.takeIf { Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(it) }
+                        ?: BusinessDay.currentDate()
+                    put("transaction_date", invoiceDate)
                     if (deliveryLocation != null) put("delivery_location", deliveryLocation)
                     if (deliveryTime != null) put("delivery_time", deliveryTime)
                 }
@@ -11787,6 +11793,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         // التصنيف المالي مشتق من payment_method نفسه.
         // لا نسمح لـ is_credit القادم من HTML بأن يحول credit_card إلى بيع آجل.
         val isCreditSale = paymentMethod == "credit"
+        val selectedPaymentTermId = data.optLong("payment_terms_id", 0L)
+        require(selectedPaymentTermId >= 0L) { "شرط الدفع المحدد غير صالح" }
+        require(if (isCreditSale) selectedPaymentTermId > 0L else selectedPaymentTermId == 0L) {
+            if (isCreditSale) "اختر شرط الدفع من جدول شروط الدفع قبل حفظ البيع الآجل" else "شروط الدفع المحددة لا تطبق على البيع النقدي"
+        }
         if (isCreditSale) {
             require(customerId != null) {
                 "العميل مطلوب للبيع الآجل"
@@ -11852,11 +11863,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     } else {
                         if (isCreditSale) 0.0 else totalAmount
                     },
-                    manageTransaction = false
+                    manageTransaction = false,
+                    transactionDate = data.optString("transaction_time", data.optString("sale_date", "")).take(10)
                 )
                 if (isCreditSale && customerId != null) {
-                    DebtDueDateRepository.applySaleSnapshot(
-                        db,saleId,stationScopeId,customerId.toLong(),BusinessDay.currentDate()
+                    DebtDueDateRepository.applySelectedPaymentTermSnapshot(
+                        db, saleId, stationScopeId, customerId.toLong(), selectedPaymentTermId,
+                        allowExistingSnapshot = true, allowSettledInvoice = true
                     )
                 }
                 val cv = ContentValues().apply {
@@ -12126,6 +12139,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 else -> "cash"
             }
             val isCredit = paymentMethod == "credit"
+            val selectedPaymentTermId = data.optLong("payment_terms_id", 0L)
+            require(selectedPaymentTermId >= 0L) { "شرط الدفع المحدد غير صالح" }
+            require(if (isCredit) selectedPaymentTermId > 0L else selectedPaymentTermId == 0L) {
+                if (isCredit) "اختر شرط الدفع من جدول شروط الدفع قبل اعتماد الفاتورة الآجلة" else "شروط الدفع لا تطبق على البيع النقدي"
+            }
             val paidAmount = data.optDouble("amount_paid", if (isCredit) 0.0 else netAmount)
             require(paidAmount.isFinite() && paidAmount >= 0.0) { "المبلغ المدفوع غير صالح" }
             require(isCredit || paidAmount + 1e-9 >= netAmount) { "المبلغ المدفوع أقل من الإجمالي" }
@@ -12167,11 +12185,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 notes = data.optString("notes", ""),
                 orderType = "product",
                 paidAmount = paidAmount,
-                manageTransaction = false
+                manageTransaction = false,
+                transactionDate = data.optString("transaction_time", "").take(10)
             )
+            var paymentTermsSnapshot: JSONObject? = null
             if (isCredit) {
-                DebtDueDateRepository.applySaleSnapshot(
-                    db,saleId,stationScopeId,data.optLong("entity_id",0L),BusinessDay.currentDate()
+                paymentTermsSnapshot = DebtDueDateRepository.applySelectedPaymentTermSnapshot(
+                    db, saleId, stationScopeId, data.optLong("entity_id",0L), selectedPaymentTermId,
+                    allowExistingSnapshot = true, allowSettledInvoice = true
                 )
             }
             val pricingMetadata = JSONArray()
@@ -12244,6 +12265,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             db.setTransactionSuccessful()
             result.put("success", true)
             result.put("sale_id", saleId)
+            paymentTermsSnapshot?.let { result.put("payment_terms_snapshot", it) }
             result.put("invoice_number", getSaleTransactionById(saleId.toInt(), stationScopeId)?.optString("invoice_number", "") ?: "")
         } catch (e: Exception) {
             result.put("success", false)
