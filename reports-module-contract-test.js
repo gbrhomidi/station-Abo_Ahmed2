@@ -12,6 +12,7 @@ const reports = {
   ],
   'screens/customer-reports.html': [
     'generateCRMReport', 'getPartyTypes', 'getCustomerDebts',
+    'getCustomerDebtSummary', 'getCustomerDebtReportBundle',
     'getPartyCrmBundle', 'getPartyCrmBundleAsync', 'updatePartyCreditLimit'
   ],
   'screens/fuel-reports.html': [
