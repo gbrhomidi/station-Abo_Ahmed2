@@ -1,6 +1,7 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.ListenableWorker
@@ -245,6 +246,53 @@ class SmsOutboxWorkerIntegrationTest {
         database.readableDatabase.rawQuery(
             "SELECT COUNT(*) FROM sms_outbox WHERE status = ?", arrayOf(value)
         ).use { cursor -> check(cursor.moveToFirst()); cursor.getInt(0) }
+
+    private fun insertDebtFixture(): Pair<Long, Long> {
+        val db = database.writableDatabase
+        db.execSQL("PRAGMA foreign_keys = OFF")
+        val suffix = System.nanoTime().toString()
+        val customerId = db.insertOrThrow("parties", null, ContentValues().apply {
+            put("uuid", "sms-load-party-$suffix")
+            put("party_code", "SMS-LOAD-$suffix")
+            put("party_type_id", 1)
+            put("station_id", 1)
+            put("commercial_name_ar", "SMS load test $suffix")
+            put("payment_terms", "صافي 30 يوم")
+            put("payment_terms_days", 30)
+            put("payment_terms_source", "explicit_text")
+            put("is_active", 1)
+            put("is_deleted", 0)
+        })
+        val saleColumns = db.rawQuery("PRAGMA table_info(sales_transactions)", null).use { cursor ->
+            buildSet { while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name"))) }
+        }
+        val saleValues = ContentValues().apply {
+            put("uuid", "sms-load-sale-$suffix")
+            put("sale_code", "SMS-LOAD-SALE-$suffix")
+            put("station_id", 1)
+            put("shift_id", 1)
+            put("customer_party_id", customerId)
+            put("subtotal", 1.0)
+            put("gross_amount", 1.0)
+            put("net_amount", 1.0)
+            put("payment_method", "credit")
+            put("payment_status", "pending")
+            put("paid_amount", 0.0)
+            put("remaining_amount", 1.0)
+            put("status", "completed")
+            put("cashier_id", 1)
+            put("is_deleted", 0)
+            listOf("business_day", "transaction_date", "sale_date")
+                .firstOrNull { it in saleColumns }
+                ?.let { put(it, BusinessDay.currentDate()) }
+            if ("payment_terms_at_sale" in saleColumns) put("payment_terms_at_sale", "صافي 30 يوم")
+            if ("payment_terms_source_at_sale" in saleColumns) {
+                put("payment_terms_source_at_sale", "explicit_text")
+            }
+        }
+        val saleId = db.insertOrThrow("sales_transactions", null, saleValues)
+        return customerId to saleId
+    }
 
     private class RecordingTransport {
         val sentMessageIds = mutableListOf<String>()
