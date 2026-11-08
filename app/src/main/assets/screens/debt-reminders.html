@@ -3717,7 +3717,7 @@ async function openSettingsModal() {
     const body = $('settingsBody');
     body.innerHTML = '<div style="text-align:center;padding:30px"><div class="spinner" style="margin:0 auto"></div></div>';
     try {
-        const keys = ['sms_send_enabled', 'sms_max_daily_messages', 'retry_attempts'];
+        const keys = ['sms_send_enabled', 'sms_max_daily_messages', 'retry_attempts', 'debt_reminder_days_before_due'];
         const values = {};
         for (const k of keys) {
             const res = await safeInvoke('getSetting', [k]);
@@ -3752,12 +3752,29 @@ async function openSettingsModal() {
                     <input type="number" id="setting_retry_attempts" value="${esc(values.retry_attempts || 3)}" min="1" max="10">
                     <button class="btn-save-setting" onclick="saveSetting('retry_attempts', document.getElementById('setting_retry_attempts').value)">حفظ</button>
                 </div>
+            </div>
+            <div class="settings-row">
+                <div class="settings-label"><i class="fas fa-calendar-check"></i>
+                    <div>التذكير قبل الاستحقاق<div class="settings-desc">(debt_reminder_days_before_due)</div></div>
+                </div>
+                <div class="settings-input-wrap">
+                    <input type="number" id="setting_pre_due_days" value="${esc(values.debt_reminder_days_before_due || 3)}" min="1" max="30" step="1">
+                    <button class="btn-save-setting" onclick="saveSetting('debt_reminder_days_before_due', document.getElementById('setting_pre_due_days').value)">حفظ</button>
+                </div>
             </div>`;
     } catch (e) {
         body.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>فشل تحميل الإعدادات</p></div>`;
     }
 }
 async function saveSetting(key, value) {
+    if (key === 'debt_reminder_days_before_due') {
+        const days = Number(value);
+        if (!Number.isInteger(days) || days < 1 || days > 30) {
+            showToast('حدد عدداً صحيحاً من 1 إلى 30 يوماً', 'error');
+            return;
+        }
+        value = String(days);
+    }
     showLoading(true);
     try {
         const result = await invoke('setSetting', [key, String(value)]);

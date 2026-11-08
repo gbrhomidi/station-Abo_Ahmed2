@@ -216,16 +216,92 @@ class DebtDueDatePolicyTest {
         assertTrue(db.rawQuery("PRAGMA table_info(sales_transactions)",null).use { c -> var found=false;while(c.moveToNext()) if(c.getString(c.getColumnIndexOrThrow("name"))=="payment_terms_source_at_sale") found=true;found })
     }
 
-    @Test fun customerTermListExcludesCashAndUsesShortLabels() {
+    @Test fun customerTermListExcludesCashAndSupplierTermsAfterLegacyScopeMigration() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val db = helper.writableDatabase
+        // Simulate an installation where the built-in catalogue was previously seeded as BOTH.
+        db.execSQL("UPDATE payment_terms SET applies_to='both' WHERE station_id IS NULL AND code IN ('AFTER_1','AFTER_3','NET_7','NET_15','NET_30','NET_45','NET_60','NET_90')")
+        db.insertOrThrow("payment_terms", null, ContentValues().apply {
+            put("code", "SUPPLIER_ONLY_TEST")
+            put("name_ar", "شرط مورد اختباري")
+            put("name_en", "Supplier-only test term")
+            put("days", 14)
+            put("applies_to", "supplier")
+            put("station_id", 1)
+            put("is_default", 0)
+            put("is_active", 1)
+            put("sort_order", 900)
+        })
+
+        // ensureSchema is the idempotent migration entry used by DatabaseHelper.onCreate/onUpgrade.
         DebtDueDateRepository.ensureSchema(helper)
         val rows = DebtDueDateRepository.getPaymentTerms(helper, 1, "customer")
         assertEquals(8, rows.length())
         for (i in 0 until rows.length()) {
             val row = rows.getJSONObject(i)
             assertTrue(row.getInt("days") > 0)
+            assertEquals("customer", row.getString("applies_to"))
             assertTrue(row.getString("name_ar").startsWith("بعد "))
             assertFalse(row.getString("name_ar").contains("صافي"))
         }
+        val suppliers = DebtDueDateRepository.getPaymentTerms(helper, 1, "supplier")
+        assertEquals(1, suppliers.length())
+        assertEquals("supplier", suppliers.getJSONObject(0).getString("applies_to"))
+        assertEquals("SUPPLIER_ONLY_TEST", suppliers.getJSONObject(0).getString("code"))
+    }
+
+    @Test fun preDueReminderCandidateAndOutboxValidationUseConfiguredCalendarWindow() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val db = helper.writableDatabase
+        db.execSQL("PRAGMA foreign_keys=OFF")
+        val customerId = addParty(db, "pre-due-reminder", "صافي 30 يوم", 30, "explicit_text")
+        val phone = "967771234567"
+        db.insertOrThrow("party_contacts", null, ContentValues().apply {
+            put("uuid", "pre-due-contact-${System.nanoTime()}")
+            put("party_id", customerId)
+            put("contact_name", "Pre-due integration customer")
+            put("phone", phone)
+            put("is_primary", 1)
+            put("is_active", 1)
+            put("is_deleted", 0)
+        })
+        val today = LocalDate.parse(BusinessDay.currentDate())
+        val dueDate = today.plusDays(2).toString()
+        val saleId = addSale(db, "pre-due-invoice", customerId, dueDate, "sale_creation", "explicit_text")
+
+        helper.setSetting("debt_reminder_days_before_due", "3")
+        assertEquals(3, DebtDueDateRepository.reminderLeadDays(helper))
+        val candidates = DebtDueDateRepository.getDueSoonDebtReminders(helper, 1, 3)
+        val candidate = (0 until candidates.length()).map { candidates.getJSONObject(it) }
+            .single { it.getLong("customer_party_id") == customerId }
+        assertEquals(2, candidate.getInt("days_remaining"))
+        assertTrue(candidate.getBoolean("eligible"))
+        val body = "مرحباً، يتبقى 2 يوم على موعد استحقاق الدين ($dueDate). " +
+            "المبلغ المستحق بتاريخ $dueDate 100 ر. ي، وإجمالي الرصيد القائم 100 ر. ي."
+        val eventId = candidate.getString("event_id")
+        val entity = "party:$customerId"
+        assertTrue(
+            "A pre-due SMS that still matches the trusted invoice, remaining days, phone and balances must pass the final SQLite gate",
+            DebtDueDateRepository.isCurrentDebtReminder(helper, eventId, entity, phone, body)
+        )
+
+        helper.setSetting("debt_reminder_days_before_due", "1")
+        assertEquals(1, DebtDueDateRepository.reminderLeadDays(helper))
+        assertFalse(
+            "Changing the lead window must invalidate an already-queued reminder outside the newly configured window",
+            DebtDueDateRepository.isCurrentDebtReminder(helper, eventId, entity, phone, body)
+        )
+        helper.setSetting("debt_reminder_days_before_due", "3")
+        db.update(
+            "sales_transactions",
+            ContentValues().apply { put("due_date", today.plusDays(4).toString()) },
+            "id=? AND station_id=?",
+            arrayOf(saleId.toString(), "1")
+        )
+        assertFalse(
+            "Moving the maturity date beyond the configured lead window must cancel the stale pre-due event",
+            DebtDueDateRepository.isCurrentDebtReminder(helper, eventId, entity, phone, body)
+        )
     }
 
     @Test fun schemaInitializationDoesNotBackfillHistoricalSales() {

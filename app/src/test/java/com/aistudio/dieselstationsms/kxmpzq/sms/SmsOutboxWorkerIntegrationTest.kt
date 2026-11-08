@@ -1,17 +1,22 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
 import android.Manifest
+import android.app.Application
 import android.content.ContentValues
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.Data
 import androidx.work.ListenableWorker
+import androidx.work.WorkManager
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
+import androidx.work.testing.WorkManagerTestInitHelper
 import com.aistudio.dieselstationsms.kxmpzq.BusinessDay
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -54,6 +59,106 @@ class SmsOutboxWorkerIntegrationTest {
     @After
     fun tearDown() {
         DatabaseHelper.closeInstance()
+    }
+
+    @Test
+    fun actualDebtReminderWorkerQueuesOnlyInsideTheConfiguredPreDueWindow() = runBlocking {
+        // Initialize WorkManager's in-memory test scheduler; the production worker still
+        // executes its SQLite reads, transaction, reminder persistence and outbox enqueue.
+        WorkManagerTestInitHelper.initializeTestWorkManager(context)
+        shadowOf(context.applicationContext as Application).grantPermissions(Manifest.permission.SEND_SMS)
+        val db = database.writableDatabase
+        val today = LocalDate.parse(BusinessDay.currentDate())
+        val (inWindowCustomer, inWindowSale) = insertDebtFixture()
+        val (outsideCustomer, outsideSale) = insertDebtFixture()
+        val phoneInWindow = "967771234567"
+        val phoneOutside = "967771765432"
+        val partyColumns = db.rawQuery("PRAGMA table_info(parties)", null).use { cursor ->
+            buildSet { while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name"))) }
+        }
+        val legacyPhoneColumn = listOf("phone", "phone_number", "mobile", "phone1")
+            .firstOrNull { it in partyColumns }
+        listOf(inWindowCustomer to phoneInWindow, outsideCustomer to phoneOutside).forEachIndexed { index, pair ->
+            legacyPhoneColumn?.let { column ->
+                db.update("parties", ContentValues().apply { put(column, pair.second) },
+                    "id=? AND station_id=1", arrayOf(pair.first.toString()))
+            }
+            db.insertOrThrow("party_contacts", null, ContentValues().apply {
+                put("uuid", "worker-pre-due-contact-${System.nanoTime()}-$index")
+                put("party_id", pair.first)
+                put("contact_name", "Pre-due worker test $index")
+                put("phone", pair.second)
+                put("is_primary", 1)
+                put("is_active", 1)
+                put("is_deleted", 0)
+            })
+        }
+        val dueDateColumns = db.rawQuery("PRAGMA table_info(sales_transactions)", null).use { cursor ->
+            buildSet { while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name"))) }
+        }
+        val dueWindowUpdate = ContentValues().apply {
+            put("due_date", today.plusDays(2).toString())
+            put("due_date_source", "sale_creation")
+            if ("payment_terms_source_at_sale" in dueDateColumns) put("payment_terms_source_at_sale", "explicit_text")
+            if ("payment_terms_at_sale" in dueDateColumns) put("payment_terms_at_sale", "صافي 30 يوم")
+        }
+        assertEquals(1, db.update("sales_transactions", dueWindowUpdate, "id=?", arrayOf(inWindowSale.toString())))
+        val outsideUpdate = ContentValues().apply {
+            put("due_date", today.plusDays(4).toString())
+            put("due_date_source", "sale_creation")
+            if ("payment_terms_source_at_sale" in dueDateColumns) put("payment_terms_source_at_sale", "explicit_text")
+            if ("payment_terms_at_sale" in dueDateColumns) put("payment_terms_at_sale", "صافي 30 يوم")
+        }
+        assertEquals(1, db.update("sales_transactions", outsideUpdate, "id=?", arrayOf(outsideSale.toString())))
+
+        val userId = db.rawQuery("SELECT id FROM users WHERE is_deleted=0 ORDER BY id LIMIT 1", null)
+            .use { cursor -> assertTrue("A valid authenticated user is required by the reminder worker", cursor.moveToFirst()); cursor.getLong(0) }
+        database.setSetting("sms_send_enabled", "1")
+        database.setSetting("debt_reminder_days_before_due", "3")
+        // Scheduling twice must update the same durable station work item, not create
+        // duplicate periodic workers; changing the authenticated user updates its input.
+        DebtDueReminderWorker.schedule(context, 1, userId)
+        DebtDueReminderWorker.schedule(context, 1, userId + 1L)
+        val scheduled = WorkManager.getInstance(context)
+            .getWorkInfosForUniqueWork("debt-due-sms-reminders-station-1")
+            .get(10, TimeUnit.SECONDS)
+        assertEquals(1, scheduled.size)
+        assertEquals(userId + 1L, scheduled.single().inputData.getLong("debt_reminder_user_id", 0L))
+
+        val requestData = Data.Builder()
+            .putInt("debt_reminder_station_id", 1)
+            .putLong("debt_reminder_user_id", userId)
+            .build()
+        val worker = TestListenableWorkerBuilder.from(context, DebtDueReminderWorker::class.java)
+            .setInputData(requestData)
+            .build()
+
+        val result = worker.doWork()
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM sms_reminders WHERE transaction_id=? AND days_before_due=2 AND status='pending'",
+            arrayOf(inWindowSale.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
+        assertEquals(0, db.rawQuery(
+            "SELECT COUNT(*) FROM sms_reminders WHERE transaction_id=?",
+            arrayOf(outsideSale.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
+        val queued = db.rawQuery(
+            """SELECT o.status,o.body,o.event_id FROM sms_outbox o
+               WHERE o.business_entity_id=? ORDER BY o.queued_at DESC LIMIT 1""",
+            arrayOf("party:$inWindowCustomer")
+        ).use {
+            assertTrue("The in-window customer must have one durable outbox row", it.moveToFirst())
+            Triple(it.getString(0), it.getString(1), it.getString(2))
+        }
+        assertEquals("QUEUED", queued.first)
+        assertTrue(queued.second.contains("يتبقى 2 يوم على موعد استحقاق الدين"))
+        assertTrue(queued.third.startsWith("debt-reminder:1:$inWindowCustomer:"))
+        assertEquals(0, db.rawQuery(
+            "SELECT COUNT(*) FROM sms_outbox WHERE business_entity_id=?",
+            arrayOf("party:$outsideCustomer")
+        ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
     }
 
     @Test

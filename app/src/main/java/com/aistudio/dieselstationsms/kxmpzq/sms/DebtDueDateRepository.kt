@@ -104,7 +104,7 @@ object DebtDueDateRepository {
                 name_ar TEXT NOT NULL,
                 name_en TEXT NOT NULL DEFAULT '',
                 days INTEGER NOT NULL CHECK(days BETWEEN 0 AND 365),
-                applies_to TEXT NOT NULL DEFAULT 'both',
+                applies_to TEXT NOT NULL DEFAULT 'customer',
                 station_id INTEGER,
                 is_default INTEGER NOT NULL DEFAULT 0,
                 is_active INTEGER NOT NULL DEFAULT 1,
@@ -237,32 +237,56 @@ object DebtDueDateRepository {
             db.execSQL(
                 """INSERT OR IGNORE INTO payment_terms
                    (code,name_ar,name_en,days,applies_to,station_id,is_default,is_active,sort_order)
-                   VALUES(?,?,?,?, 'both', NULL, ?, 1, ?)""",
+                   VALUES(?,?,?,?, 'customer', NULL, ?, 1, ?)""",
                 arrayOf(item.code,item.nameAr,item.nameEn,item.days,if(item.code=="NET_30") 1 else 0,item.sortOrder)
             )
             // Catalogue labels may be updated; immutable invoice snapshots are not.
             db.execSQL(
-                "UPDATE payment_terms SET name_ar=?, name_en=?, days=?, sort_order=? WHERE code=? AND station_id IS NULL",
+                "UPDATE payment_terms SET name_ar=?, name_en=?, days=?, applies_to='customer', sort_order=? WHERE code=? AND station_id IS NULL",
                 arrayOf(item.nameAr, item.nameEn, item.days, item.sortOrder, item.code)
             )
         }
     }
 
-    private fun findPaymentTermId(db: SQLiteDatabase, days: Int, stationId: Int?): Long? =
-        db.rawQuery(
-            """SELECT id FROM payment_terms WHERE days=? AND is_active=1
-               AND applies_to IN ('both','customer','supplier')
+    private fun findPaymentTermId(
+        db: SQLiteDatabase,
+        days: Int,
+        stationId: Int?,
+        appliesTo: String
+    ): Long? {
+        require(appliesTo == "customer" || appliesTo == "supplier") { "نطاق شرط الدفع غير صالح" }
+        return db.rawQuery(
+            """SELECT id FROM payment_terms WHERE days=? AND is_active=1 AND applies_to=?
                AND (station_id IS NULL OR station_id=?)
                ORDER BY CASE WHEN station_id IS NULL THEN 0 ELSE 1 END,sort_order,id LIMIT 1""",
-            arrayOf(days.toString(),(stationId?:0).toString())
-        ).use { c -> if(c.moveToFirst()) c.getLong(0) else null }
+            arrayOf(days.toString(), appliesTo, (stationId ?: 0).toString())
+        ).use { c -> if (c.moveToFirst()) c.getLong(0) else null }
+    }
+
+    private fun partyPaymentTermScope(db: SQLiteDatabase, partyId: Long, stationId: Int): String {
+        if (!tableExists(db, "party_types")) return "customer"
+        val typeCode = runCatching {
+            db.rawQuery(
+                """SELECT LOWER(COALESCE(pt.type_code,'')) FROM parties p
+                   LEFT JOIN party_types pt ON pt.id=p.party_type_id
+                   WHERE p.id=? AND p.station_id=? AND COALESCE(p.is_deleted,0)=0 LIMIT 1""",
+                arrayOf(partyId.toString(), stationId.toString())
+            ).use { c -> if (c.moveToFirst()) c.getString(0).orEmpty() else "" }
+        }.getOrDefault("")
+        return if (typeCode.contains("supplier") || typeCode.contains("vendor") || typeCode.contains("مورد")) {
+            "supplier"
+        } else {
+            "customer"
+        }
+    }
 
     fun persistPartyTerms(helper: DatabaseHelper,partyId:Long,stationId:Int,requestedTerms:String?):String {
         require(partyId>0L && stationId>0) { "معرف الطرف أو المحطة غير صالح" }
         val terms=requestedTerms.orEmpty().trim()
         val days=parseTermsDays(terms)
         val db=helper.writableDatabase
-        val term=days?.let { findPaymentTermId(db,it,stationId) }
+        val appliesTo = partyPaymentTermScope(db, partyId, stationId)
+        val term=days?.let { findPaymentTermId(db,it,stationId,appliesTo) }
         val changed=db.update(
             "parties",
             ContentValues().apply {
@@ -389,7 +413,7 @@ object DebtDueDateRepository {
             require(partyActive) { "العميل غير نشط أو لا يتبع المحطة الحالية" }
             val term = db.rawQuery(
                 """SELECT id,name_ar,days FROM payment_terms
-                   WHERE id=? AND is_active=1 AND applies_to IN ('both','customer')
+                   WHERE id=? AND is_active=1 AND applies_to='customer'
                      AND (station_id IS NULL OR station_id=?) LIMIT 1""",
                 arrayOf(paymentTermId.toString(), stationId.toString())
             ).use { c ->
@@ -437,7 +461,7 @@ object DebtDueDateRepository {
         require(scope in setOf("customer","supplier","both")) { "نوع شروط الدفع غير صالح" }
         return helper.readableDatabase.rawQuery(
             """SELECT id,code,name_ar,name_en,days,applies_to,station_id,is_default,sort_order
-               FROM payment_terms WHERE is_active=1 AND days>0 AND applies_to IN ('both',?)
+               FROM payment_terms WHERE is_active=1 AND days>0 AND applies_to=?
                  AND (station_id IS NULL OR station_id=?)
                ORDER BY CASE WHEN is_default=1 THEN 0 ELSE 1 END,sort_order,id""",
             arrayOf(scope,stationId.toString())
@@ -817,6 +841,7 @@ object DebtDueDateRepository {
         if (parsedReminders.isEmpty()) return eligibleMessageIds
 
         val today = LocalDate.parse(BusinessDay.currentDate())
+        val preDueDays = reminderLeadDays(helper)
         val database = helper.readableDatabase
         parsedReminders.groupBy { it.stationId }.forEach { (stationId, stationMessages) ->
             val customerIds = stationMessages.map { it.customerId }.toSet()
@@ -828,7 +853,7 @@ object DebtDueDateRepository {
 
             stationMessages.forEach { reminder ->
                 val customerDebts = debtsByCustomer[reminder.customerId].orEmpty()
-                if (isCurrentDebtReminderForCustomer(reminder, customerDebts, today)) {
+                if (isCurrentDebtReminderForCustomer(reminder, customerDebts, today, preDueDays)) {
                     eligibleMessageIds += reminder.message.messageId
                 }
             }
@@ -856,7 +881,8 @@ object DebtDueDateRepository {
     private fun isCurrentDebtReminderForCustomer(
         reminder: ParsedDebtReminder,
         debts: List<SaleDebt>,
-        today: LocalDate
+        today: LocalDate,
+        preDueDays: Int
     ): Boolean {
         val openCustomerDebts = debts.filter { it.remaining > 0.000001 }
         if (openCustomerDebts.isEmpty()) return false
@@ -870,11 +896,24 @@ object DebtDueDateRepository {
             expectedDate = today
             expectedRows = dueToday
         } else {
-            val latestOverdue = customerDebts.mapNotNull { parseDate(it.dueDate) }
-                .filter { it.isBefore(today) }
-                .maxOrNull() ?: return false
-            expectedDate = latestOverdue
-            expectedRows = customerDebts.filter { parseDate(it.dueDate) == latestOverdue }
+            // Mirror the worker's precedence: nearest upcoming invoice in the configured
+            // pre-due window first, otherwise the latest overdue maturity for catch-up.
+            val nearestUpcoming = customerDebts.mapNotNull { parseDate(it.dueDate) }
+                .filter { due ->
+                    due.isAfter(today) &&
+                        java.time.temporal.ChronoUnit.DAYS.between(today, due) <= preDueDays.toLong()
+                }
+                .minOrNull()
+            if (nearestUpcoming != null) {
+                expectedDate = nearestUpcoming
+                expectedRows = customerDebts.filter { parseDate(it.dueDate) == nearestUpcoming }
+            } else {
+                val latestOverdue = customerDebts.mapNotNull { parseDate(it.dueDate) }
+                    .filter { it.isBefore(today) }
+                    .maxOrNull() ?: return false
+                expectedDate = latestOverdue
+                expectedRows = customerDebts.filter { parseDate(it.dueDate) == latestOverdue }
+            }
         }
 
         if (expectedDate.toString() != reminder.dueDate) return false
@@ -890,16 +929,23 @@ object DebtDueDateRepository {
         val outstandingText = formatReminderAmount(outstanding)
         val dueAmountText = formatReminderAmount(dueAmount)
         val body = reminder.message.body
+        val daysRemaining = java.time.temporal.ChronoUnit.DAYS.between(today, expectedDate).toInt()
 
-        // Do not send stale maturity wording or stale amounts after a partial payment/date roll.
-        return if (expectedDate == today) {
-            body.contains("موعد استحقاق الدين هو اليوم") &&
-                body.contains("المبلغ المستحق اليوم $dueAmountText") &&
-                body.contains("إجمالي الرصيد القائم $outstandingText")
-        } else {
-            body.contains("قد مضى منذ") &&
-                body.contains("المبلغ المتأخر $dueAmountText") &&
-                body.contains("إجمالي الرصيد القائم $outstandingText")
+        // Do not send stale maturity wording, remaining-day count or balances after a
+        // payment, a calendar-day rollover or a changed reminder lead-window setting.
+        return when {
+            expectedDate == today ->
+                body.contains("موعد استحقاق الدين هو اليوم") &&
+                    body.contains("المبلغ المستحق اليوم $dueAmountText") &&
+                    body.contains("إجمالي الرصيد القائم $outstandingText")
+            expectedDate.isAfter(today) ->
+                body.contains("يتبقى $daysRemaining يوم على موعد استحقاق الدين") &&
+                    body.contains("المبلغ المستحق بتاريخ $expectedDate $dueAmountText") &&
+                    body.contains("إجمالي الرصيد القائم $outstandingText")
+            else ->
+                body.contains("قد مضى منذ ${-daysRemaining} يوم") &&
+                    body.contains("المبلغ المتأخر $dueAmountText") &&
+                    body.contains("إجمالي الرصيد القائم $outstandingText")
         }
     }
 
@@ -919,6 +965,19 @@ object DebtDueDateRepository {
         }
         return out
     }
+
+    const val DEFAULT_PRE_DUE_REMINDER_DAYS = 3
+    const val MAX_PRE_DUE_REMINDER_DAYS = 30
+
+    /**
+     * The lead window is read on each worker pass, so changes take effect without deleting
+     * or rebuilding WorkManager's durable periodic request. Invalid legacy values fail safe
+     * to the documented three-day default.
+     */
+    fun reminderLeadDays(helper: DatabaseHelper): Int =
+        helper.getSetting("debt_reminder_days_before_due").trim().toIntOrNull()
+            ?.takeIf { it in 1..MAX_PRE_DUE_REMINDER_DAYS }
+            ?: DEFAULT_PRE_DUE_REMINDER_DAYS
 
     /** Public so the SMS worker and UI use exactly the same calendar-date arithmetic. */
     fun daysUntil(dueDate: String?, today: LocalDate = LocalDate.parse(BusinessDay.currentDate())): Int? {

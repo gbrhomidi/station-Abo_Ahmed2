@@ -12131,10 +12131,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(serviceFee.isFinite() && serviceFee >= 0.0) { "رسوم الخدمة غير صالحة" }
             val netAmount = (total - discountAmount + taxAmount + serviceFee).coerceAtLeast(0.0)
             require(netAmount.isFinite()) { "صافي البيع غير صالح" }
-            val paymentType = data.optString("payment_type", "cash")
-            val paymentMethod = when (paymentType) {
-                "آجل", "credit" -> "credit"
-                "بطاقة", "credit_card" -> "credit_card"
+            val normalizedPaymentType = data.optString("payment_type", "cash")
+                .trim()
+                .lowercase(Locale.ROOT)
+                .replace(" ", "")
+                .replace("-", "_")
+            val paymentMethod = when (normalizedPaymentType) {
+                "آجل", "اجل", "credit", "credit_sale", "credit_account", "on_account", "بيعآجل", "علىالحساب" -> "credit"
+                "بطاقة", "card", "credit_card", "debit_card" -> "credit_card"
                 "تحويل", "bank_transfer" -> "bank_transfer"
                 "شيك", "cheque" -> "cheque"
                 else -> "cash"

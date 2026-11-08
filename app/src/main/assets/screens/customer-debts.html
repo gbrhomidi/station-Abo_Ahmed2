@@ -2682,21 +2682,33 @@
             // Never substitute invoice creation time for a missing maturity date:
             // doing so incorrectly turns an undated current debt into an overdue debt.
             const dueDate = IsoCivilDate.isValidIsoDate(row.due_date) ? row.due_date : '';
-            const explicitStatus = String(row.payment_status ?? row.status ?? '').toLowerCase();
             const today = businessDayDate();
-            const dueDays = dueDate && IsoCivilDate.isValidIsoDate(today)
-                ? IsoCivilDate.calendarDayDifference(today, dueDate)
-                : null;
-            const risk = String(row.risk_level || row.risk_classification || '').trim().toLowerCase();
-            const highRisk = ['high','critical','blacklisted','مرتفع','محظور'].includes(risk) ||
-                risk.includes('high') || risk.includes('critical') || risk.includes('blacklist') || risk.includes('مرتفع') || risk.includes('محظور');
-            let status;
-            if (remaining <= 0.000001) status = 'paid';
-            else if (explicitStatus === 'doubtful' || highRisk || (dueDays !== null && dueDays <= -90)) status = 'doubtful';
-            else if (dueDays === null) status = 'undated';
-            else if (dueDays !== null && dueDays < 0) status = 'overdue';
-            else if (paid > 0.000001) status = 'partial';
-            else status = 'current';
+            const suppliedDays = row.days_remaining;
+            const dueDays = suppliedDays === null || suppliedDays === undefined || suppliedDays === ''
+                ? (dueDate && IsoCivilDate.isValidIsoDate(today)
+                    ? IsoCivilDate.calendarDayDifference(today, dueDate)
+                    : null)
+                : finiteNumber(suppliedDays, null);
+            const centralStatus = String(row.status ?? row.payment_status ?? '').trim().toLowerCase();
+            const allowedStatuses = new Set(['paid','doubtful','undated','overdue','partial','current']);
+            // The repository is the canonical source. Recalculate only for legacy callers
+            // that genuinely do not return a classification field.
+            let status = allowedStatuses.has(centralStatus) ? centralStatus : '';
+            if (!status) {
+                if (remaining <= 0.000001) status = 'paid';
+                else if (centralStatus === 'doubtful') status = 'doubtful';
+                else if (dueDays === null) status = 'undated';
+                else if (dueDays < 0) status = 'overdue';
+                else if (paid > 0.000001) status = 'partial';
+                else status = 'current';
+            }
+            const centralMaturity = String(row.maturity_status || '').trim().toUpperCase();
+            const maturityStatus = ['PAID','UNDATED','OVERDUE','DUE_TODAY','NOT_DUE'].includes(centralMaturity)
+                ? centralMaturity
+                : (remaining <= 0.000001 ? 'PAID'
+                    : dueDays === null ? 'UNDATED'
+                    : dueDays < 0 ? 'OVERDUE'
+                    : dueDays === 0 ? 'DUE_TODAY' : 'NOT_DUE');
             return {
                 ...row,
                 id: row.transaction_id ?? row.id ?? row.sale_id,
@@ -2711,7 +2723,10 @@
                 remaining_amount: remaining,
                 due_date: dueDate,
                 days_remaining: dueDays,
-                days_overdue: dueDays === null ? 0 : Math.max(0, -dueDays),
+                days_overdue: row.days_overdue === null || row.days_overdue === undefined
+                    ? (dueDays === null ? 0 : Math.max(0, -dueDays))
+                    : Math.max(0, finiteNumber(row.days_overdue)),
+                maturity_status: maturityStatus,
                 payment_status: status,
                 status
             };

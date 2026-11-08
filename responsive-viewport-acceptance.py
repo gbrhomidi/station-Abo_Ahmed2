@@ -24,11 +24,13 @@ SCREENS = (
     ASSETS / "screens" / "dashboard.html",
     ASSETS / "screens" / "customer-reports.html",
     ASSETS / "screens" / "customer-debts.html",
+    ASSETS / "screens" / "fuel-sales.html",
+    ASSETS / "screens" / "pos.html",
     ASSETS / "screens" / "debt-reminders.html",
     ASSETS / "screens" / "tasks.html",
     ASSETS / "screens" / "reports-reconciliation.html",
 )
-VIEWPORT_WIDTHS = (320, 360, 390, 412)
+VIEWPORT_WIDTHS = (320, 360, 390, 412, 768, 1024)
 VIEWPORT_HEIGHT = 900
 
 
@@ -85,6 +87,40 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
   const root = document.documentElement;
   const body = document.body;
   const width = root.clientWidth || window.innerWidth;
+  const pageName = location.pathname.toLowerCase();
+  const isFuelSalesPage = pageName.includes('fuel-sales-viewport');
+  const isPosPage = pageName.includes('pos-viewport');
+
+  // The production fuel-sales form is assembled dynamically by JavaScript. Its native
+  // script is intentionally removed in this CSS-only acceptance harness, so recreate
+  // the exact form-group/select/date structure and expose the real modal container.
+  if (isFuelSalesPage) {
+    const form = document.getElementById('recordForm');
+    const modal = document.getElementById('formModal');
+    if (form && modal) {
+      form.innerHTML =
+        '<div class="form-group payment-terms-field" data-payment-terms-acceptance="true">' +
+          '<label class="form-label">شروط الدفع</label>' +
+          '<select class="form-input" id="paymentTermsAcceptanceSelect"><option>بعد 7 أيام</option></select>' +
+        '</div>' +
+        '<div class="form-group payment-terms-field" data-payment-terms-acceptance="true">' +
+          '<label class="form-label">تاريخ الاستحقاق المتوقع</label>' +
+          '<input class="form-input readonly" id="paymentTermsDueDatePreview" type="date" value="2026-11-15" readonly>' +
+        '</div>';
+      modal.classList.add('show');
+    }
+  }
+
+  // POS stores these paired controls in the customer-search modal used by credit sales.
+  if (isPosPage) {
+    const modal = document.getElementById('customerSearchModal');
+    const row = document.getElementById('paymentTermsRow');
+    if (modal && row) {
+      modal.classList.add('show');
+      row.style.display = '';
+    }
+  }
+
   const offenders = [];
   for (const element of Array.from(body.querySelectorAll('*'))) {
     const style = getComputedStyle(element);
@@ -111,11 +147,47 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
       }
     }
   }
+  const paymentTermsIds = isFuelSalesPage
+    ? ['paymentTermsAcceptanceSelect', 'paymentTermsDueDatePreview']
+    : isPosPage ? ['paymentTermsId', 'paymentTermsDueDate'] : [];
+  const paymentTermsRects = paymentTermsIds.map(id => {
+    const field = document.getElementById(id);
+    if (!field) return { id, visible: false, missing: true };
+    const style = getComputedStyle(field);
+    const group = field.closest('.form-group, .field-group') || field;
+    const rect = group.getBoundingClientRect();
+    return {
+      id,
+      visible: style.display !== 'none' && style.visibility !== 'hidden' &&
+        rect.width > 0 && rect.height > 0,
+      left: Math.round(rect.left * 10) / 10,
+      right: Math.round(rect.right * 10) / 10,
+      top: Math.round(rect.top * 10) / 10,
+      bottom: Math.round(rect.bottom * 10) / 10
+    };
+  });
+  let paymentTermsOverlap = false;
+  if (paymentTermsRects.length === 2 && paymentTermsRects.every(item => item.visible)) {
+    const [first, second] = paymentTermsRects;
+    paymentTermsOverlap = first.left < second.right - 1 && first.right > second.left + 1 &&
+      first.top < second.bottom - 1 && first.bottom > second.top + 1;
+  }
+  const paymentTermsOutside = paymentTermsRects.some(item =>
+    item.visible && (item.left < -1 || item.right > width + 1)
+  );
+  const paymentTermsPassed = paymentTermsIds.length === 0 ||
+    (paymentTermsRects.length === 2 &&
+      paymentTermsRects.every(item => item.visible && !item.missing) &&
+      !paymentTermsOverlap && !paymentTermsOutside);
   const result = {
     innerWidth: window.innerWidth,
     clientWidth: root.clientWidth,
     documentScrollWidth: root.scrollWidth,
     bodyScrollWidth: body.scrollWidth,
+    paymentTermsRects,
+    paymentTermsOverlap,
+    paymentTermsOutside,
+    paymentTermsPassed,
     offenders
   };
   const output = document.createElement('pre');
@@ -349,12 +421,15 @@ def main() -> int:
                         document_width <= visual_width + 1
                         and body_width <= width + 1
                         and not result.get("offenders")
+                        and result.get("paymentTermsPassed", True)
                     )
                     label = "PASS" if passed else "FAIL"
                     print(
                         f"{label} {screen.relative_to(ASSETS)} @ {width}px "
                         f"(visual={visual_width}, layout={client}, "
                         f"document={document_width}, body={body_width}, "
+                        f"term_fields={len(result.get('paymentTermsRects', []))}, "
+                        f"term_overlap={result.get('paymentTermsOverlap', False)}, "
                         f"offenders={len(result.get('offenders', []))})"
                     )
                     if not passed:

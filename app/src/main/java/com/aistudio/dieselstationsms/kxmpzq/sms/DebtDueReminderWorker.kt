@@ -47,23 +47,25 @@ class DebtDueReminderWorker(
             // Use the same trusted due-date source consumed by debt screens and reports. The same
             // date calculation is used by the customer-debt screen and the UI banner.
             DebtDueDateRepository.ensureSchema(db)
-            val dueRows = DebtDueDateRepository.getDueSoonDebtReminders(db, stationId, 0)
+            val preDueDays = DebtDueDateRepository.reminderLeadDays(db)
+            val dueRows = DebtDueDateRepository.getDueSoonDebtReminders(db, stationId, preDueDays)
             val overdueRows = DebtDueDateRepository.getOverdueReminderCandidates(db, stationId)
-            val customersDueToday = (0 until dueRows.length())
+            val customersInDueWindow = (0 until dueRows.length())
                 .mapNotNull { dueRows.optJSONObject(it)?.optLong("customer_party_id", 0L) }
                 .filter { it > 0L }
                 .toSet()
             val candidates = mutableListOf<org.json.JSONObject>()
             for (index in 0 until dueRows.length()) {
                 val row = dueRows.optJSONObject(index) ?: continue
-                if (row.optInt("days_remaining", Int.MAX_VALUE) == 0) candidates += row
+                val daysRemaining = row.optInt("days_remaining", Int.MAX_VALUE)
+                if (daysRemaining in 0..preDueDays) candidates += row
             }
             for (index in 0 until overdueRows.length()) {
                 val row = overdueRows.optJSONObject(index) ?: continue
                 val customerId = row.optLong("customer_party_id", 0L)
-                // Prefer today's due reminder over a catch-up reminder to prevent two texts
-                // to the same customer during the same worker cycle.
-                if (customerId > 0L && customerId !in customersDueToday) candidates += row
+                // One message per customer/cycle: a nearer due-window reminder takes precedence
+                // over an older overdue cohort, avoiding contradictory SMS messages.
+                if (customerId > 0L && customerId !in customersInDueWindow) candidates += row
             }
             // Local alerts do not require a phone number or SMS transport permission.
             val localReminderRows = candidates.filter { row ->
@@ -77,10 +79,11 @@ class DebtDueReminderWorker(
 
             var queuedCount = 0
             var overdueQueuedCount = 0
+            var preDueQueuedCount = 0
             val remindedNames = mutableListOf<String>()
             for (row in candidates) {
                 val daysRemaining = row.optInt("days_remaining", Int.MAX_VALUE)
-                if (daysRemaining > 0) continue
+                if (daysRemaining > preDueDays) continue
                 if (!row.optBoolean("eligible", false)) continue
 
                 val customerId = row.optLong("customer_party_id", 0L)
@@ -103,12 +106,16 @@ class DebtDueReminderWorker(
                 val dueAmountText = formatAmount(dueAmount)
                 val customerName = row.optString("customer_name").trim().ifBlank { "عميلنا الكريم" }
                 val overdueDays = (-daysRemaining).coerceAtLeast(0)
-                val message = if (daysRemaining < 0) {
-                    "مرحباً $customerName، نذكّركم بأن موعد استحقاق الدين ($dueDate) قد مضى منذ $overdueDays يوم. " +
-                        "المبلغ المتأخر $dueAmountText ر. ي، وإجمالي الرصيد القائم $balanceText ر. ي. شاكرين تعاونكم."
-                } else {
-                    "مرحباً $customerName، نذكّركم بأن موعد استحقاق الدين هو اليوم ($dueDate). " +
-                        "المبلغ المستحق اليوم $dueAmountText ر. ي، وإجمالي الرصيد القائم $balanceText ر. ي. شاكرين تعاونكم."
+                val message = when {
+                    daysRemaining < 0 ->
+                        "مرحباً $customerName، نذكّركم بأن موعد استحقاق الدين ($dueDate) قد مضى منذ $overdueDays يوم. " +
+                            "المبلغ المتأخر $dueAmountText ر. ي، وإجمالي الرصيد القائم $balanceText ر. ي. شاكرين تعاونكم."
+                    daysRemaining > 0 ->
+                        "مرحباً $customerName، نذكّركم بأنه يتبقى $daysRemaining يوم على موعد استحقاق الدين ($dueDate). " +
+                            "المبلغ المستحق بتاريخ $dueDate $dueAmountText ر. ي، وإجمالي الرصيد القائم $balanceText ر. ي. شاكرين تعاونكم."
+                    else ->
+                        "مرحباً $customerName، نذكّركم بأن موعد استحقاق الدين هو اليوم ($dueDate). " +
+                            "المبلغ المستحق اليوم $dueAmountText ر. ي، وإجمالي الرصيد القائم $balanceText ر. ي. شاكرين تعاونكم."
                 }
 
                 val eventId = row.optString("event_id").trim().ifBlank {
@@ -134,7 +141,7 @@ class DebtDueReminderWorker(
                             newReminder = true
                             db.recordQueuedDebtReminder(
                                 customerId, transactionId, phone, message,
-                                createdBy = userId, daysBeforeDue = 0
+                                createdBy = userId, daysBeforeDue = daysRemaining.coerceAtLeast(0)
                             )
                         }
                     },
@@ -152,6 +159,7 @@ class DebtDueReminderWorker(
                 if (outcome.queuedMessageId != null) {
                     queuedCount++
                     if (daysRemaining < 0) overdueQueuedCount++
+                    if (daysRemaining > 0) preDueQueuedCount++
                     if (customerName !in remindedNames) remindedNames += customerName
                 }
             }
@@ -166,6 +174,7 @@ class DebtDueReminderWorker(
                     if (hasQueuedSms) queuedCount else localEligibleCount,
                     if (hasQueuedSms) remindedNames else localReminderNames,
                     overdueQueuedCount,
+                    preDueQueuedCount,
                     smsEnabled,
                     smsPermissionGranted
                 )
@@ -181,6 +190,7 @@ class DebtDueReminderWorker(
         count: Int,
         names: List<String>,
         overdueCount: Int,
+        preDueCount: Int,
         smsEnabled: Boolean,
         smsPermissionGranted: Boolean
     ) {
@@ -216,7 +226,7 @@ class DebtDueReminderWorker(
                 .setStyle(Notification.BigTextStyle().bigText(
                     when {
                         smsDispatchAllowed ->
-                            "تمت إضافة $count رسالة تذكير إلى طابور SMS. منها $overdueCount تذكير لمديونيات تجاوزت تاريخ الاستحقاق، والباقي لمستحقات اليوم. ستُرسل وفق إعدادات الرسائل وأذونات الجهاز."
+                            "تمت إضافة $count رسالة إلى طابور SMS: $preDueCount قبل تاريخ الاستحقاق، والباقي لمستحقات اليوم أو ديون متأخرة ($overdueCount). ستُرسل وفق إعدادات الرسائل وأذونات الجهاز."
                         !smsEnabled ->
                             "إرسال SMS معطّل من الإعدادات؛ لم تُرسل أي رسالة. هذا إشعار محلي لمتابعة الديون المستحقة."
                         else ->

@@ -36,6 +36,9 @@ class FinancialIntegrityContractTest {
         assertTrue("Debt payment must create a customer-ledger credit", payment.contains("insertOrThrow(\"customer_ledger\"") && payment.contains("put(\"credit\", amount)"))
         assertTrue("Debt payment must update the selected settlement balance", payment.contains("cash_movements") && payment.contains("insertBankLedgerEntry("))
         assertTrue("Product sale must use the transaction-neutral sale writer", productSale.contains("insertSaleTransactionInternal(db"))
+        assertTrue("POS credit aliases must classify to the same deferred-sale contract as the Android bridge",
+            productSale.contains("credit_sale") && productSale.contains("credit_account") &&
+                productSale.contains("on_account") && productSale.contains("normalizedPaymentType"))
         assertTrue("Fuel sale must use the transaction-neutral sale writer", fuelSale.contains("insertSaleTransactionInternal(db"))
         assertTrue("Stock updates inside a sale must use the transaction-neutral writer", productSale.contains("addStockMovementInternal("))
         assertTrue("Database must define the unique financial idempotency table", source.contains("financial_idempotency_keys"))

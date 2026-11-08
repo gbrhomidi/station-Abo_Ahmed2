@@ -703,16 +703,22 @@ object DeliveryFeeAccounting {
         require(fuelSaleId > 0L && stationId > 0) { "معرف البيع أو المحطة غير صالح" }
         require(amount.isFinite() && amount >= 0.0) { "رسوم خدمة التوصيل غير صالحة" }
 
+        // The bridge receives the parent invoice ID for compatibility, while the physical
+        // fuel_sales row has its own primary key. Resolve both before writing any child fields.
+        val sale = findSale(db, stationId, fuelSaleId)
+            ?: throw IllegalStateException("لم يتم العثور على عملية بيع الوقود في SQLite")
+
         if (originalAmount != null || originalQuantity != null) {
             val cols = columns(db, "fuel_sales")
             val grossValues = ContentValues()
             if (originalAmount != null && originalAmount.isFinite() && "gross_amount" in cols) grossValues.put("gross_amount", originalAmount)
             if (originalQuantity != null && originalQuantity.isFinite() && "gross_quantity" in cols) grossValues.put("gross_quantity", originalQuantity)
-            if (grossValues.size() > 0) db.update("fuel_sales", grossValues, "id=? AND station_id=?", arrayOf(fuelSaleId.toString(), stationId.toString()))
+            if (grossValues.size() > 0) {
+                check(db.update("fuel_sales", grossValues, "id=? AND station_id=?", arrayOf(sale.id.toString(), stationId.toString())) == 1) {
+                    "تعذر تحديث لقطة إجمالي وكمية الوقود في سجل الوقود الفعلي"
+                }
+            }
         }
-
-        val sale = findSale(db, stationId, fuelSaleId)
-            ?: throw IllegalStateException("لم يتم العثور على عملية بيع الوقود في SQLite")
         val mode = normalizeMode(rawMode)
         val feeAmount = if (mode == EXEMPT) 0.0 else amount
         val grossAmount = (originalAmount ?: sale.grossAmount).takeIf { it.isFinite() && it > 0.0 } ?: sale.amount
@@ -741,7 +747,9 @@ object DeliveryFeeAccounting {
             if ("gross_amount" in fuelColumns) put("gross_amount", grossAmount)
             if ("gross_quantity" in fuelColumns) put("gross_quantity", grossQuantity)
         }
-        db.update("fuel_sales", fuelValues, "id=? AND station_id=?", arrayOf(fuelSaleId.toString(), stationId.toString()))
+        check(db.update("fuel_sales", fuelValues, "id=? AND station_id=?", arrayOf(sale.id.toString(), stationId.toString())) == 1) {
+            "تعذر حفظ رسوم التوصيل على سجل الوقود الفعلي"
+        }
 
         // Parent transaction is the customer invoice; fuel_sales retains the fuel-only value.
         if (sale.parentSaleId > 0L && tableExists(db, "sales_transactions")) {
