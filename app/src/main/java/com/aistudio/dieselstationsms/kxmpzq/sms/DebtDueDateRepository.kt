@@ -542,7 +542,8 @@ object DebtDueDateRepository {
         rows.filter { row ->
             val dueDate = row.dueDate
             val validDueDate = IsoCivilDate.isValid(dueDate)
-            (fromDate.isNullOrEmpty() || (validDueDate && dueDate >= fromDate)) &&
+            row.remaining > 0.000001 &&
+                (fromDate.isNullOrEmpty() || (validDueDate && dueDate >= fromDate)) &&
                 (toDate.isNullOrEmpty() || (validDueDate && dueDate <= toDate))
         }.forEach { invoices.put(toJson(it, today)) }
         val summary = buildCustomerDebtSummary(rows, stationId, asOfDate, today)
