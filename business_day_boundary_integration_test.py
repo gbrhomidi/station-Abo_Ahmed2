@@ -139,7 +139,7 @@ def test_dashboard_and_crm_use_the_canonical_debt_repository() -> None:
 
     assert "DebtDueDateRepository.getCustomerDebtSummary(this, stationId, today)" in database_helper
     assert 'val reportRows = when (reportType)' in database_helper
-    assert 'reportType == "customers"' in database_helper
+    assert 'reportType in setOf("customers", "balance")' in database_helper
     assert "DebtDueDateRepository.getCustomerDebtSummary(db, stationId, businessDate)" in main_activity
     assert 'fun getCustomerDebtSummary()' in main_activity
     assert 'fun getCustomerDebtSummary(' in repository

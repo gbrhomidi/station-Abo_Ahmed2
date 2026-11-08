@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import tempfile
@@ -319,6 +320,7 @@ def main() -> int:
             cwd=PROJECT_ROOT,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            start_new_session=True,
         )
         devtools = None
         try:
@@ -342,12 +344,18 @@ def main() -> int:
                     client = int(result.get("clientWidth", 0))
                     document_width = int(result.get("documentScrollWidth", 0))
                     body_width = int(result.get("bodyScrollWidth", 0))
-                    passed = document_width <= width + 1 and body_width <= width + 1
+                    visual_width = int(result.get("innerWidth", width))
+                    passed = (
+                        document_width <= visual_width + 1
+                        and body_width <= width + 1
+                        and not result.get("offenders")
+                    )
                     label = "PASS" if passed else "FAIL"
                     print(
                         f"{label} {screen.relative_to(ASSETS)} @ {width}px "
-                        f"(inner={result.get('innerWidth')}, client={client}, "
-                        f"document={document_width}, body={body_width})"
+                        f"(visual={visual_width}, layout={client}, "
+                        f"document={document_width}, body={body_width}, "
+                        f"offenders={len(result.get('offenders', []))})"
                     )
                     if not passed:
                         failures.append({
@@ -358,11 +366,17 @@ def main() -> int:
         finally:
             if devtools:
                 devtools.close()
-            process.terminate()
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
             try:
                 process.wait(timeout=8)
             except subprocess.TimeoutExpired:
-                process.kill()
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
                 process.wait(timeout=5)
 
     print(f"RESPONSIVE VIEWPORT ACCEPTANCE: {total - len(failures)}/{total} passed; {len(failures)} failed.")
