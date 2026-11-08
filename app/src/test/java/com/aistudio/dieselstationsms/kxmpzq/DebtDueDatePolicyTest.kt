@@ -216,7 +216,7 @@ class DebtDueDatePolicyTest {
             assertEquals(netSevenId, c.getLong(0))
             assertEquals(7, c.getInt(1))
             assertEquals("explicit_text", c.getString(2))
-            assertEquals("صافي 7 أيام", c.getString(3))
+            assertEquals("بعد 7 أيام", c.getString(3))
             assertEquals("2026-11-08", c.getString(4))
             assertEquals("2026-11-01", c.getString(5))
             assertEquals("sale_creation", c.getString(6))
