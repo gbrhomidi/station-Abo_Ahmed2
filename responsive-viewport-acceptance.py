@@ -117,13 +117,16 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
 
   // POS stores these paired controls in the customer-search modal used by credit sales.
   if (isPosPage) {
-    const modal = document.getElementById('customerSearchModal');
+    // The terms row is inside customerInfoRow, which starts hidden until the
+    // operator chooses credit payment and a customer. Recreate that real state
+    // explicitly in this CSS-only harness instead of opening the separate search modal.
+    const paymentType = document.getElementById('paymentType');
+    const customerInfo = document.getElementById('customerInfoRow');
     const row = document.getElementById('paymentTermsRow');
-    if (modal && row) {
-      // Mirror production openModal(): POS uses display:flex, not a show class.
-      modal.style.display = 'flex';
-      row.style.display = 'grid';
-    }
+    if (paymentType) paymentType.value = 'آجل';
+    if (customerInfo) customerInfo.style.display = 'block';
+    if (row) row.style.display = 'grid';
+
     // This A4 invoice is a print-only node intentionally parked far offscreen.
     // It is not part of the interactive POS screen being measured here.
     document.querySelectorAll('.pos-invoice').forEach(invoice => {
