@@ -226,9 +226,10 @@ class DebtDueReminderWorkerIntegrationTest {
             ))
         }
         val notificationId = 0xD3B7 + (stationId and 0x0FFF)
+        val notificationsBefore = shadowOf(manager).getAllNotifications().size
         manager.notify(notificationId, Notification.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("Stale debt").build())
-        assertTrue(shadowOf(manager).getAllNotifications().any { it.id == notificationId })
+        assertEquals(notificationsBefore + 1, shadowOf(manager).getAllNotifications().size)
 
         val worker = TestListenableWorkerBuilder.from(context, DebtDueReminderWorker::class.java)
             .setInputData(Data.Builder().putInt("debt_reminder_station_id", stationId)
@@ -237,7 +238,7 @@ class DebtDueReminderWorkerIntegrationTest {
         assertEquals(ListenableWorker.Result.success(), worker.doWork())
         assertEquals(PackageManager.PERMISSION_DENIED, context.checkSelfPermission(Manifest.permission.SEND_SMS))
         assertTrue("A fully paid debt must cancel the station's stale local alert",
-            shadowOf(manager).getAllNotifications().none { it.id == notificationId })
+            shadowOf(manager).getAllNotifications().size == notificationsBefore)
         assertEquals(0, db.rawQuery(
             "SELECT COUNT(*) FROM sms_outbox WHERE event_id LIKE ?", arrayOf("debt-reminder:$stationId:$customerId:%")
         ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
