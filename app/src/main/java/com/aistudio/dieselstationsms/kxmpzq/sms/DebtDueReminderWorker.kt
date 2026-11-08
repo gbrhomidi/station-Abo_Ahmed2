@@ -94,8 +94,10 @@ class DebtDueReminderWorker(
                 if (customerId <= 0L || transactionId <= 0L || balance <= 0.0 ||
                     phone == null || dueDate.isBlank()
                 ) continue
-                // Do not queue a carrier message unless both permission and setting allow it.
-                if (!smsDispatchAllowed) continue
+                // Keep the durable reminder when SEND_SMS is unavailable. The atomic
+                // transaction queues it for later retry; only an explicit SMS opt-out
+                // should suppress persistence entirely.
+                if (!smsEnabled) continue
 
                 // A reminder already recorded on the due date is enough; a reminder
                 // from yesterday must not suppress the actual due-date notification.
