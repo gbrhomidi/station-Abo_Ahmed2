@@ -141,14 +141,14 @@ class SmsOutboxWorkerIntegrationTest {
 
             val eventId = "debt-reminder:1:$customerId:$today:$saleId"
             val body = "موعد استحقاق الدين هو اليوم. المبلغ المستحق اليوم 1 وإجمالي الرصيد القائم 1 ر. ي."
-            queued += SmsOutboxRepository.enqueue(
+            queued.add(SmsOutboxRepository.enqueue(
                 database,
                 phone,
                 body,
                 eventId = eventId,
                 businessEntityId = "party:$customerId",
                 dedupeKey = "load-debt-reminder-$index"
-            )!!
+            )!!)
         }
 
         assertEquals(
