@@ -73,7 +73,7 @@
             <i class="fas fa-hand-holding-usd kpi-icon"></i>
             <h3 class="kpi-title">الديون المستحقة</h3>
             <p class="kpi-value" id="kpiDebts">0.00</p>
-            <span class="kpi-trend">إجمالي أرصدة العملاء</span>
+            <span class="kpi-trend" id="trendCustomerDebts">إجمالي أرصدة الفواتير الآجلة</span>
         </div>
     </div>
 
@@ -107,7 +107,16 @@
                 document.getElementById('kpiSalesToday').textContent = fmtMoney(data.sales_today);
                 document.getElementById('kpiFuelToday').textContent = fmtNum(data.fuel_liters_today);
                 document.getElementById('kpiStockAlerts').textContent = fmtNum(data.low_stock);
-                document.getElementById('kpiDebts').textContent = fmtMoney(data.total_customer_debts);
+                const debtSummary = data.customer_debt_summary || {};
+                const totalCustomerDebts = debtSummary.total_customer_debts !== undefined
+                    ? debtSummary.total_customer_debts
+                    : (data.customer_debts !== undefined ? data.customer_debts : data.total_customer_debts);
+                document.getElementById('kpiDebts').textContent = fmtMoney(totalCustomerDebts);
+                const debtTrendElement = document.getElementById('trendCustomerDebts');
+                if (debtTrendElement) {
+                    debtTrendElement.textContent = 'المتأخر: ' + fmtMoney(debtSummary.total_overdue_amount || 0) +
+                        ' — فواتير خلال 7 أيام: ' + fmtNum(debtSummary.due_next_7_days_invoice_count || 0);
+                }
                 
                 // Update Trends
                 const salesTrend = data.sales_today_vs_yesterday || 0;

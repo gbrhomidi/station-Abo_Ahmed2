@@ -69,6 +69,103 @@ class DebtDueDatePolicyTest {
         assertEquals("PAID", DebtDueDateRepository.maturityStatusFor(0.0, "2026-11-04", today))
     }
 
+    @Test fun customerDebtSummaryIsCanonicalStationScopedAndUsesOneExplicitBusinessDate() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val db = helper.writableDatabase
+        db.execSQL("PRAGMA foreign_keys=OFF")
+
+        val customerA = addParty(db, "central-debt-a", "NET 30", 30, "explicit_text")
+        val customerB = addParty(db, "central-debt-b", "NET 15", 15, "explicit_text")
+
+        val overdueId = addSale(db, "central-overdue", customerA, "2026-11-07", "sale_creation", "explicit_text")
+        val dueTodayId = addSale(db, "central-due-today", customerA, "2026-11-08", "sale_creation", "explicit_text")
+        val futureId = addSale(db, "central-future", customerB, "2026-11-10", "sale_creation", "explicit_text")
+        val undatedId = addSale(db, "central-undated", customerB, null, null, "explicit_text")
+        val paidId = addSale(db, "central-paid", customerB, "2026-11-08", "sale_creation", "explicit_text")
+        val foreignStationId = addSale(db, "central-foreign-station", customerB, "2026-11-07", "sale_creation", "explicit_text")
+        val deletedId = addSale(db, "central-deleted", customerB, "2026-11-07", "sale_creation", "explicit_text")
+        val cancelledId = addSale(db, "central-cancelled", customerB, "2026-11-07", "sale_creation", "explicit_text")
+
+        db.update("sales_transactions", ContentValues().apply {
+            put("paid_amount", 60.0)
+            put("remaining_amount", 40.0)
+        }, "id=?", arrayOf(dueTodayId.toString()))
+        db.update("sales_transactions", ContentValues().apply {
+            put("paid_amount", 80.0)
+            put("remaining_amount", 20.0)
+            put("business_day", "2026-11-20")
+        }, "id=?", arrayOf(undatedId.toString()))
+        db.update("sales_transactions", ContentValues().apply {
+            put("paid_amount", 100.0)
+            put("remaining_amount", 0.0)
+        }, "id=?", arrayOf(paidId.toString()))
+        db.update("sales_transactions", ContentValues().apply {
+            put("station_id", 2)
+        }, "id=?", arrayOf(foreignStationId.toString()))
+        db.update("sales_transactions", ContentValues().apply {
+            put("is_deleted", 1)
+        }, "id=?", arrayOf(deletedId.toString()))
+        db.update("sales_transactions", ContentValues().apply {
+            put("status", "cancelled")
+        }, "id=?", arrayOf(cancelledId.toString()))
+
+        val summary = DebtDueDateRepository.getCustomerDebtSummary(helper, 1, "2026-11-08")
+        assertEquals("2026-11-08", summary.getString("as_of_date"))
+        assertEquals("DebtDueDateRepository.readDebts", summary.getString("source"))
+        assertEquals(150.0, summary.getDouble("total_customer_debts"), 0.000001)
+        assertEquals(150.0, summary.getDouble("customer_debts"), 0.000001)
+        assertEquals(60.0, summary.getDouble("total_overdue_amount"), 0.000001)
+        assertEquals(4, summary.getInt("open_invoice_count"))
+        assertEquals(1, summary.getInt("overdue_invoice_count"))
+        assertEquals(2, summary.getInt("due_next_7_days_invoice_count"))
+        assertEquals(1, summary.getInt("due_today_invoice_count"))
+        assertEquals(1, summary.getInt("undated_invoice_count"))
+        assertEquals(2, summary.getInt("debtor_count"))
+        assertEquals(1, summary.getInt("paid_invoice_count"))
+
+        val customers = summary.getJSONArray("customer_balances")
+        val customerARow = (0 until customers.length()).map { customers.getJSONObject(it) }
+            .single { it.getLong("customer_party_id") == customerA }
+        val customerBRow = (0 until customers.length()).map { customers.getJSONObject(it) }
+            .single { it.getLong("customer_party_id") == customerB }
+        assertEquals(100.0, customerARow.getDouble("total_due"), 0.000001)
+        assertEquals(60.0, customerARow.getDouble("overdue_amount"), 0.000001)
+        assertEquals(2, customerARow.getInt("open_invoice_count"))
+        assertEquals(50.0, customerBRow.getDouble("current_balance"), 0.000001)
+        assertEquals(20.0, customerBRow.getDouble("undated_amount"), 0.000001)
+        assertEquals(1, customerBRow.getInt("undated_invoice_count"))
+
+        val invoiceRows = DebtDueDateRepository.getCustomerDebts(helper, 1, asOfDate = "2026-11-08")
+        val overdueJson = (0 until invoiceRows.length()).map { invoiceRows.getJSONObject(it) }
+            .single { it.getLong("transaction_id") == overdueId }
+        val dueTodayJson = (0 until invoiceRows.length()).map { invoiceRows.getJSONObject(it) }
+            .single { it.getLong("transaction_id") == dueTodayId }
+        assertEquals("OVERDUE", overdueJson.getString("maturity_status"))
+        assertEquals(-1, overdueJson.getInt("days_remaining"))
+        assertEquals("DUE_TODAY", dueTodayJson.getString("maturity_status"))
+        assertEquals(0, dueTodayJson.getInt("days_remaining"))
+
+        // Changing the explicit operating date changes only maturity buckets, not the
+        // persisted invoice balance or the device clock used by the test runner.
+        val nextDay = DebtDueDateRepository.getCustomerDebtSummary(helper, 1, "2026-11-09")
+        assertEquals(150.0, nextDay.getDouble("total_customer_debts"), 0.000001)
+        assertEquals(100.0, nextDay.getDouble("total_overdue_amount"), 0.000001)
+        assertEquals(2, nextDay.getInt("overdue_invoice_count"))
+        assertEquals(1, nextDay.getInt("due_next_7_days_invoice_count"))
+        assertEquals(0, nextDay.getInt("due_today_invoice_count"))
+
+        var invalidAsOfRejected = false
+        try {
+            DebtDueDateRepository.getCustomerDebtSummary(helper, 1, "2026-02-30")
+        } catch (_: IllegalArgumentException) {
+            invalidAsOfRejected = true
+        }
+        assertTrue("A non-calendar as-of date must never be accepted", invalidAsOfRejected)
+
+        // Keep references live so a mistaken test fixture edit cannot silently remove a case.
+        assertTrue(overdueId > 0L && futureId > 0L && undatedId > 0L)
+    }
+
     @Test fun creditRiskDoesNotOverrideMaturityState() {
         val today=LocalDate.parse("2026-11-05")
         assertEquals("current",DebtDueDateRepository.statusFor(100.0,0.0,"2026-11-15","critical",today))

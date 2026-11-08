@@ -1169,7 +1169,7 @@
             .sidebar-btn i { font-size: 1.2rem; }
         }
   </style>
-     <meta name="reports-bridge-methods" content="generateCRMReport,getPartyTypes,getCustomerDebts,getPartyCrmBundle,getPartyCrmBundleAsync,updatePartyCreditLimit">
+     <meta name="reports-bridge-methods" content="generateCRMReport,getPartyTypes,getCustomerDebts,getCustomerDebtSummary,getPartyCrmBundle,getPartyCrmBundleAsync,updatePartyCreditLimit">
     <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 <script src="file:///android_asset/assets-local/js/report-context-persistence.js"></script><script src="source-trace-contract.js"></script><script src="file:///android_asset/assets-local/js/report-evidence-runtime.js"></script>
     <style>
@@ -1752,6 +1752,8 @@
                     return bridge.getPartyTypes();
                 case 'getCustomerDebts':
                     return bridge.getCustomerDebts(p.start_date || null, p.end_date || null);
+                case 'getCustomerDebtSummary':
+                    return bridge.getCustomerDebtSummary();
                 case 'getPartyCrmBundle':
                     return bridge.getPartyCrmBundle(Number(p.id || p.party_id || 0));
                 case 'updatePartyCreditLimit':
@@ -2082,16 +2084,42 @@
             showLoading(true);
             try {
                 const common = { start_date: from, end_date: to, party_type: type ? Number(type) : 0, status };
-                const [balanceResult, salesResult, debtsResult] = await Promise.all([
+                const [balanceResult, salesResult, debtsResult, debtSummaryResult] = await Promise.all([
                     apiCall('generateCRMReport', { ...common, report_type: 'customers' }),
                     apiCall('generateCRMReport', { ...common, report_type: 'profitability' }),
-                    apiCall('getCustomerDebts', { start_date: from, end_date: to })
+                    apiCall('getCustomerDebts', { start_date: from, end_date: to }),
+                    apiCall('getCustomerDebtSummary')
                 ]);
                 if (!balanceResult.success) throw new Error(balanceResult.error || balanceResult.message || 'فشل تحميل بيانات العملاء');
+                if (!debtSummaryResult.success || !debtSummaryResult.data || !Array.isArray(debtSummaryResult.data.customer_balances)) {
+                    throw new Error(debtSummaryResult.error || debtSummaryResult.message || 'مصدر ملخص ديون العملاء المركزي غير متاح');
+                }
                 const balanceRows = Array.isArray(balanceResult.data) ? balanceResult.data : [];
                 const salesRows = salesResult.success && Array.isArray(salesResult.data) ? salesResult.data : [];
                 const salesById = new Map(salesRows.map(row => [String(row.id), row]));
-                runtimeState.rawCustomers = balanceRows.map(row => normalizeCustomerRow({ ...row, ...(salesById.get(String(row.id)) || {}) }));
+                const debtByCustomerId = new Map(
+                    debtSummaryResult.data.customer_balances.map(row => [String(row.customer_party_id || row.customer_id || row.party_id), row])
+                );
+                runtimeState.debtSummary = debtSummaryResult.data;
+                runtimeState.rawCustomers = balanceRows.map(row => {
+                    const sales = salesById.get(String(row.id)) || {};
+                    const debt = debtByCustomerId.get(String(row.id)) || {};
+                    const balance = finiteNumber(debt.total_due, 0);
+                    return normalizeCustomerRow({
+                        ...row,
+                        ...sales,
+                        // Current customer balances are always invoice-level repository values;
+                        // never fall back to denormalized parties.current_balance/total_due.
+                        current_balance: balance,
+                        total_due: balance,
+                        outstanding_amount: balance,
+                        overdue_amount: finiteNumber(debt.overdue_amount, 0),
+                        debt_open_invoice_count: finiteNumber(debt.open_invoice_count, 0),
+                        debt_overdue_invoice_count: finiteNumber(debt.overdue_invoice_count, 0),
+                        debt_undated_invoice_count: finiteNumber(debt.undated_invoice_count, 0),
+                        debt_summary_source: 'DebtDueDateRepository.readDebts'
+                    });
+                });
                 runtimeState.rawAgingDebts = debtsResult.success && Array.isArray(debtsResult.data) ? debtsResult.data : [];
                 runtimeState.agingRows = buildAgingRows(runtimeState.rawAgingDebts);
                 runtimeState.lastLoadedAt = new Date();
@@ -2108,6 +2136,7 @@
                 runtimeState.visibleCustomers = [];
                 runtimeState.salesAvailable = false;
                 runtimeState.agingAvailable = false;
+                runtimeState.debtSummary = null;
                 runtimeState.agingRows = [];
                 runtimeState.rawAgingDebts = [];
                 renderCurrentCustomerView();

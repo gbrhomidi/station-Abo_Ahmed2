@@ -430,6 +430,24 @@ else:
         print(f'FAIL custody/workshop preflight: runner exited {preflight.returncode}')
         failed += 1
 
+# Execute the explicit SQLite/business-day integration suite and browser-based viewport acceptance matrix.
+for acceptance_name, acceptance_script in (
+    ('business-day SQLite integration', PROJECT_ROOT / 'business_day_boundary_integration_test.py'),
+    ('responsive viewport acceptance', PROJECT_ROOT / 'responsive-viewport-acceptance.py'),
+):
+    if not acceptance_script.exists():
+        print(f'FAIL {acceptance_name}: runner missing')
+        failed += 1
+        continue
+    acceptance = subprocess.run(
+        [sys.executable, str(acceptance_script)],
+        cwd=PROJECT_ROOT,
+        check=False,
+    )
+    if acceptance.returncode != 0:
+        print(f'FAIL {acceptance_name}: runner exited {acceptance.returncode}')
+        failed += 1
+
 if failed:
     raise SystemExit(f'{failed} screen/security smoke checks failed')
 print(f'All screen and security smoke checks passed: {len(CASES)} screens, {len(SECURITY_CASES)} security contracts. Acceptance preflight status is reported separately above.')

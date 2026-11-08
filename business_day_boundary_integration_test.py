@@ -94,6 +94,60 @@ def test_midnight_to_three_is_same_operating_day() -> None:
     assert utc_count == 1, utc_count
 
 
+
+def test_device_date_mismatch_uses_stored_business_day() -> None:
+    db = setup_db()
+    # A local Yemen operating day can begin while the UTC calendar is still the prior day.
+    # A later transaction may have a created_at date matching the device date but belong
+    # to the next stored operating day. Reports must follow business_day, not either clock.
+    rows = [
+        (1, "2026-11-07 21:30:00", "2026-11-08", 120.0),
+        (2, "2026-11-08 10:15:00", "2026-11-08", 30.0),
+        (3, "2026-11-08 21:30:00", "2026-11-09", 300.0),
+    ]
+    for row_id, created_at, operating_day, amount in rows:
+        db.execute(
+            "INSERT INTO sales_transactions VALUES (?, 7, ?, ?, ?, 0)",
+            (row_id, created_at, operating_day, amount),
+        )
+    db.commit()
+
+    simulated_device_date = "2026-11-09"
+    requested_business_day = "2026-11-08"
+    selected = db.execute(
+        "SELECT COUNT(*), COALESCE(SUM(net_amount),0) FROM sales_transactions "
+        "WHERE station_id=? AND business_day=? AND is_deleted=0",
+        (7, requested_business_day),
+    ).fetchone()
+    assert selected == (2, 150.0), selected
+
+    # A device/UTC calendar-date predicate returns a different cohort and amount.
+    device_date_rows = db.execute(
+        "SELECT COUNT(*), COALESCE(SUM(net_amount),0) FROM sales_transactions "
+        "WHERE station_id=? AND substr(created_at,1,10)=? AND is_deleted=0",
+        (7, simulated_device_date),
+    ).fetchone()
+    assert device_date_rows == (1, 300.0), device_date_rows
+    assert selected != device_date_rows
+
+
+def test_dashboard_and_crm_use_the_canonical_debt_repository() -> None:
+    database_helper = Path("app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt").read_text()
+    main_activity = Path("app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt").read_text()
+    repository = Path("app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/sms/DebtDueDateRepository.kt").read_text()
+    customer_report = Path("app/src/main/assets/screens/customer-reports.html").read_text()
+
+    assert "DebtDueDateRepository.getCustomerDebtSummary(this, stationId, today)" in database_helper
+    assert 'val reportRows = when (reportType)' in database_helper
+    assert 'reportType == "customers"' in database_helper
+    assert "DebtDueDateRepository.getCustomerDebtSummary(db, stationId, businessDate)" in main_activity
+    assert 'fun getCustomerDebtSummary()' in main_activity
+    assert 'fun getCustomerDebtSummary(' in repository
+    assert "getCustomerDebtSummary" in customer_report
+    assert "debt.total_due" in customer_report
+    assert "debt_summary_source" in customer_report
+
+
 def test_source_uses_business_day_for_sales_reports() -> None:
     source = Path("app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt").read_text()
     required = [
@@ -109,5 +163,7 @@ def test_source_uses_business_day_for_sales_reports() -> None:
 
 if __name__ == "__main__":
     test_midnight_to_three_is_same_operating_day()
+    test_device_date_mismatch_uses_stored_business_day()
     test_source_uses_business_day_for_sales_reports()
-    print("BUSINESS-DAY BOUNDARY INTEGRATION PASS")
+    test_dashboard_and_crm_use_the_canonical_debt_repository()
+    print("BUSINESS-DAY, DEVICE-DATE MISMATCH AND CENTRAL DEBT INTEGRATION PASS")

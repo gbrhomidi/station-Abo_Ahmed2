@@ -32,6 +32,8 @@ assert.equal(window.businessDayDate('2026-10-08'), '2026-10-08');
 assert.equal(window.businessDayDateTime('2026-10-08 00:00:00'), '2026-10-08 00:00:00');
 // An instant around the local boundary resolves to the prior local date before midnight.
 assert.equal(window.businessDayDate(new Date('2026-10-08T03:30:00Z')), '2026-10-07');
+assert.equal(window.businessDayDate(new Date('2026-11-08T04:59:59Z')), '2026-11-07', 'the instant immediately before local midnight stays on the previous device day');
+assert.equal(window.businessDayDate(new Date('2026-11-08T05:00:00Z')), '2026-11-08', 'the first instant at local midnight advances the local date');
 
 const observedDayChanges = [];
 const watchDashboardDay = window.createBusinessDayWatcher((currentDay, previousDay) => {
@@ -51,7 +53,8 @@ assert.ok(mainHtml.includes('if (!isSleeping) loadDashboard(true);'), 'a detecte
 assert.ok(mainHtml.includes("new Intl.DateTimeFormat('ar-EG'"), 'main.html must render the date using the device locale');
 assert.ok(mainHtml.includes('if (forceRefresh) dashboardRefreshQueued = true;'), 'midnight refresh must not be lost during an in-flight dashboard request');
 
-console.log('Business-day and main-dashboard rollover tests passed (America/New_York).');
+require(path.join(__dirname, '../../../../customer-debt-centralization-regression-test.js'));
+console.log('Business-day, debt-source and main-dashboard rollover tests passed (America/New_York).');
 require('./fuel-sales-async-bridge.test.js')()
     .then(() => require('./fuel-sales-delivery-fee.test.js')())
     .then(() => require('./deliveries-form-regression.test.js')())
