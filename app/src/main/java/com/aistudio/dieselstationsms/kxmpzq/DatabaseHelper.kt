@@ -18270,17 +18270,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (cursor.moveToFirst()) stats.put("total_remaining", cursor.getDouble(0))
         }
 
-        // إجمالي المبالغ المستحقة (للعملاء) في المحطة
-        db.rawQuery(
-            """SELECT COALESCE(SUM(remaining_amount),0) FROM sales_transactions
-               WHERE station_id=? AND COALESCE(is_deleted,0)=0 AND remaining_amount > 0.000001
-                 AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(payment_method,'')),' ',''),'-','_'))
-                     IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')
-                 AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')""",
-            arrayOf(stationId.toString())
-        ).use { cursor ->
-            if (cursor.moveToFirst()) stats.put("total_due", cursor.getDouble(0))
-        }
+        // Legacy total_due remains a compatibility alias of the same central debt snapshot.
+        stats.put("total_due", customerDebtSummary.optDouble("total_customer_debts", 0.0))
 
         // إجمالي العملاء (جميع العملاء في المحطة)
         db.rawQuery(
@@ -28768,17 +28759,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             sale.put("detail_text", details)
 
-            val totals = db.rawQuery(
-                """
-                SELECT COALESCE(SUM(CASE WHEN payment_method='credit' AND is_credit=1 THEN remaining_amount ELSE 0 END),0),
-                       COALESCE(SUM(CASE WHEN payment_method='credit' AND is_credit=1 THEN net_amount ELSE 0 END),0)
-                FROM sales_transactions
-                WHERE customer_party_id = ? AND station_id = ? AND is_deleted = 0
-                """.trimIndent(),
+            val totalCreditSales = db.rawQuery(
+                "SELECT COALESCE(SUM(CASE WHEN payment_method='credit' AND is_credit=1 THEN net_amount ELSE 0 END),0) FROM sales_transactions WHERE customer_party_id=? AND station_id=? AND is_deleted=0",
                 arrayOf(customerId.toString(), stationScopeId.toString())
-            ).use { c -> if (c.moveToFirst()) doubleArrayOf(c.getDouble(0), c.getDouble(1)) else doubleArrayOf(0.0,0.0) }
-            sale.put("total_outstanding", totals[0])
-            sale.put("total_credit_sales", totals[1])
+            ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+            sale.put(
+                "total_outstanding",
+                DebtDueDateRepository.getCustomerOutstandingBalance(this, stationScopeId, customerId)
+            )
+            sale.put("total_credit_sales", totalCreditSales)
             sale
         } finally {
             dbLock.unlock()
@@ -28816,10 +28805,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     "SELECT COALESCE(SUM(paid_amount),0) FROM sales_transactions WHERE customer_party_id=? AND station_id=? AND is_deleted=0",
                     arrayOf(customerId.toString(), stationScopeId.toString())
                 ).use { q -> if (q.moveToFirst()) q.getDouble(0) else 0.0 }
-                val outstanding = db.rawQuery(
-                    "SELECT COALESCE(SUM(CASE WHEN payment_method='credit' AND is_credit=1 THEN remaining_amount ELSE 0 END),0) FROM sales_transactions WHERE customer_party_id=? AND station_id=? AND is_deleted=0",
-                    arrayOf(customerId.toString(), stationScopeId.toString())
-                ).use { q -> if (q.moveToFirst()) q.getDouble(0) else 0.0 }
+                val outstanding = DebtDueDateRepository.getCustomerOutstandingBalance(
+                    this, stationScopeId, customerId
+                )
                 JSONObject().apply {
                     put("payment_id", c.getLong(0))
                     put("customer_party_id", customerId)
@@ -30165,7 +30153,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             // CRM customer balance columns are projections of the same invoice-level
             // debt repository used by the dashboard and debt-aging screens. Sales-period
             // profitability fields above intentionally remain period-scoped.
-            if (stationScopeId != null && reportType == "customers") {
+            if (stationScopeId != null && reportType in setOf("customers", "balance")) {
                 val summary = DebtDueDateRepository.getCustomerDebtSummary(this, stationScopeId, BusinessDay.currentDate())
                 val balances = summary.optJSONArray("customer_balances") ?: JSONArray()
                 val byParty = HashMap<Long, JSONObject>()

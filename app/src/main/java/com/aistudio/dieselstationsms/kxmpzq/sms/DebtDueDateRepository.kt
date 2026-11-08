@@ -488,6 +488,23 @@ object DebtDueDateRepository {
      * midnight rollover from classifying rows against different dates in one response
      * and makes the method deterministic when device date and stored business_day differ.
      */
+    /**
+     * Returns a customer's open invoice balance using the exact same station-scoped
+     * invoice selection and remaining_amount source as the dashboard/CRM summary.
+     */
+    fun getCustomerOutstandingBalance(
+        helper: DatabaseHelper,
+        stationId: Int,
+        customerPartyId: Long
+    ): Double {
+        require(stationId > 0 && customerPartyId > 0L) { "معرف العميل أو المحطة غير صالح" }
+        return readDebts(helper.readableDatabase, stationId)
+            .asSequence()
+            .filter { it.customerId == customerPartyId }
+            .sumOf { it.remaining }
+            .coerceAtLeast(0.0)
+    }
+
     fun getCustomerDebtSummary(
         helper: DatabaseHelper,
         stationId: Int,

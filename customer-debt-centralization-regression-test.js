@@ -14,6 +14,11 @@ const customerReport = read('app/src/main/assets/screens/customer-reports.html')
 const dashboard = read('app/src/main/assets/screens/dashboard.html');
 
 assert.ok(repository.includes('fun getCustomerDebtSummary('), 'one repository summary must exist');
+assert.ok(repository.includes('fun getCustomerOutstandingBalance('), 'SMS/account balance contexts must use the canonical repository');
+assert.ok(database.includes('stats.put("total_due", customerDebtSummary.optDouble("total_customer_debts", 0.0))'), 'legacy dashboard total_due must be a canonical alias');
+assert.ok(database.includes('reportType in setOf("customers", "balance")'), 'CRM balance and customer reports must use canonical debt projections');
+assert.ok(database.includes('DebtDueDateRepository.getCustomerOutstandingBalance(this, stationScopeId, customerId)'), 'credit-sale SMS balance must be canonical');
+assert.ok(database.includes('DebtDueDateRepository.getCustomerOutstandingBalance(\n                    this, stationScopeId, customerId'), 'payment SMS balance must be canonical');
 assert.ok(repository.includes('fun getCustomerDebtReportBundle('), 'one repository report bundle must exist');
 assert.ok(repository.includes('val summary = buildCustomerDebtSummary(rows, stationId, asOfDate, today)'), 'summary and invoice-aging must derive from one row snapshot');
 assert.ok(repository.includes('readDebts(helper.readableDatabase, stationId)'), 'summary must use the invoice-level canonical read');

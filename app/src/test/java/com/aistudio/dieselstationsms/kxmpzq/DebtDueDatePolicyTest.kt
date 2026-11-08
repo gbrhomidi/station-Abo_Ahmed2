@@ -109,6 +109,8 @@ class DebtDueDatePolicyTest {
             put("status", "cancelled")
         }, "id=?", arrayOf(cancelledId.toString()))
 
+        assertEquals(100.0, DebtDueDateRepository.getCustomerOutstandingBalance(helper, 1, customerA), 0.000001)
+        assertEquals(50.0, DebtDueDateRepository.getCustomerOutstandingBalance(helper, 1, customerB), 0.000001)
         val summary = DebtDueDateRepository.getCustomerDebtSummary(helper, 1, "2026-11-08")
         assertEquals("2026-11-08", summary.getString("as_of_date"))
         assertEquals("DebtDueDateRepository.readDebts", summary.getString("source"))
