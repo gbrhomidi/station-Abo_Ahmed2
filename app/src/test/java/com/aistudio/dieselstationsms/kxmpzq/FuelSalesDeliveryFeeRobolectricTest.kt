@@ -493,7 +493,7 @@ class FuelSalesDeliveryFeeRobolectricTest {
         )
         assertEquals(firstPaymentId, duplicatePaymentId)
         assertEquals(1L, scalarLong(
-            "SELECT COUNT(*) FROM financial_idempotency_keys WHERE station_id=? AND operation_type='payment' AND idempotency_key=?",
+            "SELECT COUNT(*) FROM financial_idempotency_keys WHERE station_id=? AND operation='payment' AND idempotency_key=?",
             arrayOf(stationId.toString(), firstPaymentKey)
         ))
 

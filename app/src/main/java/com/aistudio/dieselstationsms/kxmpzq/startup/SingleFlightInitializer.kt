@@ -18,6 +18,14 @@ internal class SingleFlightInitializer<T : Any>(
     private var initializedValue: T? = null
     private var inFlight: CompletableDeferred<T>? = null
 
+    fun resetForTests() {
+        synchronized(lock) {
+            initializedValue = null
+            inFlight?.cancel()
+            inFlight = null
+        }
+    }
+
     suspend fun get(initializer: suspend () -> T): T {
         val shared = synchronized(lock) {
             initializedValue?.let { return it }

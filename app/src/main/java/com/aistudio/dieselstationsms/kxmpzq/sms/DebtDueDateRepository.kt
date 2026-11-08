@@ -67,7 +67,8 @@ object DebtDueDateRepository {
         val stationId: Int,
         val customerId: Long,
         val dueDate: String,
-        val invoiceIds: List<Long>
+        val invoiceIds: List<Long>,
+        val stage: String?
     )
 
     /** Compatibility entry point for explicit schema initialization. */
@@ -717,7 +718,8 @@ object DebtDueDateRepository {
             val dueAmount = sameDateRows.sumOf { it.remaining }.coerceAtLeast(0.0)
             val phone = PhoneUtils.normalize(nearest.phone)
             val invoiceSet = sameDateRows.map { it.transactionId }.sorted().joinToString(",")
-            val eventId = "debt-reminder:$stationId:$customerId:$dueDateKey:$invoiceSet"
+            val stage = if (daysRemaining == 0) "due" else "pre"
+            val eventId = "debt-reminder:$stationId:$customerId:$dueDateKey:$invoiceSet:$stage"
             val dedupeKey = if (phone != null) "$eventId:$phone" else ""
             val alreadyQueued = dedupeKey.isNotBlank() && hasOutboxDedupeKey(helper.readableDatabase, dedupeKey)
             val eligible = outstanding > 0.000001 && phone != null && !alreadyQueued
@@ -782,9 +784,16 @@ object DebtDueDateRepository {
             val phone = PhoneUtils.normalize(nearest.phone)
             val invoiceSet = overdueRows.filter { it.dueDate == dueDate }
                 .map { it.transactionId }.sorted().joinToString(",")
-            val eventId = "debt-reminder:$stationId:$customerId:$dueDate:$invoiceSet"
+            val eventId = "debt-reminder:$stationId:$customerId:$dueDate:$invoiceSet:overdue"
             val dedupeKey = if (phone != null) "$eventId:$phone" else ""
-            val alreadyQueued = dedupeKey.isNotBlank() && hasOutboxDedupeKey(helper.readableDatabase, dedupeKey)
+            val dueDayEventIds = listOf(
+                "debt-reminder:$stationId:$customerId:$dueDate:$invoiceSet:due",
+                "debt-reminder:$stationId:$customerId:$dueDate:$invoiceSet"
+            )
+            val dueDayWasSent = phone != null &&
+                dueDayEventIds.any { hasSentDebtReminder(helper.readableDatabase, it, phone) }
+            val alreadyQueued = (dedupeKey.isNotBlank() && hasOutboxDedupeKey(helper.readableDatabase, dedupeKey)) ||
+                dueDayWasSent
             output.put(JSONObject().apply {
                 put("id", nearest.transactionId)
                 put("transaction_id", nearest.transactionId)
@@ -887,8 +896,10 @@ object DebtDueDateRepository {
     private fun parseDebtReminder(
         message: SmsOutboxRepository.OutboxMessage
     ): ParsedDebtReminder? {
-        val parts = message.eventId?.split(":", limit = 5) ?: return null
-        if (parts.size != 5) return null
+        // Five-part events are legacy due-day/overdue messages. New events carry an
+        // explicit stage so pre-due notices cannot suppress a later due-day notice.
+        val parts = message.eventId?.split(":", limit = 6) ?: return null
+        if (parts.size !in 5..6) return null
         val stationId = parts[1].toIntOrNull()?.takeIf { it > 0 } ?: return null
         val customerId = parts[2].toLongOrNull()?.takeIf { it > 0L } ?: return null
         val eventDueDate = parts[3].takeIf { it.length == 10 && parseDate(it) != null } ?: return null
@@ -897,8 +908,10 @@ object DebtDueDateRepository {
         if (invoiceIds.isEmpty() || invoiceIds.any { it <= 0L } ||
             invoiceIds != invoiceIds.distinct().sorted()
         ) return null
+        val stage = parts.getOrNull(5)
+        if (stage != null && stage !in setOf("pre", "due", "overdue")) return null
 
-        return ParsedDebtReminder(message, stationId, customerId, eventDueDate, invoiceIds)
+        return ParsedDebtReminder(message, stationId, customerId, eventDueDate, invoiceIds, stage)
     }
 
     private fun isCurrentDebtReminderForCustomer(
@@ -942,6 +955,14 @@ object DebtDueDateRepository {
         if (expectedDate.toString() != reminder.dueDate) return false
         val currentInvoiceIds = expectedRows.map { it.transactionId }.distinct().sorted()
         if (currentInvoiceIds != reminder.invoiceIds) return false
+        val daysRemaining = java.time.temporal.ChronoUnit.DAYS.between(today, expectedDate).toInt()
+        when (reminder.stage) {
+            "due" -> if (daysRemaining != 0) return false
+            "pre" -> if (daysRemaining !in 1..preDueDays) return false
+            "overdue" -> if (daysRemaining >= 0) return false
+            // Keep already-queued legacy events valid only for their original due/overdue cases.
+            null -> if (daysRemaining > 0) return false
+        }
         if (expectedRows.sumOf { it.remaining } <= 0.000001) return false
 
         val currentPhone = PhoneUtils.normalize(expectedRows.first().phone) ?: return false
@@ -952,7 +973,6 @@ object DebtDueDateRepository {
         val outstandingText = formatReminderAmount(outstanding)
         val dueAmountText = formatReminderAmount(dueAmount)
         val body = reminder.message.body
-        val daysRemaining = java.time.temporal.ChronoUnit.DAYS.between(today, expectedDate).toInt()
 
         // Do not send stale maturity wording, remaining-day count or balances after a
         // payment, a calendar-day rollover or a changed reminder lead-window setting.
@@ -1293,6 +1313,20 @@ object DebtDueDateRepository {
         if (!tableExists(db, "sms_outbox") || "dedupe_key" !in columns(db, "sms_outbox")) return false
         return runCatching {
             db.rawQuery("SELECT 1 FROM sms_outbox WHERE dedupe_key=? LIMIT 1", arrayOf(dedupeKey)).use { it.moveToFirst() }
+        }.getOrDefault(false)
+    }
+
+    private fun hasSentDebtReminder(db: SQLiteDatabase, eventId: String, recipient: String): Boolean {
+        val outboxColumns = columns(db, "sms_outbox")
+        if (!setOf("event_id", "recipient", "status").all { it in outboxColumns }) return false
+        return runCatching {
+            db.rawQuery(
+                """SELECT 1 FROM sms_outbox
+                   WHERE event_id=? AND recipient=?
+                     AND UPPER(status) IN ('SENT','DELIVERY_PENDING','DELIVERED')
+                   LIMIT 1""",
+                arrayOf(eventId, recipient)
+            ).use { it.moveToFirst() }
         }.getOrDefault(false)
     }
 

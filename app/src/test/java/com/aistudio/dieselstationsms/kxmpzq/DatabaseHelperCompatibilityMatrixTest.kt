@@ -102,8 +102,30 @@ class DatabaseHelperCompatibilityMatrixTest {
 
             DatabaseHelper.closeInstance()
             val upgraded = DatabaseHelper.getInstance(context).writableDatabase
-            assertEquals("V57 must be upgraded to V59", 59, upgraded.version)
+            assertEquals("V57 must be upgraded to the current database schema", DatabaseHelper.VERSION, upgraded.version)
             assertSmsAttemptSchema(upgraded)
+
+            // Model an already-installed V59 database with the old BOTH scope, then execute
+            // the actual SQLiteOpenHelper V59->V60 upgrade path (not only ensureSchema directly).
+            upgraded.execSQL(
+                """UPDATE payment_terms SET applies_to='both'
+                   WHERE station_id IS NULL
+                     AND code IN ('AFTER_1','AFTER_3','NET_7','NET_15','NET_30','NET_45','NET_60','NET_90')"""
+            )
+            upgraded.version = 59
+            DatabaseHelper.closeInstance()
+
+            val migratedV60 = DatabaseHelper.getInstance(context).writableDatabase
+            assertEquals(DatabaseHelper.VERSION, migratedV60.version)
+            assertSmsAttemptSchema(migratedV60)
+            val legacyBuiltInScopeCount = migratedV60.rawQuery(
+                """SELECT COUNT(*) FROM payment_terms
+                   WHERE station_id IS NULL
+                     AND code IN ('AFTER_1','AFTER_3','NET_7','NET_15','NET_30','NET_45','NET_60','NET_90')
+                     AND applies_to<>'customer'""",
+                null
+            ).use { cursor -> assertTrue(cursor.moveToFirst()); cursor.getInt(0) }
+            assertEquals("Every historical built-in payment term must be migrated to customer-only scope", 0, legacyBuiltInScopeCount)
         } finally {
             DatabaseHelper.closeInstance()
             context.deleteDatabase(DatabaseHelper.DATABASE_NAME)

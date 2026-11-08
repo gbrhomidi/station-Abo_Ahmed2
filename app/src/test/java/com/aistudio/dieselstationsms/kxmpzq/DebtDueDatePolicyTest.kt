@@ -308,10 +308,70 @@ class DebtDueDatePolicyTest {
         val body = "مرحباً، يتبقى 2 يوم على موعد استحقاق الدين ($dueDate). " +
             "المبلغ المستحق بتاريخ $dueDate 100 ر. ي، وإجمالي الرصيد القائم 100 ر. ي."
         val eventId = candidate.getString("event_id")
+        assertTrue("A pre-due reminder must have its own outbox stage", eventId.endsWith(":pre"))
         val entity = "party:$customerId"
         assertTrue(
             "A pre-due SMS that still matches the trusted invoice, remaining days, phone and balances must pass the final SQLite gate",
             DebtDueDateRepository.isCurrentDebtReminder(helper, eventId, entity, phone, body)
+        )
+
+        // An already-queued pre-due notice must not suppress the independent due-day event.
+        db.update(
+            "sales_transactions",
+            ContentValues().apply { put("due_date", today.toString()) },
+            "id=? AND station_id=?",
+            arrayOf(saleId.toString(), "1")
+        )
+        val dueTodayRows = DebtDueDateRepository.getDueSoonDebtReminders(helper, 1, 3)
+        val dueTodayCandidate = (0 until dueTodayRows.length()).map { dueTodayRows.getJSONObject(it) }
+            .single { it.getLong("customer_party_id") == customerId }
+        val dueTodayEventId = dueTodayCandidate.getString("event_id")
+        assertTrue("The due-day notice needs a distinct stage-specific dedupe key", dueTodayEventId.endsWith(":due"))
+        assertFalse("Pre-due and due-day notices must not share an outbox identity", eventId == dueTodayEventId)
+        assertFalse("A pre-due message becomes stale once the invoice reaches its due date",
+            DebtDueDateRepository.isCurrentDebtReminder(helper, eventId, entity, phone, body))
+        // A delivered due-day SMS suppresses the overdue catch-up. A due-day row that
+        // never left the outbox (cancelled/queued/failed) must not suppress recovery.
+        val dueDayDedupeKey = "$dueTodayEventId:$phone"
+        assertTrue(SmsOutboxRepository.enqueue(
+            helper, phone, "Due day already sent", eventId = dueTodayEventId,
+            businessEntityId = entity, dedupeKey = dueDayDedupeKey
+        ) != null)
+        db.update(
+            "sms_outbox",
+            ContentValues().apply { put("status", "SENT") },
+            "dedupe_key=?",
+            arrayOf(dueDayDedupeKey)
+        )
+        db.update(
+            "sales_transactions",
+            ContentValues().apply { put("due_date", today.minusDays(1).toString()) },
+            "id=? AND station_id=?",
+            arrayOf(saleId.toString(), "1")
+        )
+        val overdueAfterSent = DebtDueDateRepository.getOverdueReminderCandidates(helper, 1)
+            .let { rows -> (0 until rows.length()).map { rows.getJSONObject(it) } }
+            .single { it.getLong("customer_party_id") == customerId }
+        assertFalse("A delivered due-day reminder must prevent a duplicate overdue catch-up",
+            overdueAfterSent.getBoolean("eligible"))
+
+        db.update(
+            "sms_outbox",
+            ContentValues().apply { put("status", "CANCELLED") },
+            "dedupe_key=?",
+            arrayOf(dueDayDedupeKey)
+        )
+        val overdueAfterCancelled = DebtDueDateRepository.getOverdueReminderCandidates(helper, 1)
+            .let { rows -> (0 until rows.length()).map { rows.getJSONObject(it) } }
+            .single { it.getLong("customer_party_id") == customerId }
+        assertTrue("A cancelled due-day message must not block overdue recovery",
+            overdueAfterCancelled.getBoolean("eligible"))
+
+        db.update(
+            "sales_transactions",
+            ContentValues().apply { put("due_date", dueDate) },
+            "id=? AND station_id=?",
+            arrayOf(saleId.toString(), "1")
         )
 
         helper.setSetting("debt_reminder_days_before_due", "1")

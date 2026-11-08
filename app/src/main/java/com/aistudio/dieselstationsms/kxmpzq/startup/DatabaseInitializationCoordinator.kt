@@ -13,6 +13,10 @@ object DatabaseInitializationCoordinator {
  private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineName("DatabaseInitialization"))
  private val initializer = SingleFlightInitializer<com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper>(scope, MAX_ATTEMPTS, { a -> if (a == 1) 250L else 700L }, ::isTransient)
 
+ internal fun resetForTests() {
+  initializer.resetForTests()
+ }
+
  suspend fun awaitDatabase(context: Context): DatabaseHelper {
   StartupPerformanceMonitor.increment("database.await_requests")
   val awaitSpan = StartupPerformanceMonitor.beginSpan("database.await")
