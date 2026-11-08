@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Real Chromium responsive-layout acceptance at common compact Android CSS widths."""
+"""Real Chromium mobile-emulation viewport acceptance for debt and reporting screens."""
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import shutil
+import socket
 import subprocess
 import tempfile
-from urllib.parse import unquote
+import time
+from urllib.parse import unquote, urlsplit
+from urllib.request import urlopen
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 ASSETS = PROJECT_ROOT / "app" / "src" / "main" / "assets"
@@ -36,7 +41,13 @@ def find_browser() -> str:
     raise RuntimeError("Chromium/Chrome is required for real viewport acceptance; no browser executable was found.")
 
 
-def prepare_html(source_path: Path, temporary_path: Path, width: int) -> None:
+def find_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        server.bind(("127.0.0.1", 0))
+        return int(server.getsockname()[1])
+
+
+def prepare_html(source_path: Path, temporary_path: Path) -> None:
     html = source_path.read_text(encoding="utf-8", errors="replace")
     viewport_tags = re.findall(r"<meta\b[^>]*>", html, flags=re.I)
     viewport_tag = next((
@@ -46,13 +57,8 @@ def prepare_html(source_path: Path, temporary_path: Path, width: int) -> None:
     ), None)
     if viewport_tag is None:
         raise RuntimeError(f"{source_path.name} does not declare a device-width viewport")
-    # Headless desktop Chromium otherwise defaults to a 500 CSS-pixel layout viewport.
-    # Change only the temporary test copy after asserting that the shipped screen uses
-    # width=device-width, so media-query/CSS geometry is measured at the requested width.
-    fixed_viewport = f'<meta name="viewport" content="width={width}, initial-scale=1.0, maximum-scale=1.0">'
-    html = html.replace(viewport_tag, fixed_viewport, 1)
 
-    # The acceptance is for CSS/DOM geometry, not Android bridge availability or network APIs.
+    # This test measures DOM/CSS layout only. Remove bridge/network scripts and remote styles.
     html = re.sub(r"(?is)<script\b[^>]*>.*?</script\s*>", "", html)
     html = re.sub(
         r"(?is)<link\b[^>]*href=[\"']https?://[^\"']+[\"'][^>]*>",
@@ -64,10 +70,8 @@ def prepare_html(source_path: Path, temporary_path: Path, width: int) -> None:
         relative = unquote(match.group(1).split("#", 1)[0].split("?", 1)[0])
         local = (ASSETS / relative).resolve()
         if not local.is_file():
-            # Some legacy HTML refers to optional fonts/icons that are not shipped in
-            # this branch. They do not determine layout geometry; retain the page's
-            # declared fallback font instead of failing the entire viewport run.
-            if local.suffix.lower() in (".css",):
+            # Absent legacy font/icon files do not affect layout measurement; CSS is mandatory.
+            if local.suffix.lower() == ".css":
                 raise FileNotFoundError(f"Referenced Android stylesheet is missing: {relative} (from {source_path.name})")
             return "about:blank"
         return local.as_uri()
@@ -127,84 +131,238 @@ def prepare_html(source_path: Path, temporary_path: Path, width: int) -> None:
     temporary_path.write_text(html, encoding="utf-8")
 
 
-def measure(browser: str, html_path: Path, width: int) -> dict:
-    command = [
-        browser,
-        "--headless",
-        "--no-sandbox",
-        "--disable-gpu",
-        "--disable-dev-shm-usage",
-        "--disable-extensions",
-        "--hide-scrollbars",
-        "--force-device-scale-factor=1",
-        f"--window-size={width},{VIEWPORT_HEIGHT}",
-        "--virtual-time-budget=1200",
-        "--dump-dom",
-        html_path.as_uri(),
-    ]
-    result = subprocess.run(
-        command,
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=35,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"Chromium exited {result.returncode} at {width}px for {html_path.name}: "
-            f"{result.stderr[-1600:]}"
+class DevToolsWebSocket:
+    """Minimal WebSocket transport for the Chrome DevTools Protocol (stdlib only)."""
+
+    def __init__(self, url: str) -> None:
+        parsed = urlsplit(url)
+        if parsed.scheme != "ws" or not parsed.hostname or not parsed.port:
+            raise RuntimeError(f"Unexpected DevTools WebSocket URL: {url}")
+        self.socket = socket.create_connection((parsed.hostname, parsed.port), timeout=10)
+        self.socket.settimeout(10)
+        self.buffer = b""
+        key = base64.b64encode(os.urandom(16)).decode("ascii")
+        path = parsed.path + (("?" + parsed.query) if parsed.query else "")
+        request = (
+            f"GET {path} HTTP/1.1\r\n"
+            f"Host: {parsed.netloc}\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\n"
+            "Sec-WebSocket-Version: 13\r\n"
+            "Origin: http://localhost\r\n\r\n"
         )
-    match = re.search(
-        r'<pre[^>]*id=["\']__viewport_acceptance__["\'][^>]*>(.*?)</pre>',
-        result.stdout,
-        re.S | re.I,
-    )
-    if not match:
-        raise RuntimeError(
-            f"Chromium did not return viewport measurements for {html_path.name} at {width}px. "
-            f"Output tail: {result.stdout[-1200:]}"
+        self.socket.sendall(request.encode("ascii"))
+        response = b""
+        while b"\r\n\r\n" not in response:
+            chunk = self.socket.recv(4096)
+            if not chunk:
+                raise RuntimeError("DevTools WebSocket closed during handshake")
+            response += chunk
+        header, self.buffer = response.split(b"\r\n\r\n", 1)
+        expected = base64.b64encode(
+            hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode("ascii")).digest()
         )
-    return json.loads(match.group(1))
+        if b" 101 " not in header.split(b"\r\n", 1)[0] or expected not in header:
+            raise RuntimeError("Chrome rejected the DevTools WebSocket handshake")
+
+    def _read_exact(self, length: int) -> bytes:
+        while len(self.buffer) < length:
+            chunk = self.socket.recv(max(4096, length - len(self.buffer)))
+            if not chunk:
+                raise RuntimeError("DevTools WebSocket closed unexpectedly")
+            self.buffer += chunk
+        data, self.buffer = self.buffer[:length], self.buffer[length:]
+        return data
+
+    def _send_frame(self, opcode: int, payload: bytes) -> None:
+        mask = os.urandom(4)
+        length = len(payload)
+        header = bytearray([0x80 | opcode])
+        if length < 126:
+            header.append(0x80 | length)
+        elif length < 65536:
+            header.append(0x80 | 126)
+            header.extend(length.to_bytes(2, "big"))
+        else:
+            header.append(0x80 | 127)
+            header.extend(length.to_bytes(8, "big"))
+        masked = bytes(value ^ mask[index % 4] for index, value in enumerate(payload))
+        self.socket.sendall(bytes(header) + mask + masked)
+
+    def _receive_text(self) -> str:
+        chunks = []
+        while True:
+            first, second = self._read_exact(2)
+            opcode = first & 0x0F
+            length = second & 0x7F
+            if length == 126:
+                length = int.from_bytes(self._read_exact(2), "big")
+            elif length == 127:
+                length = int.from_bytes(self._read_exact(8), "big")
+            masked = bool(second & 0x80)
+            mask = self._read_exact(4) if masked else b""
+            payload = self._read_exact(length)
+            if masked:
+                payload = bytes(value ^ mask[index % 4] for index, value in enumerate(payload))
+            if opcode == 0x8:
+                raise RuntimeError("Chrome closed the DevTools WebSocket")
+            if opcode == 0x9:
+                self._send_frame(0xA, payload)
+                continue
+            if opcode in (0x1, 0x0):
+                chunks.append(payload)
+                if first & 0x80:
+                    return b"".join(chunks).decode("utf-8")
+            elif opcode == 0xA:
+                continue
+
+    def call(self, method: str, params: dict | None = None, timeout: float = 10.0) -> dict:
+        self.next_id = getattr(self, "next_id", 0) + 1
+        request_id = self.next_id
+        message = json.dumps({"id": request_id, "method": method, "params": params or {}}).encode("utf-8")
+        self._send_frame(0x1, message)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            message = json.loads(self._receive_text())
+            if message.get("id") != request_id:
+                continue
+            if "error" in message:
+                raise RuntimeError(f"DevTools {method} failed: {message['error']}")
+            return message.get("result", {})
+        raise TimeoutError(f"Timed out waiting for DevTools command: {method}")
+
+    def close(self) -> None:
+        try:
+            self._send_frame(0x8, b"")
+        except Exception:
+            pass
+        try:
+            self.socket.close()
+        except Exception:
+            pass
+
+
+def wait_for_page_target(port: int, process: subprocess.Popen) -> dict:
+    endpoint = f"http://127.0.0.1:{port}/json/list"
+    deadline = time.monotonic() + 25
+    last_error = None
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError(f"Chromium exited during startup with code {process.returncode}")
+        try:
+            with urlopen(endpoint, timeout=2) as response:
+                targets = json.loads(response.read().decode("utf-8"))
+            page = next((target for target in targets if target.get("type") == "page" and target.get("webSocketDebuggerUrl")), None)
+            if page:
+                return page
+        except Exception as error:
+            last_error = error
+        time.sleep(0.2)
+    raise TimeoutError(f"Chrome DevTools endpoint did not become ready: {last_error}")
+
+
+def evaluate_measurement(devtools: DevToolsWebSocket, width: int) -> dict:
+    expression = "document.getElementById('__viewport_acceptance__')?.textContent || ''"
+    deadline = time.monotonic() + 10
+    last_value = ""
+    while time.monotonic() < deadline:
+        response = devtools.call("Runtime.evaluate", {
+            "expression": expression,
+            "returnByValue": True,
+            "awaitPromise": True,
+        })
+        last_value = response.get("result", {}).get("value", "")
+        if last_value:
+            result = json.loads(last_value)
+            if int(result.get("innerWidth", 0)) != width or int(result.get("clientWidth", 0)) != width:
+                raise RuntimeError(
+                    f"Device emulation requested {width}px but Chromium reports "
+                    f"inner={result.get('innerWidth')} client={result.get('clientWidth')}"
+                )
+            return result
+        time.sleep(0.1)
+    raise TimeoutError(f"Viewport marker did not render at {width}px: {last_value!r}")
 
 
 def main() -> int:
     browser = find_browser()
     missing = [path for path in SCREENS if not path.is_file()]
     if missing:
-        raise FileNotFoundError("Responsive acceptance screen(s) missing: " + ", ".join(str(p) for p in missing))
+        raise FileNotFoundError("Responsive acceptance screen(s) missing: " + ", ".join(str(path) for path in missing))
 
     failures = []
     total = 0
     with tempfile.TemporaryDirectory(prefix="station-responsive-") as directory:
         temp_root = Path(directory)
-        for screen in SCREENS:
-            for width in VIEWPORT_WIDTHS:
-                total += 1
-                prepared = temp_root / f"{screen.stem}-{width}px.html"
-                prepare_html(screen, prepared, width)
-                result = measure(browser, prepared, width)
-                client = int(result.get("clientWidth", 0))
-                document_width = int(result.get("documentScrollWidth", 0))
-                body_width = int(result.get("bodyScrollWidth", 0))
-                inner = int(result.get("innerWidth", 0))
-                passed = (
-                    inner == width
-                    and client == width
-                    and document_width <= width + 1
-                    and body_width <= width + 1
-                )
-                label = "PASS" if passed else "FAIL"
-                print(
-                    f"{label} {screen.relative_to(ASSETS)} @ {width}px "
-                    f"(inner={result.get('innerWidth')}, client={client}, document={document_width}, body={body_width})"
-                )
-                if not passed:
-                    failures.append({
-                        "screen": str(screen.relative_to(ASSETS)),
-                        "viewport": width,
-                        "measurement": result,
+        port = find_free_port()
+        profile = temp_root / "chrome-profile"
+        process = subprocess.Popen(
+            [
+                browser,
+                "--headless",
+                "--no-sandbox",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                "--disable-extensions",
+                "--disable-background-networking",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--allow-file-access-from-files",
+                "--remote-allow-origins=*",
+                f"--remote-debugging-port={port}",
+                f"--user-data-dir={profile}",
+                "about:blank",
+            ],
+            cwd=PROJECT_ROOT,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        devtools = None
+        try:
+            target = wait_for_page_target(port, process)
+            devtools = DevToolsWebSocket(target["webSocketDebuggerUrl"])
+            devtools.call("Page.enable")
+            devtools.call("Runtime.enable")
+            for screen in SCREENS:
+                prepared = temp_root / f"{screen.stem}-viewport.html"
+                prepare_html(screen, prepared)
+                for width in VIEWPORT_WIDTHS:
+                    total += 1
+                    devtools.call("Emulation.setDeviceMetricsOverride", {
+                        "width": width,
+                        "height": VIEWPORT_HEIGHT,
+                        "deviceScaleFactor": 1,
+                        "mobile": True,
                     })
+                    devtools.call("Page.navigate", {"url": prepared.as_uri()})
+                    result = evaluate_measurement(devtools, width)
+                    client = int(result.get("clientWidth", 0))
+                    document_width = int(result.get("documentScrollWidth", 0))
+                    body_width = int(result.get("bodyScrollWidth", 0))
+                    passed = document_width <= width + 1 and body_width <= width + 1
+                    label = "PASS" if passed else "FAIL"
+                    print(
+                        f"{label} {screen.relative_to(ASSETS)} @ {width}px "
+                        f"(inner={result.get('innerWidth')}, client={client}, "
+                        f"document={document_width}, body={body_width})"
+                    )
+                    if not passed:
+                        failures.append({
+                            "screen": str(screen.relative_to(ASSETS)),
+                            "viewport": width,
+                            "measurement": result,
+                        })
+        finally:
+            if devtools:
+                devtools.close()
+            process.terminate()
+            try:
+                process.wait(timeout=8)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+
     print(f"RESPONSIVE VIEWPORT ACCEPTANCE: {total - len(failures)}/{total} passed; {len(failures)} failed.")
     if failures:
         for item in failures:
