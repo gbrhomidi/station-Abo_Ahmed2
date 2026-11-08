@@ -330,22 +330,24 @@ class DebtDueDatePolicyTest {
         assertFalse("Pre-due and due-day notices must not share an outbox identity", eventId == dueTodayEventId)
         assertFalse("A pre-due message becomes stale once the invoice reaches its due date",
             DebtDueDateRepository.isCurrentDebtReminder(helper, eventId, entity, phone, body))
-        // A delivered due-day SMS suppresses the overdue catch-up. A due-day row that
-        // never left the outbox (cancelled/queued/failed) must not suppress recovery.
-        val dueDayDedupeKey = "$dueTodayEventId:$phone"
+        // Simulate the due-day message that was sent yesterday, before the operating
+        // date rolled over to today. Its ID must use that same invoice maturity date.
+        val yesterdayDueDate = today.minusDays(1).toString()
+        val yesterdayDueEventId = "debt-reminder:1:$customerId:$yesterdayDueDate:$saleId:due"
+        val dueDayDedupeKey = "$yesterdayDueEventId:$phone"
         assertTrue(SmsOutboxRepository.enqueue(
-            helper, phone, "Due day already sent", eventId = dueTodayEventId,
+            helper, phone, "Due day already sent", eventId = yesterdayDueEventId,
             businessEntityId = entity, dedupeKey = dueDayDedupeKey
         ) != null)
         db.update(
             "sms_outbox",
-            ContentValues().apply { put("status", "SENT") },
+            ContentValues().apply { put("status", "DELIVERED") },
             "dedupe_key=?",
             arrayOf(dueDayDedupeKey)
         )
         db.update(
             "sales_transactions",
-            ContentValues().apply { put("due_date", today.minusDays(1).toString()) },
+            ContentValues().apply { put("due_date", yesterdayDueDate) },
             "id=? AND station_id=?",
             arrayOf(saleId.toString(), "1")
         )

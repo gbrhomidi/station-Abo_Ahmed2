@@ -5,8 +5,12 @@ import android.app.Application
 import android.content.ContentValues
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.Configuration
 import androidx.work.Data
 import androidx.work.ListenableWorker
+import androidx.work.Worker
+import androidx.work.WorkerFactory
+import androidx.work.WorkerParameters
 import androidx.work.WorkManager
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
@@ -52,6 +56,9 @@ class DebtDueReminderWorkerIntegrationTest {
 
     @After
     fun tearDown() {
+        runCatching {
+            WorkManager.getInstance(context).cancelAllWork().get(10, TimeUnit.SECONDS)
+        }
         DatabaseInitializationCoordinator.resetForTests()
         DatabaseHelper.closeInstance()
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
@@ -59,7 +66,23 @@ class DebtDueReminderWorkerIntegrationTest {
 
     @Test
     fun actualWorkerQueuesOnlyInsideConfiguredPreDueWindowAndUpdatesUniqueSchedule() = runBlocking {
-        WorkManagerTestInitHelper.initializeTestWorkManager(context)
+        val guardedFactory = object : WorkerFactory() {
+            override fun createWorker(
+                appContext: Context,
+                workerClassName: String,
+                workerParameters: WorkerParameters
+            ): ListenableWorker? {
+                return if (workerClassName == SmsOutboxWorker::class.java.name) {
+                    SuppressedSmsOutboxWorker(appContext, workerParameters)
+                } else {
+                    null
+                }
+            }
+        }
+        WorkManagerTestInitHelper.initializeTestWorkManager(
+            context,
+            Configuration.Builder().setWorkerFactory(guardedFactory).build()
+        )
         shadowOf(context.applicationContext as Application).grantPermissions(Manifest.permission.SEND_SMS)
 
         val db = database.writableDatabase
@@ -100,13 +123,15 @@ class DebtDueReminderWorkerIntegrationTest {
             put("due_date", inWindowDate)
             put("due_date_source", "sale_creation")
             if ("due_date_basis" in salesColumns) put("due_date_basis", today.toString())
-            if ("payment_terms_days_at_sale" in salesColumns) put("payment_terms_days_at_sale", 30)
+            if ("payment_terms_days_at_sale" in salesColumns) put("payment_terms_days_at_sale", 2)
             if ("payment_terms_source_at_sale" in salesColumns) put("payment_terms_source_at_sale", "explicit_text")
-            if ("payment_terms_at_sale" in salesColumns) put("payment_terms_at_sale", "صافي 30 يوم")
+            if ("payment_terms_at_sale" in salesColumns) put("payment_terms_at_sale", "صافي 2 يوم")
         }
         val outsideUpdate = ContentValues(inWindowUpdate).apply {
             put("due_date", outsideDate)
-            if ("due_date_basis" in salesColumns) put("due_date_basis", today.minusDays(26).toString())
+            if ("due_date_basis" in salesColumns) put("due_date_basis", today.toString())
+            if ("payment_terms_days_at_sale" in salesColumns) put("payment_terms_days_at_sale", 4)
+            if ("payment_terms_at_sale" in salesColumns) put("payment_terms_at_sale", "صافي 4 أيام")
         }
         assertEquals(1, db.update("sales_transactions", inWindowUpdate, "id=? AND station_id=?",
             arrayOf(inWindowSale.toString(), stationId.toString())))
@@ -160,6 +185,13 @@ class DebtDueReminderWorkerIntegrationTest {
             "SELECT COUNT(*) FROM sms_outbox WHERE business_entity_id=?",
             arrayOf("party:$outsideCustomer")
         ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
+    }
+
+    private class SuppressedSmsOutboxWorker(
+        appContext: Context,
+        workerParameters: WorkerParameters
+    ) : Worker(appContext, workerParameters) {
+        override fun doWork(): Result = Result.success()
     }
 
     private fun ensureTestUser(db: android.database.sqlite.SQLiteDatabase): Long {
