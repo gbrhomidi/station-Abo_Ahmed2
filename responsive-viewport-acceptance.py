@@ -124,7 +124,12 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
     const customerInfo = document.getElementById('customerInfoRow');
     const row = document.getElementById('paymentTermsRow');
     if (paymentType) paymentType.value = 'آجل';
-    if (customerInfo) customerInfo.style.display = 'block';
+    // POS CSS deliberately uses !important to keep customer fields hidden until the
+    // payment/customer workflow opens them; force the acceptance state at that same
+    // precedence so this standalone CSS harness measures the intended credit form.
+    if (customerInfo) customerInfo.style.setProperty('display', 'block', 'important');
+    const customerName = document.getElementById('customerNameField');
+    if (customerName) customerName.style.setProperty('display', 'block', 'important');
     if (row) row.style.display = 'grid';
 
     // This A4 invoice is a print-only node intentionally parked far offscreen.
