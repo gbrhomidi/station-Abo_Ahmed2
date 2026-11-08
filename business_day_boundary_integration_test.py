@@ -103,7 +103,7 @@ def test_device_date_mismatch_uses_stored_business_day() -> None:
     rows = [
         (1, "2026-11-07 21:30:00", "2026-11-08", 120.0),
         (2, "2026-11-08 10:15:00", "2026-11-08", 30.0),
-        (3, "2026-11-08 21:30:00", "2026-11-09", 300.0),
+        (3, "2026-11-09 00:30:00", "2026-11-09", 300.0),
     ]
     for row_id, created_at, operating_day, amount in rows:
         db.execute(
