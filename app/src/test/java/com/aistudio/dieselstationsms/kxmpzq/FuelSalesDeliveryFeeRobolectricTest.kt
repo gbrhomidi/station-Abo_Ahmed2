@@ -6,6 +6,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.os.Looper
 import android.webkit.WebView
 import androidx.test.core.app.ApplicationProvider
+import com.aistudio.dieselstationsms.kxmpzq.sms.DebtDueDateRepository
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
@@ -185,6 +186,115 @@ class FuelSalesDeliveryFeeRobolectricTest {
         }
         assertEquals("Rejected save must roll back the parent sale", before,
             scalarLong("SELECT COUNT(*) FROM sales_transactions WHERE station_id=?", arrayOf(stationId.toString())))
+    }
+
+    @Test
+    fun creditFuelSaleRollsBackInvoiceFuelStockShiftBalanceAndIdempotencyWhenDueSnapshotFails() {
+        val customerId = ensureTestCustomer()
+        val beforeSales = scalarLong("SELECT COUNT(*) FROM sales_transactions WHERE station_id=?", arrayOf(stationId.toString()))
+        val beforeFuelRows = scalarLong("SELECT COUNT(*) FROM fuel_sales WHERE station_id=?", arrayOf(stationId.toString()))
+        val beforeShift = db.rawQuery(
+            "SELECT total_sales,total_fuel_liters FROM shifts WHERE station_id=? AND status='open' ORDER BY id DESC LIMIT 1",
+            arrayOf(stationId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getDouble(0) to it.getDouble(1) }
+        val tankId = if (pumpId > 0L) scalarLong("SELECT tank_id FROM pumps WHERE id=?", arrayOf(pumpId.toString())) else 0L
+        val beforeTank = if (tankId > 0L) scalarDouble("SELECT current_quantity FROM tanks WHERE id=?", arrayOf(tankId.toString())) else 0.0
+        val idempotencyKey = "fuel-snapshot-failure-${UUID.randomUUID()}"
+        val input = buildFuelSaleInput(
+            DeliveryFeeAccounting.EXEMPT, 0.0, "",
+            paymentMethod = "credit", customerId = customerId
+        ).put("idempotency_key", idempotencyKey)
+        db.execSQL("""
+            CREATE TRIGGER reject_fuel_due_snapshot
+            BEFORE UPDATE OF payment_terms_id_at_sale ON sales_transactions
+            WHEN NEW.payment_terms_id_at_sale IS NOT NULL AND OLD.payment_terms_id_at_sale IS NULL
+            BEGIN SELECT RAISE(ABORT, 'forced fuel payment-term snapshot failure'); END
+        """.trimIndent())
+        var failed = false
+        try {
+            helper.addFuelSale(input, stationId, userId)
+        } catch (_: Exception) {
+            failed = true
+        } finally {
+            db.execSQL("DROP TRIGGER IF EXISTS reject_fuel_due_snapshot")
+        }
+
+        assertTrue("The injected snapshot failure must abort the fuel invoice save", failed)
+        assertEquals(beforeSales, scalarLong("SELECT COUNT(*) FROM sales_transactions WHERE station_id=?", arrayOf(stationId.toString())))
+        assertEquals(beforeFuelRows, scalarLong("SELECT COUNT(*) FROM fuel_sales WHERE station_id=?", arrayOf(stationId.toString())))
+        assertEquals(0L, scalarLong(
+            "SELECT COUNT(*) FROM financial_idempotency_keys WHERE station_id=? AND idempotency_key=?",
+            arrayOf(stationId.toString(), idempotencyKey)
+        ))
+        assertEquals(0.0, scalarDouble("SELECT current_balance FROM parties WHERE id=?", arrayOf(customerId.toString())), 0.0001)
+        val afterShift = db.rawQuery(
+            "SELECT total_sales,total_fuel_liters FROM shifts WHERE station_id=? AND status='open' ORDER BY id DESC LIMIT 1",
+            arrayOf(stationId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getDouble(0) to it.getDouble(1) }
+        assertEquals(beforeShift.first, afterShift.first, 0.0001)
+        assertEquals(beforeShift.second, afterShift.second, 0.0001)
+        if (tankId > 0L) assertEquals(beforeTank, scalarDouble("SELECT current_quantity FROM tanks WHERE id=?", arrayOf(tankId.toString())), 0.0001)
+    }
+
+    @Test
+    fun v58ToV59MigrationPreservesFuelInvoiceAndReconstructsFromLinkedFuelSaleDateIdempotently() {
+        val customerId = ensureTestCustomer()
+        val input = buildFuelSaleInput(
+            DeliveryFeeAccounting.EXEMPT, 0.0, "",
+            paymentMethod = "credit", customerId = customerId
+        )
+        val parentSaleId = helper.addFuelSale(input, stationId, userId)
+        val fuelSaleId = scalarLong(
+            "SELECT id FROM fuel_sales WHERE sale_id=? AND station_id=? ORDER BY id DESC LIMIT 1",
+            arrayOf(parentSaleId.toString(), stationId.toString())
+        )
+        val historicalFuelDate = "2026-10-05"
+        db.execSQL("DROP TRIGGER IF EXISTS trg_debt_due_date_sales_insert_v4")
+        db.execSQL("DROP TRIGGER IF EXISTS trg_debt_due_date_sales_update_v4")
+        db.update("fuel_sales", ContentValues().apply { put("sale_date", historicalFuelDate) }, "id=?", arrayOf(fuelSaleId.toString()))
+        db.update("sales_transactions", ContentValues().apply {
+            put("payment_terms_source_at_sale", "explicit_text")
+            put("payment_terms_at_sale", "صافي 7 أيام")
+            put("payment_terms_days_at_sale", 7)
+            putNull("due_date_basis")
+            putNull("due_date")
+            putNull("due_date_source")
+        }, "id=?", arrayOf(parentSaleId.toString()))
+        val preservedAmount = scalarDouble(
+            "SELECT net_amount FROM sales_transactions WHERE id=?", arrayOf(parentSaleId.toString())
+        )
+
+        db.execSQL("ALTER TABLE sales_transactions DROP COLUMN transaction_date")
+        db.version = 58
+        DatabaseHelper.closeInstance()
+        helper = DatabaseHelper.getInstance(context)
+        db = helper.writableDatabase
+
+        assertEquals(59, db.version)
+        val migrated = db.rawQuery(
+            "SELECT transaction_date,due_date_basis,due_date,due_date_source,net_amount FROM sales_transactions WHERE id=? AND station_id=?",
+            arrayOf(parentSaleId.toString(), stationId.toString())
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            listOf(cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getString(3), cursor.getDouble(4))
+        }
+        assertEquals(historicalFuelDate, migrated[0])
+        assertEquals(historicalFuelDate, migrated[1])
+        assertEquals("2026-10-12", migrated[2])
+        assertEquals("historical_snapshot_reconstruction", migrated[3])
+        assertEquals(preservedAmount, migrated[4] as Double, 0.0001)
+        assertEquals(1L, scalarLong("SELECT COUNT(*) FROM fuel_sales WHERE id=? AND sale_id=?", arrayOf(fuelSaleId.toString(), parentSaleId.toString())))
+
+        DebtDueDateRepository.ensureSchema(helper)
+        DebtDueDateRepository.ensureSchema(helper)
+        val transactionDateColumns = db.rawQuery("PRAGMA table_info(sales_transactions)", null).use { cursor ->
+            var count = 0
+            val nameColumn = cursor.getColumnIndexOrThrow("name")
+            while (cursor.moveToNext()) if (cursor.getString(nameColumn) == "transaction_date") count++
+            count
+        }
+        assertEquals("Reapplying V59 schema setup must not duplicate the additive column", 1, transactionDateColumns)
+        assertEquals("ok", db.rawQuery("PRAGMA integrity_check", null).use { it.moveToFirst(); it.getString(0) })
     }
 
     @Test

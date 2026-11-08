@@ -124,12 +124,68 @@ object DebtDueDateRepository {
         reconstructProvableHistoricalDueDates(db)
     }
 
+    /** Additive, transactional migration from the V58 sales schema to V59. */
+    fun migrateV58ToV59(db: SQLiteDatabase) {
+        check(db.inTransaction()) { "V58-to-V59 migration requires the onUpgrade transaction" }
+        if (!tableExists(db, "sales_transactions")) return
+        addColumn(db, "sales_transactions", "transaction_date", "TEXT")
+        val salesColumns = columns(db, "sales_transactions")
+
+        if (tableExists(db, "fuel_sales") && setOf("sale_id", "station_id", "sale_date").all { it in columns(db, "fuel_sales") }) {
+            db.execSQL(
+                """UPDATE sales_transactions
+                   SET transaction_date=(
+                       SELECT CASE
+                           WHEN TRIM(COALESCE(fs.sale_date,''))<>''
+                            AND date(substr(fs.sale_date,1,10),'+0 days')=substr(fs.sale_date,1,10)
+                           THEN substr(fs.sale_date,1,10) END
+                       FROM fuel_sales fs
+                       WHERE fs.sale_id=sales_transactions.id AND fs.station_id=sales_transactions.station_id
+                       ORDER BY fs.id DESC LIMIT 1
+                   )
+                   WHERE (sales_transactions.transaction_date IS NULL OR TRIM(sales_transactions.transaction_date)='')
+                     AND EXISTS (
+                         SELECT 1 FROM fuel_sales fs
+                         WHERE fs.sale_id=sales_transactions.id AND fs.station_id=sales_transactions.station_id
+                     )"""
+            )
+        }
+        if ("business_day" in salesColumns) {
+            db.execSQL(
+                """UPDATE sales_transactions
+                   SET transaction_date=substr(business_day,1,10)
+                   WHERE (transaction_date IS NULL OR TRIM(transaction_date)='')
+                     AND TRIM(COALESCE(business_day,''))<>''
+                     AND date(substr(business_day,1,10),'+0 days')=substr(business_day,1,10)"""
+            )
+        }
+
+        val snapshotColumns = setOf(
+            "payment_terms_source_at_sale", "payment_terms_days_at_sale", "payment_terms_at_sale",
+            "due_date_basis", "transaction_date"
+        )
+        if (snapshotColumns.all { it in salesColumns }) {
+            db.execSQL(
+                """UPDATE sales_transactions
+                   SET due_date_basis=substr(transaction_date,1,10)
+                   WHERE (due_date_basis IS NULL OR TRIM(due_date_basis)='')
+                     AND COALESCE(payment_terms_source_at_sale,'')='explicit_text'
+                     AND payment_terms_at_sale IS NOT NULL AND TRIM(payment_terms_at_sale)<>''
+                     AND payment_terms_days_at_sale BETWEEN 0 AND 365
+                     AND transaction_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+                     AND date(transaction_date,'+0 days')=transaction_date"""
+            )
+        }
+        reconstructProvableHistoricalDueDates(db)
+    }
+
     /** Rebuild only from immutable invoice-time terms plus a stored invoice-time basis. */
     private fun reconstructProvableHistoricalDueDates(db: SQLiteDatabase) {
         val saleColumns = columns(db, "sales_transactions")
         val required = setOf(
             "payment_terms_source_at_sale", "payment_terms_days_at_sale", "payment_terms_at_sale",
-            "due_date_basis", "due_date", "due_date_source"
+            "due_date_basis", "due_date", "due_date_source", "payment_method", "remaining_amount",
+            "status", "is_deleted"
         )
         if (!required.all { it in saleColumns }) return
         val ownsTransaction = !db.inTransaction()
@@ -143,6 +199,11 @@ object DebtDueDateRepository {
                      AND COALESCE(payment_terms_source_at_sale,'')='explicit_text'
                      AND payment_terms_at_sale IS NOT NULL AND TRIM(payment_terms_at_sale)<>''
                      AND payment_terms_days_at_sale BETWEEN 0 AND 365
+                     AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(payment_method,'')),' ',''),'-','_'))
+                         IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')
+                     AND COALESCE(remaining_amount,0)>0.000001
+                     AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded')
+                     AND COALESCE(is_deleted,0)=0
                      AND due_date_basis GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
                      AND date(due_date_basis,'+0 days')=due_date_basis"""
             )

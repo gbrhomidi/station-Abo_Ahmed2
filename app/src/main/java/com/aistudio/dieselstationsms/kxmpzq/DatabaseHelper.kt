@@ -313,6 +313,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     51 -> ensureTaskWorkspaceSchema(db)
                     52 -> ensureDashboardDebtQueryIndexes(db)
                     53 -> SupplierPayablesRepository.ensureSchema(db)
+                    58 -> DebtDueDateRepository.migrateV58ToV59(db)
                 }
             }
             ensureModule006Schema(db)
