@@ -27,7 +27,7 @@ assert.ok(repository.includes('val today = LocalDate.parse(asOfDate)'), 'maturit
 
 assert.ok(database.includes('DebtDueDateRepository.getCustomerDebtSummary(this, stationId, today)'), 'dashboard debt KPIs must use the central repository');
 assert.ok(database.includes('val reportRows = when (reportType)'), 'CRM report result must be decorated from one report projection');
-assert.ok(database.includes('reportType == "customers"'), 'customer CRM report must receive central balances');
+assert.ok(database.includes('reportType in setOf("customers", "balance")'), 'customer and explicit balance CRM reports must receive central balances');
 
 assert.ok(activity.includes('db.getDashboardStatsForDate(stationId, params, businessDate)'), 'dashboard must use one business-date snapshot');
 assert.ok(activity.includes('fun getCustomerDebtSummary()'), 'summary bridge must be exposed to the customer report');
