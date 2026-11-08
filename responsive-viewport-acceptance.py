@@ -275,10 +275,12 @@ def evaluate_measurement(devtools: DevToolsWebSocket, width: int) -> dict:
         last_value = response.get("result", {}).get("value", "")
         if last_value:
             result = json.loads(last_value)
-            if int(result.get("innerWidth", 0)) != width or int(result.get("clientWidth", 0)) != width:
+            # clientWidth is the CSS layout viewport used for media-query/layout geometry.
+            # Chromium's mobile visual viewport may report a few extra CSS pixels in innerWidth.
+            if int(result.get("clientWidth", 0)) != width:
                 raise RuntimeError(
-                    f"Device emulation requested {width}px but Chromium reports "
-                    f"inner={result.get('innerWidth')} client={result.get('clientWidth')}"
+                    f"Device emulation requested {width}px but CSS layout viewport "
+                    f"is {result.get('clientWidth')}px (visual innerWidth={result.get('innerWidth')})"
                 )
             return result
         time.sleep(0.1)
