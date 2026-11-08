@@ -152,6 +152,11 @@ class DebtDueReminderWorkerIntegrationTest {
             .getWorkInfosForUniqueWork("debt-due-sms-reminders-station-$stationId")
             .get(10, TimeUnit.SECONDS)
         assertEquals("Station reminder scheduling must remain unique after a user/session change", 1, scheduled.size)
+        // Keep the scheduling assertion independent from the manual worker execution below.
+        // The test scheduler may run periodic work immediately, racing the SQLite fixture.
+        WorkManager.getInstance(context)
+            .cancelUniqueWork("debt-due-sms-reminders-station-$stationId")
+            .get(10, TimeUnit.SECONDS)
 
         val requestData = Data.Builder()
             .putInt("debt_reminder_station_id", stationId)
