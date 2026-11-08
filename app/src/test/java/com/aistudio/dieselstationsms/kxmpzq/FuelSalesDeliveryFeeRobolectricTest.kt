@@ -253,12 +253,17 @@ class FuelSalesDeliveryFeeRobolectricTest {
         } else {
             db.execSQL("UPDATE sqlite_sequence SET seq=9000 WHERE name='fuel_sales'")
         }
+        val nozzleId = scalarLong(
+            "SELECT id FROM pump_nozzles WHERE pump_id=? AND COALESCE(is_deleted,0)=0 ORDER BY id LIMIT 1",
+            arrayOf(pumpId.toString())
+        )
+        assertTrue("The bridge fixture must provide a nozzle attached to its pump", nozzleId > 0L)
         val input = buildFuelSaleInput(
             DeliveryFeeAccounting.ADD_TO_SALES,
             75.0,
             "موقع توصيل اختبار الجسر",
             paymentMethod = "cash"
-        ).put("idempotency_key", key)
+        ).put("idempotency_key", key).put("nozzle_id", nozzleId)
         val (bridge, webView) = createNativeAsyncBridgeHarness()
 
         val first = invokeFuelSalesAsyncAndAwait(
@@ -273,7 +278,7 @@ class FuelSalesDeliveryFeeRobolectricTest {
         )
         assertTrue("The test must prove that the child primary key differs from the invoice ID", childId > 9000L && childId != parentId)
         db.rawQuery(
-            """SELECT delivery_service_fee,delivery_fee_mode,delivery_location,gross_quantity,gross_amount
+            """SELECT delivery_service_fee,delivery_fee_mode,delivery_location,gross_quantity,gross_amount,nozzle_id
                FROM fuel_sales WHERE id=? AND sale_id=? AND station_id=?""",
             arrayOf(childId.toString(), parentId.toString(), stationId.toString())
         ).use { cursor ->
@@ -283,6 +288,7 @@ class FuelSalesDeliveryFeeRobolectricTest {
             assertEquals("موقع توصيل اختبار الجسر", cursor.getString(2))
             assertEquals(10.0, cursor.getDouble(3), 0.000001)
             assertTrue(cursor.getDouble(4) > 0.0)
+            assertEquals(nozzleId, cursor.getLong(5))
         }
         val feeLedgerId = scalarLong(
             "SELECT id FROM delivery_service_fee_ledger WHERE fuel_sale_id=? AND station_id=?",
@@ -320,6 +326,37 @@ class FuelSalesDeliveryFeeRobolectricTest {
     }
 
     @Test
+    fun bridgeNormalizesUppercaseOnAccountAliasBeforeValidatingCreditTerms() {
+        val customerId = ensureTestCustomer()
+        val termId = scalarLong(
+            "SELECT id FROM payment_terms WHERE code='NET_7' AND applies_to='customer' AND is_active=1 AND (station_id IS NULL OR station_id=?) ORDER BY CASE WHEN station_id IS NULL THEN 0 ELSE 1 END LIMIT 1",
+            arrayOf(stationId.toString())
+        )
+        val input = buildFuelSaleInput(
+            DeliveryFeeAccounting.EXEMPT, 0.0, "", paymentMethod = "ON_ACCOUNT", customerId = customerId
+        ).put("payment_terms_id", termId)
+            .put("idempotency_key", "uppercase-on-account-${UUID.randomUUID()}")
+        val (bridge, webView) = createNativeAsyncBridgeHarness()
+        val response = invokeFuelSalesAsyncAndAwait(
+            bridge, webView, "uppercase-on-account-${UUID.randomUUID()}", "save",
+            JSONArray().put(input.toString())
+        )
+        assertTrue("The bridge must recognize the backend-supported uppercase credit alias: $response",
+            response.optBoolean("success"))
+        val invoiceId = response.optLong("sale_id", response.optLong("id", 0L))
+        db.rawQuery(
+            "SELECT payment_method,is_credit,payment_terms_days_at_sale,due_date FROM sales_transactions WHERE id=? AND station_id=?",
+            arrayOf(invoiceId.toString(), stationId.toString())
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("credit", cursor.getString(0))
+            assertEquals(1, cursor.getInt(1))
+            assertEquals(7, cursor.getInt(2))
+            assertTrue(cursor.getString(3).isNotBlank())
+        }
+    }
+
+    @Test
     fun creditFuelSaleFeeLedgerFailureRollsBackInvoiceSnapshotBalancesAndIdempotencyThenAllowsRetry() {
         val customerId = ensureTestCustomer()
         ensureReceivableAndRevenueAccounts()
@@ -327,6 +364,12 @@ class FuelSalesDeliveryFeeRobolectricTest {
         val beforeFuel = scalarLong("SELECT COUNT(*) FROM fuel_sales WHERE station_id=?", arrayOf(stationId.toString()))
         val beforeLedger = scalarLong("SELECT COUNT(*) FROM delivery_service_fee_ledger WHERE station_id=?", arrayOf(stationId.toString()))
         val beforeJournals = scalarLong("SELECT COUNT(*) FROM journal_entries WHERE station_id=?", arrayOf(stationId.toString()))
+        val beforeShift = db.rawQuery(
+            "SELECT total_sales,total_fuel_liters FROM shifts WHERE station_id=? AND status='open' ORDER BY id DESC LIMIT 1",
+            arrayOf(stationId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getDouble(0) to it.getDouble(1) }
+        val tankId = if (pumpId > 0L) scalarLong("SELECT tank_id FROM pumps WHERE id=?", arrayOf(pumpId.toString())) else 0L
+        val beforeTank = if (tankId > 0L) scalarDouble("SELECT current_quantity FROM tanks WHERE id=?", arrayOf(tankId.toString())) else 0.0
         val key = "credit-fee-rollback-${UUID.randomUUID()}"
         val termId = scalarLong(
             "SELECT id FROM payment_terms WHERE code='NET_7' AND applies_to='customer' AND is_active=1 AND (station_id IS NULL OR station_id=?) ORDER BY CASE WHEN station_id IS NULL THEN 0 ELSE 1 END LIMIT 1",
@@ -362,6 +405,14 @@ class FuelSalesDeliveryFeeRobolectricTest {
         assertEquals(beforeFuel, scalarLong("SELECT COUNT(*) FROM fuel_sales WHERE station_id=?", arrayOf(stationId.toString())))
         assertEquals(beforeLedger, scalarLong("SELECT COUNT(*) FROM delivery_service_fee_ledger WHERE station_id=?", arrayOf(stationId.toString())))
         assertEquals(beforeJournals, scalarLong("SELECT COUNT(*) FROM journal_entries WHERE station_id=?", arrayOf(stationId.toString())))
+        val afterShift = db.rawQuery(
+            "SELECT total_sales,total_fuel_liters FROM shifts WHERE station_id=? AND status='open' ORDER BY id DESC LIMIT 1",
+            arrayOf(stationId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getDouble(0) to it.getDouble(1) }
+        assertEquals("A failed ledger insert must roll back shift totals", beforeShift.first, afterShift.first, 0.0001)
+        assertEquals("A failed ledger insert must roll back shift liters", beforeShift.second, afterShift.second, 0.0001)
+        if (tankId > 0L) assertEquals("A failed ledger insert must roll back tank stock", beforeTank,
+            scalarDouble("SELECT current_quantity FROM tanks WHERE id=?", arrayOf(tankId.toString())), 0.0001)
         assertEquals(0L, scalarLong(
             "SELECT COUNT(*) FROM financial_idempotency_keys WHERE station_id=? AND idempotency_key=?",
             arrayOf(stationId.toString(), key)
@@ -469,6 +520,21 @@ class FuelSalesDeliveryFeeRobolectricTest {
         ensureReceivableAndRevenueAccounts()
         val (cashBoxId, _) = ensureCashSettlementAccount()
         val firstAmount = afterReturn / 3.0
+        // A legacy/imported cash invoice may carry a stale open balance. It is not part of
+        // canonical customer credit debt and must never absorb a debt installment.
+        val cashInvoiceId = helper.addFuelSale(
+            buildFuelSaleInput(
+                DeliveryFeeAccounting.EXEMPT, 0.0, "",
+                paymentMethod = "cash", customerId = customerId
+            ).put("idempotency_key", "cash-stale-balance-${UUID.randomUUID()}"),
+            stationId, userId
+        )
+        db.update("sales_transactions", ContentValues().apply {
+            put("remaining_amount", firstAmount)
+            put("paid_amount", 0.0)
+            put("payment_status", "partial")
+            put("due_date", "2020-01-01")
+        }, "id=? AND station_id=?", arrayOf(cashInvoiceId.toString(), stationId.toString()))
         val firstPaymentKey = "credit-installment-one-${UUID.randomUUID()}"
         val firstPaymentId = helper.processPayment(
             customerId.toInt(), firstAmount, "cash",
@@ -480,6 +546,9 @@ class FuelSalesDeliveryFeeRobolectricTest {
             "SELECT payment_status FROM sales_transactions WHERE id=? AND station_id=?",
             arrayOf(parentId.toString(), stationId.toString())
         ).use { assertTrue(it.moveToFirst()); it.getString(0) })
+        assertEquals("The stale cash balance must not absorb the credit installment", firstAmount,
+            scalarDouble("SELECT remaining_amount FROM sales_transactions WHERE id=? AND station_id=?",
+                arrayOf(cashInvoiceId.toString(), stationId.toString())), 0.01)
         val firstRemaining = afterReturn - firstAmount
         assertEquals(firstRemaining, scalarDouble(
             "SELECT remaining_amount FROM sales_transactions WHERE id=? AND station_id=?",
@@ -525,6 +594,65 @@ class FuelSalesDeliveryFeeRobolectricTest {
             "SELECT COALESCE(SUM(amount),0) FROM payments WHERE station_id=? AND customer_party_id=? AND is_refund=0 AND status='completed' AND is_deleted=0",
             arrayOf(stationId.toString(), customerId.toString())
         ), 0.01)
+        assertEquals(0L, scalarLong(
+            "SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0 AND ABS(total_debit-total_credit)>0.01",
+            arrayOf(stationId.toString())
+        ))
+    }
+
+    @Test
+    fun customerPaymentAllocatesOldestCreditInvoiceBeforeLaterInvoiceAndIsIdempotent() {
+        val customerId = ensureTestCustomer()
+        ensureReceivableAndRevenueAccounts()
+        val firstInput = buildFuelSaleInput(
+            DeliveryFeeAccounting.EXEMPT, 0.0, "", paymentMethod = "credit", customerId = customerId
+        )
+        val secondInput = buildFuelSaleInput(
+            DeliveryFeeAccounting.EXEMPT, 0.0, "", paymentMethod = "credit", customerId = customerId
+        )
+        val firstInvoice = helper.addFuelSale(firstInput, stationId, userId)
+        val secondInvoice = helper.addFuelSale(secondInput, stationId, userId)
+        val firstRemaining = scalarDouble(
+            "SELECT remaining_amount FROM sales_transactions WHERE id=? AND station_id=?",
+            arrayOf(firstInvoice.toString(), stationId.toString())
+        )
+        val secondRemaining = scalarDouble(
+            "SELECT remaining_amount FROM sales_transactions WHERE id=? AND station_id=?",
+            arrayOf(secondInvoice.toString(), stationId.toString())
+        )
+        assertTrue(firstInvoice < secondInvoice && firstRemaining > 0.0 && secondRemaining > 0.0)
+        val (cashBoxId, _) = ensureCashSettlementAccount()
+        val paymentKey = "oldest-credit-payment-${UUID.randomUUID()}"
+        val paymentId = helper.processPayment(
+            customerId.toInt(), firstRemaining, "cash", operator = "SQLite allocation acceptance",
+            notes = "تحصيل أقدم فاتورة", stationScopeId = stationId, idempotencyKey = paymentKey,
+            actorId = userId, cashBoxId = cashBoxId
+        )
+        assertEquals("paid", db.rawQuery(
+            "SELECT payment_status FROM sales_transactions WHERE id=? AND station_id=?",
+            arrayOf(firstInvoice.toString(), stationId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getString(0) })
+        assertEquals(secondRemaining, scalarDouble(
+            "SELECT remaining_amount FROM sales_transactions WHERE id=? AND station_id=?",
+            arrayOf(secondInvoice.toString(), stationId.toString())
+        ), 0.01)
+        assertEquals(secondRemaining, scalarDouble(
+            "SELECT total_due FROM parties WHERE id=? AND station_id=?",
+            arrayOf(customerId.toString(), stationId.toString())
+        ), 0.01)
+        assertEquals(paymentId, helper.processPayment(
+            customerId.toInt(), firstRemaining, "cash", operator = "SQLite allocation retry",
+            notes = "إعادة التحصيل", stationScopeId = stationId, idempotencyKey = paymentKey,
+            actorId = userId, cashBoxId = cashBoxId
+        ))
+        assertEquals(1L, scalarLong(
+            "SELECT COUNT(*) FROM payments WHERE station_id=? AND customer_party_id=? AND status='completed' AND is_deleted=0",
+            arrayOf(stationId.toString(), customerId.toString())
+        ))
+        assertEquals(1L, scalarLong(
+            "SELECT COUNT(*) FROM customer_ledger WHERE party_id=? AND transaction_type='payment' AND transaction_id=?",
+            arrayOf(customerId.toString(), paymentId.toString())
+        ))
         assertEquals(0L, scalarLong(
             "SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND status='posted' AND is_deleted=0 AND ABS(total_debit-total_credit)>0.01",
             arrayOf(stationId.toString())

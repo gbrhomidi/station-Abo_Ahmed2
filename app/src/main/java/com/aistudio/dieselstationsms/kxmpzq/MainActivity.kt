@@ -13526,8 +13526,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 }
                 val selectedPaymentTermId = input.optLong("payment_terms_id", 0L)
                 require(selectedPaymentTermId >= 0L) { "شرط الدفع المحدد غير صالح" }
-                val creditSale = input.optString("payment_method", "").trim() in
-                    setOf("credit", "آجل", "credit_sale", "credit_account")
+                val normalizedPaymentMethod = input.optString("payment_method", "")
+                    .trim().lowercase(java.util.Locale.ROOT).replace(" ", "").replace("-", "_")
+                val creditSale = normalizedPaymentMethod in setOf(
+                    "credit", "آجل", "اجل", "credit_sale", "credit_account", "on_account", "بيعآجل", "علىالحساب"
+                )
                 if (creditSale) {
                     require(selectedPaymentTermId > 0L) { "اختر شرط الدفع من جدول شروط الدفع قبل حفظ البيع الآجل" }
                     require(input.optLong("customer_id", 0L) > 0L) { "اختر عميلاً قبل حفظ البيع الآجل" }
@@ -13590,13 +13593,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 database.beginTransaction()
                 try {
                     saleId = db.addFuelSale(input, stationScopeId, currentUserId)
-                    val nozzleId = input.optLong("nozzle_id", 0L)
-                    if (nozzleId > 0L) {
-                        database.execSQL(
-                            "UPDATE fuel_sales SET nozzle_id=? WHERE id=? AND station_id=?",
-                            arrayOf<Any?>(nozzleId, saleId, stationScopeId)
-                        )
-                    }
                     feeResult = DeliveryFeeAccounting.persistFuelSaleFee(
                         helper = db,
                         fuelSaleId = saleId,
@@ -13617,7 +13613,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 }
 
                 // Post-commit SMS is isolated: a queue error must not report a committed sale as failed.
-                val smsResult = if (input.optString("payment_method").trim() in setOf("credit", "آجل", "credit_sale", "credit_account")) {
+                val smsResult = if (creditSale) {
                     try {
                         queueCreditSaleSms(db, saleId, stationScopeId, currentUserId)
                     } catch (smsError: Exception) {

@@ -52,6 +52,14 @@ def find_free_port() -> int:
 
 def prepare_html(source_path: Path, temporary_path: Path) -> None:
     html = source_path.read_text(encoding="utf-8", errors="replace")
+    production_renderer = ""
+    if source_path.name == "fuel-sales.html":
+        esc_match = re.search(r"(?m)^const esc = .*?;\s*$", html)
+        renderer_start = html.find("function inputHtml(def, row) {")
+        renderer_end = html.find("\nfunction normalizePromotionBoundary", renderer_start)
+        if esc_match is None or renderer_start < 0 or renderer_end < 0:
+            raise RuntimeError("Could not extract the production fuel-sales form renderer")
+        production_renderer = "<script>" + esc_match.group(0) + "\n" + html[renderer_start:renderer_end] + "</script>"
     viewport_tags = re.findall(r"<meta\b[^>]*>", html, flags=re.I)
     viewport_tag = next((
         tag for tag in viewport_tags
@@ -61,7 +69,7 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
     if viewport_tag is None:
         raise RuntimeError(f"{source_path.name} does not declare a device-width viewport")
 
-    # This test measures DOM/CSS layout only. Remove bridge/network scripts and remote styles.
+    # Keep the production inputHtml renderer below; remove bridge/network scripts and remote styles.
     html = re.sub(r"(?is)<script\b[^>]*>.*?</script\s*>", "", html)
     html = re.sub(
         r"(?is)<link\b[^>]*href=[\"']https?://[^\"']+[\"'][^>]*>",
@@ -84,6 +92,8 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
         return local.as_uri()
 
     html = re.sub(r"file:///android_asset/([A-Za-z0-9_./-]+)", local_asset, html)
+    if production_renderer:
+        html = re.sub(r"</body\s*>", production_renderer + "</body>", html, count=1, flags=re.I)
 
     marker = r"""
 <script>
@@ -95,22 +105,26 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
   const isFuelSalesPage = pageName.includes('fuel-sales-viewport');
   const isPosPage = pageName.includes('pos-viewport');
 
-  // The production fuel-sales form is assembled dynamically by JavaScript. Its native
-  // script is intentionally removed in this CSS-only acceptance harness, so recreate
-  // the exact form-group/select/date structure and expose the real modal container.
+  // Use the actual production inputHtml renderer and real form/modal CSS, then make its
+  // two production controls visible to measure the credit-sale layout state.
   if (isFuelSalesPage) {
     const form = document.getElementById('recordForm');
     const modal = document.getElementById('formModal');
     if (form && modal) {
-      form.innerHTML =
-        '<div class="form-group payment-terms-field" data-payment-terms-acceptance="true">' +
-          '<label class="form-label">شروط الدفع</label>' +
-          '<select class="form-input" id="paymentTermsAcceptanceSelect" data-key="payment_terms_id"><option>بعد 7 أيام</option></select>' +
-        '</div>' +
-        '<div class="form-group payment-terms-field" data-payment-terms-preview-group="true">' +
-          '<label class="form-label">تاريخ الاستحقاق المتوقع</label>' +
-          '<input class="form-input readonly" id="paymentTermsDueDatePreview" type="date" value="2026-11-15" readonly>' +
-        '</div>';
+      form.innerHTML = inputHtml(
+        {type: 'select', key: 'payment_terms_id', label: 'شروط الدفع', required: true}, null
+      ) + inputHtml(
+        {type: 'payment_terms_preview', key: 'payment_terms_preview', label: 'تاريخ الاستحقاق المتوقع'}, null
+      );
+      const termsSelect = form.querySelector('[data-key="payment_terms_id"]');
+      if (termsSelect) {
+        termsSelect.id = 'fuelSalesPaymentTermsId';
+        termsSelect.innerHTML = '<option value="7" data-days="7">بعد 7 أيام</option>';
+      }
+      const previewGroup = form.querySelector('[data-payment-terms-preview-group]');
+      const preview = document.getElementById('paymentTermsDueDatePreview');
+      if (previewGroup) previewGroup.style.display = 'block';
+      if (preview) preview.value = '2026-11-15';
       modal.classList.add('show');
     }
   }
@@ -173,11 +187,13 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
       }
     }
   }
-  const paymentTermsIds = isFuelSalesPage
-    ? ['paymentTermsAcceptanceSelect', 'paymentTermsDueDatePreview']
-    : isPosPage ? ['paymentTermsId', 'paymentTermsDueDate'] : [];
-  const paymentTermsRects = paymentTermsIds.map(id => {
-    const field = document.getElementById(id);
+  const paymentTermsTargets = isFuelSalesPage
+    ? [['fuelSalesPaymentTermsId', document.getElementById('fuelSalesPaymentTermsId')],
+       ['paymentTermsDueDatePreview', document.getElementById('paymentTermsDueDatePreview')]]
+    : isPosPage ? [['paymentTermsId', document.getElementById('paymentTermsId')],
+                   ['paymentTermsDueDate', document.getElementById('paymentTermsDueDate')]] : [];
+  const paymentTermsIds = paymentTermsTargets.map(item => item[0]);
+  const paymentTermsRects = paymentTermsTargets.map(([id, field]) => {
     if (!field) return { id, visible: false, missing: true };
     const style = getComputedStyle(field);
     const group = field.closest('.form-group, .field-group') || field;
@@ -211,6 +227,7 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
       !paymentTermsOverlap && paymentTermsSideBySide && !paymentTermsOutside);
   const result = {
     innerWidth: window.innerWidth,
+    visualViewportWidth: window.visualViewport ? window.visualViewport.width : window.innerWidth,
     clientWidth: root.clientWidth,
     documentScrollWidth: root.scrollWidth,
     bodyScrollWidth: body.scrollWidth,
@@ -219,7 +236,18 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
     paymentTermsSideBySide,
     paymentTermsOutside,
     paymentTermsPassed,
-    offenders
+    offenders,
+    overflowElements: Array.from(body.querySelectorAll('*')).map(element => {
+      const rect = element.getBoundingClientRect();
+      return {element, rect};
+    }).filter(item => item.rect.width > 0 && (item.rect.left < -1 || item.rect.right > width + 1))
+      .slice(0, 8).map(({element, rect}) => ({
+        tag: element.tagName, id: element.id || '',
+        className: typeof element.className === 'string' ? element.className.slice(0, 80) : '',
+        left: Math.round(rect.left * 10) / 10,
+        right: Math.round(rect.right * 10) / 10,
+        width: Math.round(rect.width * 10) / 10
+      }))
   };
   const output = document.createElement('pre');
   output.id = '__viewport_acceptance__';
@@ -448,8 +476,10 @@ def main() -> int:
                     document_width = int(result.get("documentScrollWidth", 0))
                     body_width = int(result.get("bodyScrollWidth", 0))
                     visual_width = int(result.get("innerWidth", width))
+                    visual_viewport_width = float(result.get("visualViewportWidth", width))
                     passed = (
-                        document_width <= visual_width + 1
+                        abs(visual_viewport_width - width) <= 1
+                        and document_width <= visual_width + 1
                         and body_width <= width + 1
                         and not result.get("offenders")
                         and result.get("paymentTermsPassed", True)
@@ -458,6 +488,7 @@ def main() -> int:
                     print(
                         f"{label} {screen.relative_to(ASSETS)} @ {width}px "
                         f"(visual={visual_width}, layout={client}, "
+                        f"visual_viewport={visual_viewport_width:g}, "
                         f"document={document_width}, body={body_width}, "
                         f"term_fields={len(result.get('paymentTermsRects', []))}, "
                         f"term_overlap={result.get('paymentTermsOverlap', False)}, "

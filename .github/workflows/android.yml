@@ -320,6 +320,11 @@ jobs:
 
           python3 ./screen-smoke-test.py
 
+      - name: Run responsive viewport acceptance
+        run: |
+          set -e
+          python3 ./responsive-viewport-acceptance.py
+
       - name: Verify local business-day boundary
         run: |
           set -e

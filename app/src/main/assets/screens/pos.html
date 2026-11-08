@@ -6694,20 +6694,31 @@ function loadCustomerDetails(customerId) {
 
 function displayCustomerDetails(customer) {
     const container = document.getElementById('customerDetailsContainer');
-    container.innerHTML = `
-        <div class="customer-info-grid">
-            <div class="customer-info-item"><strong>رقم العميل:</strong> ${customer.entity_id || customerDatabaseId(customer)}</div>
-            <div class="customer-info-item"><strong>الاسم القانوني:</strong> ${customer.legal_name || ''}</div>
-            <div class="customer-info-item"><strong>الاسم التجاري:</strong> ${customer.commercial_name || ''}</div>
-            <div class="customer-info-item"><strong>الحد الائتماني:</strong> ${customer.credit_limit || 0} ريال</div>
-            <div class="customer-info-item"><strong>الرصيد الحالي:</strong> ${customer.current_balance || 0} ريال</div>
-            <div class="customer-info-item"><strong>شروط الدفع:</strong> ${customer.payment_terms || ''}</div>
-            <div class="customer-info-item"><strong>الحالة:</strong> ${customer.is_active ? 'نشط' : 'غير نشط'}</div>
-            <div class="customer-info-item"><strong>الهاتف:</strong> ${customer.primary_phone || customer.phone || ''}</div>
-            <div class="customer-info-item"><strong>البريد الإلكتروني:</strong> ${customer.email || ''}</div>
-            <div class="customer-info-item"><strong>العنوان:</strong> ${customer.address_line1 || ''} ${customer.address_line2 || ''} ${customer.city || ''} ${customer.state || ''}</div>
-        </div>
-    `;
+    const grid = document.createElement('div');
+    grid.className = 'customer-info-grid';
+    const entries = [
+        ['رقم العميل', customer.entity_id || customerDatabaseId(customer)],
+        ['الاسم القانوني', customer.legal_name || ''],
+        ['الاسم التجاري', customer.commercial_name || ''],
+        ['الحد الائتماني', `${customer.credit_limit || 0} ريال`],
+        ['الرصيد الحالي', `${customer.current_balance || 0} ريال`],
+        ['شروط الدفع', customer.payment_terms || ''],
+        ['الحالة', customer.is_active ? 'نشط' : 'غير نشط'],
+        ['الهاتف', customer.primary_phone || customer.phone || ''],
+        ['البريد الإلكتروني', customer.email || ''],
+        ['العنوان', [customer.address_line1, customer.address_line2, customer.city, customer.state].filter(Boolean).join(' ')]
+    ];
+    entries.forEach(([label, value]) => {
+        const item = document.createElement('div');
+        item.className = 'customer-info-item';
+        const strong = document.createElement('strong');
+        strong.textContent = `${label}: `;
+        const text = document.createElement('span');
+        text.textContent = String(value ?? '');
+        item.append(strong, text);
+        grid.appendChild(item);
+    });
+    container.replaceChildren(grid);
     container.style.display = 'block';
 }
 

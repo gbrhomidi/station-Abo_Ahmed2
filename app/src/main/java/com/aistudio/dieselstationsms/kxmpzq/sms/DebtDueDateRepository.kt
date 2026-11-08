@@ -1312,7 +1312,12 @@ object DebtDueDateRepository {
     private fun hasOutboxDedupeKey(db: SQLiteDatabase, dedupeKey: String): Boolean {
         if (!tableExists(db, "sms_outbox") || "dedupe_key" !in columns(db, "sms_outbox")) return false
         return runCatching {
-            db.rawQuery("SELECT 1 FROM sms_outbox WHERE dedupe_key=? LIMIT 1", arrayOf(dedupeKey)).use { it.moveToFirst() }
+            db.rawQuery(
+                """SELECT 1 FROM sms_outbox
+                   WHERE (dedupe_key=? OR dedupe_key LIKE ?)
+                     AND UPPER(COALESCE(status,'')) NOT IN ('CANCELLED','CANCELED','FAILED') LIMIT 1""",
+                arrayOf(dedupeKey, "$dedupeKey:retry:%")
+            ).use { it.moveToFirst() }
         }.getOrDefault(false)
     }
 

@@ -11885,6 +11885,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("station_id", stationScopeId)
                     put("shift_id", shiftId)
                     if (pumpId != null) put("pump_id", pumpId)
+                    data.optLong("nozzle_id", 0L).takeIf { it > 0L }?.let { put("nozzle_id", it) }
                     put("fuel_type_id", fuelTypeId)
                     put("quantity", liters)
                     put("price_per_liter", pricePerLiter)
@@ -16694,6 +16695,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     """SELECT id, COALESCE(remaining_amount, 0)
                        FROM sales_transactions
                        WHERE customer_party_id = ? AND remaining_amount > 0 AND is_deleted = 0$salesScopeClause
+                         AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(payment_method,'')),' ',''),'-','_'))
+                             IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')
+                         AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')
                        ORDER BY CASE WHEN due_date IS NULL OR due_date='' THEN 1 ELSE 0 END, due_date ASC, id ASC""",
                     arrayOf(customerId.toString(), paymentStationId.toString())
                 ).use { cursor ->

@@ -2,8 +2,13 @@ package com.aistudio.dieselstationsms.kxmpzq.sms
 
 import android.Manifest
 import android.app.Application
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.ContentValues
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
 import androidx.work.Data
@@ -152,6 +157,19 @@ class DebtDueReminderWorkerIntegrationTest {
             .putInt("debt_reminder_station_id", stationId)
             .putLong("debt_reminder_user_id", userId)
             .build()
+        val candidates = DebtDueDateRepository.getDueSoonDebtReminders(database, stationId, 3)
+        val candidate = (0 until candidates.length())
+            .mapNotNull { candidates.optJSONObject(it) }
+            .single { it.optLong("customer_party_id") == inWindowCustomer }
+        val oldDedupeKey = "${candidate.getString("event_id")}:$phoneInWindow"
+        assertTrue(SmsOutboxRepository.enqueue(
+            database, phoneInWindow, "نسخة قديمة من التذكير", eventId = candidate.getString("event_id"),
+            businessEntityId = "party:$inWindowCustomer", dedupeKey = oldDedupeKey
+        ) != null)
+        assertEquals(1, db.update(
+            "sms_outbox", ContentValues().apply { put("status", "CANCELLED") },
+            "dedupe_key=?", arrayOf(oldDedupeKey)
+        ))
         val worker = TestListenableWorkerBuilder.from(context, DebtDueReminderWorker::class.java)
             .setInputData(requestData)
             .build()
@@ -169,21 +187,59 @@ class DebtDueReminderWorkerIntegrationTest {
         ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
 
         val queued = db.rawQuery(
-            """SELECT o.status,o.body,o.event_id FROM sms_outbox o
+            """SELECT o.status,o.body,o.event_id,o.dedupe_key FROM sms_outbox o
                WHERE o.business_entity_id=? ORDER BY o.queued_at DESC LIMIT 1""",
             arrayOf("party:$inWindowCustomer")
         ).use {
             assertTrue("The in-window customer must have one durable outbox row", it.moveToFirst())
-            Triple(it.getString(0), it.getString(1), it.getString(2))
+            listOf(it.getString(0), it.getString(1), it.getString(2), it.getString(it.getColumnIndexOrThrow("dedupe_key")))
         }
-        assertEquals("QUEUED", queued.first)
-        assertTrue(queued.second.contains("يتبقى 2 يوم على موعد استحقاق الدين"))
-        assertTrue(queued.third.startsWith("debt-reminder:$stationId:$inWindowCustomer:"))
-        assertTrue(queued.third.endsWith(":pre"))
+        assertEquals("QUEUED", queued[0])
+        assertTrue(queued[1].contains("يتبقى 2 يوم على موعد استحقاق الدين"))
+        assertTrue(queued[2].startsWith("debt-reminder:$stationId:$inWindowCustomer:"))
+        assertTrue(queued[2].endsWith(":pre"))
+        assertTrue("A cancelled reminder must permit a fresh versioned idempotency key", queued[3].contains(":retry:"))
 
         assertEquals(0, db.rawQuery(
             "SELECT COUNT(*) FROM sms_outbox WHERE business_entity_id=?",
             arrayOf("party:$outsideCustomer")
+        ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
+    }
+
+    @Test
+    fun workerCancelsStaleLocalNotificationWhenDebtIsPaidWithoutSmsPermission() = runBlocking {
+        WorkManagerTestInitHelper.initializeTestWorkManager(context, Configuration.Builder().build())
+        shadowOf(context.applicationContext as Application).denyPermissions(Manifest.permission.SEND_SMS)
+        val db = database.writableDatabase
+        val (customerId, saleId) = insertDebtFixture(db, "paid-notification")
+        db.update("sales_transactions", ContentValues().apply {
+            put("paid_amount", 100.0)
+            put("remaining_amount", 0.0)
+            put("payment_status", "paid")
+        }, "id=? AND station_id=?", arrayOf(saleId.toString(), stationId.toString()))
+
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channelId = "debt_due_reminders"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(NotificationChannel(
+                channelId, "Debt reminders test", NotificationManager.IMPORTANCE_DEFAULT
+            ))
+        }
+        val notificationId = 0xD3B7 + (stationId and 0x0FFF)
+        manager.notify(notificationId, Notification.Builder(context, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("Stale debt").build())
+        assertTrue(shadowOf(manager).getAllNotifications().any { it.id == notificationId })
+
+        val worker = TestListenableWorkerBuilder.from(context, DebtDueReminderWorker::class.java)
+            .setInputData(Data.Builder().putInt("debt_reminder_station_id", stationId)
+                .putLong("debt_reminder_user_id", ensureTestUser(db)).build())
+            .build()
+        assertEquals(ListenableWorker.Result.success(), worker.doWork())
+        assertEquals(PackageManager.PERMISSION_DENIED, context.checkSelfPermission(Manifest.permission.SEND_SMS))
+        assertTrue("A fully paid debt must cancel the station's stale local alert",
+            shadowOf(manager).getAllNotifications().none { it.id == notificationId })
+        assertEquals(0, db.rawQuery(
+            "SELECT COUNT(*) FROM sms_outbox WHERE event_id LIKE ?", arrayOf("debt-reminder:$stationId:$customerId:%")
         ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
     }
 

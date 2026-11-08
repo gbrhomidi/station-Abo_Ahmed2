@@ -121,29 +121,36 @@ class DebtDueReminderWorker(
                 val eventId = row.optString("event_id").trim().ifBlank {
                     "debt-reminder:$stationId:$customerId:$dueDate"
                 }
-                val dedupeKey = "$eventId:$phone"
+                val dedupeBase = "$eventId:$phone"
                 val alreadyQueued = db.readableDatabase.rawQuery(
-                    "SELECT 1 FROM sms_outbox WHERE dedupe_key = ? LIMIT 1",
-                    arrayOf(dedupeKey)
+                    """SELECT 1 FROM sms_outbox WHERE event_id=? AND recipient=?
+                       AND UPPER(COALESCE(status,'')) NOT IN ('CANCELLED','CANCELED','FAILED') LIMIT 1""",
+                    arrayOf(eventId, phone)
                 ).use { it.moveToFirst() }
                 if (alreadyQueued) continue
 
                 var newReminder = false
+                var dedupeKey = dedupeBase
                 val outcome = SmsOutboxAtomicTransaction.execute(
                     db = db,
                     context = applicationContext,
                     persist = {
                         val duplicate = db.readableDatabase.rawQuery(
-                            "SELECT 1 FROM sms_outbox WHERE dedupe_key = ? LIMIT 1",
-                            arrayOf(dedupeKey)
+                            """SELECT 1 FROM sms_outbox WHERE event_id=? AND recipient=?
+                               AND UPPER(COALESCE(status,'')) NOT IN ('CANCELLED','CANCELED','FAILED') LIMIT 1""",
+                            arrayOf(eventId, phone)
                         ).use { it.moveToFirst() }
-                        if (duplicate) 0L else {
-                            newReminder = true
-                            db.recordQueuedDebtReminder(
-                                customerId, transactionId, phone, message,
-                                createdBy = userId, daysBeforeDue = daysRemaining.coerceAtLeast(0)
-                            )
-                        }
+                        if (duplicate) return@execute 0L
+                        val priorRows = db.readableDatabase.rawQuery(
+                            "SELECT COUNT(*) FROM sms_outbox WHERE dedupe_key=? OR dedupe_key LIKE ?",
+                            arrayOf(dedupeBase, "$dedupeBase:retry:%")
+                        ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+                        dedupeKey = if (priorRows == 0) dedupeBase else "$dedupeBase:retry:$priorRows"
+                        newReminder = true
+                        db.recordQueuedDebtReminder(
+                            customerId, transactionId, phone, message,
+                            createdBy = userId, daysBeforeDue = daysRemaining.coerceAtLeast(0)
+                        )
                     },
                     notificationFactory = {
                         if (!newReminder) null else SmsOutboxAtomicTransaction.NotificationDraft(
@@ -178,6 +185,8 @@ class DebtDueReminderWorker(
                     smsEnabled,
                     smsPermissionGranted
                 )
+            } else if (localEligibleCount == 0) {
+                cancelDueReminderNotification(stationId)
             }
             Result.success()
         } catch (exception: Exception) {
@@ -206,7 +215,7 @@ class DebtDueReminderWorker(
             }
             val openApp = PendingIntent.getActivity(
                 applicationContext,
-                0xD3B7 + (stationId and 0x0FFF),
+                notificationId(stationId),
                 Intent(applicationContext, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra("open_screen", "تذكيرات الديون")
@@ -236,11 +245,18 @@ class DebtDueReminderWorker(
                 .setContentIntent(openApp)
                 .setAutoCancel(true)
                 .build()
-            manager.notify(0xD3B7 + (stationId and 0x0FFF), notification)
+            manager.notify(notificationId(stationId), notification)
         } catch (_: SecurityException) {
             // Notification permission is optional; the durable SMS outbox still works.
         } catch (_: Exception) {
             // Never fail/retry the debt SMS batch solely because the UI notification failed.
+        }
+    }
+
+    private fun cancelDueReminderNotification(stationId: Int) {
+        runCatching {
+            val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.cancel(notificationId(stationId))
         }
     }
 
@@ -254,6 +270,7 @@ class DebtDueReminderWorker(
         private const val KEY_STATION_ID = "debt_reminder_station_id"
         private const val KEY_USER_ID = "debt_reminder_user_id"
         private const val WORK_PREFIX = "debt-due-sms-reminders-station-"
+        private fun notificationId(stationId: Int): Int = 0xD3B7 + (stationId and 0x0FFF)
 
         /** WorkManager persists this schedule across process death and device restarts. */
         fun schedule(context: Context, stationId: Int, userId: Long) {
