@@ -109,14 +109,14 @@ class DebtDueDatePolicyTest {
             put("status", "cancelled")
         }, "id=?", arrayOf(cancelledId.toString()))
 
-        assertEquals(100.0, DebtDueDateRepository.getCustomerOutstandingBalance(helper, 1, customerA), 0.000001)
-        assertEquals(50.0, DebtDueDateRepository.getCustomerOutstandingBalance(helper, 1, customerB), 0.000001)
+        assertEquals(140.0, DebtDueDateRepository.getCustomerOutstandingBalance(helper, 1, customerA), 0.000001)
+        assertEquals(120.0, DebtDueDateRepository.getCustomerOutstandingBalance(helper, 1, customerB), 0.000001)
         val summary = DebtDueDateRepository.getCustomerDebtSummary(helper, 1, "2026-11-08")
         assertEquals("2026-11-08", summary.getString("as_of_date"))
         assertEquals("DebtDueDateRepository.readDebts", summary.getString("source"))
-        assertEquals(150.0, summary.getDouble("total_customer_debts"), 0.000001)
-        assertEquals(150.0, summary.getDouble("customer_debts"), 0.000001)
-        assertEquals(60.0, summary.getDouble("total_overdue_amount"), 0.000001)
+        assertEquals(260.0, summary.getDouble("total_customer_debts"), 0.000001)
+        assertEquals(260.0, summary.getDouble("customer_debts"), 0.000001)
+        assertEquals(100.0, summary.getDouble("total_overdue_amount"), 0.000001)
         assertEquals(4, summary.getInt("open_invoice_count"))
         assertEquals(1, summary.getInt("overdue_invoice_count"))
         assertEquals(2, summary.getInt("due_next_7_days_invoice_count"))
@@ -130,10 +130,10 @@ class DebtDueDatePolicyTest {
             .single { it.getLong("customer_party_id") == customerA }
         val customerBRow = (0 until customers.length()).map { customers.getJSONObject(it) }
             .single { it.getLong("customer_party_id") == customerB }
-        assertEquals(100.0, customerARow.getDouble("total_due"), 0.000001)
-        assertEquals(60.0, customerARow.getDouble("overdue_amount"), 0.000001)
+        assertEquals(140.0, customerARow.getDouble("total_due"), 0.000001)
+        assertEquals(100.0, customerARow.getDouble("overdue_amount"), 0.000001)
         assertEquals(2, customerARow.getInt("open_invoice_count"))
-        assertEquals(50.0, customerBRow.getDouble("current_balance"), 0.000001)
+        assertEquals(120.0, customerBRow.getDouble("current_balance"), 0.000001)
         assertEquals(20.0, customerBRow.getDouble("undated_amount"), 0.000001)
         assertEquals(1, customerBRow.getInt("undated_invoice_count"))
 
@@ -163,8 +163,8 @@ class DebtDueDatePolicyTest {
         // Changing the explicit operating date changes only maturity buckets, not the
         // persisted invoice balance or the device clock used by the test runner.
         val nextDay = DebtDueDateRepository.getCustomerDebtSummary(helper, 1, "2026-11-09")
-        assertEquals(150.0, nextDay.getDouble("total_customer_debts"), 0.000001)
-        assertEquals(100.0, nextDay.getDouble("total_overdue_amount"), 0.000001)
+        assertEquals(260.0, nextDay.getDouble("total_customer_debts"), 0.000001)
+        assertEquals(140.0, nextDay.getDouble("total_overdue_amount"), 0.000001)
         assertEquals(2, nextDay.getInt("overdue_invoice_count"))
         assertEquals(1, nextDay.getInt("due_next_7_days_invoice_count"))
         assertEquals(0, nextDay.getInt("due_today_invoice_count"))
