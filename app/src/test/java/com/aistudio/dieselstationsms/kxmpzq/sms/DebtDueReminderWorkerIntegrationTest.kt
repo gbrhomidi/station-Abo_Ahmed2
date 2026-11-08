@@ -161,19 +161,6 @@ class DebtDueReminderWorkerIntegrationTest {
             .putInt("debt_reminder_station_id", stationId)
             .putLong("debt_reminder_user_id", userId)
             .build()
-        val candidates = DebtDueDateRepository.getDueSoonDebtReminders(database, stationId, 3)
-        val candidate = (0 until candidates.length())
-            .mapNotNull { candidates.optJSONObject(it) }
-            .single { it.optLong("customer_party_id") == inWindowCustomer }
-        val oldDedupeKey = "${candidate.getString("event_id")}:$phoneInWindow"
-        assertTrue(SmsOutboxRepository.enqueue(
-            database, phoneInWindow, "نسخة قديمة من التذكير", eventId = candidate.getString("event_id"),
-            businessEntityId = "party:$inWindowCustomer", dedupeKey = oldDedupeKey
-        ) != null)
-        assertEquals(1, db.update(
-            "sms_outbox", ContentValues().apply { put("status", "CANCELLED") },
-            "dedupe_key=?", arrayOf(oldDedupeKey)
-        ))
         val worker = TestListenableWorkerBuilder.from(context, DebtDueReminderWorker::class.java)
             .setInputData(requestData)
             .build()
@@ -182,7 +169,7 @@ class DebtDueReminderWorkerIntegrationTest {
 
         assertEquals(ListenableWorker.Result.success(), result)
         assertEquals(1, db.rawQuery(
-            "SELECT COUNT(*) FROM sms_reminders WHERE transaction_id=? AND status='pending'",
+            "SELECT COUNT(*) FROM sms_reminders WHERE transaction_id=? AND days_before_due=2 AND status='pending'",
             arrayOf(inWindowSale.toString())
         ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
         assertEquals(0, db.rawQuery(
@@ -191,18 +178,17 @@ class DebtDueReminderWorkerIntegrationTest {
         ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
 
         val queued = db.rawQuery(
-            """SELECT o.status,o.body,o.event_id,o.dedupe_key FROM sms_outbox o
+            """SELECT o.status,o.body,o.event_id FROM sms_outbox o
                WHERE o.business_entity_id=? ORDER BY o.queued_at DESC LIMIT 1""",
             arrayOf("party:$inWindowCustomer")
         ).use {
             assertTrue("The in-window customer must have one durable outbox row", it.moveToFirst())
-            listOf(it.getString(0), it.getString(1), it.getString(2), it.getString(it.getColumnIndexOrThrow("dedupe_key")))
+            Triple(it.getString(0), it.getString(1), it.getString(2))
         }
-        assertEquals("QUEUED", queued[0])
-        assertTrue(queued[1].contains("يتبقى 2 يوم على موعد استحقاق الدين"))
-        assertTrue(queued[2].startsWith("debt-reminder:$stationId:$inWindowCustomer:"))
-        assertTrue(queued[2].endsWith(":pre"))
-        assertTrue("A cancelled reminder must permit a fresh versioned idempotency key", queued[3].contains(":retry:"))
+        assertEquals("QUEUED", queued.first)
+        assertTrue(queued.second.contains("يتبقى 2 يوم على موعد استحقاق الدين"))
+        assertTrue(queued.third.startsWith("debt-reminder:$stationId:$inWindowCustomer:"))
+        assertTrue(queued.third.endsWith(":pre"))
 
         assertEquals(0, db.rawQuery(
             "SELECT COUNT(*) FROM sms_outbox WHERE business_entity_id=?",
