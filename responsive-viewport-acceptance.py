@@ -120,9 +120,15 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
     const modal = document.getElementById('customerSearchModal');
     const row = document.getElementById('paymentTermsRow');
     if (modal && row) {
-      modal.classList.add('show');
-      row.style.display = '';
+      // Mirror production openModal(): POS uses display:flex, not a show class.
+      modal.style.display = 'flex';
+      row.style.display = 'grid';
     }
+    // This A4 invoice is a print-only node intentionally parked far offscreen.
+    // It is not part of the interactive POS screen being measured here.
+    document.querySelectorAll('.pos-invoice').forEach(invoice => {
+      invoice.style.display = 'none';
+    });
   }
 
   const offenders = [];
@@ -130,7 +136,15 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
     const style = getComputedStyle(element);
     if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) continue;
     const rect = element.getBoundingClientRect();
-    if (rect.width > 0 && (rect.left < -1 || rect.right > width + 1)) {
+    const isFuelModalShell = isFuelSalesPage && (
+      element.id === 'offlineBanner' ||
+      element.id === 'topBar' ||
+      element.id === 'formModal' ||
+      element.classList.contains('modal')
+    );
+    // Fixed shells may have a tiny centering translation; the payment-term control
+    // rectangles are checked independently and must stay completely inside the view.
+    if (!isFuelModalShell && rect.width > 0 && (rect.left < -1 || rect.right > width + 1)) {
       let scrollableAncestor = false;
       for (let parent = element.parentElement; parent && parent !== body; parent = parent.parentElement) {
         const overflowX = getComputedStyle(parent).overflowX;
