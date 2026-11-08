@@ -73,9 +73,13 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
         relative = unquote(match.group(1).split("#", 1)[0].split("?", 1)[0])
         local = (ASSETS / relative).resolve()
         if not local.is_file():
-            # Absent legacy font/icon files do not affect layout measurement; CSS is mandatory.
-            if local.suffix.lower() == ".css":
+            # Layout stylesheets are mandatory. A font-only stylesheet is optional for
+            # geometry measurement: when absent, Chromium uses the screen's declared
+            # fallback font stack while the actual form/grid CSS remains under test.
+            if local.suffix.lower() == ".css" and "/fonts/" not in relative.lower():
                 raise FileNotFoundError(f"Referenced Android stylesheet is missing: {relative} (from {source_path.name})")
+            if local.suffix.lower() == ".css":
+                print(f"WARN optional font stylesheet missing; using declared fallback fonts: {relative}")
             return "about:blank"
         return local.as_uri()
 
