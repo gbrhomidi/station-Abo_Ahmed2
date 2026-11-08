@@ -11784,8 +11784,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val pricePerLiter = resolvedPrice.unitPrice
         val subtotal = liters * pricePerLiter
         val totalAmount = subtotal
-        val paymentMethod = when (data.optString("payment_method", "cash").trim()) {
-            "آجل", "credit", "credit_sale", "credit_account" -> "credit"
+        val normalizedPaymentType = data.optString("payment_method", "cash")
+            .trim()
+            .lowercase(Locale.ROOT)
+            .replace(" ", "")
+            .replace("-", "_")
+        val paymentMethod = when (normalizedPaymentType) {
+            "آجل", "اجل", "credit", "credit_sale", "credit_account", "on_account", "بيعآجل", "علىالحساب" -> "credit"
             "بطاقة", "card", "credit_card", "debit_card" -> "credit_card"
             "تحويل", "bank_transfer" -> "bank_transfer"
             "شيك", "cheque" -> "cheque"

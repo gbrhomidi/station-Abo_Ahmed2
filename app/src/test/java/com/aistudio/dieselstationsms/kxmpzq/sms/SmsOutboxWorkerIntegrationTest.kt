@@ -159,6 +159,25 @@ class SmsOutboxWorkerIntegrationTest {
             "SELECT COUNT(*) FROM sms_outbox WHERE business_entity_id=?",
             arrayOf("party:$outsideCustomer")
         ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
+
+        val queuedMessageId = db.rawQuery(
+            "SELECT message_id FROM sms_outbox WHERE business_entity_id=? ORDER BY queued_at DESC LIMIT 1",
+            arrayOf("party:$inWindowCustomer")
+        ).use { assertTrue(it.moveToFirst()); it.getString(0) }
+        // A payment, cancellation or other invoice-state change after queueing must be
+        // revalidated by the actual outbox worker immediately before carrier transport.
+        assertEquals(1, db.update("sales_transactions", ContentValues().apply {
+            put("status", "cancelled")
+        }, "id=? AND station_id=1", arrayOf(inWindowSale.toString())))
+        val transport = RecordingTransport()
+        val outboxWorker = TestListenableWorkerBuilder.from(context, SmsOutboxWorker::class.java)
+            .setWorkerFactory(transport.factory())
+            .build()
+        val dispatchResult = outboxWorker.doWork()
+        assertEquals(ListenableWorker.Result.success(), dispatchResult)
+        assertTrue("The cancelled invoice reminder must never reach the carrier transport",
+            transport.sentMessageIds.isEmpty())
+        assertEquals("CANCELLED", status(queuedMessageId))
     }
 
     @Test

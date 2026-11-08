@@ -21,7 +21,7 @@ import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
 import java.util.concurrent.TimeUnit
 
 /**
- * Periodically queues one SMS reminder for a customer's debt on its due date.
+ * Periodically queues one SMS reminder before maturity, on the due date, or for an overdue balance.
  *
  * The station is passed from the authenticated user session; the worker never
  * scans or sends across station boundaries. The database's eligible flag and

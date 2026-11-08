@@ -248,6 +248,30 @@ class DebtDueDatePolicyTest {
         assertEquals(1, suppliers.length())
         assertEquals("supplier", suppliers.getJSONObject(0).getString("applies_to"))
         assertEquals("SUPPLIER_ONLY_TEST", suppliers.getJSONObject(0).getString("code"))
+
+        val supplierTypeId = db.rawQuery(
+            "SELECT id FROM party_types WHERE type_code='SUPPLIER' AND is_deleted=0 AND is_active=1 LIMIT 1",
+            null
+        ).use { cursor -> assertTrue(cursor.moveToFirst()); cursor.getLong(0) }
+        val supplierId = db.insertOrThrow("parties", null, ContentValues().apply {
+            put("uuid", "supplier-term-scope-${System.nanoTime()}")
+            put("party_code", "SUPPLIER-TERM-${System.nanoTime()}")
+            put("party_type_id", supplierTypeId)
+            put("station_id", 1)
+            put("legal_name", "Supplier term scope acceptance")
+            put("commercial_name_ar", "مورد اختبار نطاق شروط الدفع")
+            put("is_active", 1)
+            put("is_deleted", 0)
+        })
+        assertEquals("صافي 14 يوم", DebtDueDateRepository.persistPartyTerms(
+            helper, supplierId, 1, "صافي 14 يوم"
+        ))
+        val persistedSupplierTermId = db.rawQuery(
+            "SELECT payment_terms_id FROM parties WHERE id=? AND station_id=1",
+            arrayOf(supplierId.toString())
+        ).use { cursor -> assertTrue(cursor.moveToFirst()); cursor.getLong(0) }
+        assertEquals("Supplier profiles must resolve supplier-scoped terms, never a customer term",
+            suppliers.getJSONObject(0).getLong("id"), persistedSupplierTermId)
     }
 
     @Test fun preDueReminderCandidateAndOutboxValidationUseConfiguredCalendarWindow() {
@@ -636,7 +660,7 @@ class DebtDueDatePolicyTest {
             put("is_primary",1);put("is_active",1);put("is_deleted",0)
         })
         val today=BusinessDay.currentDate()
-        addSale(db,"outbox-revalidation",partyId,today,"sale_creation","explicit_text")
+        val originalSaleId=addSale(db,"outbox-revalidation",partyId,today,"sale_creation","explicit_text")
 
         val secondPhone="967771112222"
         val secondPartyId=addParty(db,"outbox-revalidation-second","صافي 0 يوم",0,"explicit_text")
@@ -693,6 +717,12 @@ class DebtDueDatePolicyTest {
         },"id=?",arrayOf(candidate.getLong("transaction_id").toString()))
         db.update("party_contacts",ContentValues().apply { put("phone","967779999999") },"party_id=?",arrayOf(partyId.toString()))
         assertFalse("A queued message must not be sent to the customer's old phone",DebtDueDateRepository.isCurrentDebtReminder(helper,eventId,entityId,originalPhone,body))
+
+        db.update("party_contacts",ContentValues().apply { put("phone",originalPhone) },"party_id=?",arrayOf(partyId.toString()))
+        db.update("sales_transactions",ContentValues().apply { put("status","cancelled") },
+            "id=? AND station_id=1",arrayOf(originalSaleId.toString()))
+        assertFalse("A reminder for a cancelled invoice must be rejected at the final pre-transport SQLite gate",
+            DebtDueDateRepository.isCurrentDebtReminder(helper,eventId,entityId,originalPhone,body))
     }
 
     private fun addParty(db:android.database.sqlite.SQLiteDatabase,key:String,terms:String,days:Int,source:String?):Long {

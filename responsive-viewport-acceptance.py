@@ -101,9 +101,9 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
       form.innerHTML =
         '<div class="form-group payment-terms-field" data-payment-terms-acceptance="true">' +
           '<label class="form-label">شروط الدفع</label>' +
-          '<select class="form-input" id="paymentTermsAcceptanceSelect"><option>بعد 7 أيام</option></select>' +
+          '<select class="form-input" id="paymentTermsAcceptanceSelect" data-key="payment_terms_id"><option>بعد 7 أيام</option></select>' +
         '</div>' +
-        '<div class="form-group payment-terms-field" data-payment-terms-acceptance="true">' +
+        '<div class="form-group payment-terms-field" data-payment-terms-preview-group="true">' +
           '<label class="form-label">تاريخ الاستحقاق المتوقع</label>' +
           '<input class="form-input readonly" id="paymentTermsDueDatePreview" type="date" value="2026-11-15" readonly>' +
         '</div>';
@@ -167,10 +167,14 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
     };
   });
   let paymentTermsOverlap = false;
+  let paymentTermsSideBySide = true;
   if (paymentTermsRects.length === 2 && paymentTermsRects.every(item => item.visible)) {
     const [first, second] = paymentTermsRects;
     paymentTermsOverlap = first.left < second.right - 1 && first.right > second.left + 1 &&
       first.top < second.bottom - 1 && first.bottom > second.top + 1;
+    paymentTermsSideBySide = Math.abs(first.top - second.top) <= 3;
+  } else if (paymentTermsRects.length === 2) {
+    paymentTermsSideBySide = false;
   }
   const paymentTermsOutside = paymentTermsRects.some(item =>
     item.visible && (item.left < -1 || item.right > width + 1)
@@ -178,7 +182,7 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
   const paymentTermsPassed = paymentTermsIds.length === 0 ||
     (paymentTermsRects.length === 2 &&
       paymentTermsRects.every(item => item.visible && !item.missing) &&
-      !paymentTermsOverlap && !paymentTermsOutside);
+      !paymentTermsOverlap && paymentTermsSideBySide && !paymentTermsOutside);
   const result = {
     innerWidth: window.innerWidth,
     clientWidth: root.clientWidth,
@@ -186,6 +190,7 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
     bodyScrollWidth: body.scrollWidth,
     paymentTermsRects,
     paymentTermsOverlap,
+    paymentTermsSideBySide,
     paymentTermsOutside,
     paymentTermsPassed,
     offenders
@@ -430,6 +435,7 @@ def main() -> int:
                         f"document={document_width}, body={body_width}, "
                         f"term_fields={len(result.get('paymentTermsRects', []))}, "
                         f"term_overlap={result.get('paymentTermsOverlap', False)}, "
+                        f"term_side_by_side={result.get('paymentTermsSideBySide', True)}, "
                         f"offenders={len(result.get('offenders', []))})"
                     )
                     if not passed:

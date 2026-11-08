@@ -412,7 +412,7 @@ class FuelSalesDeliveryFeeRobolectricTest {
         )
         val saleInput = buildFuelSaleInput(
             DeliveryFeeAccounting.EXEMPT, 0.0, "",
-            paymentMethod = "credit", customerId = customerId
+            paymentMethod = "credit_sale", customerId = customerId
         ).put("payment_terms_id", termId).put("idempotency_key", "credit-return-payments-${UUID.randomUUID()}")
         val parentId = helper.addFuelSale(saleInput, stationId, userId)
         val childId = scalarLong(

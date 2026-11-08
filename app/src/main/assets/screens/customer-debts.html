@@ -2690,13 +2690,17 @@
                     : null)
                 : finiteNumber(suppliedDays, null);
             const centralStatus = String(row.status ?? row.payment_status ?? '').trim().toLowerCase();
+            const risk = String(row.risk_level || row.risk_classification || '').trim().toLowerCase();
+            const highRisk = ['high','critical','blacklisted','مرتفع','محظور'].includes(risk) ||
+                risk.includes('high') || risk.includes('critical') || risk.includes('blacklist') ||
+                risk.includes('مرتفع') || risk.includes('محظور');
             const allowedStatuses = new Set(['paid','doubtful','undated','overdue','partial','current']);
             // The repository is the canonical source. Recalculate only for legacy callers
             // that genuinely do not return a classification field.
             let status = allowedStatuses.has(centralStatus) ? centralStatus : '';
             if (!status) {
                 if (remaining <= 0.000001) status = 'paid';
-                else if (centralStatus === 'doubtful') status = 'doubtful';
+                else if (centralStatus === 'doubtful' || highRisk || (dueDays !== null && dueDays <= -90)) status = 'doubtful';
                 else if (dueDays === null) status = 'undated';
                 else if (dueDays < 0) status = 'overdue';
                 else if (paid > 0.000001) status = 'partial';

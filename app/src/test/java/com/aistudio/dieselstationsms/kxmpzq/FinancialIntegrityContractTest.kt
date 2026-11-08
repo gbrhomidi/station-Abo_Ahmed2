@@ -40,6 +40,9 @@ class FinancialIntegrityContractTest {
             productSale.contains("credit_sale") && productSale.contains("credit_account") &&
                 productSale.contains("on_account") && productSale.contains("normalizedPaymentType"))
         assertTrue("Fuel sale must use the transaction-neutral sale writer", fuelSale.contains("insertSaleTransactionInternal(db"))
+        assertTrue("Fuel sales must normalize the same alternate credit labels before debt classification",
+            fuelSale.contains("credit_sale") && fuelSale.contains("credit_account") &&
+                fuelSale.contains("debit_card") && fuelSale.contains("normalizedPaymentType"))
         assertTrue("Stock updates inside a sale must use the transaction-neutral writer", productSale.contains("addStockMovementInternal("))
         assertTrue("Database must define the unique financial idempotency table", source.contains("financial_idempotency_keys"))
         assertTrue("Financial paths must reserve idempotency keys", source.contains("reserveFinancialIdempotency"))
