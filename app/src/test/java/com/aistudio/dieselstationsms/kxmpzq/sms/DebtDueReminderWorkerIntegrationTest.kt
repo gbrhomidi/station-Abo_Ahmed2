@@ -156,7 +156,6 @@ class DebtDueReminderWorkerIntegrationTest {
         // The test scheduler may run periodic work immediately, racing the SQLite fixture.
         WorkManager.getInstance(context)
             .cancelUniqueWork("debt-due-sms-reminders-station-$stationId")
-            .get(10, TimeUnit.SECONDS)
 
         val requestData = Data.Builder()
             .putInt("debt_reminder_station_id", stationId)
