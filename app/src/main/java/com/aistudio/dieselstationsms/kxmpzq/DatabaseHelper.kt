@@ -18316,24 +18316,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
         }
 
-        // عدد ومبلغ الفواتير المتأخرة في المحطة
-        db.rawQuery(
-            """SELECT COUNT(*), COALESCE(SUM(remaining_amount),0) FROM sales_transactions
-               WHERE station_id=? AND remaining_amount > 0.000001
-                 AND COALESCE(is_deleted,0)=0
-                 AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(payment_method,'')),' ',''),'-','_'))
-                     IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')
-                 AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')
-                 AND due_date IS NOT NULL AND TRIM(due_date)<>''
-                 $trustedDueDateClause
-                 AND due_date < substr(?,1,10)""",
-            arrayOf(stationId.toString(), today)
-        ).use { cursor ->
-            if (cursor.moveToFirst()) {
-                stats.put("overdue_count", cursor.getInt(0))
-                stats.put("overdue_amount", cursor.getDouble(1))
-            }
-        }
+        // Compatibility aliases are projections of the canonical debt summary above.
+        stats.put("overdue_count", customerDebtSummary.optInt("overdue_invoice_count", 0))
+        stats.put("overdue_amount", customerDebtSummary.optDouble("total_overdue_amount", 0.0))
 
         // نسبة امتلاء خزانات المحطة — تُحسب من الكمية الحالية والسعة الفعلية في SQLite.
         // نحتفظ بالمفتاح occupancy_rate للتوافق مع الشاشات القديمة، مع إضافة مفاتيح صريحة جديدة.

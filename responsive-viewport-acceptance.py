@@ -54,7 +54,7 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
             raise FileNotFoundError(f"Referenced Android asset is missing: {relative} (from {source_path.name})")
         return local.as_uri()
 
-    html = re.sub(r"file:///android_asset/([^\\"'<>\\s)]+)", local_asset, html)
+    html = re.sub(r"file:///android_asset/([A-Za-z0-9_./-]+)", local_asset, html)
 
     marker = r"""
 <script>

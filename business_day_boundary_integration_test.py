@@ -1,7 +1,7 @@
-"""Regression test for the Riyadh business-day boundary.
+"""Regression test for the Aden business-day boundary.
 
 This test exercises the SQLite predicates used by operational reports. It deliberately
-stores UTC-looking created_at values around 00:00–02:59 Riyadh and verifies that the
+stores UTC-looking created_at values around 00:00–02:59 Aden and verifies that the
 stored business_day, not created_at, selects the operation.
 """
 from datetime import datetime, timezone
@@ -9,11 +9,11 @@ from pathlib import Path
 import sqlite3
 from zoneinfo import ZoneInfo
 
-RIYADH = ZoneInfo("Asia/Riyadh")
+ADEN = ZoneInfo("Asia/Aden")
 
 
 def business_day(instant: datetime) -> str:
-    return instant.astimezone(RIYADH).date().isoformat()
+    return instant.astimezone(ADEN).date().isoformat()
 
 
 def setup_db() -> sqlite3.Connection:
@@ -42,11 +42,11 @@ def setup_db() -> sqlite3.Connection:
 
 def test_midnight_to_three_is_same_operating_day() -> None:
     db = setup_db()
-    # 00:30 and 02:59 Riyadh are the previous UTC calendar date.
+    # 00:30 and 02:59 Aden are the previous UTC calendar date.
     instants = [
-        datetime(2026, 10, 9, 0, 30, tzinfo=RIYADH),
-        datetime(2026, 10, 9, 2, 59, 59, tzinfo=RIYADH),
-        datetime(2026, 10, 9, 3, 0, tzinfo=RIYADH),
+        datetime(2026, 10, 9, 0, 30, tzinfo=ADEN),
+        datetime(2026, 10, 9, 2, 59, 59, tzinfo=ADEN),
+        datetime(2026, 10, 9, 3, 0, tzinfo=ADEN),
     ]
     for index, local_time in enumerate(instants, 1):
         utc_text = local_time.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
