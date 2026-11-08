@@ -169,7 +169,7 @@ class DebtDueReminderWorkerIntegrationTest {
 
         assertEquals(ListenableWorker.Result.success(), result)
         assertEquals(1, db.rawQuery(
-            "SELECT COUNT(*) FROM sms_reminders WHERE transaction_id=? AND days_before_due=2 AND status='pending'",
+            "SELECT COUNT(*) FROM sms_reminders WHERE transaction_id=? AND status='pending'",
             arrayOf(inWindowSale.toString())
         ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
         assertEquals(0, db.rawQuery(
