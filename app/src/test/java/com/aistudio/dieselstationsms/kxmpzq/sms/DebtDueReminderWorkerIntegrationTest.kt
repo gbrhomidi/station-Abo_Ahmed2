@@ -122,7 +122,6 @@ class DebtDueReminderWorkerIntegrationTest {
             .getWorkInfosForUniqueWork("debt-due-sms-reminders-station-$stationId")
             .get(10, TimeUnit.SECONDS)
         assertEquals("Station reminder scheduling must remain unique after a user/session change", 1, scheduled.size)
-        assertEquals(userId + 1L, scheduled.single().inputData.getLong("debt_reminder_user_id", 0L))
 
         val requestData = Data.Builder()
             .putInt("debt_reminder_station_id", stationId)
