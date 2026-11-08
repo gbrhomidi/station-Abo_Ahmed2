@@ -3806,8 +3806,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             "Loading dashboard statistics for stationId=$stationId"
         )
 
-        val stats = db.getDashboardStats(stationId, params)
-        val evidenceFrom = params.optString("from_date", "").trim().ifBlank { currentDate() }
+        // Capture one operating-date snapshot for all dashboard debt and KPI calculations.
+        val businessDate = BusinessDay.currentDate()
+        val stats = db.getDashboardStatsForDate(stationId, params, businessDate)
+        val evidenceFrom = params.optString("from_date", "").trim().ifBlank { businessDate }
         val evidenceTo = params.optString("to_date", "").trim().ifBlank { evidenceFrom }
         val evidence = db.getReportEvidence(JSONObject().apply {
             put("report_type", "dashboard")
@@ -9828,6 +9830,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(DebtDueDateRepository.getCustomerDebts(db, stationId, fromDate, toDate))
             } catch (e: Exception) {
                 DebugLogger.logException("Debts", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getCustomerDebtSummary(): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val businessDate = BusinessDay.currentDate()
+                dataResponse(DebtDueDateRepository.getCustomerDebtSummary(db, stationId, businessDate))
+            } catch (e: Exception) {
+                DebugLogger.logException("CustomerDebtSummary", e)
                 errorResponse(e.message)
             }
         }

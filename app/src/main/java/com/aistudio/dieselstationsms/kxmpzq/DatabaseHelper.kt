@@ -17996,17 +17996,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val stats = JSONObject()
         val db = readableDatabase
         val today = businessDate
-        val salesColumns = db.rawQuery("PRAGMA table_info(sales_transactions)", null).use { cursor ->
-            buildSet {
-                while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
-            }
-        }
-        val trustedDueDateClause = if ("due_date_source" in salesColumns && "payment_terms_source_at_sale" in salesColumns) {
-            "AND COALESCE(payment_terms_source_at_sale,'')='explicit_text' AND COALESCE(due_date_source,'') IN ('sale_creation','sales_trigger_v3','sales_trigger_v4')"
-        } else {
-            "AND 0=1"
-        }
-
         // 1. إجمالي المنتجات النشطة في المحطة
         db.rawQuery(
             "SELECT COUNT(*) FROM products WHERE station_id = ? AND is_deleted = 0 AND status = 'active'",
@@ -18124,24 +18113,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (cursor.moveToFirst()) stats.put("low_stock", cursor.getInt(0))
         }
 
-        // 6. الفواتير الآجلة ذات الرصيد المفتوح المستحقة من اليوم وحتى سبعة أيام قادمة (شاملاً).
-        db.rawQuery(
-            """SELECT COUNT(*) FROM sales_transactions
-               WHERE station_id=? AND remaining_amount > 0.000001
-                 AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(payment_method,'')),' ',''),'-','_'))
-                     IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')
-                 AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')
-                 AND COALESCE(is_deleted,0)=0
-                 AND due_date IS NOT NULL AND TRIM(due_date)<>''
-                 AND due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
-                 AND date(due_date,'+0 days')=due_date
-                 $trustedDueDateClause
-                 AND due_date >= substr(?,1,10)
-                 AND due_date < date(substr(?,1,10), '+8 days')""",
-            arrayOf(stationId.toString(), today, today)
-        ).use { cursor ->
-            if (cursor.moveToFirst()) stats.put("due_invoices", cursor.getInt(0))
-        }
+        // 6. All customer-debt dashboard KPIs come from the repository's canonical
+        // invoice-level read, using the same business-date snapshot as the rest of this report.
+        val customerDebtSummary = DebtDueDateRepository.getCustomerDebtSummary(this, stationId, today)
+        stats.put("customer_debt_summary", customerDebtSummary)
+        stats.put("customer_debts", customerDebtSummary.optDouble("total_customer_debts", 0.0))
+        stats.put("total_customer_debts", customerDebtSummary.optDouble("total_customer_debts", 0.0))
+        stats.put("overdue_customer_debts", customerDebtSummary.optDouble("total_overdue_amount", 0.0))
+        stats.put("overdue_customer_invoice_count", customerDebtSummary.optInt("overdue_invoice_count", 0))
+        stats.put("due_invoices", customerDebtSummary.optInt("due_next_7_days_invoice_count", 0))
+        stats.put("undated_customer_invoice_count", customerDebtSummary.optInt("undated_invoice_count", 0))
 
         // Fuel returns and damage use the posted adjustment ledger and the current business date.
         db.rawQuery(
@@ -18173,19 +18154,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             arrayOf(stationId.toString(), today)
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("damaged_products_today", cursor.getDouble(0))
-        }
-
-        // 9. مديونية العملاء (المبالغ المتبقية للفواتير الآجلة) في المحطة
-        db.rawQuery(
-            """SELECT COALESCE(SUM(remaining_amount),0) FROM sales_transactions
-               WHERE station_id=? AND COALESCE(is_deleted,0)=0
-                 AND remaining_amount > 0.000001
-                 AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(payment_method,'')),' ',''),'-','_'))
-                     IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')
-                 AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')""",
-            arrayOf(stationId.toString())
-        ).use { cursor ->
-            if (cursor.moveToFirst()) stats.put("customer_debts", cursor.getDouble(0))
         }
 
         // 10. مديونية الموردين: اجمع رصيد كل مورد مرة واحدة، بما يشمل توريد الوقود ومشتريات المنتجات.
@@ -30142,7 +30110,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (startDate.isNotEmpty()) { dateClause.append(" AND s.business_day >= date(?)"); dateArgs.add(startDate) }
             if (endDate.isNotEmpty()) { dateClause.append(" AND s.business_day <= date(?)"); dateArgs.add(endDate) }
             val args = dateArgs + whereArgs
-            when (reportType) {
+            val reportRows = when (reportType) {
                 "activity" -> db.rawQuery(
                     """
                     SELECT p.id, p.party_code, p.commercial_name, p.commercial_name_ar,
@@ -30209,6 +30177,33 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     ).use { cursorToJsonArray(it) }
                 }
             }
+            // CRM customer balance columns are projections of the same invoice-level
+            // debt repository used by the dashboard and debt-aging screens. Sales-period
+            // profitability fields above intentionally remain period-scoped.
+            if (stationScopeId != null && reportType == "customers") {
+                val summary = DebtDueDateRepository.getCustomerDebtSummary(this, stationScopeId, BusinessDay.currentDate())
+                val balances = summary.optJSONArray("customer_balances") ?: JSONArray()
+                val byParty = HashMap<Long, JSONObject>()
+                for (index in 0 until balances.length()) {
+                    val balance = balances.optJSONObject(index) ?: continue
+                    val partyId = balance.optLong("customer_party_id", 0L)
+                    if (partyId > 0L) byParty[partyId] = balance
+                }
+                for (index in 0 until reportRows.length()) {
+                    val row = reportRows.optJSONObject(index) ?: continue
+                    val balance = byParty[row.optLong("id", 0L)]
+                    val amount = balance?.optDouble("total_due", 0.0) ?: 0.0
+                    row.put("current_balance", amount)
+                    row.put("total_due", amount)
+                    row.put("outstanding_amount", amount)
+                    row.put("overdue_amount", balance?.optDouble("overdue_amount", 0.0) ?: 0.0)
+                    row.put("debt_open_invoice_count", balance?.optInt("open_invoice_count", 0) ?: 0)
+                    row.put("debt_overdue_invoice_count", balance?.optInt("overdue_invoice_count", 0) ?: 0)
+                    row.put("debt_undated_invoice_count", balance?.optInt("undated_invoice_count", 0) ?: 0)
+                    row.put("debt_summary_source", "DebtDueDateRepository.readDebts")
+                }
+            }
+            reportRows
         } finally {
             dbLock.unlock()
         }

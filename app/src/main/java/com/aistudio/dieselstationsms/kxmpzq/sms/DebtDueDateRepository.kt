@@ -457,21 +457,124 @@ object DebtDueDateRepository {
         helper: DatabaseHelper,
         stationId: Int,
         fromDate: String? = null,
-        toDate: String? = null
+        toDate: String? = null,
+        asOfDate: String = BusinessDay.currentDate()
     ): JSONArray {
         require(stationId > 0) { "معرف المحطة غير صالح" }
         IsoCivilDate.requireOptionalRange(fromDate, toDate)
+        IsoCivilDate.requireValid(asOfDate, "تاريخ العمل")
+        val today = LocalDate.parse(asOfDate)
         val rows = readDebts(helper.readableDatabase, stationId)
         val output = JSONArray()
         rows.filter { row ->
-            // The caller's date range is a maturity-date filter, matching the dashboard's
-            // due-invoice KPI. Filtering by createdAt hides older invoices that mature soon.
+            // The caller's date range is a maturity-date filter. Current maturity status
+            // is calculated against one explicit operating-date snapshot, not repeated
+            // calls to the device clock while serializing individual invoices.
             val dueDate = row.dueDate
             val dueDateIsValid = IsoCivilDate.isValid(dueDate)
             (fromDate.isNullOrEmpty() || (dueDateIsValid && dueDate >= fromDate)) &&
                 (toDate.isNullOrEmpty() || (dueDateIsValid && dueDate <= toDate))
-        }.forEach { output.put(toJson(it)) }
+        }.forEach { output.put(toJson(it, today)) }
         return output
+    }
+
+    /**
+     * Canonical customer-debt aggregation for the dashboard, CRM balance columns and
+     * customer-debt reports. It deliberately reuses readDebts(), so saved remaining
+     * balances, trusted invoice-time due dates, station isolation and cancellation
+     * exclusions have exactly one implementation.
+     *
+     * asOfDate is supplied by the caller once per screen/report load. This keeps a
+     * midnight rollover from classifying rows against different dates in one response
+     * and makes the method deterministic when device date and stored business_day differ.
+     */
+    fun getCustomerDebtSummary(
+        helper: DatabaseHelper,
+        stationId: Int,
+        asOfDate: String = BusinessDay.currentDate()
+    ): JSONObject {
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        IsoCivilDate.requireValid(asOfDate, "تاريخ العمل")
+        val today = LocalDate.parse(asOfDate)
+        val allRows = readDebts(helper.readableDatabase, stationId)
+        val openRows = allRows.filter { it.remaining > 0.000001 }
+        val overdueRows = openRows.filter { parseDate(it.dueDate)?.isBefore(today) == true }
+        val dueTodayRows = openRows.filter { parseDate(it.dueDate) == today }
+        val dueNextSevenRows = openRows.filter { due ->
+            val date = parseDate(due.dueDate)
+            date != null && !date.isBefore(today) && !date.isAfter(today.plusDays(7))
+        }
+        val futureRows = openRows.filter { parseDate(it.dueDate)?.isAfter(today) == true }
+        val undatedRows = openRows.filter { parseDate(it.dueDate) == null }
+        val totalOutstanding = openRows.sumOf { it.remaining }.coerceAtLeast(0.0)
+        val totalOverdue = overdueRows.sumOf { it.remaining }.coerceAtLeast(0.0)
+        val totalDueNextSeven = dueNextSevenRows.sumOf { it.remaining }.coerceAtLeast(0.0)
+        val totalUndated = undatedRows.sumOf { it.remaining }.coerceAtLeast(0.0)
+
+        val customerBalances = JSONArray()
+        val byCustomer = openRows.asSequence()
+            .filter { it.customerId > 0L }
+            .groupBy { it.customerId }
+        byCustomer.toSortedMap().forEach { (customerId, rows) ->
+            val overdue = rows.filter { parseDate(it.dueDate)?.isBefore(today) == true }
+            val dueToday = rows.filter { parseDate(it.dueDate) == today }
+            val dueNextSeven = rows.filter {
+                val date = parseDate(it.dueDate)
+                date != null && !date.isBefore(today) && !date.isAfter(today.plusDays(7))
+            }
+            val undated = rows.filter { parseDate(it.dueDate) == null }
+            val balance = rows.sumOf { it.remaining }.coerceAtLeast(0.0)
+            val representative = rows.first()
+            customerBalances.put(JSONObject().apply {
+                put("customer_party_id", customerId)
+                put("customer_id", customerId)
+                put("party_id", customerId)
+                put("station_id", stationId)
+                put("customer_name", representative.customerName)
+                put("commercial_name", representative.customerName)
+                put("commercial_name_ar", representative.customerName)
+                put("phone", representative.phone)
+                put("current_balance", balance)
+                put("total_due", balance)
+                put("outstanding_amount", balance)
+                put("remaining_amount", balance)
+                put("overdue_amount", overdue.sumOf { it.remaining }.coerceAtLeast(0.0))
+                put("due_today_amount", dueToday.sumOf { it.remaining }.coerceAtLeast(0.0))
+                put("due_next_7_days_amount", dueNextSeven.sumOf { it.remaining }.coerceAtLeast(0.0))
+                put("undated_amount", undated.sumOf { it.remaining }.coerceAtLeast(0.0))
+                put("open_invoice_count", rows.size)
+                put("overdue_invoice_count", overdue.size)
+                put("due_today_invoice_count", dueToday.size)
+                put("due_next_7_days_invoice_count", dueNextSeven.size)
+                put("undated_invoice_count", undated.size)
+                put("has_overdue", overdue.isNotEmpty())
+            })
+        }
+
+        return JSONObject().apply {
+            put("source", "DebtDueDateRepository.readDebts")
+            put("station_id", stationId)
+            put("as_of_date", asOfDate)
+            put("total_customer_debts", totalOutstanding)
+            put("customer_debts", totalOutstanding)
+            put("total_due_amount", totalOutstanding)
+            put("total_overdue_amount", totalOverdue)
+            put("overdue_amount", totalOverdue)
+            put("due_next_7_days_amount", totalDueNextSeven)
+            put("undated_amount", totalUndated)
+            put("open_invoice_count", openRows.size)
+            put("overdue_invoice_count", overdueRows.size)
+            put("due_invoice_count", dueNextSevenRows.size)
+            put("due_next_7_days_invoice_count", dueNextSevenRows.size)
+            put("due_today_invoice_count", dueTodayRows.size)
+            put("future_due_invoice_count", futureRows.size)
+            put("undated_invoice_count", undatedRows.size)
+            put("paid_invoice_count", allRows.count { it.remaining <= 0.000001 })
+            put("invoice_count", allRows.size)
+            put("debtor_count", byCustomer.size)
+            put("customers_with_debt", byCustomer.size)
+            put("customer_balances", customerBalances)
+        }
     }
 
     /**
@@ -905,10 +1008,10 @@ object DebtDueDateRepository {
         return rows
     }
 
-    private fun toJson(row: SaleDebt): JSONObject {
-        val days = daysUntil(row.dueDate)
+    private fun toJson(row: SaleDebt, today: LocalDate = LocalDate.parse(BusinessDay.currentDate())): JSONObject {
+        val days = daysUntil(row.dueDate, today)
         val daysOverdue = days?.let { (-it).coerceAtLeast(0) } ?: 0
-        val status = statusFor(row.remaining, row.paid, row.dueDate, row.riskLevel)
+        val status = statusFor(row.remaining, row.paid, row.dueDate, row.riskLevel, today)
         val isCredit = row.paymentMethod.trim().lowercase(Locale.ROOT) in creditMethods
         val overdueAmount = if (status == "overdue" || status == "doubtful") row.remaining else 0.0
         return JSONObject().apply {
@@ -941,7 +1044,7 @@ object DebtDueDateRepository {
             put("overdue_amount", overdueAmount)
             put("payment_status", status)
             put("status", status)
-            put("maturity_status", maturityStatusFor(row.remaining, row.dueDate))
+            put("maturity_status", maturityStatusFor(row.remaining, row.dueDate, today))
             put("days_remaining", days ?: JSONObject.NULL)
             put("days_overdue", daysOverdue)
             put("risk_level", row.riskLevel)
