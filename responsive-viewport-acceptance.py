@@ -51,7 +51,12 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
         relative = unquote(match.group(1).split("#", 1)[0].split("?", 1)[0])
         local = (ASSETS / relative).resolve()
         if not local.is_file():
-            raise FileNotFoundError(f"Referenced Android asset is missing: {relative} (from {source_path.name})")
+            # Some legacy HTML refers to optional fonts/icons that are not shipped in
+            # this branch. They do not determine layout geometry; retain the page's
+            # declared fallback font instead of failing the entire viewport run.
+            if local.suffix.lower() in (".css",):
+                raise FileNotFoundError(f"Referenced Android stylesheet is missing: {relative} (from {source_path.name})")
+            return "about:blank"
         return local.as_uri()
 
     html = re.sub(r"file:///android_asset/([A-Za-z0-9_./-]+)", local_asset, html)
