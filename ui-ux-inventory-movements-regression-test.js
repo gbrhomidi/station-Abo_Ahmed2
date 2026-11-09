@@ -8,7 +8,8 @@ assert(s.includes('.nav-tab.active, .nav-tab:active') && s.includes('background:
 assert(s.includes('id="sunIcon"') && s.includes('id="moonIcon"'), 'أيقونات الثيم غير موجودة');
 assert(s.includes('onclick="goToDashboard()">🏠'), 'زر الرئيسية غير موجود');
 assert(!s.includes('↩️ رجوع'), 'زر الرجوع القديم ما زال موجوداً');
-assert(s.includes('class="bottom-action-bar"') && s.includes('onclick="showCreateModal()"'), 'إجراء الحركة الجديدة ليس في الشريط السفلي');
+assert(s.includes('class="bottom-action-bar"') && s.includes('id="open-create-movement-button"'), 'إجراء الحركة الجديدة ليس في الشريط السفلي');
+assert(s.includes("getElementById('open-create-movement-button')") && s.includes("button.addEventListener('click'") && s.includes('void showCreateModal();'), 'زر الحركة الجديدة غير مربوط فعلياً بنافذة الإنشاء');
 assert(s.includes('⛽ استلام / تعبئة الخزان') && s.includes('🚚 صرف / استهلاك الوقود') && s.includes('⚖️ تسوية رصيد الخزان'), 'حركات الوقود غير مكتملة');
 assert(s.includes('function toggleTheme(theme)') && s.includes("localStorage.setItem('theme'"), 'منطق الثيم غير محفوظ');
 console.log('UI/UX inventory movements regression: PASS');
