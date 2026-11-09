@@ -543,11 +543,11 @@ class SupplierPayablesRobolectricTest {
             arrayOf(referenceType, sourceId.toString())
         ).use { c ->
             check(c.moveToFirst()) { "قيد المصدر المالي غير موجود: $referenceType/$sourceId" }
+            val captured = Triple(c.getLong(0), c.getDouble(1), c.getDouble(2))
+            assertEquals("posted", c.getString(3))
+            assertEquals(1, c.getInt(4))
             assertFalse("لا يجوز تكرار القيد للمصدر نفسه", c.moveToNext())
-            Triple(c.getLong(0), c.getDouble(1), c.getDouble(2)).also {
-                assertEquals("posted", c.getString(3))
-                assertEquals(1, c.getInt(4))
-            }
+            captured
         }
         assertEquals(expectedAmount, journal.second, 0.01)
         assertEquals(expectedAmount, journal.third, 0.01)

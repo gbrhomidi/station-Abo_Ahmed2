@@ -203,7 +203,8 @@ class DebtDueDatePolicyTest {
         DebtDueDateRepository.ensureSchema(helper)
         val db=helper.readableDatabase
         assertTrue(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='payment_terms'",null).use { it.moveToFirst() })
-        assertEquals(9,db.rawQuery("SELECT COUNT(*) FROM payment_terms WHERE is_active=1",null).use { it.moveToFirst();it.getInt(0) })
+        assertEquals(18,db.rawQuery("SELECT COUNT(*) FROM payment_terms WHERE is_active=1",null).use { it.moveToFirst();it.getInt(0) })
+        assertEquals(9, db.rawQuery("SELECT COUNT(*) FROM payment_terms WHERE is_active=1 AND applies_to='supplier'", null).use { it.moveToFirst(); it.getInt(0) })
         assertEquals(listOf(1,3,7,15,30,45,60,90), db.rawQuery(
             "SELECT days FROM payment_terms WHERE is_active=1 AND days>0 AND applies_to IN ('both','customer') ORDER BY sort_order,id", null
         ).use { c -> buildList { while (c.moveToNext()) add(c.getInt(0)) } })
@@ -252,7 +253,7 @@ class DebtDueDatePolicyTest {
         DatabaseHelper.closeInstance()
         helper = DatabaseHelper.getInstance(context)
         val migratedDb = helper.writableDatabase
-        assertEquals("The V59 -> V60 upgrade must execute for existing installations", 60, migratedDb.version)
+        assertEquals("The V59 -> V61 upgrade must execute for existing installations", 61, migratedDb.version)
 
         val rows = DebtDueDateRepository.getPaymentTerms(helper, 1, "customer")
         assertEquals(8, rows.length())

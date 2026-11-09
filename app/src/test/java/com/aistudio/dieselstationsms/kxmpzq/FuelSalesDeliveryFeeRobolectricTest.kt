@@ -693,7 +693,7 @@ class FuelSalesDeliveryFeeRobolectricTest {
         helper = DatabaseHelper.getInstance(context)
         db = helper.writableDatabase
 
-        assertEquals(60, db.version)
+        assertEquals(61, db.version)
         val migrated = db.rawQuery(
             "SELECT transaction_date,due_date_basis,due_date,due_date_source,net_amount FROM sales_transactions WHERE id=? AND station_id=?",
             arrayOf(parentSaleId.toString(), stationId.toString())

@@ -202,8 +202,6 @@ object SupplierPayablesRepository {
                FROM supplier_invoices i
                JOIN parties p ON p.id=i.supplier_id AND p.station_id=i.station_id
                             AND p.is_deleted=0 AND p.is_active=1
-               JOIN party_types pt ON pt.id=p.party_type_id
-                                  AND pt.is_deleted=0 AND pt.type_code='SUPPLIER'
                WHERE i.station_id=? AND i.is_deleted=0
                  AND i.status IN ('open','partial')
                  AND COALESCE(i.remaining_amount,0)>?
@@ -227,7 +225,7 @@ object SupplierPayablesRepository {
             val maturity = invoice.dueDate?.let(::parseDate)
             val dueDate = maturity?.toString()
             val period = dueDate ?: "UNDATED"
-            val key = "\${invoice.supplierId}:\${invoice.invoiceId}:$period"
+            val key = "${invoice.supplierId}:${invoice.invoiceId}:$period"
             activeKeys += key
             val daysUntilDue = maturity?.let { java.time.temporal.ChronoUnit.DAYS.between(asOf, it) }
             val taskStatus = when {
@@ -237,7 +235,7 @@ object SupplierPayablesRepository {
                 else -> "غير مدفوعة"
             }
             val priority = if (maturity == null || (daysUntilDue != null && daysUntilDue < 0)) "عالية" else "متوسطة"
-            val notes = "المورد: \${invoice.supplierName} — فاتورة: \${invoice.invoiceNumber}"
+            val notes = "المورد: ${invoice.supplierName} — فاتورة: ${invoice.invoiceNumber}"
             val existingId = db.rawQuery(
                 """SELECT id FROM supplier_invoice_tasks
                    WHERE station_id=? AND supplier_id=? AND supplier_invoice_id=?
@@ -285,7 +283,7 @@ object SupplierPayablesRepository {
             arrayOf(stationId.toString())
         ).use { c ->
             while (c.moveToNext()) {
-                val key = "\${c.getLong(1)}:\${c.getLong(2)}:\${c.getString(3)}"
+                val key = "${c.getLong(1)}:${c.getLong(2)}:${c.getString(3)}"
                 if (key !in activeKeys) stale += c.getLong(0)
             }
         }
