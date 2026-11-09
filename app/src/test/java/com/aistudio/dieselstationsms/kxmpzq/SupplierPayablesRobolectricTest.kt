@@ -261,14 +261,60 @@ class SupplierPayablesRobolectricTest {
             "id=? AND station_id=1",
             arrayOf(supplierId.toString())
         )
-        val cashBoxId = db.rawQuery(
-            "SELECT id FROM cash_boxes WHERE station_id=1 AND status='active' AND is_deleted=0 ORDER BY id LIMIT 1",
+        val roleId = db.rawQuery(
+            "SELECT id FROM roles ORDER BY id LIMIT 1",
             null
-        ).use { cursor -> check(cursor.moveToFirst()) { "لا يوجد صندوق اختبار نشط للمحطة 1" }; cursor.getLong(0) }
-        val actorId = db.rawQuery(
-            "SELECT id FROM users WHERE is_deleted=0 ORDER BY id LIMIT 1",
-            null
-        ).use { cursor -> check(cursor.moveToFirst()) { "لا يوجد مستخدم اختبار صالح" }; cursor.getLong(0) }
+        ).use { cursor -> check(cursor.moveToFirst()) { "لا يوجد دور اختبار صالح" }; cursor.getLong(0) }
+        val actorSuffix = UUID.randomUUID().toString().replace("-", "").take(10)
+        val actorId = db.insertOrThrow("users", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("username", "supplier-payment-test-$actorSuffix")
+            put("password_hash", "test-only")
+            put("full_name", "Supplier payment concurrency test")
+            put("role_id", roleId)
+            put("station_id", 1)
+            put("is_deleted", 0)
+            put("status", "active")
+        })
+        val cashBoxId = db.insertOrThrow("cash_boxes", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("box_code", "SP-CONCURRENT-$actorSuffix")
+            put("box_name", "Supplier payment concurrency test cash box")
+            put("station_id", 1)
+            put("opening_balance", 1000.0)
+            put("current_balance", 1000.0)
+            put("status", "active")
+            put("created_by", actorId)
+            put("is_deleted", 0)
+        })
+        db.insertOrThrow("accounts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("account_code", "SP-CASH-$actorSuffix")
+            put("account_name", "Supplier payment test cash account")
+            put("account_name_ar", "حساب نقدية اختبار دفعة المورد")
+            put("account_category", "cash")
+            put("level", 1)
+            put("account_type", "asset")
+            put("normal_balance", "debit")
+            put("is_cash_account", 1)
+            put("cash_box_id", cashBoxId)
+            put("is_active", 1)
+            put("is_deleted", 0)
+            put("created_by", actorId)
+        })
+        db.insertOrThrow("accounts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("account_code", "SP-PAYABLE-$actorSuffix")
+            put("account_name", "Supplier payment test payable")
+            put("account_name_ar", "ذمم الموردين اختبار الدفعة")
+            put("account_category", "payable")
+            put("level", 1)
+            put("account_type", "liability")
+            put("normal_balance", "credit")
+            put("is_active", 1)
+            put("is_deleted", 0)
+            put("created_by", actorId)
+        })
         val request = JSONObject()
             .put("amount", 10.0).put("supplier_party_id", supplierId).put("cash_box_id", cashBoxId)
             .put("payment_type", "cash").put("payment_method", "cash")
