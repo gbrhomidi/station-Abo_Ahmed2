@@ -813,16 +813,10 @@ object SupplierPayablesRepository {
         data class AllocationRow(val invoiceId: Long?, val amount: Double)
         val active = mutableListOf<AllocationRow>()
         db.rawQuery(
-            """SELECT a.supplier_invoice_id,
-                          a.amount-COALESCE((SELECT SUM(r.amount) FROM supplier_allocation_reversals r
-                                             WHERE r.station_id=a.station_id AND r.allocation_id=a.id AND r.status='posted'),0)
-               FROM supplier_invoice_allocations a
-               WHERE a.station_id=? AND a.supplier_id=? AND a.payment_id=?
-                 AND a.status='posted' AND a.is_deleted=0
-                 AND a.amount-COALESCE((SELECT SUM(r.amount) FROM supplier_allocation_reversals r
-                                       WHERE r.station_id=a.station_id AND r.allocation_id=a.id AND r.status='posted'),0)>?
-               ORDER BY a.id""",
-            arrayOf(stationId.toString(), supplierId.toString(), paymentId.toString(), EPSILON.toString())
+            """SELECT supplier_invoice_id,amount FROM supplier_invoice_allocations
+               WHERE station_id=? AND supplier_id=? AND payment_id=?
+                 AND status='posted' AND is_deleted=0 ORDER BY id""",
+            arrayOf(stationId.toString(), supplierId.toString(), paymentId.toString())
         ).use { cursor ->
             while (cursor.moveToNext()) active += AllocationRow(
                 if (cursor.isNull(0)) null else cursor.getLong(0), cursor.getDouble(1)
@@ -854,8 +848,6 @@ object SupplierPayablesRepository {
                                     WHERE a.station_id=i.station_id AND a.supplier_invoice_id=i.id
                                       AND COALESCE(a.currency_id,0)=COALESCE(i.currency_id,0)
                                       AND a.status='posted' AND a.is_deleted=0),0)
-                          - COALESCE((SELECT SUM(r.amount) FROM supplier_allocation_reversals r
-                                      WHERE r.station_id=i.station_id AND r.supplier_invoice_id=i.id AND r.status='posted'),0)
                    FROM supplier_invoices i
                    WHERE i.id=? AND i.station_id=? AND i.supplier_id=? AND i.is_deleted=0""",
                 arrayOf(invoiceId.toString(), stationId.toString(), supplierId.toString())

@@ -265,6 +265,10 @@ class SupplierPayablesRobolectricTest {
             "SELECT id FROM cash_boxes WHERE station_id=1 AND status='active' AND is_deleted=0 ORDER BY id LIMIT 1",
             null
         ).use { cursor -> check(cursor.moveToFirst()) { "لا يوجد صندوق اختبار نشط للمحطة 1" }; cursor.getLong(0) }
+        val actorId = db.rawQuery(
+            "SELECT id FROM users WHERE is_deleted=0 ORDER BY id LIMIT 1",
+            null
+        ).use { cursor -> check(cursor.moveToFirst()) { "لا يوجد مستخدم اختبار صالح" }; cursor.getLong(0) }
         val request = JSONObject()
             .put("amount", 10.0).put("supplier_party_id", supplierId).put("cash_box_id", cashBoxId)
             .put("payment_type", "cash").put("payment_method", "cash")
@@ -277,7 +281,7 @@ class SupplierPayablesRobolectricTest {
             Thread {
                 try {
                     start.await(5, TimeUnit.SECONDS)
-                    results += helper.addPayment(JSONObject(request.toString()), 1, 1)
+                    results += helper.addPayment(JSONObject(request.toString()), 1, actorId)
                 } catch (error: Throwable) {
                     failures += error
                 } finally {
