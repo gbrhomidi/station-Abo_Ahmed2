@@ -57,12 +57,17 @@ class DebtDueReminderWorkerIntegrationTest {
             assertTrue("A seeded station is required for the worker integration", cursor.moveToFirst())
             cursor.getInt(0)
         }
+        WorkManagerTestInitHelper.initializeTestWorkManager(
+            context,
+            Configuration.Builder().setWorkerFactory(guardedWorkerFactory()).build()
+        )
+        WorkManager.getInstance(context).cancelAllWork().result.get(10, TimeUnit.SECONDS)
     }
 
     @After
     fun tearDown() {
         runCatching {
-            WorkManager.getInstance(context).cancelAllWork()
+            WorkManager.getInstance(context).cancelAllWork().result.get(10, TimeUnit.SECONDS)
         }
         DatabaseInitializationCoordinator.resetForTests()
         DatabaseHelper.closeInstance()
@@ -71,23 +76,6 @@ class DebtDueReminderWorkerIntegrationTest {
 
     @Test
     fun actualWorkerQueuesOnlyInsideConfiguredPreDueWindowAndUpdatesUniqueSchedule() = runBlocking {
-        val guardedFactory = object : WorkerFactory() {
-            override fun createWorker(
-                appContext: Context,
-                workerClassName: String,
-                workerParameters: WorkerParameters
-            ): ListenableWorker? {
-                return when (workerClassName) {
-                    SmsOutboxWorker::class.java.name -> SuppressedSmsOutboxWorker(appContext, workerParameters)
-                    DebtDueReminderWorker::class.java.name -> SuppressedScheduledDebtDueReminderWorker(appContext, workerParameters)
-                    else -> null
-                }
-            }
-        }
-        WorkManagerTestInitHelper.initializeTestWorkManager(
-            context,
-            Configuration.Builder().setWorkerFactory(guardedFactory).build()
-        )
         shadowOf(context.applicationContext as Application).grantPermissions(Manifest.permission.SEND_SMS)
 
         val db = database.writableDatabase
@@ -142,6 +130,12 @@ class DebtDueReminderWorkerIntegrationTest {
             arrayOf(inWindowSale.toString(), stationId.toString())))
         assertEquals(1, db.update("sales_transactions", outsideUpdate, "id=? AND station_id=?",
             arrayOf(outsideSale.toString(), stationId.toString())))
+        val dueCandidates = DebtDueDateRepository.getDueSoonDebtReminders(database, stationId, 3)
+        val inWindowCandidate = (0 until dueCandidates.length())
+            .mapNotNull { dueCandidates.optJSONObject(it) }
+            .firstOrNull { it.optLong("transaction_id") == inWindowSale }
+        assertTrue("The in-window fixture must be eligible before worker execution: $dueCandidates",
+            inWindowCandidate?.optBoolean("eligible") == true)
 
         database.setSetting("sms_send_enabled", "1")
         database.setSetting("debt_reminder_days_before_due", "3")
@@ -198,7 +192,6 @@ class DebtDueReminderWorkerIntegrationTest {
 
     @Test
     fun workerCancelsStaleLocalNotificationWhenDebtIsPaidWithoutSmsPermission() = runBlocking {
-        WorkManagerTestInitHelper.initializeTestWorkManager(context, Configuration.Builder().build())
         shadowOf(context.applicationContext as Application).denyPermissions(Manifest.permission.SEND_SMS)
         val db = database.writableDatabase
         val (customerId, saleId) = insertDebtFixture(db, "paid-notification")
@@ -249,6 +242,18 @@ class DebtDueReminderWorkerIntegrationTest {
         workerParameters: WorkerParameters
     ) : Worker(appContext, workerParameters) {
         override fun doWork(): Result = Result.success()
+    }
+
+    private fun guardedWorkerFactory(): WorkerFactory = object : WorkerFactory() {
+        override fun createWorker(
+            appContext: Context,
+            workerClassName: String,
+            workerParameters: WorkerParameters
+        ): ListenableWorker? = when (workerClassName) {
+            SmsOutboxWorker::class.java.name -> SuppressedSmsOutboxWorker(appContext, workerParameters)
+            DebtDueReminderWorker::class.java.name -> SuppressedScheduledDebtDueReminderWorker(appContext, workerParameters)
+            else -> null
+        }
     }
 
     private fun ensureTestUser(db: android.database.sqlite.SQLiteDatabase): Long {
