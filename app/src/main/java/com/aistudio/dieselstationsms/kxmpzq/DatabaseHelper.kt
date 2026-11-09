@@ -18170,7 +18170,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (cursor.moveToFirst()) stats.put("damaged_products_today", cursor.getDouble(0))
         }
 
-        // 10. مديونية الموردين: اجمع رصيد كل مورد مرة واحدة، بما يشمل توريد الوقود ومشتريات المنتجات.
+        // 10. مؤشرات مستحقات الموردين: المصدر المحاسبي المركزي هو الفواتير وتخصيصاتها.
+        val supplierPayablesSummary = SupplierPayablesRepository.getSupplierPayablesSummary(db, stationId, today)
+        stats.put("supplier_payables_summary", supplierPayablesSummary)
+        stats.put("total_supplier_payables", supplierPayablesSummary.optDouble("total_supplier_payables", 0.0))
+        stats.put("supplier_overdue_amount", supplierPayablesSummary.optDouble("total_overdue", 0.0))
+        stats.put("supplier_open_invoice_count", supplierPayablesSummary.optInt("open_invoice_count", 0))
+        stats.put("supplier_overdue_invoice_count", supplierPayablesSummary.optInt("overdue_invoice_count", 0))
+        stats.put("supplier_unapplied_payment_amount", supplierPayablesSummary.optDouble("unapplied_payment_amount", 0.0))
+        // Legacy supplier_debts remains for existing screens; new payable KPIs above are canonical.
         db.rawQuery(
             """SELECT COALESCE(SUM(CASE WHEN COALESCE(p.current_balance,0)>0.000001
                                        THEN p.current_balance ELSE 0 END),0)
@@ -18718,6 +18726,29 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 UNION ALL
 
                 SELECT
+                    CAST(-(4000000000000 + i.id) AS INTEGER) AS id,
+                    ('supplier-invoice-task-' || i.id) AS uuid,
+                    'فاتورة مورد غير مسددة' AS task_type,
+                    'فاتورة مورد غير مسددة' AS type,
+                    COALESCE(NULLIF(i.invoice_number, ''), CAST(i.id AS TEXT)) AS reference,
+                    CASE WHEN i.due_date_source='purchase_creation' AND COALESCE(i.payment_terms_source_at_purchase,'')='explicit_text' THEN NULLIF(i.due_date,'') ELSE NULL END AS task_date,
+                    CASE WHEN i.due_date_source='purchase_creation' AND COALESCE(i.payment_terms_source_at_purchase,'')='explicit_text' THEN NULLIF(i.due_date,'') ELSE NULL END AS date,
+                    MAX(COALESCE(i.remaining_amount, 0), 0) AS amount,
+                    CASE WHEN i.due_date_source<>'purchase_creation' OR COALESCE(i.payment_terms_source_at_purchase,'')<>'explicit_text' OR NULLIF(i.due_date,'') IS NULL OR date(i.due_date) < date(?) THEN 'عالية' ELSE 'متوسطة' END AS priority,
+                    CASE WHEN i.due_date_source<>'purchase_creation' OR COALESCE(i.payment_terms_source_at_purchase,'')<>'explicit_text' OR NULLIF(i.due_date,'') IS NULL THEN 'بحاجة مراجعة' WHEN date(i.due_date) < date(?) THEN 'متأخرة' ELSE 'غير مدفوعة' END AS status,
+                    'المورد: ' || TRIM(COALESCE(p.commercial_name_ar, p.commercial_name, '')) AS notes,
+                    0 AS is_resolved, 0 AS is_archived, 0 AS is_deleted, NULL AS extra,
+                    NULL AS resolved_at, NULL AS archived_at, NULL AS created_by, NULL AS updated_by,
+                    i.created_at AS created_at, i.updated_at AS updated_at,
+                    'supplier_invoice' AS source_kind, i.id AS source_id, ('SI-' || i.id) AS display_id, 0 AS can_edit
+                FROM supplier_invoices i
+                JOIN parties p ON p.id=i.supplier_id AND p.station_id=i.station_id AND p.is_deleted=0 AND p.is_active=1
+                WHERE i.station_id=? AND i.is_deleted=0 AND i.status IN ('open','partial')
+                  AND COALESCE(i.remaining_amount, 0) > 0.000001
+
+                UNION ALL
+
+                SELECT
                     CAST(-(2000000000000 + p.id) AS INTEGER) AS id,
                     ('stock-task-' || p.id) AS uuid,
                     'منتج منخفض المخزون' AS task_type,
@@ -18755,6 +18786,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             LIMIT ? OFFSET ?
         """.trimIndent()
         val queryArgs = mutableListOf<String>().apply {
+            add(stationId.toString())
+            add(asOfDate)
+            add(asOfDate)
             add(stationId.toString())
             add(asOfDate)
             add(asOfDate)

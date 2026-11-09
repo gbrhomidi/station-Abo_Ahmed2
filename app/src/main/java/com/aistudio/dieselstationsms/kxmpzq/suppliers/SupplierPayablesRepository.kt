@@ -740,6 +740,47 @@ object SupplierPayablesRepository {
         }
     }
 
+    /** Canonical station-level payable KPIs derived from invoice balances and posted allocations. */
+    fun getSupplierPayablesSummary(db: SQLiteDatabase, stationId: Int, asOfDate: String): JSONObject {
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        val asOf = parseDate(asOfDate) ?: throw IllegalArgumentException("تاريخ مستحقات الموردين غير صالح")
+        var invoiced = 0.0; var allocated = 0.0; var outstanding = 0.0; var overdue = 0.0
+        var openCount = 0; var overdueCount = 0
+        db.rawQuery("""SELECT i.total_amount,
+                    COALESCE((SELECT SUM(a.amount) FROM supplier_invoice_allocations a
+                              WHERE a.supplier_invoice_id=i.id AND a.status='posted' AND a.is_deleted=0),0),
+                    i.due_date, i.due_date_source, COALESCE(i.payment_terms_source_at_purchase,'')
+             FROM supplier_invoices i JOIN parties p ON p.id=i.supplier_id AND p.station_id=i.station_id
+              AND p.is_deleted=0 AND p.is_active=1
+             WHERE i.station_id=? AND i.is_deleted=0 AND i.status IN ('open','partial','paid')""",
+            arrayOf(stationId.toString())
+        ).use { c ->
+            while (c.moveToNext()) {
+                val total = c.getDouble(0).coerceAtLeast(0.0)
+                val paid = c.getDouble(1).coerceIn(0.0, total)
+                val remaining = (total - paid).coerceAtLeast(0.0)
+                invoiced += total; allocated += paid
+                if (remaining <= EPSILON) continue
+                outstanding += remaining; openCount++
+                val trusted = c.getString(3).orEmpty() == "purchase_creation" && c.getString(4).orEmpty() == "explicit_text"
+                if (trusted && parseDate(c.getString(2))?.isBefore(asOf) == true) { overdue += remaining; overdueCount++ }
+            }
+        }
+        var unapplied = 0.0
+        db.rawQuery("""SELECT COALESCE(SUM(amount),0) FROM supplier_invoice_allocations
+             WHERE station_id=? AND supplier_invoice_id IS NULL AND allocation_kind='unapplied_legacy'
+               AND status='posted' AND is_deleted=0""", arrayOf(stationId.toString())
+        ).use { c -> if (c.moveToFirst()) unapplied = c.getDouble(0).coerceAtLeast(0.0) }
+        return JSONObject().apply {
+            put("source", "SupplierPayablesRepository.supplier_invoices")
+            put("station_id", stationId); put("as_of_date", asOf.toString())
+            put("total_invoiced", invoiced); put("total_allocated", allocated)
+            put("total_supplier_payables", outstanding); put("total_outstanding", outstanding)
+            put("total_overdue", overdue); put("open_invoice_count", openCount)
+            put("overdue_invoice_count", overdueCount); put("unapplied_payment_amount", unapplied)
+        }
+    }
+
     /** Read-only statement: invoices/payments affect the running balance; allocations are links only. */
     fun getSupplierStatement(
         db: SQLiteDatabase,
