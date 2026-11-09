@@ -384,5 +384,27 @@ class SupplierPayablesRobolectricTest {
         // proves the current dashboard query does not multiply a supplier by invoice/payment rows.
         val dashboard = helper.getDashboardStatsForDate(1, JSONObject(), "2026-11-05")
         assertEquals(425.0, dashboard.getDouble("supplier_debts"), 0.0001)
+        assertEquals(400.0, dashboard.getDouble("total_supplier_payables"), 0.0001)
+        assertEquals(400.0, dashboard.getJSONObject("supplier_payables_summary").getDouble("total_outstanding"), 0.0001)
+    }
+
+    @Test
+    fun paidAndCancelledSupplierInvoicesAreFullyExcludedFromPendingTasks() {
+        val openId = SupplierPayablesRepository.createPurchaseInvoice(db, 1, supplierId, "manual", 96001, "OPEN-96001", 100.0, "2026-11-01", null, 1)
+        val paidId = SupplierPayablesRepository.createPurchaseInvoice(db, 1, supplierId, "manual", 96002, "PAID-96002", 200.0, "2026-11-01", null, 1)
+        val cancelledId = SupplierPayablesRepository.createPurchaseInvoice(db, 1, supplierId, "manual", 96003, "CANCEL-96003", 300.0, "2026-11-01", null, 1)
+        assertEquals(1, db.update("supplier_invoices", ContentValues().apply {
+            put("status", "paid"); put("paid_amount", 200.0); put("remaining_amount", 0.0)
+        }, "id=?", arrayOf(paidId.toString())))
+        assertEquals(1, db.update("supplier_invoices", ContentValues().apply {
+            put("status", "cancelled"); put("paid_amount", 0.0); put("remaining_amount", 300.0)
+        }, "id=?", arrayOf(cancelledId.toString())))
+
+        val rows = helper.getPendingTasks(1, JSONObject().put("search", "960"))
+        val supplierRows = (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
+            .filter { it.optString("source_kind") == "supplier_invoice" }
+        assertEquals(1, supplierRows.size)
+        assertEquals(openId, supplierRows.single().getLong("source_id"))
+        assertEquals("OPEN-96001", supplierRows.single().getString("reference"))
     }
 }

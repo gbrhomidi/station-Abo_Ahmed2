@@ -3801,7 +3801,7 @@
                     value: (stats.customer_debts || 0).toFixed(2) + ' ' + CURRENCY,
                     label: 'إجمالي الديون المستحقة', cls: 'warning-card' },
                 { id: 'card-supplier-debts', header: 'مديونية الموردين', icon: 'fa-file-invoice-dollar',
-                    value: (stats.supplier_debts || 0).toFixed(2) + ' ' + CURRENCY,
+                    value: Number(stats.total_supplier_payables ?? stats.supplier_payables_summary?.total_supplier_payables ?? stats.supplier_debts ?? 0).toFixed(2) + ' ' + CURRENCY,
                     label: 'إجمالي الدين للموردين' },
                 { id: 'card-inventory-value', header: 'قيمة المخزون', icon: 'fa-warehouse',
                     value: (stats.inventory_value || 0).toFixed(2) + ' ' + CURRENCY,
