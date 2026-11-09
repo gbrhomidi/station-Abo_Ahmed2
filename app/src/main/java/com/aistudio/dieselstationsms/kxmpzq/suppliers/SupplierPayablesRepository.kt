@@ -204,7 +204,7 @@ object SupplierPayablesRepository {
                             AND p.is_deleted=0 AND p.is_active=1
                WHERE i.station_id=? AND i.is_deleted=0
                  AND i.status IN ('open','partial')
-                 AND COALESCE(i.remaining_amount,0)>?
+                 AND COALESCE(i.remaining_amount,0)>CAST(? AS REAL)
                ORDER BY i.id""",
             arrayOf(stationId.toString(), EPSILON.toString())
         ).use { c ->

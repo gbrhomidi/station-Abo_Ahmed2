@@ -265,9 +265,14 @@ class DebtDueDatePolicyTest {
             assertFalse(row.getString("name_ar").contains("صافي"))
         }
         val suppliers = DebtDueDateRepository.getPaymentTerms(helper, 1, "supplier")
-        assertEquals(1, suppliers.length())
-        assertEquals("supplier", suppliers.getJSONObject(0).getString("applies_to"))
-        assertEquals("SUPPLIER_ONLY_TEST", suppliers.getJSONObject(0).getString("code"))
+        // The supplier catalogue intentionally includes eight global positive-day terms plus
+        // this station-specific 14-day term. The zero-day cash term is excluded by getPaymentTerms.
+        assertEquals(9, suppliers.length())
+        val supplierRows = (0 until suppliers.length()).map { suppliers.getJSONObject(it) }
+        assertTrue(supplierRows.all { it.getString("applies_to") == "supplier" && it.getInt("days") > 0 })
+        assertEquals(1, supplierRows.count { it.getString("code") == "SUPPLIER_ONLY_TEST" })
+        assertEquals(1, supplierRows.count { it.optInt("station_id", 0) == 1 })
+        assertTrue(supplierRows.none { it.getString("code") in setOf("NET_7", "NET_30", "AFTER_1", "AFTER_3") })
 
         assertEquals("صافي 14 يوم", DebtDueDateRepository.persistPartyTerms(
             helper, supplierId, 1, "صافي 14 يوم"
@@ -277,7 +282,8 @@ class DebtDueDatePolicyTest {
             arrayOf(supplierId.toString())
         ).use { cursor -> assertTrue(cursor.moveToFirst()); cursor.getLong(0) }
         assertEquals("Supplier profiles must resolve supplier-scoped terms, never a customer term",
-            suppliers.getJSONObject(0).getLong("id"), persistedSupplierTermId)
+            supplierRows.single { it.getString("code") == "SUPPLIER_ONLY_TEST" }.getLong("id"),
+            persistedSupplierTermId)
     }
 
     @Test fun preDueReminderCandidateAndOutboxValidationUseConfiguredCalendarWindow() {

@@ -589,14 +589,14 @@ class SupplierPayablesRobolectricTest {
 
 
     @Test
-    fun supplierNetSevenAndThirtyUseSupplierScopedImmutableSnapshots() {
+    fun supplierNetSevenUsesSupplierScopedImmutableSnapshot() {
         DebtDueDateRepository.persistPartyTerms(helper, supplierId, 1, "صافي 7 يوم")
         val net7 = SupplierPayablesRepository.createPurchaseInvoice(
             db, 1, supplierId, "manual", 97001, "SUP-NET7", 70.0, "2026-11-01", null, 1
         )
-        val net7Snapshot = db.rawQuery(
+        db.rawQuery(
             """SELECT i.due_date,i.payment_terms_days_at_purchase,i.payment_terms_at_purchase,
-                      t.code,t.applies_to
+                      i.due_date_basis,i.payment_terms_source_at_purchase,t.code,t.applies_to
                FROM supplier_invoices i
                JOIN payment_terms t ON t.id=i.payment_terms_id_at_purchase
                WHERE i.id=?""",
@@ -606,17 +606,31 @@ class SupplierPayablesRobolectricTest {
             assertEquals("2026-11-08", c.getString(0))
             assertEquals(7, c.getInt(1))
             assertEquals("صافي 7 يوم", c.getString(2))
-            assertEquals("SUPPLIER_NET_7", c.getString(3))
-            assertEquals("supplier", c.getString(4))
-            c.getString(0)
+            assertEquals("2026-11-01", c.getString(3))
+            assertEquals("explicit_text", c.getString(4))
+            assertEquals("SUPPLIER_NET_7", c.getString(5))
+            assertEquals("supplier", c.getString(6))
         }
+        DebtDueDateRepository.persistPartyTerms(helper, supplierId, 1, "صافي 30 يوم")
+        db.rawQuery(
+            "SELECT due_date,payment_terms_days_at_purchase FROM supplier_invoices WHERE id=?",
+            arrayOf(net7.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals("2026-11-08", c.getString(0))
+            assertEquals(7, c.getInt(1))
+        }
+    }
 
+    @Test
+    fun supplierNetThirtyUsesSupplierScopedImmutableSnapshot() {
         DebtDueDateRepository.persistPartyTerms(helper, supplierId, 1, "صافي 30 يوم")
         val net30 = SupplierPayablesRepository.createPurchaseInvoice(
             db, 1, supplierId, "manual", 97002, "SUP-NET30", 300.0, "2026-11-01", null, 1
         )
         db.rawQuery(
-            """SELECT i.due_date,i.payment_terms_days_at_purchase,t.code,t.applies_to
+            """SELECT i.due_date,i.payment_terms_days_at_purchase,i.payment_terms_at_purchase,
+                      i.due_date_basis,i.payment_terms_source_at_purchase,t.code,t.applies_to
                FROM supplier_invoices i
                JOIN payment_terms t ON t.id=i.payment_terms_id_at_purchase
                WHERE i.id=?""",
@@ -625,16 +639,20 @@ class SupplierPayablesRobolectricTest {
             check(c.moveToFirst())
             assertEquals("2026-12-01", c.getString(0))
             assertEquals(30, c.getInt(1))
-            assertEquals("SUPPLIER_NET_30", c.getString(2))
-            assertEquals("supplier", c.getString(3))
+            assertEquals("صافي 30 يوم", c.getString(2))
+            assertEquals("2026-11-01", c.getString(3))
+            assertEquals("explicit_text", c.getString(4))
+            assertEquals("SUPPLIER_NET_30", c.getString(5))
+            assertEquals("supplier", c.getString(6))
         }
+        DebtDueDateRepository.persistPartyTerms(helper, supplierId, 1, "صافي 7 يوم")
         db.rawQuery(
             "SELECT due_date,payment_terms_days_at_purchase FROM supplier_invoices WHERE id=?",
-            arrayOf(net7.toString())
+            arrayOf(net30.toString())
         ).use { c ->
             check(c.moveToFirst())
-            assertEquals(net7Snapshot, c.getString(0))
-            assertEquals(7, c.getInt(1))
+            assertEquals("2026-12-01", c.getString(0))
+            assertEquals(30, c.getInt(1))
         }
     }
 
