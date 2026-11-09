@@ -77,10 +77,10 @@ class DebtDueReminderWorkerIntegrationTest {
                 workerClassName: String,
                 workerParameters: WorkerParameters
             ): ListenableWorker? {
-                return if (workerClassName == SmsOutboxWorker::class.java.name) {
-                    SuppressedSmsOutboxWorker(appContext, workerParameters)
-                } else {
-                    null
+                return when (workerClassName) {
+                    SmsOutboxWorker::class.java.name -> SuppressedSmsOutboxWorker(appContext, workerParameters)
+                    DebtDueReminderWorker::class.java.name -> SuppressedScheduledDebtDueReminderWorker(appContext, workerParameters)
+                    else -> null
                 }
             }
         }
@@ -152,10 +152,10 @@ class DebtDueReminderWorkerIntegrationTest {
             .getWorkInfosForUniqueWork("debt-due-sms-reminders-station-$stationId")
             .get(10, TimeUnit.SECONDS)
         assertEquals("Station reminder scheduling must remain unique after a user/session change", 1, scheduled.size)
-        // Keep the scheduling assertion independent from the manual worker execution below.
-        // The test scheduler may run periodic work immediately, racing the SQLite fixture.
+        // Complete cancellation before running the separate production worker instance below.
         WorkManager.getInstance(context)
             .cancelUniqueWork("debt-due-sms-reminders-station-$stationId")
+            .result.get(10, TimeUnit.SECONDS)
 
         val requestData = Data.Builder()
             .putInt("debt_reminder_station_id", stationId)
@@ -238,6 +238,13 @@ class DebtDueReminderWorkerIntegrationTest {
     }
 
     private class SuppressedSmsOutboxWorker(
+        appContext: Context,
+        workerParameters: WorkerParameters
+    ) : Worker(appContext, workerParameters) {
+        override fun doWork(): Result = Result.success()
+    }
+
+    private class SuppressedScheduledDebtDueReminderWorker(
         appContext: Context,
         workerParameters: WorkerParameters
     ) : Worker(appContext, workerParameters) {

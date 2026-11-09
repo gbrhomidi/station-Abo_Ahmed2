@@ -489,10 +489,20 @@ class DebtDueDatePolicyTest {
             "SELECT id FROM payment_terms WHERE code='NET_7' AND station_id IS NULL LIMIT 1", null
         ).use { c -> check(c.moveToFirst()); c.getLong(0) }
 
+        val today = LocalDate.parse(BusinessDay.currentDate())
+        val invoiceDate = today.minusDays(7).toString()
+        val dateColumns = db.rawQuery("PRAGMA table_info(sales_transactions)", null).use { c ->
+            buildSet { while (c.moveToNext()) add(c.getString(c.getColumnIndexOrThrow("name"))) }
+        }
+        assertEquals(1, db.update("sales_transactions", ContentValues().apply {
+            listOf("business_day", "transaction_date", "sale_date")
+                .filter { it in dateColumns }
+                .forEach { put(it, invoiceDate) }
+        }, "id=? AND station_id=1", arrayOf(saleId.toString())))
         val applied = DebtDueDateRepository.applySelectedPaymentTermSnapshot(db, saleId, 1, customerId, netSevenId, allowExistingSnapshot = true)
         assertTrue(applied.getBoolean("success"))
         assertEquals(7, applied.getInt("payment_terms_days"))
-        assertEquals("2026-11-08", applied.getString("due_date"))
+        assertEquals(today.toString(), applied.getString("due_date"))
 
         DebtDueDateRepository.persistPartyTerms(helper, customerId, 1, "صافي 0 يوم")
         db.rawQuery(
@@ -506,14 +516,14 @@ class DebtDueDatePolicyTest {
             assertEquals(7, c.getInt(1))
             assertEquals("explicit_text", c.getString(2))
             assertEquals("بعد 7 أيام", c.getString(3))
-            assertEquals("2026-11-08", c.getString(4))
-            assertEquals("2026-11-01", c.getString(5))
+            assertEquals(today.toString(), c.getString(4))
+            assertEquals(invoiceDate, c.getString(5))
             assertEquals("sale_creation", c.getString(6))
         }
         val rows = DebtDueDateRepository.getCustomerDebts(helper, 1)
         val debt = (0 until rows.length()).map { rows.getJSONObject(it) }
             .first { it.getLong("transaction_id") == saleId }
-        assertEquals("2026-11-08", debt.getString("due_date"))
+        assertEquals(today.toString(), debt.getString("due_date"))
         assertEquals("current", debt.getString("status"))
     }
 
