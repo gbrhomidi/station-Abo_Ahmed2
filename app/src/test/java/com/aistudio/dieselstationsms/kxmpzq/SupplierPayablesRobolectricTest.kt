@@ -254,6 +254,68 @@ class SupplierPayablesRobolectricTest {
     }
 
     @Test
+    fun partialAllocationReversalKeepsOriginalAndReverses300Then200Then500WithoutCashJournal() {
+        val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 93002, "MAN-PARTIAL-REVERSAL", 1000.0, "2026-10-01", null, 1
+        )
+        val paymentId = createCompletedSupplierPayment(1000.0, "PARTIAL-REVERSAL")
+        val allocation = SupplierPayablesRepository.allocatePayment(db, 1, supplierId, paymentId, 1000.0, 1, invoiceId)
+        val allocationId = db.rawQuery(
+            "SELECT id FROM supplier_invoice_allocations WHERE payment_id=? AND supplier_invoice_id=? AND status='posted' AND is_deleted=0",
+            arrayOf(paymentId.toString(), invoiceId.toString())
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getLong(0) }
+        val cashBefore = db.rawQuery("SELECT COUNT(*) FROM cash_movements WHERE reference_type='payment_reversal' AND reference_id=?", arrayOf(paymentId.toString())).use { it.moveToFirst(); it.getInt(0) }
+        val journalsBefore = db.rawQuery("SELECT COUNT(*) FROM journal_entries WHERE reference_type='payment' AND reference_id=? AND is_deleted=0", arrayOf(paymentId.toString())).use { it.moveToFirst(); it.getInt(0) }
+
+        listOf(300.0 to "partial-300", 200.0 to "partial-200", 500.0 to "partial-500").forEach { (amount, key) ->
+            val result = SupplierPayablesRepository.reversePaymentAllocation(
+                db, 1, supplierId, allocationId, amount, 1, "اختبار عكس جزئي $amount", key
+            )
+            assertFalse(result.getBoolean("idempotent"))
+            assertEquals(amount, result.getDouble("reversed_amount"), 0.0001)
+        }
+        val repeated = SupplierPayablesRepository.reversePaymentAllocation(
+            db, 1, supplierId, allocationId, 500.0, 1, "إعادة المحاولة", "partial-500"
+        )
+        assertTrue(repeated.getBoolean("idempotent"))
+        assertTrue(runCatching {
+            SupplierPayablesRepository.reversePaymentAllocation(
+                db, 1, supplierId, allocationId, 1.0, 1, "عكس زائد", "partial-over"
+            )
+        }.isFailure)
+        db.rawQuery(
+            "SELECT status,amount FROM supplier_invoice_allocations WHERE id=?",
+            arrayOf(allocationId.toString())
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            assertEquals("posted", cursor.getString(0))
+            assertEquals(1000.0, cursor.getDouble(1), 0.0001)
+        }
+        db.rawQuery(
+            "SELECT COUNT(*),COALESCE(SUM(amount),0) FROM supplier_allocation_reversals WHERE allocation_id=? AND status='posted'",
+            arrayOf(allocationId.toString())
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            assertEquals(3, cursor.getInt(0))
+            assertEquals(1000.0, cursor.getDouble(1), 0.0001)
+        }
+        db.rawQuery(
+            "SELECT paid_amount,remaining_amount,status FROM supplier_invoices WHERE id=?",
+            arrayOf(invoiceId.toString())
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            assertEquals(0.0, cursor.getDouble(0), 0.0001)
+            assertEquals(1000.0, cursor.getDouble(1), 0.0001)
+            assertEquals("open", cursor.getString(2))
+        }
+        val cashAfter = db.rawQuery("SELECT COUNT(*) FROM cash_movements WHERE reference_type='payment_reversal' AND reference_id=?", arrayOf(paymentId.toString())).use { it.moveToFirst(); it.getInt(0) }
+        val journalsAfter = db.rawQuery("SELECT COUNT(*) FROM journal_entries WHERE reference_type='payment' AND reference_id=? AND is_deleted=0", arrayOf(paymentId.toString())).use { it.moveToFirst(); it.getInt(0) }
+        assertEquals(cashBefore, cashAfter)
+        assertEquals(journalsBefore, journalsAfter)
+        assertEquals(1000.0, allocation.getDouble("allocated_amount"), 0.0001)
+    }
+
+    @Test
     fun currentPaymentExcessOffsetsAreReportedSeparatelyPerCurrency() {
         SupplierPayablesRepository.createPurchaseInvoice(
             db, 1, supplierId, "manual", 94001, "MAN-94001",

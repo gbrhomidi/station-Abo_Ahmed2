@@ -24046,6 +24046,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             db.beginTransaction()
             try {
+                val normalizedIdempotencyKey = data.optString("idempotency_key", "").trim()
+                if (supplierId > 0L) {
+                    require(normalizedIdempotencyKey.isNotBlank()) {
+                        "مفتاح idempotency مطلوب لدفعات الموردين لمنع تكرار السداد"
+                    }
+                    val existingPaymentId = findFinancialIdempotency(db, "supplier_payment", stationScopeId, normalizedIdempotencyKey)
+                    if (existingPaymentId != null) return existingPaymentId
+                    require(reserveFinancialIdempotency(db, "supplier_payment", stationScopeId, normalizedIdempotencyKey)) {
+                        "مفتاح دفعة المورد مستخدم مسبقاً أو قيد المعالجة"
+                    }
+                }
                 if (customerId > 0) requirePartyInStation(db, customerId, stationScopeId)
                 if (supplierId > 0) requirePartyInStation(db, supplierId, stationScopeId)
                 if (cashBoxId > 0) {
@@ -24156,6 +24167,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         db, stationScopeId, supplierId, id, amount, actorId,
                         data.optLong("supplier_invoice_id", 0L)
                     )
+                }
+                if (supplierId > 0L) {
+                    completeFinancialIdempotency(db, "supplier_payment", stationScopeId, normalizedIdempotencyKey, id)
                 }
                 db.setTransactionSuccessful()
                 id

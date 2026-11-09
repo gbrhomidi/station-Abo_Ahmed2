@@ -97,6 +97,28 @@ object SupplierPayablesRepository {
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_supplier_invoice_date ON supplier_invoices(station_id,supplier_id,invoice_date,is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_supplier_invoice_alloc_invoice ON supplier_invoice_allocations(station_id,supplier_invoice_id,status,is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_supplier_invoice_alloc_payment ON supplier_invoice_allocations(station_id,payment_id,status,is_deleted)")
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS supplier_allocation_reversals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL UNIQUE,
+                station_id INTEGER NOT NULL,
+                supplier_id INTEGER NOT NULL,
+                allocation_id INTEGER NOT NULL,
+                payment_id INTEGER NOT NULL,
+                supplier_invoice_id INTEGER NOT NULL,
+                amount REAL NOT NULL CHECK(amount > 0),
+                idempotency_key TEXT NOT NULL,
+                reason TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'posted' CHECK(status IN ('posted','reversed')),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_by INTEGER NOT NULL,
+                FOREIGN KEY (allocation_id) REFERENCES supplier_invoice_allocations(id),
+                FOREIGN KEY (payment_id) REFERENCES payments(id),
+                FOREIGN KEY (supplier_invoice_id) REFERENCES supplier_invoices(id),
+                UNIQUE(station_id,idempotency_key)
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_supplier_allocation_reversals_allocation ON supplier_allocation_reversals(station_id,allocation_id,status)")
 
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS supplier_invoice_tasks (
@@ -635,6 +657,115 @@ object SupplierPayablesRepository {
 
 
     /**
+     * Reverse only part of one posted invoice allocation. The original allocation remains
+     * unchanged and each reversal is stored independently. This never writes a cash/bank
+     * movement or a journal entry because it changes only the subsidiary payable allocation.
+     */
+    fun reversePaymentAllocation(
+        db: SQLiteDatabase,
+        stationId: Int,
+        supplierId: Long,
+        allocationId: Long,
+        amount: Double,
+        actorId: Long,
+        reason: String,
+        idempotencyKey: String
+    ): JSONObject {
+        require(stationId > 0 && supplierId > 0L && allocationId > 0L && actorId > 0L) {
+            "بيانات عكس تخصيص المورد غير صالحة"
+        }
+        require(amount.isFinite() && amount > EPSILON) { "مبلغ العكس الجزئي غير صالح" }
+        val key = idempotencyKey.trim()
+        require(key.isNotBlank()) { "مفتاح عكس التخصيص مطلوب لمنع التكرار" }
+        if (db.inTransaction()) {
+            return reversePaymentAllocationWithinTransaction(db, stationId, supplierId, allocationId, amount, actorId, reason, key)
+        }
+        db.beginTransaction()
+        try {
+            val result = reversePaymentAllocationWithinTransaction(db, stationId, supplierId, allocationId, amount, actorId, reason, key)
+            db.setTransactionSuccessful()
+            return result
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    private fun reversePaymentAllocationWithinTransaction(
+        db: SQLiteDatabase,
+        stationId: Int,
+        supplierId: Long,
+        allocationId: Long,
+        amount: Double,
+        actorId: Long,
+        reason: String,
+        idempotencyKey: String
+    ): JSONObject {
+        db.rawQuery(
+            "SELECT amount FROM supplier_allocation_reversals WHERE station_id=? AND idempotency_key=? AND status='posted' LIMIT 1",
+            arrayOf(stationId.toString(), idempotencyKey)
+        ).use { cursor ->
+            if (cursor.moveToFirst()) return JSONObject().apply {
+                put("success", true); put("idempotent", true); put("reversed_amount", cursor.getDouble(0)); put("allocation_id", allocationId)
+            }
+        }
+        data class Original(val paymentId: Long, val invoiceId: Long, val amount: Double, val currencyId: Long)
+        val original = db.rawQuery(
+            """SELECT payment_id,supplier_invoice_id,amount,COALESCE(currency_id,0)
+               FROM supplier_invoice_allocations
+               WHERE id=? AND station_id=? AND supplier_id=? AND allocation_kind='invoice'
+                 AND status='posted' AND is_deleted=0""",
+            arrayOf(allocationId.toString(), stationId.toString(), supplierId.toString())
+        ).use { cursor ->
+            require(cursor.moveToFirst()) { "التخصيص الأصلي غير موجود أو غير نشط" }
+            Original(cursor.getLong(0), cursor.getLong(1), cursor.getDouble(2), cursor.getLong(3))
+        }
+        val alreadyReversed = db.rawQuery(
+            "SELECT COALESCE(SUM(amount),0) FROM supplier_allocation_reversals WHERE station_id=? AND allocation_id=? AND status='posted'",
+            arrayOf(stationId.toString(), allocationId.toString())
+        ).use { cursor -> cursor.moveToFirst(); cursor.getDouble(0) }
+        val available = original.amount - alreadyReversed
+        require(available > EPSILON) { "لا يوجد رصيد تخصيص متبقٍ للعكس" }
+        require(amount <= available + 0.01) { "مبلغ العكس يتجاوز المتبقي من التخصيص" }
+        val paymentCurrency = db.rawQuery(
+            "SELECT COALESCE(currency_id,0) FROM payments WHERE id=? AND station_id=? AND supplier_party_id=? AND status='completed' AND is_deleted=0",
+            arrayOf(original.paymentId.toString(), stationId.toString(), supplierId.toString())
+        ).use { cursor -> require(cursor.moveToFirst()) { "دفعة المورد غير صالحة" }; cursor.getLong(0) }
+        require(paymentCurrency == original.currencyId) { "عملة التخصيص لا تطابق عملة الدفعة" }
+        db.insertOrThrow("supplier_allocation_reversals", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("station_id", stationId); put("supplier_id", supplierId)
+            put("allocation_id", allocationId); put("payment_id", original.paymentId); put("supplier_invoice_id", original.invoiceId)
+            put("amount", amount); put("idempotency_key", idempotencyKey)
+            put("reason", reason.trim().ifBlank { "عكس تخصيص المورد" }); put("status", "posted"); put("created_by", actorId)
+        })
+        val activePaid = db.rawQuery(
+            """SELECT COALESCE((SELECT SUM(a.amount) FROM supplier_invoice_allocations a
+                                  WHERE a.station_id=? AND a.supplier_invoice_id=? AND a.status='posted' AND a.is_deleted=0),0)
+                      - COALESCE((SELECT SUM(r.amount) FROM supplier_allocation_reversals r
+                                  WHERE r.station_id=? AND r.supplier_invoice_id=? AND r.status='posted'),0)""",
+            arrayOf(stationId.toString(), original.invoiceId.toString(), stationId.toString(), original.invoiceId.toString())
+        ).use { cursor -> cursor.moveToFirst(); cursor.getDouble(0).coerceAtLeast(0.0) }
+        val total = db.rawQuery(
+            "SELECT total_amount FROM supplier_invoices WHERE id=? AND station_id=? AND supplier_id=? AND is_deleted=0",
+            arrayOf(original.invoiceId.toString(), stationId.toString(), supplierId.toString())
+        ).use { cursor -> require(cursor.moveToFirst()) { "فاتورة المورد غير موجودة" }; cursor.getDouble(0) }
+        require(activePaid <= total + 0.01) { "رصيد تخصيصات الفاتورة غير صالح" }
+        val remaining = (total - activePaid).coerceAtLeast(0.0)
+        val status = when { remaining <= EPSILON -> "paid"; activePaid > EPSILON -> "partial"; else -> "open" }
+        require(db.update(
+            "supplier_invoices",
+            ContentValues().apply { put("paid_amount", activePaid); put("remaining_amount", remaining); put("status", status); put("updated_at", BusinessDay.currentDate() + " 00:00:00") },
+            "id=? AND station_id=? AND supplier_id=? AND is_deleted=0",
+            arrayOf(original.invoiceId.toString(), stationId.toString(), supplierId.toString())
+        ) == 1) { "تعذر تحديث فاتورة المورد بعد العكس الجزئي" }
+        return JSONObject().apply {
+            put("success", true); put("idempotent", false); put("reversed_amount", amount); put("allocation_id", allocationId)
+            put("payment_id", original.paymentId); put("supplier_invoice_id", original.invoiceId)
+            put("remaining_allocation_amount", available - amount); put("invoice_paid_amount", activePaid)
+            put("invoice_remaining_amount", remaining); put("cash_journal_created", false)
+        }
+    }
+
+    /**
      * Reverse active allocations and reopen affected supplier invoices. Invoke inside the same
      * SQLite transaction that restores the supplier control balance and reverses the GL entry.
      */
@@ -680,10 +811,16 @@ object SupplierPayablesRepository {
         data class AllocationRow(val invoiceId: Long?, val amount: Double)
         val active = mutableListOf<AllocationRow>()
         db.rawQuery(
-            """SELECT supplier_invoice_id,amount FROM supplier_invoice_allocations
-               WHERE station_id=? AND supplier_id=? AND payment_id=?
-                 AND status='posted' AND is_deleted=0 ORDER BY id""",
-            arrayOf(stationId.toString(), supplierId.toString(), paymentId.toString())
+            """SELECT a.supplier_invoice_id,
+                          a.amount-COALESCE((SELECT SUM(r.amount) FROM supplier_allocation_reversals r
+                                             WHERE r.station_id=a.station_id AND r.allocation_id=a.id AND r.status='posted'),0)
+               FROM supplier_invoice_allocations a
+               WHERE a.station_id=? AND a.supplier_id=? AND a.payment_id=?
+                 AND a.status='posted' AND a.is_deleted=0
+                 AND a.amount-COALESCE((SELECT SUM(r.amount) FROM supplier_allocation_reversals r
+                                       WHERE r.station_id=a.station_id AND r.allocation_id=a.id AND r.status='posted'),0)>?
+               ORDER BY a.id""",
+            arrayOf(stationId.toString(), supplierId.toString(), paymentId.toString(), EPSILON.toString())
         ).use { cursor ->
             while (cursor.moveToNext()) active += AllocationRow(
                 if (cursor.isNull(0)) null else cursor.getLong(0), cursor.getDouble(1)
@@ -715,6 +852,8 @@ object SupplierPayablesRepository {
                                     WHERE a.station_id=i.station_id AND a.supplier_invoice_id=i.id
                                       AND COALESCE(a.currency_id,0)=COALESCE(i.currency_id,0)
                                       AND a.status='posted' AND a.is_deleted=0),0)
+                          - COALESCE((SELECT SUM(r.amount) FROM supplier_allocation_reversals r
+                                      WHERE r.station_id=i.station_id AND r.supplier_invoice_id=i.id AND r.status='posted'),0)
                    FROM supplier_invoices i
                    WHERE i.id=? AND i.station_id=? AND i.supplier_id=? AND i.is_deleted=0""",
                 arrayOf(invoiceId.toString(), stationId.toString(), supplierId.toString())
