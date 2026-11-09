@@ -77,15 +77,15 @@ class SupplierPayablesRobolectricTest {
     @Test
     fun fifoAllocationsUpdateInvoiceBalancesAndAreIdempotent() {
         val firstInvoice = SupplierPayablesRepository.createPurchaseInvoice(
-            db, 1, supplierId, "fuel_refill", 91001, "REF-91001",
+            db, 1, supplierId, "manual", 91001, "MAN-91001",
             100.0, "2026-10-01", null, 1
         )
         val secondInvoice = SupplierPayablesRepository.createPurchaseInvoice(
-            db, 1, supplierId, "product_purchase", 91002, "PROD-91002",
+            db, 1, supplierId, "manual", 91002, "MAN-91002",
             200.0, "2026-10-15", null, 1
         )
         assertEquals(firstInvoice, SupplierPayablesRepository.createPurchaseInvoice(
-            db, 1, supplierId, "fuel_refill", 91001, "REF-91001",
+            db, 1, supplierId, "manual", 91001, "MAN-91001",
             100.0, "2026-10-01", null, 1
         ))
         db.rawQuery(
@@ -407,4 +407,685 @@ class SupplierPayablesRobolectricTest {
         assertEquals(openId, supplierRows.single().getLong("source_id"))
         assertEquals("OPEN-96001", supplierRows.single().getString("reference"))
     }
+
+    private fun createFinanceActor(): Long {
+        val roleId = db.rawQuery("SELECT id FROM roles ORDER BY id LIMIT 1", null).use {
+            check(it.moveToFirst()); it.getLong(0)
+        }
+        return db.insertOrThrow("users", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("username", "supplier-flow-${UUID.randomUUID().toString().take(10)}")
+            put("password_hash", "test-only")
+            put("full_name", "مستخدم اختبار دورة المورد")
+            put("role_id", roleId)
+            put("station_id", 1)
+        })
+    }
+
+    private fun createCashBoxAndPostingAccounts(actorId: Long): Long {
+        val cashBoxId = db.insertOrThrow("cash_boxes", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("box_code", "SP-CASH-${UUID.randomUUID().toString().take(8)}")
+            put("box_name", "Supplier workflow test cash")
+            put("box_name_ar", "صندوق اختبار دورة المورد")
+            put("station_id", 1)
+            put("opening_balance", 10000.0)
+            put("current_balance", 10000.0)
+            put("maximum_balance", 50000.0)
+            put("status", "active")
+            put("is_deleted", 0)
+            put("created_by", actorId)
+        })
+        db.insertOrThrow("accounts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("account_code", "SP-CASH-ACC-${UUID.randomUUID().toString().take(8)}")
+            put("account_name", "Supplier test cash account")
+            put("account_name_ar", "حساب صندوق اختبار المورد")
+            put("level", 1)
+            put("account_type", "asset")
+            put("account_category", "cash")
+            put("normal_balance", "debit")
+            put("is_cash_account", 1)
+            put("cash_box_id", cashBoxId)
+            put("is_active", 1)
+            put("is_deleted", 0)
+            put("created_by", actorId)
+        })
+
+        val inventoryAccountExists = db.rawQuery(
+            """SELECT 1 FROM accounts
+               WHERE account_type='asset' AND is_active=1 AND is_deleted=0
+                 AND (lower(COALESCE(account_category,'')) LIKE '%inventory%'
+                      OR lower(COALESCE(account_category,'')) LIKE '%stock%'
+                      OR COALESCE(account_name_ar,'') LIKE '%المخزون%'
+                      OR COALESCE(account_name_ar,'') LIKE '%البضاعة%'
+                      OR COALESCE(account_name,'') LIKE '%Inventory%')
+               LIMIT 1""", null
+        ).use { it.moveToFirst() }
+        if (!inventoryAccountExists) {
+            db.insertOrThrow("accounts", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("account_code", "SP-INV-${UUID.randomUUID().toString().take(8)}")
+                put("account_name", "Supplier workflow inventory")
+                put("account_name_ar", "مخزون اختبار المورد")
+                put("level", 1)
+                put("account_type", "asset")
+                put("account_category", "inventory")
+                put("normal_balance", "debit")
+                put("is_active", 1)
+                put("is_deleted", 0)
+                put("created_by", actorId)
+            })
+        }
+        val payableAccountExists = db.rawQuery(
+            """SELECT 1 FROM accounts WHERE account_type='liability'
+               AND is_active=1 AND is_deleted=0
+               AND (account_code='2101' OR lower(COALESCE(account_category,'')) LIKE '%pay%'
+                    OR lower(COALESCE(account_name,'')) LIKE '%payable%'
+                    OR lower(COALESCE(account_name,'')) LIKE '%supplier%'
+                    OR COALESCE(account_name_ar,'') LIKE '%مورد%'
+                    OR COALESCE(account_name_ar,'') LIKE '%دائن%')
+               LIMIT 1""", null
+        ).use { it.moveToFirst() }
+        if (!payableAccountExists) {
+            db.insertOrThrow("accounts", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("account_code", "SP-AP-${UUID.randomUUID().toString().take(8)}")
+                put("account_name", "Supplier accounts payable")
+                put("account_name_ar", "ذمم الموردين")
+                put("level", 1)
+                put("account_type", "liability")
+                put("account_category", "accounts_payable")
+                put("normal_balance", "credit")
+                put("is_active", 1)
+                put("is_deleted", 0)
+                put("created_by", actorId)
+            })
+        }
+        return cashBoxId
+    }
+
+    private fun createFuelTank(actorId: Long): Pair<Long, Long> {
+        val fuelTypeId = db.rawQuery(
+            "SELECT id FROM fuel_types WHERE is_active=1 AND is_deleted=0 ORDER BY id LIMIT 1", null
+        ).use { c ->
+            if (c.moveToFirst()) c.getLong(0) else db.insertOrThrow("fuel_types", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("fuel_code", "SPF-${UUID.randomUUID().toString().take(6)}")
+                put("fuel_name", "Supplier workflow diesel")
+                put("fuel_name_ar", "ديزل اختبار المورد")
+                put("is_active", 1)
+                put("is_deleted", 0)
+                put("created_by", actorId)
+            })
+        }
+        val tankId = db.insertOrThrow("tanks", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("tank_code", "SPT-${UUID.randomUUID().toString().take(8)}")
+            put("tank_name", "Supplier workflow test tank")
+            put("tank_name_ar", "خزان اختبار دورة المورد")
+            put("station_id", 1)
+            put("fuel_type_id", fuelTypeId)
+            put("capacity_liters", 1000.0)
+            put("current_quantity", 0.0)
+            put("status", "active")
+            put("is_deleted", 0)
+            put("created_by", actorId)
+        })
+        return tankId to fuelTypeId
+    }
+
+    private fun assertBalancedSourceJournal(referenceType: String, sourceId: Long, expectedAmount: Double) {
+        val journal = db.rawQuery(
+            """SELECT id,total_debit,total_credit,status,is_balanced
+               FROM journal_entries
+               WHERE station_id=1 AND reference_type=? AND reference_id=? AND is_deleted=0""",
+            arrayOf(referenceType, sourceId.toString())
+        ).use { c ->
+            check(c.moveToFirst()) { "قيد المصدر المالي غير موجود: $referenceType/$sourceId" }
+            assertFalse("لا يجوز تكرار القيد للمصدر نفسه", c.moveToNext())
+            Triple(c.getLong(0), c.getDouble(1), c.getDouble(2)).also {
+                assertEquals("posted", c.getString(3))
+                assertEquals(1, c.getInt(4))
+            }
+        }
+        assertEquals(expectedAmount, journal.second, 0.01)
+        assertEquals(expectedAmount, journal.third, 0.01)
+        db.rawQuery(
+            "SELECT COALESCE(SUM(debit),0),COALESCE(SUM(credit),0),COUNT(*) FROM journal_entry_items WHERE journal_entry_id=?",
+            arrayOf(journal.first.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals(expectedAmount, c.getDouble(0), 0.01)
+            assertEquals(expectedAmount, c.getDouble(1), 0.01)
+            assertEquals(2, c.getInt(2))
+        }
+    }
+
+    private fun assertSupplierInvoice(
+        sourceType: String,
+        sourceId: Long,
+        expectedTotal: Double,
+        expectedStatus: String,
+        expectedPaid: Double,
+        expectedRemaining: Double
+    ): Long {
+        return db.rawQuery(
+            """SELECT id,total_amount,paid_amount,remaining_amount,status
+               FROM supplier_invoices
+               WHERE station_id=1 AND source_type=? AND source_id=? AND is_deleted=0""",
+            arrayOf(sourceType, sourceId.toString())
+        ).use { c ->
+            check(c.moveToFirst()) { "فاتورة المورد غير مرتبطة بمستند المصدر $sourceType/$sourceId" }
+            val id = c.getLong(0)
+            assertEquals(expectedTotal, c.getDouble(1), 0.01)
+            assertEquals(expectedPaid, c.getDouble(2), 0.01)
+            assertEquals(expectedRemaining, c.getDouble(3), 0.01)
+            assertEquals(expectedStatus, c.getString(4))
+            assertFalse("يجب أن توجد فاتورة واحدة فقط لكل مستند مصدر", c.moveToNext())
+            id
+        }
+    }
+
+
+    @Test
+    fun supplierNetSevenAndThirtyUseSupplierScopedImmutableSnapshots() {
+        DebtDueDateRepository.persistPartyTerms(helper, supplierId, 1, "صافي 7 يوم")
+        val net7 = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 97001, "SUP-NET7", 70.0, "2026-11-01", null, 1
+        )
+        val net7Snapshot = db.rawQuery(
+            """SELECT i.due_date,i.payment_terms_days_at_purchase,i.payment_terms_at_purchase,
+                      t.code,t.applies_to
+               FROM supplier_invoices i
+               JOIN payment_terms t ON t.id=i.payment_terms_id_at_purchase
+               WHERE i.id=?""",
+            arrayOf(net7.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals("2026-11-08", c.getString(0))
+            assertEquals(7, c.getInt(1))
+            assertEquals("صافي 7 يوم", c.getString(2))
+            assertEquals("SUPPLIER_NET_7", c.getString(3))
+            assertEquals("supplier", c.getString(4))
+            c.getString(0)
+        }
+
+        DebtDueDateRepository.persistPartyTerms(helper, supplierId, 1, "صافي 30 يوم")
+        val net30 = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 97002, "SUP-NET30", 300.0, "2026-11-01", null, 1
+        )
+        db.rawQuery(
+            """SELECT i.due_date,i.payment_terms_days_at_purchase,t.code,t.applies_to
+               FROM supplier_invoices i
+               JOIN payment_terms t ON t.id=i.payment_terms_id_at_purchase
+               WHERE i.id=?""",
+            arrayOf(net30.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals("2026-12-01", c.getString(0))
+            assertEquals(30, c.getInt(1))
+            assertEquals("SUPPLIER_NET_30", c.getString(2))
+            assertEquals("supplier", c.getString(3))
+        }
+        db.rawQuery(
+            "SELECT due_date,payment_terms_days_at_purchase FROM supplier_invoices WHERE id=?",
+            arrayOf(net7.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals(net7Snapshot, c.getString(0))
+            assertEquals(7, c.getInt(1))
+        }
+    }
+
+    @Test
+    fun supplierInvoiceTasksArePersistedIdempotentAndClosedAfterPaymentOrCancellation() {
+        val paidInvoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 97101, "TASK-PAID", 100.0, "2026-11-01", null, 1
+        )
+        val taskId = db.rawQuery(
+            """SELECT id FROM supplier_invoice_tasks
+               WHERE station_id=1 AND supplier_id=? AND supplier_invoice_id=? AND is_deleted=0""",
+            arrayOf(supplierId.toString(), paidInvoiceId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+
+        repeat(3) { helper.getPendingTasks(1, JSONObject().put("search", "TASK-PAID")) }
+        val duplicateCount = db.rawQuery(
+            """SELECT COUNT(*) FROM supplier_invoice_tasks
+               WHERE station_id=1 AND supplier_id=? AND supplier_invoice_id=? AND is_deleted=0""",
+            arrayOf(supplierId.toString(), paidInvoiceId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+        assertEquals(1, duplicateCount)
+
+        val projected = helper.getPendingTasks(1, JSONObject().put("search", "TASK-PAID"))
+        val supplierTask = (0 until projected.length()).mapNotNull { projected.optJSONObject(it) }
+            .single { it.optString("source_kind") == "supplier_invoice" }
+        assertEquals(paidInvoiceId, supplierTask.getLong("source_id"))
+        assertEquals(taskId, db.rawQuery(
+            """SELECT id FROM supplier_invoice_tasks
+               WHERE supplier_invoice_id=? AND station_id=1 AND is_resolved=0""",
+            arrayOf(paidInvoiceId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) })
+
+        val partialPaymentId = createCompletedSupplierPayment(25.0, "TASK-PARTIAL")
+        SupplierPayablesRepository.allocatePayment(db, 1, supplierId, partialPaymentId, 25.0, 1, paidInvoiceId)
+        db.rawQuery(
+            "SELECT is_resolved,status,resolved_at,amount FROM supplier_invoice_tasks WHERE id=?",
+            arrayOf(taskId.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals(0, c.getInt(0))
+            assertEquals("غير مدفوعة", c.getString(1))
+            assertTrue(c.isNull(2))
+            assertEquals(75.0, c.getDouble(3), 0.0001)
+        }
+        val finalPaymentId = createCompletedSupplierPayment(75.0, "TASK-PAID")
+        SupplierPayablesRepository.allocatePayment(db, 1, supplierId, finalPaymentId, 75.0, 1, paidInvoiceId)
+        db.rawQuery(
+            "SELECT is_resolved,status,resolved_at,amount FROM supplier_invoice_tasks WHERE id=?",
+            arrayOf(taskId.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals(1, c.getInt(0))
+            assertEquals("مكتملة", c.getString(1))
+            assertTrue(!c.isNull(2))
+            assertEquals(0.0, c.getDouble(3), 0.0001)
+        }
+        val hiddenPaid = helper.getPendingTasks(1, JSONObject().put("search", "TASK-PAID"))
+        assertEquals(0, (0 until hiddenPaid.length()).count {
+            hiddenPaid.optJSONObject(it)?.optString("source_kind") == "supplier_invoice"
+        })
+        val includeResolved = helper.getPendingTasks(
+            1, JSONObject().put("search", "TASK-PAID").put("include_resolved", true)
+        )
+        assertEquals(1, (0 until includeResolved.length()).count {
+            includeResolved.optJSONObject(it)?.optString("source_kind") == "supplier_invoice"
+        })
+
+        val cancelledInvoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 97102, "TASK-CANCEL", 75.0, "2026-11-01", null, 1
+        )
+        val cancelledTaskId = db.rawQuery(
+            "SELECT id FROM supplier_invoice_tasks WHERE supplier_invoice_id=? AND station_id=1",
+            arrayOf(cancelledInvoiceId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+        assertEquals(1, db.update(
+            "supplier_invoices",
+            ContentValues().apply { put("status", "cancelled") },
+            "id=? AND station_id=1",
+            arrayOf(cancelledInvoiceId.toString())
+        ))
+        helper.getPendingTasks(1, JSONObject().put("search", "TASK-CANCEL"))
+        db.rawQuery(
+            "SELECT is_resolved,status FROM supplier_invoice_tasks WHERE id=?",
+            arrayOf(cancelledTaskId.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals(1, c.getInt(0))
+            assertEquals("مكتملة", c.getString(1))
+        }
+    }
+
+    @Test
+    fun supplierPurchaseInvoiceRejectsMissingSourceAndNonSupplierParty() {
+        val missingFuelSource = runCatching {
+            SupplierPayablesRepository.createPurchaseInvoice(
+                db, 1, supplierId, "fuel_refill", 97991, "MISSING-FUEL", 50.0, "2026-11-01", null, 1
+            )
+        }.isFailure
+        val missingProductSource = runCatching {
+            SupplierPayablesRepository.createPurchaseInvoice(
+                db, 1, supplierId, "product_purchase", 97992, "MISSING-PRODUCT", 50.0, "2026-11-01", null, 1
+            )
+        }.isFailure
+        assertTrue("يجب رفض فاتورة وقود بلا مستند توريد", missingFuelSource)
+        assertTrue("يجب رفض فاتورة منتجات بلا مستند شراء", missingProductSource)
+
+        val customerTypeId = db.rawQuery(
+            "SELECT id FROM party_types WHERE type_code='INDIVIDUAL' AND is_deleted=0 LIMIT 1", null
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val customerId = helper.insertParty(
+            JSONObject()
+                .put("party_type_id", customerTypeId)
+                .put("party_type", "customer")
+                .put("commercial_name", "Supplier validation customer")
+                .put("commercial_name_ar", "عميل لا يجوز اعتماده مورداً")
+                .put("is_active", true),
+            1
+        )
+        val invalidParty = runCatching {
+            SupplierPayablesRepository.createPurchaseInvoice(
+                db, 1, customerId, "manual", 97993, "INVALID-SUPPLIER", 50.0, "2026-11-01", null, 1
+            )
+        }.isFailure
+        assertTrue("يجب رفض طرف غير مصنف مورداً", invalidParty)
+        assertEquals(0, db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_invoices WHERE station_id=1 AND source_id IN (97991,97992,97993)",
+            null
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+    }
+
+    @Test
+    fun fuelCashAndCreditSuppliesCreateSourceInvoicesBalancedJournalsAndAreIdempotent() {
+        val actorId = createFinanceActor()
+        val cashBoxId = createCashBoxAndPostingAccounts(actorId)
+        val (tankId, fuelTypeId) = createFuelTank(actorId)
+        DebtDueDateRepository.persistPartyTerms(helper, supplierId, 1, "صافي 7 يوم")
+
+        val cashPayload = JSONObject()
+            .put("supplier_id", supplierId)
+            .put("tank_id", tankId)
+            .put("fuel_type_id", fuelTypeId)
+            .put("ordered_quantity", 10.0)
+            .put("unit_price", 5.0)
+            .put("transport_cost", 0.0)
+            .put("discount", 0.0)
+            .put("tax_amount", 0.0)
+            .put("payment_method", "cash")
+            .put("cash_box_id", cashBoxId)
+            .put("invoice_number", "FUEL-CASH-INT")
+            .put("invoice_date", "2026-11-01")
+            .put("order_date", "2026-11-01")
+            .put("idempotency_key", "fuel-cash-${UUID.randomUUID()}")
+
+        val cashResult = helper.saveTankRefillWithPayment(cashPayload, 1, actorId)
+        val cashRefillId = cashResult.getLong("refill_id")
+        assertEquals(50.0, cashResult.getDouble("net_amount"), 0.01)
+        val cashInvoiceId = assertSupplierInvoice(
+            "fuel_refill", cashRefillId, 50.0, "paid", 50.0, 0.0
+        )
+        assertBalancedSourceJournal("fuel_supply", cashRefillId, 50.0)
+        val retryCash = helper.saveTankRefillWithPayment(cashPayload, 1, actorId)
+        assertTrue(retryCash.optBoolean("idempotent"))
+        assertEquals(cashRefillId, retryCash.getLong("refill_id"))
+
+        val creditPayload = JSONObject(cashPayload.toString())
+            .put("payment_method", "credit")
+            .put("cash_box_id", 0)
+            .put("unit_price", 7.0)
+            .put("invoice_number", "FUEL-CREDIT-INT")
+            .put("idempotency_key", "fuel-credit-${UUID.randomUUID()}")
+        val creditResult = helper.saveTankRefillWithPayment(creditPayload, 1, actorId)
+        val creditRefillId = creditResult.getLong("refill_id")
+        assertEquals(70.0, creditResult.getDouble("net_amount"), 0.01)
+        val creditInvoiceId = assertSupplierInvoice(
+            "fuel_refill", creditRefillId, 70.0, "open", 0.0, 70.0
+        )
+        assertBalancedSourceJournal("fuel_supply", creditRefillId, 70.0)
+        val retryCredit = helper.saveTankRefillWithPayment(creditPayload, 1, actorId)
+        assertTrue(retryCredit.optBoolean("idempotent"))
+        assertEquals(creditRefillId, retryCredit.getLong("refill_id"))
+
+        assertEquals(2, db.rawQuery(
+            "SELECT COUNT(*) FROM tank_refills WHERE station_id=1 AND supplier_id=? AND is_deleted=0",
+            arrayOf(supplierId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+        assertEquals(2, db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_invoices WHERE station_id=1 AND source_type='fuel_refill' AND source_id IN (?,?) AND is_deleted=0",
+            arrayOf(cashRefillId.toString(), creditRefillId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+        assertEquals(20.0, db.rawQuery(
+            "SELECT current_quantity FROM tanks WHERE id=? AND station_id=1",
+            arrayOf(tankId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getDouble(0) }, 0.0001)
+        assertEquals(cashInvoiceId, db.rawQuery(
+            "SELECT id FROM supplier_invoices WHERE source_type='fuel_refill' AND source_id=?",
+            arrayOf(cashRefillId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) })
+        assertTrue(creditInvoiceId > 0L)
+        db.rawQuery(
+            "SELECT current_balance,total_due,total_purchases FROM parties WHERE id=? AND station_id=1",
+            arrayOf(supplierId.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals(70.0, c.getDouble(0), 0.01)
+            assertEquals(70.0, c.getDouble(1), 0.01)
+            assertEquals(120.0, c.getDouble(2), 0.01)
+        }
+        val sameKeyDifferentAmount = JSONObject(cashPayload.toString()).put("unit_price", 6.0)
+        assertTrue(runCatching {
+            helper.saveTankRefillWithPayment(sameKeyDifferentAmount, 1, actorId)
+        }.isFailure)
+    }
+
+    @Test
+    fun productCashAndCreditPurchasesCreateUniqueSupplierInvoicesAndExcludeInternalTransfers() {
+        val actorId = createFinanceActor()
+        val cashBoxId = createCashBoxAndPostingAccounts(actorId)
+        val categoryId = db.rawQuery(
+            "SELECT id FROM product_categories WHERE is_deleted=0 ORDER BY id LIMIT 1", null
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val unitId = db.rawQuery("SELECT id FROM units ORDER BY id LIMIT 1", null)
+            .use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val productId = helper.insertProduct(
+            JSONObject()
+                .put("product_name", "Supplier purchase integration product")
+                .put("product_name_ar", "منتج اختبار مشتريات المورد")
+                .put("category_id", categoryId)
+                .put("unit_id", unitId)
+                .put("purchase_price", 5.0)
+                .put("sale_price", 8.0)
+                .put("quantity", 0.0)
+                .put("minimum_stock", 0.0),
+            1, actorId
+        )
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+
+        val creditPayload = JSONObject()
+            .put("movement_type", "in")
+            .put("movement_subtype", "in")
+            .put("financial_purchase", true)
+            .put("payment_method", "credit")
+            .put("supplier_id", supplierId)
+            .put("product_id", productId)
+            .put("warehouse_id", warehouseId)
+            .put("quantity", 10.0)
+            .put("unit_cost", 5.0)
+            .put("movement_code", "SP-PROD-CREDIT-${UUID.randomUUID().toString().take(8)}")
+            .put("invoice_number", "PROD-CREDIT-INT")
+            .put("invoice_date", "2026-11-02")
+            .put("idempotency_key", "product-credit-${UUID.randomUUID()}")
+
+        val creditMovementId = helper.addStockMovement(creditPayload, 1, actorId)
+        val creditInvoiceId = assertSupplierInvoice(
+            "product_purchase", creditMovementId, 50.0, "open", 0.0, 50.0
+        )
+        assertBalancedSourceJournal("product_purchase", creditMovementId, 50.0)
+        val duplicateCreditId = helper.addStockMovement(creditPayload, 1, actorId)
+        assertEquals(creditMovementId, duplicateCreditId)
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_movements WHERE id=? AND station_id=1",
+            arrayOf(creditMovementId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+
+        val cashPayload = JSONObject()
+            .put("movement_type", "in")
+            .put("movement_subtype", "in")
+            .put("financial_purchase", true)
+            .put("payment_method", "cash")
+            .put("cash_box_id", cashBoxId)
+            .put("supplier_id", supplierId)
+            .put("product_id", productId)
+            .put("warehouse_id", warehouseId)
+            .put("quantity", 5.0)
+            .put("unit_cost", 6.0)
+            .put("movement_code", "SP-PROD-CASH-${UUID.randomUUID().toString().take(8)}")
+            .put("invoice_number", "PROD-CASH-INT")
+            .put("invoice_date", "2026-11-03")
+            .put("idempotency_key", "product-cash-${UUID.randomUUID()}")
+
+        val cashMovementId = helper.addStockMovement(cashPayload, 1, actorId)
+        val cashInvoiceId = assertSupplierInvoice(
+            "product_purchase", cashMovementId, 30.0, "paid", 30.0, 0.0
+        )
+        assertBalancedSourceJournal("product_purchase", cashMovementId, 30.0)
+        val duplicateCashId = helper.addStockMovement(cashPayload, 1, actorId)
+        assertEquals(cashMovementId, duplicateCashId)
+        assertTrue(creditInvoiceId != cashInvoiceId)
+        db.rawQuery(
+            "SELECT current_balance,total_due,total_purchases FROM parties WHERE id=? AND station_id=1",
+            arrayOf(supplierId.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals(50.0, c.getDouble(0), 0.01)
+            assertEquals(50.0, c.getDouble(1), 0.01)
+            assertEquals(80.0, c.getDouble(2), 0.01)
+        }
+
+        val changedPurchase = JSONObject(creditPayload.toString()).put("unit_cost", 7.0)
+        assertTrue(runCatching { helper.addStockMovement(changedPurchase, 1, actorId) }.isFailure)
+
+        val secondWarehouseId = db.insertOrThrow("warehouses", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("station_id", 1)
+            put("warehouse_name", "Supplier transfer test ${UUID.randomUUID().toString().take(8)}")
+            put("location_details", "internal transfer test only")
+            put("is_default", 0)
+            put("is_active", 1)
+        })
+        val beforeInvoices = db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_invoices WHERE station_id=1 AND source_type='product_purchase' AND is_deleted=0",
+            null
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+        val beforeJournals = db.rawQuery(
+            "SELECT COUNT(*) FROM journal_entries WHERE station_id=1 AND reference_type='product_purchase' AND is_deleted=0",
+            null
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+        helper.transferStockMovement(
+            JSONObject()
+                .put("product_id", productId)
+                .put("source_warehouse_id", warehouseId)
+                .put("target_warehouse_id", secondWarehouseId)
+                .put("quantity", 2.0)
+                .put("unit_cost", 5.0)
+                .put("reference_code", "INTERNAL-TRANSFER")
+                .put("notes", "اختبار استثناء التحويل الداخلي"),
+            1, actorId
+        )
+        assertEquals(beforeInvoices, db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_invoices WHERE station_id=1 AND source_type='product_purchase' AND is_deleted=0",
+            null
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+        assertEquals(beforeJournals, db.rawQuery(
+            "SELECT COUNT(*) FROM journal_entries WHERE station_id=1 AND reference_type='product_purchase' AND is_deleted=0",
+            null
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+        assertEquals(15.0, db.rawQuery(
+            "SELECT COALESCE(SUM(quantity_on_hand),0) FROM inventory_levels WHERE product_id=?",
+            arrayOf(productId.toString())
+        ).use { c -> c.moveToFirst(); c.getDouble(0) }, 0.0001)
+        assertEquals(2, db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_invoices WHERE station_id=1 AND source_type='product_purchase' AND source_id IN (?,?) AND is_deleted=0",
+            arrayOf(creditMovementId.toString(), cashMovementId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+    }
+
+
+    @Test
+    fun fuelSupplyIdempotencyIndependentlyPreventsDuplicateSourceInvoiceAndJournal() {
+        val actorId = createFinanceActor()
+        createCashBoxAndPostingAccounts(actorId)
+        val (tankId, fuelTypeId) = createFuelTank(actorId)
+        val key = "fuel-independent-\${UUID.randomUUID()}"
+        val payload = JSONObject()
+            .put("supplier_id", supplierId)
+            .put("tank_id", tankId)
+            .put("fuel_type_id", fuelTypeId)
+            .put("ordered_quantity", 8.0)
+            .put("unit_price", 4.0)
+            .put("payment_method", "credit")
+            .put("cash_box_id", 0)
+            .put("invoice_number", "FUEL-IDEMPOTENT-INDEPENDENT")
+            .put("invoice_date", "2026-11-04")
+            .put("order_date", "2026-11-04")
+            .put("idempotency_key", key)
+
+        val first = helper.saveTankRefillWithPayment(payload, 1, actorId)
+        val retry = helper.saveTankRefillWithPayment(payload, 1, actorId)
+        assertEquals(first.getLong("refill_id"), retry.getLong("refill_id"))
+        assertTrue(retry.optBoolean("idempotent"))
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM tank_refills WHERE station_id=1 AND is_deleted=0 AND extra_data LIKE ?",
+            arrayOf("%$key%")
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_invoices WHERE station_id=1 AND source_type='fuel_refill' AND source_id=? AND is_deleted=0",
+            arrayOf(first.getLong("refill_id").toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM journal_entries WHERE station_id=1 AND reference_type='fuel_supply' AND reference_id=? AND is_deleted=0",
+            arrayOf(first.getLong("refill_id").toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+        assertEquals(8.0, db.rawQuery(
+            "SELECT current_quantity FROM tanks WHERE id=? AND station_id=1",
+            arrayOf(tankId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getDouble(0) }, 0.0001)
+
+        assertTrue(runCatching {
+            helper.saveTankRefillWithPayment(JSONObject(payload.toString()).put("unit_price", 5.0), 1, actorId)
+        }.isFailure)
+    }
+
+    @Test
+    fun productPurchaseIdempotencyIndependentlyPreventsDuplicateMovementInvoiceAndJournal() {
+        val actorId = createFinanceActor()
+        createCashBoxAndPostingAccounts(actorId)
+        val categoryId = db.rawQuery(
+            "SELECT id FROM product_categories WHERE is_deleted=0 ORDER BY id LIMIT 1", null
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val unitId = db.rawQuery("SELECT id FROM units ORDER BY id LIMIT 1", null)
+            .use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val productId = helper.insertProduct(
+            JSONObject()
+                .put("product_name", "Independent idempotency product")
+                .put("product_name_ar", "منتج اختبار منع تكرار مستقل")
+                .put("category_id", categoryId)
+                .put("unit_id", unitId)
+                .put("purchase_price", 3.0)
+                .put("sale_price", 5.0)
+                .put("quantity", 0.0),
+            1, actorId
+        )
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        val key = "product-independent-\${UUID.randomUUID()}"
+        val payload = JSONObject()
+            .put("movement_type", "in")
+            .put("movement_subtype", "in")
+            .put("financial_purchase", true)
+            .put("payment_method", "credit")
+            .put("supplier_id", supplierId)
+            .put("product_id", productId)
+            .put("warehouse_id", warehouseId)
+            .put("quantity", 6.0)
+            .put("unit_cost", 3.0)
+            .put("movement_code", "SP-PROD-IDEMP-\${UUID.randomUUID().toString().take(8)}")
+            .put("invoice_number", "PRODUCT-IDEMPOTENT-INDEPENDENT")
+            .put("invoice_date", "2026-11-04")
+            .put("idempotency_key", key)
+
+        val firstId = helper.addStockMovement(payload, 1, actorId)
+        val retryId = helper.addStockMovement(payload, 1, actorId)
+        assertEquals(firstId, retryId)
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_movements WHERE id=? AND station_id=1 AND is_deleted=0",
+            arrayOf(firstId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_invoices WHERE station_id=1 AND source_type='product_purchase' AND source_id=? AND is_deleted=0",
+            arrayOf(firstId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM journal_entries WHERE station_id=1 AND reference_type='product_purchase' AND reference_id=? AND is_deleted=0",
+            arrayOf(firstId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+        assertEquals(6.0, db.rawQuery(
+            "SELECT quantity_on_hand FROM inventory_levels WHERE product_id=? AND warehouse_id=?",
+            arrayOf(productId.toString(), warehouseId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getDouble(0) }, 0.0001)
+
+        assertTrue(runCatching {
+            helper.addStockMovement(JSONObject(payload.toString()).put("unit_cost", 4.0), 1, actorId)
+        }.isFailure)
+    }
+
 }

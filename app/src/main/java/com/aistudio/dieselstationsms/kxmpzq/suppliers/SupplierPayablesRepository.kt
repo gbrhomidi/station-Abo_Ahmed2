@@ -97,6 +97,38 @@ object SupplierPayablesRepository {
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_supplier_invoice_date ON supplier_invoices(station_id,supplier_id,invoice_date,is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_supplier_invoice_alloc_invoice ON supplier_invoice_allocations(station_id,supplier_invoice_id,status,is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_supplier_invoice_alloc_payment ON supplier_invoice_allocations(station_id,payment_id,status,is_deleted)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS supplier_invoice_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL UNIQUE,
+                station_id INTEGER NOT NULL,
+                supplier_id INTEGER NOT NULL,
+                supplier_invoice_id INTEGER NOT NULL,
+                task_type TEXT NOT NULL,
+                due_period TEXT NOT NULL,
+                reference TEXT NOT NULL DEFAULT '',
+                task_date TEXT,
+                amount REAL NOT NULL DEFAULT 0,
+                priority TEXT NOT NULL DEFAULT 'متوسطة',
+                status TEXT NOT NULL DEFAULT 'غير مدفوعة',
+                notes TEXT,
+                is_resolved INTEGER NOT NULL DEFAULT 0,
+                is_archived INTEGER NOT NULL DEFAULT 0,
+                is_deleted INTEGER NOT NULL DEFAULT 0,
+                resolved_at TEXT,
+                archived_at TEXT,
+                created_by INTEGER,
+                updated_by INTEGER,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(station_id,supplier_id,supplier_invoice_id,task_type,due_period),
+                FOREIGN KEY (supplier_invoice_id) REFERENCES supplier_invoices(id),
+                FOREIGN KEY (supplier_id) REFERENCES parties(id)
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_supplier_invoice_tasks_pending ON supplier_invoice_tasks(station_id,is_resolved,is_archived,is_deleted,task_date)")
+
         db.execSQL("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_supplier_invoice_payment_once
             ON supplier_invoice_allocations(payment_id,supplier_invoice_id)
@@ -135,6 +167,173 @@ object SupplierPayablesRepository {
         """.trimIndent())
     }
 
+
+    /**
+     * Persist one operational task for every open supplier invoice. The composite unique
+     * key is invoice- and maturity-period-specific, so refreshes and retries cannot duplicate tasks.
+     */
+    fun synchronizeSupplierInvoiceTasks(
+        db: SQLiteDatabase,
+        stationId: Int,
+        asOfDate: String = BusinessDay.currentDate()
+    ): Int {
+        require(stationId > 0) { "معرف المحطة غير صالح لمزامنة مهام الموردين" }
+        val asOf = parseDate(asOfDate) ?: LocalDate.now()
+        data class Candidate(
+            val invoiceId: Long,
+            val supplierId: Long,
+            val invoiceNumber: String,
+            val dueDate: String?,
+            val remaining: Double,
+            val supplierName: String,
+            val createdAt: String,
+            val createdBy: Long?
+        )
+        val candidates = mutableListOf<Candidate>()
+        db.rawQuery(
+            """SELECT i.id,i.supplier_id,COALESCE(i.invoice_number,''),
+                      CASE WHEN i.due_date_source='purchase_creation'
+                             AND COALESCE(i.payment_terms_source_at_purchase,'')='explicit_text'
+                             AND date(i.due_date,'+0 days')=i.due_date
+                           THEN i.due_date ELSE NULL END,
+                      MAX(COALESCE(i.remaining_amount,0),0),
+                      TRIM(COALESCE(p.commercial_name_ar,p.commercial_name,'')),
+                      COALESCE(i.created_at,''),i.created_by
+               FROM supplier_invoices i
+               JOIN parties p ON p.id=i.supplier_id AND p.station_id=i.station_id
+                            AND p.is_deleted=0 AND p.is_active=1
+               JOIN party_types pt ON pt.id=p.party_type_id
+                                  AND pt.is_deleted=0 AND pt.type_code='SUPPLIER'
+               WHERE i.station_id=? AND i.is_deleted=0
+                 AND i.status IN ('open','partial')
+                 AND COALESCE(i.remaining_amount,0)>?
+               ORDER BY i.id""",
+            arrayOf(stationId.toString(), EPSILON.toString())
+        ).use { c ->
+            while (c.moveToNext()) {
+                candidates += Candidate(
+                    c.getLong(0), c.getLong(1), c.getString(2).orEmpty(),
+                    c.getString(3)?.takeIf { it.isNotBlank() }, c.getDouble(4).coerceAtLeast(0.0),
+                    c.getString(5).orEmpty(), c.getString(6).orEmpty(),
+                    if (c.isNull(7)) null else c.getLong(7)
+                )
+            }
+        }
+
+        val now = asOfDate + " 00:00:00"
+        val activeKeys = HashSet<String>()
+        var changed = 0
+        candidates.forEach { invoice ->
+            val maturity = invoice.dueDate?.let(::parseDate)
+            val dueDate = maturity?.toString()
+            val period = dueDate ?: "UNDATED"
+            val key = "\${invoice.supplierId}:\${invoice.invoiceId}:$period"
+            activeKeys += key
+            val daysUntilDue = maturity?.let { java.time.temporal.ChronoUnit.DAYS.between(asOf, it) }
+            val taskStatus = when {
+                maturity == null -> "بحاجة مراجعة"
+                daysUntilDue != null && daysUntilDue < 0 -> "متأخرة"
+                daysUntilDue != null && daysUntilDue <= 3 -> "قريبة من الاستحقاق"
+                else -> "غير مدفوعة"
+            }
+            val priority = if (maturity == null || (daysUntilDue != null && daysUntilDue < 0)) "عالية" else "متوسطة"
+            val notes = "المورد: \${invoice.supplierName} — فاتورة: \${invoice.invoiceNumber}"
+            val existingId = db.rawQuery(
+                """SELECT id FROM supplier_invoice_tasks
+                   WHERE station_id=? AND supplier_id=? AND supplier_invoice_id=?
+                     AND task_type='supplier_invoice_due' AND due_period=? LIMIT 1""",
+                arrayOf(stationId.toString(), invoice.supplierId.toString(), invoice.invoiceId.toString(), period)
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            val values = ContentValues().apply {
+                put("reference", invoice.invoiceNumber.ifBlank { invoice.invoiceId.toString() })
+                if (dueDate != null) put("task_date", dueDate) else putNull("task_date")
+                put("amount", invoice.remaining)
+                put("priority", priority)
+                put("status", taskStatus)
+                put("notes", notes)
+                put("is_resolved", 0)
+                putNull("resolved_at")
+                put("updated_at", now)
+                if (invoice.createdBy != null) put("created_by", invoice.createdBy)
+            }
+            if (existingId > 0L) {
+                changed += db.update(
+                    "supplier_invoice_tasks", values, "id=? AND station_id=?",
+                    arrayOf(existingId.toString(), stationId.toString())
+                )
+            } else {
+                values.put("uuid", UUID.randomUUID().toString())
+                values.put("station_id", stationId)
+                values.put("supplier_id", invoice.supplierId)
+                values.put("supplier_invoice_id", invoice.invoiceId)
+                values.put("task_type", "supplier_invoice_due")
+                values.put("due_period", period)
+                values.put("created_at", invoice.createdAt.ifBlank { now })
+                changed += if (db.insertWithOnConflict(
+                    "supplier_invoice_tasks", null, values, SQLiteDatabase.CONFLICT_IGNORE
+                ) > 0L) 1 else 0
+            }
+        }
+
+        // Close tasks for paid, cancelled, deleted or otherwise ineligible invoices.
+        // A changed maturity period retires its old task and creates one new period record.
+        val stale = mutableListOf<Long>()
+        db.rawQuery(
+            """SELECT id,supplier_id,supplier_invoice_id,due_period
+               FROM supplier_invoice_tasks
+               WHERE station_id=? AND is_deleted=0 AND is_resolved=0""",
+            arrayOf(stationId.toString())
+        ).use { c ->
+            while (c.moveToNext()) {
+                val key = "\${c.getLong(1)}:\${c.getLong(2)}:\${c.getString(3)}"
+                if (key !in activeKeys) stale += c.getLong(0)
+            }
+        }
+        stale.forEach { id ->
+            changed += db.update(
+                "supplier_invoice_tasks",
+                ContentValues().apply {
+                    put("is_resolved", 1)
+                    put("status", "مكتملة")
+                    put("amount", 0.0)
+                    put("resolved_at", now)
+                    put("updated_at", now)
+                },
+                "id=? AND station_id=? AND is_resolved=0 AND is_deleted=0",
+                arrayOf(id.toString(), stationId.toString())
+            )
+        }
+        return changed
+    }
+
+    private fun validatePurchaseSource(
+        db: SQLiteDatabase,
+        stationId: Int,
+        supplierId: Long,
+        sourceType: String,
+        sourceId: Long,
+        amount: Double
+    ) {
+        if (sourceType == "manual") return
+        val sql = when (sourceType) {
+            "fuel_refill" -> """SELECT 1 FROM tank_refills
+                WHERE id=? AND station_id=? AND supplier_id=? AND status='completed'
+                  AND is_deleted=0 AND ABS(COALESCE(net_amount,0)-?)<=0.01 LIMIT 1"""
+            "product_purchase" -> """SELECT 1 FROM inventory_movements
+                WHERE id=? AND station_id=? AND movement_type='in'
+                  AND COALESCE(movement_subtype,'')='in' AND status='completed'
+                  AND is_deleted=0 AND reference_id=?
+                  AND ABS(COALESCE(total_cost,0)-?)<=0.01 LIMIT 1"""
+            else -> throw IllegalArgumentException("نوع مصدر فاتورة المورد غير مدعوم")
+        }
+        val args = arrayOf(sourceId.toString(), stationId.toString(), supplierId.toString(), amount.toString())
+        val exists = db.rawQuery(sql, args).use { it.moveToFirst() }
+        require(exists) {
+            if (sourceType == "fuel_refill") "لا يمكن إنشاء فاتورة مورد دون توريد وقود مكتمل مطابق للمورد والمحطة والمبلغ"
+            else "لا يمكن إنشاء فاتورة مورد دون حركة شراء منتجات مكتملة ومطابقة للمورد والمحطة والمبلغ"
+        }
+    }
+
     fun createPurchaseInvoice(
         db: SQLiteDatabase,
         stationId: Int,
@@ -154,6 +353,7 @@ object SupplierPayablesRepository {
             "نوع مصدر فاتورة المورد غير صالح"
         }
         require(amount.isFinite() && amount > EPSILON) { "مبلغ فاتورة المورد غير صالح" }
+        validatePurchaseSource(db, stationId, supplierId, sourceType, sourceId, amount)
 
         val existing = db.rawQuery(
             """SELECT id,supplier_id,total_amount,invoice_number,invoice_date,currency_id
@@ -183,17 +383,20 @@ object SupplierPayablesRepository {
         }
 
         val partyColumns = columns(db,"parties")
-        val termsExpr = if ("payment_terms" in partyColumns) "COALESCE(payment_terms,'')" else "''"
-        val daysExpr = if ("payment_terms_days" in partyColumns) "payment_terms_days" else "NULL"
-        val termIdExpr = if ("payment_terms_id" in partyColumns) "payment_terms_id" else "NULL"
-        val termSourceExpr = if ("payment_terms_source" in partyColumns) "payment_terms_source" else "NULL"
-        val partyStation = if ("station_id" in partyColumns) " AND station_id=?" else ""
+        val termsExpr = if ("payment_terms" in partyColumns) "COALESCE(p.payment_terms,'')" else "''"
+        val daysExpr = if ("payment_terms_days" in partyColumns) "p.payment_terms_days" else "NULL"
+        val termIdExpr = if ("payment_terms_id" in partyColumns) "p.payment_terms_id" else "NULL"
+        val termSourceExpr = if ("payment_terms_source" in partyColumns) "p.payment_terms_source" else "NULL"
+        val partyStation = if ("station_id" in partyColumns) " AND p.station_id=?" else ""
         val args = if ("station_id" in partyColumns) arrayOf(supplierId.toString(),stationId.toString()) else arrayOf(supplierId.toString())
         val terms = db.rawQuery(
-            "SELECT $termsExpr,$daysExpr,$termIdExpr,$termSourceExpr FROM parties WHERE id=?$partyStation AND is_deleted=0 AND is_active=1 LIMIT 1",
+            "SELECT $termsExpr,$daysExpr,$termIdExpr,$termSourceExpr,COALESCE(pt.type_code,'') " +
+                "FROM parties p JOIN party_types pt ON pt.id=p.party_type_id " +
+                "WHERE p.id=?$partyStation AND p.is_deleted=0 AND p.is_active=1 AND pt.is_deleted=0 LIMIT 1",
             args
         ).use { c ->
             require(c.moveToFirst()) { "المورد غير موجود أو غير نشط ضمن المحطة" }
+            require(c.getString(4).equals("SUPPLIER", ignoreCase = true)) { "الطرف المحدد ليس مورداً" }
             listOf(c.getString(0).orEmpty(),if(c.isNull(1)) null else c.getInt(1),
                 if(c.isNull(2)) null else c.getLong(2),c.getString(3).orEmpty())
         }
@@ -235,6 +438,7 @@ object SupplierPayablesRepository {
             put("created_by",actorId)
         })
         check(id > 0L) { "تعذر حفظ فاتورة المورد" }
+        synchronizeSupplierInvoiceTasks(db, stationId)
         return id
     }
 
@@ -423,6 +627,7 @@ object SupplierPayablesRepository {
                 put("status","posted");put("allocated_at",BusinessDay.currentDate());put("created_by",actorId)
             })
         }
+        synchronizeSupplierInvoiceTasks(db, stationId)
         return JSONObject().apply {
             put("success",true);put("idempotent",false)
             put("allocated_amount",allocated);put("unapplied_amount",remainingPayment)

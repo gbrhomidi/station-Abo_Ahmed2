@@ -56,7 +56,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 60
+        const val VERSION = 61
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -12399,6 +12399,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val purchasePaymentMethod = data.optString("payment_method", "").trim().lowercase(Locale.ROOT)
             val purchaseCashBoxId = data.optLong("cash_box_id", 0L)
             val purchaseIdempotencyKey = data.optString("idempotency_key", "").trim()
+            val purchaseFingerprint = if (financialPurchase) listOf(
+                stationScopeId.toString(), data.optLong("supplier_id", 0L).toString(),
+                productId.toString(), warehouseId.toString(), quantity.toString(), unitCost.toString(),
+                purchasePaymentMethod, purchaseCashBoxId.toString(), data.optLong("currency_id", 0L).toString(),
+                data.optString("invoice_number", "").trim(),
+                data.optString("invoice_date", data.optString("movement_date", "")).trim()
+            ).joinToString("|") else ""
             val movementCode = data.optString("movement_code", "INV-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}").trim()
                 .ifBlank { "INV-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(6)}" }
             val referenceId = data.optLong(
@@ -12445,7 +12452,40 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     val previousPurchaseId = findFinancialIdempotency(
                         db, "product_purchase", stationScopeId, purchaseIdempotencyKey
                     )
-                    if (previousPurchaseId != null) return previousPurchaseId
+                    if (previousPurchaseId != null) {
+                        val previous = db.rawQuery(
+                            """SELECT product_id,warehouse_id,quantity_change,unit_cost,total_cost,reference_id,extra_data
+                               FROM inventory_movements
+                               WHERE id=? AND station_id=? AND status='completed' AND is_deleted=0 LIMIT 1""",
+                            arrayOf(previousPurchaseId.toString(), stationScopeId.toString())
+                        ).use { c ->
+                            require(c.moveToFirst()) { "مفتاح شراء المنتجات مرتبط بمستند مصدر محذوف أو غير موجود" }
+                            JSONObject().apply {
+                                put("product_id", c.getLong(0)); put("warehouse_id", c.getLong(1))
+                                put("quantity", c.getDouble(2)); put("unit_cost", c.getDouble(3))
+                                put("total_cost", c.getDouble(4)); put("supplier_id", c.getLong(5))
+                                put("extra_data", c.getString(6).orEmpty())
+                            }
+                        }
+                        val savedFingerprint = runCatching {
+                            JSONObject(previous.getString("extra_data")).optString("idempotency_fingerprint")
+                        }.getOrDefault("")
+                        if (savedFingerprint.isNotBlank()) {
+                            require(savedFingerprint == purchaseFingerprint) {
+                                "تم استخدام مفتاح شراء المنتجات نفسه لبيانات مختلفة"
+                            }
+                        } else {
+                            require(
+                                previous.getLong("product_id") == productId.toLong() &&
+                                previous.getLong("warehouse_id") == warehouseId &&
+                                kotlin.math.abs(previous.getDouble("quantity") - quantity) <= 0.000001 &&
+                                kotlin.math.abs(previous.getDouble("unit_cost") - unitCost) <= 0.000001 &&
+                                kotlin.math.abs(previous.getDouble("total_cost") - totalCost) <= 0.01 &&
+                                previous.getLong("supplier_id") == data.optLong("supplier_id")
+                            ) { "مفتاح شراء المنتجات السابق لا يطابق مستند المصدر الحالي" }
+                        }
+                        return previousPurchaseId
+                    }
                     require(reserveFinancialIdempotency(
                         db, "product_purchase", stationScopeId, purchaseIdempotencyKey
                     )) { "مفتاح شراء المنتجات مستخدم مسبقاً" }
@@ -12511,6 +12551,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("reason", data.optString("notes", ""))
                     put("performed_by", userId)
                     put("status", "completed")
+                    if (financialPurchase) {
+                        put("extra_data", JSONObject()
+                            .put("financial_purchase", true)
+                            .put("idempotency_key", purchaseIdempotencyKey)
+                            .put("idempotency_fingerprint", purchaseFingerprint)
+                            .put("payment_method", purchasePaymentMethod)
+                            .put("cash_box_id", purchaseCashBoxId)
+                            .toString())
+                    }
                     put("created_at", getCurrentDateTime())
                 }
                 val id = db.insertOrThrow("inventory_movements", null, cv)
@@ -18599,10 +18648,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     private fun taskQuery(params: JSONObject, stationId: Int): JSONArray {
         require(stationId > 0) { "معرف المحطة غير صالح لقراءة المهام" }
         val asOfDate = BusinessDay.currentDate()
+        SupplierPayablesRepository.synchronizeSupplierInvoiceTasks(writableDatabase, stationId, asOfDate)
 
         val manualVisibility = buildString {
             if (!params.optBoolean("include_archived", false)) append(" AND is_archived = 0")
             if (!params.optBoolean("include_resolved", false)) append(" AND is_resolved = 0")
+        }
+        val supplierTaskVisibility = buildString {
+            if (!params.optBoolean("include_archived", false)) append(" AND it.is_archived = 0")
+            if (!params.optBoolean("include_resolved", false)) append(" AND it.is_resolved = 0")
         }
         val filters = mutableListOf<String>()
         val args = mutableListOf<String>()
@@ -18726,25 +18780,26 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 UNION ALL
 
                 SELECT
-                    CAST(-(4000000000000 + i.id) AS INTEGER) AS id,
-                    ('supplier-invoice-task-' || i.id) AS uuid,
+                    CAST(-(4000000000000 + it.id) AS INTEGER) AS id,
+                    it.uuid AS uuid,
                     'فاتورة مورد غير مسددة' AS task_type,
                     'فاتورة مورد غير مسددة' AS type,
-                    COALESCE(NULLIF(i.invoice_number, ''), CAST(i.id AS TEXT)) AS reference,
-                    CASE WHEN i.due_date_source='purchase_creation' AND COALESCE(i.payment_terms_source_at_purchase,'')='explicit_text' THEN NULLIF(i.due_date,'') ELSE NULL END AS task_date,
-                    CASE WHEN i.due_date_source='purchase_creation' AND COALESCE(i.payment_terms_source_at_purchase,'')='explicit_text' THEN NULLIF(i.due_date,'') ELSE NULL END AS date,
-                    MAX(COALESCE(i.remaining_amount, 0), 0) AS amount,
-                    CASE WHEN i.due_date_source<>'purchase_creation' OR COALESCE(i.payment_terms_source_at_purchase,'')<>'explicit_text' OR NULLIF(i.due_date,'') IS NULL OR date(i.due_date) < date(?) THEN 'عالية' ELSE 'متوسطة' END AS priority,
-                    CASE WHEN i.due_date_source<>'purchase_creation' OR COALESCE(i.payment_terms_source_at_purchase,'')<>'explicit_text' OR NULLIF(i.due_date,'') IS NULL THEN 'بحاجة مراجعة' WHEN date(i.due_date) < date(?) THEN 'متأخرة' ELSE 'غير مدفوعة' END AS status,
-                    'المورد: ' || TRIM(COALESCE(p.commercial_name_ar, p.commercial_name, '')) AS notes,
-                    0 AS is_resolved, 0 AS is_archived, 0 AS is_deleted, NULL AS extra,
-                    NULL AS resolved_at, NULL AS archived_at, NULL AS created_by, NULL AS updated_by,
-                    i.created_at AS created_at, i.updated_at AS updated_at,
-                    'supplier_invoice' AS source_kind, i.id AS source_id, ('SI-' || i.id) AS display_id, 0 AS can_edit
-                FROM supplier_invoices i
-                JOIN parties p ON p.id=i.supplier_id AND p.station_id=i.station_id AND p.is_deleted=0 AND p.is_active=1
-                WHERE i.station_id=? AND i.is_deleted=0 AND i.status IN ('open','partial')
-                  AND COALESCE(i.remaining_amount, 0) > 0.000001
+                    it.reference AS reference,
+                    NULLIF(it.task_date,'') AS task_date,
+                    NULLIF(it.task_date,'') AS date,
+                    MAX(COALESCE(it.amount,0),0) AS amount,
+                    it.priority AS priority,
+                    it.status AS status,
+                    it.notes AS notes,
+                    it.is_resolved AS is_resolved, it.is_archived AS is_archived,
+                    it.is_deleted AS is_deleted, NULL AS extra,
+                    it.resolved_at AS resolved_at, it.archived_at AS archived_at,
+                    it.created_by AS created_by, it.updated_by AS updated_by,
+                    it.created_at AS created_at, it.updated_at AS updated_at,
+                    'supplier_invoice' AS source_kind, it.supplier_invoice_id AS source_id,
+                    ('SI-' || it.supplier_invoice_id) AS display_id, 0 AS can_edit
+                FROM supplier_invoice_tasks it
+                WHERE it.station_id=? AND it.is_deleted=0 $supplierTaskVisibility
 
                 UNION ALL
 
@@ -18793,8 +18848,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             add(asOfDate)
             add(asOfDate)
             add(stationId.toString())
-            add(asOfDate)
-            add(asOfDate)
             add(stationId.toString())
             add(stationId.toString())
             add(stationId.toString())
@@ -19999,15 +20052,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val tankId = data.optLong("tank_id", 0L)
                 val fuelTypeId = data.optLong("fuel_type_id", 0L)
                 require(tankId > 0L && fuelTypeId > 0L) { "الخزان ونوع الوقود مطلوبان" }
-                val tank = requireTankFuelMatch(db, tankId, fuelTypeId, stationScopeId)
 
                 val ordered = data.optDouble("ordered_quantity", Double.NaN)
                 require(ordered.isFinite() && ordered > 0.0) { "الكمية المطلوبة غير صالحة" }
                 val delivered = ordered
-                val before = tank.optDouble("current_quantity")
-                val actual = before + delivered
-                require(actual.isFinite() && actual <= tank.optDouble("capacity_liters")) { "التوريد يتجاوز سعة الخزان" }
-
                 val unitPrice = data.optDouble("unit_price", Double.NaN)
                 require(unitPrice.isFinite() && unitPrice >= 0.0) { "سعر الشراء غير صالح" }
                 val transport = data.optDouble("transport_cost", 0.0).coerceAtLeast(0.0)
@@ -20016,6 +20064,69 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val totalAmount = delivered * unitPrice
                 val netAmount = (totalAmount + transport - discount + tax).coerceAtLeast(0.0)
                 require(netAmount.isFinite() && netAmount > 0.0) { "صافي مبلغ التوريد يجب أن يكون أكبر من صفر" }
+
+                // Reserve a station-scoped financial key before touching tank, cash or ledger balances.
+                // The saved fingerprint prevents an accidental key reuse for a different shipment.
+                val idempotencyKey = data.optString("idempotency_key", "").trim()
+                require(idempotencyKey.isNotBlank()) { "مفتاح عملية توريد فريد مطلوب لمنع تكرار فاتورة الوقود" }
+                val invoiceDateFingerprint = data.optString("invoice_date", data.optString("order_date", "")).trim()
+                val idempotencyFingerprint = listOf(
+                    stationScopeId.toString(), supplierId.toString(), tankId.toString(), fuelTypeId.toString(),
+                    ordered.toString(), unitPrice.toString(), transport.toString(), discount.toString(), tax.toString(),
+                    paymentMethod, data.optLong("cash_box_id", 0L).toString(),
+                    data.optLong("currency_id", 0L).toString(),
+                    data.optString("invoice_number", "").trim(), invoiceDateFingerprint
+                ).joinToString("|")
+
+                val previousRefillId = findFinancialIdempotency(
+                    db, "fuel_supply", stationScopeId, idempotencyKey
+                )
+                if (previousRefillId != null) {
+                    val existing = db.rawQuery(
+                        """SELECT refill_code,status,net_amount,delivered_quantity,actual_quantity,
+                                  quantity_difference,extra_data
+                           FROM tank_refills
+                           WHERE id=? AND station_id=? AND is_deleted=0 LIMIT 1""",
+                        arrayOf(previousRefillId.toString(), stationScopeId.toString())
+                    ).use { c ->
+                        require(c.moveToFirst()) { "مفتاح التوريد مرتبط بمستند مصدر محذوف أو غير موجود" }
+                        JSONObject().apply {
+                            put("refill_code", c.getString(0).orEmpty())
+                            put("status", c.getString(1).orEmpty())
+                            put("net_amount", c.getDouble(2))
+                            put("delivered_quantity", c.getDouble(3))
+                            put("actual_quantity", c.getDouble(4))
+                            put("quantity_difference", c.getDouble(5))
+                            put("extra_data", c.getString(6).orEmpty())
+                        }
+                    }
+                    val savedFingerprint = runCatching {
+                        JSONObject(existing.getString("extra_data")).optString("idempotency_fingerprint")
+                    }.getOrDefault("")
+                    require(savedFingerprint.isNotBlank() && savedFingerprint == idempotencyFingerprint) {
+                        "تم استخدام مفتاح التوريد نفسه لبيانات مختلفة؛ أنشئ عملية جديدة بدلاً من إعادة استخدام المفتاح"
+                    }
+                    return JSONObject().apply {
+                        put("id", previousRefillId)
+                        put("refill_id", previousRefillId)
+                        put("refill_code", existing.getString("refill_code"))
+                        put("status", existing.getString("status"))
+                        put("payment_method", paymentMethod)
+                        put("net_amount", existing.getDouble("net_amount"))
+                        put("delivered_quantity", existing.getDouble("delivered_quantity"))
+                        put("actual_quantity", existing.getDouble("actual_quantity"))
+                        put("quantity_difference", existing.getDouble("quantity_difference"))
+                        put("idempotent", true)
+                    }
+                }
+                require(reserveFinancialIdempotency(
+                    db, "fuel_supply", stationScopeId, idempotencyKey
+                )) { "مفتاح عملية توريد الوقود مستخدم مسبقاً" }
+
+                val tank = requireTankFuelMatch(db, tankId, fuelTypeId, stationScopeId)
+                val before = tank.optDouble("current_quantity")
+                val actual = before + delivered
+                require(actual.isFinite() && actual <= tank.optDouble("capacity_liters")) { "التوريد يتجاوز سعة الخزان" }
 
                 val now = getCurrentDateTime()
                 val refillCodeInput = data.optString("refill_code", "").trim()
@@ -20061,6 +20172,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     throw IllegalArgumentException("بيانات extra_data غير صالحة")
                 }
                 extra.put("payment_method", paymentMethod)
+                extra.put("idempotency_key", idempotencyKey)
+                extra.put("idempotency_fingerprint", idempotencyFingerprint)
                 if (paymentMethod == "cash") extra.put("cash_box_id", cashBoxId) else extra.remove("cash_box_id")
 
                 val values = ContentValues().apply {
@@ -20211,6 +20324,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         db, stationScopeId, supplierId, supplierPaymentId, netAmount, actorId, supplierInvoiceId
                     )
                 }
+
+                completeFinancialIdempotency(
+                    db, "fuel_supply", stationScopeId, idempotencyKey, refillId
+                )
 
                 // سجل النشاط داخل نفس المعاملة حتى لا ينجح أحد طرفي العملية وحده.
                 logActivity(

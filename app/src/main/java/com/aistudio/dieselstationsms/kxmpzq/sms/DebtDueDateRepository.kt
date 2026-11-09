@@ -270,6 +270,22 @@ object DebtDueDateRepository {
                 arrayOf(item.nameAr, item.nameEn, item.days, item.sortOrder, item.code)
             )
         }
+        // The global UNIQUE(code) catalogue cannot reuse NET_7/NET_30 for a second scope.
+        // Supplier equivalents therefore have explicit supplier-only codes and never inherit
+        // the customer-only built-in records.
+        items.forEach { item ->
+            val supplierCode = "SUPPLIER_${item.code}"
+            db.execSQL(
+                """INSERT OR IGNORE INTO payment_terms
+                   (code,name_ar,name_en,days,applies_to,station_id,is_default,is_active,sort_order)
+                   VALUES(?,?,?,?,'supplier',NULL,?,1,?)""",
+                arrayOf(supplierCode, item.nameAr, item.nameEn, item.days, if (item.code=="NET_30") 1 else 0, item.sortOrder)
+            )
+            db.execSQL(
+                "UPDATE payment_terms SET name_ar=?,name_en=?,days=?,applies_to='supplier',sort_order=? WHERE code=? AND station_id IS NULL",
+                arrayOf(item.nameAr, item.nameEn, item.days, item.sortOrder, supplierCode)
+            )
+        }
     }
 
     private fun findPaymentTermId(

@@ -1432,6 +1432,48 @@
         $('printSupplyBtn').disabled = false;
     }
 
+    const FUEL_SUPPLY_IDEMPOTENCY_STORAGE_KEY = 'fuel_supply_idempotency_v1';
+
+    function fuelSupplyIdempotencyFingerprint(payload) {
+        return JSON.stringify([
+            String(payload.supplier_id || ''), String(payload.tank_id || ''),
+            String(payload.fuel_type_id || ''), Number(payload.ordered_quantity || 0),
+            Number(payload.unit_price || 0), Number(payload.transport_cost || 0),
+            Number(payload.discount || 0), Number(payload.tax_amount || 0),
+            String(payload.payment_method || 'cash'), String(payload.cash_box_id || ''),
+            String(payload.currency_id || ''), String(payload.invoice_number || '').trim(),
+            String(payload.invoice_date || payload.order_date || '')
+        ]);
+    }
+
+    function fuelSupplyIdempotencyKey(payload) {
+        const fingerprint = fuelSupplyIdempotencyFingerprint(payload);
+        try {
+            const existing = JSON.parse(localStorage.getItem(FUEL_SUPPLY_IDEMPOTENCY_STORAGE_KEY) || 'null');
+            if (existing && existing.key && existing.fingerprint === fingerprint) return existing.key;
+            const token = (window.crypto && typeof window.crypto.randomUUID === 'function')
+                ? window.crypto.randomUUID()
+                : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+            const key = 'fuel-supply-' + token;
+            localStorage.setItem(FUEL_SUPPLY_IDEMPOTENCY_STORAGE_KEY, JSON.stringify({ key, fingerprint }));
+            return key;
+        } catch (_) {
+            window.__fuelSupplyIdempotencyKey = window.__fuelSupplyIdempotencyKey || (
+                'fuel-supply-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
+            );
+            return window.__fuelSupplyIdempotencyKey;
+        }
+    }
+
+    function clearFuelSupplyIdempotencyKey(key) {
+        try {
+            const existing = JSON.parse(localStorage.getItem(FUEL_SUPPLY_IDEMPOTENCY_STORAGE_KEY) || 'null');
+            if (existing && existing.key === key) localStorage.removeItem(FUEL_SUPPLY_IDEMPOTENCY_STORAGE_KEY);
+        } catch (_) {
+            if (window.__fuelSupplyIdempotencyKey === key) delete window.__fuelSupplyIdempotencyKey;
+        }
+    }
+
     function applyDefaultsForAdd() {
         // الوقت الحالي تلقائياً
         const arrival = document.querySelector('[data-key="arrival_date"]');
@@ -1706,6 +1748,7 @@
         payload.total_amount = delivered * unitPrice;
         payload.net_amount = Math.max(0, payload.total_amount + transport - discount + tax);
         payload.status = payload.status || 'pending';
+        if (!state.editing) payload.idempotency_key = fuelSupplyIdempotencyKey(payload);
 
         setLoading(true);
         try {
@@ -1721,6 +1764,7 @@
                 const saved = dataOf(parse(result));
                 const savedId = Number(saved.id || saved.refill_id || 0);
                 if (!savedId) throw new Error('لم يتم استلام معرف الفاتورة من SQLite');
+                clearFuelSupplyIdempotencyKey(payload.idempotency_key);
 
                 state.lastSavedRow = {
                     ...payload,

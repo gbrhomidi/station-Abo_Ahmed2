@@ -106,7 +106,7 @@ class DatabaseHelperCompatibilityMatrixTest {
             assertSmsAttemptSchema(upgraded)
 
             // Model an already-installed V59 database with the old BOTH scope, then execute
-            // the actual SQLiteOpenHelper V59->V60 upgrade path (not only ensureSchema directly).
+            // the SQLiteOpenHelper V59->V61 upgrade path, including the V60->V61 supplier additions.
             upgraded.execSQL(
                 """UPDATE payment_terms SET applies_to='both'
                    WHERE station_id IS NULL
@@ -115,10 +115,11 @@ class DatabaseHelperCompatibilityMatrixTest {
             upgraded.version = 59
             DatabaseHelper.closeInstance()
 
-            val migratedV60 = DatabaseHelper.getInstance(context).writableDatabase
-            assertEquals(DatabaseHelper.VERSION, migratedV60.version)
-            assertSmsAttemptSchema(migratedV60)
-            val legacyBuiltInScopeCount = migratedV60.rawQuery(
+            val migratedV61 = DatabaseHelper.getInstance(context).writableDatabase
+            assertEquals("V60 must upgrade to the current schema version", 61, migratedV61.version)
+            assertEquals(DatabaseHelper.VERSION, migratedV61.version)
+            assertSmsAttemptSchema(migratedV61)
+            val legacyBuiltInScopeCount = migratedV61.rawQuery(
                 """SELECT COUNT(*) FROM payment_terms
                    WHERE station_id IS NULL
                      AND code IN ('AFTER_1','AFTER_3','NET_7','NET_15','NET_30','NET_45','NET_60','NET_90')
@@ -126,6 +127,20 @@ class DatabaseHelperCompatibilityMatrixTest {
                 null
             ).use { cursor -> assertTrue(cursor.moveToFirst()); cursor.getInt(0) }
             assertEquals("Every historical built-in payment term must be migrated to customer-only scope", 0, legacyBuiltInScopeCount)
+
+            val supplierNetTerms = migratedV61.rawQuery(
+                """SELECT COUNT(*) FROM payment_terms
+                   WHERE station_id IS NULL AND applies_to='supplier' AND is_active=1
+                     AND code IN ('SUPPLIER_NET_7','SUPPLIER_NET_30')""",
+                null
+            ).use { cursor -> assertTrue(cursor.moveToFirst()); cursor.getInt(0) }
+            assertEquals("V60 installs must receive supplier-scoped NET_7 and NET_30 terms", 2, supplierNetTerms)
+
+            val persistentSupplierTasks = migratedV61.rawQuery(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='supplier_invoice_tasks'",
+                null
+            ).use { it.moveToFirst() }
+            assertTrue("V60 installs must receive the persistent supplier task table", persistentSupplierTasks)
         } finally {
             DatabaseHelper.closeInstance()
             context.deleteDatabase(DatabaseHelper.DATABASE_NAME)

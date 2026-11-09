@@ -2502,14 +2502,44 @@ async function loadProductInfo() {
 
 let activeProductPurchaseIdempotencyKey = '';
 let productPurchaseKeySequence = 0;
-function productPurchaseIdempotencyKey() {
-    if (!activeProductPurchaseIdempotencyKey) {
+const PRODUCT_PURCHASE_IDEMPOTENCY_STORAGE_KEY = 'product_purchase_idempotency_v1';
+function productPurchaseIdempotencyKey(data = {}) {
+    const fingerprint = JSON.stringify([
+        String(data.supplier_id || ''), String(data.product_id || ''),
+        String(data.warehouse_id || ''), Number(data.quantity || 0),
+        Number(data.unit_cost || 0), String(data.payment_method || ''),
+        String(data.cash_box_id || ''), String(data.movement_date || ''),
+        String(data.reference_code || '')
+    ]);
+    try {
+        const existing = JSON.parse(localStorage.getItem(PRODUCT_PURCHASE_IDEMPOTENCY_STORAGE_KEY) || 'null');
+        if (existing && existing.key && existing.fingerprint === fingerprint) {
+            activeProductPurchaseIdempotencyKey = existing.key;
+            return existing.key;
+        }
         const token = (window.crypto && typeof window.crypto.randomUUID === 'function')
             ? window.crypto.randomUUID()
             : Date.now().toString(36) + '-' + (++productPurchaseKeySequence).toString(36);
         activeProductPurchaseIdempotencyKey = 'product-purchase-' + token;
+        localStorage.setItem(PRODUCT_PURCHASE_IDEMPOTENCY_STORAGE_KEY, JSON.stringify({
+            key: activeProductPurchaseIdempotencyKey, fingerprint
+        }));
+    } catch (_) {
+        if (!activeProductPurchaseIdempotencyKey) {
+            const token = (window.crypto && typeof window.crypto.randomUUID === 'function')
+                ? window.crypto.randomUUID()
+                : Date.now().toString(36) + '-' + (++productPurchaseKeySequence).toString(36);
+            activeProductPurchaseIdempotencyKey = 'product-purchase-' + token;
+        }
     }
     return activeProductPurchaseIdempotencyKey;
+}
+function clearProductPurchaseIdempotencyKey(key) {
+    if (activeProductPurchaseIdempotencyKey === key) activeProductPurchaseIdempotencyKey = '';
+    try {
+        const existing = JSON.parse(localStorage.getItem(PRODUCT_PURCHASE_IDEMPOTENCY_STORAGE_KEY) || 'null');
+        if (existing && existing.key === key) localStorage.removeItem(PRODUCT_PURCHASE_IDEMPOTENCY_STORAGE_KEY);
+    } catch (_) {}
 }
 
 async function saveMovement() {
@@ -2591,17 +2621,18 @@ async function saveMovement() {
             financial_purchase: type === 'in',
             payment_method: type === 'in' ? purchasePaymentMethod : '',
             cash_box_id: type === 'in' && purchasePaymentMethod === 'cash' ? purchaseCashBoxId : 0,
-            idempotency_key: type === 'in' ? productPurchaseIdempotencyKey() : '',
+            idempotency_key: '',
             reference_code: reference,
             reference_type: type,
             notes
         };
+        if (type === 'in') data.idempotency_key = productPurchaseIdempotencyKey(data);
     }
     showLoading(true);
     try {
         const result = await apiCall('saveMovement', data);
         showToast(result.message || 'تم حفظ الحركة وتحديث الرصيد بنجاح', 'success');
-        if (stockType === 'products' && type === 'in') activeProductPurchaseIdempotencyKey = '';
+        if (stockType === 'products' && type === 'in') clearProductPurchaseIdempotencyKey(data.idempotency_key);
         if (window.bootstrap && window.bootstrap.Modal) {
             window.bootstrap.Modal.getInstance(document.getElementById('createModal'))?.hide();
         } else {
