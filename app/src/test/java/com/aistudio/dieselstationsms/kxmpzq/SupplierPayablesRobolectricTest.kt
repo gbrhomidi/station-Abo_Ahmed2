@@ -16,6 +16,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
@@ -169,6 +171,138 @@ class SupplierPayablesRobolectricTest {
             assertEquals(30.0, cursor.getDouble(0), 0.0001)
             assertEquals(50.0, cursor.getDouble(1), 0.0001)
             assertEquals("partial", cursor.getString(2))
+        }
+    }
+
+    @Test
+    fun concurrentIdenticalInvoiceRequestsReturnOneInvoiceId() {
+        val start = CountDownLatch(1)
+        val done = CountDownLatch(2)
+        val results = java.util.concurrent.ConcurrentLinkedQueue<Long>()
+        val failures = java.util.concurrent.ConcurrentLinkedQueue<Throwable>()
+        val workers = (1..2).map {
+            Thread {
+                try {
+                    start.await(5, TimeUnit.SECONDS)
+                    results += SupplierPayablesRepository.createPurchaseInvoice(
+                        db, 1, supplierId, "manual", 96001, "MAN-CONCURRENT-96001",
+                        250.0, "2026-10-01", null, 1
+                    )
+                } catch (error: Throwable) {
+                    failures += error
+                } finally {
+                    done.countDown()
+                }
+            }.apply { name = "supplier-invoice-worker-$it" }
+        }
+        workers.forEach(Thread::start)
+        start.countDown()
+        assertTrue("انتهت مهلة اختبار إنشاء الفاتورة المتزامن", done.await(10, TimeUnit.SECONDS))
+        workers.forEach(Thread::join)
+        assertTrue("فشل طلب متزامن لإنشاء الفاتورة: $failures", failures.isEmpty())
+        assertEquals(2, results.size)
+        assertEquals(1, results.toSet().size)
+        db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_invoices WHERE station_id=1 AND source_type='manual' AND source_id=96001 AND is_deleted=0",
+            null
+        ).use { cursor -> check(cursor.moveToFirst()); assertEquals(1, cursor.getInt(0)) }
+    }
+
+    @Test
+    fun concurrentIdenticalPaymentAllocationsCreateOneAllocationAndOneIdempotentResult() {
+        val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 96002, "MAN-CONCURRENT-PAYMENT-96002", 100.0, "2026-10-01", null, 1
+        )
+        val paymentId = createCompletedSupplierPayment(100.0, "CONCURRENT-ALLOCATION")
+        val start = CountDownLatch(1)
+        val done = CountDownLatch(2)
+        val results = java.util.concurrent.ConcurrentLinkedQueue<JSONObject>()
+        val failures = java.util.concurrent.ConcurrentLinkedQueue<Throwable>()
+        val workers = (1..2).map {
+            Thread {
+                try {
+                    start.await(5, TimeUnit.SECONDS)
+                    results += SupplierPayablesRepository.allocatePayment(
+                        db, 1, supplierId, paymentId, 100.0, 1, invoiceId
+                    )
+                } catch (error: Throwable) {
+                    failures += error
+                } finally {
+                    done.countDown()
+                }
+            }.apply { name = "supplier-payment-worker-$it" }
+        }
+        workers.forEach(Thread::start)
+        start.countDown()
+        assertTrue("انتهت مهلة اختبار تخصيص الدفعة المتزامن", done.await(10, TimeUnit.SECONDS))
+        workers.forEach(Thread::join)
+        assertTrue("فشل طلب متزامن لتخصيص الدفعة: $failures", failures.isEmpty())
+        assertEquals(2, results.size)
+        assertEquals(1, results.count { it.optBoolean("idempotent") })
+        assertEquals(1, results.count { !it.optBoolean("idempotent") })
+        db.rawQuery(
+            "SELECT COUNT(*),COALESCE(SUM(amount),0) FROM supplier_invoice_allocations WHERE payment_id=? AND supplier_invoice_id=? AND status='posted' AND is_deleted=0",
+            arrayOf(paymentId.toString(), invoiceId.toString())
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+            assertEquals(100.0, cursor.getDouble(1), 0.0001)
+        }
+    }
+
+    @Test
+    fun concurrentIdenticalSupplierPaymentRequestsCreateOnePayment() {
+        val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 96003, "MAN-CONCURRENT-DIRECT-PAYMENT", 10.0, "2026-10-01", null, 1
+        )
+        db.update(
+            "parties",
+            ContentValues().apply { put("current_balance", 10.0); put("total_due", 10.0); put("total_payments", 0.0) },
+            "id=? AND station_id=1",
+            arrayOf(supplierId.toString())
+        )
+        val cashBoxId = db.rawQuery(
+            "SELECT id FROM cash_boxes WHERE station_id=1 AND status='active' AND is_deleted=0 ORDER BY id LIMIT 1",
+            null
+        ).use { cursor -> check(cursor.moveToFirst()) { "لا يوجد صندوق اختبار نشط للمحطة 1" }; cursor.getLong(0) }
+        val request = JSONObject()
+            .put("amount", 10.0).put("supplier_party_id", supplierId).put("cash_box_id", cashBoxId)
+            .put("payment_type", "cash").put("payment_method", "cash")
+            .put("supplier_invoice_id", invoiceId).put("idempotency_key", "supplier-payment-concurrent-96003")
+        val start = CountDownLatch(1)
+        val done = CountDownLatch(2)
+        val results = java.util.concurrent.ConcurrentLinkedQueue<Long>()
+        val failures = java.util.concurrent.ConcurrentLinkedQueue<Throwable>()
+        val workers = (1..2).map {
+            Thread {
+                try {
+                    start.await(5, TimeUnit.SECONDS)
+                    results += helper.addPayment(JSONObject(request.toString()), 1, 1)
+                } catch (error: Throwable) {
+                    failures += error
+                } finally {
+                    done.countDown()
+                }
+            }.apply { name = "supplier-payment-create-worker-$it" }
+        }
+        workers.forEach(Thread::start)
+        start.countDown()
+        assertTrue("انتهت مهلة اختبار إنشاء دفعة المورد المتزامن", done.await(10, TimeUnit.SECONDS))
+        workers.forEach(Thread::join)
+        assertTrue("فشل طلب متزامن لإنشاء دفعة المورد: $failures", failures.isEmpty())
+        assertEquals(2, results.size)
+        assertEquals(1, results.toSet().size)
+        db.rawQuery(
+            "SELECT COUNT(*) FROM payments WHERE station_id=1 AND supplier_party_id=? AND amount=10 AND is_deleted=0",
+            arrayOf(supplierId.toString())
+        ).use { cursor -> check(cursor.moveToFirst()); assertEquals(1, cursor.getInt(0)) }
+        db.rawQuery(
+            "SELECT status,resource_id FROM financial_idempotency_keys WHERE operation='supplier_payment' AND station_id=1 AND idempotency_key=?",
+            arrayOf("supplier-payment-concurrent-96003")
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            assertEquals("COMPLETED", cursor.getString(0))
+            assertEquals(results.first(), cursor.getLong(1))
         }
     }
 

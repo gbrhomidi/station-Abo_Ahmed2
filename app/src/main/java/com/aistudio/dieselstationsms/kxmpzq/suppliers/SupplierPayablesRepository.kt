@@ -354,6 +354,7 @@ object SupplierPayablesRepository {
         }
     }
 
+    @Synchronized
     fun createPurchaseInvoice(
         db: SQLiteDatabase,
         stationId: Int,
@@ -467,6 +468,7 @@ object SupplierPayablesRepository {
      * A payment against an old control balance that has no invoice-level record is retained as
      * an explicit unapplied legacy allocation; it is never fabricated into an invoice payment.
      */
+    @Synchronized
     fun allocatePayment(
         db: SQLiteDatabase,
         stationId: Int,
