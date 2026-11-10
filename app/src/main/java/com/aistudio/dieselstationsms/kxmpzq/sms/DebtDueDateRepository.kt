@@ -536,7 +536,8 @@ object DebtDueDateRepository {
             // calls to the device clock while serializing individual invoices.
             val dueDate = row.dueDate
             val dueDateIsValid = IsoCivilDate.isValid(dueDate)
-            (fromDate.isNullOrEmpty() || (dueDateIsValid && dueDate >= fromDate)) &&
+            row.remaining > 0.000001 &&
+                (fromDate.isNullOrEmpty() || (dueDateIsValid && dueDate >= fromDate)) &&
                 (toDate.isNullOrEmpty() || (dueDateIsValid && dueDate <= toDate))
         }.forEach { output.put(toJson(it, today)) }
         return output

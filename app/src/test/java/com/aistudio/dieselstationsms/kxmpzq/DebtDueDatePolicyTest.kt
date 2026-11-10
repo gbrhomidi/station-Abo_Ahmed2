@@ -35,6 +35,159 @@ class DebtDueDatePolicyTest {
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
     }
 
+    @Test fun customerDebtSettlementRepairsMissingMappingsAndPostsCashAndNonCashMethods() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val db = helper.writableDatabase
+        val roleId = db.rawQuery("SELECT id FROM roles ORDER BY id LIMIT 1", null).use {
+            assertTrue(it.moveToFirst()); it.getLong(0)
+        }
+        val actorId = db.insertOrThrow("users", null, ContentValues().apply {
+            put("uuid", "debt-settlement-user-${System.nanoTime()}")
+            put("username", "debt-settlement-${System.nanoTime()}")
+            put("password_hash", "test-only")
+            put("full_name", "مستخدم اختبار تسديد الديون")
+            put("role_id", roleId)
+            put("station_id", 1)
+        })
+        val cashierExists = db.rawQuery("SELECT 1 FROM users WHERE id=1 LIMIT 1", null).use { it.moveToFirst() }
+        if (!cashierExists) {
+            db.insertOrThrow("users", null, ContentValues().apply {
+                put("id", 1L)
+                put("uuid", "debt-settlement-cashier-${System.nanoTime()}")
+                put("username", "debt-cashier-${System.nanoTime()}")
+                put("password_hash", "test-only")
+                put("full_name", "Cashier fixture")
+                put("role_id", roleId)
+                put("station_id", 1)
+            })
+        }
+        val shiftExists = db.rawQuery("SELECT 1 FROM shifts WHERE id=1 LIMIT 1", null).use { it.moveToFirst() }
+        if (!shiftExists) {
+            db.insertOrThrow("shifts", null, ContentValues().apply {
+                put("id", 1L)
+                put("uuid", "debt-settlement-shift-${System.nanoTime()}")
+                put("shift_code", "DBT-SHIFT-${System.nanoTime()}")
+                put("station_id", 1)
+                put("shift_date", BusinessDay.currentDate())
+                put("shift_type", "morning")
+                put("start_time", BusinessDay.currentDate() + " 08:00:00")
+                put("cashier_id", 1L)
+                put("created_by", actorId)
+                put("status", "open")
+            })
+        }
+
+        val customerId = addParty(db, "settlement-all-methods", "صافي 0 يوم", 0, "explicit_text")
+        addSale(
+            db, "settlement-all-methods-invoice", customerId,
+            BusinessDay.currentDate(), "sale_creation", "explicit_text"
+        )
+        db.update(
+            "parties",
+            ContentValues().apply { put("current_balance", 100.0); put("total_due", 100.0) },
+            "id=? AND station_id=1",
+            arrayOf(customerId.toString())
+        )
+
+        val cashBoxId = db.rawQuery(
+            "SELECT id FROM cash_boxes WHERE station_id=1 AND status='active' AND is_deleted=0 ORDER BY id DESC LIMIT 1",
+            null
+        ).use { assertTrue("A seeded active cash box is required", it.moveToFirst()); it.getLong(0) }
+        val cashBefore = db.rawQuery(
+            "SELECT current_balance FROM cash_boxes WHERE id=?",
+            arrayOf(cashBoxId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getDouble(0) }
+
+        val bankId = db.insertOrThrow("banks", null, ContentValues().apply {
+            put("uuid", "debt-settlement-bank-${System.nanoTime()}")
+            put("bank_code", "DBT-BANK-${System.nanoTime()}")
+            put("bank_name", "Debt Settlement Test Bank")
+            put("bank_name_ar", "بنك اختبار تسديد الديون")
+            put("is_active", 1)
+            put("is_deleted", 0)
+        })
+        val bankAccountId = db.insertOrThrow("bank_accounts", null, ContentValues().apply {
+            put("uuid", "debt-settlement-account-${System.nanoTime()}")
+            put("account_code", "DBT-BA-${System.nanoTime()}")
+            put("bank_id", bankId)
+            put("station_id", 1)
+            put("account_name", "Debt Settlement Account")
+            put("account_name_ar", "حساب تسوية اختبار")
+            put("account_number", "TEST-${System.nanoTime()}")
+            put("account_type", "current")
+            put("opening_balance", 0.0)
+            put("current_balance", 0.0)
+            put("available_balance", 0.0)
+            put("status", "active")
+            put("is_deleted", 0)
+        })
+
+        val methods = listOf("cash", "bank_transfer", "cheque", "mobile_money")
+        val paymentIds = methods.map { method ->
+            helper.processPayment(
+                customerId.toInt(), 25.0, method, "Robolectric", "اختبار تسديد دين العميل",
+                1, "debt-settlement-$method", actorId,
+                if (method == "cash") cashBoxId else 0L,
+                if (method == "cash") 0L else bankAccountId
+            )
+        }
+        assertTrue(paymentIds.all { it > 0L })
+        assertEquals(4, paymentIds.toSet().size)
+        assertEquals(4, db.rawQuery(
+            "SELECT COUNT(*) FROM payments WHERE customer_party_id=? AND is_deleted=0",
+            arrayOf(customerId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
+        assertEquals(0.0, db.rawQuery(
+            "SELECT total_due FROM parties WHERE id=? AND station_id=1",
+            arrayOf(customerId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getDouble(0) }, 0.000001)
+        db.rawQuery(
+            "SELECT paid_amount,remaining_amount,payment_status FROM sales_transactions WHERE customer_party_id=? AND station_id=1",
+            arrayOf(customerId.toString())
+        ).use {
+            assertTrue(it.moveToFirst())
+            assertEquals(100.0, it.getDouble(0), 0.000001)
+            assertEquals(0.0, it.getDouble(1), 0.000001)
+            assertEquals("paid", it.getString(2))
+        }
+
+        val cashAfter = db.rawQuery(
+            "SELECT current_balance FROM cash_boxes WHERE id=?",
+            arrayOf(cashBoxId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getDouble(0) }
+        assertEquals(cashBefore + 25.0, cashAfter, 0.000001)
+        val bankAfter = db.rawQuery(
+            "SELECT current_balance,available_balance FROM bank_accounts WHERE id=?",
+            arrayOf(bankAccountId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getDouble(0) to it.getDouble(1) }
+        assertEquals(75.0, bankAfter.first, 0.000001)
+        assertEquals(75.0, bankAfter.second, 0.000001)
+
+        val cashMappings = db.rawQuery(
+            "SELECT COUNT(*) FROM accounts WHERE cash_box_id=? AND account_type='asset' AND is_cash_account=1 AND is_active=1 AND is_deleted=0",
+            arrayOf(cashBoxId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getInt(0) }
+        val bankMappings = db.rawQuery(
+            "SELECT COUNT(*) FROM accounts WHERE bank_account_id=? AND account_type='asset' AND is_bank_account=1 AND is_active=1 AND is_deleted=0",
+            arrayOf(bankAccountId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getInt(0) }
+        assertEquals("Cash box must have exactly one active GL mapping", 1, cashMappings)
+        assertEquals("Bank account must have exactly one active GL mapping", 1, bankMappings)
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM cash_movements WHERE reference_type='payment' AND reference_id=? AND is_deleted=0",
+            arrayOf(paymentIds.first().toString())
+        ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
+        assertEquals(3, db.rawQuery(
+            "SELECT COUNT(*) FROM bank_ledger WHERE bank_account_id=? AND transaction_type='payment'",
+            arrayOf(bankAccountId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
+        assertEquals(4, db.rawQuery(
+            "SELECT COUNT(*) FROM journal_entries WHERE reference_type='payment' AND status='posted' AND is_deleted=0",
+            null
+        ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
+        assertTrue(db.rawQuery("PRAGMA foreign_key_check", null).use { !it.moveToFirst() })
+    }
+
     @Test fun parsesOnlyExplicitEnglishArabicAndZeroTerms() {
         assertEquals(30,DebtDueDateRepository.parseTermsDays("50% مقدم، صافي 30 يوم"))
         assertEquals(30,DebtDueDateRepository.parseTermsDays("NET 30"))
@@ -161,6 +314,11 @@ class DebtDueDatePolicyTest {
             (0 until bundleInvoices.length()).map { bundleInvoices.getJSONObject(it).getLong("transaction_id") }.toSet()
         )
         val invoiceRows = DebtDueDateRepository.getCustomerDebts(helper, 1, asOfDate = "2026-11-08")
+        assertFalse(
+            "Fully settled credit invoices must not appear in the customer-debt management worklist",
+            (0 until invoiceRows.length()).any { invoiceRows.getJSONObject(it).getLong("transaction_id") == paidId }
+        )
+        assertEquals("Paid invoices remain counted in the summary history", 1, summary.getInt("paid_invoice_count"))
         val overdueJson = (0 until invoiceRows.length()).map { invoiceRows.getJSONObject(it) }
             .single { it.getLong("transaction_id") == overdueId }
         val dueTodayJson = (0 until invoiceRows.length()).map { invoiceRows.getJSONObject(it) }

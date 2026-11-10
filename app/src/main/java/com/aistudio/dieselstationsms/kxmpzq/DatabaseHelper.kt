@@ -16741,6 +16741,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     "مفتاح العملية مستخدم مسبقاً"
                 }
 
+                // Repair missing source-specific asset mappings in the same transaction
+                // as the payment. A failed settlement rolls this repair back as well.
+                repairSettlementAccountMappings(db)
+
                 val partyBalance = db.rawQuery(
                     "SELECT COALESCE(total_due, 0) FROM parties WHERE id = ? AND is_deleted = 0$partyScopeClause LIMIT 1",
                     arrayOf(customerId.toString(), paymentStationId.toString())
@@ -22839,6 +22843,84 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     nameAr.contains("حساب بنكي") || category.contains("bank")
             }
 
+            // Create a deterministic, source-specific leaf asset account only when
+            // the selected cash box/bank account has no active GL mapping. This does
+            // not reuse generic control accounts, alter historical journal lines, or
+            // change balances; the source link and audit row make the repair traceable.
+            fun ensureMissingSettlementMapping(
+                sourceId: Long,
+                sourceColumn: String,
+                codePrefix: String,
+                accountName: String,
+                accountNameAr: String,
+                isCash: Boolean
+            ) {
+                val classificationColumn = if (isCash) "is_cash_account" else "is_bank_account"
+                val activeMappings = linkedIds(
+                    "SELECT id FROM accounts WHERE $sourceColumn=? AND account_type='asset' " +
+                        "AND $classificationColumn=1 AND is_active=1 AND is_deleted=0 ORDER BY id",
+                    sourceId
+                )
+                if (activeMappings.isNotEmpty()) return
+
+                val controlCode = if (isCash) "1101" else "1102"
+                val controlExists = db.rawQuery(
+                    "SELECT 1 FROM accounts WHERE account_code=? AND account_type='asset' " +
+                        "AND is_active=1 AND is_deleted=0 LIMIT 1",
+                    arrayOf(controlCode)
+                ).use { it.moveToFirst() }
+                if (!controlExists) return
+
+                val codeStem = "$codePrefix-$sourceId"
+                var accountCode = codeStem
+                var suffix = 1
+                while (db.rawQuery(
+                    "SELECT 1 FROM accounts WHERE account_code=? LIMIT 1",
+                    arrayOf(accountCode)
+                ).use { it.moveToFirst() }) {
+                    accountCode = "$codeStem-${suffix++}"
+                }
+
+                val parentId = db.rawQuery(
+                    "SELECT id FROM accounts WHERE account_code='11' AND account_type='asset' " +
+                        "AND is_active=1 AND is_deleted=0 LIMIT 1",
+                    null
+                ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+                val parentLevel = if (parentId > 0L) db.rawQuery(
+                    "SELECT level FROM accounts WHERE id=? LIMIT 1",
+                    arrayOf(parentId.toString())
+                ).use { c -> if (c.moveToFirst()) c.getInt(0) else 2 } else 2
+
+                val label = accountName.trim().ifBlank {
+                    if (isCash) "Cash Box #$sourceId" else "Bank Account #$sourceId"
+                }
+                val labelAr = accountNameAr.trim().ifBlank {
+                    if (isCash) "حساب الصندوق #$sourceId" else "حساب البنك #$sourceId"
+                }
+                val values = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("account_code", accountCode)
+                    put("account_name", label)
+                    put("account_name_ar", labelAr)
+                    if (parentId > 0L) put("parent_account_id", parentId)
+                    put("account_type", "asset")
+                    put("account_category", if (isCash) "cash" else "bank")
+                    put("normal_balance", "debit")
+                    put("level", parentLevel + 1)
+                    put("is_control_account", 0)
+                    put("is_cash_account", if (isCash) 1 else 0)
+                    put("is_bank_account", if (isCash) 0 else 1)
+                    put("is_active", 1)
+                    put("is_deleted", 0)
+                    if (isCash) put("cash_box_id", sourceId) else put("bank_account_id", sourceId)
+                    put("remarks", "[automatic-settlement-map-v1] مصدر التسوية #$sourceId؛ حساب أصل تفصيلي منشأ دون رصيد افتتاحي")
+                    put("created_at", getCurrentDateTime())
+                    put("updated_at", getCurrentDateTime())
+                }
+                val createdId = db.insertOrThrow("accounts", null, values)
+                writeAccountAudit(db, 0L, "auto_create_settlement_mapping", createdId, null, getAccountRow(db, createdId, true))
+            }
+
             if (hasCashBoxes) {
                 val cashBoxIds = mutableListOf<Long>()
                 db.rawQuery(
@@ -22881,6 +22963,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                             }
                         }
                     }
+                    val cashNames = db.rawQuery(
+                        "SELECT box_name, box_name_ar FROM cash_boxes WHERE id=? AND status='active' AND is_deleted=0 LIMIT 1",
+                        arrayOf(cashBoxId.toString())
+                    ).use { c ->
+                        if (c.moveToFirst()) c.getString(0).orEmpty() to c.getString(1).orEmpty()
+                        else "" to ""
+                    }
+                    ensureMissingSettlementMapping(
+                        cashBoxId, "cash_box_id", "1101-CB",
+                        cashNames.first, cashNames.second, true
+                    )
                 }
             }
 
@@ -22915,6 +23008,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                             }, "إزالة ربط البنك #$bankId غير الصحيح من حساب ${row.optString("account_code")}")
                         }
                     }
+                    val bankNames = db.rawQuery(
+                        "SELECT account_name, account_name_ar FROM bank_accounts WHERE id=? AND status='active' AND is_deleted=0 LIMIT 1",
+                        arrayOf(bankId.toString())
+                    ).use { c ->
+                        if (c.moveToFirst()) c.getString(0).orEmpty() to c.getString(1).orEmpty()
+                        else "" to ""
+                    }
+                    ensureMissingSettlementMapping(
+                        bankId, "bank_account_id", "1102-BA",
+                        bankNames.first, bankNames.second, false
+                    )
                 }
             }
             if (ownsTransaction) db.setTransactionSuccessful()
