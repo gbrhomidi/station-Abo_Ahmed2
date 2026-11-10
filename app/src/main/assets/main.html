@@ -1329,51 +1329,46 @@
         }
 
         /* ================================================================
-           Bubbles
+           Bubbles — Notifications
         ================================================================ */
         .bubble-container {
-            position: fixed;
-            top: 90px;
-            left: 16px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            z-index: 999;
-            max-width: 280px;
+            position: fixed; top: 90px; left: 10px;
+            display: flex; flex-direction: row; flex-wrap: nowrap; gap: 8px;
+            z-index: 999; width: max-content; max-width: calc(100vw - 20px);
+            pointer-events: none; box-sizing: border-box;
+            overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
         }
-
+        .bubble-container::-webkit-scrollbar { display: none; }
+        .bubble-container > * { pointer-events: auto; }
         .notification-bubble {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 16px;
-            box-shadow: var(--shadow-hover);
-            cursor: pointer;
-            transition: 0.3s;
-            position: relative;
-            animation: pulseSoft 2.5s infinite;
+            width: 36px; height: 36px; min-width: 36px; flex: 0 0 36px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            color: #FFFFFF; font-size: 15px; box-shadow: 0 3px 10px rgba(0,0,0,.18);
+            cursor: pointer; transition: transform .2s ease, opacity .35s ease;
+            border: 1.5px solid rgba(255,255,255,.25); will-change: transform;
         }
-
-        .notification-bubble:hover { transform: scale(1.1); }
-
+        .notification-bubble:hover { transform: scale(1.08); }
+        .notification-bubble:active { transform: scale(.94); }
         .bubble-info { background: #3D8BC4; }
         .bubble-warning { background: var(--warning); }
         .bubble-danger { background: var(--danger); }
-        .bubble-success { background: var(--success); }
-
-        .bubble-wave {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            background: inherit;
-            opacity: 0.4;
-            animation: wave 12s infinite;
+        .bubble-returned { background: #6F42C1; }
+        .bubble-damaged { background: #EA580C; }
+        @media (max-width: 767px) {
+            .bubble-container { top: 82px; left: 10px; gap: 7px; }
+            .notification-bubble { width: 34px; height: 34px; min-width: 34px; flex-basis: 34px; font-size: 14px; }
+        }
+        @media (max-width: 480px) {
+            .bubble-container { top: 74px; left: 8px; gap: 6px; max-width: calc(100vw - 16px); }
+            .notification-bubble { width: 32px; height: 32px; min-width: 32px; flex-basis: 32px; font-size: 13px; }
+        }
+        @media (max-width: 360px) {
+            .bubble-container { gap: 5px; }
+            .notification-bubble { width: 30px; height: 30px; min-width: 30px; flex-basis: 30px; font-size: 12px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .notification-bubble { transition: none !important; }
         }
 
         /* ================================================================
@@ -1953,8 +1948,9 @@
         let currentUser = null;
         let notificationQueue = [];
         let isProcessingQueue = false;
-        let activeBubbles = [];
-        let refreshInterval = null;
+        let notificationsEnabled = true;
+        let activeBubbles = new Map(); // Map<type, { element }>
+        let notificationsReenableTimer = null;
         let dashboardCache = null;
         let androidInterface = null;
         let useAndroidInterface = false;
@@ -2358,7 +2354,6 @@
 
             document.body.classList.add('sleep-active');
 
-            if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
             if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
             if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; }
 
@@ -2451,10 +2446,6 @@
 
             if (!businessDayChanged) loadDashboard(true);
 
-            if (!refreshInterval) {
-                refreshInterval = setInterval(() => { loadDashboard(true); }, 180000);
-            }
-
             handleUserActivity();
         }
 
@@ -2517,7 +2508,7 @@
                 if (sleepMoveInterval) { clearInterval(sleepMoveInterval); sleepMoveInterval = null; }
                 document.body.classList.remove('sleep-active');
                 if (!clockInterval) { clockInterval = setInterval(updateDateTime, 1000); }
-                if (!refreshInterval) refreshInterval = setInterval(() => loadDashboard(true), 180000);
+
                 console.warn('[Display] Session warning fired while sleeping — mutual exclusion triggered cleanup.');
             }
 
@@ -2800,7 +2791,7 @@
         }
 
         async function logout() {
-            if (refreshInterval) clearInterval(refreshInterval);
+
             if (clockInterval) clearInterval(clockInterval);
             if (inactivityTimer) clearTimeout(inactivityTimer);
             if (sleepMoveInterval) clearInterval(sleepMoveInterval);
@@ -3923,85 +3914,150 @@
         }
 
         // ================================================================
-        // Notifications
+        // Notifications — six dashboard bubbles
         // ================================================================
+        const DOUBLE_CLICK_THRESHOLD = 400;
+        const REENABLE_DELAY = 3000;
+        let lastClick = 0;
+
         function showRealNotifications(stats) {
-            if (stats.expiry_soon > 0) {
+            if (!stats || !notificationsEnabled) return;
+            if (Number(stats.low_stock) > 0) addNotificationToQueue({
+                type: 'low_stock', icon: 'fa-exclamation-circle', color: 'danger',
+                targetCard: 'card-low-stock',
+                message: `هناك ${Number(stats.low_stock)} منتج تحت الحد الأدنى`
+            });
+            if (Number(stats.due_invoices) > 0) addNotificationToQueue({
+                type: 'due_invoices', icon: 'fa-file-invoice', color: 'info',
+                targetCard: 'card-due-invoices',
+                message: `${Number(stats.due_invoices)} فاتورة مستحقة خلال 8 أيام`
+            });
+
+            const damagedFuel = Number(stats.damaged_fuel_today) || 0;
+            const damagedProd = Number(stats.damaged_products_today) || 0;
+            if (damagedFuel > 0 || damagedProd > 0) {
+                const parts = [];
+                if (damagedFuel > 0) parts.push(`${damagedFuel.toFixed(2)} لتر وقود`);
+                if (damagedProd > 0) parts.push(`${damagedProd.toFixed(2)} منتج`);
                 addNotificationToQueue({
-                    title: 'تنبيه انتهاء الصلاحية',
-                    message: `هناك ${stats.expiry_soon} منتج ستنتهي صلاحيته خلال 30 يومًا`,
-                    icon: 'fa-hourglass-half', type: 'warning', targetCard: 'card-expiry-soon'
+                    type: 'damaged_products', icon: 'fa-ban', color: 'damaged',
+                    targetCard: 'card-damaged-products', message: `تالفات اليوم: ${parts.join(' + ')}`
                 });
             }
-            if (stats.low_stock > 0) {
+
+            const retFuel = Number(stats.returned_fuel_today) || 0;
+            const retProd = Number(stats.returned_products_today) || 0;
+            if (retFuel > 0 || retProd > 0) {
+                const parts = [];
+                if (retFuel > 0) parts.push(`${retFuel.toFixed(2)} لتر وقود`);
+                if (retProd > 0) parts.push(`${retProd.toFixed(2)} منتج`);
                 addNotificationToQueue({
-                    title: 'تنبيه انخفاض المخزون',
-                    message: `هناك ${stats.low_stock} منتج تحت الحد الأدنى`,
-                    icon: 'fa-exclamation-circle', type: 'danger', targetCard: 'card-low-stock'
+                    type: 'returned_products', icon: 'fa-undo', color: 'returned',
+                    targetCard: 'card-returned-products', message: `مرتجعات اليوم: ${parts.join(' + ')}`
                 });
             }
-            if (stats.pending_tasks > 0) {
-                addNotificationToQueue({
-                    title: 'مهام معلقة',
-                    message: `لديك ${stats.pending_tasks} مهمة تحتاج إلى مراجعتك`,
-                    icon: 'fa-tasks', type: 'info', targetCard: 'card-pending-tasks'
-                });
-            }
+            if (Number(stats.expiry_soon) > 0) addNotificationToQueue({
+                type: 'expiry_soon', icon: 'fa-hourglass-half', color: 'warning',
+                targetCard: 'card-expiry-soon',
+                message: `هناك ${Number(stats.expiry_soon)} منتج ستنتهي صلاحيته خلال 30 يومًا`
+            });
+            if (Number(stats.pending_tasks) > 0) addNotificationToQueue({
+                type: 'pending_tasks', icon: 'fa-tasks', color: 'info',
+                targetCard: 'card-pending-tasks',
+                message: `لديك ${Number(stats.pending_tasks)} مهمة تحتاج إلى مراجعتك`
+            });
             processNotificationQueue();
         }
 
-        function addNotificationToQueue(notification) { notificationQueue.push(notification); }
+        function addNotificationToQueue(notification) {
+            if (!notification || !notificationsEnabled || activeBubbles.has(notification.type)) return;
+            if (notificationQueue.some(item => item.type === notification.type)) return;
+            notificationQueue.push(notification);
+        }
 
         function processNotificationQueue() {
-            if (isProcessingQueue || notificationQueue.length === 0) return;
+            if (!notificationsEnabled || isProcessingQueue || notificationQueue.length === 0) return;
             isProcessingQueue = true;
-            const notification = notificationQueue.shift();
-            createNotificationBubble(notification);
+            createNotificationBubble(notificationQueue.shift());
             setTimeout(() => { isProcessingQueue = false; processNotificationQueue(); }, 1500);
         }
 
         function createNotificationBubble(notification) {
+            if (!notification || activeBubbles.has(notification.type)) return;
             const container = document.getElementById('bubbleContainer') || createBubbleContainer();
             const bubble = document.createElement('div');
-            bubble.className = `notification-bubble bubble-${notification.type}`;
-            bubble.innerHTML = `<i class="fas ${notification.icon}"></i>`;
+            bubble.className = `notification-bubble bubble-${notification.color}`;
             bubble.dataset.target = notification.targetCard;
-            const wave = document.createElement('div');
-            wave.className = 'bubble-wave';
-            bubble.appendChild(wave);
-            container.appendChild(bubble);
-            const interval = setInterval(() => {
-                wave.style.animation = 'none';
-                setTimeout(() => { wave.style.animation = 'wave 15s infinite'; }, 10);
-            }, 60000);
-            bubble.onclick = function() {
-                const card = document.getElementById(this.dataset.target);
-                if (card) {
-                    card.scrollIntoView({ behavior: 'smooth' });
-                    setTimeout(() => {
-                        if (this.parentNode) {
-                            clearInterval(interval);
-                            this.parentNode.removeChild(this);
-                        }
-                    }, 500);
+            bubble.dataset.type = notification.type;
+            bubble.title = notification.message;
+            bubble.setAttribute('aria-label', notification.message);
+            bubble.setAttribute('role', 'button');
+            bubble.tabIndex = 0;
+            bubble.innerHTML = `<i class="fas ${notification.icon}" aria-hidden="true"></i>`;
+            bubble.addEventListener('click', () => handleBubbleClick(bubble));
+            bubble.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    handleBubbleClick(bubble);
                 }
-            };
-            activeBubbles.push({ element: bubble, interval: interval });
+            });
+            container.appendChild(bubble);
+            activeBubbles.set(notification.type, { element: bubble });
+        }
+
+        function handleBubbleClick(bubble) {
+            if (!bubble || bubble.dataset.dismissed === 'true') return;
+            bubble.dataset.dismissed = 'true';
+            const type = bubble.dataset.type;
+            const card = document.getElementById(bubble.dataset.target);
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const previousShadow = card.style.boxShadow;
+                card.style.boxShadow = '0 0 24px rgba(212,168,106,.95)';
+                setTimeout(() => { card.style.boxShadow = previousShadow; }, 1800);
+            } else {
+                console.warn(`[Bubble] Card "${bubble.dataset.target}" not found.`);
+            }
+            bubble.style.transition = 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)';
+            bubble.style.transform = 'scale(0)';
+            bubble.style.opacity = '0';
+            setTimeout(() => {
+                bubble.remove();
+                if (activeBubbles.get(type)?.element === bubble) activeBubbles.delete(type);
+            }, 350);
         }
 
         function createBubbleContainer() {
-            const c = document.createElement('div');
-            c.id = 'bubbleContainer';
-            c.className = 'bubble-container';
-            document.body.appendChild(c);
-            return c;
+            const container = document.createElement('div');
+            container.id = 'bubbleContainer';
+            container.className = 'bubble-container';
+            document.body.appendChild(container);
+            return container;
         }
 
         function hideAllBubbles() {
-            activeBubbles.forEach(b => { clearInterval(b.interval); b.element.remove(); });
-            activeBubbles = [];
+            activeBubbles.forEach(({ element }) => {
+                element.style.transition = 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+                element.style.transform = 'scale(0)';
+                element.style.opacity = '0';
+                setTimeout(() => element.remove(), 400);
+            });
+            activeBubbles.clear();
             notificationQueue = [];
+            isProcessingQueue = false;
+            notificationsEnabled = false;
+            if (notificationsReenableTimer !== null) clearTimeout(notificationsReenableTimer);
+            notificationsReenableTimer = setTimeout(() => {
+                notificationsEnabled = true;
+                notificationsReenableTimer = null;
+            }, REENABLE_DELAY);
         }
+
+        document.addEventListener('click', function () {
+            const now = Date.now();
+            if (now - lastClick < DOUBLE_CLICK_THRESHOLD) hideAllBubbles();
+            lastClick = now;
+        });
 
         // ================================================================
         // Card Double Click
@@ -4133,8 +4189,6 @@
             if (!userLoaded) return;
 
             initCardDoubleClick();
-
-            refreshInterval = setInterval(() => { loadDashboard(true); }, 180000);
 
             updateThemeButton(document.documentElement.getAttribute('data-theme') === 'dark');
 
