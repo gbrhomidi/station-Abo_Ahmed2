@@ -18149,7 +18149,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         // 2. المبيعات اليومية (صافي المبلغ)
         db.rawQuery(
             "SELECT COALESCE(SUM(net_amount),0) FROM sales_transactions WHERE station_id=? AND business_day=? AND is_deleted=0",
-            arrayOf(stationId.toString(), today)
+            arrayOf(stationId.toString(), today, stationId.toString(), stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("daily_sales", cursor.getDouble(0))
         }
@@ -18202,7 +18202,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             """
             SELECT COALESCE(SUM(p.amount),0)
             FROM payments p
-            WHERE p.station_id = ?
+            LEFT JOIN sales_transactions s ON s.id = p.sale_id
+            LEFT JOIN parties customer ON customer.id = p.customer_party_id
+            WHERE COALESCE(p.station_id, s.station_id, customer.station_id) = ?
               AND COALESCE(p.is_deleted,0) = 0
               AND p.status = 'completed'
               AND COALESCE(p.is_refund,0) = 0
@@ -18210,25 +18212,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
               AND (
                     (
                         COALESCE(p.sale_id,0) > 0
-                        AND EXISTS (
-                            SELECT 1 FROM sales_transactions s
-                            WHERE s.id = p.sale_id
-                              AND s.station_id = p.station_id
-                              AND s.is_deleted = 0
-                              AND LOWER(COALESCE(s.status,'')) NOT IN ('cancelled','refunded','void','reversed')
-                        )
+                        AND s.station_id = ?
+                        AND s.is_deleted = 0
+                        AND LOWER(COALESCE(s.status,'')) NOT IN ('cancelled','refunded','void','reversed')
                     )
                     OR
                     (
                         COALESCE(p.sale_id,0) = 0
                         AND COALESCE(p.customer_party_id,0) > 0
                         AND COALESCE(p.supplier_party_id,0) = 0
-                        AND EXISTS (
-                            SELECT 1 FROM parties customer
-                            WHERE customer.id = p.customer_party_id
-                              AND customer.station_id = p.station_id
-                              AND customer.is_deleted = 0
-                        )
+                        AND customer.station_id = ?
+                        AND customer.is_deleted = 0
                     )
               )
             """,

@@ -230,9 +230,24 @@ class CreditInventoryWorkflowRobolectricTest {
         insertDashboardPayment("DASH-DEBT-" + UUID.randomUUID(), 25.0, customerReference = customerId)
         insertDashboardPayment("DASH-SUPPLIER-" + UUID.randomUUID(), 90.0, supplierReference = customerId)
         insertDashboardPayment("DASH-REFUND-" + UUID.randomUUID(), 15.0, saleReference = saleId, refund = true)
+        // Legacy POS rows can have a NULL station_id; resolve their station only
+        // through the linked sale, never by accepting an unscoped payment.
+        db.insertOrThrow("payments", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("payment_code", "DASH-LEGACY-" + UUID.randomUUID())
+            putNull("station_id")
+            put("sale_id", saleId)
+            put("payment_type", "cash")
+            put("payment_method", "cash")
+            put("amount", 10.0)
+            put("business_day", BusinessDay.currentDate())
+            put("status", "completed")
+            put("is_refund", 0)
+            put("is_deleted", 0)
+        })
         val collectedStats = helper.getDashboardStatsForDate(1, JSONObject(), BusinessDay.currentDate())
-        assertEquals("المتحصل فعلياً يجمع دفعات البيع وتحصيلات ديون العملاء فقط",
-            65.0, collectedStats.getDouble("collected_amount"), 0.0001)
+        assertEquals("المتحصل فعلياً يجمع دفعات البيع وتحصيلات ديون العملاء مع الحفاظ على السجلات القديمة",
+            75.0, collectedStats.getDouble("collected_amount"), 0.0001)
 
         assertTrue(db.rawQuery("PRAGMA foreign_key_check", null).use { !it.moveToFirst() })
     }
