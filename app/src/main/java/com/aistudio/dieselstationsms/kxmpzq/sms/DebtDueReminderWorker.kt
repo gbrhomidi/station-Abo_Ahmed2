@@ -39,10 +39,15 @@ class DebtDueReminderWorker(
 
         return try {
             val db = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
+            val automaticRemindersEnabled = db.getSetting("debt_due_auto_sms_enabled") == "1"
+            if (!automaticRemindersEnabled) {
+                cancelDueReminderNotification(stationId)
+                return Result.success()
+            }
             val smsEnabled = db.getSetting("sms_send_enabled") != "0"
             val smsPermissionGranted = applicationContext.checkSelfPermission(Manifest.permission.SEND_SMS) ==
                 PackageManager.PERMISSION_GRANTED
-            val smsDispatchAllowed = smsEnabled && smsPermissionGranted
+            val smsDispatchAllowed = automaticRemindersEnabled && smsEnabled && smsPermissionGranted
 
             // Use the same trusted due-date source consumed by debt screens and reports. The same
             // date calculation is used by the customer-debt screen and the UI banner.
@@ -97,7 +102,7 @@ class DebtDueReminderWorker(
                 // Keep the durable reminder when SEND_SMS is unavailable. The atomic
                 // transaction queues it for later retry; only an explicit SMS opt-out
                 // should suppress persistence entirely.
-                if (!smsEnabled) continue
+                if (!automaticRemindersEnabled || !smsEnabled) continue
 
                 // A reminder already recorded on the due date is enough; a reminder
                 // from yesterday must not suppress the actual due-date notification.
@@ -275,6 +280,12 @@ class DebtDueReminderWorker(
         private fun notificationId(stationId: Int): Int = 0xD3B7 + (stationId and 0x0FFF)
 
         /** WorkManager persists this schedule across process death and device restarts. */
+        fun cancel(context: Context, stationId: Int) {
+            if (stationId <= 0) return
+            WorkManager.getInstance(context.applicationContext)
+                .cancelUniqueWork(WORK_PREFIX + stationId)
+        }
+
         fun schedule(context: Context, stationId: Int, userId: Long) {
             if (stationId <= 0 || userId <= 0L) return
             val request = PeriodicWorkRequestBuilder<DebtDueReminderWorker>(

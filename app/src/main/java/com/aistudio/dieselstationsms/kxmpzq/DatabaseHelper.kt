@@ -18202,14 +18202,35 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             """
             SELECT COALESCE(SUM(p.amount),0)
             FROM payments p
-            JOIN sales_transactions s
-            ON s.id = p.sale_id
-            WHERE s.station_id = ?
-            AND (p.station_id IS NULL OR p.station_id = s.station_id)
-            AND s.is_deleted = 0
-            AND COALESCE(p.is_deleted,0) = 0
-            AND p.status = 'completed'
-            AND p.business_day = ?
+            WHERE p.station_id = ?
+              AND COALESCE(p.is_deleted,0) = 0
+              AND p.status = 'completed'
+              AND COALESCE(p.is_refund,0) = 0
+              AND p.business_day = ?
+              AND (
+                    (
+                        COALESCE(p.sale_id,0) > 0
+                        AND EXISTS (
+                            SELECT 1 FROM sales_transactions s
+                            WHERE s.id = p.sale_id
+                              AND s.station_id = p.station_id
+                              AND s.is_deleted = 0
+                              AND LOWER(COALESCE(s.status,'')) NOT IN ('cancelled','refunded','void','reversed')
+                        )
+                    )
+                    OR
+                    (
+                        COALESCE(p.sale_id,0) = 0
+                        AND COALESCE(p.customer_party_id,0) > 0
+                        AND COALESCE(p.supplier_party_id,0) = 0
+                        AND EXISTS (
+                            SELECT 1 FROM parties customer
+                            WHERE customer.id = p.customer_party_id
+                              AND customer.station_id = p.station_id
+                              AND customer.is_deleted = 0
+                        )
+                    )
+              )
             """,
             arrayOf(stationId.toString(), today)
         ).use { cursor ->

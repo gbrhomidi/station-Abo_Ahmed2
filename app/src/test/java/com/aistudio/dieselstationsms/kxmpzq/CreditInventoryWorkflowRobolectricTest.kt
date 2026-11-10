@@ -200,6 +200,40 @@ class CreditInventoryWorkflowRobolectricTest {
         }
         db.update("sales_transactions", ContentValues().apply { put("status", "completed") },
             "id=? AND station_id=?", arrayOf(saleId.toString(), "1"))
+        // Dashboard collection includes POS-linked payments and customer debt
+        // settlements (processPayment stores customer receipts without a sale_id).
+        fun insertDashboardPayment(
+            code: String,
+            amount: Double,
+            saleReference: Long? = null,
+            customerReference: Long? = null,
+            supplierReference: Long? = null,
+            refund: Boolean = false
+        ) {
+            db.insertOrThrow("payments", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("payment_code", code)
+                put("station_id", 1)
+                if (saleReference != null) put("sale_id", saleReference)
+                if (customerReference != null) put("customer_party_id", customerReference)
+                if (supplierReference != null) put("supplier_party_id", supplierReference)
+                put("payment_type", "cash")
+                put("payment_method", "cash")
+                put("amount", amount)
+                put("business_day", BusinessDay.currentDate())
+                put("status", "completed")
+                put("is_refund", if (refund) 1 else 0)
+                put("is_deleted", 0)
+            })
+        }
+        insertDashboardPayment("DASH-POS-" + UUID.randomUUID(), 40.0, saleReference = saleId, customerReference = customerId)
+        insertDashboardPayment("DASH-DEBT-" + UUID.randomUUID(), 25.0, customerReference = customerId)
+        insertDashboardPayment("DASH-SUPPLIER-" + UUID.randomUUID(), 90.0, supplierReference = customerId)
+        insertDashboardPayment("DASH-REFUND-" + UUID.randomUUID(), 15.0, saleReference = saleId, refund = true)
+        val collectedStats = helper.getDashboardStatsForDate(1, JSONObject(), BusinessDay.currentDate())
+        assertEquals("المتحصل فعلياً يجمع دفعات البيع وتحصيلات ديون العملاء فقط",
+            65.0, collectedStats.getDouble("collected_amount"), 0.0001)
+
         assertTrue(db.rawQuery("PRAGMA foreign_key_check", null).use { !it.moveToFirst() })
     }
 

@@ -1214,7 +1214,9 @@ class MainActivity : AppCompatActivity() {
             val db = dbHelper
             val userId = currentUserId
             val stationId = db.getUserById(userId)?.optInt("station_id", 0) ?: 0
-            if (userId > 0L && stationId > 0) {
+            if (userId > 0L && stationId > 0 &&
+                db.getSetting("debt_due_auto_sms_enabled") == "1"
+            ) {
                 DebtDueReminderWorker.schedule(this, stationId, userId)
             }
             if (isPermissionGranted(Manifest.permission.SEND_SMS)) {
@@ -1253,7 +1255,7 @@ class MainActivity : AppCompatActivity() {
         if (userId <= 0L) return
         runCatching {
             val stationId = dbHelper.getUserById(userId)?.optInt("station_id", 0) ?: 0
-            if (stationId > 0) {
+            if (stationId > 0 && dbHelper.getSetting("debt_due_auto_sms_enabled") == "1") {
                 DebtDueReminderWorker.schedule(this, stationId, userId)
             }
         }.onFailure {
@@ -6873,7 +6875,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
             return try {
                 // Never report success when the SQLite helper explicitly rejects a write.
+                if (key == "debt_due_auto_sms_enabled") {
+                    require(value == "0" || value == "1") { "قيمة إعداد التذكير الآلي غير صالحة" }
+                }
                 check(db.setSetting(key, value)) { "تعذر حفظ الإعداد في SQLite" }
+                if (key == "debt_due_auto_sms_enabled") {
+                    val stationId = db.getUserById(currentUserId)?.optInt("station_id", 0) ?: 0
+                    if (value == "1") {
+                        scheduleDebtReminderWork(currentUserId)
+                    } else if (stationId > 0) {
+                        DebtDueReminderWorker.cancel(this@MainActivity, stationId)
+                    }
+                }
                 // Resume durable outgoing messages immediately when sending is enabled again.
                 if (key == "sms_send_enabled" && value == "1" &&
                     isPermissionGranted(Manifest.permission.SEND_SMS)

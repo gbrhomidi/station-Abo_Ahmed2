@@ -1805,6 +1805,12 @@
         }
         .due-reminder-card h3 { margin: 0 0 8px; }
         .due-reminder-card p { line-height: 1.8; }
+        .due-auto-toggle {
+            display: flex; align-items: flex-start; gap: 10px; margin: 14px 0 8px;
+            padding: 12px 14px; border: 1px solid rgba(5,150,105,.35);
+            border-radius: 13px; background: rgba(5,150,105,.07); font-weight: 800; line-height: 1.7;
+        }
+        .due-auto-toggle input { width: 20px; height: 20px; margin-top: 2px; flex: 0 0 auto; accent-color: #059669; }
         .due-reminder-actions {
             display: flex;
             gap: 10px;
@@ -2704,6 +2710,8 @@
                 ),
                 getDueSoonDebtRemindersTyped: () => androidInterface.getDueSoonDebtRemindersTyped(JSON.stringify(safeParams)),
                 sendDueSoonDebtRemindersTyped: () => androidInterface.sendDueSoonDebtRemindersTyped(JSON.stringify(safeParams)),
+                getSetting: () => androidInterface.getSetting(String(safeParams.key || '')),
+                setSetting: () => androidInterface.setSetting(String(safeParams.key || ''), String(safeParams.value ?? '')),
                 screenExists: () => androidInterface.screenExists(
                     typeof safeParams.path === 'string' ? safeParams.path : ''
                 ),
@@ -3628,7 +3636,7 @@
                 const o = document.createElement('div');
                 o.id = 'mainDueReminderOverlay';
                 o.className = 'due-reminder-overlay';
-                o.innerHTML = `<div class="due-reminder-card"><h3>🔔 مستحقات العملاء تقترب</h3><p>يوجد عملاء عليهم ديون واقتربت تواريخ استحقاقها. هل تصرح للتطبيق بإرسال رسائل SMS تذكيرية الآن؟</p><div class="due-reminder-actions"><button class="due-view" onclick="openMainDueReminderDetails()">إطلاع</button><button class="due-delay" onclick="deferMainDueReminder()">تأجيل</button><button class="due-cancel" onclick="closeMainDueReminderNotice()">إلغاء</button><button class="due-ok" onclick="approveMainDueReminders()">موافق - يتم الإرسال فوراً</button></div></div>`;
+                o.innerHTML = `<div class="due-reminder-card"><h3>🔔 مستحقات العملاء تقترب</h3><p>يوجد عملاء لديهم فواتير آجلة اقترب موعد استحقاقها. يمكنك إرسال تذكير يدوي الآن أو تفعيل الإرسال الآلي المستمر.</p><label class="due-auto-toggle"><input id="mainDueAutoSmsEnabled" type="checkbox" onchange="setMainDueAutoSmsEnabled(this.checked)"><span>إرسال آلياً — إرسال تذكيرات SMS تلقائياً عند اقتراب الاستحقاق وفي يومه وبعد تجاوزه، طوال أيام الأسبوع.</span></label><div class="due-reminder-actions"><button class="due-view" onclick="openMainDueReminderDetails()">إطلاع</button><button class="due-delay" onclick="deferMainDueReminder()">تأجيل</button><button class="due-cancel" onclick="closeMainDueReminderNotice()">إلغاء</button><button class="due-ok" onclick="approveMainDueReminders()">إرسال التذكيرات الآن</button></div></div>`;
                 document.body.appendChild(o);
             }
             if (!document.getElementById('mainDueDetailModal')) {
@@ -3669,27 +3677,60 @@
             try { localStorage.setItem(dueReminderRefreshStorageKey(), String(now)); } catch (_) {}
         }
 
+        async function loadMainDueAutoSmsSetting() {
+            const checkbox = document.getElementById('mainDueAutoSmsEnabled');
+            if (!checkbox) return;
+            try {
+                const result = await apiCall('getSetting', { key: 'debt_due_auto_sms_enabled' });
+                if (!result.success) throw new Error(result.error || 'تعذر قراءة إعداد الإرسال الآلي');
+                checkbox.checked = String(result.value ?? '0') === '1';
+            } catch (error) {
+                checkbox.checked = false;
+                console.warn('Main due auto-SMS setting:', error);
+            }
+        }
+
+        async function setMainDueAutoSmsEnabled(enabled) {
+            const checkbox = document.getElementById('mainDueAutoSmsEnabled');
+            if (checkbox) checkbox.disabled = true;
+            try {
+                const result = await apiCall('setSetting', { key: 'debt_due_auto_sms_enabled', value: enabled ? '1' : '0' });
+                if (!result.success) throw new Error(result.error || result.message || 'تعذر حفظ إعداد الإرسال الآلي');
+                const verified = await apiCall('getSetting', { key: 'debt_due_auto_sms_enabled' });
+                if (!verified.success || String(verified.value ?? '0') !== (enabled ? '1' : '0')) {
+                    throw new Error('لم يتم التحقق من حفظ إعداد الإرسال الآلي في SQLite');
+                }
+                if (checkbox) checkbox.checked = enabled;
+                showToast(enabled
+                    ? 'تم تفعيل التذكير الآلي. سيعمل في الخلفية وفق قيود نظام Android.'
+                    : 'تم إيقاف التذكير الآلي.', 'success');
+            } catch (error) {
+                if (checkbox) checkbox.checked = !enabled;
+                showToast(error.message || 'تعذر تحديث إعداد التذكير الآلي', 'error');
+            } finally {
+                if (checkbox) checkbox.disabled = false;
+            }
+        }
+
         async function refreshMainDueReminders() {
             ensureMainDueReminderUI();
+            await loadMainDueAutoSmsSetting();
             try {
-                const result = await apiCall('getDueSoonDebtRemindersTyped', JSON.stringify({days: 10}));
+                const result = await apiCall('getDueSoonDebtRemindersTyped', { days: 10 });
                 if (!result.success) return false;
                 mainDueReminderRows = Array.isArray(result.data) ? result.data : [];
-                const eligible = mainDueReminderRows.filter(r => r.eligible && Number(r.days_remaining) <= 10);
+                const dueSoon = mainDueReminderRows.filter(r =>
+                    Number(r.total_outstanding) > 0 && Number(r.days_remaining) >= 0 &&
+                    Number(r.days_remaining) <= 10
+                );
                 const b = document.getElementById('mainDueReminderButton');
                 if (b) {
-                    b.style.display = eligible.length ? 'inline-flex' : 'none';
+                    b.style.display = dueSoon.length ? 'inline-flex' : 'none';
                     const c = b.querySelector('.due-count');
-                    if (c) c.textContent = eligible.length;
+                    if (c) c.textContent = dueSoon.length;
                 }
-                const auto = eligible.filter(r => Number(r.days_remaining) === 1);
-                if (auto.length) {
-                    await apiCall('sendDueSoonDebtRemindersTyped', JSON.stringify({days: 1, automatic_one_day: true}));
-                    const refreshed = await apiCall('getDueSoonDebtRemindersTyped', JSON.stringify({days: 10}));
-                    if (refreshed.success) mainDueReminderRows = Array.isArray(refreshed.data) ? refreshed.data : [];
-                }
-                const after = mainDueReminderRows.filter(r => r.eligible && Number(r.days_remaining) <= 10);
-                if (after.length && !mainDueReminderDeferred && sessionStorage.getItem('mainDueReminderShownDate') !== new Date().toISOString().slice(0, 10)) {
+                if (dueSoon.length && !mainDueReminderDeferred &&
+                    sessionStorage.getItem('mainDueReminderShownDate') !== new Date().toISOString().slice(0, 10)) {
                     sessionStorage.setItem('mainDueReminderShownDate', new Date().toISOString().slice(0, 10));
                     openMainDueReminderNotice();
                 }
@@ -3714,7 +3755,7 @@
         }
         function approveMainDueReminders() {
             closeMainDueReminderNotice();
-            apiCall('sendDueSoonDebtRemindersTyped', JSON.stringify({days: 10}))
+            apiCall('sendDueSoonDebtRemindersTyped', { days: 10 })
                 .then(r => {
                     if (!r.success) throw new Error(r.error || r.message || 'تعذر إرسال التذكيرات');
                     showToast(`تمت إضافة ${r.data?.queued_count || 0} رسالة إلى طابور SMS`, 'success');
@@ -3725,7 +3766,10 @@
         }
         function openMainDueReminderDetails() {
             ensureMainDueReminderUI();
-            const rows = mainDueReminderRows.filter(r => r.eligible && Number(r.days_remaining) <= 10);
+            const rows = mainDueReminderRows.filter(r =>
+                Number(r.total_outstanding) > 0 && Number(r.days_remaining) >= 0 &&
+                Number(r.days_remaining) <= 10
+            );
             document.getElementById('mainDueDetailContent').innerHTML = rows.length
                 ? `<div style="overflow:auto;margin-top:12px"><table class="due-detail-table"><thead><tr><th>العميل</th><th>الهاتف</th><th>الدين القريب</th><th>إجمالي غير المسدد</th><th>الاستحقاق</th></tr></thead><tbody>${rows.map(r => `<tr><td>${String(r.customer_name || '---')}</td><td dir="ltr">${String(r.phone || '---')}</td><td class="due-red">${Number(r.due_soon_amount || 0).toLocaleString('en-US')} ${CURRENCY}</td><td class="due-blue">${Number(r.total_outstanding || 0).toLocaleString('en-US')} ${CURRENCY}</td><td>${String(r.nearest_due_date || '---')}</td></tr>`).join('')}</tbody></table></div>`
                 : '<div style="padding:30px;text-align:center">لا توجد مستحقات مؤهلة حالياً.</div>';

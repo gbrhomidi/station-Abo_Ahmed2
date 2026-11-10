@@ -138,6 +138,7 @@ class DebtDueReminderWorkerIntegrationTest {
             inWindowCandidate?.optBoolean("eligible") == true)
 
         database.setSetting("sms_send_enabled", "1")
+        database.setSetting("debt_due_auto_sms_enabled", "1")
         database.setSetting("debt_reminder_days_before_due", "3")
 
         DebtDueReminderWorker.schedule(context, stationId, userId)
@@ -187,6 +188,61 @@ class DebtDueReminderWorkerIntegrationTest {
         assertEquals(0, db.rawQuery(
             "SELECT COUNT(*) FROM sms_outbox WHERE business_entity_id=?",
             arrayOf("party:$outsideCustomer")
+        ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
+    }
+
+    @Test
+    fun workerDoesNotQueueDebtSmsWhenAutomaticRemindersAreDisabled() = runBlocking {
+        shadowOf(context.applicationContext as Application).grantPermissions(Manifest.permission.SEND_SMS)
+        val db = database.writableDatabase
+        val userId = ensureTestUser(db)
+        val today = LocalDate.parse(BusinessDay.currentDate())
+        val (customerId, saleId) = insertDebtFixture(db, "automatic-disabled")
+        val phone = "967771112233"
+        val partyColumns = columns(db, "parties")
+        listOf("phone", "phone_number", "mobile", "phone1")
+            .firstOrNull { it in partyColumns }
+            ?.let { column ->
+                db.update("parties", ContentValues().apply { put(column, phone) },
+                    "id=? AND station_id=?", arrayOf(customerId.toString(), stationId.toString()))
+            }
+        db.insertOrThrow("party_contacts", null, ContentValues().apply {
+            put("uuid", "worker-disabled-contact-" + UUID.randomUUID())
+            put("party_id", customerId)
+            put("contact_name", "Automatic reminder disabled test")
+            put("phone", phone)
+            put("is_primary", 1)
+            put("is_active", 1)
+            put("is_deleted", 0)
+        })
+        val salesColumns = columns(db, "sales_transactions")
+        db.update("sales_transactions", ContentValues().apply {
+            put("due_date", today.plusDays(1).toString())
+            put("due_date_source", "sale_creation")
+            if ("due_date_basis" in salesColumns) put("due_date_basis", today.toString())
+            if ("payment_terms_days_at_sale" in salesColumns) put("payment_terms_days_at_sale", 1)
+            if ("payment_terms_source_at_sale" in salesColumns) put("payment_terms_source_at_sale", "explicit_text")
+            if ("payment_terms_at_sale" in salesColumns) put("payment_terms_at_sale", "صافي يوم")
+        }, "id=? AND station_id=?", arrayOf(saleId.toString(), stationId.toString()))
+
+        database.setSetting("sms_send_enabled", "1")
+        database.setSetting("debt_due_auto_sms_enabled", "0")
+        val requestData = Data.Builder()
+            .putInt("debt_reminder_station_id", stationId)
+            .putLong("debt_reminder_user_id", userId)
+            .build()
+        val worker = TestListenableWorkerBuilder.from(context, DebtDueReminderWorker::class.java)
+            .setInputData(requestData)
+            .build()
+
+        assertEquals(ListenableWorker.Result.success(), worker.doWork())
+        assertEquals(0, db.rawQuery(
+            "SELECT COUNT(*) FROM sms_reminders WHERE transaction_id=?",
+            arrayOf(saleId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
+        assertEquals(0, db.rawQuery(
+            "SELECT COUNT(*) FROM sms_outbox WHERE business_entity_id=?",
+            arrayOf("party:$customerId")
         ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
     }
 
