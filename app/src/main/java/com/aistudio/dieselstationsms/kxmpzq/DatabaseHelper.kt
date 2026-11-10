@@ -18092,30 +18092,35 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      */
     private fun countDashboardPendingTasks(stationId: Int): Int {
         require(stationId > 0) { "معرف المحطة غير صالح لعد المهام المعلقة" }
-        val pageSize = 5000
-        var offset = 0
-        var total = 0
-        while (true) {
-            val params = JSONObject().apply {
-                put("include_archived", false)
-                put("include_resolved", false)
-                put("limit", pageSize)
-                put("offset", offset)
+        dbLock.lock()
+        return try {
+            val pageSize = 5000
+            var offset = 0
+            var total = 0
+            while (true) {
+                val params = JSONObject().apply {
+                    put("include_archived", false)
+                    put("include_resolved", false)
+                    put("limit", pageSize)
+                    put("offset", offset)
+                }
+                val page = taskQuery(params, stationId)
+                for (index in 0 until page.length()) {
+                    val task = page.optJSONObject(index) ?: continue
+                    if (task.optInt("is_deleted", 0) != 0 ||
+                        task.optInt("is_archived", 0) != 0 ||
+                        task.optInt("is_resolved", 0) != 0 ||
+                        task.optString("status") == "مكتملة"
+                    ) continue
+                    total++
+                }
+                if (page.length() < pageSize) break
+                offset += pageSize
             }
-            val page = taskQuery(params, stationId)
-            for (index in 0 until page.length()) {
-                val task = page.optJSONObject(index) ?: continue
-                if (task.optInt("is_deleted", 0) != 0 ||
-                    task.optInt("is_archived", 0) != 0 ||
-                    task.optInt("is_resolved", 0) != 0 ||
-                    task.optString("status") == "مكتملة"
-                ) continue
-                total++
-            }
-            if (page.length() < pageSize) break
-            offset += pageSize
+            total
+        } finally {
+            dbLock.unlock()
         }
-        return total
     }
 
     fun getDashboardStats(stationId: Int, params: JSONObject = JSONObject()): JSONObject =
