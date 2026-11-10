@@ -427,7 +427,14 @@ class FinancialIntegrityContractTest {
         val saleWriter = functionBody(source, "private fun insertSaleTransactionInternal(")
         val productSale = functionBody(source, "fun completeSale")
         val invoiceReader = functionBody(source, "fun getInvoiceDetails")
-        val revenueJournal = functionBody(source, "private fun postSaleRevenueJournalWithinTransaction")
+        // This method contains local Kotlin functions (account/addLine). The generic
+        // functionBody helper treats those as class-level declarations and truncates
+        // the method before its journal-line assertions.
+        val revenueJournalStart = source.indexOf("private fun postSaleRevenueJournalWithinTransaction")
+        val revenueJournalEnd = source.indexOf("\nprivate fun postSalesReversalJournal", revenueJournalStart)
+        assertTrue("POS revenue journal method boundaries must be present",
+            revenueJournalStart >= 0 && revenueJournalEnd > revenueJournalStart)
+        val revenueJournal = source.substring(revenueJournalStart, revenueJournalEnd)
         assertTrue("POS must pass delivery fee to shared writer", productSale.contains("serviceFee = serviceFee"))
         assertTrue("Shared writer must persist service_fee", saleWriter.contains("put(\"service_fee\", serviceFee)"))
         assertTrue("Invoice retrieval must return service_fee", invoiceReader.contains("s.service_fee") && invoiceReader.contains("put(\"service_fee\""))
