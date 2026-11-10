@@ -3925,16 +3925,6 @@ body.invoice-print-mode #posInvoice {
           <button type="button" class="btn btn-primary w-100" id="openCreditCustomerModalBtn"><i class="fas fa-search"></i> بحث واختيار عميل</button>
         </div>
       </div>
-      <div class="horizontal-row" id="paymentTermsRow" style="display:none;">
-        <div class="field-group">
-          <label class="form-label" for="paymentTermsId">شروط الدفع</label>
-          <select id="paymentTermsId" class="form-control"><option value="">اختر شرط الدفع...</option></select>
-        </div>
-        <div class="field-group">
-          <label class="form-label" for="paymentTermsDueDate">تاريخ الاستحقاق المتوقع</label>
-          <input type="date" id="paymentTermsDueDate" class="form-control" readonly aria-readonly="true">
-        </div>
-      </div>
       <div id="customerDetailsContainer" class="customer-info-grid" style="display: none;"></div>
       <div class="customer-action-buttons">
         <button class="btn btn-primary" id="addCustomerBtn">إضافة عميل</button>
@@ -3981,6 +3971,19 @@ body.invoice-print-mode #posInvoice {
         </thead>
         <tbody id="productsTableBody"></tbody>
       </table>
+    </div>
+  </div>
+
+  <div class="form-grid" id="paymentTermsSection" style="display:none;">
+    <div class="horizontal-row" id="paymentTermsRow" style="display:none;">
+      <div class="field-group">
+        <label class="form-label" for="paymentTermsId">شروط الدفع</label>
+        <select id="paymentTermsId" class="form-control"><option value="">اختر شرط الدفع...</option></select>
+      </div>
+      <div class="field-group">
+        <label class="form-label" for="paymentTermsDueDate">تاريخ الاستحقاق المتوقع</label>
+        <input type="date" id="paymentTermsDueDate" class="form-control" readonly aria-readonly="true">
+      </div>
     </div>
   </div>
 
@@ -6622,13 +6625,15 @@ function syncPosPaymentTermForCustomer(customer) {
 }
 
 function updatePosPaymentTermsVisibility() {
+    const section = document.getElementById('paymentTermsSection');
     const row = document.getElementById('paymentTermsRow');
     const select = document.getElementById('paymentTermsId');
     const credit = document.getElementById('paymentType')?.value === 'آجل';
-    const customerId = Number(document.getElementById('customerId')?.value || 0);
-    const visible = credit && customerId > 0;
-    if (row) row.style.display = visible ? '' : 'none';
-    if (select) { select.required = visible; select.disabled = !visible; }
+    // Show the terms/date row immediately for credit sales; customer selection
+    // remains a separate required step in completeSale().
+    if (section) section.style.display = credit ? '' : 'none';
+    if (row) row.style.display = credit ? '' : 'none';
+    if (select) { select.required = credit; select.disabled = !credit; }
     updatePosPaymentTermsPreview();
 }
 

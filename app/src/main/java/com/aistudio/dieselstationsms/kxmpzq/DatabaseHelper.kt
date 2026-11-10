@@ -12304,6 +12304,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     }, stationScopeId, cashierId
                 )
             }
+            // Existing installations may have restored a database without the POS adjustment
+            // accounts. Repair the three dedicated categories inside the same sale transaction
+            // before resolving journal lines, so no sale can fail on missing mappings.
+            ensureProductSaleAccountingAccounts(db)
             postSaleRevenueJournalWithinTransaction(
                 db, saleId, stationScopeId, cashierId, "products",
                 data.optLong("entity_id", 0L).takeIf { it > 0L }?.toInt(),

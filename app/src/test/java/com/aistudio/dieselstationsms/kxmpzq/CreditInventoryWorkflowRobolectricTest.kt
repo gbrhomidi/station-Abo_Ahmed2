@@ -480,6 +480,11 @@ class CreditInventoryWorkflowRobolectricTest {
             put("station_id",1);put("shift_date","2026-11-10");put("shift_type","morning")
             put("start_time","2026-11-10 08:00:00");put("cashier_id",actorId);put("created_by",actorId);put("status","open")
         })
+        // Simulate a legacy/restored database with missing POS adjustment accounts.
+        // completeSale must repair these categories transactionally before journal posting.
+        db.delete("accounts", "account_category IN (?, ?, ?)", arrayOf(
+            "pos_sales_discount", "pos_sales_tax_payable", "pos_delivery_fee_revenue"
+        ))
         val expectedNet=12.0-2.0+1.5+3.0
         fun createSale(type:String,key:String,paid:Double)=helper.completeSale(JSONObject()
             .put("payment_type",type).put("entity_id",if(type=="credit")customerId else JSONObject.NULL)
