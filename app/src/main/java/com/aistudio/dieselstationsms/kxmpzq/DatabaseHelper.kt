@@ -18149,7 +18149,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         // 2. المبيعات اليومية (صافي المبلغ)
         db.rawQuery(
             "SELECT COALESCE(SUM(net_amount),0) FROM sales_transactions WHERE station_id=? AND business_day=? AND is_deleted=0",
-            arrayOf(stationId.toString(), today, stationId.toString(), stationId.toString())
+            arrayOf(stationId.toString(), today)
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("daily_sales", cursor.getDouble(0))
         }
@@ -18226,7 +18226,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     )
               )
             """,
-            arrayOf(stationId.toString(), today)
+            arrayOf(stationId.toString(), today, stationId.toString(), stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) {
                 stats.put(
