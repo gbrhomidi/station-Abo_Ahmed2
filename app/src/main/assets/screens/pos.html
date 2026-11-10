@@ -6544,6 +6544,16 @@ function loadCustomers() {
             const list = Array.isArray(raw) ? raw : (Array.isArray(raw.rows) ? raw.rows : []);
             if (data.success) {
                 creditCustomers = list.filter(customer => customer && customerDatabaseId(customer) > 0 && customer.is_active !== 0 && customer.is_deleted !== 1);
+                // Reconcile a customer selected before the asynchronous lookup completed.
+                const selectedId = Number(document.getElementById('customerId')?.value || 0);
+                if (selectedId > 0) {
+                    const refreshedCustomer = creditCustomers.find(customer => customerDatabaseId(customer) === selectedId);
+                    if (refreshedCustomer) {
+                        selectedCreditCustomer = refreshedCustomer;
+                        syncPosPaymentTermForCustomer(refreshedCustomer);
+                    }
+                }
+                updatePosPaymentTermsVisibility();
                 creditCustomers.forEach(customer => {
                     const option = document.createElement('option');
                     option.value = String(customerDatabaseId(customer));
@@ -6687,9 +6697,21 @@ function loadCustomersByEntityType(entityTypeId) {
 function loadCustomerDetails(customerId) {
     const id = Number(customerId || 0);
     const matchingCustomer = creditCustomers.find(customer => customerDatabaseId(customer) === id) || null;
-    if (!matchingCustomer) { selectedCreditCustomer = null; document.getElementById('customerDetailsContainer').style.display = 'none'; return; }
+    const details = document.getElementById('customerDetailsContainer');
+    if (!matchingCustomer) {
+        // Keep the selected placeholder while getCustomers is still loading; clearing it
+        // here makes completeSale reject a valid customer chosen through selectCustomer().
+        if (Number(selectedCreditCustomer?.id || selectedCreditCustomer?.party_id || 0) !== id) {
+            selectedCreditCustomer = null;
+        }
+        if (details) details.style.display = 'none';
+        updatePosPaymentTermsVisibility();
+        return;
+    }
     selectedCreditCustomer = matchingCustomer;
     displayCustomerDetails(selectedCreditCustomer);
+    syncPosPaymentTermForCustomer(matchingCustomer);
+    updatePosPaymentTermsVisibility();
 }
 
 function displayCustomerDetails(customer) {
@@ -6745,6 +6767,8 @@ function selectCustomer(customerId, customerName = '') {
     selectedCreditCustomer = { id: Number(customerId), commercial_name: customerName, is_active: 1 };
     document.getElementById('customerId').value = String(customerId);
     closeModal('customerSearchModal');
+    syncPosPaymentTermForCustomer(selectedCreditCustomer);
+    updatePosPaymentTermsVisibility();
     loadCustomerDetails(customerId);
 }
 
