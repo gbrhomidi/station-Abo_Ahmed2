@@ -3985,7 +3985,7 @@ body.invoice-print-mode #posInvoice {
     </div>
     <div class="horizontal-row">
       <div class="field-group"><label class="form-label">الضريبة</label><input type="number" id="taxAmount" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" value="0" inputmode="decimal"></div>
-      <div class="field-group"><label class="form-label">رسوم الخدمة</label><input type="number" id="serviceFee" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" value="0" inputmode="decimal"></div>
+      <div class="field-group"><label class="form-label">رسوم توصيل</label><input type="number" id="serviceFee" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" value="0" inputmode="decimal"></div>
     </div>
     <div class="horizontal-row">
       <div class="field-group"><label class="form-label">الإجمالي النهائي</label><input type="number" id="totalAmount" class="form-control invoice-summary" dir="ltr" min="0" step="0.01" inputmode="decimal"></div>
@@ -5592,7 +5592,7 @@ function renderSalesInvoice(invoice, targetSection) {
 
     const subtotal = Number(invoice.subtotal ?? 0);
     const discount = Number(invoice.discount_amount ?? 0);
-    const tax = Number(invoice.tax_amount ?? 0) + Number(invoice.vat_amount ?? 0);
+    const tax = Number(invoice.tax_amount ?? invoice.vat_amount ?? 0);
     const serviceFee = Number(invoice.service_fee ?? 0);
     const net = Number(invoice.net_amount ?? invoice.total_amount ?? 0);
     const paid = Number(invoice.amount_paid ?? 0);
@@ -5640,7 +5640,7 @@ function renderSalesInvoice(invoice, targetSection) {
         <div class="invoice-summary-row">
           <div class="invoice-summary-card"><div class="summary-label">الخصم</div><div class="summary-value">${discount.toFixed(2)}</div></div>
           <div class="invoice-summary-card"><div class="summary-label">الضريبة</div><div class="summary-value">${tax.toFixed(2)}</div></div>
-          <div class="invoice-summary-card"><div class="summary-label">رسوم الخدمة</div><div class="summary-value">${serviceFee.toFixed(2)}</div></div>
+          <div class="invoice-summary-card"><div class="summary-label">رسوم توصيل</div><div class="summary-value">${serviceFee.toFixed(2)}</div></div>
           <div class="invoice-summary-card"><div class="summary-label">المدفوع</div><div class="summary-value">${paid.toFixed(2)}</div></div>
           <div class="invoice-summary-card grand"><div class="summary-label">الإجمالي النهائي</div><div class="summary-value">${net.toFixed(2)}</div></div>
         </div>
@@ -6114,7 +6114,7 @@ function buildInvoiceWhatsAppText(invoice) {
     lines.push(`الإجمالي الفرعي: ${pad(invoice.subtotal)}`);
     if (Number(invoice.discount_amount || 0) > 0) lines.push(`الخصم: ${pad(invoice.discount_amount)}`);
     if (Number(invoice.tax_amount || 0) > 0) lines.push(`الضريبة: ${pad(invoice.tax_amount)}`);
-    if (Number(invoice.service_fee || 0) > 0) lines.push(`رسوم الخدمة: ${pad(invoice.service_fee)}`);
+    if (Number(invoice.service_fee || 0) > 0) lines.push(`رسوم توصيل: ${pad(invoice.service_fee)}`);
     lines.push(`*الإجمالي: ${pad(invoice.net_amount ?? invoice.total_amount)}*`);
     lines.push(`المدفوع: ${pad(invoice.amount_paid)}`);
     lines.push(`المتبقي: ${pad(invoice.remaining_amount)}`);
