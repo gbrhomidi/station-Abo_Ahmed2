@@ -130,6 +130,59 @@ class PendingTasksWorkspaceRobolectricTest {
     }
 
     @Test
+    fun dashboardPendingTasksMatchesTheActiveTasksWorkspaceAcrossSources() {
+        helper.addTask(
+            JSONObject()
+                .put("task_type", "مهمة يدوية معلقة")
+                .put("reference", "DASHBOARD-MANUAL")
+                .put("task_date", "2026-11-03")
+                .put("status", "قيد التنفيذ"),
+            stationId = 1
+        )
+        helper.addTask(
+            JSONObject()
+                .put("task_type", "مهمة مكتملة")
+                .put("reference", "DASHBOARD-COMPLETED")
+                .put("task_date", "2026-11-03")
+                .put("status", "مكتملة"),
+            stationId = 1
+        )
+        val userId = insertUser(1, "dashboard-task-user")
+        val shiftId = insertShift(1, "DASHBOARD-TASK-SHIFT")
+        insertCreditSale(1, shiftId, userId, "DASHBOARD-TASK-CREDIT-SALE")
+        insertOutstandingExpense(1, "DASHBOARD-TASK-EXPENSE")
+        val warehouseId = insertWarehouse(1, "DASHBOARD-TASK-WAREHOUSE")
+        insertLowStockProduct(1, warehouseId, "DASHBOARD-TASK-LOW-STOCK")
+
+        val visibleTaskRows = helper.getPendingTasks(
+            1,
+            JSONObject()
+                .put("include_archived", false)
+                .put("include_resolved", false)
+                .put("limit", 5000)
+        ).let { rows ->
+            (0 until rows.length()).count { index ->
+                val row = rows.optJSONObject(index) ?: return@count false
+                row.optInt("is_deleted", 0) == 0 &&
+                    row.optInt("is_archived", 0) == 0 &&
+                    row.optInt("is_resolved", 0) == 0 &&
+                    row.optString("status") != "مكتملة"
+            }
+        }
+
+        val stats = helper.getDashboardStats(1)
+        assertEquals(visibleTaskRows, stats.getInt("pending_tasks"))
+        assertTrue(stats.getBoolean("notifications"))
+        assertTrue(stats.has("due_invoices"))
+        assertTrue(stats.has("expiry_soon"))
+        assertTrue(stats.has("low_stock"))
+        assertTrue(stats.has("returned_fuel_today"))
+        assertTrue(stats.has("returned_products_today"))
+        assertTrue(stats.has("damaged_fuel_today"))
+        assertTrue(stats.has("damaged_products_today"))
+    }
+
+    @Test
     fun taskCrudAndReportsCannotCrossStationBoundary() {
         val taskId = helper.addTask(
             JSONObject()
