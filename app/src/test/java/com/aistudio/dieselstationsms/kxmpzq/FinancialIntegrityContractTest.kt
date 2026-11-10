@@ -420,4 +420,27 @@ class FinancialIntegrityContractTest {
                 ledger.contains("openingArgs += stationScopeId.toString()")
         )
     }
+
+    @Test
+    fun productPosAdjustmentsPersistAndPostAsInvoiceLinkedJournalLines() {
+        val source = locateDatabaseHelper().readText()
+        val saleWriter = functionBody(source, "private fun insertSaleTransactionInternal(")
+        val productSale = functionBody(source, "fun completeSale")
+        val invoiceReader = functionBody(source, "fun getInvoiceDetails")
+        val revenueJournal = functionBody(source, "private fun postSaleRevenueJournalWithinTransaction")
+        assertTrue("POS must pass delivery fee to shared writer", productSale.contains("serviceFee = serviceFee"))
+        assertTrue("Shared writer must persist service_fee", saleWriter.contains("put(\"service_fee\", serviceFee)"))
+        assertTrue("Invoice retrieval must return service_fee", invoiceReader.contains("s.service_fee") && invoiceReader.contains("put(\"service_fee\""))
+        assertTrue("Journal must split discount, tax and delivery revenue",
+            revenueJournal.contains("pos_sales_discount") && revenueJournal.contains("pos_sales_tax_payable") &&
+                revenueJournal.contains("pos_delivery_fee_revenue"))
+        assertTrue("Adjustment descriptions must reference the invoice",
+            revenueJournal.contains("خصم مبيعات الفاتورة \$invoiceNumber") &&
+                revenueJournal.contains("ضريبة المبيعات المستحقة للفاتورة \$invoiceNumber") &&
+                revenueJournal.contains("إيراد رسوم توصيل المنتجات للفاتورة \$invoiceNumber"))
+        assertTrue("Journal header debit and credit totals must balance",
+            revenueJournal.contains("val debitTotal=if(productPos)netAmount+discount") &&
+                revenueJournal.contains("val creditTotal=if(productPos)salesBase+tax+deliveryFee"))
+    }
+
 }
