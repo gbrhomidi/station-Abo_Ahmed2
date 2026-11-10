@@ -1329,25 +1329,71 @@
         }
 
         /* ================================================================
-           Bubbles — Notifications
+           Bubbles — Chat notifications with a lightweight golden wave
         ================================================================ */
-        .bubble-container {
-            position: fixed; top: 90px; left: 10px;
-            display: flex; flex-direction: row; flex-wrap: nowrap; gap: 8px;
-            direction: ltr;
-            z-index: 999; width: max-content; max-width: calc(100vw - 20px);
-            pointer-events: none; box-sizing: border-box;
-            overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
-            -webkit-overflow-scrolling: touch;
+        @keyframes goldenBubbleWave {
+            0% { transform: scale(.88); opacity: .78; }
+            75%, 100% { transform: scale(1.42); opacity: 0; }
         }
-        .bubble-container::-webkit-scrollbar { display: none; }
+        .bubble-container {
+            position: fixed;
+            top: 225px;
+            left: 10px;
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            gap: 8px;
+            direction: ltr;
+            z-index: 999;
+            width: max-content;
+            max-width: calc(100vw - 20px);
+            padding: 8px 6px;
+            pointer-events: none;
+            box-sizing: border-box;
+            overflow: visible;
+        }
         .bubble-container > * { pointer-events: auto; }
         .notification-bubble {
-            width: 36px; height: 36px; min-width: 36px; flex: 0 0 36px;
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            color: #FFFFFF; font-size: 15px; box-shadow: 0 3px 10px rgba(0,0,0,.18);
-            cursor: pointer; transition: transform .2s ease, opacity .35s ease;
-            border: 1.5px solid rgba(255,255,255,.25); will-change: transform;
+            position: relative;
+            isolation: isolate;
+            width: 36px;
+            height: 36px;
+            min-width: 36px;
+            flex: 0 0 36px;
+            border-radius: 12px 12px 12px 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #FFFFFF;
+            font-size: 15px;
+            box-shadow: 0 3px 10px rgba(0,0,0,.18);
+            cursor: pointer;
+            transition: transform .2s ease, opacity .35s ease;
+            border: 1.5px solid rgba(255,255,255,.25);
+            will-change: transform;
+        }
+        .notification-bubble::before {
+            content: '';
+            position: absolute;
+            z-index: -1;
+            inset: -4px;
+            border: 2px solid rgba(212,168,106,.95);
+            border-radius: 15px 15px 15px 5px;
+            box-shadow: 0 0 8px rgba(212,168,106,.55);
+            pointer-events: none;
+            animation: goldenBubbleWave 1.8s ease-out infinite;
+        }
+        .notification-bubble::after {
+            content: '';
+            position: absolute;
+            left: 5px;
+            bottom: -6px;
+            width: 0;
+            height: 0;
+            border-top: 7px solid currentColor;
+            border-right: 7px solid transparent;
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,.16));
+            pointer-events: none;
         }
         .notification-bubble:hover { transform: scale(1.08); }
         .notification-bubble:active { transform: scale(.94); }
@@ -1357,11 +1403,11 @@
         .bubble-returned { background: #6F42C1; }
         .bubble-damaged { background: #EA580C; }
         @media (max-width: 767px) {
-            .bubble-container { top: 82px; left: 10px; gap: 7px; }
+            .bubble-container { top: 205px; left: 10px; gap: 7px; }
             .notification-bubble { width: 34px; height: 34px; min-width: 34px; flex-basis: 34px; font-size: 14px; }
         }
         @media (max-width: 480px) {
-            .bubble-container { top: 74px; left: 8px; gap: 6px; max-width: calc(100vw - 16px); }
+            .bubble-container { top: 185px; left: 8px; gap: 6px; max-width: calc(100vw - 16px); }
             .notification-bubble { width: 32px; height: 32px; min-width: 32px; flex-basis: 32px; font-size: 13px; }
         }
         @media (max-width: 360px) {
@@ -1369,6 +1415,7 @@
             .notification-bubble { width: 30px; height: 30px; min-width: 30px; flex-basis: 30px; font-size: 12px; }
         }
         @media (prefers-reduced-motion: reduce) {
+            .notification-bubble::before { animation: none !important; opacity: .65; transform: none; }
             .notification-bubble { transition: none !important; }
         }
 
