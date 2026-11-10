@@ -18086,6 +18086,38 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return parsed.plusDays(days.toLong()).toString()
     }
 
+    /**
+     * Counts the active task rows shown by the default Tasks screen filter.
+     * taskQuery is the canonical source for manual and derived operational rows.
+     */
+    private fun countDashboardPendingTasks(stationId: Int): Int {
+        require(stationId > 0) { "معرف المحطة غير صالح لعد المهام المعلقة" }
+        val pageSize = 5000
+        var offset = 0
+        var total = 0
+        while (true) {
+            val params = JSONObject().apply {
+                put("include_archived", false)
+                put("include_resolved", false)
+                put("limit", pageSize)
+                put("offset", offset)
+            }
+            val page = taskQuery(params, stationId)
+            for (index in 0 until page.length()) {
+                val task = page.optJSONObject(index) ?: continue
+                if (task.optInt("is_deleted", 0) != 0 ||
+                    task.optInt("is_archived", 0) != 0 ||
+                    task.optInt("is_resolved", 0) != 0 ||
+                    task.optString("status") == "مكتملة"
+                ) continue
+                total++
+            }
+            if (page.length() < pageSize) break
+            offset += pageSize
+        }
+        return total
+    }
+
     fun getDashboardStats(stationId: Int, params: JSONObject = JSONObject()): JSONObject =
         getDashboardStatsForDate(stationId, params, BusinessDay.currentDate())
 
@@ -18292,13 +18324,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (cursor.moveToFirst()) stats.put("inventory_value", cursor.getDouble(0))
         }
 
-        // 12. المهام اليدوية المعلقة للمحطة الحالية؛ العناصر المالية المشتقة تُحسب منفصلة في مساحة المهام.
-        db.rawQuery(
-            "SELECT COUNT(*) FROM tasks WHERE station_id=? AND is_deleted=0 AND is_archived=0 AND is_resolved=0",
-            arrayOf(stationId.toString())
-        ).use { cursor ->
-            if (cursor.moveToFirst()) stats.put("pending_tasks", cursor.getInt(0))
-        }
+        // 12. عدد المهام المعلقة المطابق لمرشح القائمة الافتراضي في screens/tasks.html.
+        stats.put("pending_tasks", countDashboardPendingTasks(stationId))
 
         // 13. حساب اتجاه المبيعات من فترتين متكافئتين فعليتين في SQLite
         val currentEnd = if (requestedTo.isNotEmpty()) requestedTo else today
@@ -18442,6 +18469,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 stats.put("occupancy_rate_source", "tanks.current_quantity/tanks.capacity_liters")
             }
         }
+
+        // All notification metrics are station-scoped values computed above.
+        val hasNotifications =
+            stats.optInt("low_stock", 0) > 0 ||
+            stats.optInt("due_invoices", 0) > 0 ||
+            stats.optInt("pending_tasks", 0) > 0 ||
+            stats.optInt("expiry_soon", 0) > 0 ||
+            stats.optDouble("returned_fuel_today", 0.0) > 0.0 ||
+            stats.optDouble("returned_products_today", 0.0) > 0.0 ||
+            stats.optDouble("damaged_fuel_today", 0.0) > 0.0 ||
+            stats.optDouble("damaged_products_today", 0.0) > 0.0
+        stats.put("notifications", hasNotifications)
 
         return stats
     }
