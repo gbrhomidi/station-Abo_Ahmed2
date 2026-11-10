@@ -136,15 +136,19 @@ def prepare_html(source_path: Path, temporary_path: Path) -> None:
     // explicitly in this CSS-only harness instead of opening the separate search modal.
     const paymentType = document.getElementById('paymentType');
     const customerInfo = document.getElementById('customerInfoRow');
+    const termsSection = document.getElementById('paymentTermsSection');
     const row = document.getElementById('paymentTermsRow');
     if (paymentType) paymentType.value = 'آجل';
-    // POS CSS deliberately uses !important to keep customer fields hidden until the
-    // payment/customer workflow opens them; force the acceptance state at that same
-    // precedence so this standalone CSS harness measures the intended credit form.
+    // Match the production credit-sale state without executing Android bridge scripts:
+    // customer details and the separately positioned payment-terms section are both
+    // revealed by updatePosPaymentTermsVisibility() when the operator selects credit.
     if (customerInfo) customerInfo.style.setProperty('display', 'block', 'important');
     const customerName = document.getElementById('customerNameField');
     if (customerName) customerName.style.setProperty('display', 'block', 'important');
-    if (row) row.style.display = 'grid';
+    // paymentTermsSection is intentionally outside customerInfoRow so it can sit
+    // immediately above the invoice summary; reveal its parent as well as the row.
+    if (termsSection) termsSection.style.setProperty('display', 'grid', 'important');
+    if (row) row.style.setProperty('display', 'grid', 'important');
 
     // This A4 invoice is a print-only node intentionally parked far offscreen.
     // It is not part of the interactive POS screen being measured here.
