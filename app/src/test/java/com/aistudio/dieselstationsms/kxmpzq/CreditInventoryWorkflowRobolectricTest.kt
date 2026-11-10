@@ -451,4 +451,69 @@ class CreditInventoryWorkflowRobolectricTest {
         assertTrue("خطة مصروفات المركبات لا تستخدم فهرس التاريخ المركب: $plan", plan.contains("idx_vehicle_expenses_vehicle_date"))
         assertTrue(db.rawQuery("PRAGMA foreign_key_check", null).use { !it.moveToFirst() })
     }
+
+    @Test fun `cash and credit product invoices persist and post discount tax and delivery fee`() {
+        DebtDueDateRepository.ensureSchema(helper)
+        val db=helper.writableDatabase
+        val roleId=db.rawQuery("SELECT id FROM roles ORDER BY id LIMIT 1",null).use{check(it.moveToFirst());it.getLong(0)}
+        val actorId=db.insertOrThrow("users",null,ContentValues().apply{
+            put("uuid",UUID.randomUUID().toString());put("username","pos-adjustment-${UUID.randomUUID().toString().take(8)}")
+            put("password_hash","test-only");put("full_name","مستخدم اختبار تعديلات نقاط البيع");put("role_id",roleId);put("station_id",1)
+        })
+        val categoryId=db.rawQuery("SELECT id FROM product_categories WHERE is_deleted=0 ORDER BY id LIMIT 1",null).use{check(it.moveToFirst());it.getLong(0)}
+        val unitId=db.rawQuery("SELECT id FROM units ORDER BY id LIMIT 1",null).use{check(it.moveToFirst());it.getLong(0)}
+        val productId=helper.insertProduct(JSONObject().put("product_name","منتج اختبار الخصم والضريبة")
+            .put("product_name_ar","منتج اختبار الخصم والضريبة").put("category_id",categoryId).put("unit_id",unitId)
+            .put("purchase_price",5.0).put("sale_price",12.0).put("quantity",10.0).put("minimum_stock",1.0),1,actorId)
+        helper.adjustProductStock(productId,10.0,1,actorId)
+        val customerTypeId=db.rawQuery("SELECT id FROM party_types WHERE type_code='INDIVIDUAL' AND is_deleted=0 LIMIT 1",null).use{check(it.moveToFirst());it.getLong(0)}
+        val termId=db.rawQuery("SELECT id FROM payment_terms WHERE code='NET_15' LIMIT 1",null).use{check(it.moveToFirst());it.getLong(0)}
+        val customerId=db.insertOrThrow("parties",null,ContentValues().apply{
+            put("uuid",UUID.randomUUID().toString());put("party_code","CUS-POS-${UUID.randomUUID().toString().take(8)}")
+            put("party_type_id",customerTypeId);put("station_id",1);put("commercial_name","عميل اختبار قيود نقاط البيع")
+            put("payment_terms","صافي 15 يوم");put("payment_terms_id",termId);put("payment_terms_days",15)
+            put("payment_terms_source","explicit_text");put("credit_limit",500.0);put("current_balance",0.0)
+            put("is_active",1);put("created_by",actorId)
+        })
+        db.insertOrThrow("shifts",null,ContentValues().apply{
+            put("uuid",UUID.randomUUID().toString());put("shift_code","SH-POS-${UUID.randomUUID().toString().take(8)}")
+            put("station_id",1);put("shift_date","2026-11-10");put("shift_type","morning")
+            put("start_time","2026-11-10 08:00:00");put("cashier_id",actorId);put("created_by",actorId);put("status","open")
+        })
+        val expectedNet=12.0-2.0+1.5+3.0
+        fun createSale(type:String,key:String,paid:Double)=helper.completeSale(JSONObject()
+            .put("payment_type",type).put("entity_id",if(type=="credit")customerId else JSONObject.NULL)
+            .put("payment_terms_id",if(type=="credit")termId else 0).put("amount_paid",paid)
+            .put("discount_amount",2.0).put("tax_amount",1.5).put("vat_amount",1.5).put("service_fee",3.0)
+            .put("idempotency_key",key)
+            .put("products",JSONArray().put(JSONObject().put("product_id",productId).put("quantity",1.0))),1,actorId)
+        val cash=createSale("cash","pos-cash-${UUID.randomUUID()}",expectedNet)
+        assertTrue("Cash POS sale should complete: ${cash.optString("error")}",cash.optBoolean("success"))
+        val credit=createSale("credit","pos-credit-${UUID.randomUUID()}",0.0)
+        assertTrue("Credit POS sale should complete: ${credit.optString("error")}",credit.optBoolean("success"))
+        fun verify(result:JSONObject) {
+            val saleId=result.getLong("sale_id")
+            val invoiceNo=db.rawQuery("SELECT invoice_number FROM sales_transactions WHERE id=? AND station_id=1",arrayOf(saleId.toString())).use{check(it.moveToFirst());it.getString(0)}
+            val invoice=helper.getInvoiceDetails(invoiceNo,1)!!
+            assertEquals(3.0,invoice.getDouble("service_fee"),0.0001)
+            assertEquals(2.0,invoice.getDouble("discount_amount"),0.0001)
+            assertEquals(1.5,invoice.getDouble("tax_amount"),0.0001)
+            assertEquals(expectedNet,invoice.getDouble("net_amount"),0.0001)
+            val jid=db.rawQuery("SELECT id FROM journal_entries WHERE station_id=1 AND reference_type='sale' AND reference_id=? AND is_deleted=0",arrayOf(saleId.toString())).use{check(it.moveToFirst());it.getLong(0)}
+            val header=db.rawQuery("SELECT total_debit,total_credit,reference_code FROM journal_entries WHERE id=?",arrayOf(jid.toString())).use{check(it.moveToFirst());Triple(it.getDouble(0),it.getDouble(1),it.getString(2))}
+            assertEquals(invoiceNo,header.third);assertEquals(16.5,header.first,0.0001);assertEquals(16.5,header.second,0.0001)
+            val amounts=db.rawQuery("""SELECT a.account_category,SUM(ji.debit),SUM(ji.credit)
+                FROM journal_entry_items ji JOIN accounts a ON a.id=ji.account_id
+                WHERE ji.journal_entry_id=? GROUP BY a.account_category""",arrayOf(jid.toString())).use{c->
+                val m=mutableMapOf<String,Pair<Double,Double>>();while(c.moveToNext())m[c.getString(0)]=c.getDouble(1) to c.getDouble(2);m}
+            assertEquals(2.0,amounts["pos_sales_discount"]?.first?:0.0,0.0001)
+            assertEquals(1.5,amounts["pos_sales_tax_payable"]?.second?:0.0,0.0001)
+            assertEquals(3.0,amounts["pos_delivery_fee_revenue"]?.second?:0.0,0.0001)
+            assertEquals(12.0,amounts["operating_revenue"]?.second?:0.0,0.0001)
+            val totals=db.rawQuery("SELECT SUM(debit),SUM(credit) FROM journal_entry_items WHERE journal_entry_id=?",arrayOf(jid.toString())).use{c->check(c.moveToFirst());c.getDouble(0) to c.getDouble(1)}
+            assertEquals(totals.first,totals.second,0.0001)
+        }
+        verify(cash);verify(credit)
+    }
+
 }
