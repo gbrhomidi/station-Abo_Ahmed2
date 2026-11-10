@@ -10786,17 +10786,21 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val packageName = listOf("com.whatsapp", "com.whatsapp.w4b").firstOrNull {
                     activity.packageManager.getLaunchIntentForPackage(it) != null
                 } ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
+                // Explicitly grant the target app access to the exact content URI before
+                // launching it. Some Android builds start a cold WhatsApp process before
+                // propagating the transient grant carried only by the SEND intent.
                 val intent = Intent(Intent.ACTION_SEND).apply {
                     type = "application/pdf"
                     putExtra(Intent.EXTRA_STREAM, shareUri)
                     putExtra("jid", normalizedPhone + "@s.whatsapp.net")
+                    clipData = android.content.ClipData.newUri(activity.contentResolver, "invoice-pdf", shareUri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    clipData = android.content.ClipData.newRawUri("invoice-pdf", shareUri)
                     setPackage(packageName)
                 }
                 if (intent.resolveActivity(activity.packageManager) == null) {
                     throw IllegalStateException("WhatsApp لا يقبل مشاركة مستند PDF على هذا الجهاز")
                 }
+                activity.grantUriPermission(packageName, shareUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 val launchLatch = CountDownLatch(1)
                 var launchError: Exception? = null
                 activity.runOnUiThread {
@@ -11135,17 +11139,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     val waPackage = listOf("com.whatsapp", "com.whatsapp.w4b")
                         .firstOrNull { pkg -> activity.packageManager.getLaunchIntentForPackage(pkg) != null }
                         ?: throw IllegalStateException("WhatsApp غير مثبت على الجهاز")
+                    // Grant access before the cold-start launch; do not rely solely on
+                    // the receiving activity reading the URI grant from the intent.
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "application/pdf"
                         putExtra(Intent.EXTRA_STREAM, shareUri)
                         putExtra("jid", normalizedPhone + "@s.whatsapp.net")
+                        clipData = android.content.ClipData.newUri(activity.contentResolver, "invoice-pdf", shareUri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        clipData = android.content.ClipData.newRawUri("invoice-pdf", shareUri)
                         setPackage(waPackage)
                     }
                     if (intent.resolveActivity(activity.packageManager) == null) {
                         throw IllegalStateException("WhatsApp مثبت لكنه لا يقبل مشاركة مستند PDF")
                     }
+                    activity.grantUriPermission(waPackage, shareUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     activity.startActivity(intent)
                     return JSONObject().apply {
                         put("success", true)
