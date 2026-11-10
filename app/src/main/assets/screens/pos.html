@@ -3668,9 +3668,11 @@ body.invoice-print-mode #posInvoice {
       text-align: center;
       border-bottom: 2px dotted #1a3a5a;
       margin: 0 4mm;
-      min-height: 5mm;
+      min-height: 8mm;
       color: #000;
-      font-weight: 700;
+      font-size: 24px;
+      line-height: 1.35;
+      font-weight: 900;
       padding: 0 2mm;
       overflow-wrap: anywhere;
     }
@@ -3706,13 +3708,29 @@ body.invoice-print-mode #posInvoice {
       background: linear-gradient(to bottom, #fdfbf7 0%, #f4eae1 100%);
     }
     .pos-invoice .invoice-items tbody tr { page-break-inside: avoid; }
-    .pos-invoice .invoice-items .desc  { width: 45%; text-align: center; }
+    .pos-invoice .invoice-items .row-number { width: 7%; }
+    .pos-invoice .invoice-items .desc  { width: 38%; text-align: center; }
     .pos-invoice .invoice-items .qty   { width: 10%; }
     .pos-invoice .invoice-items .unit  { width: 22.5%; }
     .pos-invoice .invoice-items .total { width: 22.5%; }
+    .pos-invoice .invoice-items .product-name {
+      color: #000;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1.45;
+    }
+    .pos-invoice .invoice-items .row-number-cell {
+      color: #000;
+      font-weight: 900;
+      direction: ltr;
+    }
+    .pos-invoice .invoice-items .blank-row td {
+      height: 9mm;
+      background: #fff;
+    }
     .pos-invoice .invoice-summary {
       width: 100%;
-      margin: 4mm 0 6mm;
+      margin: 15mm 0 6mm;
       border: 0;
       overflow: visible;
       background: transparent;
@@ -3720,33 +3738,35 @@ body.invoice-print-mode #posInvoice {
     .pos-invoice .invoice-summary-row {
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 2.5mm;
-      margin-bottom: 3mm;
-    }
-    .pos-invoice .invoice-summary-row.payment-balance-row {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 4mm;
-      margin-top: 2mm;
-    }
-    .pos-invoice .invoice-summary-card {
-      min-width: 0;
+      gap: 0;
+      margin: 0;
       border: 1.2px solid #1a3a5a;
       border-radius: 3mm;
       overflow: hidden;
       background: #fff;
+    }
+    .pos-invoice .invoice-summary-card {
+      min-width: 0;
+      border: 0;
+      border-left: 1px solid #1a3a5a;
+      border-radius: 0;
+      overflow: hidden;
+      background: #fff;
       text-align: center;
     }
+    .pos-invoice .invoice-summary-card:last-child { border-left: 0; }
     .pos-invoice .invoice-summary-card .summary-label {
       min-height: 9mm;
       padding: 2mm 1mm;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #1a3a5a;
-      color: #fff;
+      background: linear-gradient(135deg, #c49a73 0%, #dfc5a7 48%, #b7c0ca 100%);
+      color: #182b43;
       font-size: 10px;
       line-height: 1.25;
       font-weight: 900;
+      border-bottom: 1px solid rgba(26, 58, 90, .45);
     }
     .pos-invoice .invoice-summary-card .summary-value {
       min-height: 10mm;
@@ -3758,22 +3778,11 @@ body.invoice-print-mode #posInvoice {
       color: #000;
       direction: ltr;
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 900;
       overflow-wrap: anywhere;
     }
-    .pos-invoice .invoice-summary-card.grand .summary-value {
-      background: #f3f6fa;
-      color: #000;
-      font-size: 13px;
-      font-weight: 900;
-    }
-    .pos-invoice .payment-balance-row .invoice-summary-card .summary-value {
-      font-size: 15px;
-      font-weight: 900;
-      color: #000;
-    }
     .pos-invoice .invoice-footer {
-      margin-top: 10mm;
+      margin-top: 15mm;
       display: flex;
       flex-direction: column;
       gap: 2.5mm;
@@ -3818,12 +3827,10 @@ body.invoice-print-mode #posInvoice {
       .pos-invoice .invoice-title{font-size:17px;padding:2.5mm 8mm}
       .pos-invoice .invoice-items th,.pos-invoice .invoice-items td{font-size:9px;padding:1.6mm 1mm}
       .pos-invoice .invoice-summary{width:100%}
-      .pos-invoice .invoice-summary-row{grid-template-columns:repeat(5,minmax(0,1fr));gap:1.2mm}
-      .pos-invoice .invoice-summary-row.payment-balance-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:2mm}
+      .pos-invoice .invoice-summary-row{grid-template-columns:repeat(5,minmax(0,1fr));gap:0}
       .pos-invoice .invoice-summary-card .summary-label{font-size:8px;padding:1.5mm .5mm}
       .pos-invoice .invoice-summary-card .summary-value{font-size:9px;padding:1.5mm .5mm}
-      .pos-invoice .payment-balance-row .invoice-summary-card .summary-value{font-size:12px}
-      .pos-invoice .invoice-footer{margin-top:8mm}
+      .pos-invoice .invoice-footer{margin-top:15mm}
     }
   </style>
   <script src="file:///android_asset/assets-local/js/business-day.js"></script>
@@ -5579,16 +5586,17 @@ function renderSalesInvoice(invoice, targetSection) {
         const name = item.name || item.product_name || item.product_name_ar || 'منتج';
         const returnNote = returnedQty > 0 ? `<div style="font-size:9px;color:#7b1f1f">مرتجع: ${returnedQty.toFixed(2)}</div>` : '';
         return `<tr>
-            <td class="desc">${index + 1}. ${escapeReceiptValue(name)} ${returnNote}</td>
+            <td class="row-number-cell">${index + 1}</td>
+            <td class="desc"><span class="product-name">${escapeReceiptValue(name)}</span> ${returnNote}</td>
             <td class="qty">${visibleQty.toFixed(2)}</td>
             <td class="unit">${Number(item.unit_price || 0).toFixed(2)}</td>
             <td class="total">${lineTotal.toFixed(2)}</td>
         </tr>`;
     }).join('');
 
-    const emptyRows = items.length === 0
-        ? Array.from({ length: 6 }).map(() => `<tr><td class="desc"></td><td class="qty"></td><td class="unit"></td><td class="total"></td></tr>`).join('')
-        : '';
+    const emptyRows = Array.from({ length: 2 }).map(() =>
+        `<tr class="blank-row"><td class="row-number-cell"></td><td class="desc"></td><td class="qty"></td><td class="unit"></td><td class="total"></td></tr>`
+    ).join('');
 
     const subtotal = Number(invoice.subtotal ?? 0);
     const discount = Number(invoice.discount_amount ?? 0);
@@ -5627,13 +5635,14 @@ function renderSalesInvoice(invoice, targetSection) {
       <table class="invoice-items">
         <thead>
           <tr>
+            <th class="row-number">#</th>
             <th class="desc">التفاصيل<br><span style="font-size:9px">Description</span></th>
             <th class="qty">العدد<br><span style="font-size:9px">Qty</span></th>
             <th class="unit">سعر الوحدة<br><span style="font-size:9px">Unit Price</span></th>
             <th class="total">القيمة الإجمالية<br><span style="font-size:9px">Total Amount</span></th>
           </tr>
         </thead>
-        <tbody>${rows || emptyRows || '<tr><td colspan="4">لا توجد بنود</td></tr>'}</tbody>
+        <tbody>${rows}${emptyRows}</tbody>
       </table>
 
       <div class="invoice-summary">
@@ -5642,11 +5651,7 @@ function renderSalesInvoice(invoice, targetSection) {
           <div class="invoice-summary-card"><div class="summary-label">الضريبة</div><div class="summary-value">${tax.toFixed(2)}</div></div>
           <div class="invoice-summary-card"><div class="summary-label">رسوم توصيل</div><div class="summary-value">${serviceFee.toFixed(2)}</div></div>
           <div class="invoice-summary-card"><div class="summary-label">المدفوع</div><div class="summary-value">${paid.toFixed(2)}</div></div>
-          <div class="invoice-summary-card grand"><div class="summary-label">الإجمالي النهائي</div><div class="summary-value">${net.toFixed(2)}</div></div>
-        </div>
-        <div class="invoice-summary-row payment-balance-row">
-          <div class="invoice-summary-card"><div class="summary-label">المـــدفـــوع</div><div class="summary-value">${paid.toFixed(2)}</div></div>
-          <div class="invoice-summary-card"><div class="summary-label">المتبقــــي</div><div class="summary-value">${remaining.toFixed(2)}</div></div>
+          <div class="invoice-summary-card"><div class="summary-label">المتبقي</div><div class="summary-value">${remaining.toFixed(2)}</div></div>
         </div>
       </div>
 
