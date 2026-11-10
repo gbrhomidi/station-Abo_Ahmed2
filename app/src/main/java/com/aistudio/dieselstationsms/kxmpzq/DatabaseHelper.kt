@@ -617,10 +617,42 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    /**
+     * Dedicated POS adjustment accounts: contra-revenue discounts, tax liability,
+     * and separate product delivery-fee revenue. Existing accounts are never reclassified.
+     */
+    private fun ensureProductSaleAccountingAccounts(db: SQLiteDatabase) {
+        fun ensureAccount(code: String, name: String, nameAr: String, type: String, category: String, normal: String, parentCode: String) {
+            val existing=db.rawQuery("SELECT id FROM accounts WHERE account_type=? AND account_category=? ORDER BY id LIMIT 1",
+                arrayOf(type,category)).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
+            if(existing>0L){
+                db.update("accounts",ContentValues().apply{put("is_active",1);put("is_deleted",0);put("updated_at",getCurrentDateTime())},
+                    "id=?",arrayOf(existing.toString()))
+                return
+            }
+            val occupied=db.rawQuery("SELECT 1 FROM accounts WHERE account_code=? LIMIT 1",arrayOf(code)).use{it.moveToFirst()}
+            val actualCode=if(occupied)"POS-$code" else code
+            val parent=db.rawQuery("SELECT id FROM accounts WHERE account_code=? AND is_deleted=0 LIMIT 1",arrayOf(parentCode))
+                .use{c->if(c.moveToFirst())c.getLong(0)else 0L}
+            db.insertOrThrow("accounts",null,ContentValues().apply{
+                put("uuid",UUID.randomUUID().toString());put("account_code",actualCode)
+                put("account_name",name);put("account_name_ar",nameAr)
+                if(parent>0L)put("parent_account_id",parent)
+                put("level",3);put("account_type",type);put("account_category",category)
+                put("normal_balance",normal);put("is_active",1);put("is_deleted",0)
+                put("created_at",getCurrentDateTime());put("updated_at",getCurrentDateTime())
+            })
+        }
+        ensureAccount("4190","Sales Discounts","خصومات المبيعات","revenue","pos_sales_discount","debit","41")
+        ensureAccount("2102","Sales Tax Payable","ضريبة المبيعات المستحقة","liability","pos_sales_tax_payable","credit","21")
+        ensureAccount("4103","Product Delivery Fee Revenue","إيرادات رسوم توصيل المنتجات","revenue","pos_delivery_fee_revenue","credit","41")
+    }
+
     private fun ensureSalesPricingDefaults(db: SQLiteDatabase) {
         // Repair control accounts on existing installations as well as fresh databases.
         // Payment posting must never depend on a one-time seed having survived a restore.
         ensureRequiredSaleAccounts(db)
+        ensureProductSaleAccountingAccounts(db)
         db.execSQL("""
             INSERT OR IGNORE INTO accounts
                 (uuid, account_code, account_name, account_name_ar, account_type, account_category, normal_balance, level, is_active)
@@ -9876,7 +9908,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         orderType: String = "sale",
         paidAmount: Double? = null,
         manageTransaction: Boolean = true,
-        transactionDate: String? = null
+        transactionDate: String? = null,
+        serviceFee: Double = 0.0
     ): Long {
         require(stationId > 0) { "معرف المحطة غير صالح" }
         require(shiftId > 0) { "معرف الوردية غير صالح" }
@@ -9886,6 +9919,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(subtotal.isFinite() && subtotal >= 0.0) { "الإجمالي الفرعي غير صالح" }
         require(discountAmount.isFinite() && discountAmount >= 0.0) { "الخصم غير صالح" }
         require(taxAmount.isFinite() && taxAmount >= 0.0) { "الضريبة غير صالحة" }
+        require(serviceFee.isFinite() && serviceFee >= 0.0) { "رسوم التوصيل غير صالحة" }
         require(grossAmount.isFinite() && grossAmount >= 0.0) { "الإجمالي غير صالح" }
         require(netAmount.isFinite() && netAmount >= 0.0) { "الصافي غير صالح" }
         require(paymentMethod in setOf("cash", "credit_card", "bank_transfer", "credit", "cheque", "mobile_money", "loyalty_points")) { "طريقة الدفع غير مدعومة" }
@@ -9960,6 +9994,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("subtotal", subtotal)
                     put("discount_amount", discountAmount)
                     put("tax_amount", taxAmount)
+                    put("service_fee", serviceFee)
                     put("gross_amount", grossAmount)
                     put("net_amount", netAmount)
                     put("payment_method", paymentMethod)
@@ -12133,10 +12168,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val discountAmount = data.optDouble("discount_amount", 0.0)
             val taxAmount = data.optDouble("tax_amount", data.optDouble("vat_amount", 0.0))
             val serviceFee = data.optDouble("service_fee", 0.0)
-            require(discountAmount.isFinite() && discountAmount >= 0.0) { "الخصم غير صالح" }
+            require(discountAmount.isFinite() && discountAmount >= 0.0 && discountAmount <= total + 0.000001) {
+                "الخصم لا يجوز أن يتجاوز إجمالي المنتجات"
+            }
             require(taxAmount.isFinite() && taxAmount >= 0.0) { "الضريبة غير صالحة" }
-            require(serviceFee.isFinite() && serviceFee >= 0.0) { "رسوم الخدمة غير صالحة" }
-            val netAmount = (total - discountAmount + taxAmount + serviceFee).coerceAtLeast(0.0)
+            require(serviceFee.isFinite() && serviceFee >= 0.0) { "رسوم التوصيل غير صالحة" }
+            val netAmount = total - discountAmount + taxAmount + serviceFee
             require(netAmount.isFinite()) { "صافي البيع غير صالح" }
             val normalizedPaymentType = data.optString("payment_type", "cash")
                 .trim()
@@ -12198,7 +12235,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 orderType = "product",
                 paidAmount = paidAmount,
                 manageTransaction = false,
-                transactionDate = data.optString("transaction_time", "").take(10)
+                transactionDate = data.optString("transaction_time", "").take(10),
+                serviceFee = serviceFee
             )
             var paymentTermsSnapshot: JSONObject? = null
             if (isCredit) {
@@ -27351,7 +27389,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             data.optString("end_date").takeIf { it.isNotBlank() }?.let { where += "s.business_day <= date(?)"; args += it }
             val limit = data.optInt("limit", 100).coerceIn(1, 500)
             val sql = """SELECT s.id, s.invoice_number, s.payment_method AS payment_type,
-                    s.gross_amount AS total_amount, s.paid_amount AS amount_paid, s.remaining_amount,
+                    s.net_amount AS total_amount, s.paid_amount AS amount_paid, s.remaining_amount,
                     s.created_at AS sale_date, p.commercial_name AS customer_name
                     FROM sales_transactions s LEFT JOIN parties p ON p.id=s.customer_party_id
                     WHERE ${where.joinToString(" AND ")} ORDER BY s.id DESC LIMIT $limit"""
@@ -27918,118 +27956,89 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return entryId
     }
 
-    private fun postSaleRevenueJournalWithinTransaction(
-        db: SQLiteDatabase,
-        saleId: Long,
-        stationId: Int,
-        actorId: Long,
-        orderType: String,
-        customerPartyId: Int?,
-        paymentMethod: String,
-        netAmount: Double,
-        paidAmount: Double
+        private fun postSaleRevenueJournalWithinTransaction(
+        db: SQLiteDatabase, saleId: Long, stationId: Int, actorId: Long,
+        orderType: String, customerPartyId: Int?, paymentMethod: String,
+        netAmount: Double, paidAmount: Double
     ): Long? {
-        require(saleId > 0 && stationId > 0 && actorId > 0) { "بيانات قيد المبيعات غير صالحة" }
-        require(netAmount.isFinite() && netAmount >= 0.0) { "صافي المبيعات غير صالح للقيد" }
-        require(paidAmount.isFinite() && paidAmount >= 0.0) { "المبلغ المسدد غير صالح للقيد" }
-        if (netAmount <= 0.000001) return null
-
-        val existing = db.rawQuery(
-            "SELECT id FROM journal_entries WHERE station_id=? AND reference_type='sale' AND reference_id=? AND is_deleted=0 LIMIT 1",
-            arrayOf(stationId.toString(), saleId.toString())
-        ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
-        if (existing > 0L) return existing
-
-        val revenueCode = if (orderType.equals("fuel", ignoreCase = true)) "4101" else "4102"
-        val revenueAccount = db.rawQuery(
-            "SELECT id FROM accounts WHERE account_code=? AND account_type='revenue' AND is_active=1 AND is_deleted=0 LIMIT 1",
-            arrayOf(revenueCode)
-        ).use { c -> if (c.moveToFirst()) c.getLong(0) else findFinancialAccount(db, "revenue") }
-        val paid = paidAmount.coerceAtMost(netAmount)
-        val receivableAmount = (netAmount - paid).coerceAtLeast(0.0)
-        val settlementAccount = if (paid > 0.000001) {
-            val kind = if (paymentMethod == "cash" || paymentMethod == "credit") "cash" else "bank"
-            findFinancialAccount(db, kind)
-        } else 0L
-        val receivableAccount = if (receivableAmount > 0.000001) {
-            require(customerPartyId != null && customerPartyId > 0) { "العميل مطلوب لإثبات الذمم المدينة" }
-            findFinancialAccount(db, "receivable")
-        } else 0L
-        require(revenueAccount != settlementAccount || settlementAccount == 0L) { "حساب التسوية لا يجوز أن يكون حساب الإيرادات" }
-        require(revenueAccount != receivableAccount || receivableAccount == 0L) { "حساب الذمم لا يجوز أن يكون حساب الإيرادات" }
-
-        val invoiceNumber = db.rawQuery(
-            "SELECT invoice_number FROM sales_transactions WHERE id=? AND station_id=? AND is_deleted=0",
-            arrayOf(saleId.toString(), stationId.toString())
-        ).use { c ->
-            require(c.moveToFirst()) { "تعذر العثور على فاتورة البيع لترحيلها محاسبياً" }
-            c.getString(0).orEmpty()
-        }
-        val now = getCurrentDateTime()
-        val entryId = db.insertOrThrow("journal_entries", null, ContentValues().apply {
-            put("uuid", UUID.randomUUID().toString())
-            put("entry_number", journalEntryNumber(db, stationId))
-            put("entry_date", getDateOnlyFormat().format(Date()))
-            put("entry_type", "sales")
-            put("reference_type", "sale")
-            put("reference_id", saleId)
-            put("reference_code", invoiceNumber)
-            put("description", "قيد مبيعات $orderType $invoiceNumber")
-            put("description_ar", "قيد مبيعات $orderType للفاتورة $invoiceNumber")
-            put("total_debit", netAmount)
-            put("total_credit", netAmount)
-            put("is_balanced", 1)
-            put("status", "posted")
-            put("posted_at", now)
-            put("posted_by", actorId)
-            put("station_id", stationId)
-            put("created_at", now)
-            put("updated_at", now)
-            put("created_by", actorId)
-            put("updated_by", actorId)
-            put("is_deleted", 0)
-            put("extra_data", JSONObject().put("sale_id", saleId).put("order_type", orderType).put("payment_method", paymentMethod).toString())
+        require(saleId>0&&stationId>0&&actorId>0) { "بيانات قيد المبيعات غير صالحة" }
+        require(netAmount.isFinite()&&netAmount>=0.0) { "صافي المبيعات غير صالح للقيد" }
+        require(paidAmount.isFinite()&&paidAmount>=0.0) { "المبلغ المسدد غير صالح للقيد" }
+        val productPos=orderType.equals("products",true)||orderType.equals("product",true)
+        val invoiceNumber=db.rawQuery("SELECT invoice_number FROM sales_transactions WHERE id=? AND station_id=? AND is_deleted=0",
+            arrayOf(saleId.toString(),stationId.toString())).use{c->
+            require(c.moveToFirst()){"تعذر العثور على فاتورة البيع لترحيلها محاسبياً"};c.getString(0).orEmpty()}
+        val existing=db.rawQuery("SELECT id FROM journal_entries WHERE station_id=? AND reference_type='sale' AND reference_id=? AND is_deleted=0 LIMIT 1",
+            arrayOf(stationId.toString(),saleId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
+        if(existing>0L)return existing
+        var salesBase=netAmount
+        var discount=0.0
+        var tax=0.0
+        var deliveryFee=0.0
+        if(productPos){
+            val values=db.rawQuery("SELECT subtotal,discount_amount,tax_amount,service_fee FROM sales_transactions WHERE id=? AND station_id=? AND is_deleted=0",
+                arrayOf(saleId.toString(),stationId.toString())).use{c->
+                require(c.moveToFirst()){"تعذر قراءة مبالغ الفاتورة $invoiceNumber"}
+                doubleArrayOf(c.getDouble(0),c.getDouble(1),c.getDouble(2),c.getDouble(3))}
+            salesBase=values[0];discount=values[1];tax=values[2];deliveryFee=values[3]
+            require(listOf(salesBase,discount,tax,deliveryFee).all{it.isFinite()&&it>=0.0}){"مبالغ الفاتورة $invoiceNumber غير صالحة"}
+            require(discount<=salesBase+0.000001){"خصم الفاتورة $invoiceNumber يتجاوز إجمالي المنتجات"}
+            require(kotlin.math.abs(salesBase-discount+tax+deliveryFee-netAmount)<=0.000001){
+                "إجمالي الفاتورة $invoiceNumber لا يطابق الخصم والضريبة ورسوم التوصيل"}
+            if(salesBase+tax+deliveryFee<=0.000001)return null
+        }else if(netAmount<=0.000001)return null
+        val revenueCode=if(orderType.equals("fuel",true))"4101" else "4102"
+        val revenueAccount=db.rawQuery("SELECT id FROM accounts WHERE account_code=? AND account_type='revenue' AND is_active=1 AND is_deleted=0 LIMIT 1",
+            arrayOf(revenueCode)).use{c->if(c.moveToFirst())c.getLong(0)else findFinancialAccount(db,"revenue")}
+        fun account(type:String,category:String,error:String):Long=db.rawQuery(
+            "SELECT id FROM accounts WHERE account_type=? AND account_category=? AND is_active=1 AND is_deleted=0 LIMIT 1",
+            arrayOf(type,category)).use{c->require(c.moveToFirst()){error};c.getLong(0)}
+        val discountAccount=if(discount>0.000001)account("revenue","pos_sales_discount","حساب خصومات المبيعات غير مهيأ")else 0L
+        val taxAccount=if(tax>0.000001)account("liability","pos_sales_tax_payable","حساب ضريبة المبيعات المستحقة غير مهيأ")else 0L
+        val deliveryAccount=if(deliveryFee>0.000001)account("revenue","pos_delivery_fee_revenue","حساب إيرادات رسوم توصيل المنتجات غير مهيأ")else 0L
+        val paid=paidAmount.coerceAtMost(netAmount)
+        val receivable=(netAmount-paid).coerceAtLeast(0.0)
+        val settlement=if(paid>0.000001)findFinancialAccount(db,if(paymentMethod=="cash"||paymentMethod=="credit")"cash" else "bank")else 0L
+        val receivableAccount=if(receivable>0.000001){
+            require(customerPartyId!=null&&customerPartyId>0){"العميل مطلوب لإثبات الذمم المدينة"}
+            findFinancialAccount(db,"receivable")
+        }else 0L
+        require(revenueAccount!=settlement||settlement==0L){"حساب التسوية لا يجوز أن يكون حساب الإيرادات"}
+        require(revenueAccount!=receivableAccount||receivableAccount==0L){"حساب الذمم لا يجوز أن يكون حساب الإيرادات"}
+        val debitTotal=if(productPos)netAmount+discount else netAmount
+        val creditTotal=if(productPos)salesBase+tax+deliveryFee else netAmount
+        require(kotlin.math.abs(debitTotal-creditTotal)<=0.000001){"قيد المبيعات غير متوازن للفاتورة $invoiceNumber"}
+        val now=getCurrentDateTime()
+        val entryId=db.insertOrThrow("journal_entries",null,ContentValues().apply{
+            put("uuid",UUID.randomUUID().toString());put("entry_number",journalEntryNumber(db,stationId))
+            put("entry_date",getDateOnlyFormat().format(Date()));put("entry_type","sales")
+            put("reference_type","sale");put("reference_id",saleId);put("reference_code",invoiceNumber)
+            put("description","قيد مبيعات $orderType $invoiceNumber")
+            put("description_ar","قيد مبيعات $orderType للفاتورة $invoiceNumber")
+            put("total_debit",debitTotal);put("total_credit",creditTotal);put("is_balanced",1)
+            put("status","posted");put("posted_at",now);put("posted_by",actorId);put("station_id",stationId)
+            put("created_at",now);put("updated_at",now);put("created_by",actorId);put("updated_by",actorId);put("is_deleted",0)
+            put("extra_data",JSONObject().put("sale_id",saleId).put("order_type",orderType).put("payment_method",paymentMethod)
+                .put("invoice_number",invoiceNumber).put("discount_amount",discount).put("tax_amount",tax).put("delivery_fee",deliveryFee).toString())
         })
-        var lineNumber = 1
-        if (paid > 0.000001) {
-            db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
-                put("uuid", UUID.randomUUID().toString())
-                put("journal_entry_id", entryId)
-                put("line_number", lineNumber++)
-                put("account_id", settlementAccount)
-                put("debit", paid)
-                put("credit", 0.0)
-                put("description", "تحصيل مبيعات $invoiceNumber")
-                put("description_ar", "تحصيل مبيعات $invoiceNumber")
+        var line=1
+        fun addLine(id:Long,debit:Double,credit:Double,en:String,ar:String){
+            db.insertOrThrow("journal_entry_items",null,ContentValues().apply{
+                put("uuid",UUID.randomUUID().toString());put("journal_entry_id",entryId);put("line_number",line++)
+                put("account_id",id);put("debit",debit);put("credit",credit);put("description",en);put("description_ar",ar)
             })
         }
-        if (receivableAmount > 0.000001) {
-            db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
-                put("uuid", UUID.randomUUID().toString())
-                put("journal_entry_id", entryId)
-                put("line_number", lineNumber++)
-                put("account_id", receivableAccount)
-                put("debit", receivableAmount)
-                put("credit", 0.0)
-                put("description", "ذمم مدينة عن الفاتورة $invoiceNumber")
-                put("description_ar", "ذمم مدينة عن الفاتورة $invoiceNumber")
-            })
-        }
-        db.insertOrThrow("journal_entry_items", null, ContentValues().apply {
-            put("uuid", UUID.randomUUID().toString())
-            put("journal_entry_id", entryId)
-            put("line_number", lineNumber)
-            put("account_id", revenueAccount)
-            put("debit", 0.0)
-            put("credit", netAmount)
-            put("description", "إيراد مبيعات $invoiceNumber")
-            put("description_ar", "إيراد مبيعات $invoiceNumber")
-        })
-        require(kotlin.math.abs(paid + receivableAmount - netAmount) <= 0.000001) { "قيد المبيعات غير متوازن" }
+        if(paid>0.000001)addLine(settlement,paid,0.0,"Sales collection $invoiceNumber","تحصيل مبيعات $invoiceNumber")
+        if(receivable>0.000001)addLine(receivableAccount,receivable,0.0,"Receivable for invoice $invoiceNumber","ذمم مدينة عن الفاتورة $invoiceNumber")
+        addLine(revenueAccount,0.0,if(productPos)salesBase else netAmount,"Sales revenue $invoiceNumber","إيراد مبيعات $invoiceNumber")
+        if(discount>0.000001)addLine(discountAccount,discount,0.0,"Sales discount $invoiceNumber","خصم مبيعات الفاتورة $invoiceNumber")
+        if(tax>0.000001)addLine(taxAccount,0.0,tax,"Sales tax payable $invoiceNumber","ضريبة المبيعات المستحقة للفاتورة $invoiceNumber")
+        if(deliveryFee>0.000001)addLine(deliveryAccount,0.0,deliveryFee,"Product delivery fee revenue $invoiceNumber","إيراد رسوم توصيل المنتجات للفاتورة $invoiceNumber")
+        require(kotlin.math.abs(debitTotal-creditTotal)<=0.000001){"قيد المبيعات غير متوازن"}
         return entryId
     }
 
-    private fun postSalesReversalJournal(
+private fun postSalesReversalJournal(
         db: SQLiteDatabase,
         saleId: Long,
         stationId: Int,
