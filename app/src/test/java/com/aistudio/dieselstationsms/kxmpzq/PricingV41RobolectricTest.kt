@@ -325,6 +325,8 @@ class PricingV41RobolectricTest {
         assertEquals(0.0, previousDay.getDouble("credit_sales"), 0.001)
         assertEquals(100.0, previousDay.getDouble("total_sales"), 0.001)
         assertEquals(1, previousDay.getInt("transactions_today"))
+        assertEquals("دفعة البيع المسجلة في يوم العمل التالي لا تدخل في تحصيل اليوم السابق", 0.0, previousDay.getDouble("collected_amount"), 0.001)
+        assertEquals(45.0, newDay.getDouble("collected_amount"), 0.001)
         assertEquals(200.0, newDay.getDouble("daily_sales"), 0.001)
         assertEquals(0.0, newDay.getDouble("cash_sales"), 0.001)
         assertEquals(200.0, newDay.getDouble("credit_sales"), 0.001)
