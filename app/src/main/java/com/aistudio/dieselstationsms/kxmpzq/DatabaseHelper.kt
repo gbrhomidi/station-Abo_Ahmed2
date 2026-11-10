@@ -18204,8 +18204,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             FROM payments p
             LEFT JOIN sales_transactions s ON s.id = p.sale_id
             LEFT JOIN parties customer ON customer.id = p.customer_party_id
-            WHERE COALESCE(p.station_id, s.station_id, customer.station_id) = ?
-              AND COALESCE(p.is_deleted,0) = 0
+            WHERE COALESCE(p.is_deleted,0) = 0
               AND p.status = 'completed'
               AND COALESCE(p.is_refund,0) = 0
               AND p.business_day = ?
@@ -18226,7 +18225,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     )
               )
             """,
-            arrayOf(stationId.toString(), today, stationId.toString(), stationId.toString())
+            arrayOf(today, stationId.toString(), stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) {
                 stats.put(
