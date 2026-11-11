@@ -1,29 +1,36 @@
-# Station Routes API — Google Cloud Run
+# Station Routes API — provider-independent Cloud Run service
 
-A server-side Google Routes API proxy. The Google Routes API key is never placed
-in the Android APK or source control.
+The routing backend is provider-independent. Its default provider is **OSRM**
+(open-source routing engine) and Google Routes is an optional provider/fallback.
+The Android application must never treat a straight-line estimate as a road route.
 
-## Security requirements
+## Provider modes
 
-- Every `POST /v1/routes` request must provide a valid Firebase App Check token
-  in `X-Firebase-AppCheck`; missing or invalid attestation is rejected.
-- Configure Firebase App Check with Play Integrity for the exact Android package
-  `com.aistudio.dieselstationsms.kxmpzq` before deploying for production use.
-- Store the Google Routes API key in Secret Manager, restricted to Routes API.
-- Do not disable App Check verification. Add quotas, budget alerts and abuse
-  monitoring; consider Cloud Armor/API Gateway for additional edge controls.
+- `ROUTE_PROVIDER=osrm` (default): uses OSRM driving route geometry, road distance,
+  and duration. No Google Maps API key or Google billing account is required.
+- `ROUTE_PROVIDER=google`: explicitly opts into Google Routes API and its billing.
+- `ROUTE_PROVIDER=auto`: tries OSRM first and uses Google only when an explicit
+  Google key is configured and OSRM fails.
 
-## Configure the Google Cloud/Firebase project
+`OSRM_BASE_URL` may point to an operator-managed OSRM deployment. The public
+`router.project-osrm.org` host is a community demo endpoint, not a production
+SLA; its availability, rate limits, and fair-use policy can change. For reliable
+commercial/multi-station operation, deploy OSRM with regional OpenStreetMap data
+on infrastructure you control, or contract a routing provider. OpenStreetMap
+data attribution and ODbL requirements must be respected.
 
-1. Use an existing Google Cloud project and add Firebase to it.
-2. Register the Android app in Firebase with package
-   `com.aistudio.dieselstationsms.kxmpzq`.
-3. Enable App Check and register Play Integrity.
-4. Enable Routes API and create a server key restricted to Routes API.
-5. Store the key in Secret Manager as `google-routes-api-key`.
-6. Grant the Cloud Run runtime service account
-   `roles/secretmanager.secretAccessor` on that secret and only the permissions
-   needed to verify App Check tokens.
+## Security
+
+Every `POST /v1/routes` request requires a valid Firebase App Check token in
+`X-Firebase-AppCheck`. Configure Firebase App Check with Play Integrity for
+the Android package `com.aistudio.dieselstationsms.kxmpzq`. The service rejects
+requests if App Check is not configured; it does not silently expose an open
+routing proxy.
+
+Google API keys are never placed in the APK or source control. Only configure
+`GOOGLE_ROUTES_API_KEY` in Secret Manager if you deliberately enable Google
+routing. App Check and Cloud Run deployment still require a configured project
+and authorized deployment access.
 
 ## Deploy
 
@@ -31,21 +38,20 @@ From this directory, after authenticating with gcloud and selecting the intended
 project, substitute the actual region, Firebase project ID and runtime identity:
 
 ```sh
-gcloud services enable run.googleapis.com routes.googleapis.com secretmanager.googleapis.com
+gcloud services enable run.googleapis.com secretmanager.googleapis.com
 gcloud run deploy station-routes \
   --source . \
   --region REGION \
   --allow-unauthenticated \
   --service-account ROUTES_RUNTIME_SERVICE_ACCOUNT \
-  --set-env-vars FIREBASE_PROJECT_ID=YOUR_FIREBASE_PROJECT_ID \
-  --set-secrets GOOGLE_ROUTES_API_KEY=google-routes-api-key:latest \
+  --set-env-vars FIREBASE_PROJECT_ID=YOUR_FIREBASE_PROJECT_ID,ROUTE_PROVIDER=osrm \
   --max-instances 3 --concurrency 20 --timeout 20
 ```
 
-Cloud Run is internet-reachable so Android clients can call it; App Check
-verification is mandatory. Deployment requires authorized access to the actual
-Google Cloud project, billing, Firebase registration and Secret Manager.
-This repository change does not deploy cloud resources or create credentials.
+To enable optional Google fallback, store its key in Secret Manager and add
+`--set-secrets GOOGLE_ROUTES_API_KEY=google-routes-api-key:latest`, then set
+`ROUTE_PROVIDER=auto`. Restrict that key to Routes API, configure budget alerts,
+and set quotas before enabling it.
 
 ## API
 
@@ -59,9 +65,10 @@ This repository change does not deploy cloud resources or create credentials.
 }
 ```
 
-The service asks Google Routes for alternatives and returns the shortest
-returned road route, its distance, duration and encoded polyline. It uses
-traffic-unaware routing; live traffic availability is region-dependent.
+Returns provider name, road distance in meters/kilometers, duration, encoded
+route polyline, and origin/destination. The OSRM provider currently supports
+driving profile only. No route result is returned when the provider cannot
+calculate a valid road route.
 
 ## Local verification
 
