@@ -181,20 +181,10 @@ class DebtDueReminderWorker(
             if (queuedCount > 0 || SmsOutboxRepository.hasPending(db)) {
                 SmsOutboxWorker.schedule(applicationContext)
             }
-            if (queuedCount > 0 || (!smsDispatchAllowed && localEligibleCount > 0)) {
-                val hasQueuedSms = queuedCount > 0
-                postDueReminderNotification(
-                    stationId,
-                    if (hasQueuedSms) queuedCount else localEligibleCount,
-                    if (hasQueuedSms) remindedNames else localReminderNames,
-                    overdueQueuedCount,
-                    preDueQueuedCount,
-                    smsEnabled,
-                    smsPermissionGranted
-                )
-            } else if (localEligibleCount == 0) {
-                cancelDueReminderNotification(stationId)
-            }
+            // Reminder notifications are presented only by the in-app screens.
+            // The automatic SMS worker must remain silent, including after queueing SMS.
+            // This also clears legacy Android notifications left by earlier app versions.
+            cancelDueReminderNotification(stationId)
             Result.success()
         } catch (exception: Exception) {
             Result.retry()

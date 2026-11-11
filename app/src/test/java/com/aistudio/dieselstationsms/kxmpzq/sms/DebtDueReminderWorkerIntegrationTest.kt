@@ -163,6 +163,11 @@ class DebtDueReminderWorkerIntegrationTest {
         val result = worker.doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        assertTrue(
+            "Automatic SMS reminders must not create Android notifications",
+            shadowOf(notificationManager).getAllNotifications().isEmpty()
+        )
         assertEquals(1, db.rawQuery(
             "SELECT COUNT(*) FROM sms_reminders WHERE transaction_id=? AND status='pending'",
             arrayOf(inWindowSale.toString())
