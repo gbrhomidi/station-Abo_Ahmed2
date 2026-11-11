@@ -1222,9 +1222,12 @@ function showFormErrors(errors){
 ========================================================= */
 let mapPickerState={lat:null,lon:null};
 function currentFormCoords(){
-    const lat=numeric($('field_latitude')?.value), lon=numeric($('field_longitude')?.value);
-    if(Number.isFinite(lat)&&Number.isFinite(lon)&&!(lat===0&&lon===0)) return {lat,lon};
-    return {lat:15.3694,lon:44.1910};
+    const rawLatitude=$('field_latitude')?.value;
+    const rawLongitude=$('field_longitude')?.value;
+    if(rawLatitude===undefined||rawLongitude===undefined||String(rawLatitude).trim()===''||String(rawLongitude).trim()==='') return null;
+    const lat=Number(rawLatitude),lon=Number(rawLongitude);
+    if(Number.isFinite(lat)&&Number.isFinite(lon)&&lat>=-90&&lat<=90&&lon>=-180&&lon<=180&&!(lat===0&&lon===0)) return {lat,lon};
+    return null;
 }
 function applySelectedCoordinates(lat,lon,source='الخريطة الأصلية'){
     if(!Number.isFinite(lat)||!Number.isFinite(lon)||lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
@@ -1248,7 +1251,7 @@ function openNativePicker(){
         return;
     }
     try{
-        const response=window.AndroidInterface.openNativeMapPicker(start.lat,start.lon);
+        const response=window.AndroidInterface.openNativeMapPicker(start?.lat??NaN,start?.lon??NaN);
         const parsed=response?JSON.parse(response):null;
         if(parsed && parsed.success===false) toast(parsed.error||'تعذر فتح محدد الموقع','bad');
     }catch(error){
