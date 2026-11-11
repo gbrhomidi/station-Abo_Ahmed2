@@ -3636,7 +3636,7 @@
                 const o = document.createElement('div');
                 o.id = 'mainDueReminderOverlay';
                 o.className = 'due-reminder-overlay';
-                o.innerHTML = `<div class="due-reminder-card"><h3>🔔 مستحقات العملاء تقترب</h3><p>يوجد عملاء لديهم فواتير آجلة اقترب موعد استحقاقها. يمكنك إرسال تذكير يدوي الآن أو تفعيل الإرسال الآلي المستمر.</p><label class="due-auto-toggle"><input id="mainDueAutoSmsEnabled" type="checkbox" onchange="setMainDueAutoSmsEnabled(this.checked)"><span>إرسال آلياً — إرسال تذكيرات SMS تلقائياً عند اقتراب الاستحقاق وفي يومه وبعد تجاوزه، طوال أيام الأسبوع.</span></label><div class="due-reminder-actions"><button class="due-view" onclick="openMainDueReminderDetails()">إطلاع</button><button class="due-delay" onclick="deferMainDueReminder()">تأجيل</button><button class="due-cancel" onclick="closeMainDueReminderNotice()">إلغاء</button><button class="due-ok" onclick="approveMainDueReminders()">إرسال التذكيرات الآن</button></div></div>`;
+                o.innerHTML = `<div class="due-reminder-card"><h3>🔔 مستحقات العملاء تقترب</h3><p>يوجد عملاء لديهم فواتير آجلة اقترب موعد استحقاقها. يمكنك إرسال تذكير يدوي الآن أو تفعيل الإرسال الآلي المستمر.</p><div class="due-auto-toggle"><label><input id="mainDueReminderMode_auto" type="checkbox" onchange="setMainDebtReminderMode('auto',this.checked)"> إرسال SMS آلياً</label><label><input id="mainDueReminderMode_manual" type="checkbox" onchange="setMainDebtReminderMode('manual',this.checked)"> إرسال SMS يدوياً</label><label><input id="mainDueReminderMode_local" type="checkbox" onchange="setMainDebtReminderMode('local',this.checked)"> إشعار محلي فقط</label></div><div class="due-reminder-actions"><button class="due-view" onclick="openMainDueReminderDetails()">إطلاع</button><button class="due-delay" onclick="deferMainDueReminder()">تأجيل</button><button class="due-cancel" onclick="closeMainDueReminderNotice()">إلغاء</button><button class="due-ok" onclick="approveMainDueReminders()">إرسال التذكيرات الآن</button></div></div>`;
                 document.body.appendChild(o);
             }
             if (!document.getElementById('mainDueDetailModal')) {
@@ -3675,6 +3675,35 @@
         function markMainDueRemindersRefreshed(now = Date.now()) {
             window.__mainDueReminderRefreshAt = now;
             try { localStorage.setItem(dueReminderRefreshStorageKey(), String(now)); } catch (_) {}
+        }
+
+
+        async function loadMainDebtReminderModes() {
+            const keys={auto:'debt_due_auto_sms_enabled',manual:'debt_due_manual_sms_enabled',local:'debt_due_local_notification_enabled'};
+            for(const [mode,key] of Object.entries(keys)){
+                const result=await apiCall('getSetting',{key});
+                const el=document.getElementById('mainDueReminderMode_'+mode);
+                if(el)el.checked=result.success&&String(result.value??'0')==='1';
+            }
+        }
+        async function setMainDebtReminderMode(mode,enabled){
+            const keys={auto:'debt_due_auto_sms_enabled',manual:'debt_due_manual_sms_enabled',local:'debt_due_local_notification_enabled'};
+            const key=keys[mode];if(!key)return;
+            const result=await apiCall('setSetting',{key,value:enabled?'1':'0'});
+            if(!result.success)throw new Error(result.error||result.message||'تعذر حفظ وضع التذكير');
+            const verify=await apiCall('getSetting',{key});
+            if(!verify.success||String(verify.value??'0')!==(enabled?'1':'0'))throw new Error('لم يتم التحقق من حفظ وضع التذكير');
+            if(mode==='auto')await setMainDueAutoSmsEnabled(enabled);
+            showToast(enabled?'تم تفعيل وضع التذكير.':'تم إيقاف وضع التذكير.','success');
+        }
+        async function persistMainDueReminderDecision(action,mode='manual'){
+            for(const row of mainDueReminderRows.filter(r=>r.event_id&&Number(r.customer_party_id)>0)){
+                const result=await apiCall('updateDebtReminderInteractionTyped',{
+                    event_id:row.event_id,customer_party_id:Number(row.customer_party_id),
+                    due_date:row.nearest_due_date||row.due_date||'',action,mode
+                });
+                if(!result.success)throw new Error(result.error||'تعذر حفظ قرار التذكير');
+            }
         }
 
         async function loadMainDueAutoSmsSetting() {
@@ -3719,6 +3748,7 @@
                 const result = await apiCall('getDueSoonDebtRemindersTyped', { days: 10 });
                 if (!result.success) return false;
                 mainDueReminderRows = Array.isArray(result.data) ? result.data : [];
+                await loadMainDebtReminderModes();
                 const dueSoon = mainDueReminderRows.filter(r =>
                     Number(r.total_outstanding) > 0 && Number(r.days_remaining) >= 0 &&
                     Number(r.days_remaining) <= 10
@@ -3745,15 +3775,18 @@
             ensureMainDueReminderUI();
             document.getElementById('mainDueReminderOverlay').classList.add('show');
         }
-        function closeMainDueReminderNotice() {
+        async function closeMainDueReminderNotice() {
             document.getElementById('mainDueReminderOverlay')?.classList.remove('show');
+            try { await persistMainDueReminderDecision('dismissed','manual'); } catch(e) { console.warn('Reminder decision:',e); }
         }
-        function deferMainDueReminder() {
+        async function deferMainDueReminder() {
+            try { await persistMainDueReminderDecision('deferred','manual'); } catch(e) { showToast(e.message||'تعذر تأجيل التذكير','error'); return; }
             mainDueReminderDeferred = true;
             closeMainDueReminderNotice();
             document.getElementById('mainDueReminderBubble')?.classList.add('show');
         }
-        function approveMainDueReminders() {
+        async function approveMainDueReminders() {
+            try { await persistMainDueReminderDecision('viewed','manual'); } catch(e) { showToast(e.message||'تعذر حفظ قرار الإرسال','error'); return; }
             closeMainDueReminderNotice();
             apiCall('sendDueSoonDebtRemindersTyped', { days: 10 })
                 .then(r => {

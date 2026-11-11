@@ -14650,6 +14650,28 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+
+        @JavascriptInterface
+        fun updateDebtReminderInteractionTyped(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+                val obj = JSONObject(jsonData.ifBlank { "{}" })
+                val stationId = requireCurrentStationId(helper, activity.currentUserId)
+                val eventId = obj.optString("event_id").trim()
+                val customerId = obj.optLong("customer_party_id", 0L)
+                val dueDate = obj.optString("due_date").trim()
+                val action = obj.optString("action").trim()
+                val mode = obj.optString("mode", "manual").trim()
+                DebtDueDateRepository.recordReminderInteraction(
+                    helper.writableDatabase, stationId, eventId, customerId, dueDate, action, mode
+                )
+                dataResponse(JSONObject().put("event_id", eventId).put("action", action).put("mode", mode))
+            } catch (e: Exception) {
+                errorResponse(e.message ?: "تعذر حفظ قرار تذكير الدين")
+            }
+        }
+
         @JavascriptInterface
         fun getWhitelistPage(jsonData: String): String {
             return try {

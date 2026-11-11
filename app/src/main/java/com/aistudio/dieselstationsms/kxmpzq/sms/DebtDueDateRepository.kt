@@ -705,6 +705,71 @@ object DebtDueDateRepository {
             put("customer_balances", customerBalances)
         }
     }
+
+    /**
+     * Durable, station-scoped lifecycle ledger shared by the dashboard and debt screen.
+     * It is created lazily on the first reminder operation so existing installations are
+     * upgraded additively without rebuilding or replacing customer/accounting data.
+     */
+    fun ensureReminderInteractionSchema(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS debt_reminder_interactions (
+                station_id INTEGER NOT NULL,
+                event_id TEXT NOT NULL,
+                customer_party_id INTEGER NOT NULL,
+                due_date TEXT NOT NULL DEFAULT '',
+                action TEXT NOT NULL CHECK(action IN ('deferred','dismissed','viewed','queued','sent')),
+                mode TEXT NOT NULL DEFAULT 'manual',
+                next_notify_at INTEGER,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY(station_id,event_id)
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_debt_reminder_interactions_state ON debt_reminder_interactions(station_id,action,next_notify_at)")
+    }
+
+    fun recordReminderInteraction(
+        db: SQLiteDatabase,
+        stationId: Int,
+        eventId: String,
+        customerPartyId: Long,
+        dueDate: String,
+        action: String,
+        mode: String
+    ) {
+        require(stationId > 0 && customerPartyId > 0L && eventId.isNotBlank()) { "بيانات التذكير غير صالحة" }
+        require(action in setOf("deferred","dismissed","viewed","queued","sent")) { "قرار التذكير غير صالح" }
+        require(mode in setOf("auto","manual","local")) { "وضع التذكير غير صالح" }
+        ensureReminderInteractionSchema(db)
+        val values = ContentValues().apply {
+            put("station_id", stationId)
+            put("event_id", eventId)
+            put("customer_party_id", customerPartyId)
+            put("due_date", dueDate)
+            put("action", action)
+            put("mode", mode)
+            if (action == "deferred") put("next_notify_at", System.currentTimeMillis() + 60L * 60L * 1000L)
+            else putNull("next_notify_at")
+            put("updated_at", java.time.LocalDateTime.now().toString())
+        }
+        db.insertWithOnConflict("debt_reminder_interactions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    fun getReminderInteraction(db: SQLiteDatabase, stationId: Int, eventId: String): JSONObject? {
+        ensureReminderInteractionSchema(db)
+        return db.rawQuery(
+            "SELECT action,mode,next_notify_at,updated_at FROM debt_reminder_interactions WHERE station_id=? AND event_id=? LIMIT 1",
+            arrayOf(stationId.toString(), eventId)
+        ).use { c ->
+            if (!c.moveToFirst()) null else JSONObject().apply {
+                put("action", c.getString(0))
+                put("mode", c.getString(1))
+                put("next_notify_at", if (c.isNull(2)) JSONObject.NULL else c.getLong(2))
+                put("updated_at", c.getString(3))
+            }
+        }
+    }
+
     /**
      * Returns one nearest-due invoice per customer for the requested calendar-day window.
      * days=0 means due today; negative/overdue balances are not automatically re-reminded.
@@ -740,6 +805,7 @@ object DebtDueDateRepository {
             val dedupeKey = if (phone != null) "$eventId:$phone" else ""
             val alreadyQueued = dedupeKey.isNotBlank() && hasOutboxDedupeKey(helper.readableDatabase, dedupeKey)
             val eligible = outstanding > 0.000001 && phone != null && !alreadyQueued
+            val interaction = getReminderInteraction(helper.readableDatabase, stationId, eventId)
             result.put(JSONObject().apply {
                 put("id", nearest.transactionId)
                 put("transaction_id", nearest.transactionId)
@@ -763,6 +829,9 @@ object DebtDueDateRepository {
                 put("eligible", eligible)
                 put("station_id", stationId)
                 put("event_id", eventId)
+                put("interaction_action", interaction?.optString("action") ?: "")
+                put("interaction_mode", interaction?.optString("mode") ?: "")
+                put("interaction_next_notify_at", interaction?.opt("next_notify_at") ?: JSONObject.NULL)
                 put("risk_level", nearest.riskLevel)
             })
         }

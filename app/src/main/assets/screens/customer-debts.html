@@ -3499,6 +3499,41 @@ function updateDebtViewButtons() {
             }
         }
 
+
+        async function loadDebtReminderModes() {
+            const keys = {
+                auto: 'debt_due_auto_sms_enabled',
+                manual: 'debt_due_manual_sms_enabled',
+                local: 'debt_due_local_notification_enabled'
+            };
+            for (const [mode,key] of Object.entries(keys)) {
+                const result = await apiCall('getSetting',{key});
+                const el = document.getElementById('debtReminderMode_'+mode);
+                if (el) el.checked = result.success && String(result.value ?? '0') === '1';
+            }
+        }
+        async function setDebtReminderMode(mode, enabled) {
+            const keys = {auto:'debt_due_auto_sms_enabled',manual:'debt_due_manual_sms_enabled',local:'debt_due_local_notification_enabled'};
+            const key = keys[mode];
+            if (!key) return;
+            const result = await apiCall('setSetting',{key,value:enabled?'1':'0'});
+            if (!result.success) throw new Error(result.error || result.message || 'تعذر حفظ وضع التذكير');
+            const verify = await apiCall('getSetting',{key});
+            if (!verify.success || String(verify.value ?? '0') !== (enabled?'1':'0')) throw new Error('لم يتم التحقق من حفظ إعداد التذكير');
+            if (mode === 'auto') await setDueAutoSmsEnabled(enabled);
+            showToast(enabled?'تم تفعيل وضع التذكير.':'تم إيقاف وضع التذكير.','success');
+        }
+        async function persistDueReminderDecision(action, mode='manual') {
+            const rows = dueReminderRows.filter(r => r.event_id && Number(r.customer_party_id)>0);
+            for (const row of rows) {
+                const result = await apiCall('updateDebtReminderInteractionTyped',{
+                    event_id:row.event_id,customer_party_id:Number(row.customer_party_id),
+                    due_date:row.nearest_due_date||row.due_date||'',action,mode
+                });
+                if (!result.success) throw new Error(result.error || 'تعذر حفظ قرار التذكير');
+            }
+        }
+
         async function loadDueAutoSmsSetting() {
             const checkbox=document.getElementById('dueAutoSmsEnabled');
             if(!checkbox)return;
@@ -3545,9 +3580,10 @@ function updateDebtViewButtons() {
         }
 
         function openDueReminderNotice(){ensureDueReminderUI();document.getElementById('dueReminderOverlay').classList.add('show');document.body.style.overflow='hidden';}
-        function closeDueReminderNotice(){document.getElementById('dueReminderOverlay')?.classList.remove('show');document.body.style.overflow='';}
-        function deferDueReminder(){dueReminderDeferred=true;closeDueReminderNotice();document.getElementById('dueReminderBubble')?.classList.add('show');}
-        function approveDueReminders(){
+        async function closeDueReminderNotice(){document.getElementById('dueReminderOverlay')?.classList.remove('show');document.body.style.overflow='';try{await persistDueReminderDecision('dismissed','manual');}catch(e){console.warn('Reminder decision:',e);}}
+        async function deferDueReminder(){try{await persistDueReminderDecision('deferred','manual');dueReminderDeferred=true;closeDueReminderNotice();document.getElementById('dueReminderBubble')?.classList.add('show');}catch(e){showToast(e.message||'تعذر تأجيل التذكير','error');}}
+        async function approveDueReminders(){
+            try { await persistDueReminderDecision('viewed','manual'); } catch(e) { showToast(e.message||'تعذر حفظ قرار الإرسال','error'); return; }
             closeDueReminderNotice();
             apiCall('sendDueSoonDebtRemindersTyped',{days:debtScreenSettings.dueSoonDays}).then(r=>{
                 if(!r.success)throw new Error(r.error||r.message||'تعذر إرسال التذكيرات');
@@ -4213,11 +4249,16 @@ async function loadCustomerDebtSettings() {
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">نافذة تذكير الاستحقاق بالأيام</span><span class="debt-setting-desc">نطاق قائمة تنبيهات الديون القريبة في هذه الشاشة.</span></div><input id="debtSettingDueDays" type="number" min="1" max="365" step="1" value="'+value.dueSoonDays+'"></div>'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">التقرير الافتراضي</span><span class="debt-setting-desc">التقرير الذي يظهر أولاً عند فتح التقارير.</span></div><select id="debtSettingDefaultReport"><option value="balances">أرصدة ديون العملاء</option><option value="overdue">الديون المتأخرة</option><option value="doubtful">الديون المشكوك في تحصيلها</option><option value="aging">أعمار الديون</option><option value="customers">ملخص حسب العميل</option><option value="invoices">الفواتير ذات الرصيد المتبقي</option><option value="payments">عمليات التحصيل والتسديد</option><option value="statement">كشف حركة عميل</option></select></div>'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">إبراز الديون المتأخرة</span><span class="debt-setting-desc">تنسيق تحذيري للديون المتأخرة في عرض البطاقات والشجرة.</span></div><label class="debt-setting-check"><input id="debtSettingHighlightOverdue" type="checkbox" '+(value.highlightOverdue?'checked':'')+'> تفعيل الإبراز</label></div>'+
-                    '</div><div id="debtSettingsFeedback" class="debt-settings-feedback" hidden></div><div class="report-actions"><button class="btn-report primary" onclick="saveCustomerDebtSettings()"><i class="fas fa-save"></i> حفظ الإعدادات</button><button class="btn-report" onclick="loadCustomerDebtSettings().then(openSettingsModal)"><i class="fas fa-undo"></i> إعادة تحميل المحفوظ</button></div></section>'+
+                    '</div><section class="report-panel"><div class="report-panel-title"><i class="fas fa-bell"></i> تذكيرات الديون</div>'+
+                    '<div class="debt-setting-row"><div><span class="debt-setting-label">إرسال SMS آلياً</span><span class="debt-setting-desc">إرسال تلقائي في الخلفية دون إشعار المستخدم.</span></div><input id="debtReminderMode_auto" type="checkbox" title="إرسال SMS آلياً" onchange="setDebtReminderMode(\'auto\',this.checked)"></div>'+
+                    '<div class="debt-setting-row"><div><span class="debt-setting-label">إرسال SMS يدوياً</span><span class="debt-setting-desc">عرض تنبيه داخل التطبيق يتطلب قرار المستخدم قبل الإرسال.</span></div><input id="debtReminderMode_manual" type="checkbox" title="إرسال SMS يدوياً" onchange="setDebtReminderMode(\'manual\',this.checked)"></div>'+
+                    '<div class="debt-setting-row"><div><span class="debt-setting-label">إشعار محلي</span><span class="debt-setting-desc">تنبيه داخل التطبيق فقط، دون إرسال SMS.</span></div><input id="debtReminderMode_local" type="checkbox" title="إشعار محلي" onchange="setDebtReminderMode(\'local\',this.checked)"></div>'+
+                    '</section><div id="debtSettingsFeedback" class="debt-settings-feedback" hidden></div><div class="report-actions"><button class="btn-report primary" onclick="saveCustomerDebtSettings()"><i class="fas fa-save"></i> حفظ الإعدادات</button><button class="btn-report" onclick="loadCustomerDebtSettings().then(openSettingsModal)"><i class="fas fa-undo"></i> إعادة تحميل المحفوظ</button></div></section>'+
                     '<section class="report-panel"><div class="report-panel-title"><i class="fas fa-database"></i> التخزين والتحقق</div><p class="report-result-caption">تُحفظ التفضيلات في SQLite بمفاتيح خاصة بهذه الشاشة، ولا تستبدل إعدادات الضريبة أو المخزون أو المبيعات.</p></section></div>';
                 document.getElementById('debtSettingDefaultView').value=value.defaultView;
                 document.getElementById('debtSettingDefaultStatus').value=value.defaultStatus;
                 document.getElementById('debtSettingDefaultReport').value=value.defaultReport;
+                loadDebtReminderModes().catch(e=>console.warn('Reminder modes:',e));
             }).catch(function(e){body.innerHTML='<div class="error-state">'+escapeHtml(e.message||'تعذر تحميل إعدادات ديون العملاء')+'</div>';console.error('Customer debt settings failed:',e);});
         }
 
