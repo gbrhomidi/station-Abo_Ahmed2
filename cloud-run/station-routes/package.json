@@ -1,0 +1,18 @@
+{
+  "name": "station-routes-cloud-run",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Authenticated Google Routes API proxy for the station Android application",
+  "main": "server.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "firebase-admin": "^13.5.0"
+  }
+}

@@ -3445,13 +3445,17 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun openNativeMapPicker(latitude: Double, longitude: Double): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            val safeLatitude = latitude.takeIf { it.isFinite() && it in -90.0..90.0 } ?: 0.0
-            val safeLongitude = longitude.takeIf { it.isFinite() && it in -180.0..180.0 } ?: 0.0
+            val hasValidInitialLocation =
+                latitude.isFinite() && longitude.isFinite() &&
+                latitude in -90.0..90.0 && longitude in -180.0..180.0 &&
+                !(latitude == 0.0 && longitude == 0.0)
             return try {
                 activity.mapPickerLauncher.launch(
                     Intent(activity, MapPickerActivity::class.java).apply {
-                        putExtra(MapPickerActivity.EXTRA_INITIAL_LATITUDE, safeLatitude)
-                        putExtra(MapPickerActivity.EXTRA_INITIAL_LONGITUDE, safeLongitude)
+                        if (hasValidInitialLocation) {
+                            putExtra(MapPickerActivity.EXTRA_INITIAL_LATITUDE, latitude)
+                            putExtra(MapPickerActivity.EXTRA_INITIAL_LONGITUDE, longitude)
+                        }
                     }
                 )
                 successResponse(true, "تم فتح محدد الموقع الأصلي")

@@ -28,8 +28,6 @@ class MapPickerActivity : AppCompatActivity(), OnMapReadyCallback {
         const val EXTRA_INITIAL_LONGITUDE = "initial_longitude"
         const val EXTRA_LATITUDE = "selected_latitude"
         const val EXTRA_LONGITUDE = "selected_longitude"
-        private const val DEFAULT_LATITUDE = 24.7136
-        private const val DEFAULT_LONGITUDE = 46.6753
     }
 
     private lateinit var binding: ActivityMapPickerBinding
@@ -51,16 +49,21 @@ class MapPickerActivity : AppCompatActivity(), OnMapReadyCallback {
         binding = ActivityMapPickerBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val lat = intent.getDoubleExtra(EXTRA_INITIAL_LATITUDE, DEFAULT_LATITUDE)
-        val lon = intent.getDoubleExtra(EXTRA_INITIAL_LONGITUDE, DEFAULT_LONGITUDE)
-        initialLocation = if (lat in -90.0..90.0 && lon in -180.0..180.0 && !(lat == 0.0 && lon == 0.0)) {
-            LatLng(lat, lon)
-        } else null
+        val hasInitialCoordinates = intent.hasExtra(EXTRA_INITIAL_LATITUDE) &&
+            intent.hasExtra(EXTRA_INITIAL_LONGITUDE)
+        val lat = intent.getDoubleExtra(EXTRA_INITIAL_LATITUDE, Double.NaN)
+        val lon = intent.getDoubleExtra(EXTRA_INITIAL_LONGITUDE, Double.NaN)
+        initialLocation = if (
+            hasInitialCoordinates &&
+            lat.isFinite() && lon.isFinite() &&
+            lat in -90.0..90.0 && lon in -180.0..180.0 &&
+            !(lat == 0.0 && lon == 0.0)
+        ) LatLng(lat, lon) else null
 
         binding.cancelButton.setOnClickListener { finish() }
         binding.confirmButton.setOnClickListener { confirmSelection() }
         binding.myLocationButton.setOnClickListener { requestAndCenterOnCurrentLocation() }
-        updateCoordinates(initialLocation ?: LatLng(DEFAULT_LATITUDE, DEFAULT_LONGITUDE))
+        updateCoordinates(initialLocation)
 
         val mapFragment = SupportMapFragment.newInstance()
         supportFragmentManager.beginTransaction()
@@ -75,13 +78,25 @@ class MapPickerActivity : AppCompatActivity(), OnMapReadyCallback {
         map.uiSettings.isCompassEnabled = true
         map.uiSettings.isMyLocationButtonEnabled = false
         map.setOnMapClickListener { updateSelection(it) }
-        map.setOnCameraIdleListener {
-            map.cameraPosition.target.let { updateSelection(it, moveCamera = false) }
-        }
+        map.setOnMarkerDragListener(object : GoogleMap.OnMarkerDragListener {
+            override fun onMarkerDragStart(marker: Marker) = Unit
+            override fun onMarkerDrag(marker: Marker) = Unit
+            override fun onMarkerDragEnd(marker: Marker) {
+                updateSelection(marker.position, moveCamera = false)
+            }
+        })
 
-        val start = initialLocation ?: LatLng(DEFAULT_LATITUDE, DEFAULT_LONGITUDE)
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(start, 15f))
-        updateSelection(start)
+        val existingLocation = initialLocation
+        if (existingLocation != null) {
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(existingLocation, 16f))
+            updateSelection(existingLocation, moveCamera = false)
+        } else {
+            // Camera position is not a selected location. Require an explicit map tap
+            // or the current-location control before enabling confirmation.
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(0.0, 0.0), 2f))
+            selectedLocation = null
+            updateCoordinates(null)
+        }
         if (hasLocationPermission()) enableMyLocationAndCenter(center = false)
     }
 
@@ -91,16 +106,16 @@ class MapPickerActivity : AppCompatActivity(), OnMapReadyCallback {
         selectedMarker = googleMap?.addMarker(
             MarkerOptions().position(location).title("الموقع المحدد").draggable(true)
         )
-        googleMap?.setOnMarkerDragListener(object : GoogleMap.OnMarkerDragListener {
-            override fun onMarkerDragStart(marker: Marker) = Unit
-            override fun onMarkerDrag(marker: Marker) = Unit
-            override fun onMarkerDragEnd(marker: Marker) { updateSelection(marker.position, moveCamera = false) }
-        })
         if (moveCamera) googleMap?.animateCamera(CameraUpdateFactory.newLatLng(location))
         updateCoordinates(location)
     }
 
-    private fun updateCoordinates(location: LatLng) {
+    private fun updateCoordinates(location: LatLng?) {
+        if (location == null) {
+            binding.latitudeText.text = "لم يتم تحديد الموقع"
+            binding.longitudeText.text = "لم يتم تحديد الموقع"
+            return
+        }
         binding.latitudeText.text = String.format(Locale.US, "%.8f", location.latitude)
         binding.longitudeText.text = String.format(Locale.US, "%.8f", location.longitude)
     }
