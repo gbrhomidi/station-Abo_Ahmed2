@@ -127,23 +127,42 @@ app.post('/v1/routes', async (req, res) => {
       return res.status(400).json({ error: 'Unsupported travel mode' });
     }
 
-    let route;
-    if (ROUTE_PROVIDER === 'google') {
-      route = await requestGoogleRoute(origin, destination, travelMode);
-    } else if (ROUTE_PROVIDER === 'osrm') {
-      if (travelMode !== 'DRIVE') return res.status(422).json({ error: 'The configured OSRM profile supports driving routes only' });
-      route = await requestOsrmRoute(origin, destination);
-    } else {
+    const cacheKey = [
+      ROUTE_PROVIDER,
+      travelMode,
+      origin.latitude.toFixed(6),
+      origin.longitude.toFixed(6),
+      destination.latitude.toFixed(6),
+      destination.longitude.toFixed(6)
+    ].join(':');
+
+    const cachedResult = await routeCache.getOrLoad(cacheKey, async () => {
+      if (ROUTE_PROVIDER === 'google') {
+        return requestGoogleRoute(origin, destination, travelMode);
+      }
+      if (ROUTE_PROVIDER === 'osrm') {
+        if (travelMode !== 'DRIVE') {
+          const error = new Error('The configured OSRM profile supports driving routes only');
+          error.status = 422;
+          throw error;
+        }
+        return requestOsrmRoute(origin, destination);
+      }
       try {
-        if (travelMode !== 'DRIVE') throw new Error('OSRM driving profile does not support this travel mode');
-        route = await requestOsrmRoute(origin, destination);
+        if (travelMode !== 'DRIVE') {
+          throw new Error('OSRM driving profile does not support this travel mode');
+        }
+        return await requestOsrmRoute(origin, destination);
       } catch (osrmError) {
         if (!GOOGLE_ROUTES_API_KEY) throw osrmError;
-        route = await requestGoogleRoute(origin, destination, travelMode);
-        route.fallbackReason = 'OSRM provider unavailable';
+        const fallback = await requestGoogleRoute(origin, destination, travelMode);
+        fallback.fallbackReason = 'OSRM provider unavailable';
+        return fallback;
       }
-    }
-    return res.status(200).json(route);
+    });
+
+    res.set('X-Route-Cache', cachedResult.cacheHit ? 'HIT' : 'MISS');
+    return res.status(200).json(cachedResult.value);
   } catch (error) {
     const status = error.status || (error.name === 'AbortError' || error.name === 'TimeoutError' ? 504 : 502);
     console.warn('Route request failed', status, error.message);
