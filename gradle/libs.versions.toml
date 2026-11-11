@@ -26,6 +26,7 @@ kotlinxCoroutinesCore = "1.10.1"
 robolectric = "4.18-beta-1"
 roborazzi = "1.39.0"
 firebaseBom = "33.7.0"
+googleServices = "4.5.0"
 work = "2.9.1"
 
 # Security
@@ -82,3 +83,5 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
+
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }

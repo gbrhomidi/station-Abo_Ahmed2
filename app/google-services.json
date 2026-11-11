@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "593620032216",
+    "project_id": "fuel-station-management-5ca98",
+    "storage_bucket": "fuel-station-management-5ca98.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:593620032216:android:30e3116ba61c31055355ad",
+        "android_client_info": {
+          "package_name": "com.aistudio.dieselstationsms.kxmpzq"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB-4pFI8zWbA371Cy8udZiqeTD0ShDHRLM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
