@@ -1929,6 +1929,77 @@
         .debt-summary-section{margin-top:15px;padding:13px;border:1px solid var(--border-color);border-radius:15px;background:var(--bg-glass)}
         .debt-summary-section h4{margin-bottom:10px}
         @media(max-width:520px){.debt-view-caption{width:100%;margin-bottom:3px}.debt-view-button{flex:1;padding:9px 7px;font-size:.8rem}.debt-tree-item{align-items:flex-start;flex-direction:column}.debt-setting-row{grid-template-columns:1fr;gap:8px}.report-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Full-width responsive layouts for the requested debt modals. */
+#settingsModal.modal-overlay,#reportsModal.modal-overlay,#summaryModal.modal-overlay{padding:0;align-items:stretch;justify-content:flex-start}
+#settingsModal .modal-content,#reportsModal .modal-content,#summaryModal .modal-content{width:100%;max-width:none;height:100%;max-height:100%;min-height:100%;margin:0;padding:14px 0;border-radius:0;border-inline:0;overflow-x:hidden}
+#settingsModal .modal-header,#reportsModal .modal-header,#summaryModal .modal-header{margin:0 0 12px;padding:0 12px 12px}
+#settingsModal .modal-body,#reportsModal .modal-body,#summaryModal .modal-body{width:100%;min-width:0;padding:0;margin:0;gap:10px}
+#settingsModal .report-workspace,#reportsModal .report-workspace,#summaryModal .report-workspace{width:100%;min-width:0;gap:10px}
+#settingsModal .report-panel,#reportsModal .report-panel,#summaryModal .debt-summary-section{width:100%;min-width:0;margin:0;padding:12px 0;border-inline:0;border-radius:0}
+#settingsModal .report-panel-title,#reportsModal .report-panel-title,#summaryModal .debt-summary-section h4{padding-inline:10px;text-align:center;justify-content:center}
+#settingsModal .debt-setting-row{padding:12px 10px;text-align:center;justify-items:center}
+#settingsModal .debt-setting-row>div{width:100%;text-align:center}
+#settingsModal .debt-setting-row input:not([type=checkbox]),#settingsModal .debt-setting-row select{max-width:none;text-align:center}
+#settingsModal .debt-setting-check{justify-content:center}
+#settingsModal .report-panel>p{padding:0 10px;text-align:center}
+#reportsModal .report-filters{width:100%;min-width:0;padding:0 8px;grid-template-columns:repeat(2,minmax(0,1fr))}
+#reportsModal .report-field{text-align:center;align-items:stretch}
+#reportsModal .report-field input,#reportsModal .report-field select{text-align:center}
+#reportsModal .report-actions{width:100%;padding:0 8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+#reportsModal .report-actions .btn-report{min-width:0;width:100%;flex:initial;padding:9px 4px;font-size:.78rem;white-space:nowrap}
+#reportsModal .report-actions .btn-report:nth-child(1),#reportsModal .report-actions .btn-report:nth-child(5){grid-column:1/-1}
+#reportsModal .report-kpi-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;padding:0 8px}
+#reportsModal .report-kpi{min-width:0;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow-wrap:anywhere}
+#reportsModal .report-kpi:last-child{grid-column:1/-1}
+#reportsModal .report-kpi strong,#reportsModal .report-kpi span{text-align:center;max-width:100%}
+#reportsModal .report-result-caption{width:100%;padding:0 8px;text-align:center}
+#reportsModal #reportOutput{width:100%;min-width:0;overflow:visible}
+#reportsModal .table-scroll,#summaryModal .table-scroll{width:100%;max-width:100%;margin:0;padding:0;overflow-x:auto;overscroll-behavior-x:contain}
+#reportsModal .mini-table,#summaryModal .mini-table{width:max-content;min-width:100%;table-layout:auto;border-collapse:collapse}
+#reportsModal .mini-table th,#reportsModal .mini-table td,#summaryModal .mini-table th,#summaryModal .mini-table td{text-align:center;white-space:nowrap;vertical-align:middle}
+#reportsModal .mini-table th,#reportsModal .mini-table td{padding:9px 12px}
+#summaryModal .report-kpi-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;padding:0 8px}
+#summaryModal .debt-summary-card{min-width:0;margin:0;padding:12px 5px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow-wrap:anywhere}
+#summaryModal .debt-summary-card strong,#summaryModal .debt-summary-card span{text-align:center;max-width:100%}
+#summaryModal .debt-summary-section{padding:12px 0}
+#summaryModal .debt-summary-section .table-scroll{padding:0}
+#summaryModal .report-actions{padding:0 8px}
+#summaryModal .report-result-caption{text-align:center;padding:0 8px}
+#debtViewToolbar{overflow-x:auto;flex-wrap:nowrap;justify-content:flex-start;scrollbar-width:thin}
+#debtViewToolbar .debt-view-caption,#debtViewToolbar .debt-view-button{flex:0 0 auto;white-space:nowrap}
+#debtAdvancedView{display:none;min-width:0;width:100%}
+#debtTableSection[data-view="table"] .table-wrapper{display:block}
+#debtTableSection[data-view="cards"] .table-wrapper,#debtTableSection[data-view="tree"] .table-wrapper,#debtTableSection[data-view="grid"] .table-wrapper,#debtTableSection[data-view="kanban"] .table-wrapper,#debtTableSection[data-view="gantt"] .table-wrapper,#debtTableSection[data-view="calendar"] .table-wrapper,#debtTableSection[data-view="gallery"] .table-wrapper,#debtTableSection[data-view="map"] .table-wrapper,#debtTableSection[data-view="dashboard"] .table-wrapper,#debtTableSection[data-view="list"] .table-wrapper{display:none}
+#debtTableSection[data-view="cards"] #debtCardsView,#debtTableSection[data-view="tree"] #debtTreeView{display:block}
+#debtTableSection[data-view="grid"] #debtAdvancedView,#debtTableSection[data-view="kanban"] #debtAdvancedView,#debtTableSection[data-view="gantt"] #debtAdvancedView,#debtTableSection[data-view="calendar"] #debtAdvancedView,#debtTableSection[data-view="gallery"] #debtAdvancedView,#debtTableSection[data-view="map"] #debtAdvancedView,#debtTableSection[data-view="dashboard"] #debtAdvancedView,#debtTableSection[data-view="list"] #debtAdvancedView{display:block}
+.debt-advanced-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;padding:0 8px}
+.debt-advanced-card{min-width:0;padding:12px;border:1px solid var(--border-color);border-radius:14px;background:var(--bg-card);text-align:center;display:flex;flex-direction:column;align-items:center;gap:7px;overflow-wrap:anywhere}
+.debt-advanced-card strong{font-size:.95rem}.debt-advanced-meta{font-size:.78rem;color:var(--text-muted);white-space:normal}
+.debt-advanced-actions{display:flex;justify-content:center;gap:7px;flex-wrap:wrap}
+.debt-kanban{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;padding:0 8px}
+.debt-kanban-column{min-width:0;padding:10px;border:1px solid var(--border-color);border-radius:13px;background:var(--bg-glass)}
+.debt-kanban-column h4{text-align:center;margin-bottom:9px}
+.debt-timeline{padding:0 8px;display:flex;flex-direction:column;gap:8px}
+.debt-timeline-row{display:grid;grid-template-columns:minmax(105px,1fr) minmax(90px,2fr);gap:10px;align-items:center;padding:9px;border:1px solid var(--border-color);border-radius:10px}
+.debt-timeline-track{height:10px;border-radius:20px;background:var(--bg-glass-light);overflow:hidden}
+.debt-timeline-track span{display:block;height:100%;background:linear-gradient(90deg,var(--emerald-primary),var(--gold-primary))}
+.debt-calendar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 8px}
+.debt-calendar-day{padding:10px 6px;border:1px solid var(--border-color);border-radius:10px;text-align:center;background:var(--bg-card)}
+.debt-map-notice{margin:0 8px;padding:14px;border:1px dashed var(--border-color);border-radius:12px;text-align:center;color:var(--text-muted);line-height:1.8}
+.debt-dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 8px}
+.debt-dashboard-tile{padding:14px 6px;text-align:center;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card)}
+.debt-dashboard-tile strong{display:block;color:var(--gold-primary);font-size:1.1rem}
+.debt-list-view{padding:0 8px;display:flex;flex-direction:column;gap:7px}
+.debt-list-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--border-color);text-align:center}
+.debt-list-row>*{min-width:0;overflow-wrap:anywhere}
+@media(max-width:520px){
+ #reportsModal .report-actions .btn-report{font-size:.7rem;padding:8px 3px;white-space:nowrap}
+ #summaryModal .report-kpi-grid,#reportsModal .report-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #summaryModal .debt-summary-card strong{font-size:1.05rem}
+ .debt-advanced-grid,.debt-kanban{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .debt-timeline-row{grid-template-columns:1fr}
+}
     </style>
   <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
@@ -2117,9 +2188,18 @@
             <button type="button" class="debt-view-button active" id="debtViewTable" onclick="setDebtView('table')"><i class="fas fa-table"></i> جدول</button>
             <button type="button" class="debt-view-button" id="debtViewCards" onclick="setDebtView('cards')"><i class="fas fa-th-large"></i> بطاقات</button>
             <button type="button" class="debt-view-button" id="debtViewTree" onclick="setDebtView('tree')"><i class="fas fa-sitemap"></i> شجرة</button>
+            <button type="button" class="debt-view-button" id="debtViewGrid" onclick="setDebtView('grid')"><i class="fas fa-border-all"></i> شبكة</button>
+            <button type="button" class="debt-view-button" id="debtViewKanban" onclick="setDebtView('kanban')"><i class="fas fa-columns"></i> كانبان</button>
+            <button type="button" class="debt-view-button" id="debtViewGantt" onclick="setDebtView('gantt')"><i class="fas fa-stream"></i> جانت</button>
+            <button type="button" class="debt-view-button" id="debtViewCalendar" onclick="setDebtView('calendar')"><i class="fas fa-calendar-alt"></i> تقويم</button>
+            <button type="button" class="debt-view-button" id="debtViewGallery" onclick="setDebtView('gallery')"><i class="fas fa-images"></i> معرض</button>
+            <button type="button" class="debt-view-button" id="debtViewMap" onclick="setDebtView('map')"><i class="fas fa-map-marked-alt"></i> خريطة</button>
+            <button type="button" class="debt-view-button" id="debtViewDashboard" onclick="setDebtView('dashboard')"><i class="fas fa-chart-pie"></i> لوحة تحكم</button>
+            <button type="button" class="debt-view-button" id="debtViewList" onclick="setDebtView('list')"><i class="fas fa-list"></i> قائمة</button>
         </div>
         <div id="debtCardsView" class="debt-card-grid" aria-live="polite"></div>
         <div id="debtTreeView" class="debt-tree-view" aria-live="polite"></div>
+        <div id="debtAdvancedView" aria-live="polite"></div>
         <div class="table-wrapper">
             <div class="table-scroll">
                 <table class="data-table" id="debtTable">
@@ -2791,6 +2871,7 @@
             renderTable(debtsData);
             renderDebtCards(debtsData);
             renderDebtTree(debtsData);
+            renderAdvancedDebtView(debtsData);
             updateDebtViewButtons();
             updateKPIs(debtsData);
             updateCharts(debtsData);
@@ -2844,7 +2925,9 @@
 function updateDebtViewButtons() {
             const section = document.getElementById('debtTableSection');
             if (!section) return;
-            section.dataset.view = ['table','cards','tree'].includes(debtViewMode) ? debtViewMode : 'table';
+            const supportedViews=['table','cards','tree','grid','kanban','gantt','calendar','gallery','map','dashboard','list'];
+            section.dataset.view = supportedViews.includes(debtViewMode) ? debtViewMode : 'table';
+            supportedViews.forEach(function(view){const button=document.getElementById('debtView'+view.charAt(0).toUpperCase()+view.slice(1));if(button){button.classList.toggle('active',debtViewMode===view);button.setAttribute('aria-pressed',debtViewMode===view?'true':'false');}});
             [['table','debtViewTable'],['cards','debtViewCards'],['tree','debtViewTree']].forEach(function(pair) {
                 const button = document.getElementById(pair[1]);
                 if (button) {
@@ -2855,14 +2938,59 @@ function updateDebtViewButtons() {
         }
 
         function setDebtView(view, persist) {
-            if (['table','cards','tree'].indexOf(view) < 0) return;
+            if (['table','cards','tree','grid','kanban','gantt','calendar','gallery','map','dashboard','list'].indexOf(view) < 0) return;
             debtViewMode = view;
             updateDebtViewButtons();
+            renderAdvancedDebtView(debtsData);
             if (persist !== false) {
                 debtScreenSettings.defaultView = view;
                 apiCall('setSetting', {key:'customer_debts_default_view', value:view})
                     .catch(function(error){ console.warn('تعذر حفظ تفضيل العرض:', error); });
             }
+        }
+
+
+        function renderAdvancedDebtView(data) {
+            const host=document.getElementById('debtAdvancedView');
+            if(!host)return;
+            const rows=Array.isArray(data)?data:[];
+            const card=function(item){
+                const id=finiteNumber(item.customer_party_id??item.customer_id),remaining=finiteNumber(item.remaining_amount);
+                const due=IsoCivilDate.isValidIsoDate(item.due_date)?item.due_date:'غير محدد';
+                const customer=escapeHtml(item.customer_name||'عميل غير مسمى');
+                const invoice=escapeHtml(item.invoice_number||item.sale_code||('فاتورة #'+(item.id||'')));
+                return '<article class="debt-advanced-card"><strong>'+customer+'</strong><span class="debt-advanced-meta">'+invoice+'</span><span>المتبقي: '+formatCurrency(remaining)+'</span><span class="debt-advanced-meta">الاستحقاق: '+due+' · '+escapeHtml(getStatusLabel(item.status))+'</span><div class="debt-advanced-actions"><button class="btn-action pay" onclick="openPaymentForCustomer('+id+','+remaining+')" title="تسديد"><i class="fas fa-money-bill-wave"></i></button><button class="btn-action view" onclick="viewCustomerDetails('+id+')" title="تفاصيل"><i class="fas fa-eye"></i></button><button class="btn-action history" onclick="viewHistory('+id+')" title="السجل"><i class="fas fa-history"></i></button></div></article>';
+            };
+            if(!rows.length){host.innerHTML='<div class="empty-state">لا توجد ديون مطابقة للفلاتر الحالية.</div>';return;}
+            if(debtViewMode==='kanban'){
+                const groups=[['current','غير متأخر'],['partial','مدفوع جزئياً'],['overdue','متأخر'],['doubtful','مشكوك في تحصيله'],['undated','غير محدد الاستحقاق']];
+                host.innerHTML='<div class="debt-kanban">'+groups.map(function(group){const items=rows.filter(function(row){return row.status===group[0]||(group[0]==='current'&&row.status==='partial'&&finiteNumber(row.days_remaining)>=0);});return '<section class="debt-kanban-column"><h4>'+group[1]+' ('+items.length+')</h4>'+(items.length?items.map(card).join(''):'<div class="report-result-caption">لا توجد سجلات</div>')+'</section>';}).join('')+'</div>';return;
+            }
+            if(debtViewMode==='gantt'){
+                const dated=rows.filter(function(row){return IsoCivilDate.isValidIsoDate(row.due_date);});
+                const first=dated.reduce(function(min,row){return !min||row.due_date<min?row.due_date:min;},'');
+                const last=dated.reduce(function(max,row){return !max||row.due_date>max?row.due_date:max;},'');
+                const span=first&&last?Math.max(1,IsoCivilDate.calendarDayDifference(first,last)||1):1;
+                host.innerHTML='<div class="debt-timeline">'+(dated.length?dated.map(function(row){const offset=Math.max(0,IsoCivilDate.calendarDayDifference(first,row.due_date)||0);const width=Math.max(4,Math.min(100,((offset+1)/span)*100));return '<div class="debt-timeline-row"><div><strong>'+escapeHtml(row.customer_name||'عميل')+'</strong><div class="debt-advanced-meta">'+row.due_date+'</div></div><div><div class="debt-timeline-track"><span style="width:'+width+'%"></span></div><small>'+formatCurrency(row.remaining_amount)+'</small></div></div>';}).join(''):'<div class="empty-state">لا توجد تواريخ استحقاق صالحة لعرضها زمنياً.</div>')+'</div>';return;
+            }
+            if(debtViewMode==='calendar'){
+                const days=new Map();rows.forEach(function(row){const date=IsoCivilDate.isValidIsoDate(row.due_date)?row.due_date:'بدون تاريخ';if(!days.has(date))days.set(date,[]);days.get(date).push(row);});
+                host.innerHTML='<div class="debt-calendar">'+Array.from(days.entries()).sort(function(a,b){return a[0].localeCompare(b[0]);}).map(function(entry){return '<div class="debt-calendar-day"><strong>'+escapeHtml(entry[0])+'</strong><div>'+entry[1].length+' فاتورة</div><strong>'+formatCurrency(entry[1].reduce(function(sum,row){return sum+finiteNumber(row.remaining_amount);},0))+'</strong></div>';}).join('')+'</div>';return;
+            }
+            if(debtViewMode==='map'){
+                const located=rows.filter(function(row){return row.latitude!==undefined&&row.longitude!==undefined&&Number.isFinite(Number(row.latitude))&&Number.isFinite(Number(row.longitude));});
+                host.innerHTML='<div class="debt-map-notice"><i class="fas fa-map-marked-alt"></i><br>'+(located.length?'توجد '+located.length+' سجلات بإحداثيات؛ يلزم ربط مزود خرائط لعرض خريطة تفاعلية.':'لا تتوفر إحداثيات جغرافية موثوقة في بيانات الديون الحالية؛ لن يتم اختلاق مواقع أو علامات تقديرية.')+'</div>'+(located.length?'<div class="debt-advanced-grid">'+located.map(card).join('')+'</div>':'');return;
+            }
+            if(debtViewMode==='dashboard'){
+                const total=rows.reduce(function(sum,row){return sum+finiteNumber(row.remaining_amount);},0);
+                const overdue=rows.filter(function(row){return ['overdue','doubtful'].includes(row.status);}).reduce(function(sum,row){return sum+finiteNumber(row.remaining_amount);},0);
+                const customers=new Set(rows.map(function(row){return String(row.customer_party_id??row.customer_id??'');}).filter(Boolean));
+                host.innerHTML='<div class="debt-dashboard-grid"><div class="debt-dashboard-tile"><strong>'+formatCurrency(total)+'</strong>إجمالي المتبقي</div><div class="debt-dashboard-tile"><strong>'+formatCurrency(overdue)+'</strong>المتأخرات</div><div class="debt-dashboard-tile"><strong>'+customers.size+'</strong>العملاء</div><div class="debt-dashboard-tile"><strong>'+rows.length+'</strong>الفواتير</div></div><div class="debt-advanced-grid">'+rows.slice().sort(function(a,b){return finiteNumber(b.remaining_amount)-finiteNumber(a.remaining_amount);}).slice(0,6).map(card).join('')+'</div>';return;
+            }
+            if(debtViewMode==='list'){
+                host.innerHTML='<div class="debt-list-view">'+rows.map(function(row){return '<div class="debt-list-row"><strong>'+escapeHtml(row.customer_name||'عميل')+'</strong><span>'+escapeHtml(row.invoice_number||row.sale_code||'---')+'</span><span>'+formatCurrency(row.remaining_amount)+'</span><span>'+escapeHtml(getStatusLabel(row.status))+'</span></div>';}).join('')+'</div>';return;
+            }
+            host.innerHTML='<div class="debt-advanced-grid">'+rows.map(card).join('')+'</div>';
         }
 
         function renderDebtCards(data) {
@@ -4204,7 +4332,7 @@ async function loadCustomerDebtSettings() {
             const read=function(i,fallback){const r=results[i];return r&&r.success?(r.value??r.data??fallback):fallback;};
             const rawView=String(read(0,'table')), rawStatus=String(read(1,'')), rawDays=finiteNumber(read(2,10),10), rawReport=String(read(3,'balances')), rawHighlight=String(read(4,'1'));
             debtScreenSettings={
-                defaultView:['table','cards','tree'].indexOf(rawView)>=0?rawView:'table',
+                defaultView:['table','cards','tree','grid','kanban','gantt','calendar','gallery','map','dashboard','list'].indexOf(rawView)>=0?rawView:'table',
                 defaultStatus:['','current','undated','overdue','doubtful','partial'].indexOf(rawStatus)>=0?rawStatus:'',
                 dueSoonDays:Math.max(1,Math.min(365,Math.round(rawDays||10))),
                 defaultReport:['balances','overdue','doubtful','aging','customers','invoices','payments','statement'].indexOf(rawReport)>=0?rawReport:'balances',
@@ -4224,7 +4352,7 @@ async function loadCustomerDebtSettings() {
             const report=document.getElementById('debtSettingDefaultReport').value;
             const highlight=document.getElementById('debtSettingHighlightOverdue').checked?'1':'0';
             const feedback=document.getElementById('debtSettingsFeedback');
-            if(['table','cards','tree'].indexOf(view)<0||['','current','undated','overdue','doubtful','partial'].indexOf(status)<0||
+            if(['table','cards','tree','grid','kanban','gantt','calendar','gallery','map','dashboard','list'].indexOf(view)<0||['','current','undated','overdue','doubtful','partial'].indexOf(status)<0||
                !Number.isInteger(days)||days<1||days>365||
                ['balances','overdue','doubtful','aging','customers','invoices','payments','statement'].indexOf(report)<0){
                 if(feedback){feedback.hidden=false;feedback.textContent='تحقق من القيم؛ عدد الأيام يجب أن يكون عدداً صحيحاً من 1 إلى 365.';feedback.style.color='var(--danger)';}return;
@@ -4247,7 +4375,7 @@ async function loadCustomerDebtSettings() {
             body.innerHTML='<div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> جاري تحميل إعدادات ديون العملاء...</div>';
             loadCustomerDebtSettings().then(function(value){
                 body.innerHTML='<div class="report-workspace"><section class="report-panel"><div class="report-panel-title"><i class="fas fa-sliders-h"></i> تفضيلات شاشة ديون العملاء</div><div class="debt-settings-stack">'+
-                    '<div class="debt-setting-row"><div><span class="debt-setting-label">طريقة العرض الافتراضية</span><span class="debt-setting-desc">جدول أو بطاقات أو شجرة مجمعة حسب العميل.</span></div><select id="debtSettingDefaultView"><option value="table">جدول</option><option value="cards">بطاقات</option><option value="tree">شجرة</option></select></div>'+
+                    '<div class="debt-setting-row"><div><span class="debt-setting-label">طريقة العرض الافتراضية</span><span class="debt-setting-desc">اختر أسلوب عرض الديون الذي سيُطبّق تلقائياً عند فتح الشاشة.</span></div><select id="debtSettingDefaultView"><option value="table">جدول</option><option value="grid">شبكة</option><option value="cards">بطاقات</option><option value="kanban">كانبان</option><option value="gantt">جانت</option><option value="calendar">تقويم</option><option value="gallery">معرض</option><option value="map">خريطة</option><option value="dashboard">لوحة تحكم</option><option value="list">قائمة</option><option value="tree">شجرة (تجميع حسب العميل)</option></select></div>'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">حالة الديون الافتراضية</span><span class="debt-setting-desc">فلتر اختياري عند فتح الشاشة، ويمكن تغييره من شريط الفلاتر.</span></div><select id="debtSettingDefaultStatus"><option value="">جميع الحالات</option><option value="current">غير متأخر</option><option value="undated">غير محدد الاستحقاق</option><option value="overdue">متأخر</option><option value="doubtful">مشكوك في تحصيله</option><option value="partial">مدفوع جزئياً</option></select></div>'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">نافذة تذكير الاستحقاق بالأيام</span><span class="debt-setting-desc">نطاق قائمة تنبيهات الديون القريبة في هذه الشاشة.</span></div><input id="debtSettingDueDays" type="number" min="1" max="365" step="1" value="'+value.dueSoonDays+'"></div>'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">التقرير الافتراضي</span><span class="debt-setting-desc">التقرير الذي يظهر أولاً عند فتح التقارير.</span></div><select id="debtSettingDefaultReport"><option value="balances">أرصدة ديون العملاء</option><option value="overdue">الديون المتأخرة</option><option value="doubtful">الديون المشكوك في تحصيلها</option><option value="aging">أعمار الديون</option><option value="customers">ملخص حسب العميل</option><option value="invoices">الفواتير ذات الرصيد المتبقي</option><option value="payments">عمليات التحصيل والتسديد</option><option value="statement">كشف حركة عميل</option></select></div>'+
