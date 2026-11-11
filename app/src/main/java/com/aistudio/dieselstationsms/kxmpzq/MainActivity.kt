@@ -3441,7 +3441,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getStartupError(): String = getActivity()?.startupErrorForBridge() ?: "تعذر الوصول إلى النشاط"
 
-        /** Opens the real Google Maps SDK picker; no API key or map state is exposed to JavaScript. */
+        /** Opens the native OpenStreetMap picker; the existing result contract is preserved. */
         @JavascriptInterface
         fun openNativeMapPicker(latitude: Double, longitude: Double): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3461,7 +3461,7 @@ class MainActivity : AppCompatActivity() {
                 successResponse(true, "تم فتح محدد الموقع الأصلي")
             } catch (exception: Exception) {
                 DebugLogger.logException("Maps", exception)
-                Toast.makeText(activity, "تعذر فتح خريطة Google؛ يمكنك إدخال الإحداثيات يدوياً.", Toast.LENGTH_LONG).show()
+                Toast.makeText(activity, "تعذر فتح محدد OpenStreetMap؛ يمكنك إدخال الإحداثيات يدوياً.", Toast.LENGTH_LONG).show()
                 errorResponse("تعذر فتح محدد الموقع الأصلي")
             }
         }

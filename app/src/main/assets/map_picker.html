@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>تحديد الموقع - OpenStreetMap</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+html,body,#map{height:100%;width:100%;margin:0;padding:0;background:#e8edf0}
+.leaflet-control-attribution{font-size:10px}
+.map-hint{position:absolute;z-index:1000;top:12px;left:12px;right:12px;max-width:440px;margin:auto;padding:9px 12px;border-radius:10px;background:#ffffffed;color:#263445;font:14px sans-serif;text-align:center;box-shadow:0 2px 10px #0002;pointer-events:none}
+.map-error{position:absolute;z-index:1001;bottom:12px;left:12px;right:12px;padding:10px;border-radius:10px;background:#fff0f0;color:#9b1c1c;font:13px sans-serif;text-align:center;display:none}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="map-hint" id="hint">المس الخريطة لتحديد الموقع أو اسحب العلامة لتعديلها</div>
+<div class="map-error" id="mapError">تعذر تحميل الخريطة. تحقق من اتصال الإنترنت ثم أعد فتح محدد الموقع.</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function(){
+'use strict';
+var errorBox=document.getElementById('mapError');
+if(!window.L){errorBox.style.display='block';errorBox.textContent='تعذر تحميل مكوّن الخريطة. تحقق من اتصال الإنترنت.';return;}
+var map=L.map('map',{zoomControl:true,attributionControl:true}).setView([15,45],5);
+var marker=null;
+var tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+ maxZoom:19,
+ attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+});
+tiles.on('tileerror',function(){errorBox.style.display='block';});
+tiles.on('tileload',function(){errorBox.style.display='none';});
+tiles.addTo(map);
+function report(lat,lon){
+ var point=[lat,lon];
+ if(marker){marker.setLatLng(point);}
+ else{
+  marker=L.marker(point,{draggable:true}).addTo(map);
+  marker.on('dragend',function(){var p=marker.getLatLng();report(p.lat,p.lng);});
+ }
+ if(window.MapSelectionBridge)window.MapSelectionBridge.onLocationSelected(lat,lon);
+ document.getElementById('hint').textContent='الموقع المحدد: '+lat.toFixed(6)+', '+lon.toFixed(6);
+}
+map.on('click',function(event){report(event.latlng.lat,event.latlng.lng);});
+window.setInitialSelection=function(lat,lon){
+ if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
+ map.setView([lat,lon],16);report(lat,lon);
+};
+window.setCurrentLocation=window.setInitialSelection;
+if(window.MapSelectionBridge)window.MapSelectionBridge.onMapReady();
+})();
+</script>
+</body>
+</html>

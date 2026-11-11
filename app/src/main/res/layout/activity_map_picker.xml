@@ -11,14 +11,13 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:padding="12dp"
-        android:background="#FFFFFF">
+        android:padding="12dp">
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="تحديد موقع المحطة"
+            android:text="تحديد الموقع على OpenStreetMap"
             android:textColor="#172033"
             android:textSize="18sp"
             android:textStyle="bold" />
@@ -32,11 +31,12 @@
             android:src="@android:drawable/ic_menu_close_clear_cancel" />
     </LinearLayout>
 
-    <FrameLayout
-        android:id="@+id/map_container"
+    <WebView
+        android:id="@+id/map_web_view"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1"
+        android:overScrollMode="never" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -62,8 +62,9 @@
                 android:id="@+id/latitude_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:text="لم يتم تحديد الموقع"
                 android:textColor="#172033"
-                android:textSize="15sp"
+                android:textSize="14sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -82,8 +83,9 @@
                 android:id="@+id/longitude_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:text="لم يتم تحديد الموقع"
                 android:textColor="#172033"
-                android:textSize="15sp"
+                android:textSize="14sp"
                 android:textStyle="bold" />
         </LinearLayout>
     </LinearLayout>

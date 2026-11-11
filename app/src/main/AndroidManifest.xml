@@ -105,13 +105,7 @@
         android:theme="@style/Theme.MyApplication"
         android:usesCleartextTraffic="false"
         tools:targetApi="34">
-
-        <!-- Injected by the Secrets Gradle Plugin; never store a real key in source. -->
-        <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="${MAPS_API_KEY}" />
-
-        <!-- ════════════════════════════════════════════════════════ -->
+<!-- ════════════════════════════════════════════════════════ -->
         <!-- 🎯 MainActivity - نقطة الدخول الرئيسية                    -->
         <!-- ════════════════════════════════════════════════════════ -->
         <activity
