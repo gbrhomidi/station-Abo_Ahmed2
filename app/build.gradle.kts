@@ -303,11 +303,6 @@ configurations.all {
     }
 }
 
-secrets {
-    propertiesFileName = "secrets.properties"
-    defaultPropertiesFileName = "local.defaults.properties"
-    ignoreList.add("DEFAULT_API_KEY_NOT_CONFIGURED")
-}
 
 // ============================================================
 //  مهمة فحص أمني – تمنع رفع المفاتيح الحساسة
