@@ -7,7 +7,7 @@ The Android application must never treat a straight-line estimate as a road rout
 ## Provider modes
 
 - `ROUTE_PROVIDER=osrm` (default): uses OSRM driving route geometry, road distance,
-  and duration. No Google Maps API key or Google billing account is required.
+  and duration. No Google Maps API key or Google billing account is required.\n\nSuccessful route responses are cached in each running instance for five minutes\nby default (configurable with `ROUTE_CACHE_TTL_MS`) with a 256-entry LRU bound.\nConcurrent identical requests share one upstream request. Cache misses are reported\nwith the `X-Route-Cache: MISS` response header; subsequent/reused results report\n`HIT`. The cache is instance-local and is not a shared cache across Cloud Run instances.
 - `ROUTE_PROVIDER=google`: explicitly opts into Google Routes API and its billing.
 - `ROUTE_PROVIDER=auto`: tries OSRM first and uses Google only when an explicit
   Google key is configured and OSRM fails.

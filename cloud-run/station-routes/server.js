@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const { RouteCache } = require('./route-cache');
 const { initializeApp, getApps } = require('firebase-admin/app');
 const { getAppCheck } = require('firebase-admin/app-check');
 
@@ -14,6 +15,7 @@ const OSRM_BASE_URL = String(process.env.OSRM_BASE_URL || 'https://router.projec
 const GOOGLE_ROUTES_API_KEY = process.env.GOOGLE_ROUTES_API_KEY || '';
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || '';
 const ROUTES_ENDPOINT = 'https://routes.googleapis.com/directions/v2:computeRoutes';
+const routeCache = new RouteCache({ ttlMs: Number(process.env.ROUTE_CACHE_TTL_MS || 300000), maxEntries: 256 });
 
 if (!['osrm', 'google', 'auto'].includes(ROUTE_PROVIDER)) {
   throw new Error('ROUTE_PROVIDER must be osrm, google or auto');
