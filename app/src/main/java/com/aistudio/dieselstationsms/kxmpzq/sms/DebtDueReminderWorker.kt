@@ -171,6 +171,9 @@ class DebtDueReminderWorker(
                     }
                 )
                 if (outcome.queuedMessageId != null) {
+                    DebtDueDateRepository.recordReminderInteraction(
+                        db.writableDatabase, stationId, eventId, customerId, dueDate, "queued", "auto"
+                    )
                     queuedCount++
                     if (daysRemaining < 0) overdueQueuedCount++
                     if (daysRemaining > 0) preDueQueuedCount++

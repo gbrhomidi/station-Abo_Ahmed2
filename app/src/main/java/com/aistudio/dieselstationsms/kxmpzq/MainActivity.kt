@@ -14637,7 +14637,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     if (autoOneDay && daysRemaining != 1) continue
                     if (!autoOneDay && requested.isNotEmpty() && customerId !in requested) continue
                     val result = queueDueReminder(db, row, stationId, activity.currentUserId)
-                    if (result.optBoolean("queued", false)) queued++ else skipped++
+                    if (result.optBoolean("queued", false)) {
+                        queued++
+                        DebtDueDateRepository.recordReminderInteraction(
+                            db.writableDatabase, stationId, row.optString("event_id"),
+                            customerId, row.optString("nearest_due_date"), "queued",
+                            if (autoOneDay) "auto" else "manual"
+                        )
+                    } else skipped++
                     results.put(result.put("days_remaining", daysRemaining))
                 }
                 dataResponse(JSONObject().apply {
@@ -14650,6 +14657,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+
+        @JavascriptInterface
+        fun consumeSuccessfulDebtReminderSmsTyped(jsonData: String = "{}"): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+                val stationId = requireCurrentStationId(helper, activity.currentUserId)
+                val count = DebtDueDateRepository.consumeSuccessfulReminderSms(helper, stationId)
+                dataResponse(JSONObject().put("sent_count", count))
+            } catch (e: Exception) {
+                errorResponse(e.message ?: "تعذر التحقق من رسائل تذكير الديون المرسلة")
+            }
+        }
 
         @JavascriptInterface
         fun updateDebtReminderInteractionTyped(jsonData: String): String {

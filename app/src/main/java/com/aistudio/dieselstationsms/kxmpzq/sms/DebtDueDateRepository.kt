@@ -721,10 +721,12 @@ object DebtDueDateRepository {
                 action TEXT NOT NULL CHECK(action IN ('deferred','dismissed','viewed','queued','sent')),
                 mode TEXT NOT NULL DEFAULT 'manual',
                 next_notify_at INTEGER,
+                success_toast_shown_at TEXT,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY(station_id,event_id)
             )
         """.trimIndent())
+        addColumn(db, "debt_reminder_interactions", "success_toast_shown_at", "TEXT")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_debt_reminder_interactions_state ON debt_reminder_interactions(station_id,action,next_notify_at)")
     }
 
@@ -755,8 +757,47 @@ object DebtDueDateRepository {
         db.insertWithOnConflict("debt_reminder_interactions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
-    fun getReminderInteraction(db: SQLiteDatabase, stationId: Int, eventId: String): JSONObject? {
+
+    /** Claim each successful carrier submission once for the dashboard success toast. */
+    fun consumeSuccessfulReminderSms(helper: DatabaseHelper, stationId: Int): Int {
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        val db = helper.writableDatabase
         ensureReminderInteractionSchema(db)
+        val now = java.time.LocalDateTime.now().toString()
+        var consumed = 0
+        db.beginTransaction()
+        try {
+            val events = mutableListOf<String>()
+            db.rawQuery(
+                """SELECT DISTINCT i.event_id
+                   FROM debt_reminder_interactions i
+                   INNER JOIN sms_outbox o ON o.event_id=i.event_id
+                   WHERE i.station_id=? AND i.action='queued'
+                     AND i.success_toast_shown_at IS NULL
+                     AND UPPER(COALESCE(o.status,'')) IN ('DELIVERY_PENDING','DELIVERED')
+                   ORDER BY i.updated_at,i.event_id""",
+                arrayOf(stationId.toString())
+            ).use { cursor -> while (cursor.moveToNext()) events += cursor.getString(0) }
+            events.forEach { eventId ->
+                consumed += db.update(
+                    "debt_reminder_interactions",
+                    ContentValues().apply {
+                        put("action", "sent")
+                        put("success_toast_shown_at", now)
+                        put("updated_at", now)
+                    },
+                    "station_id=? AND event_id=? AND action='queued' AND success_toast_shown_at IS NULL",
+                    arrayOf(stationId.toString(), eventId)
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return consumed
+    }
+
+    fun getReminderInteraction(db: SQLiteDatabase, stationId: Int, eventId: String): JSONObject? {
         return db.rawQuery(
             "SELECT action,mode,next_notify_at,updated_at FROM debt_reminder_interactions WHERE station_id=? AND event_id=? LIMIT 1",
             arrayOf(stationId.toString(), eventId)
@@ -777,6 +818,7 @@ object DebtDueDateRepository {
     fun getDueSoonDebtReminders(helper: DatabaseHelper, stationId: Int, days: Int): JSONArray {
         require(stationId > 0) { "معرف المحطة غير صالح" }
         val maxDays = days.coerceIn(0, 365)
+        ensureReminderInteractionSchema(helper.writableDatabase)
         val today = LocalDate.parse(BusinessDay.currentDate())
         val all = readDebts(helper.readableDatabase, stationId)
         val openByCustomer = all.filter { it.remaining > 0.000001 && it.customerId > 0L }

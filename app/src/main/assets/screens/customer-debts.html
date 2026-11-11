@@ -3483,8 +3483,8 @@ function updateDebtViewButtons() {
                     <div class="due-reminder-actions">
                       <button class="due-view" onclick="openDueReminderDetails()">إطلاع</button>
                       <button class="due-delay" onclick="deferDueReminder()">تأجيل</button>
-                      <button class="due-cancel" onclick="closeDueReminderNotice()">إلغاء</button>
-                      <button class="due-ok" onclick="approveDueReminders()">موافق - يتم الإرسال فوراً</button>
+                      <button class="due-cancel" onclick="cancelDueReminderNotice()">إلغاء</button>
+                      <button id="dueReminderSendButton" class="due-ok" onclick="approveDueReminders()">موافق - يتم الإرسال فوراً</button>
                     </div></div>`;
                 document.body.appendChild(o);
             }
@@ -3535,18 +3535,18 @@ function updateDebtViewButtons() {
         }
 
         async function loadDueAutoSmsSetting() {
-            const checkbox=document.getElementById('dueAutoSmsEnabled');
-            if(!checkbox)return;
-            try {
-                const result=await apiCall('getSetting',{key:'debt_due_auto_sms_enabled'});
-                if(!result.success)throw new Error(result.error||'تعذر قراءة إعداد الإرسال الآلي');
-                checkbox.checked=String(result.value??'0')==='1';
-            } catch(error) {
-                checkbox.checked=false;
-                console.warn('Customer debt auto-SMS setting:',error);
+            const modes = {};
+            for (const mode of ['auto','manual','local']) {
+                const key = ({auto:'debt_due_auto_sms_enabled',manual:'debt_due_manual_sms_enabled',local:'debt_due_local_notification_enabled'})[mode];
+                const value = await apiCall('getSetting',{key});
+                modes[mode] = value.success && String(value.value ?? '0') === '1';
             }
+            window.__debtReminderModes = modes;
+            const autoBox=document.getElementById('dueAutoSmsEnabled');
+            if(autoBox)autoBox.checked=modes.auto;
+            const send=document.getElementById('dueReminderSendButton');
+            if(send)send.style.display=modes.manual?'inline-flex':'none';
         }
-
         async function setDueAutoSmsEnabled(enabled) {
             const checkbox=document.getElementById('dueAutoSmsEnabled');
             if(checkbox)checkbox.disabled=true;
@@ -3572,18 +3572,21 @@ function updateDebtViewButtons() {
                 const result=await apiCall('getDueSoonDebtRemindersTyped', {days:debtScreenSettings.dueSoonDays});
                 if(!result.success) return;
                 dueReminderRows=Array.isArray(result.data)?result.data:[];
-                const dueSoon=dueReminderRows.filter(r=>Number(r.total_outstanding)>0&&Number(r.days_remaining)>=0&&Number(r.days_remaining)<=debtScreenSettings.dueSoonDays);
+                const dueSoon=dueReminderRows.filter(r=>Number(r.total_outstanding)>0&&Number(r.days_remaining)>=0&&Number(r.days_remaining)<=debtScreenSettings.dueSoonDays&&!['dismissed','viewed','queued','sent','deferred'].includes(r.interaction_action));
                 const btn=document.getElementById('dueReminderButton');
                 if(btn){btn.style.display=dueSoon.length?'inline-flex':'none'; const c=btn.querySelector('.due-count'); if(c)c.textContent=dueSoon.length;}
-                if(showNotice && dueSoon.length && !dueReminderDeferred) openDueReminderNotice();
+                const modes=window.__debtReminderModes||{};
+                const deferred=dueReminderRows.some(r=>r.interaction_action==='deferred');
+                if(deferred)document.getElementById('dueReminderBubble')?.classList.add('show');
+                if(showNotice && dueSoon.length && !dueReminderDeferred && (modes.manual||modes.local)) openDueReminderNotice();
             }catch(e){console.warn('Due reminders:',e);}
         }
 
         function openDueReminderNotice(){ensureDueReminderUI();document.getElementById('dueReminderOverlay').classList.add('show');document.body.style.overflow='hidden';}
-        async function closeDueReminderNotice(){document.getElementById('dueReminderOverlay')?.classList.remove('show');document.body.style.overflow='';try{await persistDueReminderDecision('dismissed','manual');}catch(e){console.warn('Reminder decision:',e);}}
+        async function closeDueReminderNotice(){document.getElementById('dueReminderOverlay')?.classList.remove('show');document.body.style.overflow='';}
+        async function cancelDueReminderNotice(){try{await persistDueReminderDecision('dismissed','manual');closeDueReminderNotice();}catch(e){showToast(e.message||'تعذر إلغاء التذكير','error');}}
         async function deferDueReminder(){try{await persistDueReminderDecision('deferred','manual');dueReminderDeferred=true;closeDueReminderNotice();document.getElementById('dueReminderBubble')?.classList.add('show');}catch(e){showToast(e.message||'تعذر تأجيل التذكير','error');}}
         async function approveDueReminders(){
-            try { await persistDueReminderDecision('viewed','manual'); } catch(e) { showToast(e.message||'تعذر حفظ قرار الإرسال','error'); return; }
             closeDueReminderNotice();
             apiCall('sendDueSoonDebtRemindersTyped',{days:debtScreenSettings.dueSoonDays}).then(r=>{
                 if(!r.success)throw new Error(r.error||r.message||'تعذر إرسال التذكيرات');

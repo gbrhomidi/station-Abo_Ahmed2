@@ -186,14 +186,59 @@ class DebtDueReminderWorkerIntegrationTest {
             Triple(it.getString(0), it.getString(1), it.getString(2))
         }
         assertEquals("QUEUED", queued.first)
+        val automaticInteraction = DebtDueDateRepository.getReminderInteraction(db, stationId, queued.third)
+        assertEquals("queued", automaticInteraction?.optString("action"))
+        assertEquals("auto", automaticInteraction?.optString("mode"))
         assertTrue(queued.second.contains("يتبقى 2 يوم على موعد استحقاق الدين"))
         assertTrue(queued.third.startsWith("debt-reminder:$stationId:$inWindowCustomer:"))
         assertTrue(queued.third.endsWith(":pre"))
+
+        // The success toast is consumed only after SmsOutboxWorker's sent callback advances
+        // the outbox to DELIVERY_PENDING, and it must be emitted exactly once.
+        db.execSQL("UPDATE sms_outbox SET status='DELIVERY_PENDING' WHERE event_id=?", arrayOf(queued.third))
+        assertEquals(1, DebtDueDateRepository.consumeSuccessfulReminderSms(database, stationId))
+        assertEquals(0, DebtDueDateRepository.consumeSuccessfulReminderSms(database, stationId))
+        assertEquals("sent",
+            DebtDueDateRepository.getReminderInteraction(db, stationId, queued.third)?.optString("action"))
 
         assertEquals(0, db.rawQuery(
             "SELECT COUNT(*) FROM sms_outbox WHERE business_entity_id=?",
             arrayOf("party:$outsideCustomer")
         ).use { assertTrue(it.moveToFirst()); it.getInt(0) })
+    }
+
+    @Test
+    fun reminderInteractionLedgerPersistsDecisionsAndIsStationScoped() {
+        val db = database.writableDatabase
+        val eventId = "debt-reminder:$stationId:7001:2026-12-01:9001:pre"
+        DebtDueDateRepository.recordReminderInteraction(
+            db = db,
+            stationId = stationId,
+            eventId = eventId,
+            customerPartyId = 7001L,
+            dueDate = "2026-12-01",
+            action = "deferred",
+            mode = "manual"
+        )
+        val deferred = DebtDueDateRepository.getReminderInteraction(db, stationId, eventId)
+        assertEquals("deferred", deferred?.optString("action"))
+        assertEquals("manual", deferred?.optString("mode"))
+        assertTrue("A deferred reminder must have a durable re-notification time",
+            (deferred?.optLong("next_notify_at", 0L) ?: 0L) > System.currentTimeMillis())
+
+        DebtDueDateRepository.recordReminderInteraction(
+            db = db,
+            stationId = stationId,
+            eventId = eventId,
+            customerPartyId = 7001L,
+            dueDate = "2026-12-01",
+            action = "dismissed",
+            mode = "manual"
+        )
+        assertEquals("dismissed",
+            DebtDueDateRepository.getReminderInteraction(db, stationId, eventId)?.optString("action"))
+        assertTrue("A reminder decision in one station must not leak into another station",
+            DebtDueDateRepository.getReminderInteraction(db, stationId + 1, eventId) == null)
     }
 
     @Test
@@ -232,6 +277,9 @@ class DebtDueReminderWorkerIntegrationTest {
 
         database.setSetting("sms_send_enabled", "1")
         database.setSetting("debt_due_auto_sms_enabled", "0")
+        // Manual and local modes must never activate the background SMS worker.
+        database.setSetting("debt_due_manual_sms_enabled", "1")
+        database.setSetting("debt_due_local_notification_enabled", "1")
         val requestData = Data.Builder()
             .putInt("debt_reminder_station_id", stationId)
             .putLong("debt_reminder_user_id", userId)
