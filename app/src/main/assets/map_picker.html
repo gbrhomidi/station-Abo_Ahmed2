@@ -22,7 +22,8 @@ html,body,#map{height:100%;width:100%;margin:0;padding:0;background:#e8edf0}
 'use strict';
 var errorBox=document.getElementById('mapError');
 if(!window.L){errorBox.style.display='block';errorBox.textContent='تعذر تحميل مكوّن الخريطة. تحقق من اتصال الإنترنت.';return;}
-var map=L.map('map',{zoomControl:true,attributionControl:true}).setView([15,45],5);
+var map=L.map('map',{zoomControl:true,attributionControl:true});
+map.fitWorld(); // No station/customer coordinates are preselected or fabricated.
 var marker=null;
 var tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
  maxZoom:19,
