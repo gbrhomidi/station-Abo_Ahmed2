@@ -1,0 +1,1 @@
+{"name":"station-routes-worker","private":true,"type":"module","scripts":{"test":"node --test"},"dependencies":{"jose":"^6.1.0"},"devDependencies":{"wrangler":"^4.45.0"}}

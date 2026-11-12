@@ -1,0 +1,45 @@
+name: Deploy Station Routes Worker
+on:
+  push:
+    branches: [feature/ai-health-sqlite]
+    paths: ['cloudflare-worker/station-routes/**','.github/workflows/cloudflare-worker.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: station-routes-worker-${{ github.ref }}
+  queue: max
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare-worker/station-routes
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npx wrangler deploy --dry-run
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/feature/ai-health-sqlite'
+    runs-on: ubuntu-latest
+    environment: cloudflare-production
+    defaults:
+      run:
+        working-directory: cloudflare-worker/station-routes
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: cloudflare-worker/station-routes
+          command: deploy
