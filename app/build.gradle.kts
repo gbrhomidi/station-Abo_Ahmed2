@@ -9,7 +9,7 @@ plugins {
 
 val recaptchaEnterpriseSiteKey = (System.getenv("RECAPTCHA_ENTERPRISE_SITE_KEY")
     ?: providers.gradleProperty("RECAPTCHA_ENTERPRISE_SITE_KEY").orNull
-    ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
+    ?: "6LeQFB0uAAAAAIsexCQHHH8860V1oYgG3zdqSwEp").replace("\\", "\\\\").replace("\"", "\\\"")
 
 android {
     namespace = "com.aistudio.dieselstationsms.kxmpzq"

@@ -8,9 +8,9 @@
 - The Android reCAPTCHA provider is currently Preview and may change.
 - In the Google Cloud project linked to Firebase, enable the reCAPTCHA Enterprise API and create an Android score-based key. Keep package-name verification enabled and enable support for distribution outside Google Play because this app is distributed directly/sideloaded.
 - Register that key in Firebase Console → App Check → Apps for this Android app.
-- Supply the public site key at build time (it is not a secret):
-  - Gradle property: `-PRECAPTCHA_ENTERPRISE_SITE_KEY=YOUR_ANDROID_SITE_KEY`
-  - or environment variable: `RECAPTCHA_ENTERPRISE_SITE_KEY`.
+- The supplied public Android site key is configured as the Release build default. It is a public client identifier, not a secret.
+  - A different key can override it with Gradle property `-PRECAPTCHA_ENTERPRISE_SITE_KEY=...` or environment variable `RECAPTCHA_ENTERPRISE_SITE_KEY`.
+  - The key must also be registered against this Android app in Firebase Console → App Check. Source-code configuration alone does not register it with Firebase.
 - Do not enable App Check enforcement until real-device token acquisition and backend verification are tested.
 - reCAPTCHA Enterprise has a no-cost quota of 10,000 assessments/month; usage above the quota can incur charges if billing is enabled. Keep the project on the no-cost plan and do not link billing without explicit approval. Quota exhaustion can interrupt optional cloud requests, not local SQLite workflows.
 
