@@ -150,6 +150,11 @@ android {
 }
 
 dependencies {
+    // Firebase App Check is used only to attest optional Cloud Run requests.
+    // Core station workflows and SQLite remain fully local/offline.
+    implementation(platform(libs.firebase.bom))
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
+
     // Compose BOM
     implementation(platform(libs.androidx.compose.bom))
 
