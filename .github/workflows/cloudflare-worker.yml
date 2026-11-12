@@ -37,9 +37,25 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
-      - uses: cloudflare/wrangler-action@v3
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: cloudflare-worker/station-routes
           command: deploy
+      - name: Verify deployed Worker health
+        env:
+          WORKER_BASE_URL: https://station-routes-worker.db7r01.workers.dev
+        run: |
+          set -euo pipefail
+          health="$(curl --fail --silent --show-error "$WORKER_BASE_URL/health")"
+          echo "$health" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const x=JSON.parse(s);if(x.status!=='ok'||x.service!=='station-routes'||x.provider!=='OSRM')process.exit(1);console.log('Live health check: PASS')})"
+      - name: Verify deployed route endpoint rejects unauthenticated requests
+        env:
+          WORKER_BASE_URL: https://station-routes-worker.db7r01.workers.dev
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error -o /tmp/route-response.json -w '%{http_code}' -X POST "$WORKER_BASE_URL/v1/routes" -H 'content-type: application/json' --data '{}')"
+          test "$status" = "401"
+          echo "Live App Check enforcement smoke test: PASS (HTTP 401 without token)"
