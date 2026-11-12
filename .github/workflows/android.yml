@@ -320,9 +320,22 @@ jobs:
 
           python3 ./screen-smoke-test.py
 
+      # The viewport acceptance suite drives real Chromium through DevTools.
+      # Ubuntu runner images do not guarantee a Chrome binary; install a pinned
+      # stable browser explicitly instead of allowing a false-negative CI failure.
+      - name: Set up Chromium for responsive viewport acceptance
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
       - name: Run responsive viewport acceptance
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
         run: |
           set -e
+          test -x "$CHROME_BIN"
+          "$CHROME_BIN" --version
           python3 ./responsive-viewport-acceptance.py
 
       - name: Verify local business-day boundary
