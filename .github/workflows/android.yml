@@ -354,6 +354,23 @@ jobs:
 
 
       # ----------------------------------------------------------------------
+      # Cloud Run routing service contract and cache regression tests
+      # ----------------------------------------------------------------------
+
+      - name: Set up Node.js 22 for Cloud Run tests
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Run Cloud Run routing service tests
+        working-directory: cloud-run/station-routes
+        run: |
+          set -e
+          npm install --no-audit --no-fund
+          npm test
+
+
+      # ----------------------------------------------------------------------
       # Kotlin / Robolectric regression tests
       # ----------------------------------------------------------------------
 
