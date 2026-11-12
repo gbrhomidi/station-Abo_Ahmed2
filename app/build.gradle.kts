@@ -7,6 +7,10 @@ plugins {
     alias(libs.plugins.google.services)
 }
 
+val recaptchaEnterpriseSiteKey = (System.getenv("RECAPTCHA_ENTERPRISE_SITE_KEY")
+    ?: providers.gradleProperty("RECAPTCHA_ENTERPRISE_SITE_KEY").orNull
+    ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
+
 android {
     namespace = "com.aistudio.dieselstationsms.kxmpzq"
     compileSdk = 35
@@ -17,6 +21,7 @@ android {
         targetSdk = 35
         versionCode = 5
         versionName = "5.0 Pro"
+        buildConfigField("String", "RECAPTCHA_ENTERPRISE_SITE_KEY", "\"${recaptchaEnterpriseSiteKey}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -153,7 +158,9 @@ dependencies {
     // Firebase App Check is used only to attest optional Cloud Run requests.
     // Core station workflows and SQLite remain fully local/offline.
     implementation(platform(libs.firebase.bom))
-    implementation("com.google.firebase:firebase-appcheck-playintegrity")
+    implementation("com.google.firebase:firebase-appcheck-recaptcha")
+    // Debug provider is packaged only in the Debug variant, never in Release.
+    debugImplementation("com.google.firebase:firebase-appcheck-debug")
 
     // Compose BOM
     implementation(platform(libs.androidx.compose.bom))

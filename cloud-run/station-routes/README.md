@@ -22,10 +22,14 @@ data attribution and ODbL requirements must be respected.
 ## Security
 
 Every `POST /v1/routes` request requires a valid Firebase App Check token in
-`X-Firebase-AppCheck`. Configure Firebase App Check with Play Integrity for
-the Android package `com.aistudio.dieselstationsms.kxmpzq`. The service rejects
-requests if App Check is not configured; it does not silently expose an open
-routing proxy.
+`X-Firebase-AppCheck`. Android Release uses the official Firebase reCAPTCHA
+Enterprise App Check provider (Preview); Debug builds use the Firebase Debug
+provider for controlled testing only. Configure reCAPTCHA Enterprise for
+package `com.aistudio.dieselstationsms.kxmpzq` and supply its public Android
+site key through Gradle property or environment variable
+`RECAPTCHA_ENTERPRISE_SITE_KEY`. Never ship a Debug-provider build or debug
+token to production. The service rejects requests if App Check is not
+configured; it does not silently expose an open routing proxy.
 
 Google API keys are never placed in the APK or source control. Only configure
 `GOOGLE_ROUTES_API_KEY` in Secret Manager if you deliberately enable Google

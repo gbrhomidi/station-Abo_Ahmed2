@@ -5,8 +5,6 @@ import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManage
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 import com.aistudio.dieselstationsms.kxmpzq.startup.StartupPerformanceMonitor
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsOutboxWorker
-import com.google.firebase.appcheck.FirebaseAppCheck
-import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 
 import android.app.Activity
 import android.app.Application
@@ -118,15 +116,13 @@ class MyApplication : Application() {
         val applicationStartupSpan = StartupPerformanceMonitor.beginSpan("application.startup")
         instance = this
 
-        // App Check protects only the optional Cloud Run integration. Initialization
-        // failure must never prevent local SQLite, sales, accounting, or SMS workflows.
-        runCatching {
-            FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
-                PlayIntegrityAppCheckProviderFactory.getInstance()
-            )
-        }.onFailure {
-            Log.w(TAG, "Firebase App Check is unavailable; local operation remains enabled", it)
-        }
+        // Provider selection is build-variant specific: Debug uses the private debug
+        // provider; Release uses reCAPTCHA Enterprise when its public site key is configured.
+        // Any setup failure leaves local SQLite/business workflows operational.
+        runCatching { AppCheckInstaller.install(this) }
+            .onFailure {
+                Log.w(TAG, "Optional Firebase App Check setup unavailable; local operation remains enabled", it)
+            }
 
         registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) = Unit
